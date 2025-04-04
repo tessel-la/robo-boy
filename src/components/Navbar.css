@@ -1,0 +1,52 @@
+.navbar {
+    position: sticky; /* Make it sticky or fixed based on preference */
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--card-bg);
+    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000; /* Ensure it stays on top */
+    border-radius: 0 0 15px 15px; /* Rounded bottom corners */
+    margin-bottom: 20px; /* Space below the navbar */
+    transition: background-color 0.3s ease;
+}
+
+.navbar-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center; /* Center items */
+    align-items: center;
+    position: relative; /* Needed for absolute positioning of the bubble */
+}
+
+.navbar-item {
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-color);
+    font-weight: 500;
+    position: relative;
+    z-index: 2; /* Ensure text is above the bubble */
+    transition: color 0.3s ease;
+    border-radius: 10px; /* Slightly rounded items */
+}
+
+.navbar-item:hover {
+    color: var(--primary-color);
+}
+
+.navbar-item.active {
+    color: var(--bubble-text); /* Text color when active (inside bubble) */
+}
+
+.navbar-bubble {
+    position: absolute;
+    top: 0; /* Align bubble with the top of the list items */
+    height: 100%; /* Cover the full height of list items */
+    background-color: var(--bubble-bg);
+    border-radius: 10px; /* Match item rounding */
+    z-index: 1; /* Behind the text but above the nav background */
+    transition: left 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), width 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); /* Smooth animation */
+} 

@@ -1,0 +1,33 @@
+# Caddyfile - Using mkcert
+
+{
+    debug
+    storage file_system /data/caddy_storage
+}
+
+# Listen on 443, serve both localhost and IP using mkcert files
+:443 {
+    # Point to the mounted mkcert certificate and key
+    tls /etc/caddy/certs/local-cert.pem /etc/caddy/certs/local-key.pem
+
+    log { 
+        output stdout 
+    }
+
+    # Route WebSocket requests to the ros-stack container
+    handle /websocket* {
+       uri strip_prefix /websocket
+       reverse_proxy ros-stack:9090 
+    }
+
+    # Route other requests to the Vite app container
+    handle {
+        # Still proxy to HTTP endpoint of Vite container
+        reverse_proxy http://app:5173 
+    }
+}
+
+# Optional: Redirect HTTP to HTTPS
+# :80 {
+#    redir https://{host}{uri} permanent
+# }

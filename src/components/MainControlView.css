@@ -1,0 +1,302 @@
+.main-control-view {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px); /* Adjust based on actual Navbar height or remove if Navbar is gone */
+    padding: 20px;
+    gap: 20px; /* Space between panels */
+    position: relative; /* For positioning the disconnect button */
+    padding-top: 70px; /* Add padding to prevent overlap with fixed header/status */
+    box-sizing: border-box; /* Ensure padding is included in height/width */
+}
+
+.view-panel-container,
+.control-panel-container {
+    flex: 1; /* Each takes half the height */
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Prevent flex items from overflowing */
+    width: 100%; /* Ensure full width */
+    box-sizing: border-box;
+}
+
+.view-panel,
+.control-panel {
+    flex-grow: 1; /* Allow panels to fill their container */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* Prevent content spill */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px; /* Add consistent padding */
+}
+
+.view-toggle {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.view-toggle button {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 15px;
+    margin: 0 5px;
+    border-radius: 20px; /* Pill shape */
+    opacity: 0.7;
+}
+
+.view-toggle button.active {
+    background-color: var(--primary-color);
+    color: var(--bubble-text);
+    border-color: var(--primary-color);
+    opacity: 1;
+}
+
+.disconnect-button {
+    /* Remove background/border for icon button look */
+    background-color: transparent;
+    border: none;
+    color: var(--error-color); /* Use theme error color */
+    
+    /* Remove text-specific padding */
+    padding: 0; 
+    font-size: 1.5em; /* Make icon larger */
+    line-height: 1; /* Adjust line height for icon */
+    
+    /* Make it visually a button */
+    cursor: pointer;
+    border-radius: 4px; /* Optional: slight rounding for flat look */
+    width: 30px; /* Fixed size */
+    height: 30px; /* Fixed size */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.disconnect-button:hover {
+    background-color: rgba(220, 53, 69, 0.1); /* Subtle background on hover */
+}
+
+.connection-status {
+    /* Remove padding */
+    padding: 0;
+    /* Adjust font size for icon */
+    font-size: 1.2em; 
+    line-height: 1; /* Adjust line height */
+    /* Remove background/border */
+    background-color: transparent;
+    border: none;
+    color: inherit; /* Let icon color be handled by parent/default */
+    width: 30px; /* Match button size */
+    height: 30px; /* Match button size */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Keep the color logic for the icon itself */
+.connection-status.connected {
+    /* background-color: #28a745; */ /* Remove background */
+    /* color: white; */ /* Remove color override */
+}
+
+.connection-status.disconnected {
+    /* background-color: #ffc107; */ /* Remove background */
+    /* color: #333; */ /* Remove color override */
+}
+
+/* Add styles for animations between view/control modes later */
+
+/* Container for view toggle and camera dropdown */
+.view-header {
+    display: flex;
+    justify-content: space-between; /* Align toggle left, dropdown right */
+    align-items: center;
+    margin-bottom: 15px;
+    position: relative; /* Needed for z-index */
+    z-index: 20; /* Set higher z-index for the header containing the dropdown */
+    background-color: var(--background-color); /* Ensure background isn't transparent */
+    padding: 10px; /* Add some padding */
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-elevation-medium);
+}
+
+.view-toggle {
+    display: flex;
+    gap: 5px;
+    /* Allow selector to take space */
+    flex-grow: 1;
+}
+
+.view-toggle button {
+    padding: 8px 15px;
+    border: 1px solid var(--border-color);
+    background-color: var(--background-secondary);
+    color: var(--text-secondary);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.view-toggle button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.view-toggle button:hover:not(.active) {
+    background-color: var(--background-hover);
+}
+
+/* Style for the camera topic selector */
+.camera-topic-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0; /* Prevent shrinking */
+    position: relative; /* Keep dropdown relative to its container */
+}
+
+.camera-topic-selector label {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.camera-topic-selector select {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-background-color);
+    color: var(--text-color);
+}
+
+.view-panel-container {
+    /* ... existing styles ... */
+    /* Remove potential top margin if added previously */
+    margin-top: 0;
+}
+
+.view-panel {
+    /* Ensure panel takes remaining height if needed, adjust based on layout */
+    flex-grow: 1;
+    width: 100%;
+    /* Add min-height if content can be small */
+    min-height: 300px;
+    display: flex; /* Added to help placeholder centering */
+    justify-content: center; /* Added to help placeholder centering */
+    align-items: center; /* Added to help placeholder centering */
+}
+
+.view-panel .placeholder {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* ... rest of the styles ... */
+
+/* New styles for the right-side container */
+.status-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+/* CameraView specific adjustments */
+.view-panel .camera-view { /* Target CameraView inside view-panel */
+    width: 100%;
+    height: 100%; 
+}
+
+/* Camera Stream container adjustments */
+.camera-stream-container {
+  position: relative; 
+  width: 100%;
+  height: 100%; /* Allow vertical expansion */
+  /* max-width: 800px; */ /* REMOVE max-width */
+  aspect-ratio: unset; /* REMOVE fixed aspect ratio */
+  background-color: #000; 
+  border-radius: var(--border-radius);
+  overflow: hidden; 
+  display: flex; 
+  justify-content: center;
+  align-items: center;
+}
+
+/* ... styles for status-controls ... */
+
+/* Responsive Adjustments */
+@media (max-width: 768px) { 
+    .main-control-view {
+        padding: 5px; /* Reduce padding */
+        gap: 5px; /* Reduce gap */
+        height: auto; /* Allow height to adjust to content */
+        min-height: calc(100vh - 60px); /* Still try to fill viewport */
+    }
+
+    .view-panel-container,
+    .control-panel-container {
+        flex: none; /* Disable flex sizing */
+        min-height: 250px; /* Give panels minimum height */
+    }
+
+    /* Stack panels vertically */
+    .main-control-view {
+        flex-direction: column;
+    }
+
+    /* Ensure consistent padding on mobile panels */
+    .view-panel,
+    .control-panel {
+       padding: 5px;
+    }
+
+    .view-header {
+        flex-direction: column; /* Stack toggle and selector */
+        align-items: stretch; /* Stretch items full width */
+        gap: 5px; /* Reduce gap */
+    }
+
+    .status-controls {
+        justify-content: center;
+        width: 100%;
+        gap: 8px; /* Reduce gap */
+    }
+
+    .camera-topic-selector {
+        width: 100%; /* Make selector full width */
+    }
+
+    .camera-topic-selector select {
+        width: 100%; /* Make select full width */
+        max-width: none;
+    }
+
+    .view-toggle {
+      justify-content: flex-start; /* Align buttons left */
+      width: 100%;
+    }
+
+    /* Reduce size/gap of top controls on mobile */
+    .view-toggle button {
+       padding: 6px 10px;
+       font-size: 0.9em;
+    }
+
+    .disconnect-button {
+        font-size: 1.3em; /* Slightly smaller icon */
+        width: 28px;
+        height: 28px;
+    }
+    .connection-status {
+        font-size: 1.1em; /* Slightly smaller icon */
+        width: 28px;
+        height: 28px;
+    }
+
+    /* Ensure camera container doesn't have conflicting aspect ratio */
+    .camera-stream-container {
+      aspect-ratio: unset; /* Reinforce removal */
+    }
+}

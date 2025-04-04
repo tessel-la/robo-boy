@@ -1,0 +1,33 @@
+.entry-section {
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 30px;
+}
+
+.entry-section h2 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: var(--primary-color);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.radio-group label {
+    margin-right: 15px;
+    display: inline-flex; /* Align radio button and text */
+    align-items: center;
+    cursor: pointer;
+}
+
+.radio-group input[type="radio"] {
+    margin-right: 5px;
+    accent-color: var(--primary-color); /* Style the radio button */
+}
+
+.entry-section button[type="submit"] {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+} 

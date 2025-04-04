@@ -1,0 +1,56 @@
+services:
+  # React App Development Server
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - /app/node_modules 
+    command: npm run dev -- --host 0.0.0.0
+    environment:
+      - NODE_ENV=development
+    # Remove ports mapping if Caddy handles external access
+    # ports:
+    #   - "127.0.0.1:5173:5173" 
+    networks: # Assign to custom network
+      - app-net
+
+  # Caddy Reverse Proxy
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"    # Bind to all host interfaces
+      - "443:443"  # Bind to all host interfaces
+      - "0.0.0.0:443:443/udp" # Bind to all host interfaces
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+      - ros-stack
+    networks:
+      - app-net
+
+  # ROS 2 Stack (Rosbridge + Image Publisher)
+  ros-stack:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.ros # Use the ROS Dockerfile
+    ports: # Expose web_video_server port
+      - "127.0.0.1:8080:8080" # Map container 8080 to host's localhost:8080
+    networks: # Assign to custom network
+      - app-net
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+# Define the custom bridge network
+networks:
+  app-net:
+    driver: bridge

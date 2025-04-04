@@ -1,0 +1,22 @@
+# Dockerfile.dev - For Development Environment
+
+FROM node:lts-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files FIRST to leverage Docker cache
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the application code (will be mounted over by docker-compose)
+COPY . .
+
+# Expose the Vite development port
+EXPOSE 5173
+
+# Default command to start the Vite development server
+# Listen on all interfaces within the container, enable hot-reloading
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

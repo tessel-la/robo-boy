@@ -1,0 +1,45 @@
+# Dockerfile for ROS 2 Humble components
+
+FROM ros:humble-ros-base
+
+# Set noninteractive mode for installations
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install rosbridge, image tools, Python tools, and web_video_server
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-rosbridge-server \
+    ros-humble-image-transport \
+    ros-humble-cv-bridge \
+    ros-humble-web-video-server \
+    python3-opencv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install numpy for the image publisher script
+RUN pip install numpy
+
+# Create a workspace directory (optional, but good practice)
+WORKDIR /ros_ws
+
+
+# --- Entrypoint Script ---
+# Creates a script to source ROS and run nodes
+
+# Create entrypoint script
+RUN echo '#!/bin/bash' >> /ros_ws/entrypoint.sh && \
+    echo 'set -e' >> /ros_ws/entrypoint.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /ros_ws/entrypoint.sh && \
+    # Launch rosbridge on all interfaces within the container network
+    echo 'ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=0.0.0.0 &' >> /ros_ws/entrypoint.sh && \
+    # Launch web_video_server, listening on all interfaces in container port 8080
+    echo 'ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &' >> /ros_ws/entrypoint.sh && \
+    # Keep the container running
+    echo 'wait -n' >> /ros_ws/entrypoint.sh && \
+    # Add exit handling
+    echo 'exit $?' >> /ros_ws/entrypoint.sh
+
+# Make entrypoint executable
+RUN chmod +x /ros_ws/entrypoint.sh
+
+# Run the entrypoint script
+ENTRYPOINT ["/ros_ws/entrypoint.sh"]
