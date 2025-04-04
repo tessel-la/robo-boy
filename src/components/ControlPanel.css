@@ -76,4 +76,26 @@
         opacity: 0;
         /* transform: translateY(-10px); */
     }
+}
+
+/* Responsive adjustments for Control Panel */
+@media (max-width: 480px) {
+    .control-panel-wrapper {
+        padding: 8px;
+    }
+
+    .control-mode-toggle {
+        margin-bottom: 8px;
+    }
+
+    .control-mode-toggle button {
+        padding: 5px 10px; /* Reduce padding */
+        font-size: 0.9em; /* Reduce font size */
+        margin: 0 3px; /* Reduce margin */
+    }
+
+    /* Ensure the content area still gets enough space */
+    .control-content {
+        /* min-height might be needed if content gets too small */
+    }
 } 

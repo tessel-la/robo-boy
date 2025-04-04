@@ -105,10 +105,27 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ ros }) => {
 
   return (
     <div className="voice-control">
-      <h4>Voice Control</h4>
-      <p>{statusMessage}</p>
-      <button onClick={isRecording ? stopRecording : startRecording} disabled={!ros}> 
-        {isRecording ? 'Stop Recording' : 'Record Voice Command'}
+      {isRecording && (
+        <div className="recording-indicator">
+          {/* <div className="pulsating-dot"></div> Removed dot */}
+          {/* Sound Wave Animation */}
+          <div className="sound-wave-container">
+            <div className="sound-bar"></div>
+            <div className="sound-bar"></div>
+            <div className="sound-bar"></div>
+            <div className="sound-bar"></div>
+            <div className="sound-bar"></div>
+          </div>
+          {/* <span>Recording...</span> Maybe remove text if wave is clear */} 
+        </div>
+      )}
+      <p className="status-message">{statusMessage}</p>
+      <button 
+        className={`record-button ${isRecording ? 'recording' : ''}`}
+        onClick={isRecording ? stopRecording : startRecording} 
+        disabled={!ros}
+      > 
+        {isRecording ? 'Stop' : 'Record'}
       </button>
     </div>
   );

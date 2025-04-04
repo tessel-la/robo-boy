@@ -1,17 +1,29 @@
 .entry-section {
-    max-width: 500px;
-    margin: 50px auto;
-    padding: 30px;
+    max-width: 500px; /* Re-added */
+    margin: 20px auto; /* Reduced top/bottom margin */
+    padding: 20px; /* Reduced padding */
+    width: 90%; /* Ensure it doesn't hit edges on small screens */
+    box-sizing: border-box;
 }
 
-.entry-section h2 {
-    text-align: center;
-    margin-bottom: 25px;
+/* Style for the new H1 title */
+.app-title {
+    font-size: 2.5em; /* Adjust size as needed */
+    font-weight: bold;
     color: var(--primary-color);
+    text-align: center;
+    margin-bottom: 20px;
+    margin-top: 0; /* Remove default H1 margin */
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 15px; /* Slightly reduce gap */
+    text-align: center; /* Center labels and content */
+}
+
+.radio-group {
+    /* Styles for the radio button container */
+    text-align: center; /* Center the radio buttons/labels */
 }
 
 .radio-group label {
@@ -19,6 +31,7 @@
     display: inline-flex; /* Align radio button and text */
     align-items: center;
     cursor: pointer;
+    margin-left: 15px; /* Add left margin for spacing */
 }
 
 .radio-group input[type="radio"] {

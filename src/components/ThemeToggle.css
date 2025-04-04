@@ -1,25 +1,74 @@
+/* Remove old button styles */
+/* .theme-toggle-button { ... } */
+/* .theme-toggle-button:hover { ... } */
+
+/* Remove switch styles */
+/* .theme-switch { ... } */
+/* .theme-switch input { ... } */
+/* .slider { ... } */
+/* .slider::before { ... } */
+/* .icon-container { ... } */
+/* .sun-icon { ... } */
+/* .moon-icon { ... } */
+/* .theme-switch input:checked + .slider::before { ... } */
+/* .theme-switch input:checked + .slider .sun-icon { ... } */
+/* .theme-switch input:checked + .slider .moon-icon { ... } */
+
+/* New Button Styles */
 .theme-toggle-button {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 10px;
-    background-color: var(--card-bg);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 50%; /* Make it circular */
-    cursor: pointer;
-    font-size: 1.5rem; /* Adjust icon size */
-    line-height: 1; /* Ensure icon is centered vertically */
-    width: 50px; /* Fixed width */
-    height: 50px; /* Fixed height */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 8px; /* Slightly smaller padding */
+  background-color: var(--card-bg);
+  color: var(--text-color); /* Icon inherits this color */
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1; 
+  width: 44px; /* Button size */
+  height: 44px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+  overflow: hidden; /* Hide icon during transition */
 }
 
 .theme-toggle-button:hover {
-    transform: scale(1.1);
-    opacity: 1; /* Override general button hover opacity if needed */
-} 
+  transform: scale(1.1);
+}
+
+/* Icon Wrapper for Animation */
+.icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: rotateIcon 0.5s ease-in-out forwards; /* Apply animation */
+}
+
+.icon-wrapper svg {
+  width: 1.5em; /* Control icon size */
+  height: 1.5em;
+}
+
+/* Keyframes for the rotation animation */
+@keyframes rotateIcon {
+  from {
+    transform: rotate(0deg) scale(0.8);
+    opacity: 0.5;
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Specific color overrides if needed (optional) */
+/* .theme-toggle-button.light .icon-wrapper {
+  color: #555; 
+} */
+/* .theme-toggle-button.dark .icon-wrapper {
+  color: #eee; 
+} */ 

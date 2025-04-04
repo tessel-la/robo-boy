@@ -10,132 +10,122 @@ interface PadControlProps {
   ros: Ros;
 }
 
-// Constants
-const CMD_VEL_TOPIC = '/cmd_vel';
-const CMD_VEL_MSG_TYPE = 'geometry_msgs/Twist';
-const THROTTLE_INTERVAL = 100; // Milliseconds between velocity commands
-const MAX_LINEAR_SPEED = 0.5; // m/s - Adjust as needed
-const MAX_ANGULAR_SPEED = 1.0; // rad/s - Adjust as needed
-const MAX_LINEAR_Y_SPEED = 0.5; // m/s - Add Y speed limit
-const MAX_LINEAR_Z_SPEED = 0.3; // m/s - Add Z speed limit
+// Constants - Updated for sensor_msgs/Joy
+const JOY_TOPIC = '/joy'; // Standard topic for joystick data
+const JOY_MSG_TYPE = 'sensor_msgs/Joy';
+const THROTTLE_INTERVAL = 100; // Milliseconds 
+const JOYSTICK_MAX_VALUE = 1.0; // Max absolute value for axes
+const NUM_AXES = 4; // Define the number of axes we are using (adjust if needed)
 
 const PadControl: React.FC<PadControlProps> = ({ ros }) => {
-  const cmdVelTopic = useRef<Topic | null>(null);
-  // Use state to store combined velocity components from both joysticks
-  const [velocities, setVelocities] = useState({
-    linearX: 0,
-    linearY: 0,
-    linearZ: 0,
-    angularZ: 0,
-  });
-  const lastSentVelocities = useRef({ ...velocities }); // Keep track of last sent values for display
+  const joyTopic = useRef<Topic | null>(null); // Renamed ref
+  // State to hold axes values - Initialize with zeros
+  const [axes, setAxes] = useState<number[]>(Array(NUM_AXES).fill(0.0));
+  const lastSentAxes = useRef<number[]>([...axes]);
 
   // Initialize the topic publisher
   useEffect(() => {
-    cmdVelTopic.current = new ROSLIB.Topic({
+    joyTopic.current = new ROSLIB.Topic({
       ros: ros,
-      name: CMD_VEL_TOPIC,
-      messageType: CMD_VEL_MSG_TYPE,
+      name: JOY_TOPIC,
+      messageType: JOY_MSG_TYPE,
     });
-    cmdVelTopic.current.advertise();
-    console.log(`Advertised ${CMD_VEL_TOPIC}`);
+    joyTopic.current.advertise();
+    console.log(`Advertised ${JOY_TOPIC}`);
 
     return () => {
-      // Send a stop command when component unmounts if moving
-      if (Object.values(lastSentVelocities.current).some(v => v !== 0)) {
-        publishVelocityCombinedThrottled.cancel(); // Cancel any pending throttled calls
-        publishVelocityCombined({ linearX: 0, linearY: 0, linearZ: 0, angularZ: 0 }); // Send immediate stop
+      // Send a zero axes command when component unmounts if axes are non-zero
+      if (lastSentAxes.current.some(a => a !== 0)) {
+        publishJoyThrottled.cancel(); // Cancel any pending throttled calls
+        publishJoy(Array(NUM_AXES).fill(0.0)); // Send immediate stop
       }
-      cmdVelTopic.current?.unadvertise();
-      console.log(`Unadvertised ${CMD_VEL_TOPIC}`);
-      cmdVelTopic.current = null;
+      joyTopic.current?.unadvertise();
+      console.log(`Unadvertised ${JOY_TOPIC}`);
+      joyTopic.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ros]); // Only re-initialize if ros changes
 
-  // Raw velocity publishing function - takes the combined state
-  const publishVelocityCombined = (vels: typeof velocities) => {
-    if (!cmdVelTopic.current) return;
+  // Function to publish Joy message
+  const publishJoy = (currentAxes: number[]) => {
+    if (!joyTopic.current) return;
 
-    const twist = new ROSLIB.Message({
-      linear: { x: vels.linearX, y: vels.linearY, z: vels.linearZ },
-      angular: { x: 0, y: 0, z: vels.angularZ },
+    const joyMsg = new ROSLIB.Message({
+      header: { // Add a basic header (optional but good practice)
+        stamp: { secs: 0, nsecs: 0 }, // Can be populated with current time if needed
+        frame_id: ''
+      },
+      axes: currentAxes,
+      buttons: [] // No buttons implemented for now
     });
-    // console.log('Publishing Twist:', twist);
-    cmdVelTopic.current.publish(twist);
-    lastSentVelocities.current = { ...vels }; // Update last sent state
-    // We need to update the state for display purposes, as lastSentVelocities is just a ref
-    setVelocities(vels);
+    // console.log('Publishing Joy:', joyMsg);
+    joyTopic.current.publish(joyMsg);
+    lastSentAxes.current = [...currentAxes]; // Update last sent state
   };
 
-  // Throttled version of the combined publish function
+  // Throttled version of the publish function
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const publishVelocityCombinedThrottled = useCallback(
-    throttle(publishVelocityCombined, THROTTLE_INTERVAL, { leading: true, trailing: true }),
+  const publishJoyThrottled = useCallback(
+    throttle(publishJoy, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [ros] // Recreate throttled func only if ros changes
   );
 
-  // --- Left Joystick Handlers (X/Y Translation) ---
+  // --- Left Joystick Handlers (Axes 0 & 1) ---
   const handleMoveLeft = (event: any) => {
     if (event.x === null || event.y === null) return;
-    const size = 100;
+    const size = 100; // Assuming joystick component size is 100
     const halfSize = size / 2;
-    const newLinearX = (event.y / halfSize) * MAX_LINEAR_SPEED;
-    const newLinearY = (-event.x / halfSize) * MAX_LINEAR_Y_SPEED; // Inverted X for Y
+    // Map joystick x/y to axes 0/1, normalize to [-JOYSTICK_MAX_VALUE, +JOYSTICK_MAX_VALUE]
+    const newAxis0 = (event.x / halfSize) * JOYSTICK_MAX_VALUE;
+    const newAxis1 = (event.y / halfSize) * JOYSTICK_MAX_VALUE;
 
-    const newVels = {
-        ...lastSentVelocities.current, // Keep Z/Yaw from other joystick
-        linearX: newLinearX,
-        linearY: newLinearY,
-    };
-    setVelocities(newVels); // Update state immediately for responsiveness
-    publishVelocityCombinedThrottled(newVels);
+    const newAxes = [...lastSentAxes.current]; // Start with the last known state
+    newAxes[0] = newAxis0;
+    newAxes[1] = newAxis1;
+
+    setAxes(newAxes); // Update state immediately for responsiveness
+    publishJoyThrottled(newAxes);
   };
 
   const handleStopLeft = () => {
-    publishVelocityCombinedThrottled.cancel(); // Cancel pending calls
-    const newVels = {
-        ...lastSentVelocities.current, // Keep Z/Yaw from other joystick
-        linearX: 0,
-        linearY: 0,
-    };
-    setVelocities(newVels); // Update state immediately
-    publishVelocityCombined(newVels); // Publish stop for X/Y immediately
+    publishJoyThrottled.cancel(); // Cancel pending calls
+    const newAxes = [...lastSentAxes.current];
+    newAxes[0] = 0.0;
+    newAxes[1] = 0.0;
+    setAxes(newAxes); // Update state immediately
+    publishJoy(newAxes); // Publish stop immediately
   };
 
-  // --- Right Joystick Handlers (Z/Yaw) ---
+  // --- Right Joystick Handlers (Axes 2 & 3) ---
   const handleMoveRight = (event: any) => {
     if (event.x === null || event.y === null) return;
-    const size = 100;
+    const size = 100; // Assuming joystick component size is 100
     const halfSize = size / 2;
-    const newLinearZ = (event.y / halfSize) * MAX_LINEAR_Z_SPEED; // Y axis for Z
-    const newAngularZ = (-event.x / halfSize) * MAX_ANGULAR_SPEED; // X axis for Yaw
+    // Map joystick x/y to axes 2/3, normalize
+    const newAxis2 = (event.x / halfSize) * JOYSTICK_MAX_VALUE;
+    const newAxis3 = (event.y / halfSize) * JOYSTICK_MAX_VALUE;
 
-     const newVels = {
-        ...lastSentVelocities.current, // Keep X/Y from other joystick
-        linearZ: newLinearZ,
-        angularZ: newAngularZ,
-    };
-    setVelocities(newVels); // Update state immediately for responsiveness
-    publishVelocityCombinedThrottled(newVels);
+    const newAxes = [...lastSentAxes.current]; // Start with the last known state
+    newAxes[2] = newAxis2;
+    newAxes[3] = newAxis3;
+
+    setAxes(newAxes); // Update state immediately for responsiveness
+    publishJoyThrottled(newAxes);
   };
 
   const handleStopRight = () => {
-    publishVelocityCombinedThrottled.cancel(); // Cancel pending calls
-    const newVels = {
-        ...lastSentVelocities.current, // Keep X/Y from other joystick
-        linearZ: 0,
-        angularZ: 0,
-    };
-    setVelocities(newVels); // Update state immediately
-    publishVelocityCombined(newVels); // Publish stop for Z/Yaw immediately
+    publishJoyThrottled.cancel(); // Cancel pending calls
+    const newAxes = [...lastSentAxes.current];
+    newAxes[2] = 0.0;
+    newAxes[3] = 0.0;
+    setAxes(newAxes); // Update state immediately
+    publishJoy(newAxes); // Publish stop immediately
   };
 
   return (
     <div className="pad-control">
-      <h4>Pad Control</h4>
-      <div className="joysticks-container"> {/* Changed class */}
-         {/* Left Joystick (X/Y Translation) */}
+      <div className="joysticks-container">
+         {/* Left Joystick */}
         <div className="joystick-wrapper">
           <Joystick
             size={100}
@@ -144,12 +134,12 @@ const PadControl: React.FC<PadControlProps> = ({ ros }) => {
             stickColor="var(--primary-color)"
             move={handleMoveLeft}
             stop={handleStopLeft}
-            throttle={THROTTLE_INTERVAL / 2}
+            throttle={THROTTLE_INTERVAL / 2} // Throttle internal updates if needed
           />
-          <p className="joystick-label">Translate (X/Y)</p>
+          {/* <p className="joystick-label">Axes 0 (X) / 1 (Y)</p> Optional label */}
         </div>
 
-        {/* Right Joystick (Z/Yaw) */}
+        {/* Right Joystick */}
          <div className="joystick-wrapper">
           <Joystick
             size={100}
@@ -160,15 +150,10 @@ const PadControl: React.FC<PadControlProps> = ({ ros }) => {
             stop={handleStopRight}
             throttle={THROTTLE_INTERVAL / 2}
           />
-          <p className="joystick-label">Height (Z) / Yaw</p>
+          {/* <p className="joystick-label">Axes 2 (X) / 3 (Y)</p> Optional label */}
          </div>
       </div>
-      <div className="speed-info-grid"> {/* Changed class for grid layout */}
-        <p>LX: {velocities.linearX.toFixed(2)} m/s</p>
-        <p>LY: {velocities.linearY.toFixed(2)} m/s</p>
-        <p>LZ: {velocities.linearZ.toFixed(2)} m/s</p>
-        <p>AZ: {velocities.angularZ.toFixed(2)} rad/s</p>
-      </div>
+      {/* Speed info removed */}
     </div>
   );
 };

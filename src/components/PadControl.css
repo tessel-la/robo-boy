@@ -5,16 +5,19 @@
     justify-content: space-around; /* Space out title, joystick, info */
     width: 100%;
     height: 100%;
-    padding: 20px;
+    padding: 10px; /* Reduced padding */
     box-sizing: border-box;
-    gap: 15px; /* Add some space between elements */
+    gap: 10px; /* Reduced gap */
 }
 
+/* Removed h4 styles */
+/* 
 .pad-control h4 {
     margin-top: 0;
     margin-bottom: 15px;
     color: var(--primary-color);
 }
+*/
 
 .joysticks-container {
     display: flex;
@@ -37,17 +40,19 @@
     color: var(--text-secondary);
     margin-top: 5px;
     text-align: center;
+    display: none; /* Hide the labels */
 }
 
-/* Style for the new speed info display */
+/* Remove speed info styles */
+/* 
 .speed-info-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr); /* Two columns */
-    gap: 5px 15px; /* Row gap, Column gap */
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 5px 15px; 
     font-size: 0.9em;
     color: var(--text-secondary);
     text-align: center;
-    width: 250px; /* Adjust width as needed */
+    width: 250px; 
     margin-top: 10px;
 }
 
@@ -57,6 +62,7 @@
     background-color: var(--background-secondary);
     border-radius: 3px;
 }
+*/
 
 /* Adjust Joystick component container if needed - this might depend on react-joystick-component's internal structure */
 /* Example: If the component wraps the canvas in a div */
@@ -69,4 +75,34 @@
     color: var(--secondary-color);
     text-align: center;
     min-height: 1.2em; /* Prevent layout shift when text appears */
+}
+
+/* Media Query for very small screens (e.g., iPhone SE) */
+@media (max-width: 375px) {
+    .pad-control {
+        padding: 5px; /* Reduce padding */
+        gap: 5px;
+    }
+
+    .joysticks-container {
+        gap: 15px; /* Reduce gap between joysticks */
+        margin-bottom: 5px;
+    }
+
+    /* Reduce the size of the joystick component itself */
+    /* Note: This targets the div wrapper likely created by react-joystick-component */
+    /* You might need to inspect the actual HTML to confirm the selector */
+    .joystick-wrapper > div:first-child {
+        width: 80px !important;  /* Force smaller width */
+        height: 80px !important; /* Force smaller height */
+    }
+
+    /* Remove speed info styles */
+    /* 
+    .speed-info-grid {
+        width: 100%; /* Allow grid to take full width */
+        font-size: 0.8em;
+        gap: 2px 8px;
+    }
+    */
 }

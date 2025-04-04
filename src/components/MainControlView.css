@@ -1,302 +1,240 @@
 .main-control-view {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 60px); /* Adjust based on actual Navbar height or remove if Navbar is gone */
-    padding: 20px;
-    gap: 20px; /* Space between panels */
-    position: relative; /* For positioning the disconnect button */
-    padding-top: 70px; /* Add padding to prevent overlap with fixed header/status */
-    box-sizing: border-box; /* Ensure padding is included in height/width */
+    height: 100vh; /* Ensure it tries to fill the viewport height */
+    /* Remove padding-top, handled by content area now */
+    padding: 0; 
+    gap: 0; /* Remove gap, handled by content area padding */
+    position: relative; 
+    box-sizing: border-box; 
+    overflow: hidden; /* Prevent scrolling on the main view */
 }
 
-.view-panel-container,
-.control-panel-container {
-    flex: 1; /* Each takes half the height */
+/* Unified Top Bar Styles */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px; /* Reduced padding */
+    background-color: var(--navbar-bg, #333);
+    color: var(--navbar-text, white);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-sizing: border-box;
+    height: 40px; /* Reduced height */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); /* Adjusted shadow */
+    border-bottom-left-radius: 10px; /* Round bottom-left corner */
+    border-bottom-right-radius: 10px; /* Round bottom-right corner */
+}
+
+/* Main Content Area Styles */
+.main-content-area {
+    padding: 15px; 
+    padding-top: calc(40px + 15px); 
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Prevent flex items from overflowing */
-    width: 100%; /* Ensure full width */
+    align-items: stretch; 
+    gap: 15px; 
+    overflow: hidden; /* Changed from auto to hidden */
+    height: calc(100vh - 10px); 
     box-sizing: border-box;
 }
 
-.view-panel,
-.control-panel {
-    flex-grow: 1; /* Allow panels to fill their container */
+/* Remove styles for the old .view-header */
+/* .view-header {
     display: flex;
-    justify-content: center;
+    justify-content: space-between; 
     align-items: center;
-    overflow: hidden; /* Prevent content spill */
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px; /* Add consistent padding */
+    margin-bottom: 15px;
+    position: relative; 
+    z-index: 20; 
+    background-color: var(--background-color); 
+    padding: 10px; 
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-elevation-medium);
+} */
+
+/* Adjustments for elements within the top bar */
+.top-bar .view-toggle {
+    display: flex;
+    gap: 8px;
+    margin: 0; /* Remove default margin */
 }
 
-.view-toggle {
-    margin-bottom: 10px;
-    text-align: center;
+.top-bar .view-toggle button {
+    background-color: transparent;
+    border: 1px solid var(--navbar-text, white);
+    color: var(--navbar-text, white);
+    padding: 5px; /* Adjust padding for icons */
+    border-radius: 5px;
+    cursor: pointer;
+    /* font-size: 1.2em; /* Remove font-size */
+    line-height: 1;
+    opacity: 0.8;
+    /* Add flex centering for SVG */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.view-toggle button {
-    background-color: var(--card-bg);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    padding: 8px 15px;
-    margin: 0 5px;
-    border-radius: 20px; /* Pill shape */
-    opacity: 0.7;
+.top-bar .view-toggle button svg {
+    width: 1.2em; /* Reduced icon size */
+    height: 1.2em;
 }
 
-.view-toggle button.active {
+.top-bar .view-toggle button.active {
     background-color: var(--primary-color);
-    color: var(--bubble-text);
     border-color: var(--primary-color);
     opacity: 1;
 }
 
-.disconnect-button {
-    /* Remove background/border for icon button look */
-    background-color: transparent;
-    border: none;
-    color: var(--error-color); /* Use theme error color */
-    
-    /* Remove text-specific padding */
-    padding: 0; 
-    font-size: 1.5em; /* Make icon larger */
-    line-height: 1; /* Adjust line height for icon */
-    
-    /* Make it visually a button */
-    cursor: pointer;
-    border-radius: 4px; /* Optional: slight rounding for flat look */
-    width: 30px; /* Fixed size */
-    height: 30px; /* Fixed size */
+.top-bar .view-toggle button:hover {
+    opacity: 1;
+}
+
+.top-bar .status-controls {
     display: flex;
-    justify-content: center;
     align-items: center;
+    gap: 15px;
 }
 
-.disconnect-button:hover {
-    background-color: rgba(220, 53, 69, 0.1); /* Subtle background on hover */
+/* Use icon class names from TSX */
+.top-bar .connection-status-icon {
+    /* font-size: 1.4em; Remove font-size */
+    line-height: 1;
+    /* Add flex centering for SVG */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.top-bar .connection-status-icon svg {
+    width: 1.4em; /* Reduced icon size */
+    height: 1.4em;
 }
 
-.connection-status {
-    /* Remove padding */
+.top-bar .connection-status-icon.connected {
+    color: #4caf50; /* Green for connected */
+}
+
+.top-bar .connection-status-icon.disconnected {
+    color: #ffc107; /* Yellow/Amber for disconnected */
+}
+
+.top-bar .disconnect-button-icon {
+    background: none;
+    border: none;
+    color: var(--error-color, #dc3545); /* Use error color or default red */
+    /* font-size: 1.4em; Remove font-size */
+    line-height: 1;
+    cursor: pointer;
     padding: 0;
-    /* Adjust font size for icon */
-    font-size: 1.2em; 
-    line-height: 1; /* Adjust line height */
-    /* Remove background/border */
-    background-color: transparent;
-    border: none;
-    color: inherit; /* Let icon color be handled by parent/default */
-    width: 30px; /* Match button size */
-    height: 30px; /* Match button size */
-    display: flex;
+    /* Add flex centering for SVG */
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-    align-items: center;
+}
+.top-bar .disconnect-button-icon svg {
+    width: 1.4em; /* Reduced icon size */
+    height: 1.4em;
 }
 
-/* Keep the color logic for the icon itself */
-.connection-status.connected {
-    /* background-color: #28a745; */ /* Remove background */
-    /* color: white; */ /* Remove color override */
+.top-bar .disconnect-button-icon:hover {
+    color: var(--error-hover-color, #a71d2a); /* Darker red on hover */
 }
 
-.connection-status.disconnected {
-    /* background-color: #ffc107; */ /* Remove background */
-    /* color: #333; */ /* Remove color override */
-}
 
-/* Add styles for animations between view/control modes later */
-
-/* Container for view toggle and camera dropdown */
-.view-header {
-    display: flex;
-    justify-content: space-between; /* Align toggle left, dropdown right */
-    align-items: center;
-    margin-bottom: 15px;
-    position: relative; /* Needed for z-index */
-    z-index: 20; /* Set higher z-index for the header containing the dropdown */
-    background-color: var(--background-color); /* Ensure background isn't transparent */
-    padding: 10px; /* Add some padding */
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-elevation-medium);
-}
-
-.view-toggle {
-    display: flex;
-    gap: 5px;
-    /* Allow selector to take space */
-    flex-grow: 1;
-}
-
-.view-toggle button {
-    padding: 8px 15px;
-    border: 1px solid var(--border-color);
-    background-color: var(--background-secondary);
-    color: var(--text-secondary);
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.view-toggle button.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-.view-toggle button:hover:not(.active) {
-    background-color: var(--background-hover);
-}
-
-/* Style for the camera topic selector */
-.camera-topic-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0; /* Prevent shrinking */
-    position: relative; /* Keep dropdown relative to its container */
-}
-
-.camera-topic-selector label {
-    color: var(--text-secondary);
-    font-size: 0.9em;
-}
-
-.camera-topic-selector select {
-    padding: 5px;
-    border-radius: 4px;
-    border: 1px solid var(--border-color);
-    background-color: var(--input-background-color);
-    color: var(--text-color);
-}
-
+/* Adjust containers to fit within the new main-content-area */
 .view-panel-container {
-    /* ... existing styles ... */
-    /* Remove potential top margin if added previously */
-    margin-top: 0;
-}
-
-.view-panel {
-    /* Ensure panel takes remaining height if needed, adjust based on layout */
-    flex-grow: 1;
-    width: 100%;
-    /* Add min-height if content can be small */
-    min-height: 300px;
-    display: flex; /* Added to help placeholder centering */
-    justify-content: center; /* Added to help placeholder centering */
-    align-items: center; /* Added to help placeholder centering */
-}
-
-.view-panel .placeholder {
-    color: var(--text-secondary);
-    font-style: italic;
-}
-
-/* ... rest of the styles ... */
-
-/* New styles for the right-side container */
-.status-controls {
+    /* flex: 3 1 auto; */
+    flex: 1 1 auto; /* Let it grow and shrink to fill remaining space */
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    min-height: 0; 
+    width: 100%; 
+    box-sizing: border-box;
+    overflow: hidden; /* Hide overflow for the view panel */
 }
 
-/* CameraView specific adjustments */
-.view-panel .camera-view { /* Target CameraView inside view-panel */
+.control-panel-container {
+    /* flex: 1 1 auto; /* Removed flex sizing */
+    height: 35vh; /* Assign fixed viewport height (adjust as needed) */
+    flex-shrink: 0; /* Prevent shrinking below this height */
+    display: flex;
+    flex-direction: column;
+    /* min-height: 0; /* Not needed with fixed height */
+    width: 100%; 
+    box-sizing: border-box;
+    margin-bottom: 10px; 
+}
+
+/* Ensure panels fill their containers */
+.view-panel,
+.control-panel {
+    flex-grow: 1; 
+    display: flex;
+    flex-direction: column; 
+    overflow-y: auto; /* Allow internal scrolling if content exceeds fixed height */
     width: 100%;
-    height: 100%; 
+    /* height: 100%; /* Removed */
+    /* min-height: 250px; /* Removed */
+    box-sizing: border-box;
+    padding: 10px;
 }
 
-/* Camera Stream container adjustments */
-.camera-stream-container {
-  position: relative; 
-  width: 100%;
-  height: 100%; /* Allow vertical expansion */
-  /* max-width: 800px; */ /* REMOVE max-width */
-  aspect-ratio: unset; /* REMOVE fixed aspect ratio */
-  background-color: #000; 
-  border-radius: var(--border-radius);
-  overflow: hidden; 
-  display: flex; 
-  justify-content: center;
-  align-items: center;
+/* Prevent scrolling on body if main-control-view is active */
+body.no-scroll {
+    overflow: hidden;
 }
 
-/* ... styles for status-controls ... */
+/* Remove Camera Topic Selector styles if it's fully moved */
+/* .camera-topic-selector { ... } */
+/* .camera-topic-selector label { ... } */
+/* .camera-topic-selector select { ... } */
 
-/* Responsive Adjustments */
+/* Remove old connection/disconnect button styles if not used */
+/* .disconnect-button { ... } */
+/* .connection-status { ... } */
+
+/* --- Game Boy Style Adjustments --- */
+
+/* Remove the flex-shrink override here as it's handled above now */
+/* .control-panel-container {
+    flex-shrink: 0; 
+} */
+
+/* Remove text below D-Pad if it exists (assuming it's in PadControl) */
+/* Need to target the specific element in PadControl.css or PadControl.tsx */
+.pad-control .direction-label { /* Example selector, adjust as needed */
+    display: none;
+    height: 100%;
+}
+
+
+/* Responsive Adjustments for new layout */
 @media (max-width: 768px) { 
-    .main-control-view {
-        padding: 5px; /* Reduce padding */
-        gap: 5px; /* Reduce gap */
-        height: auto; /* Allow height to adjust to content */
-        min-height: calc(100vh - 60px); /* Still try to fill viewport */
+    .main-content-area {
+        padding: 10px;
+        padding-top: calc(40px + 10px); /* Adjusted padding */
+        gap: 10px;
     }
 
-    .view-panel-container,
-    .control-panel-container {
-        flex: none; /* Disable flex sizing */
-        min-height: 250px; /* Give panels minimum height */
-    }
+    /* Adjust top bar height/padding on mobile if needed */
+    /* .top-bar {
+        height: 35px; 
+        padding: 3px 8px;
+    } */
+    /* .main-content-area {
+      height: calc(100vh - 35px);
+      padding-top: calc(35px + 10px);
+    } */
 
-    /* Stack panels vertically */
-    .main-control-view {
-        flex-direction: column;
-    }
-
-    /* Ensure consistent padding on mobile panels */
-    .view-panel,
-    .control-panel {
-       padding: 5px;
-    }
-
-    .view-header {
-        flex-direction: column; /* Stack toggle and selector */
-        align-items: stretch; /* Stretch items full width */
-        gap: 5px; /* Reduce gap */
-    }
-
-    .status-controls {
-        justify-content: center;
-        width: 100%;
-        gap: 8px; /* Reduce gap */
-    }
-
-    .camera-topic-selector {
-        width: 100%; /* Make selector full width */
-    }
-
-    .camera-topic-selector select {
-        width: 100%; /* Make select full width */
-        max-width: none;
-    }
-
-    .view-toggle {
-      justify-content: flex-start; /* Align buttons left */
-      width: 100%;
-    }
-
-    /* Reduce size/gap of top controls on mobile */
-    .view-toggle button {
-       padding: 6px 10px;
-       font-size: 0.9em;
-    }
-
-    .disconnect-button {
-        font-size: 1.3em; /* Slightly smaller icon */
-        width: 28px;
-        height: 28px;
-    }
-    .connection-status {
-        font-size: 1.1em; /* Slightly smaller icon */
-        width: 28px;
-        height: 28px;
-    }
-
-    /* Ensure camera container doesn't have conflicting aspect ratio */
-    .camera-stream-container {
-      aspect-ratio: unset; /* Reinforce removal */
+    .top-bar .view-toggle button svg,
+    .top-bar .connection-status-icon svg,
+    .top-bar .disconnect-button-icon svg {
+        /* Adjust icon sizes for mobile if needed */
+        /* width: 1.1em; height: 1.1em; */
     }
 }

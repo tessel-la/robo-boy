@@ -6,6 +6,14 @@ interface EntrySectionProps {
   onConnect: (params: ConnectionParams) => void;
 }
 
+// New, more compact ASCII art
+const asciiArt = `
+   ____   __  ____   __       ____   __  _  _ 
+  (  _ \ /  \(  _ \ /  \  ___(  _ \ /  \( \/ )
+  )    /( O  )) _ ((  O )(___)) _ ((  O ))  / 
+  (__\_) \__/(____/ \__/     (____/ \__/(__/  
+`;
+
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('domain');
   const [ros2Value, setRos2Value] = useState<string>('');
@@ -21,7 +29,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
   return (
     <div className="entry-section card">
-      <h2>Connect to Robot (ROS 2)</h2>
+      <h1 className="app-title">Robo-Boy</h1>
       <form onSubmit={handleSubmit}>
         <>
           <div className="form-group">

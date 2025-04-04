@@ -8,8 +8,6 @@
   align-items: center;
   gap: 10px;
   width: 100%; /* Or set a specific width */
-  max-width: 640px; /* Example max width */
-  margin: 0 auto; /* Center if max-width is used */
   height: 100%;
   display: flex;
   flex-direction: column; /* Stack title and container */
@@ -25,7 +23,6 @@
 .camera-stream-container {
   position: relative; /* Establish positioning context for the overlay */
   width: 100%;
-  max-width: 800px; /* Optional: Limit max width */
   aspect-ratio: 16 / 9; /* Maintain aspect ratio, adjust as needed */
   background-color: #000; /* Black background while loading/error */
   border-radius: var(--border-radius);

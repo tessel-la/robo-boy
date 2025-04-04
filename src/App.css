@@ -1,5 +1,16 @@
 .App {
-  text-align: center;
+  /* text-align: center; */ /* Remove if using flex for centering */
+  min-height: 100vh; /* Ensure App fills viewport height */
+  display: flex;
+  flex-direction: column; /* Stack children vertically */
+}
+
+.App main {
+  flex-grow: 1; /* Allow main content to take up space */
+  /* display: flex; /* REMOVED */
+  /* justify-content: center; /* REMOVED */
+  /* align-items: stretch; /* REMOVED */
+  /* padding: 20px; /* Remove padding, let children handle it */
 }
 
 /* Add more specific styles for App component elements here */ 
