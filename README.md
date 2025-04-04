@@ -71,4 +71,32 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 
 ### Stopping the Services
 
+```bash
+# Stop and remove containers
+docker compose down
+
+# Stop, remove containers, AND remove Caddy's data volumes (useful for a clean restart)
+docker compose down -v 
+```
+
+## 🐳 Services Overview
+
+*   **`app`**: Runs the Vite development server for the React frontend with hot-reloading.
+    *   Accessible *internally* at `http://app:5173`.
+*   **`ros-stack`**: Runs ROS 2 components.
+    *   `rosbridge_server`: Provides WebSocket connection at `ws://ros-stack:9090`.
+    *   `web_video_server`: Streams video topics over HTTP at `http://ros-stack:8080`.
+*   **`caddy`**: Acts as a reverse proxy.
+    *   Listens on host ports `80` and `443`.
+    *   Provides HTTPS using the generated `mkcert` certificates.
+    *   Routes `/websocket` requests to `ros-stack:9090`.
+    *   Routes all other requests to the Vite dev server (`app:5173`).
+
+## 🛠️ Development Notes
+
+*   Changes to frontend code (in `/src`) should trigger hot-reloading in the browser.
+*   If you modify `Dockerfile`, `docker-compose.yml`, or `Caddyfile`, you'll need to rebuild and restart the services (`docker compose up -d --build --force-recreate`).
+*   Caddy logs can be viewed with `docker compose logs caddy`.
+*   ROS stack logs can be viewed with `docker compose logs ros-stack`.
+
 ```
