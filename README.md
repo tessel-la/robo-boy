@@ -1,11 +1,9 @@
 # 🤖 Robo-Boy
 
-```ascii
- ____   __  ____   __       ____   __  _  _ 
-(  _ \ /  \(  _ \ /  \  ___(  _ \ /  \( \/ )
- )   /(  O )) _ ((  O )(___)) _ ((  O ))  / 
-(__\_) \__/(____/ \__/     (____/ \__/(__/  
-```
+<!-- Replace with actual logo path if different -->
+<p align="center">
+  <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
+</p>
 
 A vibe web application for controlling ROS 2 robots, featuring a React frontend, ROS 2 integration via rosbridge, and secure local development setup with Caddy and HTTPS. Inspired by retro handheld consoles.
 
