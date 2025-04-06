@@ -6,6 +6,7 @@
   background-color: #282c34; /* Match viewer background or use theme variable */
   border-radius: 4px; /* Match card style */
   overflow: hidden; /* Ensure canvas doesn't overflow */
+  padding: 0; /* Ensure no padding */
 }
 
 /* Style the canvas element created by ROS3D.Viewer */

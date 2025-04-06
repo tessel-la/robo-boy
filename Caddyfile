@@ -14,13 +14,21 @@
         output stdout 
     }
 
+    # Order matters: More specific handlers first
+
     # Route WebSocket requests to the ros-stack container
     handle /websocket* {
        uri strip_prefix /websocket
        reverse_proxy ros-stack:9090 
     }
 
-    # Route other requests to the Vite app container
+    # Route video stream requests to the ros-stack container
+    handle /video_stream* {
+        uri strip_prefix /video_stream
+        reverse_proxy ros-stack:8080
+    }
+
+    # Route other requests to the Vite app container (Default Handler)
     handle {
         # Still proxy to HTTP endpoint of Vite container
         reverse_proxy http://app:5173 
@@ -31,3 +39,5 @@
 # :80 {
 #    redir https://{host}{uri} permanent
 # }
+
+# Removed the duplicate localhost block
