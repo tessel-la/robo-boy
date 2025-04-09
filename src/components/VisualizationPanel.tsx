@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+// Import Ros namespace and TFClient from roslib
 import type { Ros } from 'roslib';
+// Import roslib namespace instead of named TFClient
+import * as roslib from 'roslib'; 
 import * as ROS3D from 'ros3d';
 // import * as THREE from 'three'; // Remove THREE if not used
 import './VisualizationPanel.css'; // Create this next
@@ -9,14 +12,19 @@ const POINTCLOUD2_MSG_TYPE = 'sensor_msgs/msg/PointCloud2';
 
 interface VisualizationPanelProps {
   ros: Ros;
+  fixedFrame?: string; // Allow passing fixedFrame as a prop
 }
 
-const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: Ros | null }) => {
+const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros, fixedFrame = '/odom' }: { ros: Ros | null, fixedFrame?: string }) => {
   const viewerRef = useRef<HTMLDivElement>(null);
   // Use ROS3D.Type for refs
   const ros3dViewer = useRef<ROS3D.Viewer | null>(null);
   const gridClient = useRef<ROS3D.Grid | null>(null);
   const pointCloudClient = useRef<any | null>(null);
+  // Use 'any' for ref types due to type def issues
+  const roslibTFClientRef = useRef<any | null>(null);
+  // Use 'any' for ref types due to type def issues
+  const orbitControlsRef = useRef<any | null>(null);
 
   // State for topic selection
   const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
@@ -70,19 +78,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
 
   // Effect for ROS3D setup and cleanup
   useEffect(() => {
-    const currentViewerRef = viewerRef.current; // Capture ref value for cleanup
+    const currentViewerRef = viewerRef.current;
 
-    // Ensure the div exists, has an ID, and ROS is connected
     if (currentViewerRef?.id && ros && ros.isConnected) {
 
-      // Initialize viewer only if it hasn't been initialized yet
       if (!ros3dViewer.current) {
-        // console.log('Inspecting ROS3D object:', ROS3D);
         console.log('Initializing ROS3D Viewer on div#', currentViewerRef.id);
         try {
           const ViewerConstructor = (ROS3D as any).Viewer;
           const GridConstructor = (ROS3D as any).Grid;
           const PointCloud2Constructor = (ROS3D as any).PointCloud2;
+          // Use dynamic access for OrbitControls constructor
+          const OrbitControlsConstructor = (ROS3D as any).OrbitControls;
+          // Use dynamic access for roslib TFClient constructor
+          const RosLibTFClientConstructor = (roslib as any).TFClient;
 
           if (!ViewerConstructor) throw new Error("ROS3D.Viewer constructor not found!");
           const viewer = new ViewerConstructor({
@@ -98,11 +107,46 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
           gridClient.current = new GridConstructor();
           viewer.addObject(gridClient.current);
 
-          // Setup PointCloud Client (without explicit tfClient)
+          // --- Instantiate roslib TFClient --- 
+          console.log(`Initializing roslib TFClient with fixedFrame: ${fixedFrame}`);
+          if (RosLibTFClientConstructor) { // Check if constructor exists
+            roslibTFClientRef.current = new RosLibTFClientConstructor({
+                ros: ros,
+                angularThres: 0.01,
+                transThres: 0.01,
+                rate: 10.0,
+                fixedFrame: fixedFrame 
+            });
+          } else {
+              console.error("roslib.TFClient constructor not found!");
+              // Decide if this is critical - maybe PointCloud can work without it?
+              // For now, just warn and continue.
+          }
+          // -------------------------------------
+          
+          // --- Instantiate OrbitControls --- 
+          if (OrbitControlsConstructor && viewerRef.current) {
+            orbitControlsRef.current = new OrbitControlsConstructor({
+               scene: viewer.scene,
+               camera: viewer.camera,
+               userZoomSpeed: 0.2,
+               userPanSpeed: 0.2,
+               element: viewerRef.current 
+            });
+            console.log('OrbitControls initialized.');
+          } else {
+              console.warn('OrbitControls constructor not found or viewerRef not ready.');
+          }
+          // ---------------------------------
+
+          // Setup PointCloud Client (passing roslib TFClient if available)
           if (selectedPointCloudTopic) {
-            if (PointCloud2Constructor) {
+            if (PointCloud2Constructor) { // Check PointCloud constructor
+              // Only pass tfClient if it was successfully created
+              const tfClientInstance = roslibTFClientRef.current;
               pointCloudClient.current = new PointCloud2Constructor({
                   ros: ros,
+                  tfClient: tfClientInstance, // Pass instance (or null if failed)
                   rootObject: viewer.scene, 
                   topic: selectedPointCloudTopic,
                   material: { size: 0.05, color: 0xff00ff }, 
@@ -110,13 +154,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
               });
               console.log(`PointCloud client created for topic: ${selectedPointCloudTopic}`);
             } else {
-                 console.error("ROS3D.PointCloud2 constructor not found (dynamic check)!");
+                 console.error("ROS3D.PointCloud2 constructor not found!");
             }
           } else {
             console.log("No PointCloud topic selected, client not created.");
           }
 
-          console.log('ROS3D Viewer, Grid, and potentially PointCloud Client initialized.');
+          console.log('ROS3D Viewer, Grid, TFClient (roslib), OrbitControls, and potentially PointCloud Client initialized.');
 
         } catch (error) {
           console.error("Error initializing ROS3D Viewer or clients:", error);
@@ -130,6 +174,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
                 }
              }
              pointCloudClient.current = null;
+          }
+          if (roslibTFClientRef.current) {
+              roslibTFClientRef.current.dispose();
+              roslibTFClientRef.current = null;
+              console.log('Cleaned up roslib TFClient.');
+          }
+          if (orbitControlsRef.current) {
+             orbitControlsRef.current.dispose(); 
+             orbitControlsRef.current = null;
+             console.log('Cleaned up OrbitControls.');
           }
           if(gridClient.current && ros3dViewer.current?.scene) {
              try { ros3dViewer.current.scene.remove(gridClient.current); } catch(e){}
@@ -171,6 +225,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
            pointCloudClient.current = null;
         }
 
+        // Cleanup TFClient
+        if (roslibTFClientRef.current) {
+            roslibTFClientRef.current.dispose();
+            roslibTFClientRef.current = null;
+            console.log('Cleaned up roslib TFClient.');
+        }
+        
+        // Cleanup OrbitControls
+        if (orbitControlsRef.current) {
+           orbitControlsRef.current.dispose(); 
+           orbitControlsRef.current = null;
+           console.log('Cleaned up OrbitControls.');
+        }
+
         // Cleanup Grid
         if (gridClient.current && ros3dViewer.current?.scene) {
            try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { console.warn('Cleanup: Error removing grid', e); }
@@ -199,6 +267,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
        }
        pointCloudClient.current = null;
 
+       // Cleanup TFClient on disconnect
+       if (roslibTFClientRef.current) {
+            roslibTFClientRef.current.dispose();
+            roslibTFClientRef.current = null;
+       }
+       
+       // Cleanup OrbitControls on disconnect
+       if (orbitControlsRef.current) {
+           orbitControlsRef.current.dispose();
+           orbitControlsRef.current = null;
+       }
+
        // Cleanup Grid on disconnect
        if (gridClient.current && ros3dViewer.current?.scene) {
          try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { /* ignore */ }
@@ -210,7 +290,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
   // Dependencies: Re-run when ROS connection status changes or the ROS instance itself changes.
   // Adding ros?.isConnected ensures it runs correctly on connect/disconnect.
   // Added explicit 'ros' dependency due to direct check 'if (ros && ...)'
-  }, [ros, ros?.isConnected]); // Ensure effect runs on connection changes
+  // Added fixedFrame dependency
+  }, [ros, ros?.isConnected, fixedFrame]); // Ensure effect runs on connection changes
 
   // Handler for topic selection change
   const handleTopicChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
