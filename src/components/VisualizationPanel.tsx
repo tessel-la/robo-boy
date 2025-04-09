@@ -13,16 +13,17 @@ interface VisualizationPanelProps {
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: Ros | null }) => {
   const viewerRef = useRef<HTMLDivElement>(null);
+  // Use ROS3D.Type for refs
   const ros3dViewer = useRef<ROS3D.Viewer | null>(null);
-  const tfClient = useRef<ROS3D.TfClient | null>(null);
-  const gridClient = useRef<ROS3D.Grid | null>(null); // Keep track of the grid
-  // Use 'any' for the ref type due to potential type definition issues
+  const gridClient = useRef<ROS3D.Grid | null>(null);
   const pointCloudClient = useRef<any | null>(null);
 
   // State for topic selection
   const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
   const [selectedPointCloudTopic, setSelectedPointCloudTopic] = useState<string>(''); // Start with no topic selected
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // State for popup menu
+  const menuRef = useRef<HTMLDivElement>(null); // Ref for detecting outside clicks
 
   // Effect to set the ID on the div once the ref is available
   useEffect(() => {
@@ -63,8 +64,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
       setAvailablePointCloudTopics([]);
       setSelectedPointCloudTopic('');
       setFetchTopicsError(null);
+      setIsMenuOpen(false); // Close menu on disconnect
     }
-  }, [ros, ros?.isConnected, selectedPointCloudTopic]); // Re-run when ROS connection status changes
+  }, [ros, ros?.isConnected]); // Re-run when ROS connection status changes
 
   // Effect for ROS3D setup and cleanup
   useEffect(() => {
@@ -75,70 +77,62 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
 
       // Initialize viewer only if it hasn't been initialized yet
       if (!ros3dViewer.current) {
+        // console.log('Inspecting ROS3D object:', ROS3D);
         console.log('Initializing ROS3D Viewer on div#', currentViewerRef.id);
         try {
-          const viewer = new ROS3D.Viewer({
+          const ViewerConstructor = (ROS3D as any).Viewer;
+          const GridConstructor = (ROS3D as any).Grid;
+          const PointCloud2Constructor = (ROS3D as any).PointCloud2;
+
+          if (!ViewerConstructor) throw new Error("ROS3D.Viewer constructor not found!");
+          const viewer = new ViewerConstructor({
             divID: currentViewerRef.id,
             width: currentViewerRef.clientWidth,
             height: currentViewerRef.clientHeight,
             antialias: true,
-            // background: '#282c34' as any // Temporarily remove background option
+            background: undefined as any 
           });
           ros3dViewer.current = viewer;
 
-          // Add a grid
-          gridClient.current = new ROS3D.Grid();
+          if (!GridConstructor) throw new Error("ROS3D.Grid constructor not found!");
+          gridClient.current = new GridConstructor();
           viewer.addObject(gridClient.current);
 
-          // Setup TF Client
-          tfClient.current = new ROS3D.TfClient({
-            ros: ros,
-            angularThres: 0.01,
-            transThres: 0.01,
-            rate: 10.0,
-            fixedFrame: '/odom' // IMPORTANT: Change this to your actual fixed frame
-          });
-
-          // Setup PointCloud Client if a topic is selected
+          // Setup PointCloud Client (without explicit tfClient)
           if (selectedPointCloudTopic) {
-            // Use type assertion (as any) to bypass potential type errors
-            const PointCloud2Constructor = (ROS3D as any).PointCloud2;
             if (PointCloud2Constructor) {
               pointCloudClient.current = new PointCloud2Constructor({
                   ros: ros,
-                  tfClient: tfClient.current, // Use the TF client for correct positioning
-                  rootObject: viewer.scene, // Add directly to the viewer's scene
+                  rootObject: viewer.scene, 
                   topic: selectedPointCloudTopic,
-                  material: { size: 0.05, color: 0xff00ff }, // Example material
-                  max_pts: 10000 // Optional: limit points for performance
+                  material: { size: 0.05, color: 0xff00ff }, 
+                  max_pts: 10000 
               });
               console.log(`PointCloud client created for topic: ${selectedPointCloudTopic}`);
             } else {
-                 console.error("ROS3D.PointCloud2 constructor not found!");
+                 console.error("ROS3D.PointCloud2 constructor not found (dynamic check)!");
             }
           } else {
             console.log("No PointCloud topic selected, client not created.");
           }
 
-          console.log('ROS3D Viewer, TF Client, and potentially PointCloud Client initialized.');
+          console.log('ROS3D Viewer, Grid, and potentially PointCloud Client initialized.');
 
         } catch (error) {
           console.error("Error initializing ROS3D Viewer or clients:", error);
           // Clean up partial initialization
           if (pointCloudClient.current) {
-             // PointCloud client doesn't have an explicit unsubscribe/destroy
-             // Need to remove it from the scene if added
              if (ros3dViewer.current?.scene) {
-                 ros3dViewer.current.scene.remove(pointCloudClient.current.points);
+                // Access .points property if it exists
+                const pointsMesh = pointCloudClient.current.points;
+                if (pointsMesh) {
+                   try { ros3dViewer.current.scene.remove(pointsMesh); } catch (e) {}
+                }
              }
              pointCloudClient.current = null;
           }
-          if (tfClient.current) {
-            tfClient.current.unsubscribe();
-            tfClient.current = null;
-          }
           if(gridClient.current && ros3dViewer.current?.scene) {
-             ros3dViewer.current.scene.remove(gridClient.current);
+             try { ros3dViewer.current.scene.remove(gridClient.current); } catch(e){}
              gridClient.current = null;
           }
           ros3dViewer.current = null;
@@ -177,26 +171,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
            pointCloudClient.current = null;
         }
 
-        if (tfClient.current) {
-          tfClient.current.unsubscribe();
-          console.log('TF Client unsubscribed.');
-          tfClient.current = null;
+        // Cleanup Grid
+        if (gridClient.current && ros3dViewer.current?.scene) {
+           try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { console.warn('Cleanup: Error removing grid', e); }
+           gridClient.current = null;
         }
-
-        // Remove the grid from the scene before destroying the viewer
-        if (gridClient.current && ros3dViewer.current) {
-          // Check if scene still exists - belt and suspenders
-          if (ros3dViewer.current.scene) {
-             try {
-                ros3dViewer.current.scene.remove(gridClient.current);
-                console.log('Grid removed from scene.');
-             } catch(e) {
-                 console.warn('Could not remove grid from scene during cleanup:', e);
-             }
-          }
-          gridClient.current = null;
-        }
-
 
         // Destroy the viewer instance if it exists
         // Note: ROS3D.Viewer doesn't have an explicit destroy method.
@@ -220,16 +199,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
        }
        pointCloudClient.current = null;
 
-       if (tfClient.current) {
-         tfClient.current.unsubscribe();
-         tfClient.current = null;
-       }
-       // Grid removal logic (same as above)
+       // Cleanup Grid on disconnect
        if (gridClient.current && ros3dViewer.current?.scene) {
-          try {
-             ros3dViewer.current.scene.remove(gridClient.current);
-          } catch(e) { /* ignore */ }
-          gridClient.current = null;
+         try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { /* ignore */ }
+         gridClient.current = null;
        }
        ros3dViewer.current = null; // Nullify viewer ref if ROS disconnects
     }
@@ -237,32 +210,102 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ ros }: { ros: R
   // Dependencies: Re-run when ROS connection status changes or the ROS instance itself changes.
   // Adding ros?.isConnected ensures it runs correctly on connect/disconnect.
   // Added explicit 'ros' dependency due to direct check 'if (ros && ...)'
-  }, [ros, ros?.isConnected, selectedPointCloudTopic]); // Ensure effect runs on connection changes
+  }, [ros, ros?.isConnected]); // Ensure effect runs on connection changes
 
   // Handler for topic selection change
   const handleTopicChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedPointCloudTopic(event.target.value);
+    setIsMenuOpen(false); // Close menu after selection
   };
+
+  // Toggle menu visibility
+  const toggleMenu = () => {
+      setIsMenuOpen((prev: boolean) => !prev);
+  };
+
+  // Close menu if clicked outside
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+              setIsMenuOpen(false);
+          }
+      };
+
+      if (isMenuOpen) {
+          document.addEventListener('mousedown', handleClickOutside);
+      } else {
+          document.removeEventListener('mousedown', handleClickOutside);
+      }
+
+      return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+      };
+  }, [isMenuOpen]);
 
   return (
     // Ensure the container takes up space
-    <div ref={viewerRef} className="visualization-panel-container" style={{ width: '100%', height: '100%' }}>
-      {/* Topic Selection Dropdown - Overlay on top left */} 
+    <div ref={viewerRef} className="visualization-panel-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Corner button to open topic selector */} 
       {ros?.isConnected && (
-          <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'rgba(40, 44, 52, 0.8)', padding: '5px', borderRadius: '4px' }}>
-              <select 
-                  value={selectedPointCloudTopic}
-                  onChange={handleTopicChange}
-                  disabled={availablePointCloudTopics.length === 0}
-                  style={{ background: '#3a3f4b', color: 'white', border: '1px solid #555', borderRadius: '3px' }}
+          <div ref={menuRef} style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
+              {/* Button to toggle menu */} 
+              <button 
+                  onClick={toggleMenu}
+                  className="topic-menu-button" // Add class for styling
+                  title={selectedPointCloudTopic || "Select PointCloud Topic"}
+                  style={{
+                      background: 'rgba(40, 44, 52, 0.8)',
+                      color: 'white',
+                      border: '1px solid #555', 
+                      borderRadius: '4px', 
+                      padding: '5px 10px',
+                      cursor: 'pointer',
+                      maxWidth: '150px', // Prevent button getting too wide
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                  }}
               >
-                  <option value="">-- Select PointCloud Topic --</option>
-                  {availablePointCloudTopics.map((topic: string) => (
-                      <option key={topic} value={topic}>{topic}</option>
-                  ))}
-              </select>
-              {fetchTopicsError && <div style={{ color: 'red', fontSize: '0.8em', marginTop: '5px' }}>{fetchTopicsError}</div>}
-              {availablePointCloudTopics.length === 0 && !fetchTopicsError && <div style={{ color: 'orange', fontSize: '0.8em', marginTop: '5px' }}>No PointCloud2 topics found.</div>}
+                   {/* Display icon or short text */} 
+                   <span>{selectedPointCloudTopic ? selectedPointCloudTopic.split('/').pop() : "Topics"}</span>
+                   <span style={{ marginLeft: '5px' }}>{isMenuOpen ? '▲' : '▼'}</span> 
+              </button>
+
+              {/* Popup Menu - Renders below the button */} 
+              {isMenuOpen && (
+                  <div className="topic-menu-popup" // Add class for styling
+                      style={{
+                          position: 'absolute',
+                          top: '100%', // Position below the button
+                          left: 0,
+                          background: 'rgba(40, 44, 52, 0.95)',
+                          border: '1px solid #555',
+                          borderRadius: '4px',
+                          marginTop: '2px',
+                          padding: '5px',
+                          maxHeight: '200px',
+                          overflowY: 'auto'
+                      }}
+                  >
+                      {fetchTopicsError && <div style={{ color: 'red', fontSize: '0.8em', padding: '5px' }}>{fetchTopicsError}</div>}
+                      {availablePointCloudTopics.length === 0 && !fetchTopicsError && (
+                          <div style={{ color: 'orange', fontSize: '0.8em', padding: '5px' }}>No PointCloud2 topics found.</div>
+                      )}
+                      {availablePointCloudTopics.length > 0 && (
+                          <select 
+                              value={selectedPointCloudTopic} 
+                              onChange={handleTopicChange} 
+                              size={Math.min(availablePointCloudTopics.length + 1, 8)} // Show list directly
+                              style={{ width: '100%', background: '#3a3f4b', color: 'white', border: 'none' }}
+                          >
+                              <option value="" disabled={selectedPointCloudTopic !== ''}>-- Select Topic --</option>
+                              {availablePointCloudTopics.map((topic: string) => (
+                                  <option key={topic} value={topic}>{topic}</option>
+                              ))}
+                          </select>
+                      )}
+                  </div>
+              )}
           </div>
       )}
 
