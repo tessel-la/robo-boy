@@ -18,13 +18,15 @@ declare module 'roslib' {
     }
 
     export class Topic {
-        constructor(options: { ros: Ros; name: string; messageType: string });
+        constructor(options: { ros: Ros; name: string; messageType: string; [key: string]: any }); // Allow other options
         subscribe(callback: (message: any) => void): void;
         unsubscribe(): void;
         publish(message: any): void;
         advertise(): void;
         unadvertise(): void;
         // Add other properties/methods as needed
+        name: string; // Add name property
+        [key: string]: any; // Allow other properties like hasLoggedData
     }
 
     export class Message {
@@ -33,12 +35,34 @@ declare module 'roslib' {
         [key: string]: any;
     }
 
+    // Add TFClient declaration
+    export class TFClient {
+        constructor(options: {
+            ros: Ros;
+            fixedFrame: string;
+            angularThres?: number;
+            transThres?: number;
+            rate?: number;
+            serverName?: string;
+            repubServiceName?: string;
+            topicTimeout?: number;
+            updateDelay?: number;
+            groovyCompat?: boolean;
+            tfPrefix?: string;
+        });
+        subscribe(frameId: string, callback: (tf: any) => void): void;
+        unsubscribe(frameId: string, callback?: (tf: any) => void): void;
+        processTfArray(tf: any): void;
+        // Add other methods as needed
+    }
+
     // Add declarations for Service, Param, etc. as needed
 
     const ROSLIB: {
         Ros: typeof Ros;
         Topic: typeof Topic;
         Message: typeof Message;
+        TFClient: typeof TFClient; // Export TFClient
         // Service: typeof Service;
         // ... other exports
     };

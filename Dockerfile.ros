@@ -6,33 +6,43 @@ FROM ros:humble-ros-base
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install rosbridge, image tools, Python tools, and web_video_server
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Ensure package lists are updated right before installing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     ros-humble-rosbridge-server \
     ros-humble-image-transport \
     ros-humble-cv-bridge \
     ros-humble-web-video-server \
+    ros-humble-rosidl-default-generators \
     python3-opencv \
     python3-pip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install numpy for the image publisher script
 RUN pip install numpy
 
-# Create a workspace directory (optional, but good practice)
+# --- Build tf2_web_republisher_py ... ---
+# (Remove the entire block for cloning and building tf2_web_republisher_py)
+# RUN mkdir -p ...
+# --------------------------------------------
+
+# Create a general ROS workspace directory 
 WORKDIR /ros_ws
 
 
 # --- Entrypoint Script ---
-# Creates a script to source ROS and run nodes
-
-# Create entrypoint script
-RUN echo '#!/bin/bash' >> /ros_ws/entrypoint.sh && \
+RUN echo '#!/bin/bash' > /ros_ws/entrypoint.sh && \
     echo 'set -e' >> /ros_ws/entrypoint.sh && \
     echo 'source /opt/ros/humble/setup.bash' >> /ros_ws/entrypoint.sh && \
+    # Remove source for tf2_web_republisher_py workspace
+    # echo 'source /republisher_py_ws/install/setup.bash' >> /ros_ws/entrypoint.sh && \
     # Launch rosbridge on all interfaces within the container network
     echo 'ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=0.0.0.0 &' >> /ros_ws/entrypoint.sh && \
     # Launch web_video_server, listening on all interfaces in container port 8080
     echo 'ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &' >> /ros_ws/entrypoint.sh && \
+    # Remove launch for tf2_web_republisher_py
+    # echo 'ros2 run tf2_web_republisher_py tf2_web_republisher &' >> /ros_ws/entrypoint.sh && \
     # Keep the container running
     echo 'wait -n' >> /ros_ws/entrypoint.sh && \
     # Add exit handling
