@@ -23,6 +23,16 @@ const StandardPadLayout: React.FC<StandardPadLayoutProps> = ({ ros }) => { // Re
   const [axes, setAxes] = useState<number[]>(Array(NUM_AXES).fill(0.0));
   const lastSentAxes = useRef<number[]>([...axes]);
 
+  // Get current theme colors dynamically (this assumes theme variables are set on :root or body)
+  const getThemeColor = (variableName: string) => {
+      return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+  };
+
+  // Note: This might cause a flicker on initial load if CSS isn't fully loaded.
+  // Consider passing theme state down or using context for a more robust solution if needed.
+  const baseJoystickColor = getThemeColor('--secondary-color') || '#6c757d'; // Grey fallback
+  const stickJoystickColor = getThemeColor('--primary-color') || '#32CD32'; // Lime fallback
+
   // Function to publish Joy message (define first)
   const publishJoy = useCallback((currentAxes: number[]) => {
     if (!joyTopic.current) return;
@@ -130,8 +140,8 @@ const StandardPadLayout: React.FC<StandardPadLayoutProps> = ({ ros }) => { // Re
           <Joystick
             size={100}
             stickSize={60}
-            baseColor="var(--border-color)"
-            stickColor="var(--primary-color)"
+            baseColor={baseJoystickColor} // Use dynamic secondary color
+            stickColor={stickJoystickColor} // Use dynamic primary color
             move={handleMoveLeft}
             stop={handleStopLeft}
             throttle={THROTTLE_INTERVAL / 2} // Throttle internal updates if needed
@@ -144,8 +154,8 @@ const StandardPadLayout: React.FC<StandardPadLayoutProps> = ({ ros }) => { // Re
           <Joystick
             size={100}
             stickSize={60}
-            baseColor="var(--border-color)"
-            stickColor="var(--primary-color)"
+            baseColor={baseJoystickColor} // Use dynamic secondary color
+            stickColor={stickJoystickColor} // Use dynamic primary color
             move={handleMoveRight}
             stop={handleStopRight}
             throttle={THROTTLE_INTERVAL / 2}

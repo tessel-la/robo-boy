@@ -1,33 +1,57 @@
+/* Default theme (Light) */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-
   --primary-color: #32CD32; /* Lime Green */
-  --secondary-color: #6c757d;
+  --primary-hover-color: #28a745; /* Darker Lime */
+  --primary-darker-color: #218838; /* Even Darker Lime */
+  --secondary-color: #6c757d; /* Grey */
   --background-color: #ffffff;
-  --text-color: #000000;
+  --background-secondary: #f8f9fa; /* Very light grey */
+  --text-color: #212529; /* Dark grey/black */
+  --text-secondary: #6c757d; /* Medium grey */
   --border-color: #dee2e6;
-  --card-bg: #f8f9fa;
+  --card-bg: #ffffff;
   --card-border: #dee2e6;
-  --bubble-bg: var(--primary-color);
-  --bubble-text: #ffffff; /* White text on lime */
+  --button-text-color: #ffffff; /* Text on primary button */
+  --error-color: #dc3545; /* Red */
+  --error-hover-color: #c82333; /* Darker Red */
+  --error-rgb: 220, 53, 69; /* For RGBA shadows */
 }
 
 [data-theme='dark'] {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
-
   --primary-color: #32CD32; /* Lime Green */
-  --secondary-color: #adb5bd;
-  --background-color: #121212; /* Darker black */
+  --primary-hover-color: #40e040; /* Brighter Lime for hover */
+  --primary-darker-color: #28a745; /* Slightly darker for borders */
+  --secondary-color: #adb5bd; /* Lighter grey */
+  --background-color: #121212; /* Dark grey/black */
+  --background-secondary: #2c2c2c; /* Medium dark grey */
   --text-color: #e0e0e0; /* Light grey text */
+  --text-secondary: #adb5bd; /* Medium light grey */
   --border-color: #444444; /* Dark grey border */
-  --card-bg: #1e1e1e; /* Slightly lighter black for cards */
+  --card-bg: #1e1e1e; /* Slightly lighter card background */
   --card-border: #333333;
-  --bubble-bg: var(--primary-color);
-  --bubble-text: #121212; /* Black text on lime */
+  --button-text-color: #121212; /* Dark text on lime button */
+  --error-color: #e74c3c; /* Brighter Red for dark */
+  --error-hover-color: #c0392b; /* Darker Red */
+  --error-rgb: 231, 76, 60; /* For RGBA shadows */
+}
+
+/* Solarized Theme */
+[data-theme='solarized'] {
+  --primary-color: #cb4b16; /* Orange */
+  --primary-hover-color: #bd360b; /* Darker Orange */
+  --primary-darker-color: #a52f08; /* Even Darker Orange */
+  --secondary-color: #6c71c4; /* Violet */
+  --background-color: #fdf6e3; /* Base3 - Sand */
+  --background-secondary: #eee8d5; /* Base2 - Lighter Sand */
+  --text-color: #657b83; /* Base00 - Dark grey-blue */
+  --text-secondary: #93a1a1; /* Base0 - Medium grey-blue */
+  --border-color: #93a1a1; /* Base0 */
+  --card-bg: #eee8d5; /* Base2 */
+  --card-border: #93a1a1; /* Base0 */
+  --button-text-color: #fdf6e3; /* Base3 - Sand text on orange button */
+  --error-color: #dc322f; /* Red */
+  --error-hover-color: #b5262a; /* Darker Red */
+  --error-rgb: 220, 50, 47; /* For RGBA shadows */
 }
 
 body {

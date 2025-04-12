@@ -3,23 +3,39 @@ import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
 import MainControlView from './components/MainControlView';
-import ThemeToggle from './components/ThemeToggle';
+import ThemeSelector from './components/ThemeSelector';
 
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
   ros2Value: string | number;   // Now required
 }
 
+const THEMES = ['light', 'dark', 'solarized']; // Define available themes
+const THEME_STORAGE_KEY = 'appTheme';
+
 function App() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams | null>(null);
-  const [theme, setTheme] = useState('dark');
 
+  // Initialize theme state from local storage or default to 'dark'
+  const [theme, setTheme] = useState(() => {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    return storedTheme && THEMES.includes(storedTheme) ? storedTheme : 'dark';
+  });
+
+  // Apply theme to document and store in local storage
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    console.log(`Theme set to: ${theme}`);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  // Function to set a specific theme
+  const selectTheme = (themeName: string) => {
+    if (THEMES.includes(themeName)) {
+      setTheme(themeName);
+    } else {
+      console.warn(`Attempted to set invalid theme: ${themeName}`);
+    }
   };
 
   const handleConnect = (params: ConnectionParams) => {
@@ -44,7 +60,11 @@ function App() {
           />
         )}
       </main>
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+      <ThemeSelector 
+          currentTheme={theme} 
+          selectTheme={selectTheme} // Pass the specific theme setter function
+          themes={THEMES} // Pass themes for the menu
+      />
     </div>
   );
 }

@@ -1,0 +1,155 @@
+/* Remove old button styles */
+/* .theme-toggle-button { ... } */
+/* .theme-toggle-button:hover { ... } */
+
+/* Remove switch styles */
+/* .theme-switch { ... } */
+/* .theme-switch input { ... } */
+/* .slider { ... } */
+/* .slider::before { ... } */
+/* .icon-container { ... } */
+/* .sun-icon { ... } */
+/* .moon-icon { ... } */
+/* .theme-switch input:checked + .slider::before { ... } */
+/* .theme-switch input:checked + .slider .sun-icon { ... } */
+/* .theme-switch input:checked + .slider .moon-icon { ... } */
+
+/* New Button Styles */
+.theme-selector-container { /* New container for positioning */
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000; /* Ensure it's above other content */
+}
+
+.theme-selector-button { 
+  /* Styles for the main toggle button */
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+
+.theme-selector-button:hover {
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transform: translateY(-2px);
+}
+
+.icon-wrapper {
+  width: 24px; /* Adjust size as needed */
+  height: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; 
+}
+
+.icon-wrapper svg {
+  color: var(--primary-color);
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out; 
+}
+
+/* Popup Menu Styles */
+.theme-popup-menu {
+  position: absolute;
+  bottom: 65px; /* Position above the button */
+  right: 0;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px) scale(0.95); /* Initial state for animation */
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+}
+
+.theme-popup-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1); /* Final state for animation */
+}
+
+.theme-popup-menu button {
+  background-color: transparent;
+  border: none;
+  color: var(--text-color);
+  padding: 8px 12px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+}
+
+.theme-popup-menu button:hover {
+  background-color: var(--background-secondary);
+}
+
+.theme-popup-menu button svg {
+  width: 18px;
+  height: 18px;
+  color: var(--primary-color); /* Use primary for icons */
+}
+
+/* Active theme indicator (optional) */
+.theme-popup-menu button.active {
+  font-weight: bold;
+  background-color: var(--primary-color);
+  color: var(--button-text-color);
+}
+
+.theme-popup-menu button.active svg {
+  color: var(--button-text-color);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .theme-selector-container {
+    bottom: 15px;
+    right: 15px;
+  }
+  .theme-selector-button {
+    width: 45px;
+    height: 45px;
+  }
+  .icon-wrapper {
+    width: 20px;
+    height: 20px;
+  }
+  .theme-popup-menu {
+    bottom: 60px; /* Adjust popup position */
+  }
+}
+
+@media (max-width: 480px) {
+  .theme-selector-container {
+    bottom: 10px;
+    right: 10px;
+  }
+  .theme-selector-button {
+    width: 40px;
+    height: 40px;
+  }
+  .icon-wrapper {
+    width: 18px;
+    height: 18px;
+  }
+  .theme-popup-menu {
+    bottom: 55px; /* Adjust popup position */
+  }
+} 
