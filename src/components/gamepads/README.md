@@ -49,4 +49,35 @@ To add a new custom gamepad layout (e.g., a "SNES Controller"):
 5.  **Update `AddPanelMenu.tsx`:**
     *   Add an entry to `availablePanelTypes` (e.g., `{ type: 'snes', label: 'SNES Control' }`).
 
-This integrates the new layout into the control panel system. 
+This integrates the new layout into the control panel system.
+
+## Theme Customization
+
+The application supports multiple themes, including user-created custom themes. Themes define the color palette for the UI elements.
+
+### Creating & Managing Themes
+
+1.  **Access Theme Menu:** Click the theme icon button (usually in the bottom-right corner). This opens a popup menu displaying available themes (default and custom).
+
+    ![Theme Selector Popup](images/theme_custom_1.jpg)
+
+2.  **Create New Theme:** Click the "Create New Theme..." button in the popup. This opens the Theme Creator modal.
+
+    ![Theme Creator Modal](images/theme_custom_2.jpg)
+
+3.  **Define Theme:**
+    *   Enter a unique **Name** for your theme.
+    *   Select the base **Colors** (Primary, Secondary, Background) using the color pickers. Optional colors (Text, Border, etc.) can also be set.
+    *   Choose an **Icon** to represent your theme in the selector menu.
+    *   Click **Save Theme**.
+
+4.  **Editing/Deleting:** Custom themes will have Edit (pencil) and Delete (trash) icons next to them in the theme selector popup. Clicking Edit opens the Theme Creator pre-filled with that theme's settings. Clicking Delete prompts for confirmation before removing the theme.
+
+    ![Theme with Edit/Delete Actions](images/theme_custom_3).jpg)
+
+### How it Works
+
+*   Default themes (`light`, `dark`, `solarized`) have their CSS variables defined directly in `src/index.css` using `[data-theme="themename"]` selectors.
+*   Custom themes are stored in the browser's `localStorage`.
+*   When a custom theme is selected, JavaScript dynamically generates a `<style>` tag containing CSS variable overrides based on the saved colors and injects it into the document head. The `<body>` element also gets a `data-theme="custom-theme-id"` attribute.
+*   UI components should primarily use the defined CSS variables (e.g., `var(--primary-color)`, `var(--background-color)`) for styling to ensure they adapt correctly to the selected theme. 

@@ -26,10 +26,46 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
   <img src="images/padcontrol.jpg" alt="Pad Control" width="30%">
   <img src="images/voice.jpg" alt="Voice Control" width="30%">
   <img src="images/3dview.jpg" alt="3D View" width="30%">
-  <img src="images/createpad.jpg" alt="3D View" width="30%">
-  <img src="images/gameboy.jpg" alt="3D View" width="30%">
+  <img src="images/createpad.jpg" alt="Create Pad" width="30%">
+  <img src="images/gameboy.jpg" alt="GameBoy Control" width="30%">
   
 </p>
+## Theme Customization
+
+The application supports multiple themes, including user-created custom themes. Themes define the color palette for the UI elements.
+
+### Creating & Managing Themes
+
+1.  **Access Theme Menu:** Click the theme icon button (usually in the bottom-right corner). This opens a popup menu displaying available themes (default and custom).
+
+    <p align="center">
+      <img src="images/theme_custom_1.jpg" alt="Theme Selector Popup" width="30%">
+    </p>
+
+2.  **Create New Theme:** Click the "Create New Theme..." button in the popup. This opens the Theme Creator modal.
+
+    <p align="center">
+      <img src="images/theme_custom_2.jpg" alt="Theme Creator Modal" width="30%">
+    </p>
+
+3.  **Define Theme:**
+    *   Enter a unique **Name** for your theme.
+    *   Select the base **Colors** (Primary, Secondary, Background) using the color pickers. Optional colors (Text, Border, etc.) can also be set.
+    *   Choose an **Icon** to represent your theme in the selector menu.
+    *   Click **Save Theme**.
+
+4.  **Editing/Deleting:** Custom themes will have Edit (pencil) and Delete (trash) icons next to them in the theme selector popup. Clicking Edit opens the Theme Creator pre-filled with that theme's settings. Clicking Delete prompts for confirmation before removing the theme.
+
+    <p align="center">
+      <img src="images/theme_custom_3.jpg" alt="Theme with Edit/Delete Actions" width="30%">
+    </p>
+
+### How it Works
+
+*   Default themes (`light`, `dark`, `solarized`) have their CSS variables defined directly in `src/index.css` using `[data-theme="themename"]` selectors.
+*   Custom themes are stored in the browser's `localStorage`.
+*   When a custom theme is selected, JavaScript dynamically generates a `<style>` tag containing CSS variable overrides based on the saved colors and injects it into the document head. The `<body>` element also gets a `data-theme="custom-theme-id"` attribute.
+*   UI components should primarily use the defined CSS variables (e.g., `var(--primary-color)`, `var(--background-color)`) for styling to ensure they adapt correctly to the selected theme. 
 
 ## 🚀 Getting Started
 
