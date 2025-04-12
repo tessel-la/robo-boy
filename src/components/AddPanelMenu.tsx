@@ -14,6 +14,7 @@ interface AddPanelMenuProps {
 const availablePanelTypes: { type: PanelType, label: string }[] = [
   { type: 'pad', label: 'Pad Control' },
   { type: 'voice', label: 'Voice Control' },
+  { type: 'gameboy', label: 'GameBoy Control' }, // Add GameBoy option
   // { type: 'gameboy', label: 'GameBoy Control' }, // Add later
 ];
 

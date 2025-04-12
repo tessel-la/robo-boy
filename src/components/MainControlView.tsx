@@ -8,6 +8,7 @@ import VisualizationPanel from './VisualizationPanel'; // Import the new Visuali
 import ControlPanel from './ControlPanel'; // We will create this next
 import PadControl from './PadControl'; // Keep for rendering individual panels
 import VoiceControl from './VoiceControl'; // Keep for rendering individual panels
+import GameBoyControlPanel from './GameBoyControlPanel'; // Import the GameBoy panel
 // Import GameBoyControlPanel later when created
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
@@ -58,7 +59,7 @@ const icons = {
 };
 
 // Define Panel Types
-export type PanelType = 'pad' | 'voice' | 'gameboy'; // Add 'gameboy' later
+export type PanelType = 'pad' | 'voice' | 'gameboy'; // Add 'gameboy' type
 export interface ActivePanel {
   id: string;
   type: PanelType;
@@ -211,8 +212,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         return <PadControl ros={ros} key={panel.id} />;
       case 'voice':
         return <VoiceControl ros={ros} key={panel.id} />;
-      // case 'gameboy': // Add later
-      //   return <GameBoyControlPanel ros={ros} key={panel.id} />;
+      case 'gameboy': // Add case for GameBoy
+        return <GameBoyControlPanel ros={ros} key={panel.id} />;
       default:
         return <div>Unknown Panel Type</div>;
     }
