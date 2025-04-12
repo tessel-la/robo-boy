@@ -18,11 +18,13 @@
     "react-joystick-component": "^6.2.1",
     "ros3d": "^1.1.0",
     "roslib": "^1.4.1",
-    "three": "^0.89.0"
+    "three": "^0.89.0",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^7.2.0",
     "@vitejs/plugin-react": "^4.2.1",

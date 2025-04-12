@@ -43,8 +43,8 @@
 }
 
 .icon-wrapper {
-  width: 24px; /* Adjust size as needed */
-  height: 24px;
+  width: 28px; /* Increased size */
+  height: 28px; /* Increased size */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -82,39 +82,107 @@
 }
 
 .theme-popup-menu button {
-  background-color: transparent;
-  border: none;
-  color: var(--text-color);
-  padding: 8px 12px;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  width: 100%;
+  /* Keep base styles */
 }
 
-.theme-popup-menu button:hover {
+/* Rename existing button style for clarity */
+.theme-select-button {
+    background-color: transparent;
+    border: none;
+    color: var(--text-color);
+    padding: 8px 12px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    width: 100%;
+    /* Remove flex-grow if previously added */
+}
+
+.theme-select-button:hover {
   background-color: var(--background-secondary);
 }
 
-.theme-popup-menu button svg {
+.theme-select-button svg {
   width: 18px;
   height: 18px;
-  color: var(--primary-color); /* Use primary for icons */
+  color: var(--primary-color);
 }
 
-/* Active theme indicator (optional) */
-.theme-popup-menu button.active {
+.theme-select-button.active {
   font-weight: bold;
   background-color: var(--primary-color);
   color: var(--button-text-color);
 }
 
-.theme-popup-menu button.active svg {
+.theme-select-button.active svg {
   color: var(--button-text-color);
+}
+
+/* Style for the row containing theme button and actions */
+.theme-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Push actions to the right */
+    gap: 5px;
+    width: 100%;
+}
+
+.theme-item-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0; /* Prevent action buttons from shrinking */
+}
+
+.action-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; /* Small size for action icons */
+    height: 24px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: var(--background-secondary);
+    color: var(--text-color);
+}
+
+.action-button.delete-button:hover {
+    color: var(--error-color); /* Red hover for delete */
+}
+
+.action-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.create-new-theme-button {
+    margin-top: 8px; /* Space above */
+    padding: 8px 12px;
+    background-color: var(--background-secondary);
+    color: var(--text-color);
+    border: 1px dashed var(--border-color); /* Dashed border */
+    text-align: center;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    width: 100%;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.create-new-theme-button:hover {
+    background-color: var(--border-color);
+    border-color: var(--text-secondary);
 }
 
 /* Responsive Adjustments */
@@ -128,8 +196,8 @@
     height: 45px;
   }
   .icon-wrapper {
-    width: 20px;
-    height: 20px;
+    width: 24px; /* Adjusted size */
+    height: 24px; /* Adjusted size */
   }
   .theme-popup-menu {
     bottom: 60px; /* Adjust popup position */
@@ -146,8 +214,8 @@
     height: 40px;
   }
   .icon-wrapper {
-    width: 18px;
-    height: 18px;
+    width: 20px; /* Adjusted size */
+    height: 20px; /* Adjusted size */
   }
   .theme-popup-menu {
     bottom: 55px; /* Adjust popup position */

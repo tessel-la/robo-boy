@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ThemeSelector.css'; // Renamed CSS file
 
-interface ThemeSelectorProps { // Renamed interface
-  currentTheme: string;
-  selectTheme: (themeName: string) => void; // Now accepts the theme name
-  themes: string[]; // Added themes array prop
+// Define the structure for the theme data passed to the selector
+interface SelectorThemeData {
+  id: string; // Can be default name ('light') or custom ID
+  name: string; // Display name
+  isDefault: boolean;
+}
+
+// Add Edit and Delete Icons (Example SVGs)
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+
+interface ThemeSelectorProps {
+  currentThemeId: string; // Changed from currentTheme
+  selectTheme: (themeId: string) => void; // Changed argument name
+  themes: SelectorThemeData[]; // Use the new interface
+  openThemeCreator: (themeId?: string | null) => void; // Optional ID for editing
+  deleteTheme: (themeId: string) => void;
 }
 
 const SunIcon = () => (
@@ -35,17 +48,50 @@ const SolarizedIcon = () => (
   </svg>
 );
 
-const ThemeSelector: React.FC<ThemeSelectorProps> = ({ currentTheme, selectTheme, themes }) => {
+// Helper function to get the appropriate icon
+const getIcon = (themeId: string) => {
+    // Map IDs (default or custom) to icons
+    // For custom themes, you might need a default icon or add an 'icon' field later
+    switch (themeId) {
+        case 'light': return <SunIcon />;
+        case 'dark': return <MoonIcon />;
+        case 'solarized': return <SolarizedIcon />;
+        default: return <SunIcon />; // Default for custom themes for now
+    }
+};
+
+const ThemeSelector: React.FC<ThemeSelectorProps> = ({ 
+    currentThemeId, 
+    selectTheme, 
+    themes, 
+    openThemeCreator, 
+    deleteTheme
+}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null); // Ref for the container
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleThemeSelect = (themeName: string) => {
-    selectTheme(themeName); // Call parent function with selected theme
-    setIsMenuOpen(false); // Close menu after selection
+  const handleThemeSelect = (themeId: string) => {
+    selectTheme(themeId); // Pass the ID
+    setIsMenuOpen(false);
+  };
+
+  const handleEdit = (e: React.MouseEvent, themeId: string) => {
+      e.stopPropagation(); // Prevent theme selection
+      openThemeCreator(themeId);
+      setIsMenuOpen(false);
+  };
+
+  const handleDelete = (e: React.MouseEvent, themeId: string, themeName: string) => {
+      e.stopPropagation(); // Prevent theme selection
+      // Basic confirmation
+      if (window.confirm(`Are you sure you want to delete the theme "${themeName}"?`)) {
+          deleteTheme(themeId);
+          setIsMenuOpen(false); // Close menu after deletion
+      }
   };
 
   // Close menu on click outside
@@ -67,51 +113,63 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ currentTheme, selectTheme
     };
   }, [isMenuOpen]);
 
-  const getIcon = (themeName: string) => {
-      switch (themeName) {
-          case 'light': return <SunIcon />;
-          case 'dark': return <MoonIcon />;
-          case 'solarized': return <SolarizedIcon />;
-          default: return <SunIcon />; // Default to sun
-      }
-  };
-  
-  const getLabel = (themeName: string) => {
-      return `Switch to ${themeName.charAt(0).toUpperCase() + themeName.slice(1)} theme`;
-  };
-
   return (
-    <div className="theme-selector-container" ref={containerRef}> {/* Add container and ref */}
+    <div className="theme-selector-container" ref={containerRef}>
         <button 
-            onClick={toggleMenu} // Toggle menu on click
-            className={`theme-selector-button ${currentTheme}`}
+            onClick={toggleMenu}
+            className={`theme-selector-button ${currentThemeId}`}
             aria-label="Select theme"
             title="Select theme"
-            aria-haspopup="true" // Indicate popup
-            aria-expanded={isMenuOpen} // Indicate state
+            aria-haspopup="true"
+            aria-expanded={isMenuOpen}
         >
             <div className="icon-wrapper">
-                {/* Show icon representing the CURRENT theme */} 
-                {getIcon(currentTheme)} 
+                {getIcon(currentThemeId)} {/* Use currentThemeId */}
             </div>
         </button>
 
         {/* Popup Menu */}
         <div className={`theme-popup-menu ${isMenuOpen ? 'open' : ''}`}> 
-            {themes.map(themeName => (
-                <button
-                    key={themeName}
-                    onClick={() => handleThemeSelect(themeName)}
-                    className={currentTheme === themeName ? 'active' : ''} // Highlight active theme
-                    aria-pressed={currentTheme === themeName} // Indicate active state
-                >
-                    {getIcon(themeName)} {/* Icon next to name */}
-                    <span>{themeName.charAt(0).toUpperCase() + themeName.slice(1)}</span>
-                </button>
+            {themes.map(themeData => (
+                <div key={themeData.id} className="theme-item-row"> {/* Wrap button and actions */}
+                    <button
+                        onClick={() => handleThemeSelect(themeData.id)}
+                        className={`theme-select-button ${currentThemeId === themeData.id ? 'active' : ''}`} 
+                        aria-pressed={currentThemeId === themeData.id}
+                    >
+                        {getIcon(themeData.id)} 
+                        <span>{themeData.name}</span>
+                    </button>
+                    {!themeData.isDefault && (
+                        <div className="theme-item-actions">
+                            <button 
+                                className="action-button edit-button"
+                                onClick={(e) => handleEdit(e, themeData.id)}
+                                title={`Edit ${themeData.name}`}
+                                aria-label={`Edit ${themeData.name}`}
+                            >
+                                <EditIcon />
+                            </button>
+                            <button 
+                                className="action-button delete-button"
+                                onClick={(e) => handleDelete(e, themeData.id, themeData.name)}
+                                title={`Delete ${themeData.name}`}
+                                aria-label={`Delete ${themeData.name}`}
+                             >
+                                <DeleteIcon />
+                            </button>
+                        </div>
+                    )}
+                </div>
             ))}
+            <button 
+                className="create-new-theme-button"
+                onClick={() => { openThemeCreator(); setIsMenuOpen(false); }}>
+                    Create New Theme...
+             </button> 
         </div>
     </div>
   );
 };
 
-export default ThemeSelector; // Renamed export 
+export default ThemeSelector; 
