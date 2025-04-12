@@ -6,10 +6,9 @@ import './MainControlView.css';
 import CameraView from './CameraView'; // Import the new CameraView
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
 import ControlPanel from './ControlPanel'; // We will create this next
-import PadControl from './PadControl'; // Keep for rendering individual panels
-import VoiceControl from './VoiceControl'; // Keep for rendering individual panels
-import GameBoyControlPanel from './GameBoyControlPanel'; // Import the GameBoy panel
-// Import GameBoyControlPanel later when created
+import StandardPadLayout from './gamepads/standard/StandardPadLayout'; // Import the new StandardPad layout
+import VoiceLayout from './gamepads/voice/VoiceLayout'; // Import the new Voice layout
+import GameBoyLayout from './gamepads/gameboy/GameBoyLayout'; // Import the new GameBoy layout
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
@@ -59,7 +58,7 @@ const icons = {
 };
 
 // Define Panel Types
-export type PanelType = 'pad' | 'voice' | 'gameboy'; // Add 'gameboy' type
+export type PanelType = 'standardpad' | 'voicelayout' | 'gameboy'; // Updated types
 export interface ActivePanel {
   id: string;
   type: PanelType;
@@ -82,12 +81,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   // --- New State for Modular Control Panels ---
   const initialPanelId = generateUniqueId('panel');
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([
-    { id: initialPanelId, type: 'pad', name: 'Pad 1' } // Start with one pad panel
+    { id: initialPanelId, type: 'standardpad', name: 'Pad 1' } // Start with standard pad
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   // Counter for naming new panels of the same type
-  const panelCounters = useRef<Record<PanelType, number>>({ pad: 1, voice: 0, gameboy: 0 });
+  const panelCounters = useRef<Record<PanelType, number>>({ standardpad: 1, voicelayout: 0, gameboy: 0 }); // Updated counters
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -172,8 +171,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleAddPanelType = (type: PanelType) => {
+    // Define labels based on the new types
+    const typeLabels: Record<PanelType, string> = {
+        standardpad: 'Pad',
+        voicelayout: 'Voice',
+        gameboy: 'GameBoy'
+    };
     panelCounters.current[type]++;
-    const newName = `${type.charAt(0).toUpperCase() + type.slice(1)} ${panelCounters.current[type]}`;
+    const newName = `${typeLabels[type]} ${panelCounters.current[type]}`; // Use label for name
     const newPanel: ActivePanel = {
         id: generateUniqueId('panel'),
         type: type,
@@ -208,12 +213,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (!panel || !ros) return null; // Need ROS connection for panels
 
     switch (panel.type) {
-      case 'pad':
-        return <PadControl ros={ros} key={panel.id} />;
-      case 'voice':
-        return <VoiceControl ros={ros} key={panel.id} />;
-      case 'gameboy': // Add case for GameBoy
-        return <GameBoyControlPanel ros={ros} key={panel.id} />;
+      case 'standardpad':
+        return <StandardPadLayout ros={ros} key={panel.id} />;
+      case 'voicelayout':
+        return <VoiceLayout ros={ros} key={panel.id} />;
+      case 'gameboy':
+        return <GameBoyLayout ros={ros} key={panel.id} />;
       default:
         return <div>Unknown Panel Type</div>;
     }

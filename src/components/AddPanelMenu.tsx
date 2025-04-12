@@ -12,10 +12,10 @@ interface AddPanelMenuProps {
 
 // Define available panel types here or pass them as props
 const availablePanelTypes: { type: PanelType, label: string }[] = [
-  { type: 'pad', label: 'Pad Control' },
-  { type: 'voice', label: 'Voice Control' },
-  { type: 'gameboy', label: 'GameBoy Control' }, // Add GameBoy option
-  // { type: 'gameboy', label: 'GameBoy Control' }, // Add later
+  { type: 'standardpad', label: 'Standard Pad' },
+  { type: 'voicelayout', label: 'Voice Input' },
+  { type: 'gameboy', label: 'GameBoy Control' },
+  // Add other layouts here as they are created
 ];
 
 // Find or create the portal root element

@@ -27,6 +27,7 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
   <img src="images/voice.jpg" alt="Voice Control" width="30%">
   <img src="images/3dview.jpg" alt="3D View" width="30%">
   <img src="images/createpad.jpg" alt="3D View" width="30%">
+  <img src="images/gameboy.jpg" alt="3D View" width="30%">
   
 </p>
 
