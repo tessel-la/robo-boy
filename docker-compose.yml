@@ -43,6 +43,10 @@ services:
       dockerfile: Dockerfile.ros # Use the ROS Dockerfile
     ports: # Expose web_video_server port
       - "127.0.0.1:8080:8080" # Map container 8080 to host's localhost:8080
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw 
+    environment:
+      - DISPLAY=${DISPLAY}
     networks: # Assign to custom network
       - app-net
 

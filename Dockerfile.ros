@@ -5,37 +5,86 @@ FROM ros:humble-ros-base
 # Set noninteractive mode for installations
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install rosbridge, image tools, Python tools, and web_video_server
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install necessary dependencies (ensure git is included)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     ros-humble-rosbridge-server \
     ros-humble-image-transport \
     ros-humble-cv-bridge \
     ros-humble-web-video-server \
+    ros-humble-rosidl-default-generators \
     python3-opencv \
     python3-pip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install numpy for the image publisher script
-RUN pip install numpy
+# Install python dependencies
+RUN pip install numpy pyquaternion
 
-# Create a workspace directory (optional, but good practice)
+# --- Build packages from source --- 
+RUN mkdir -p /republisher_ws/src
+WORKDIR /republisher_ws/src
+# Copy the interface package
+# COPY tf2_web_republisher_py/tf2_web_republisher /republisher_ws/src/tf2_web_republisher
+# Copy the python package
+# COPY tf2_web_republisher_py/tf2_web_republisher_py /republisher_ws/src/tf2_web_republisher_py
+
+# --- DEBUG: Show copied files ---
+RUN echo "--- Contents of /republisher_ws/src: ---" && ls -la /republisher_ws/src
+# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher
+# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher
+# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher/tf2_web_republisher || echo "Inner dir not found"
+# RUN echo "--- package.xml content: ---" && cat /republisher_ws/src/tf2_web_republisher/package.xml || echo "package.xml not found"
+# --- END DEBUG ---
+
+# Build the workspace
+WORKDIR /republisher_ws
+# Clean potential stale artifacts before building
+RUN echo "--- Cleaning build/install/log directories --- " && rm -rf build install log
+# RUN echo "--- Attempting colcon build --- " && . /opt/ros/humble/setup.sh && colcon build --symlink-install --packages-select tf2_web_republisher && colcon build --symlink-install --packages-select tf2_web_republisher_py
+# Build the entire workspace now, colcon handles order
+# --- Build TF2 web republisher if sources were copied ---
+# RUN if [ -d "src/tf2_web_republisher" ]; then \
+#       echo "--- Building tf2_web_republisher packages ---" && \
+#       . /opt/ros/humble/setup.sh && \
+#       colcon build --symlink-install --packages-select tf2_web_republisher tf2_web_republisher_py; \
+#     else \
+#       echo "--- Skipping tf2_web_republisher build (sources not found) ---"; \
+#     fi
+
+# --- DEBUG: Show build results ---
+RUN echo "--- Contents of /republisher_ws after build: ---" && ls -la /republisher_ws
+RUN echo "--- Contents of /republisher_ws/install after build: ---" && ls -la /republisher_ws/install || echo "Install directory not found"
+# Add specific check for installed Python package and msg module
+# RUN echo "--- Checking for installed Python msg module: ---" && \
+#     ls -la /republisher_ws/install/tf2_web_republisher/lib/python3.10/site-packages/tf2_web_republisher/msg || echo "Python msg module directory not found!"
+# --- END DEBUG ---
+
+# --------------------------------------------
+
+# Reset working directory
 WORKDIR /ros_ws
 
-
 # --- Entrypoint Script ---
-# Creates a script to source ROS and run nodes
-
-# Create entrypoint script
-RUN echo '#!/bin/bash' >> /ros_ws/entrypoint.sh && \
+RUN echo '#!/bin/bash' > /ros_ws/entrypoint.sh && \
     echo 'set -e' >> /ros_ws/entrypoint.sh && \
+    echo 'echo "--- Sourcing ROS Humble --- "' >> /ros_ws/entrypoint.sh && \
     echo 'source /opt/ros/humble/setup.bash' >> /ros_ws/entrypoint.sh && \
-    # Launch rosbridge on all interfaces within the container network
+#    echo 'echo "--- Sourcing tf2_web_republisher workspace --- "' >> /ros_ws/entrypoint.sh && \
+#    echo 'if [ -f "/republisher_ws/install/setup.bash" ]; then source /republisher_ws/install/setup.bash; else echo "Republisher workspace not found, skipping source."; fi' >> /ros_ws/entrypoint.sh && \
+    echo 'echo "--- Launching ROS Components --- "' >> /ros_ws/entrypoint.sh && \
+    # Debug: Print PYTHONPATH after sourcing
+    echo 'echo "--- PYTHONPATH after sourcing: $PYTHONPATH"' >> /ros_ws/entrypoint.sh && \
+    # Launch rosbridge
     echo 'ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=0.0.0.0 &' >> /ros_ws/entrypoint.sh && \
-    # Launch web_video_server, listening on all interfaces in container port 8080
+    # Launch web_video_server
     echo 'ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &' >> /ros_ws/entrypoint.sh && \
+    # Launch tf2_web_republisher package, but use the expected executable/node name
+#    echo 'if [ -d "/republisher_ws/install/tf2_web_republisher_py" ]; then ros2 run tf2_web_republisher_py tf2_web_republisher_py & else echo "tf2_web_republisher_py not found, skipping launch."; fi' >> /ros_ws/entrypoint.sh && \
     # Keep the container running
+    echo 'echo "--- Waiting for processes to exit --- "' >> /ros_ws/entrypoint.sh && \
     echo 'wait -n' >> /ros_ws/entrypoint.sh && \
-    # Add exit handling
+    echo 'echo "--- Exiting entrypoint --- "' >> /ros_ws/entrypoint.sh && \
     echo 'exit $?' >> /ros_ws/entrypoint.sh
 
 # Make entrypoint executable

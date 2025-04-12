@@ -1,19 +1,192 @@
-.visualization-panel-container {
+.visualization-panel {
+  display: flex;
+  flex-direction: column; /* Stack controls above viewer */
   width: 100%;
-  height: 100%; /* Ensure it takes the full height of its parent */
-  min-height: 300px; /* Minimum height */
-  position: relative; /* Needed for absolute positioning of placeholder */
-  background-color: #282c34; /* Match viewer background or use theme variable */
-  border-radius: 4px; /* Match card style */
-  overflow: hidden; /* Ensure canvas doesn't overflow */
-  padding: 0; /* Ensure no padding */
+  height: 100%; /* Fill parent height */
+  min-height: 300px; /* Example minimum height */
+  background-color: var(--background-color); /* Use theme variable */
+  border-radius: var(--border-radius); /* Use theme variable */
+  overflow: hidden; /* Prevent content spilling out */
+  box-shadow: var(--box-shadow);
+  /* Remove padding from panel, apply to viewer container if needed */
+  /* padding: 10px; */ 
+  box-sizing: border-box; /* Include padding in width/height */
+  position: relative; /* Needed for positioning button and popup */
+}
+
+/* Remove old controls bar */
+/* .visualization-controls { ... } */
+
+/* --- Settings Button --- */
+.settings-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20; /* Above viewer overlay, below popup */
+  background-color: rgba(40, 44, 52, 0.7); /* Semi-transparent */
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%; /* Make it circular */
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5em; /* Adjust icon size */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.settings-button:hover {
+  background-color: rgba(60, 64, 72, 0.9);
+}
+
+/* --- Settings Popup --- */
+.settings-popup {
+  position: absolute;
+  top: 60px; /* Position below the button */
+  right: 10px;
+  z-index: 100; /* Above everything */
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 15px;
+  box-shadow: var(--box-shadow-large);
+  min-width: 300px; /* Minimum width */
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Space between items in popup */
+}
+
+.settings-popup h4 {
+  margin: 0 0 10px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 1.1em;
+  text-align: center;
+}
+
+.popup-control-item {
+  display: flex;
+  flex-direction: column; /* Stack label above control */
+  gap: 5px;
+}
+
+.popup-control-item label {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
+.popup-control-item select,
+.popup-control-item .topic-selector-button {
+  width: 100%; /* Make controls fill popup width */
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-radius: var(--border-radius-small);
+  font-size: 0.9em;
+  box-sizing: border-box;
+}
+
+.popup-control-item .topic-selector-button {
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+   justify-content: space-between; 
+}
+
+.popup-control-item .topic-selector-control {
+  position: relative; /* Keep for dropdown positioning */
+}
+
+/* Adjust dropdown to fit within popup */
+.popup-control-item .topic-selector-dropdown {
+  position: absolute;
+  top: 100%; 
+  left: 0;
+  right: 0; /* Ensure it doesn't overflow popup */
+  background-color: var(--background-popup); /* Different background maybe? */
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-small);
+  margin-top: 2px; 
+  max-height: 150px; /* Limit height */
+  overflow-y: auto;
+  z-index: 110; /* Above popup content */
+  list-style: none;
+  padding: 0;
+  margin: 2px 0 0 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  width: 100%; /* Match parent width */
+}
+
+/* Reuse topic item styles */
+.popup-control-item .topic-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.popup-control-item .topic-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.popup-control-item .topic-item.disabled,
+.popup-control-item .topic-item.error {
+  color: var(--text-disabled);
+  cursor: default;
+  background-color: transparent;
+}
+.popup-control-item .topic-item.error {
+  color: var(--error-color);
+}
+
+/* --- ROS3D Viewer Container --- */
+.ros3d-viewer {
+  flex-grow: 1; /* Allow viewer to take remaining space */
+  width: 100%;
+  height: 100%; /* Make viewer fill the flex item */
+  min-height: 0; /* Override previous min-height if needed */
+  position: relative; /* Needed for absolute positioning of overlay */
+  background-color: #1e1e1e; /* Darker background for viewer */
+  border-radius: var(--border-radius); /* Match panel radius */
+  overflow: hidden; /* Important: Keep canvas contained */
+  /* border: 1px solid var(--border-color); */ /* Optional border */
 }
 
 /* Style the canvas element created by ROS3D.Viewer */
-.visualization-panel-container canvas {
+.ros3d-viewer canvas {
   display: block; /* Remove any potential bottom spacing */
+  width: 100% !important; /* Force canvas size */
+  height: 100% !important; /* Force canvas size */
+}
+
+/* Overlay for messages (connecting, select topic, error) */
+.viewer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-style: italic;
+  background-color: rgba(30, 30, 30, 0.85); /* Semi-transparent overlay */
+  z-index: 10; /* Ensure it's above the canvas */
+  pointer-events: none; /* Allow interaction with canvas */
+  color: var(--text-secondary);
+  border-radius: var(--border-radius); /* Match container */
+}
+
+.viewer-overlay.error-overlay {
+    color: var(--error-color);
+    background-color: rgba(80, 30, 30, 0.85); /* Reddish overlay for error */
 }
 
 .viz-placeholder {
