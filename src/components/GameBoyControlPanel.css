@@ -1,0 +1,100 @@
+/* src/components/GameBoyControlPanel.css */
+
+.gameboy-control-panel {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 20px;
+    background-color: var(--card-bg); /* Use existing theme */
+    border-radius: 8px;
+    width: 100%;
+    height: 100%; /* Fill the container */
+    box-sizing: border-box;
+    user-select: none; /* Prevent text selection */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: manipulation; /* Improve touch responsiveness */
+}
+
+/* D-Pad Styles */
+.d-pad {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 2px; 
+}
+
+.d-pad-button {
+    background-color: #555;
+    border: 1px solid #444;
+    color: var(--text-color-light);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2em;
+    border-radius: 4px;
+    transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.d-pad-button:active {
+    background-color: var(--primary-color);
+    transform: scale(0.95);
+}
+
+/* Explicit grid placement */
+.d-pad-button.up    { grid-column: 2; grid-row: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.d-pad-button.down  { grid-column: 2; grid-row: 3; border-top-left-radius: 0; border-top-right-radius: 0; }
+.d-pad-button.left  { grid-column: 1; grid-row: 2; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.d-pad-button.right { grid-column: 3; grid-row: 2; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+.d-pad-center {
+    grid-column: 2;
+    grid-row: 2;
+    background-color: #666;
+    border-radius: 50%; /* Make it circular */
+    border: 1px solid #444;
+}
+
+/* A/B Button Styles */
+.ab-buttons {
+    display: flex;
+    flex-direction: column; /* Stack them vertically */
+    justify-content: space-between; /* Space them out */
+    align-items: center;
+    height: 100px; /* Match D-pad height */
+    width: 60px; /* Adjust width as needed */
+}
+
+.ab-button {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%; /* Circular buttons */
+    border: 1px solid #444;
+    background-color: #800020; /* Dark red */
+    color: var(--text-color-light);
+    font-weight: bold;
+    font-size: 1.1em;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.ab-button:active {
+    background-color: #cc0033; /* Brighter red */
+    transform: scale(0.95);
+}
+
+.ab-button.b {
+    /* Specific styles if needed */
+}
+
+.ab-button.a {
+    /* Specific styles if needed */
+} 

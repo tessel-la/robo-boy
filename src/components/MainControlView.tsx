@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ConnectionParams } from '../App'; // Import types
 import { useRos } from '../hooks/useRos'; // Import the hook
 import './MainControlView.css';
@@ -6,6 +6,12 @@ import './MainControlView.css';
 import CameraView from './CameraView'; // Import the new CameraView
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
 import ControlPanel from './ControlPanel'; // We will create this next
+import PadControl from './PadControl'; // Keep for rendering individual panels
+import VoiceControl from './VoiceControl'; // Keep for rendering individual panels
+// Import GameBoyControlPanel later when created
+import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
+import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
+import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -51,6 +57,14 @@ const icons = {
   disconnect: <IconMCVClose />,
 };
 
+// Define Panel Types
+export type PanelType = 'pad' | 'voice' | 'gameboy'; // Add 'gameboy' later
+export interface ActivePanel {
+  id: string;
+  type: PanelType;
+  name: string; // Display name for the tab
+}
+
 interface MainControlViewProps {
   connectionParams: ConnectionParams;
   onDisconnect: () => void;
@@ -63,6 +77,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
+
+  // --- New State for Modular Control Panels ---
+  const initialPanelId = generateUniqueId('panel');
+  const [activePanels, setActivePanels] = useState<ActivePanel[]>([
+    { id: initialPanelId, type: 'pad', name: 'Pad 1' } // Start with one pad panel
+  ]);
+  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
+  const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
+  // Counter for naming new panels of the same type
+  const panelCounters = useRef<Record<PanelType, number>>({ pad: 1, voice: 0, gameboy: 0 });
+  // Ref for the Add Panel button (+) 
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  // --- End New State ---
+
+  // Ref to prevent multiple connection attempts
+  const isConnecting = useRef(false);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -129,6 +159,64 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     disconnect(); // Disconnect ROS
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
+
+  // --- Handlers for Modular Panels ---
+  const handleSelectPanel = (id: string) => {
+    setSelectedPanelId(id);
+    setIsAddPanelMenuOpen(false); // Close menu when selecting existing panel
+  };
+
+  const handleAddPanelToggle = () => {
+    setIsAddPanelMenuOpen(prev => !prev);
+  };
+
+  const handleAddPanelType = (type: PanelType) => {
+    panelCounters.current[type]++;
+    const newName = `${type.charAt(0).toUpperCase() + type.slice(1)} ${panelCounters.current[type]}`;
+    const newPanel: ActivePanel = {
+        id: generateUniqueId('panel'),
+        type: type,
+        name: newName,
+    };
+    setActivePanels(prev => [...prev, newPanel]);
+    setSelectedPanelId(newPanel.id); // Select the newly added panel
+    setIsAddPanelMenuOpen(false); // Close the menu
+  };
+
+  const handleRemovePanel = (idToRemove: string) => {
+    setActivePanels(prev => {
+      const newPanels = prev.filter(panel => panel.id !== idToRemove);
+      // If the removed panel was selected, select the first remaining panel or null
+      if (selectedPanelId === idToRemove) {
+        setSelectedPanelId(newPanels.length > 0 ? newPanels[0].id : null);
+      }
+      return newPanels;
+    });
+    setIsAddPanelMenuOpen(false); // Close menu if open
+  };
+
+  const handleCloseMenu = () => {
+    setIsAddPanelMenuOpen(false);
+  };
+  // --- End Panel Handlers ---
+
+  // Memoize the selected panel component to prevent unnecessary re-renders
+  const SelectedPanelComponent = useMemo(() => {
+    if (!selectedPanelId) return null;
+    const panel = activePanels.find(p => p.id === selectedPanelId);
+    if (!panel || !ros) return null; // Need ROS connection for panels
+
+    switch (panel.type) {
+      case 'pad':
+        return <PadControl ros={ros} key={panel.id} />;
+      case 'voice':
+        return <VoiceControl ros={ros} key={panel.id} />;
+      // case 'gameboy': // Add later
+      //   return <GameBoyControlPanel ros={ros} key={panel.id} />;
+      default:
+        return <div>Unknown Panel Type</div>;
+    }
+  }, [selectedPanelId, activePanels, ros]);
 
   return (
     <div className="main-control-view">
@@ -202,16 +290,32 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         </div>
 
         <div className="control-panel-container">
+           <ControlPanelTabs 
+               panels={activePanels}
+               selectedPanelId={selectedPanelId}
+               onSelectPanel={handleSelectPanel}
+               onAddPanelToggle={handleAddPanelToggle}
+               onRemovePanel={handleRemovePanel}
+               addButtonRef={addButtonRef}
+           /> 
            <div className="control-panel card">
-               {/* Pass ros instance and isConnected status to ControlPanel */} 
+               {/* Render the selected panel component */}
                {isConnected && ros ? (
-                   <ControlPanel ros={ros} />
+                   SelectedPanelComponent ?? <div>Select a control panel</div>
                ) : (
                    <div>Connecting to ROS...</div>
                )}
            </div>
         </div>
       </div>
+
+      {/* Render AddPanelMenu using Portal outside main flow */}
+      <AddPanelMenu
+        isOpen={isAddPanelMenuOpen}
+        onSelectType={handleAddPanelType}
+        onClose={handleCloseMenu}
+        addButtonRef={addButtonRef}
+      />
     </div>
   );
 };
