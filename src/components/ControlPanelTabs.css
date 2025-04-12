@@ -1,0 +1,109 @@
+/* src/components/ControlPanelTabs.css */
+
+.control-panel-tabs-container {
+    width: 100%;
+    flex-shrink: 0; /* Prevent shrinking */
+    padding-bottom: 5px; /* Space between tabs and panel content */
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 10px;
+    overflow-x: auto; /* Allow horizontal scrolling if many tabs */
+    position: relative; /* Establish stacking context */
+    z-index: 1;         /* Ensure it's above default content */
+    
+    /* --- Custom Scrollbar Styling --- */
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #32CD32 #1e1e1e;
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.control-panel-tabs-container::-webkit-scrollbar {
+    height: 6px; /* Height of the horizontal scrollbar */
+}
+
+.control-panel-tabs-container::-webkit-scrollbar-track {
+    background: #1e1e1e; /* Track color */
+    border-radius: 3px;
+}
+
+.control-panel-tabs-container::-webkit-scrollbar-thumb {
+    background-color: #32CD32; /* Thumb color */
+    border-radius: 3px;
+    border: 1px solid #1e1e1e; /* Optional: adds slight border around thumb */
+}
+
+.control-panel-tabs-container::-webkit-scrollbar-thumb:hover {
+    background-color: #28a745; /* Example slightly darker green */
+}
+/* --- End Custom Scrollbar Styling --- */
+
+.control-panel-tabs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    position: relative; /* Ensure this has position: relative */
+}
+
+.tab-button,
+.tab-add-button {
+    display: inline-flex; /* Use inline-flex for alignment */
+    align-items: center;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+    color: var(--text-secondary);
+    border-radius: 5px 5px 0 0; /* Rounded top corners */
+    cursor: pointer;
+    font-size: 0.9em;
+    white-space: nowrap; /* Prevent wrapping */
+    transition: all 0.2s ease-in-out;
+    position: relative; /* For absolute positioning of remove button */
+    gap: 5px; /* Space between icon/text and remove button */
+}
+
+.tab-button:hover,
+.tab-add-button:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.tab-button.active {
+    background-color: var(--background-secondary); /* Slightly different bg for active */
+    color: var(--primary-color);
+    border-bottom-color: var(--background-secondary); /* Hide bottom border */
+    z-index: 1; /* Bring active tab forward */
+}
+
+.tab-add-button {
+    padding: 6px 8px; /* Slightly less padding for icon-only button */
+    margin-left: 5px; /* Space it from other tabs */
+}
+
+.tab-add-button svg {
+    display: block; /* Ensure SVG aligns correctly */
+}
+
+.tab-remove-button {
+    display: inline-flex; /* Align icon */
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-left: 5px; /* Space from tab name */
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    opacity: 0.6;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.tab-button:hover .tab-remove-button,
+.tab-remove-button:hover {
+    opacity: 1;
+    color: var(--error-color, #dc3545);
+}
+
+.tab-name {
+    /* Adjust if needed */
+} 
