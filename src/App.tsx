@@ -15,7 +15,7 @@ export interface ConnectionParams {
 export interface CustomTheme {
   id: string; // Unique identifier (e.g., timestamp or UUID)
   name: string;
-  // icon: string; // Placeholder for icon selection later
+  iconId?: string; // Make icon optional for now
   colors: {
     primary: string;
     secondary: string;
@@ -129,22 +129,27 @@ function App() {
   };
 
   const addCustomTheme = (newTheme: CustomTheme) => {
-    // Basic validation: ensure colors are present
+    // Add basic validation for iconId if it's added
     if (!newTheme.name || !newTheme.colors.primary || !newTheme.colors.secondary || !newTheme.colors.background) {
-      console.error("Cannot add theme: Missing name or required colors.");
-      return; // Maybe show user feedback
+      console.error("Cannot add theme: Missing data.");
+      return;
     }
+    // Ensure iconId is valid if provided
+    // if (newTheme.iconId && !availableIconIds.includes(newTheme.iconId)) {
+    //     console.warn(`Invalid iconId ${newTheme.iconId} provided for new theme. Using default.`);
+    //     newTheme.iconId = undefined; // Or set a default iconId
+    // }
     const updatedThemes = [...customThemes, newTheme];
     setCustomThemes(updatedThemes);
     localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
-    selectTheme(newTheme.id); // Select the newly added theme
+    selectTheme(newTheme.id); 
   };
 
   const updateCustomTheme = (updatedTheme: CustomTheme) => {
-    const updatedThemes = customThemes.map((t: CustomTheme) => t.id === updatedTheme.id ? updatedTheme : t);
+    // Add validation for iconId if needed
+    const updatedThemes = customThemes.map(t => t.id === updatedTheme.id ? updatedTheme : t);
     setCustomThemes(updatedThemes);
     localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
-    // If the updated theme is the currently selected one, the effect will re-apply it
   };
 
   const deleteCustomTheme = (themeIdToDelete: string) => {

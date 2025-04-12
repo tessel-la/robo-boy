@@ -40,24 +40,49 @@ const MoonIcon = () => (
   </svg>
 );
 
-const SolarizedIcon = () => (
+// Rename SolarizedIcon, maybe represent sand/sun
+const SandIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-    {/* Simple half-moon overlay */}
-    {/* <path d="M12 18A6 6 0 0012 6V18z" fill="currentColor" stroke="none"/> */}
+    {/* Simple sun over waves/sand */}
+    <path d="M12 17.657l-6.364-6.364a9 9 0 1112.728 0L12 17.657zM12 12a3 3 0 100-6 3 3 0 000 6z" />
+    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
   </svg>
 );
 
-// Helper function to get the appropriate icon
-const getIcon = (themeId: string) => {
-    // Map IDs (default or custom) to icons
-    // For custom themes, you might need a default icon or add an 'icon' field later
-    switch (themeId) {
-        case 'light': return <SunIcon />;
-        case 'dark': return <MoonIcon />;
-        case 'solarized': return <SolarizedIcon />;
-        default: return <SunIcon />; // Default for custom themes for now
+// Add more icon options
+const PaletteIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0L12 2.69z"/>
+        <circle cx="12" cy="8.5" r=".5" fill="currentColor"/><circle cx="10" cy="10.5" r=".5" fill="currentColor"/><circle cx="14" cy="10.5" r=".5" fill="currentColor"/><circle cx="12" cy="12.5" r=".5" fill="currentColor"/>
+    </svg>
+);
+const StarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+);
+
+// Map icon IDs to components
+const iconMap: { [key: string]: React.FC } = {
+    sun: SunIcon,
+    moon: MoonIcon,
+    sand: SandIcon,
+    palette: PaletteIcon,
+    star: StarIcon,
+};
+export const availableIconIds = Object.keys(iconMap);
+
+// Updated getIcon helper
+const getIcon = (themeIdOrIconId: string) => {
+    // First check if it's a known default theme ID
+    switch (themeIdOrIconId) {
+        case 'light': return iconMap.sun ? <SunIcon /> : null;
+        case 'dark': return iconMap.moon ? <MoonIcon /> : null;
+        case 'solarized': return iconMap.sand ? <SandIcon /> : null;
     }
+    // Otherwise, assume it's an iconId from a custom theme
+    const IconComponent = iconMap[themeIdOrIconId];
+    return IconComponent ? <IconComponent /> : <PaletteIcon />; // Fallback to palette if iconId invalid/missing
 };
 
 const ThemeSelector: React.FC<ThemeSelectorProps> = ({ 

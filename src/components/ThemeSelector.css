@@ -43,8 +43,8 @@
 }
 
 .icon-wrapper {
-  width: 28px; /* Increased size */
-  height: 28px; /* Increased size */
+  width: 32px; /* Increased size again */
+  height: 32px; /* Increased size again */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -196,8 +196,8 @@
     height: 45px;
   }
   .icon-wrapper {
-    width: 24px; /* Adjusted size */
-    height: 24px; /* Adjusted size */
+    width: 28px; /* Adjusted size */
+    height: 28px; /* Adjusted size */
   }
   .theme-popup-menu {
     bottom: 60px; /* Adjust popup position */
@@ -214,8 +214,8 @@
     height: 40px;
   }
   .icon-wrapper {
-    width: 20px; /* Adjusted size */
-    height: 20px; /* Adjusted size */
+    width: 24px; /* Adjusted size */
+    height: 24px; /* Adjusted size */
   }
   .theme-popup-menu {
     bottom: 55px; /* Adjust popup position */

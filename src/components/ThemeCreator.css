@@ -109,6 +109,46 @@
     border-radius: 4px;
 }
 
+.icon-selector-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--background-color);
+}
+
+.icon-select-button {
+    padding: 8px;
+    border: 2px solid transparent; /* For selected state */
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.icon-select-button:hover {
+    background-color: var(--border-color);
+}
+
+.icon-select-button.selected {
+    border-color: var(--primary-color);
+    background-color: var(--background-color);
+}
+
+.icon-select-button svg {
+    width: 24px; /* Match size used in TSX */
+    height: 24px;
+    color: var(--text-color);
+}
+
+.icon-select-button.selected svg {
+    color: var(--primary-color);
+}
 
 .theme-creator-actions {
     margin-top: 25px;
