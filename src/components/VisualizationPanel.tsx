@@ -1,461 +1,802 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
-import { Ros } from 'roslib';
+import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
+// Revert to using namespace for roslib types
+import { Ros } from 'roslib'; 
 import * as ROSLIB from 'roslib';
 import * as ROS3D from 'ros3d';
-import * as THREE from 'three';
+import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
 import './VisualizationPanel.css';
 
-// Define expected message type for PointCloud2
-const POINTCLOUD2_MSG_TYPE = 'sensor_msgs/msg/PointCloud2';
-
-interface VisualizationPanelProps {
-  ros: Ros;
+// Interface for storing transforms using THREE types within ROSLIB container
+interface TransformStore {
+  [childFrame: string]: {
+    parentFrame: string;
+    // Store ROSLIB.Transform but ensure its properties are THREE types
+    transform: {
+        translation: THREE.Vector3; 
+        rotation: THREE.Quaternion;
+    };
+    isStatic: boolean;
+  };
 }
 
-const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: { ros: Ros | null }) => {
-  console.log(`--- VisualizationPanel Render Start ---`);
-  
+// Type alias for the structure stored in the TransformStore
+ type StoredTransform = { 
+    translation: THREE.Vector3; 
+    rotation: THREE.Quaternion; 
+ };
+
+// --- Helper Functions for TF Logic (using THREE.js math) ---
+
+// Invert a Transform (represented by THREE.Vector3 and THREE.Quaternion)
+function invertTransform(transform: StoredTransform): StoredTransform {
+  // Use .inverse() for three.js r89 compatibility
+  const invQuaternion = transform.rotation.clone().inverse(); 
+  const invTranslation = transform.translation.clone().negate().applyQuaternion(invQuaternion); // Use THREE methods
+
+  return {
+    translation: invTranslation,
+    rotation: invQuaternion
+  };
+}
+
+
+// Multiply two Transforms (transform1 * transform2) -> apply transform2 then transform1
+function multiplyTransforms(transform1: StoredTransform, transform2: StoredTransform): StoredTransform {
+  const finalRotation = transform1.rotation.clone().multiply(transform2.rotation);
+  const finalTranslation = transform1.translation.clone().add(transform2.translation.clone().applyQuaternion(transform1.rotation));
+
+  return {
+    translation: finalTranslation,
+    rotation: finalRotation
+  };
+}
+
+
+// Function to find the path between frames
+function findTransformPath(
+  targetFrame: string,
+  sourceFrame: string,
+  transforms: TransformStore,
+  fixedFrame: string
+): { frame: string; transform: StoredTransform; isStatic: boolean }[] | null {
+  if (targetFrame === sourceFrame) {
+    return []; // No transform needed
+  }
+
+  const queue: { frame: string; path: { frame: string; transform: StoredTransform; isStatic: boolean }[] }[] = [{ frame: sourceFrame, path: [] }];
+  const visited = new Set<string>([sourceFrame]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue; // Should not happen with TS
+
+    const currentFrame = current.frame;
+
+    // Check direct children
+    for (const childFrame in transforms) {
+      const data = transforms[childFrame];
+      if (data.parentFrame === currentFrame && !visited.has(childFrame)) {
+        const newPath = [...current.path, { frame: childFrame, transform: data.transform, isStatic: data.isStatic }];
+        if (childFrame === targetFrame) return newPath;
+        visited.add(childFrame);
+        queue.push({ frame: childFrame, path: newPath });
+      }
+    }
+
+    // Check parent (using inverse transform)
+    const parentData = transforms[currentFrame];
+    if (parentData && !visited.has(parentData.parentFrame)) {
+       const invTransform = invertTransform(parentData.transform);
+       const newPath = [...current.path, { frame: parentData.parentFrame, transform: invTransform, isStatic: parentData.isStatic }];
+       if (parentData.parentFrame === targetFrame) return newPath;
+       visited.add(parentData.parentFrame);
+       queue.push({ frame: parentData.parentFrame, path: newPath });
+    }
+  }
+
+  console.warn(`[TF Logic] No path found from ${sourceFrame} to ${targetFrame} in TF tree.`);
+  return null; // No path found
+}
+
+// Main lookup function - returns the final THREE transform components
+function lookupTransform(
+  targetFrame: string,
+  sourceFrame: string,
+  transforms: TransformStore,
+  fixedFrame: string // fixedFrame might be implicitly the root in simple cases
+): StoredTransform | null {
+
+  // Normalize frame IDs (remove leading slashes)
+  targetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
+  sourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
+  fixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
+
+  // console.log(`[TF Logic] lookupTransform: ${sourceFrame} -> ${targetFrame} (fixed: ${fixedFrame})`);
+
+  if (targetFrame === sourceFrame) {
+    // Identity transform using THREE types
+    return {
+      translation: new THREE.Vector3(0, 0, 0),
+      rotation: new THREE.Quaternion(0, 0, 0, 1),
+    };
+  }
+
+  // Find path from source to target
+  const path = findTransformPath(targetFrame, sourceFrame, transforms, fixedFrame);
+
+  if (!path) {
+     // console.warn(`[TF Logic] No path found from ${sourceFrame} to ${targetFrame}`);
+     return null;
+  }
+
+  // Chain the transforms along the path
+  let finalTransform: StoredTransform = { // Start with identity using THREE types
+      translation: new THREE.Vector3(),
+      rotation: new THREE.Quaternion()
+  };
+
+  for (const step of path) {
+      finalTransform = multiplyTransforms(finalTransform, step.transform); // Correct order: apply step.transform *then* finalTransform
+      // Original was: multiplyTransforms(step.transform, finalTransform) which meant final = step * final
+      // We want final = final * step (apply existing, then apply next step relative to it)
+  }
+
+  // console.log(`[TF Logic] Found transform for ${sourceFrame} -> ${targetFrame}`, finalTransform);
+  return finalTransform;
+}
+
+
+// --- Custom TF Provider Class ---
+// This class manages the TF tree using THREE types internally
+// but provides an interface compatible with ros3djs (expecting ROSLIB.Transform-like structure in callback)
+class CustomTFProvider {
+    private ros: Ros;
+    private fixedFrame: string;
+    private transforms: TransformStore; // Stores THREE.Vector3 and THREE.Quaternion
+    private callbacks: Map<string, Set<(transform: ROSLIB.Transform | null) => void>>; // Callbacks expect ROSLIB structure
+
+    constructor(ros: Ros, fixedFrame: string, initialTransforms: TransformStore) {
+        this.ros = ros;
+        this.fixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;;
+        this.transforms = initialTransforms;
+        this.callbacks = new Map();
+        // console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
+    }
+
+    updateTransforms(newTransforms: TransformStore) {
+        const changedFrames = new Set<string>();
+
+        // --- (Change detection logic remains the same) ---
+        const oldKeys = Object.keys(this.transforms);
+        const newKeys = Object.keys(newTransforms);
+        if (oldKeys.length !== newKeys.length || oldKeys.some((k, i) => k !== newKeys[i])) {
+             // Basic change detection - assume all subscribed frames might be affected
+            this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
+        } else {
+             // More detailed check (optional, can be complex)
+             for (const frameId of newKeys) {
+                 // Compare THREE objects using their equals methods for robustness
+                 const oldTf = this.transforms[frameId]?.transform;
+                 const newTf = newTransforms[frameId]?.transform;
+                 if (!oldTf || !newTf || 
+                     !oldTf.translation.equals(newTf.translation) || 
+                     !oldTf.rotation.equals(newTf.rotation)) 
+                 {
+                    // This frame or its parent changed, potentially affecting subscriptions
+                    changedFrames.add(frameId);
+                    // Very simplistic: Assume any change might affect any subscription for now
+                    this.callbacks.forEach((_, cbFrameId) => changedFrames.add(cbFrameId));
+                    break; // Optimization: if one change found, update all for now
+                 }
+             }
+        }
+        // --- (End Change detection logic) ---
+
+        this.transforms = newTransforms;
+        // console.log(`[CustomTFProvider] Transforms updated. Triggering callbacks for changed frames:`, changedFrames);
+
+        changedFrames.forEach(frameId => {
+            const frameCallbacks = this.callbacks.get(frameId);
+            if (frameCallbacks) {
+                // Lookup using THREE types
+                const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
+                // Convert to ROSLIB structure for the callback
+                const latestTransformROSLIB = latestTransformTHREE
+                  ? new ROSLIB.Transform({
+                      translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
+                      rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
+                    })
+                  : null;
+                // console.log(`[CustomTFProvider] Notifying ${frameCallbacks.size} callbacks for frame ${frameId} with transform:`, latestTransformROSLIB);
+                frameCallbacks.forEach(cb => {
+                   try {
+                     cb(latestTransformROSLIB);
+                   } catch (e) {
+                     console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId}:`, e);
+                   }
+                });
+            }
+        });
+    }
+
+     updateFixedFrame(newFixedFrame: string) {
+        const normalizedNewFixedFrame = newFixedFrame.startsWith('/') ? newFixedFrame.substring(1) : newFixedFrame;
+        if (this.fixedFrame !== normalizedNewFixedFrame) {
+            // console.log(`[CustomTFProvider] Fixed frame updated from ${this.fixedFrame} to ${normalizedNewFixedFrame}`);
+            this.fixedFrame = normalizedNewFixedFrame;
+
+            this.callbacks.forEach((frameCallbacks, frameId) => {
+                 const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
+                 const latestTransformROSLIB = latestTransformTHREE
+                   ? new ROSLIB.Transform({ // Convert to ROSLIB structure
+                       translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
+                       rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
+                     })
+                   : null;
+                 // console.log(`[CustomTFProvider] Re-notifying ${frameCallbacks.size} callbacks for frame ${frameId} due to fixedFrame change.`);
+                 frameCallbacks.forEach(cb => {
+                   try {
+                     cb(latestTransformROSLIB);
+                   } catch (e) {
+                     console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId} (fixedFrame update):`, e);
+                   }
+                 });
+            });
+        }
+    }
+
+    // This is the core method ros3djs components will call
+    // It expects a callback function that takes a ROSLIB.Transform-like object or null
+    subscribe(frameId: string, callback: (transform: ROSLIB.Transform | null) => void) {
+        const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
+        // console.log(`[CustomTFProvider] subscribe called for frameId: ${normalizedFrameId}`);
+
+        if (!this.callbacks.has(normalizedFrameId)) {
+            this.callbacks.set(normalizedFrameId, new Set());
+        }
+        const frameCallbacks = this.callbacks.get(normalizedFrameId)!;
+        frameCallbacks.add(callback);
+        // console.log(`[CustomTFProvider] Added callback for ${normalizedFrameId}. Total callbacks: ${frameCallbacks.size}`);
+
+        // Immediately provide the current transform, converted to ROSLIB structure
+        const currentTransformTHREE = this.lookupTransform(this.fixedFrame, normalizedFrameId);
+        const currentTransformROSLIB = currentTransformTHREE
+            ? new ROSLIB.Transform({
+                translation: { x: currentTransformTHREE.translation.x, y: currentTransformTHREE.translation.y, z: currentTransformTHREE.translation.z },
+                rotation: { x: currentTransformTHREE.rotation.x, y: currentTransformTHREE.rotation.y, z: currentTransformTHREE.rotation.z, w: currentTransformTHREE.rotation.w }
+              })
+            : null;
+        // console.log(`[CustomTFProvider] Providing initial transform for ${normalizedFrameId}:`, currentTransformROSLIB);
+        try {
+           callback(currentTransformROSLIB);
+        } catch (e) {
+           console.error(`[CustomTFProvider] Error in initial TF callback for frame ${normalizedFrameId}:`, e);
+        }
+    }
+
+    // Unsubscribe remains the same, operating on frameId and callback reference
+    unsubscribe(frameId: string, callback?: (transform: ROSLIB.Transform | null) => void) {
+        const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
+        // console.log(`[CustomTFProvider] unsubscribe called for frameId: ${normalizedFrameId}`);
+        const frameCallbacks = this.callbacks.get(normalizedFrameId);
+        if (frameCallbacks) {
+            if (callback) {
+                frameCallbacks.delete(callback);
+                // console.log(`[CustomTFProvider] Removed specific callback for ${normalizedFrameId}. Remaining: ${frameCallbacks.size}`);
+            } else {
+                frameCallbacks.clear();
+                // console.log(`[CustomTFProvider] Cleared all callbacks for ${normalizedFrameId}.`);
+            }
+            if (frameCallbacks.size === 0) {
+                this.callbacks.delete(normalizedFrameId);
+                // console.log(`[CustomTFProvider] No more callbacks for ${normalizedFrameId}, removed entry.`);
+            }
+        } else {
+           // console.log(`[CustomTFProvider] No callbacks found for ${normalizedFrameId} to unsubscribe.`);
+        }
+    }
+
+    // Internal lookup uses THREE types
+    lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
+       return lookupTransform(targetFrame, sourceFrame, this.transforms, this.fixedFrame);
+    }
+
+    dispose() {
+        // console.log("[CustomTFProvider] Disposing...");
+        this.callbacks.clear();
+    }
+}
+
+
+interface VisualizationPanelProps {
+  ros: Ros | null; // Allow null ros object
+}
+
+const DEFAULT_FIXED_FRAME = 'odom'; // Or your preferred default, e.g., 'map', 'base_link'
+
+const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => {
+  // console.log(`--- VisualizationPanel Render Start ---`);
+
   const viewerRef = useRef<HTMLDivElement>(null);
   const ros3dViewer = useRef<ROS3D.Viewer | null>(null);
   const gridClient = useRef<ROS3D.Grid | null>(null);
-  const pointsObject = useRef<THREE.Points | null>(null); 
-  const orbitControlsRef = useRef<any | null>(null);
-  const pointCloudSub = useRef<ROSLIB.Topic | null>(null); 
-  const pointsMaterialRef = useRef<THREE.PointsMaterial | null>(null); 
+  const customTFProvider = useRef<CustomTFProvider | null>(null); // ADDED
+  const tfSub = useRef<ROSLIB.Topic | null>(null); // Use namespace
+  const tfStaticSub = useRef<ROSLIB.Topic | null>(null); // Use namespace
 
-  // State for topic selection
+  // Store transforms in state (using THREE types internally)
+  const [transforms, setTransforms] = useState<TransformStore>({}); // ADDED
+
+  const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
+  const orbitControlsRef = useRef<any | null>(null);
+
   const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
   const [selectedPointCloudTopic, setSelectedPointCloudTopic] = useState<string>('');
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
   const [isTopicMenuOpen, setIsTopicMenuOpen] = useState(false);
   const topicMenuRef = useRef<HTMLDivElement>(null);
+  const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
 
-  // Effect to set the ID on the div once the ref is available
+  // --- Callback for handling TF messages (populates store with THREE types) ---
+  const handleTFMessage = useCallback((message: any /* tf2_msgs/TFMessage */, isStatic: boolean) => {
+    // console.log(`[TF Callback] Received ${isStatic ? 'static' : 'dynamic'} TF message with ${message.transforms.length} transforms.`);
+    setTransforms(prevTransforms => {
+      const newTransforms = { ...prevTransforms };
+      let changed = false;
+      message.transforms.forEach((tStamped: any /* geometry_msgs/TransformStamped */) => {
+        const parentFrame = (tStamped.header.frame_id || '').startsWith('/')
+             ? tStamped.header.frame_id.substring(1)
+             : (tStamped.header.frame_id || '');
+         const childFrame = (tStamped.child_frame_id || '').startsWith('/')
+             ? tStamped.child_frame_id.substring(1)
+             : (tStamped.child_frame_id || '');
+
+        if (!parentFrame || !childFrame) {
+            console.warn("[TF Callback] Received transform with empty frame ID, skipping.", tStamped);
+            return;
+        }
+
+        // Create THREE.js objects from message data
+        const transform: StoredTransform = {
+          translation: new THREE.Vector3(
+            tStamped.transform.translation.x,
+            tStamped.transform.translation.y,
+            tStamped.transform.translation.z
+          ),
+          rotation: new THREE.Quaternion(
+            tStamped.transform.rotation.x,
+            tStamped.transform.rotation.y,
+            tStamped.transform.rotation.z,
+            tStamped.transform.rotation.w
+          ),
+        };
+
+        // Update Store: Compare using THREE.js equals methods for robustness
+        const existingEntry = newTransforms[childFrame];
+        if (!existingEntry || !isStatic || 
+            !existingEntry.transform.translation.equals(transform.translation) || 
+            !existingEntry.transform.rotation.equals(transform.rotation)) 
+        {
+           // console.log(`[TF Callback] Updating ${isStatic ? 'static' : 'dynamic'} transform: ${parentFrame} -> ${childFrame}`);
+           newTransforms[childFrame] = { parentFrame, transform, isStatic };
+           changed = true;
+        }
+      });
+
+      // Only update state and provider if something actually changed
+      if (changed) {
+        // console.log("[TF Callback] Transforms changed, updating state and provider.");
+        customTFProvider.current?.updateTransforms(newTransforms); // Notify provider *after* state update cycle planned
+        return newTransforms;
+      } else {
+        // console.log("[TF Callback] No effective change in transforms.");
+        return prevTransforms; // No change, return previous state
+      }
+    });
+  }, []); // No dependencies, relies on setTransforms closure
+
+  // Effect to set the ID (same as before)
   useEffect(() => {
     if (viewerRef.current && !viewerRef.current.id) {
-      // Assign a unique ID if it doesn't have one
-      viewerRef.current.id = `ros3d-viewer-${Math.random().toString(36).substring(7)}`;
-      console.log(`Assigned ID: ${viewerRef.current.id}`);
+      const uniqueId = `ros3d-viewer-${Math.random().toString(36).substring(2, 9)}`;
+      viewerRef.current.id = uniqueId;
+      // console.log(`Assigned unique ID to viewer div: ${uniqueId}`);
     }
-  }, []); // Runs once when the ref is attached
+  }, []);
 
-  // Effect to fetch PointCloud topics when ROS connects
+
+  // Effect to fetch topics (same as before)
   useEffect(() => {
     if (ros && ros.isConnected) {
-      console.log('Fetching ROS topics for PointCloud2...');
+      // console.log('Fetching ROS topics for PointCloud2...');
       setFetchTopicsError(null);
-      (ros as any).getTopicsForType(POINTCLOUD2_MSG_TYPE,
-        (topics: string[]) => {
-          console.log(`Found PointCloud2 topics: ${topics.join(', ')}`);
-          setAvailablePointCloudTopics(topics);
-          if (topics.length === 0) {
-            console.warn(`No topics found with type ${POINTCLOUD2_MSG_TYPE}`);
+      ros.getTopics(
+        (response: { topics: string[]; types: string[] }) => {
+          const pc2Topics: string[] = [];
+          response.topics.forEach((topic, index) => {
+            if (response.types[index] === 'sensor_msgs/PointCloud2' || response.types[index] === 'sensor_msgs/msg/PointCloud2') {
+              pc2Topics.push(topic);
+            }
+          });
+          // console.log(`Found PointCloud2 topics: ${pc2Topics.join(', ')}`);
+          setAvailablePointCloudTopics(pc2Topics);
+          if (pc2Topics.length === 0) {
+            console.warn(`No topics found with type sensor_msgs/PointCloud2`);
           }
         },
         (error: any) => {
-          console.error(`Failed to fetch topics for type ${POINTCLOUD2_MSG_TYPE}:`, error);
+          console.error(`Failed to fetch topics:`, error);
           setFetchTopicsError(`Failed to fetch topics: ${error?.message || error}`);
           setAvailablePointCloudTopics([]);
         }
       );
     } else {
-      // Clear topics if ROS disconnects
       setAvailablePointCloudTopics([]);
       setSelectedPointCloudTopic('');
-      setFetchTopicsError(null);
-      setIsTopicMenuOpen(false); // Close menu on disconnect
-    }
-  }, [ros, ros?.isConnected]); // Re-run when ROS connection status changes
-
-  // Main effect for ROS3D setup and cleanup
-  useEffect(() => {
-    const currentViewerRef = viewerRef.current;
-
-    if (currentViewerRef?.id && ros && ros.isConnected) {
-      if (!ros3dViewer.current) {
-        console.log('Initializing ROS3D Viewer, Grid, OrbitControls on div#', currentViewerRef.id);
-        try {
-          const viewer = new ROS3D.Viewer({
-            divID: currentViewerRef.id,
-            width: currentViewerRef.clientWidth,
-            height: currentViewerRef.clientHeight,
-            antialias: true,
-            background: undefined as any,
-            cameraPose: { x: 3, y: 3, z: 3 } 
-          });
-          ros3dViewer.current = viewer;
-
-          gridClient.current = new ROS3D.Grid();
-          viewer.addObject(gridClient.current);
-
-          if (ROS3D.OrbitControls && viewerRef.current) {
-            orbitControlsRef.current = new ROS3D.OrbitControls({
-               scene: viewer.scene,
-               camera: viewer.camera,
-               userZoomSpeed: 0.2,
-               userPanSpeed: 0.2,
-               element: viewerRef.current 
-            });
-            console.log('OrbitControls initialized.');
-          } else {
-            console.warn('ROS3D.OrbitControls not found or viewerRef not ready.');
-          }
-          console.log('ROS3D Viewer, Grid, and OrbitControls initialized.');
-
-        } catch (error) {
-          console.error("Error initializing ROS3D Viewer/Grid/Controls:", error);
-          // Clean up partially initialized components
-          if (orbitControlsRef.current) { orbitControlsRef.current = null; }
-          if(gridClient.current && ros3dViewer.current?.scene) {
-             try { ros3dViewer.current.scene.remove(gridClient.current); } catch(e){}
-             gridClient.current = null;
-          }
-          if (ros3dViewer.current) { ros3dViewer.current = null; }
-          return; // Stop if core components failed
-        }
-      }
-
-      // Handle resize - Attach listener only after successful initialization
-      const handleResize = () => {
-          if (ros3dViewer.current && currentViewerRef) {
-            ros3dViewer.current.resize(currentViewerRef.clientWidth, currentViewerRef.clientHeight);
-        }
-      };
-
-      window.addEventListener('resize', handleResize);
-      handleResize(); // Initial size setup
-
-      // Cleanup function for this effect
-      return () => {
-          console.log('Cleaning up resources for main effect...'); // More specific log
-          window.removeEventListener('resize', handleResize);
-
-          // Keep Viewer, Grid, OrbitControls cleanup
-          if (orbitControlsRef.current) {
-             orbitControlsRef.current = null;
-             console.log('Cleaned up OrbitControls.');
-          }
-          if (gridClient.current && ros3dViewer.current?.scene) {
-             try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { console.warn('Cleanup: Error removing grid', e); }
-             gridClient.current = null;
-          }
-          if (ros3dViewer.current) {
-            console.log('Setting ros3dViewer ref to null.');
-            ros3dViewer.current = null;
-          }
-      };
-
-    } else {
-       console.log('ROS disconnected or viewerRef not ready. Ensuring full cleanup.');
-       // Cleanup PointCloud Client on disconnect
-       if (pointsObject.current && ros3dViewer.current?.scene && pointsObject.current) {
-           try {
-               ros3dViewer.current.scene.remove(pointsObject.current);
-           } catch(e) { /* ignore */ }
-       }
-       pointsObject.current = null;
-       
-       // Cleanup OrbitControls on disconnect
-       if (orbitControlsRef.current) {
-           orbitControlsRef.current = null;
-       }
-
-       // Cleanup Grid on disconnect
-       if (gridClient.current && ros3dViewer.current?.scene) {
-         try { ros3dViewer.current.scene.remove(gridClient.current); } catch (e) { /* ignore */ }
-         gridClient.current = null;
-       }
-       
-       // Cleanup Viewer on disconnect
-       if (ros3dViewer.current) {
-           ros3dViewer.current = null;
-       }
+      setFetchTopicsError('ROS not connected.');
+       console.log('ROS disconnected, clearing topics.');
     }
   }, [ros, ros?.isConnected]);
 
-  // Separate effect for managing PointCloud subscription and rendering
+  // Effect for ONE-TIME Viewer/Grid/Controls Setup & Teardown
   useEffect(() => {
-    // Ensure viewer, ROS, are ready, and a topic is selected
-    if (!ros3dViewer.current || !ros || !ros.isConnected) {
-        // ... cleanup existing pointsObject if prerequisites not met ...
-        return;
+    const currentViewerRef = viewerRef.current;
+    let viewerInitializedThisEffect = false;
+    let resizeObserver: ResizeObserver | null = null; // Add variable for ResizeObserver
+
+    // --- Viewer Teardown Logic ---
+    const cleanupViewer = () => {
+        console.log('[Viewer Effect Cleanup] Cleaning up ROS3D viewer, Grid, OrbitControls, and ResizeObserver...');
+        
+        // Disconnect observer first
+        if (resizeObserver && currentViewerRef) {
+            resizeObserver.unobserve(currentViewerRef);
+            resizeObserver.disconnect();
+            console.log('[Viewer Effect Cleanup] ResizeObserver disconnected.');
+        }
+        resizeObserver = null;
+
+        if (ros3dViewer.current) {
+            try {
+                // Remove objects from scene first
+                if(gridClient.current) ros3dViewer.current.scene.remove(gridClient.current);
+                // If pointsClient exists, attempt removal (might be handled by its own effect's cleanup too)
+                if(pointsClient.current) ros3dViewer.current.scene.remove(pointsClient.current);
+
+                console.log('[Viewer Effect Cleanup] Destroying Viewer resources...');
+                if (ros3dViewer.current.renderer) {
+                    ros3dViewer.current.stop();
+                    if (ros3dViewer.current.renderer.domElement.parentElement) {
+                        ros3dViewer.current.renderer.domElement.parentElement.removeChild(ros3dViewer.current.renderer.domElement);
+                    }
+                    ros3dViewer.current.scene?.dispose();
+                    ros3dViewer.current.renderer?.dispose();
+                }
+                console.log('[Viewer Effect Cleanup] Viewer resources likely released.');
+            } catch(e) { 
+                console.warn("[Viewer Effect Cleanup] Error during viewer cleanup", e); 
+            }
+        }
+        ros3dViewer.current = null;
+        gridClient.current = null;
+        orbitControlsRef.current = null;
+        console.log('[Viewer Effect Cleanup] Viewer refs nulled.');
+    };
+
+    // --- Viewer Setup Logic ---
+    if (currentViewerRef?.id && ros && ros.isConnected) {
+      // Only initialize if viewer doesn't exist yet
+      if (!ros3dViewer.current) {
+        console.log('[Viewer Effect] Initializing ROS3D Viewer, Grid, OrbitControls...');
+        if (currentViewerRef.clientWidth > 0 && currentViewerRef.clientHeight > 0) {
+            try {
+              const viewer = new ROS3D.Viewer({
+                divID: currentViewerRef.id,
+                width: currentViewerRef.clientWidth, // Initial width
+                height: currentViewerRef.clientHeight, // Initial height
+                antialias: true,
+                background: undefined as any,
+                cameraPose: { x: 3, y: 3, z: 3 }
+              });
+              ros3dViewer.current = viewer;
+              viewerInitializedThisEffect = true;
+              console.log('[Viewer Effect] ROS3D.Viewer created.');
+
+              gridClient.current = new ROS3D.Grid();
+              viewer.addObject(gridClient.current);
+              console.log('[Viewer Effect] ROS3D.Grid added.');
+
+              if (ROS3D.OrbitControls) {
+                orbitControlsRef.current = new ROS3D.OrbitControls({
+                   scene: viewer.scene,
+                   camera: viewer.camera,
+                   userZoomSpeed: 0.2,
+                   userPanSpeed: 0.2,
+                   element: currentViewerRef // Use currentViewerRef here
+                });
+                console.log('[Viewer Effect] OrbitControls initialized.');
+              } else { 
+                  console.warn('[Viewer Effect] ROS3D.OrbitControls not found.'); 
+              }
+
+              // --- Setup Resize Observer ---
+              resizeObserver = new ResizeObserver(entries => {
+                  // Should only be one entry for our div
+                  const entry = entries[0];
+                  if (entry && ros3dViewer.current) {
+                      const { width, height } = entry.contentRect;
+                      // console.log(`[ResizeObserver] Detected size change: ${width}x${height}`);
+                      if (width > 0 && height > 0) {
+                          ros3dViewer.current.resize(width, height);
+                          // console.log(`[ResizeObserver] ROS3D Viewer resized.`);
+                      } else {
+                          // console.log(`[ResizeObserver] Skipped resize due to zero dimension.`);
+                      }
+                  } else {
+                      // console.log('[ResizeObserver] No entry or viewer not ready.');
+                  }
+              });
+              resizeObserver.observe(currentViewerRef);
+              console.log('[Viewer Effect] ResizeObserver is now observing the viewer container.');
+              // ---------------------------
+
+            } catch (error) {
+               console.error("[Viewer Effect] Error initializing ROS3D Viewer/Components:", error);
+               cleanupViewer(); // Cleanup on error
+            }
+        } else {
+            console.warn('[Viewer Effect] Viewer div has zero width or height. Skipping initialization.');
+        }
+      }
+    } else {
+        console.log('[Viewer Effect] Prerequisites not met or ROS disconnected. Cleaning up viewer if it exists...');
+        cleanupViewer(); // Cleanup if ROS disconnects or div not ready
     }
 
-    // Cleanup function for this effect (unsubscribe and remove points)
-    const cleanupSubscription = () => {
-      if (pointCloudSub.current) {
-        console.log(`Unsubscribing from ${pointCloudSub.current.name}`);
-        pointCloudSub.current.unsubscribe();
-        pointCloudSub.current = null;
+    // Return cleanup function specific to this effect
+    return cleanupViewer;
+
+  // Dependencies: Only run when ROS connects/disconnects or the component mounts/unmounts
+  // viewerRef.current is stable, so not needed here. ros object identity might change on reconnect.
+  }, [ros, ros?.isConnected]);
+
+
+  // Effect for TF Provider and Subscriptions
+  useEffect(() => {
+      // --- TF Cleanup Logic ---
+      const cleanupTf = () => {
+          console.log('[TF Effect Cleanup] Cleaning up TF subscriptions and provider...');
+          tfSub.current?.unsubscribe();
+          tfSub.current = null;
+          tfStaticSub.current?.unsubscribe();
+          tfStaticSub.current = null;
+          customTFProvider.current?.dispose();
+          customTFProvider.current = null;
+          console.log('[TF Effect Cleanup] TF refs nulled.');
+      };
+
+      // --- TF Setup Logic ---
+      // Requires ROS connection AND the viewer to be initialized by the other effect
+      if (ros && ros.isConnected && ros3dViewer.current) {
+          console.log('[TF Effect] Prerequisites met (ROS connected, Viewer ready).');
+          
+          // Initialize or update Custom TF Provider
+          if (!customTFProvider.current) {
+              console.log(`[TF Effect] Initializing CustomTFProvider with fixedFrame: ${fixedFrame}`);
+              // Use the current state of transforms when initializing
+              customTFProvider.current = new CustomTFProvider(ros, fixedFrame, transforms); 
+          } else {
+              // console.log(`[TF Effect] Updating CustomTFProvider fixedFrame: ${fixedFrame}`);
+              customTFProvider.current.updateFixedFrame(fixedFrame);
+          }
+
+          // Subscribe to TF topics if provider exists
+          if (customTFProvider.current && !tfSub.current) {
+              console.log('[TF Effect] Subscribing to /tf');
+              tfSub.current = new ROSLIB.Topic({
+                  ros: ros,
+                  name: '/tf',
+                  messageType: 'tf2_msgs/TFMessage',
+                  throttle_rate: 100,
+                  compression: 'none'
+              });
+              tfSub.current.subscribe((msg: any) => handleTFMessage(msg, false));
+          }
+          if (customTFProvider.current && !tfStaticSub.current) {
+              console.log('[TF Effect] Subscribing to /tf_static');
+              tfStaticSub.current = new ROSLIB.Topic({
+                  ros: ros,
+                  name: '/tf_static',
+                  messageType: 'tf2_msgs/TFMessage',
+                  throttle_rate: 0,
+                  compression: 'none'
+              });
+              tfStaticSub.current.subscribe((msg: any) => handleTFMessage(msg, true));
+          }
+      } else {
+           console.log('[TF Effect] Prerequisites not met (ROS or Viewer not ready). Cleaning up TF...');
+           cleanupTf(); // Cleanup TF if prerequisites fail
       }
-      if (pointsObject.current) {
-        console.log('Removing points geometry from scene');
+
+      // Return cleanup function specific to this effect
+      return cleanupTf;
+
+  // Dependencies: Re-run if ROS connects/disconnects, fixedFrame changes, or TF handler changes (stable)
+  // We also depend on ros3dViewer.current existing, but refs aren't stable dependencies.
+  // The check `if (ros3dViewer.current)` handles this internally.
+  // Remove transforms state from dependencies to prevent loop.
+  }, [ros, ros?.isConnected, fixedFrame, handleTFMessage]);
+
+
+ // Separate effect for managing PointCloud2 client
+ useEffect(() => {
+    // Cleanup function: Remove pc client from scene, nullify ref.
+    const cleanupPointCloudClient = () => {
+      if (pointsClient.current) {
+        // console.log(`Cleaning up ROS3D.PointCloud2 client for topic ${pointsClient.current.topicName}...`);
         if(ros3dViewer.current?.scene) {
-            try { ros3dViewer.current.scene.remove(pointsObject.current); } catch(e){}
+            try {
+                ros3dViewer.current.scene.remove(pointsClient.current); // Remove from scene
+                // console.log('Removed ROS3D.PointCloud2 from scene.');
+            } catch(e){ console.warn("Cleanup warning: Could not remove ROS3D.PointCloud2 client from scene", e); }
         }
-        // Properly dispose of geometry and material if necessary
-        if (pointsObject.current.geometry) pointsObject.current.geometry.dispose();
-        pointsObject.current = null;
-      }
-      // Dispose of the material when subscription ends
-      if (pointsMaterialRef.current) {
-          pointsMaterialRef.current.dispose();
-          pointsMaterialRef.current = null;
+         // REMOVED redundant/problematic unsubscribe call:
+         // if (customTFProvider.current && pointsClient.current.options.frameID) { ... }
+
+        pointsClient.current = null;
       }
     };
 
-    // If a topic is selected, create subscription
-    if (selectedPointCloudTopic) {
-      console.log(`Setting up subscription for topic: ${selectedPointCloudTopic}`);
-      
-      // --- Create Material (once per subscription) --- 
-      if (!pointsMaterialRef.current) {
-          // Use the larger size from previous attempt
-          pointsMaterialRef.current = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.5 });
-      }
-      
-      // --- Create roslib Subscription --- 
-      pointCloudSub.current = new ROSLIB.Topic({
-        ros: ros,
-        name: selectedPointCloudTopic,
-        messageType: POINTCLOUD2_MSG_TYPE,
-        // Use 'none' compression (expects Base64 data string)
-        compression: 'none', 
-        throttle_rate: 100
-      });
-      pointCloudSub.current.hasLoggedData = false; // Add flag to prevent excessive logging
-
-      pointCloudSub.current.subscribe((message: any) => {
-        console.log("+++ Message received (Manual Processing) +++"); 
-        if (!ros3dViewer.current?.scene) return;
-
-        try {
-            const { fields, data, point_step, row_step, width, height, is_dense, is_bigendian } = message;
-            const numPoints = width * height;
-
-            // Log raw data only once
-            if (!pointCloudSub.current?.hasLoggedData) { 
-                console.log("Raw data (first 64 chars, base64 string):", typeof data === 'string' ? data.substring(0, 64) + '...' : data);
-                pointCloudSub.current.hasLoggedData = true;
-            }
-
-            // Decode Base64 string data into Uint8Array
-            let dataView: DataView;
-            try {
-                if (typeof data !== 'string') {
-                    throw new Error(`Expected PointCloud2 data as a Base64 string, received: ${typeof data}`);
-                }
-                const binaryString = window.atob(data);
-                const len = binaryString.length;
-                const uint8Buffer = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    uint8Buffer[i] = binaryString.charCodeAt(i);
-                }
-                dataView = new DataView(uint8Buffer.buffer, uint8Buffer.byteOffset, uint8Buffer.byteLength);
-            } catch (conversionError) {
-                 console.error("Error decoding/converting Base64 PointCloud2 data:", conversionError, data ? data.substring(0,64)+'...' : 'null');
-                 return; 
-            }
-
-            // Find XYZ offsets dynamically
-            let xOffset = -1, yOffset = -1, zOffset = -1;
-            fields.forEach((field: any) => {
-                if (field.name === 'x') { xOffset = field.offset; }
-                if (field.name === 'y') { yOffset = field.offset; }
-                if (field.name === 'z') { zOffset = field.offset; }
-            });
-
-            if (xOffset === -1 || yOffset === -1 || zOffset === -1) {
-                 console.error("PointCloud2 message fields do not contain x, y, and z.", fields);
-                 return; 
-            }
-
-            // Use a temporary array to store only valid, finite points
-            const validPositions: number[] = [];
-            let skippedPoints = 0;
-            const littleEndian = !is_bigendian; 
-
-            for (let i = 0; i < numPoints; i++) {
-                const pointOffset = i * point_step;
-                if (pointOffset + Math.max(xOffset, yOffset, zOffset) + 4 > dataView.byteLength) {
-                    console.warn(`Point index ${i} results in offset out of bounds. Skipping remaining points.`);
-                    break; 
-                }
-                const xVal = dataView.getFloat32(pointOffset + xOffset, littleEndian); 
-                const yVal = dataView.getFloat32(pointOffset + yOffset, littleEndian); 
-                const zVal = dataView.getFloat32(pointOffset + zOffset, littleEndian); 
-
-                if (Number.isFinite(xVal) && Number.isFinite(yVal) && Number.isFinite(zVal)) {
-                    validPositions.push(xVal, yVal, zVal);
-                } else {
-                    skippedPoints++;
-                }
-            }
-
-            if (skippedPoints > 0) {
-                console.warn(`Skipped ${skippedPoints} non-finite points.`);
-            }
-
-            const positions = new Float32Array(validPositions);
-
-            if (positions.length === 0) { 
-                console.warn("No valid finite points found in the message.");
-                 if (pointsObject.current?.geometry) { // Clear existing points if necessary
-                     pointsObject.current.geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
-                     pointsObject.current.geometry.attributes.position.needsUpdate = true;
-                 }
-                return;
-            }
-            
-            // --- Create or Update THREE.Points --- 
-            if (!pointsObject.current) {
-                console.log(`Creating initial Points geometry with ${positions.length / 3} valid points.`);
-                const geometry = new THREE.BufferGeometry();
-                geometry.addAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); 
-                geometry.computeBoundingSphere(); 
-
-                if (!pointsMaterialRef.current) {
-                    console.error("PointsMaterial not ready!");
-                    return;
-                }
-
-                pointsObject.current = new THREE.Points(geometry, pointsMaterialRef.current);
-                ros3dViewer.current.scene.add(pointsObject.current);
-                console.log("THREE.Points object created and added to scene.");
-
-            } else {
-                // Subsequent messages: Update existing geometry
-                const oldGeometry = pointsObject.current.geometry;
-                oldGeometry.addAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); 
-                oldGeometry.attributes.position.needsUpdate = true; // Mark attribute for update
-                oldGeometry.computeBoundingSphere(); // Recompute bounds
-            }
-            // ------------------------------------
-
-        } catch (e) {
-            console.error("Error processing PointCloud2 message (manual):", e, message);
-        }
-      });
-      console.log(`Subscribed to ${selectedPointCloudTopic} (manual processing)`);
-      // ----------------------------------
+    // --- Setup PointCloud Client ---
+    if (!ros3dViewer.current || !ros || !ros.isConnected || !customTFProvider.current || !selectedPointCloudTopic) {
+        cleanupPointCloudClient();
+        return;
     }
 
-    return cleanupSubscription;
-  }, [ros, ros?.isConnected, ros3dViewer.current, selectedPointCloudTopic]); 
+    // --- Create or update PointCloud2 client ---
+    console.log(`[PointCloud Effect] Setting up ROS3D.PointCloud2 client for topic: ${selectedPointCloudTopic}`);
+
+    if (pointsClient.current && pointsClient.current.topicName !== selectedPointCloudTopic) {
+        console.log(`[PointCloud Effect] Topic changed (${pointsClient.current.topicName} -> ${selectedPointCloudTopic}). Cleaning up old client.`);
+        cleanupPointCloudClient();
+    }
+
+    if (!pointsClient.current) {
+        const options = {
+             ros: ros,
+             tfClient: customTFProvider.current, // Use the custom provider (which handles THREE types internally)
+             rootObject: ros3dViewer.current.scene,
+             topic: selectedPointCloudTopic,
+             material: { size: 0.05, color: 0x00ff00 },
+             max_pts: 200000,
+             throttle_rate: 100,
+             compression: 'none' as const,
+        };
+        console.log('[PointCloud Effect] Creating new ROS3D.PointCloud2 client with options:', { ...options, tfClient: 'CustomTFProvider Instance' });
+        try {
+           pointsClient.current = new ROS3D.PointCloud2(options);
+           console.log(`[PointCloud Effect] ROS3D.PointCloud2 client created for ${selectedPointCloudTopic}.`);
+
+            const checkPointsObject = setInterval(() => {
+                if (pointsClient.current?.points?.object) { // Optional chaining
+                    pointsClient.current.points.object.frustumCulled = false;
+                    console.log('[PointCloud Debug] Set frustumCulled = false on internal points object.');
+                    clearInterval(checkPointsObject);
+                }
+            }, 100);
+
+            const intervalCleanup = () => clearInterval(checkPointsObject);
+             const combinedCleanup = () => {
+                 intervalCleanup();
+                 cleanupPointCloudClient();
+             };
+             return combinedCleanup;
+
+       } catch (error) {
+           console.error(`[PointCloud Effect] Error creating ROS3D.PointCloud2 client for ${selectedPointCloudTopic}:`, error);
+           pointsClient.current = null;
+       }
+    }
+
+    return cleanupPointCloudClient;
+
+  }, [ros, ros?.isConnected, ros3dViewer.current, customTFProvider.current, selectedPointCloudTopic]); // Dependencies
+
 
   // Handler for topic selection change
-  const handleTopicChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPointCloudTopic(event.target.value);
+  const handleTopicSelect = (topic: string) => {
+    console.log(`Selected PointCloud topic: ${topic}`);
+    setSelectedPointCloudTopic(topic);
     setIsTopicMenuOpen(false); // Close menu after selection
   };
 
-  // Toggle topic menu visibility
-  const toggleTopicMenu = () => {
-      setIsTopicMenuOpen((prev: boolean) => !prev);
+  // Handler for fixed frame input change
+  const handleFixedFrameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      let newFrame = event.target.value.trim();
+      setFixedFrame(newFrame || DEFAULT_FIXED_FRAME); // Use default if empty
+      console.log("Fixed frame changed to:", newFrame || DEFAULT_FIXED_FRAME);
   };
 
-  // Close menus if clicked outside (simplified)
-  useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-          if (topicMenuRef.current && !topicMenuRef.current.contains(event.target as Node)) {
-              setIsTopicMenuOpen(false);
-          }
-      };
 
-      if (isTopicMenuOpen) { // Only check topic menu
-          document.addEventListener('mousedown', handleClickOutside);
-      } else {
-          document.removeEventListener('mousedown', handleClickOutside);
+  // Toggle topic dropdown menu
+   const toggleTopicMenu = () => {
+    setIsTopicMenuOpen(!isTopicMenuOpen);
+  };
+
+   // Effect to handle clicks outside the topic menu
+   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (topicMenuRef.current && !topicMenuRef.current.contains(event.target as Node)) {
+        setIsTopicMenuOpen(false);
       }
+    };
 
-      return () => {
-          document.removeEventListener('mousedown', handleClickOutside);
-      };
-  }, [isTopicMenuOpen]); // Only depends on topic menu
+    if (isTopicMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isTopicMenuOpen]);
+
+
+
+  // console.log(`--- VisualizationPanel Render End ---`);
 
   return (
-    // Ensure the container takes up space
-    <div ref={viewerRef} className="visualization-panel-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* Control Buttons Area */} 
-      {ros?.isConnected && (
-          <div style={{ 
-              position: 'absolute', 
-              top: '10px', 
-              left: '10px', 
-              zIndex: 10, 
-              display: 'flex', // Arrange controls horizontally
-              gap: '10px'       // Add spacing between controls
-          }}>
-              
-              {/* PointCloud Topic Selector */} 
-              <div ref={topicMenuRef} style={{ position: 'relative' }}>
-                   {/* Button to toggle menu */} 
-                  <button 
-                      onClick={toggleTopicMenu}
-                      className="topic-menu-button" 
-                      title={selectedPointCloudTopic || "Select PointCloud Topic"}
-                      disabled={availablePointCloudTopics.length === 0}
-                      style={{
-                         background: 'rgba(40, 44, 52, 0.8)',
-                         color: 'white',
-                         border: '1px solid #555', 
-                         borderRadius: '4px', 
-                         padding: '5px 10px',
-                         cursor: 'pointer',
-                         maxWidth: '150px',
-                         overflow: 'hidden',
-                         textOverflow: 'ellipsis',
-                         whiteSpace: 'nowrap'
-                      }}
-                  >
-                       <span>{selectedPointCloudTopic ? selectedPointCloudTopic.split('/').pop() : "PC Topic"}</span>
-                       <span style={{ marginLeft: '5px' }}>{isTopicMenuOpen ? '▲' : '▼'}</span> 
-                  </button>
-                  {isTopicMenuOpen && (
-                      <div className="topic-menu-popup" 
-                          style={{
-                               position: 'absolute', top: '100%', left: 0,
-                               background: 'rgba(40, 44, 52, 0.95)',
-                               border: '1px solid #555', borderRadius: '4px',
-                               marginTop: '2px', padding: '5px', maxHeight: '200px', overflowY: 'auto'
-                          }}
-                      >
-                          {fetchTopicsError && <div style={{ padding: '5px', color: 'red' }}>{fetchTopicsError}</div>}
-                          {availablePointCloudTopics.length === 0 && !fetchTopicsError && (
-                              <div style={{ padding: '5px', color: 'orange' }}>No PointCloud2 topics found.</div>
-                          )}
-                          {availablePointCloudTopics.length > 0 && (
-                              <select 
-                                  value={selectedPointCloudTopic} 
-                                  onChange={handleTopicChange} 
-                                  size={Math.min(availablePointCloudTopics.length + 1, 8)}
-                                  style={{ width: '100%', background: '#3a3f4b', color: 'white', border: 'none' }}
-                              >
-                                  <option value="" disabled={selectedPointCloudTopic !== ''}>-- Select Topic --</option>
-                                  {availablePointCloudTopics.map((topic: string) => (
-                                      <option key={topic} value={topic}>{topic}</option>
-                                  ))}
-                              </select>
-                          )}
-                      </div>
-                  )}
-              </div>
+    <div className="visualization-panel">
+      {/* Controls Container */}
+      <div className="visualization-controls">
+         {/* Fixed Frame Input */}
+         <div className="control-item fixed-frame-control">
+           <label htmlFor="fixedFrameInput">Fixed Frame:</label>
+           <input
+             id="fixedFrameInput"
+             type="text"
+             value={fixedFrame}
+             onChange={handleFixedFrameChange}
+             placeholder={DEFAULT_FIXED_FRAME}
+           />
+         </div>
 
-          </div>
-      )}
+         {/* Topic Selector Dropdown */}
+         <div className="control-item topic-selector-control" ref={topicMenuRef}>
+           <button onClick={toggleTopicMenu} className="topic-selector-button">
+             {selectedPointCloudTopic || 'Select PointCloud Topic'} <span className={`arrow ${isTopicMenuOpen ? 'up' : 'down'}`}></span>
+           </button>
+           {isTopicMenuOpen && (
+             <ul className="topic-selector-dropdown">
+               {fetchTopicsError ? (
+                  <li className="topic-item error">{fetchTopicsError}</li>
+               ) : availablePointCloudTopics.length > 0 ? (
+                 availablePointCloudTopics.map((topic) => (
+                   <li key={topic} onClick={() => handleTopicSelect(topic)} className="topic-item">
+                     {topic}
+                   </li>
+                 ))
+               ) : (
+                 <li className="topic-item disabled">No PointCloud2 topics found</li>
+               )}
+             </ul>
+           )}
+         </div>
+      </div>
 
-      {/* Message shown when ROS is not connected OR no topic selected */}
-      {(!ros?.isConnected || !selectedPointCloudTopic) && (
-        <div className="viz-placeholder">
-            {!ros?.isConnected 
-                ? "Waiting for ROS connection..." 
-                : "Please select PointCloud topic."
-            }
-            </div>
-      )}
-      {/* The ROS3D viewer will attach its canvas inside the div above */}
+      {/* ROS3D Viewer Container */}
+      <div ref={viewerRef} className="ros3d-viewer">
+        {/* Loading or connection status indicator (optional) */}
+        {(!ros || !ros.isConnected) && <div className="viewer-overlay">Connecting to ROS...</div>}
+        {ros && ros.isConnected && !selectedPointCloudTopic && <div className="viewer-overlay">Select a PointCloud topic</div>}
+         {/* Error Indicator */}
+         {fetchTopicsError && !isTopicMenuOpen && /* Don't show overlay if menu is open */
+             <div className="viewer-overlay error-overlay">Error fetching topics. Check ROS connection.</div>
+         }
+      </div>
     </div>
   );
-}); // Close memo HOC
+});
 
-export default VisualizationPanel; 
+export default VisualizationPanel;
