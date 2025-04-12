@@ -7,24 +7,35 @@
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 10px;
     overflow-x: auto; /* Allow horizontal scrolling if many tabs */
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: var(--primary-color) var(--background-secondary); /* Firefox */
     position: relative; /* Establish stacking context */
     z-index: 1;         /* Ensure it's above default content */
+    
+    /* --- Custom Scrollbar Styling --- */
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #32CD32 #1e1e1e;
 }
 
-/* Webkit scrollbar styling */
+/* Webkit (Chrome, Safari, Edge, etc.) */
 .control-panel-tabs-container::-webkit-scrollbar {
-    height: 5px;
+    height: 6px; /* Height of the horizontal scrollbar */
 }
+
 .control-panel-tabs-container::-webkit-scrollbar-track {
-    background: var(--background-secondary);
+    background: #1e1e1e; /* Track color */
     border-radius: 3px;
 }
+
 .control-panel-tabs-container::-webkit-scrollbar-thumb {
-    background-color: var(--primary-color);
+    background-color: #32CD32; /* Thumb color */
     border-radius: 3px;
+    border: 1px solid #1e1e1e; /* Optional: adds slight border around thumb */
 }
+
+.control-panel-tabs-container::-webkit-scrollbar-thumb:hover {
+    background-color: #28a745; /* Example slightly darker green */
+}
+/* --- End Custom Scrollbar Styling --- */
 
 .control-panel-tabs {
     display: flex;
