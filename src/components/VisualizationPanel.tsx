@@ -107,14 +107,15 @@ function lookupTransform(
 ): StoredTransform | null {
 
   // Normalize frame IDs (remove leading slashes)
-  targetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
-  sourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
-  fixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
+  const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
+  const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
+  const normalizedFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
 
-  // console.log(`[TF Logic] lookupTransform: ${sourceFrame} -> ${targetFrame} (fixed: ${fixedFrame})`);
+  console.log(`[TF Lookup] Request: ${normalizedSourceFrame} -> ${normalizedTargetFrame} (Fixed: ${normalizedFixedFrame})`);
 
-  if (targetFrame === sourceFrame) {
+  if (normalizedTargetFrame === normalizedSourceFrame) {
     // Identity transform using THREE types
+    console.log(`[TF Lookup] Target and source frames are identical. Returning identity.`);
     return {
       translation: new THREE.Vector3(0, 0, 0),
       rotation: new THREE.Quaternion(0, 0, 0, 1),
@@ -122,10 +123,10 @@ function lookupTransform(
   }
 
   // Find path from source to target
-  const path = findTransformPath(targetFrame, sourceFrame, transforms, fixedFrame);
+  const path = findTransformPath(normalizedTargetFrame, normalizedSourceFrame, transforms, normalizedFixedFrame);
 
   if (!path) {
-     // console.warn(`[TF Logic] No path found from ${sourceFrame} to ${targetFrame}`);
+     console.warn(`[TF Lookup] No path found from ${normalizedSourceFrame} to ${normalizedTargetFrame}. Returning null.`);
      return null;
   }
 
@@ -141,7 +142,10 @@ function lookupTransform(
       // We want final = final * step (apply existing, then apply next step relative to it)
   }
 
-  // console.log(`[TF Logic] Found transform for ${sourceFrame} -> ${targetFrame}`, finalTransform);
+  console.log(`[TF Lookup] Found transform for ${normalizedSourceFrame} -> ${normalizedTargetFrame}:`, {
+    translation: {x: finalTransform.translation.x, y: finalTransform.translation.y, z: finalTransform.translation.z },
+    rotation: {x: finalTransform.rotation.x, y: finalTransform.rotation.y, z: finalTransform.rotation.z, w: finalTransform.rotation.w }
+  });
   return finalTransform;
 }
 
@@ -153,7 +157,7 @@ class CustomTFProvider {
     private ros: Ros;
     private fixedFrame: string;
     private transforms: TransformStore; // Stores THREE.Vector3 and THREE.Quaternion
-    private callbacks: Map<string, Set<(transform: ROSLIB.Transform | null) => void>>; // Callbacks expect ROSLIB structure
+    private callbacks: Map<string, Set<(transform: any | null) => void>>; // Callbacks expect ROSLIB structure
 
     constructor(ros: Ros, fixedFrame: string, initialTransforms: TransformStore) {
         this.ros = ros;
@@ -198,19 +202,18 @@ class CustomTFProvider {
         changedFrames.forEach(frameId => {
             const frameCallbacks = this.callbacks.get(frameId);
             if (frameCallbacks) {
-                // Lookup using THREE types
                 const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
-                // Convert to ROSLIB structure for the callback
-                const latestTransformROSLIB = latestTransformTHREE
-                  ? new ROSLIB.Transform({
+                // Convert to plain object matching ROSLIB structure for the callback
+                const latestTransformObject = latestTransformTHREE
+                  ? { // Plain object, not new ROSLIB.Transform
                       translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
                       rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
-                    })
+                    }
                   : null;
-                // console.log(`[CustomTFProvider] Notifying ${frameCallbacks.size} callbacks for frame ${frameId} with transform:`, latestTransformROSLIB);
+                // console.log(`[CustomTFProvider] Notifying ${frameCallbacks.size} callbacks for frame ${frameId} with transform:`, latestTransformObject);
                 frameCallbacks.forEach(cb => {
                    try {
-                     cb(latestTransformROSLIB);
+                     cb(latestTransformObject); // Pass the plain object
                    } catch (e) {
                      console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId}:`, e);
                    }
@@ -227,16 +230,16 @@ class CustomTFProvider {
 
             this.callbacks.forEach((frameCallbacks, frameId) => {
                  const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
-                 const latestTransformROSLIB = latestTransformTHREE
-                   ? new ROSLIB.Transform({ // Convert to ROSLIB structure
+                 const latestTransformObject = latestTransformTHREE
+                   ? { // Plain object, not new ROSLIB.Transform
                        translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
                        rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
-                     })
+                     }
                    : null;
                  // console.log(`[CustomTFProvider] Re-notifying ${frameCallbacks.size} callbacks for frame ${frameId} due to fixedFrame change.`);
                  frameCallbacks.forEach(cb => {
                    try {
-                     cb(latestTransformROSLIB);
+                     cb(latestTransformObject); // Pass the plain object
                    } catch (e) {
                      console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId} (fixedFrame update):`, e);
                    }
@@ -245,9 +248,8 @@ class CustomTFProvider {
         }
     }
 
-    // This is the core method ros3djs components will call
-    // It expects a callback function that takes a ROSLIB.Transform-like object or null
-    subscribe(frameId: string, callback: (transform: ROSLIB.Transform | null) => void) {
+    // Modify subscribe to provide plain object initially
+    subscribe(frameId: string, callback: (transform: any | null) => void) { // Use 'any' for now if Transform type is problematic
         const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
         // console.log(`[CustomTFProvider] subscribe called for frameId: ${normalizedFrameId}`);
 
@@ -258,24 +260,24 @@ class CustomTFProvider {
         frameCallbacks.add(callback);
         // console.log(`[CustomTFProvider] Added callback for ${normalizedFrameId}. Total callbacks: ${frameCallbacks.size}`);
 
-        // Immediately provide the current transform, converted to ROSLIB structure
+        // Immediately provide the current transform as a plain object
         const currentTransformTHREE = this.lookupTransform(this.fixedFrame, normalizedFrameId);
-        const currentTransformROSLIB = currentTransformTHREE
-            ? new ROSLIB.Transform({
+        const currentTransformObject = currentTransformTHREE
+            ? { // Plain object, not new ROSLIB.Transform
                 translation: { x: currentTransformTHREE.translation.x, y: currentTransformTHREE.translation.y, z: currentTransformTHREE.translation.z },
                 rotation: { x: currentTransformTHREE.rotation.x, y: currentTransformTHREE.rotation.y, z: currentTransformTHREE.rotation.z, w: currentTransformTHREE.rotation.w }
-              })
+              }
             : null;
-        // console.log(`[CustomTFProvider] Providing initial transform for ${normalizedFrameId}:`, currentTransformROSLIB);
+        // console.log(`[CustomTFProvider] Providing initial transform for ${normalizedFrameId}:`, currentTransformObject);
         try {
-           callback(currentTransformROSLIB);
+           callback(currentTransformObject); // Pass the plain object
         } catch (e) {
            console.error(`[CustomTFProvider] Error in initial TF callback for frame ${normalizedFrameId}:`, e);
         }
     }
 
-    // Unsubscribe remains the same, operating on frameId and callback reference
-    unsubscribe(frameId: string, callback?: (transform: ROSLIB.Transform | null) => void) {
+    // Modify unsubscribe type signature
+    unsubscribe(frameId: string, callback?: (transform: any | null) => void) { // Use 'any' for now
         const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
         // console.log(`[CustomTFProvider] unsubscribe called for frameId: ${normalizedFrameId}`);
         const frameCallbacks = this.callbacks.get(normalizedFrameId);
@@ -314,7 +316,7 @@ interface VisualizationPanelProps {
 
 const DEFAULT_FIXED_FRAME = 'odom'; // Or your preferred default, e.g., 'map', 'base_link'
 
-const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => {
+const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -473,28 +475,92 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
     const cleanupViewer = () => {
         console.log('[Viewer Effect Cleanup] Cleaning up ROS3D viewer, Grid, OrbitControls, and ResizeObserver...');
         
-        // Disconnect observer first
-        if (resizeObserver && currentViewerRef) {
-            resizeObserver.unobserve(currentViewerRef);
-            resizeObserver.disconnect();
-            console.log('[Viewer Effect Cleanup] ResizeObserver disconnected.');
-        }
-        resizeObserver = null;
+        // Helper function to recursively dispose of resources in the scene graph
+        const disposeSceneResources = (obj: THREE.Object3D) => {
+            if (!obj) return;
+
+            // Dispose children first
+            if (obj.children && obj.children.length > 0) {
+                // Iterate over a copy in case dispose modifies the children array
+                [...obj.children].forEach(child => {
+                    disposeSceneResources(child);
+                    try {
+                        obj.remove(child); // Remove child from parent after disposing
+                    } catch (e) {
+                        console.warn('[Viewer Cleanup] Error removing child object:', e);
+                    }
+                });
+            }
+
+            // Dispose geometry
+            if ((obj as THREE.Mesh).geometry) {
+                try {
+                    (obj as THREE.Mesh).geometry.dispose();
+                    // console.log(`[Viewer Cleanup] Disposed geometry for object: ${obj.uuid}`);
+                } catch (e) {
+                    console.warn('[Viewer Cleanup] Error disposing geometry:', e);
+                }
+            }
+
+            // Dispose material(s)
+            if ((obj as THREE.Mesh).material) {
+                const material = (obj as THREE.Mesh).material;
+                if (Array.isArray(material)) {
+                    material.forEach((mat: THREE.Material) => {
+                        try {
+                            if (mat.map) mat.map.dispose(); // Dispose texture if present
+                            mat.dispose();
+                            // console.log(`[Viewer Cleanup] Disposed material in array: ${mat.uuid}`);
+                        } catch (e) {
+                            console.warn('[Viewer Cleanup] Error disposing material in array:', e);
+                        }
+                    });
+                } else {
+                    try {
+                        if (material.map) material.map.dispose(); // Dispose texture if present
+                        material.dispose();
+                        // console.log(`[Viewer Cleanup] Disposed single material: ${material.uuid}`);
+                    } catch (e) {
+                        console.warn('[Viewer Cleanup] Error disposing single material:', e);
+                    }
+                }
+            }
+            
+            // Dispose texture (if directly on the object, though less common)
+            if ((obj as any).texture) {
+                try {
+                   (obj as any).texture.dispose();
+                    // console.log(`[Viewer Cleanup] Disposed texture for object: ${obj.uuid}`);
+                } catch (e) {
+                    console.warn('[Viewer Cleanup] Error disposing texture:', e);
+                }
+            }
+        };
 
         if (ros3dViewer.current) {
             try {
-                // Remove objects from scene first
-                if(gridClient.current) ros3dViewer.current.scene.remove(gridClient.current);
-                // If pointsClient exists, attempt removal (might be handled by its own effect's cleanup too)
-                if(pointsClient.current) ros3dViewer.current.scene.remove(pointsClient.current);
+                // Remove objects from scene first (redundant if disposeSceneResources removes children, but safe)
+                // if(gridClient.current) ros3dViewer.current.scene.remove(gridClient.current);
+                // if(pointsClient.current) ros3dViewer.current.scene.remove(pointsClient.current);
 
                 console.log('[Viewer Effect Cleanup] Destroying Viewer resources...');
                 if (ros3dViewer.current.renderer) {
-                    ros3dViewer.current.stop();
+                    ros3dViewer.current.stop(); // Stop animation loop
+                    
+                    // Dispose scene contents recursively
+                    if (ros3dViewer.current.scene) {
+                       console.log('[Viewer Cleanup] Starting scene resource disposal...');
+                       disposeSceneResources(ros3dViewer.current.scene);
+                       console.log('[Viewer Cleanup] Finished scene resource disposal.');
+                    }
+                    
+                    // Remove canvas from DOM
                     if (ros3dViewer.current.renderer.domElement.parentElement) {
                         ros3dViewer.current.renderer.domElement.parentElement.removeChild(ros3dViewer.current.renderer.domElement);
                     }
-                    ros3dViewer.current.scene?.dispose();
+                    
+                    // Dispose renderer itself
+                    // ros3dViewer.current.scene?.dispose(); // REMOVED THIS LINE
                     ros3dViewer.current.renderer?.dispose();
                 }
                 console.log('[Viewer Effect Cleanup] Viewer resources likely released.');
@@ -655,93 +721,258 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
 
  // Separate effect for managing PointCloud2 client
  useEffect(() => {
-    // Capture the instance being created in this effect run
+    console.log('[PointCloud Effect] Running effect. Deps:', { rosConnected: ros?.isConnected, selectedPointCloudTopic, fixedFrame });
+
+    // Capture the instance being created *specifically* in this effect run for targeted cleanup
     let createdClientInstance: ROS3D.PointCloud2 | null = null;
 
-    // Cleanup function: Remove the specific pc client instance created by this effect run.
+    // Cleanup function: Remove the specific pc client instance created by THIS effect run.
     const cleanupPointCloudClient = () => {
-      const clientToRemove = createdClientInstance; // Use the captured instance
-      if (clientToRemove) {
-        console.log(`[PointCloud Cleanup] Attempting cleanup for topic: ${clientToRemove.topicName}`);
+        const clientToClean = createdClientInstance; // Use the captured instance
+        if (!clientToClean) {
+            // console.log('[PointCloud Cleanup] No client instance captured for this effect run to clean.');
+            return;
+        }
+
+        // console.log(`[PointCloud Cleanup] Cleaning up client instance...`); // Removed topic log
+
+        // 0. Unsubscribe - REMOVED as ROS3D.PointCloud2 handles this internally
+        // try {
+        //     if (typeof clientToClean.unsubscribe === 'function') {
+        //          clientToClean.unsubscribe();
+        //          // console.log(`[PointCloud Cleanup] Unsubscribed client for topic: ${clientToClean.options?.topic}`);
+        //     } else {
+        //          console.warn(`[PointCloud Cleanup] Client object does not have an unsubscribe method?`, clientToClean);
+        //     }
+        // } catch (e) {
+        //      console.error(`[PointCloud Cleanup] Error unsubscribing client for topic: ${clientToClean.options?.topic}`, e);
+        // }
+
+        // 1. Remove from Scene
         if (ros3dViewer.current?.scene) {
-            try {
-                console.log(`[PointCloud Cleanup] Removing object from scene:`, clientToRemove);
-                ros3dViewer.current.scene.remove(clientToRemove); 
-                console.log(`[PointCloud Cleanup] Successfully removed object from scene.`);
-            } catch(e){ 
-                console.error("[PointCloud Cleanup] Error removing instance from scene", e); 
+            // Get the internal THREE.Points object
+            const pointsObject = (clientToClean as any)?.points?.object as THREE.Object3D | undefined; // THREE.Points extends Object3D
+            if (pointsObject) {
+                // Get the PARENT of the pointsObject, which is likely what ROS3D adds to the scene
+                const wrapperObject = pointsObject.parent;
+                if (wrapperObject && wrapperObject !== ros3dViewer.current.scene) { // Ensure parent exists and is not the scene itself
+                    try {
+                        const wrapperUUID = wrapperObject.uuid;
+                        const sceneChildrenBefore = ros3dViewer.current.scene.children.map((c: THREE.Object3D) => ({ uuid: c.uuid, type: c.type }));
+                        console.log(`[PointCloud Cleanup] Scene children BEFORE removing wrapper (${wrapperUUID}):`, sceneChildrenBefore);
+                        ros3dViewer.current.scene.remove(wrapperObject); // <-- Remove the WRAPPER object
+                        const sceneChildrenAfter = ros3dViewer.current.scene.children.map((c: THREE.Object3D) => ({ uuid: c.uuid, type: c.type }));
+                        console.log(`[PointCloud Cleanup] Scene children AFTER removing wrapper (${wrapperUUID}):`, sceneChildrenAfter);
+                    } catch(e){
+                        console.error("[PointCloud Cleanup] Error removing wrapper object from scene", e);
+                    }
+                } else {
+                   console.warn(`[PointCloud Cleanup] Could not find a valid parent wrapper object for pointsObject (uuid: ${pointsObject.uuid}) to remove from scene.`);
+                   // Fallback: Try removing the pointsObject directly? (Might not work based on logs)
+                   // try { ros3dViewer.current.scene.remove(pointsObject); } catch(e){} 
+                }
+            } else {
+                console.warn(`[PointCloud Cleanup] Could not find internal points.object on the client to clean up.`);
+            }
+        } else {
+             // console.log("[PointCloud Cleanup] Viewer or scene not available for removal.");
+        }
+
+        // 2. Dispose Geometry & Material
+        // Access the internal ROS3D.Points wrapper
+        const pointsWrapper = (clientToClean as any).points;
+
+        if (pointsWrapper && pointsWrapper.object) { // Check if wrapper and its internal THREE.Points object exist
+            const pointsObject = pointsWrapper.object as THREE.Points; // The actual THREE.Points mesh
+            const clientUUID = pointsObject.uuid; // Get uuid from the THREE.Points object
+
+            // Dispose Geometry
+            if (pointsObject.geometry) {
+                try {
+                    pointsObject.geometry.dispose();
+                    // console.log(`[PointCloud Cleanup] Disposed geometry for client ${clientUUID}`);
+                } catch (e) {
+                     console.error(`[PointCloud Cleanup] Error disposing geometry for client ${clientUUID}`, e);
+                }
+            } else {
+                 // console.log(`[PointCloud Cleanup] No geometry found on pointsObject.object for client ${clientUUID}`);
+            }
+
+            // Dispose Material(s)
+            if (pointsObject.material) {
+                const material = pointsObject.material;
+                 if (Array.isArray(material)) {
+                     material.forEach((mat: THREE.Material) => {
+                         try {
+                             if (mat.map) mat.map.dispose(); // Dispose texture if present
+                             mat.dispose();
+                             // console.log(`[PointCloud Cleanup] Disposed material in array: ${mat.uuid}`);
+                         } catch (e) {
+                             console.warn('[PointCloud Cleanup] Error disposing material in array:', e);
+                         }
+                     });
+                 } else {
+                     try {
+                         if (material.map) material.map.dispose(); // Dispose texture if present
+                         material.dispose();
+                         // console.log(`[PointCloud Cleanup] Disposed single material: ${material.uuid}`);
+                     } catch (e) {
+                         console.warn('[PointCloud Cleanup] Error disposing single material:', e);
+                     }
+                 }
+            } else {
+                // console.log(`[PointCloud Cleanup] No material found on pointsObject.object for client ${clientUUID}`);
+            }
+
+        } else {
+            // Log if the expected structure isn't found
+            const baseUUID = (clientToClean as any)?.uuid ?? 'unknown';
+            if (!pointsWrapper) {
+                 console.warn(`[PointCloud Cleanup] Internal 'points' wrapper not found for disposal on client ${baseUUID}.`);
+            } else { // pointsWrapper exists, but pointsWrapper.object doesn't
+                 // console.warn(`[PointCloud Cleanup] Internal nested 'object' not found within 'points' wrapper for disposal on client ${baseUUID}.`, pointsWrapper);
+                 // This case seems to happen sometimes, potentially due to timing or ros3djs internal cleanup.
+                 // Since we check for .object before disposing geometry/material, it's safe to just not log the warning.
             }
         }
-         // No need to nullify pointsClient.current here, as the ref is managed outside this specific closure
-         console.log("[PointCloud Cleanup] Finished cleanup attempt.");
-      } else {
-         // console.log("[PointCloud Cleanup] No client instance captured for cleanup.");
-      }
+
+        // 3. Nullify the reference for this specific cleanup closure
+        createdClientInstance = null;
+        // console.log('[PointCloud Cleanup] Nullified createdClientInstance ref.');
     };
 
     // --- Setup PointCloud Client ---
+    // Prerequisite check: Ensure ROS is connected and Viewer/TFProvider are ready.
     if (!ros3dViewer.current || !ros || !ros.isConnected || !customTFProvider.current || !selectedPointCloudTopic) {
-        cleanupPointCloudClient();
-        return;
+        // If a client *already* exists from a previous run, clean it up before returning
+        if (pointsClient.current) { // Only cleanup if pointsClient.current actually exists
+           console.log("[PointCloud Effect] Prerequisites failed OR no topic selected, cleaning up existing client if any.");
+           // Use the existing cleanup logic - it now correctly handles disposal
+           const existingClientCleanup = () => {
+              const clientToClean = pointsClient.current; // Target the existing client
+              if (!clientToClean) { console.log("[PointCloud Prereq Cleanup] No existing client to clean."); return; }
+
+              console.log(`[PointCloud Prereq Cleanup] Cleaning up existing client: ${clientToClean.uuid}`);
+ 
+               // 1. Remove from Scene
+               if (ros3dViewer.current?.scene) {
+                   // Also try removing the wrapper object here in the prerequisite cleanup
+                   const pointsObject = (clientToClean as any)?.points?.object as THREE.Object3D | undefined;
+                   if (pointsObject) {
+                       const wrapperObject = pointsObject.parent;
+                       if (wrapperObject && wrapperObject !== ros3dViewer.current.scene) {
+                          try { ros3dViewer.current.scene.remove(wrapperObject); } catch(e){}
+                       }
+                   }
+               }
+               // 2. Dispose Geometry & Material
+               const pointsWrapper = (clientToClean as any).points;
+               if (pointsWrapper && pointsWrapper.object) {
+                   const pointsObject = pointsWrapper.object as THREE.Points;
+                   if (pointsObject.geometry) { try { pointsObject.geometry.dispose(); } catch(e){} }
+                   if (pointsObject.material) {
+                      const material = pointsObject.material;
+                      if (Array.isArray(material)) { material.forEach((mat: any) => { try { if (mat.map) mat.map.dispose(); mat.dispose(); } catch(e){} }); }
+                      else { try { if (material.map) material.map.dispose(); material.dispose(); } catch(e){} }
+                   }
+               }
+               pointsClient.current = null; // Nullify the main ref
+           };
+           existingClientCleanup();
+        }
+        return; // Exit effect, don't setup or return cleanupPointCloudClient
     }
 
-    // --- Create or update PointCloud2 client ---
-    console.log(`[PointCloud Effect] Setting up ROS3D.PointCloud2 client for topic: ${selectedPointCloudTopic}`);
+    // --- PointCloud Client Creation/Recreation Logic ---
+    // 1. Always cleanup the *previous* client (if one exists in the main ref) before creating a new one.
+    //    We use the refined cleanupPointCloudClient logic here by temporarily assigning
+    //    the current client to createdClientInstance for cleanup.
+    if (pointsClient.current) {
+        // console.log(`[PointCloud Effect] Re-running/Topic change. Cleaning up existing client:`, pointsClient.current);
+        console.log(`[PointCloud Effect] Cleaning up previous client: ${pointsClient.current.uuid}`);
+        createdClientInstance = pointsClient.current; // Target the existing client for cleanup
+        cleanupPointCloudClient();                    // Run the standard cleanup
+        createdClientInstance = null;                 // Reset captured instance
+        pointsClient.current = null;                  // Nullify the main ref *before* creating the new one
+    }
+    
+    // 2. Create the new client
+    // console.log(`[PointCloud Effect] Setting up new ROS3D.PointCloud2 client for topic: ${selectedPointCloudTopic}`);
+    const options = {
+         ros: ros,
+         tfClient: customTFProvider.current, 
+         rootObject: ros3dViewer.current.scene,
+         topic: selectedPointCloudTopic,
+         material: { size: 0.05, color: 0x00ff00 },
+         max_pts: 200000,
+         throttle_rate: 100,
+         compression: 'none' as const,
+    };
+    // console.log('[PointCloud Effect] Creating new ROS3D.PointCloud2 client with options:', { ...options, tfClient: 'CustomTFProvider Instance' });
+    console.log(`[PointCloud Effect] Creating new client for topic: ${selectedPointCloudTopic}`);
+    try {
+       const newClient = new ROS3D.PointCloud2(options);
+       // Note: The client is added to the scene internally by ROS3D via the rootObject option.
+       // We log the scene children *after* the client is expected to have added its object.
+       pointsClient.current = newClient;
+       createdClientInstance = newClient;
+ 
+       // Log scene children *after* adding
+       // Use a small delay or interval to wait for the object to likely be added
+       const checkSceneInterval = setInterval(() => {
+           if (ros3dViewer.current?.scene) {
+               const internalPointsObject = (newClient as any)?.points?.object;
+               // Check for the *parent* wrapper object in the scene now
+               const wrapperObject = internalPointsObject?.parent;
+               if (wrapperObject && ros3dViewer.current.scene.children.includes(wrapperObject)) {
+                   console.log(`[PointCloud Effect] New client WRAPPER object found (uuid: ${wrapperObject.uuid}). Scene children:`);
+                   const sceneChildrenAfterAdd = ros3dViewer.current.scene.children.map((c: THREE.Object3D) => ({ uuid: c.uuid, type: c.type }));
+                   console.log(sceneChildrenAfterAdd);
+                   clearInterval(checkSceneInterval);
+               } else {
+                   // console.log('[PointCloud Effect] Waiting for internal points object to appear...');
+               }
+           } else {
+              console.warn('[PointCloud Effect] Viewer scene not available to log children after add.');
+              clearInterval(checkSceneInterval); // Stop if viewer disappears
+           }
+       }, 100); // Check every 100ms
 
-    if (pointsClient.current && pointsClient.current.topicName !== selectedPointCloudTopic) {
-        console.log(`[PointCloud Effect] Topic changed (${pointsClient.current.topicName} -> ${selectedPointCloudTopic}). Cleaning up old client.`);
-        cleanupPointCloudClient();
+       // Clear interval on cleanup too
+       const cleanupCheckInterval = () => clearInterval(checkSceneInterval);
+
+       // Original frustum culling check
+       const checkPointsObject = setInterval(() => {
+            if (pointsClient.current?.points?.object) { // Optional chaining
+                pointsClient.current.points.object.frustumCulled = false;
+                // console.log('[PointCloud Debug] Set frustumCulled = false on internal points object.');
+                clearInterval(checkPointsObject);
+            }
+       }, 100);
+
+       // Cleanup function specific to the interval for THIS client instance
+       const intervalCleanup = () => clearInterval(checkPointsObject);
+       
+       // Combined cleanup for THIS effect run (cleans interval AND removes the created client instance)
+       const combinedCleanup = () => {
+           intervalCleanup(); // Cleans frustum culling interval
+           cleanupCheckInterval(); // Cleans scene check interval
+           cleanupPointCloudClient(); // Uses createdClientInstance
+       };
+       return combinedCleanup; // Return the cleanup function for this effect instance
+
+    } catch (error) {
+       console.error(`[PointCloud Effect] Error creating ROS3D.PointCloud2 client for ${selectedPointCloudTopic}:`, error);
+       pointsClient.current = null; // Ensure main ref is null if creation failed
+       createdClientInstance = null; // Ensure captured instance is null on error
+       // No specific cleanup needed here as nothing was added to the scene
     }
 
-    if (!pointsClient.current) {
-        const options = {
-             ros: ros,
-             tfClient: customTFProvider.current, // Use the custom provider (which handles THREE types internally)
-             rootObject: ros3dViewer.current.scene,
-             topic: selectedPointCloudTopic,
-             material: { size: 0.05, color: 0x00ff00 },
-             max_pts: 200000,
-             throttle_rate: 100,
-             compression: 'none' as const,
-        };
-        console.log('[PointCloud Effect] Creating new ROS3D.PointCloud2 client with options:', { ...options, tfClient: 'CustomTFProvider Instance' });
-        try {
-           // Assign to the main ref AND the local variable for cleanup
-           const newClient = new ROS3D.PointCloud2(options);
-           pointsClient.current = newClient;
-           createdClientInstance = newClient; // Capture instance for cleanup
-           
-           console.log(`[PointCloud Effect] ROS3D.PointCloud2 client created for ${selectedPointCloudTopic}.`);
+    // Fallback return (shouldn't be reached if try/catch handles returns properly)
+    return undefined; 
 
-            const checkPointsObject = setInterval(() => {
-                if (pointsClient.current?.points?.object) { // Optional chaining
-                    pointsClient.current.points.object.frustumCulled = false;
-                    console.log('[PointCloud Debug] Set frustumCulled = false on internal points object.');
-                    clearInterval(checkPointsObject);
-                }
-            }, 100);
-
-            const intervalCleanup = () => clearInterval(checkPointsObject);
-             const combinedCleanup = () => {
-                 intervalCleanup();
-                 cleanupPointCloudClient(); // Use the modified cleanup
-             };
-             // Return the combined cleanup for THIS effect instance
-             return combinedCleanup; 
-
-       } catch (error) {
-           console.error(`[PointCloud Effect] Error creating ROS3D.PointCloud2 client for ${selectedPointCloudTopic}:`, error);
-           pointsClient.current = null; // Reset ref on error
-           createdClientInstance = null; // Ensure captured instance is null on error
-       }
-    }
-
-    // If we reached here without creating a new client (e.g., topic didn't change),
-    // still return the basic cleanup in case the effect re-runs due to other dependencies.
-    // This cleanup won't do much as createdClientInstance will be null.
-    return cleanupPointCloudClient; 
-
-  }, [ros, ros?.isConnected, ros3dViewer.current, customTFProvider.current, selectedPointCloudTopic]); // Dependencies
+  // Remove ros3dViewer.current and customTFProvider.current from dependencies
+  }, [ros, ros?.isConnected, selectedPointCloudTopic, fixedFrame]); 
 
 
   // --- UI Handlers ---
@@ -830,7 +1061,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
                    onChange={handleFixedFrameChange}
                  >
                    {availableFrames.length > 0 ? (
-                       availableFrames.map((frame) => (
+                       availableFrames.map((frame: string) => (
                            <option key={frame} value={frame}>
                                {frame}
                            </option>
@@ -852,7 +1083,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
                        {fetchTopicsError ? (
                           <li className="topic-item error">{fetchTopicsError}</li>
                        ) : availablePointCloudTopics.length > 0 ? (
-                         availablePointCloudTopics.map((topic) => (
+                         availablePointCloudTopics.map((topic: string) => (
                            <li key={topic} onClick={() => handleTopicSelect(topic)} className="topic-item">
                              {topic}
                            </li>
