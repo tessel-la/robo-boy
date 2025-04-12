@@ -336,11 +336,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
   const [isTopicMenuOpen, setIsTopicMenuOpen] = useState(false);
   const topicMenuRef = useRef<HTMLDivElement>(null);
   const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
+  const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]); // NEW state for frames
+  
+  // State for UI controls
+  const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false); // NEW state for popup
+  const settingsPopupRef = useRef<HTMLDivElement>(null); // NEW ref for popup
 
-  // --- Callback for handling TF messages (populates store with THREE types) ---
+  // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any /* tf2_msgs/TFMessage */, isStatic: boolean) => {
-    // console.log(`[TF Callback] Received ${isStatic ? 'static' : 'dynamic'} TF message with ${message.transforms.length} transforms.`);
-    setTransforms(prevTransforms => {
+    const currentFrames = new Set<string>(availableFrames); // Use Set for efficient unique add
+    let newFramesFound = false;
+
+    // Fix implicit any
+    setTransforms((prevTransforms: TransformStore) => {
       const newTransforms = { ...prevTransforms };
       let changed = false;
       message.transforms.forEach((tStamped: any /* geometry_msgs/TransformStamped */) => {
@@ -354,6 +362,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
         if (!parentFrame || !childFrame) {
             console.warn("[TF Callback] Received transform with empty frame ID, skipping.", tStamped);
             return;
+        }
+
+        // Add frames to our set
+        if (!currentFrames.has(parentFrame)) {
+            currentFrames.add(parentFrame);
+            newFramesFound = true;
+        }
+         if (!currentFrames.has(childFrame)) {
+            currentFrames.add(childFrame);
+            newFramesFound = true;
         }
 
         // Create THREE.js objects from message data
@@ -386,14 +404,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
       // Only update state and provider if something actually changed
       if (changed) {
         // console.log("[TF Callback] Transforms changed, updating state and provider.");
-        customTFProvider.current?.updateTransforms(newTransforms); // Notify provider *after* state update cycle planned
+        customTFProvider.current?.updateTransforms(newTransforms);
         return newTransforms;
       } else {
         // console.log("[TF Callback] No effective change in transforms.");
         return prevTransforms; // No change, return previous state
       }
     });
-  }, []); // No dependencies, relies on setTransforms closure
+
+    // Update available frames state if new ones were found
+    if (newFramesFound) {
+        // console.log("[TF Callback] New frames found, updating availableFrames state.");
+        setAvailableFrames(Array.from(currentFrames).sort()); // Convert Set to sorted Array
+    }
+
+  }, [availableFrames]); // Add availableFrames dependency
 
   // Effect to set the ID (same as before)
   useEffect(() => {
@@ -630,20 +655,27 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
 
  // Separate effect for managing PointCloud2 client
  useEffect(() => {
-    // Cleanup function: Remove pc client from scene, nullify ref.
-    const cleanupPointCloudClient = () => {
-      if (pointsClient.current) {
-        // console.log(`Cleaning up ROS3D.PointCloud2 client for topic ${pointsClient.current.topicName}...`);
-        if(ros3dViewer.current?.scene) {
-            try {
-                ros3dViewer.current.scene.remove(pointsClient.current); // Remove from scene
-                // console.log('Removed ROS3D.PointCloud2 from scene.');
-            } catch(e){ console.warn("Cleanup warning: Could not remove ROS3D.PointCloud2 client from scene", e); }
-        }
-         // REMOVED redundant/problematic unsubscribe call:
-         // if (customTFProvider.current && pointsClient.current.options.frameID) { ... }
+    // Capture the instance being created in this effect run
+    let createdClientInstance: ROS3D.PointCloud2 | null = null;
 
-        pointsClient.current = null;
+    // Cleanup function: Remove the specific pc client instance created by this effect run.
+    const cleanupPointCloudClient = () => {
+      const clientToRemove = createdClientInstance; // Use the captured instance
+      if (clientToRemove) {
+        console.log(`[PointCloud Cleanup] Attempting cleanup for topic: ${clientToRemove.topicName}`);
+        if (ros3dViewer.current?.scene) {
+            try {
+                console.log(`[PointCloud Cleanup] Removing object from scene:`, clientToRemove);
+                ros3dViewer.current.scene.remove(clientToRemove); 
+                console.log(`[PointCloud Cleanup] Successfully removed object from scene.`);
+            } catch(e){ 
+                console.error("[PointCloud Cleanup] Error removing instance from scene", e); 
+            }
+        }
+         // No need to nullify pointsClient.current here, as the ref is managed outside this specific closure
+         console.log("[PointCloud Cleanup] Finished cleanup attempt.");
+      } else {
+         // console.log("[PointCloud Cleanup] No client instance captured for cleanup.");
       }
     };
 
@@ -674,7 +706,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
         };
         console.log('[PointCloud Effect] Creating new ROS3D.PointCloud2 client with options:', { ...options, tfClient: 'CustomTFProvider Instance' });
         try {
-           pointsClient.current = new ROS3D.PointCloud2(options);
+           // Assign to the main ref AND the local variable for cleanup
+           const newClient = new ROS3D.PointCloud2(options);
+           pointsClient.current = newClient;
+           createdClientInstance = newClient; // Capture instance for cleanup
+           
            console.log(`[PointCloud Effect] ROS3D.PointCloud2 client created for ${selectedPointCloudTopic}.`);
 
             const checkPointsObject = setInterval(() => {
@@ -688,59 +724,85 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
             const intervalCleanup = () => clearInterval(checkPointsObject);
              const combinedCleanup = () => {
                  intervalCleanup();
-                 cleanupPointCloudClient();
+                 cleanupPointCloudClient(); // Use the modified cleanup
              };
-             return combinedCleanup;
+             // Return the combined cleanup for THIS effect instance
+             return combinedCleanup; 
 
        } catch (error) {
            console.error(`[PointCloud Effect] Error creating ROS3D.PointCloud2 client for ${selectedPointCloudTopic}:`, error);
-           pointsClient.current = null;
+           pointsClient.current = null; // Reset ref on error
+           createdClientInstance = null; // Ensure captured instance is null on error
        }
     }
 
-    return cleanupPointCloudClient;
+    // If we reached here without creating a new client (e.g., topic didn't change),
+    // still return the basic cleanup in case the effect re-runs due to other dependencies.
+    // This cleanup won't do much as createdClientInstance will be null.
+    return cleanupPointCloudClient; 
 
   }, [ros, ros?.isConnected, ros3dViewer.current, customTFProvider.current, selectedPointCloudTopic]); // Dependencies
 
 
-  // Handler for topic selection change
+  // --- UI Handlers ---
+
+  const toggleSettingsPopup = () => {
+    setIsSettingsPopupOpen(!isSettingsPopupOpen);
+  };
+
+  // Handler for topic selection change (within popup)
   const handleTopicSelect = (topic: string) => {
     console.log(`Selected PointCloud topic: ${topic}`);
     setSelectedPointCloudTopic(topic);
-    setIsTopicMenuOpen(false); // Close menu after selection
+    setIsTopicMenuOpen(false); // Close topic dropdown within popup
+    // Consider closing the main popup too, or leave it open
+    // setIsSettingsPopupOpen(false); 
   };
 
-  // Handler for fixed frame input change
-  const handleFixedFrameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      let newFrame = event.target.value.trim();
+  // Handler for fixed frame input change (now a select element)
+  const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const newFrame = event.target.value;
       setFixedFrame(newFrame || DEFAULT_FIXED_FRAME); // Use default if empty
       console.log("Fixed frame changed to:", newFrame || DEFAULT_FIXED_FRAME);
+       // Consider closing the main popup after selection
+      // setIsSettingsPopupOpen(false); 
   };
 
 
-  // Toggle topic dropdown menu
+  // Toggle topic dropdown menu (within popup)
    const toggleTopicMenu = () => {
     setIsTopicMenuOpen(!isTopicMenuOpen);
   };
 
-   // Effect to handle clicks outside the topic menu
+   // Effect to handle clicks outside the popups
    useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (topicMenuRef.current && !topicMenuRef.current.contains(event.target as Node)) {
+      // Close Topic Dropdown if open and click is outside
+      if (isTopicMenuOpen && topicMenuRef.current && !topicMenuRef.current.contains(event.target as Node)) {
         setIsTopicMenuOpen(false);
+      }
+      // Close Settings Popup if open and click is outside
+      if (isSettingsPopupOpen && settingsPopupRef.current && !settingsPopupRef.current.contains(event.target as Node)) {
+          // Don't close if the click was on the settings button itself
+          const settingsButton = document.getElementById('viz-settings-button');
+          if (!settingsButton || !settingsButton.contains(event.target as Node)) {
+             setIsSettingsPopupOpen(false);
+          }
       }
     };
 
-    if (isTopicMenuOpen) {
+    // Add listener if either popup is open
+    if (isTopicMenuOpen || isSettingsPopupOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       document.removeEventListener('mousedown', handleClickOutside);
     }
 
+    // Cleanup
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isTopicMenuOpen]);
+  }, [isTopicMenuOpen, isSettingsPopupOpen]); // Add isSettingsPopupOpen dependency
 
 
 
@@ -748,50 +810,71 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }) => 
 
   return (
     <div className="visualization-panel">
-      {/* Controls Container */}
-      <div className="visualization-controls">
-         {/* Fixed Frame Input */}
-         <div className="control-item fixed-frame-control">
-           <label htmlFor="fixedFrameInput">Fixed Frame:</label>
-           <input
-             id="fixedFrameInput"
-             type="text"
-             value={fixedFrame}
-             onChange={handleFixedFrameChange}
-             placeholder={DEFAULT_FIXED_FRAME}
-           />
-         </div>
+      {/* Settings Button */} 
+      <button id="viz-settings-button" className="settings-button" onClick={toggleSettingsPopup}>
+          {/* Simple Gear Icon (replace with SVG or icon library later) */}
+          ⚙️ 
+      </button>
 
-         {/* Topic Selector Dropdown */}
-         <div className="control-item topic-selector-control" ref={topicMenuRef}>
-           <button onClick={toggleTopicMenu} className="topic-selector-button">
-             {selectedPointCloudTopic || 'Select PointCloud Topic'} <span className={`arrow ${isTopicMenuOpen ? 'up' : 'down'}`}></span>
-           </button>
-           {isTopicMenuOpen && (
-             <ul className="topic-selector-dropdown">
-               {fetchTopicsError ? (
-                  <li className="topic-item error">{fetchTopicsError}</li>
-               ) : availablePointCloudTopics.length > 0 ? (
-                 availablePointCloudTopics.map((topic) => (
-                   <li key={topic} onClick={() => handleTopicSelect(topic)} className="topic-item">
-                     {topic}
-                   </li>
-                 ))
-               ) : (
-                 <li className="topic-item disabled">No PointCloud2 topics found</li>
-               )}
-             </ul>
-           )}
-         </div>
-      </div>
+      {/* Settings Popup (conditionally rendered) */} 
+      {isSettingsPopupOpen && (
+          <div className="settings-popup" ref={settingsPopupRef}>
+              <h4>Visualization Settings</h4>
+              
+               {/* Fixed Frame Selector */}
+               <div className="popup-control-item">
+                 <label htmlFor="fixedFrameSelect">Fixed Frame:</label>
+                 <select 
+                   id="fixedFrameSelect" 
+                   value={fixedFrame}
+                   onChange={handleFixedFrameChange}
+                 >
+                   {availableFrames.length > 0 ? (
+                       availableFrames.map((frame) => (
+                           <option key={frame} value={frame}>
+                               {frame}
+                           </option>
+                       ))
+                   ) : (
+                       <option value="" disabled>No frames available</option>
+                   )}
+                 </select>
+               </div>
 
-      {/* ROS3D Viewer Container */}
+               {/* PointCloud Topic Selector */} 
+               <div className="popup-control-item topic-selector-control" ref={topicMenuRef}>
+                  <label>PointCloud Topic:</label> {/* Simple label */} 
+                  <button onClick={toggleTopicMenu} className="topic-selector-button">
+                     {selectedPointCloudTopic || 'Select PointCloud Topic'} <span className={`arrow ${isTopicMenuOpen ? 'up' : 'down'}`}></span>
+                  </button>
+                  {isTopicMenuOpen && (
+                     <ul className="topic-selector-dropdown">
+                       {fetchTopicsError ? (
+                          <li className="topic-item error">{fetchTopicsError}</li>
+                       ) : availablePointCloudTopics.length > 0 ? (
+                         availablePointCloudTopics.map((topic) => (
+                           <li key={topic} onClick={() => handleTopicSelect(topic)} className="topic-item">
+                             {topic}
+                           </li>
+                         ))
+                       ) : (
+                         <li className="topic-item disabled">No PointCloud2 topics found</li>
+                       )}
+                     </ul>
+                   )}
+                </div>
+
+                {/* Add more settings here if needed */}
+          </div>
+      )}
+
+      {/* ROS3D Viewer Container (takes full space) */} 
       <div ref={viewerRef} className="ros3d-viewer">
         {/* Loading or connection status indicator (optional) */}
         {(!ros || !ros.isConnected) && <div className="viewer-overlay">Connecting to ROS...</div>}
         {ros && ros.isConnected && !selectedPointCloudTopic && <div className="viewer-overlay">Select a PointCloud topic</div>}
          {/* Error Indicator */}
-         {fetchTopicsError && !isTopicMenuOpen && /* Don't show overlay if menu is open */
+         {fetchTopicsError && /* Don't show overlay if popup is open? Or maybe still show? */
              <div className="viewer-overlay error-overlay">Error fetching topics. Check ROS connection.</div>
          }
       </div>
