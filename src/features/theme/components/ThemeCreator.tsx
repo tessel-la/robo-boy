@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { CustomTheme } from '../App'; // Import the theme type
+import { CustomTheme } from '../../features/theme/themeUtils'; // Updated path
 import './ThemeCreator.css';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-// Remove incorrect import of getIcon and availableIconIds from ThemeSelector
-// We'll define needed icons here directly
+// Removed incorrect import again
 
 // --- Icons needed for ThemeCreator --- 
 // (Copied from ThemeSelector - consider creating a shared icon file later)

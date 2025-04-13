@@ -3,67 +3,29 @@ import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
 import MainControlView from './components/MainControlView';
-import ThemeSelector from './components/ThemeSelector';
-import ThemeCreator from './components/ThemeCreator';
+import ThemeSelector from './features/theme/components/ThemeSelector';
+import ThemeCreator from './features/theme/components/ThemeCreator';
+import {
+    CustomTheme, 
+    DEFAULT_THEMES, 
+    THEME_STORAGE_KEY, 
+    CUSTOM_THEMES_STORAGE_KEY, 
+    generateThemeCss 
+} from './features/theme/themeUtils';
 
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
   ros2Value: string | number;   // Now required
 }
 
-// Define the structure for a custom theme
-export interface CustomTheme {
-  id: string; // Unique identifier (e.g., timestamp or UUID)
-  name: string;
-  iconId?: string; // Make icon optional for now
-  colors: {
-    primary: string;
-    secondary: string;
-    background: string;
-    // Add more colors as needed (text, border, etc.)
-    text?: string;
-    border?: string;
-    cardBg?: string;
-    buttonText?: string;
-  };
-}
-
-// Default themes (cannot be edited/deleted in this basic setup)
-const DEFAULT_THEMES = ['light', 'dark', 'solarized'];
-const THEME_STORAGE_KEY = 'appTheme';
-const CUSTOM_THEMES_STORAGE_KEY = 'customThemes';
-
-// Helper to generate dynamic CSS (basic version)
-const generateThemeCss = (theme: CustomTheme): string => {
-  const colors = theme.colors;
-  // Map custom theme colors to CSS variables
-  // Add fallbacks or more complex logic as needed
-  return `
-    :root[data-theme="${theme.id}"] {
-      --primary-color: ${colors.primary};
-      --secondary-color: ${colors.secondary};
-      --background-color: ${colors.background};
-      /* Add other variables based on CustomTheme structure */
-      ${colors.text ? `--text-color: ${colors.text};` : ''}
-      ${colors.border ? `--border-color: ${colors.border};` : ''}
-      ${colors.cardBg ? `--card-bg: ${colors.cardBg};` : ''}
-      ${colors.buttonText ? `--button-text-color: ${colors.buttonText};` : ''}
-      /* Add hover/darker variants dynamically if desired, or use defaults */
-      /* --primary-hover-color: ... */ 
-    }
-  `;
-};
-
 function App() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams | null>(null);
 
   // --- Theme State ---
-  // Load selected theme name
   const [selectedThemeId, setSelectedThemeId] = useState<string>(() => {
     return localStorage.getItem(THEME_STORAGE_KEY) || 'dark';
   });
 
-  // Load custom themes
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => {
     const stored = localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY);
     try {
@@ -89,6 +51,9 @@ function App() {
     // Check if it's a default theme
     if (DEFAULT_THEMES.includes(selectedThemeId)) {
       document.documentElement.setAttribute('data-theme', selectedThemeId);
+      // Remove dynamic style tag if switching back to default
+      themeStyleTagRef.current?.remove();
+      themeStyleTagRef.current = null;
       console.log(`Applied default theme: ${selectedThemeId}`);
     } else {
       // It's a custom theme
@@ -96,6 +61,8 @@ function App() {
       if (customTheme) {
         // Generate and apply dynamic CSS
         const css = generateThemeCss(customTheme);
+        // Remove previous tag before adding new one
+        themeStyleTagRef.current?.remove(); 
         const styleTag = document.createElement('style');
         styleTag.id = `custom-theme-styles-${customTheme.id}`;
         styleTag.innerHTML = css;
@@ -108,6 +75,8 @@ function App() {
         // Fallback if custom theme not found (e.g., deleted)
         console.warn(`Custom theme with ID ${selectedThemeId} not found. Falling back to dark.`);
         document.documentElement.setAttribute('data-theme', 'dark');
+        themeStyleTagRef.current?.remove(); // Remove potential old tag
+        themeStyleTagRef.current = null;
         setSelectedThemeId('dark'); // Reset state
       }
     }
@@ -203,7 +172,7 @@ function App() {
   // Combine default and custom themes for the selector
   const allThemesForSelector = [
       ...DEFAULT_THEMES.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), isDefault: true })),
-      ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, isDefault: false }))
+      ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false }))
   ];
 
   return (
