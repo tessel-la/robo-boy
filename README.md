@@ -34,7 +34,7 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 
 The application supports multiple themes, including user-created custom themes. Themes define the color palette for the UI elements.
 
-### Creating & Managing Themes
+## Creating & Managing Themes
 
 1.  **Access Theme Menu:** Click the theme icon button (usually in the bottom-right corner). This opens a popup menu displaying available themes (default and custom).
 
