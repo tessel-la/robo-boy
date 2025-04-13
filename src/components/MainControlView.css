@@ -181,7 +181,7 @@
     /* height: 100%; /* Removed */
     /* min-height: 250px; /* Removed */
     box-sizing: border-box;
-    padding: 10px;
+    padding: 5px; /* Reduced padding */
 }
 
 /* Prevent scrolling on body if main-control-view is active */

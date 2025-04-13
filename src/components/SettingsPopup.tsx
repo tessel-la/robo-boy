@@ -1,64 +1,63 @@
-import React, { useRef, useState, useEffect } from 'react';
-import './VisualizationPanel.css'; // Reuse styles for now, or create a dedicated CSS file
+import React, { useRef, useEffect } from 'react';
+import { FiX } from 'react-icons/fi';
+import './VisualizationPanel.css'; // Reuse styles for now
 
+// Consolidated and corrected props interface
 interface SettingsPopupProps {
-  isOpen: boolean;
-  onClose: () => void;
-  // Fixed Frame Props
+  isOpen: boolean; // Controls visibility
+  onClose: () => void; // Correct prop name for closing
+
+  // Fixed Frame
   fixedFrame: string;
   availableFrames: string[];
   onFixedFrameChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
-  defaultFixedFrame: string; // Added to handle reset/default logic if needed inside
-  // PointCloud Props
+
+  // PointCloud Topic
   selectedPointCloudTopic: string;
   availablePointCloudTopics: string[];
-  fetchTopicsError: string | null;
   onTopicSelect: (topic: string) => void;
-  // Maybe pass ros connection status if needed for UI elements inside
-  // isRosConnected: boolean;
+  fetchTopicsError: string | null; // Error during topic fetching
+  topicStatus?: 'loading' | 'error' | 'ok' | null; // Status indicator for loading/error states
 }
 
-const SettingsPopup: React.FC<SettingsPopupProps> = ({
-  isOpen,
-  onClose, // We might not need onClose passed in if click outside handles it
-  fixedFrame,
-  availableFrames,
-  onFixedFrameChange,
-  defaultFixedFrame,
-  selectedPointCloudTopic,
-  availablePointCloudTopics,
-  fetchTopicsError,
-  onTopicSelect,
-}) => {
-  const settingsPopupRef = useRef<HTMLDivElement>(null);
-  const topicMenuRef = useRef<HTMLDivElement>(null);
-  const [isTopicMenuOpen, setIsTopicMenuOpen] = useState(false);
+// Explicitly type the props object here, then destructure
+const SettingsPopup = (props: SettingsPopupProps) => {
+  const {
+    isOpen,
+    onClose, // Correct prop name
+    fixedFrame,
+    availableFrames,
+    onFixedFrameChange,
+    selectedPointCloudTopic,
+    availablePointCloudTopics,
+    onTopicSelect,
+    topicStatus,
+    fetchTopicsError,
+  } = props;
 
-  const toggleTopicMenu = () => {
-    setIsTopicMenuOpen(!isTopicMenuOpen);
-  };
+  const popupRef = useRef<HTMLDivElement>(null);
+  // Removed state and refs related to the custom topic dropdown (isTopicMenuOpen, topicMenuRef)
+  // Removed toggleTopic and handleInternalTopicSelect
 
-  // Internal handler to call the passed-in onTopicSelect and close the dropdown
-  const handleInternalTopicSelect = (topic: string) => {
-    onTopicSelect(topic);
-    setIsTopicMenuOpen(false);
-  };
-
-   // Effect to handle clicks outside the popups (specific to this component)
-   useEffect(() => {
+  // Restore Effect to handle clicks outside the popup
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Close Topic Dropdown if open and click is outside topic section
-      if (isTopicMenuOpen && topicMenuRef.current && !topicMenuRef.current.contains(event.target as Node)) {
-        setIsTopicMenuOpen(false);
+      // If the popup is open and the click is outside the popup content, close it
+      if (isOpen && popupRef.current && !popupRef.current.contains(event.target as Node)) {
+        // Check if the click target is the toggle button itself to prevent immediate reopening
+        // IMPORTANT: Also check if click is on the container background (now handled by parent)
+        const toggleButton = document.getElementById('viz-settings-button'); // Use correct button ID
+        const popupContainer = document.querySelector('.settings-popup-container'); // Get the container
+
+        // Close if click is outside popup content AND not on the toggle button
+        // The parent container now handles clicks on the background overlay
+        if (!toggleButton || !toggleButton.contains(event.target as Node)) {
+             onClose();
+        }
       }
-      // Close Settings Popup if open and click is outside settings popup itself
-      // We rely on the parent component's state (isOpen) and its click outside logic to close the main popup
-      // No need to call onClose here directly, parent controls visibility.
     };
 
-    // Add listener only when the popup is actually open
     if (isOpen) {
-      // Use setTimeout to ensure the listener is added after the click that opened the popup
       const timerId = setTimeout(() => {
           document.addEventListener('mousedown', handleClickOutside);
       }, 0);
@@ -66,67 +65,80 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
         clearTimeout(timerId);
         document.removeEventListener('mousedown', handleClickOutside);
       };
-    } 
-    // No listener needed if not open
-    return () => {}; 
-
-  }, [isOpen, isTopicMenuOpen]); // Re-run if isOpen or topic menu state changes
-
+    }
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]); // Restore dependencies
 
   // Don't render anything if not open
   if (!isOpen) {
     return null;
   }
 
+  // Determine topic status display for the select element's disabled/option states
+  const isLoadingTopics = topicStatus === 'loading';
+  const hasTopicError = topicStatus === 'error' || !!fetchTopicsError;
+  const noTopicsAvailable = !isLoadingTopics && availablePointCloudTopics.length === 0;
+
   return (
-    <div className="settings-popup" ref={settingsPopupRef}>
-      <h4>Visualization Settings</h4>
+    // Restore wrapper div (though maybe not strictly necessary if parent handles overlay)
+    // Let's keep it simple for now and remove the wrapper, parent handles overlay
+    // <div className="settings-popup-overlay"> 
+      <div className="settings-popup" ref={popupRef}>
+         <div className="settings-popup-header">
+           <h3>Settings</h3>
+           <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
+             <FiX />
+           </button>
+         </div>
+         <div className="settings-popup-content">
+           {/* Fixed Frame Selector */}
+           <div className="popup-control-item">
+             <label htmlFor="fixed-frame-select">Fixed Frame:</label>
+             <select
+               id="fixed-frame-select"
+               value={fixedFrame}
+               onChange={onFixedFrameChange}
+               disabled={availableFrames.length === 0}
+             >
+               {availableFrames.length > 0 ? (
+                 availableFrames.map((frame) => (
+                   <option key={frame} value={frame}>
+                     {frame}
+                   </option>
+                 ))
+               ) : (
+                 <option value="" disabled>No frames available</option>
+               )}
+             </select>
+           </div>
 
-      {/* Fixed Frame Selector */}
-      <div className="popup-control-item">
-        <label htmlFor="fixedFrameSelect">Fixed Frame:</label>
-        <select
-          id="fixedFrameSelect"
-          value={fixedFrame}
-          onChange={onFixedFrameChange} // Pass handler directly
-        >
-          {availableFrames.length > 0 ? (
-            availableFrames.map((frame) => (
-              <option key={frame} value={frame}>
-                {frame}
-              </option>
-            ))
-          ) : (
-            <option value="" disabled>No frames available</option>
-          )}
-        </select>
+           {/* PointCloud Topic Selector */}
+           <div className="popup-control-item">
+             <label htmlFor="pointcloud-topic-select">PointCloud Topic:</label>
+             <select
+               id="pointcloud-topic-select"
+               value={selectedPointCloudTopic}
+               onChange={(e) => onTopicSelect(e.target.value)}
+               disabled={isLoadingTopics || hasTopicError || noTopicsAvailable}
+             >
+               {isLoadingTopics && <option value="">Loading topics...</option>}
+               {hasTopicError && <option value="">Error loading topics</option>}
+               {noTopicsAvailable && !isLoadingTopics && !hasTopicError && <option value="">No topics available</option>}
+               {!isLoadingTopics && !hasTopicError && availablePointCloudTopics.length > 0 &&
+                 availablePointCloudTopics.map((topic) => (
+                   <option key={topic} value={topic}>
+                     {topic}
+                   </option>
+                 ))
+               }
+             </select>
+             {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
+           </div>
+         </div>
       </div>
-
-      {/* PointCloud Topic Selector */}
-      <div className="popup-control-item topic-selector-control" ref={topicMenuRef}>
-        <label>PointCloud Topic:</label> {/* Simple label */}
-        <button onClick={toggleTopicMenu} className="topic-selector-button">
-          {selectedPointCloudTopic || 'Select PointCloud Topic'} <span className={`arrow ${isTopicMenuOpen ? 'up' : 'down'}`}></span>
-        </button>
-        {isTopicMenuOpen && (
-          <ul className="topic-selector-dropdown">
-            {fetchTopicsError ? (
-              <li className="topic-item error">{fetchTopicsError}</li>
-            ) : availablePointCloudTopics.length > 0 ? (
-              availablePointCloudTopics.map((topic) => (
-                <li key={topic} onClick={() => handleInternalTopicSelect(topic)} className="topic-item">
-                  {topic}
-                </li>
-              ))
-            ) : (
-              <li className="topic-item disabled">No PointCloud2 topics found</li>
-            )}
-          </ul>
-        )}
-      </div>
-
-      {/* Add more settings here if needed */}
-    </div>
+    // </div>
   );
 };
 

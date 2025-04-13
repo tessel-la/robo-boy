@@ -37,17 +37,7 @@ The application supports multiple themes, including user-created custom themes. 
 ## Creating & Managing Themes
 
 1.  **Access Theme Menu:** Click the theme icon button (usually in the bottom-right corner). This opens a popup menu displaying available themes (default and custom).
-
-    <p align="center">
-      <img src="images/theme_custom_1.jpg" alt="Theme Selector Popup" width="30%">
-    </p>
-
 2.  **Create New Theme:** Click the "Create New Theme..." button in the popup. This opens the Theme Creator modal.
-
-    <p align="center">
-      <img src="images/theme_custom_2.jpg" alt="Theme Creator Modal" width="30%">
-    </p>
-
 3.  **Define Theme:**
     *   Enter a unique **Name** for your theme.
     *   Select the base **Colors** (Primary, Secondary, Background) using the color pickers. Optional colors (Text, Border, etc.) can also be set.
@@ -57,8 +47,12 @@ The application supports multiple themes, including user-created custom themes. 
 4.  **Editing/Deleting:** Custom themes will have Edit (pencil) and Delete (trash) icons next to them in the theme selector popup. Clicking Edit opens the Theme Creator pre-filled with that theme's settings. Clicking Delete prompts for confirmation before removing the theme.
 
     <p align="center">
-      <img src="images/theme_custom_3.jpg" alt="Theme with Edit/Delete Actions" width="30%">
+      <img src="images/theme_custom_1.jpg" alt="Theme Selector Popup" width="30%">
+        <img src="images/theme_custom_2.jpg" alt="Theme Creator Modal" width="30%">
+        <img src="images/theme_custom_3.jpg" alt="Theme with Edit/Delete Actions" width="30%">
     </p>
+
+
 
 ### How it Works
 

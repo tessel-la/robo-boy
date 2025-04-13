@@ -5,13 +5,13 @@
   height: 100%; /* Fill parent height */
   min-height: 300px; /* Example minimum height */
   background-color: var(--background-color); /* Use theme variable */
-  border-radius: var(--border-radius); /* Use theme variable */
-  overflow: hidden; /* Prevent content spilling out */
+  border-radius: 10px; /* Explicitly set corner radius */
   box-shadow: var(--box-shadow);
-  /* Remove padding from panel, apply to viewer container if needed */
-  /* padding: 10px; */ 
+  /* Remove padding from panel */
+  padding: 0; 
   box-sizing: border-box; /* Include padding in width/height */
   position: relative; /* Needed for positioning button and popup */
+  /* overflow: hidden; Remove again to prevent clipping overlay */
 }
 
 /* Remove old controls bar */
@@ -42,21 +42,42 @@
   background-color: rgba(60, 64, 72, 0.9);
 }
 
-/* --- Settings Popup --- */
-.settings-popup {
+/* --- Settings Popup Container (Now an Overlay) --- */
+.settings-popup-container {
   position: absolute;
-  top: 60px; /* Position below the button */
-  right: 10px;
-  z-index: 100; /* Above everything */
+  inset: 0; /* Cover the entire parent */
+  z-index: 50;
+  /* pointer-events: none; Remove, container needs to catch clicks */
+  background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent overlay */
+  display: flex; /* Use flexbox to center the popup content */
+  align-items: center;
+  justify-content: center;
+  /* padding: 20px; Remove padding around the popup */
+  box-sizing: border-box;
+}
+
+/* --- Settings Popup (Content Box within Overlay) --- */
+.settings-popup {
+  /* position: absolute; Remove absolute positioning */
+  /* top: 70px; Remove */
+  /* right: 10px; Remove */
+  z-index: 100; /* Keep above overlay background */
   background-color: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  padding: 15px;
+  padding: 20px; /* Adjust padding */
   box-shadow: var(--box-shadow-large);
-  min-width: 300px; /* Minimum width */
+  /* min-width: 240px; Remove */
+  width: 95%; /* Occupy more width */
+  /* max-width: 500px; Remove max width limit */
+  /* max-height: 70vh; Remove, let flexbox handle height */
+  max-height: 90%; /* Limit height relative to container */
+  overflow-y: auto; /* Allow vertical scrolling WITHIN popup */
   display: flex;
   flex-direction: column;
-  gap: 15px; /* Space between items in popup */
+  gap: 15px;
+  pointer-events: auto; /* Keep */
+  box-sizing: border-box;
 }
 
 .settings-popup h4 {
@@ -81,7 +102,7 @@
 }
 
 .popup-control-item select,
-.popup-control-item .topic-selector-button {
+.popup-control-item input[type="text"] /* Add styles for potential future inputs */ {
   width: 100%; /* Make controls fill popup width */
   padding: 8px 10px;
   border: 1px solid var(--border-color);
@@ -92,59 +113,21 @@
   box-sizing: border-box;
 }
 
-.popup-control-item .topic-selector-button {
-   cursor: pointer;
-   display: flex;
-   align-items: center;
-   justify-content: space-between; 
-}
+/* Remove styles for the custom topic selector button */
+/* .popup-control-item .topic-selector-button { ... } */
 
-.popup-control-item .topic-selector-control {
-  position: relative; /* Keep for dropdown positioning */
-}
+/* Remove styles for the custom topic selector control positioning */
+/* .popup-control-item .topic-selector-control { ... } */
 
-/* Adjust dropdown to fit within popup */
-.popup-control-item .topic-selector-dropdown {
-  position: absolute;
-  top: 100%; 
-  left: 0;
-  right: 0; /* Ensure it doesn't overflow popup */
-  background-color: var(--background-popup); /* Different background maybe? */
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-small);
-  margin-top: 2px; 
-  max-height: 150px; /* Limit height */
-  overflow-y: auto;
-  z-index: 110; /* Above popup content */
-  list-style: none;
-  padding: 0;
-  margin: 2px 0 0 0;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  width: 100%; /* Match parent width */
-}
+/* Remove styles for the custom topic selector dropdown */
+/* .popup-control-item .topic-selector-dropdown { ... } */
 
-/* Reuse topic item styles */
-.popup-control-item .topic-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  color: var(--text-primary);
-}
-
-.popup-control-item .topic-item:hover {
-  background-color: var(--accent-color);
-  color: white;
-}
-
-.popup-control-item .topic-item.disabled,
-.popup-control-item .topic-item.error {
-  color: var(--text-disabled);
-  cursor: default;
-  background-color: transparent;
-}
-.popup-control-item .topic-item.error {
-  color: var(--error-color);
-}
+/* Remove styles for the custom topic items */
+/* .popup-control-item .topic-item { ... } */
+/* .popup-control-item .topic-item:hover { ... } */
+/* .popup-control-item .topic-item.disabled, */
+/* .popup-control-item .topic-item.error { ... } */
+/* .popup-control-item .topic-item.error { ... } */
 
 /* --- ROS3D Viewer Container --- */
 .ros3d-viewer {

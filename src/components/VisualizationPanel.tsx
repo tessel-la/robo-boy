@@ -225,25 +225,36 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   return (
     <div className="visualization-panel">
-      {/* Settings Button */} 
+      {/* Settings Button */}
       <button id="viz-settings-button" className="settings-button" onClick={toggleSettingsPopup}>
           {/* Simple Gear Icon (replace with SVG or icon library later) */}
-          ⚙️ 
+          ⚙️
       </button>
 
-      {/* Settings Popup Component */}
-      <SettingsPopup
-        isOpen={isSettingsPopupOpen}
-        onClose={toggleSettingsPopup} // Used by SettingsPopup for its own internal logic if needed, like an explicit close button
-        fixedFrame={fixedFrame}
-        availableFrames={availableFrames}
-        onFixedFrameChange={handleFixedFrameChange}
-        defaultFixedFrame={DEFAULT_FIXED_FRAME}
-        selectedPointCloudTopic={selectedPointCloudTopic}
-        availablePointCloudTopics={availablePointCloudTopics}
-        fetchTopicsError={fetchTopicsError}
-        onTopicSelect={handleTopicSelect}
-      />
+      {/* Container for the absolutely positioned popup */}
+      {isSettingsPopupOpen && (
+          <div 
+              className="settings-popup-container"
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                  // Close only if clicking the container itself (background)
+                  if (e.target === e.currentTarget) {
+                      toggleSettingsPopup();
+                  }
+              }}
+          >
+              <SettingsPopup
+                isOpen={isSettingsPopupOpen} // Still needed for internal logic/conditional rendering within Popup
+                onClose={toggleSettingsPopup}
+                fixedFrame={fixedFrame}
+                availableFrames={availableFrames}
+                onFixedFrameChange={handleFixedFrameChange}
+                selectedPointCloudTopic={selectedPointCloudTopic}
+                availablePointCloudTopics={availablePointCloudTopics}
+                fetchTopicsError={fetchTopicsError}
+                onTopicSelect={handleTopicSelect}
+              />
+          </div>
+      )}
 
       {/* Container div for the hook to manage - assign static ID */}
       <div ref={viewerRef} id="ros3d-viewer" className="ros3d-viewer">
