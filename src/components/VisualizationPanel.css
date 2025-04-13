@@ -5,7 +5,7 @@
   height: 100%; /* Fill parent height */
   min-height: 300px; /* Example minimum height */
   background-color: var(--background-color); /* Use theme variable */
-  border-radius: 10px; /* Explicitly set corner radius */
+  border-radius: var(--border-radius); /* Use theme variable */
   box-shadow: var(--box-shadow);
   /* Remove padding from panel */
   padding: 0; 
@@ -80,6 +80,52 @@
   box-sizing: border-box;
 }
 
+/* SettingsPopup Header Adjustments */
+.settings-popup-header {
+  display: flex;
+  justify-content: space-between; /* Pushes title and button apart */
+  align-items: center; /* Vertically aligns title and button */
+  margin-bottom: 15px; /* Add some space below header */
+  padding-bottom: 10px; /* Keep underline padding */
+  border-bottom: 1px solid var(--border-color); /* Keep underline */
+}
+
+.settings-popup-header h3 {
+  margin: 0; /* Remove default margin */
+  padding: 0; /* Remove default padding */
+  border-bottom: none; /* Remove duplicate underline */
+  text-align: left; /* Align title to left */
+}
+
+.settings-popup-header .close-button {
+  /* Optional: Adjust button style if needed */
+  padding: 0; /* Remove padding if it causes alignment issues */
+  line-height: 1; /* Helps vertical alignment */
+}
+
+/* Specific styling for the close button */
+.settings-popup-header .close-button {
+  background-color: var(--button-background, rgba(80, 80, 80, 0.7)); /* Use theme variable or fallback */
+  color: var(--button-text, #fff);
+  border: 1px solid var(--button-border, rgba(255, 255, 255, 0.3));
+  border-radius: 50%; /* Make it circular */
+  width: 30px; /* Slightly smaller than gear */
+  height: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2em; /* Adjust icon size */
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  padding: 0; /* Ensure no padding interferes */
+  line-height: 1; /* Ensure icon centers vertically */
+}
+
+.settings-popup-header .close-button:hover {
+  background-color: var(--button-background-hover, rgba(100, 100, 100, 0.9));
+  transform: scale(1.1);
+}
+
 .settings-popup h4 {
   margin: 0 0 10px 0;
   padding-bottom: 10px;
@@ -137,7 +183,7 @@
   min-height: 0; /* Override previous min-height if needed */
   position: relative; /* Needed for absolute positioning of overlay */
   background-color: #1e1e1e; /* Darker background for viewer */
-  border-radius: var(--border-radius); /* Match panel radius */
+  border-radius: var(--border-radius); /* Apply theme border radius */
   overflow: hidden; /* Important: Keep canvas contained */
   /* border: 1px solid var(--border-color); */ /* Optional border */
 }
