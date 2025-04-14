@@ -1,0 +1,223 @@
+/* Remove old button styles */
+/* .theme-toggle-button { ... } */
+/* .theme-toggle-button:hover { ... } */
+
+/* Remove switch styles */
+/* .theme-switch { ... } */
+/* .theme-switch input { ... } */
+/* .slider { ... } */
+/* .slider::before { ... } */
+/* .icon-container { ... } */
+/* .sun-icon { ... } */
+/* .moon-icon { ... } */
+/* .theme-switch input:checked + .slider::before { ... } */
+/* .theme-switch input:checked + .slider .sun-icon { ... } */
+/* .theme-switch input:checked + .slider .moon-icon { ... } */
+
+/* New Button Styles */
+.theme-selector-container { /* New container for positioning */
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000; /* Ensure it's above other content */
+}
+
+.theme-selector-button { 
+  /* Styles for the main toggle button */
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+
+.theme-selector-button:hover {
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transform: translateY(-2px);
+}
+
+.icon-wrapper {
+  width: 32px; /* Increased size again */
+  height: 32px; /* Increased size again */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; 
+}
+
+.icon-wrapper svg {
+  color: var(--primary-color);
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out; 
+}
+
+/* Popup Menu Styles */
+.theme-popup-menu {
+  position: absolute;
+  bottom: 65px; /* Position above the button */
+  right: 0;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px) scale(0.95); /* Initial state for animation */
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+}
+
+.theme-popup-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1); /* Final state for animation */
+}
+
+.theme-popup-menu button {
+  /* Keep base styles */
+}
+
+/* Rename existing button style for clarity */
+.theme-select-button {
+    background-color: transparent;
+    border: none;
+    color: var(--text-color);
+    padding: 8px 12px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    width: 100%;
+    /* Remove flex-grow if previously added */
+}
+
+.theme-select-button:hover {
+  background-color: var(--background-secondary);
+}
+
+.theme-select-button svg {
+  width: 18px;
+  height: 18px;
+  color: var(--primary-color);
+}
+
+.theme-select-button.active {
+  font-weight: bold;
+  background-color: var(--primary-color);
+  color: var(--button-text-color);
+}
+
+.theme-select-button.active svg {
+  color: var(--button-text-color);
+}
+
+/* Style for the row containing theme button and actions */
+.theme-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Push actions to the right */
+    gap: 5px;
+    width: 100%;
+}
+
+.theme-item-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0; /* Prevent action buttons from shrinking */
+}
+
+.action-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; /* Small size for action icons */
+    height: 24px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: var(--background-secondary);
+    color: var(--text-color);
+}
+
+.action-button.delete-button:hover {
+    color: var(--error-color); /* Red hover for delete */
+}
+
+.action-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.create-new-theme-button {
+    margin-top: 8px; /* Space above */
+    padding: 8px 12px;
+    background-color: var(--background-secondary);
+    color: var(--text-color);
+    border: 1px dashed var(--border-color); /* Dashed border */
+    text-align: center;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    width: 100%;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.create-new-theme-button:hover {
+    background-color: var(--border-color);
+    border-color: var(--text-secondary);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .theme-selector-container {
+    bottom: 15px;
+    right: 15px;
+  }
+  .theme-selector-button {
+    width: 45px;
+    height: 45px;
+  }
+  .icon-wrapper {
+    width: 28px; /* Adjusted size */
+    height: 28px; /* Adjusted size */
+  }
+  .theme-popup-menu {
+    bottom: 60px; /* Adjust popup position */
+  }
+}
+
+@media (max-width: 480px) {
+  .theme-selector-container {
+    bottom: 10px;
+    right: 10px;
+  }
+  .theme-selector-button {
+    width: 40px;
+    height: 40px;
+  }
+  .icon-wrapper {
+    width: 24px; /* Adjusted size */
+    height: 24px; /* Adjusted size */
+  }
+  .theme-popup-menu {
+    bottom: 55px; /* Adjust popup position */
+  }
+} 

@@ -1,0 +1,186 @@
+/* src/components/ThemeCreator.css */
+
+.theme-creator-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1100; /* Above theme selector */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.theme-creator-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.theme-creator-modal {
+    background-color: var(--card-bg);
+    padding: 25px 30px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 450px;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.theme-creator-backdrop.open .theme-creator-modal {
+    transform: scale(1);
+}
+
+.theme-creator-modal h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: var(--text-color);
+    text-align: center;
+    font-size: 1.4rem;
+}
+
+.theme-creator-form .form-group {
+    margin-bottom: 20px;
+}
+
+.theme-creator-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.theme-creator-form input[type="text"] {
+    width: calc(100% - 22px); /* Full width minus padding/border */
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.color-input-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 15px;
+}
+
+.color-input-item label {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between swatch and text */
+    cursor: pointer; /* Make label clickable for color input */
+}
+
+.color-input-item input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 30px; /* Size of the color swatch */
+    height: 30px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0; /* Remove default padding */
+}
+
+/* Style the color picker indicator */
+.theme-creator-form input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border-radius: 4px; 
+}
+
+.theme-creator-form input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.theme-creator-form input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.icon-selector-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--background-color);
+}
+
+.icon-select-button {
+    padding: 8px;
+    border: 2px solid transparent; /* For selected state */
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.icon-select-button:hover {
+    background-color: var(--border-color);
+}
+
+.icon-select-button.selected {
+    border-color: var(--primary-color);
+    background-color: var(--background-color);
+}
+
+.icon-select-button svg {
+    width: 24px; /* Match size used in TSX */
+    height: 24px;
+    color: var(--text-color);
+}
+
+.icon-select-button.selected svg {
+    color: var(--primary-color);
+}
+
+.theme-creator-actions {
+    margin-top: 25px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.theme-creator-actions button {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.theme-creator-actions .save-button {
+    background-color: var(--primary-color);
+    color: var(--button-text-color);
+    border: none;
+}
+
+.theme-creator-actions .cancel-button {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.theme-creator-actions .cancel-button:hover {
+     background-color: var(--background-secondary);
+}
+
+/* Optional: Add more color inputs following the pattern */
+/* Example:
+.color-input-item.optional label { ... }
+.color-input-item.optional input[type="color"] { ... }
+*/ 

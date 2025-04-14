@@ -63,10 +63,10 @@
 .d-pad-center {
     grid-column: 2;
     grid-row: 2;
-    /* Slightly darker grey for center */
-    background-color: #444;
+    /* Use secondary color for better theme integration */
+    background-color: var(--secondary-color, #444); /* Use secondary, fallback to grey */
     border-radius: 50%;
-    border: 1px solid #333;
+    border: 1px solid var(--border-color); /* Use theme border color */
 }
 
 /* A/B Button Styles */

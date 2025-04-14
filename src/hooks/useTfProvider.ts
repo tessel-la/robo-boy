@@ -36,13 +36,22 @@ export function useTfProvider({
     // Check prerequisites
     if (ros && isRosConnected && ros3dViewer.current) {
       if (!customTFProvider.current) {
+        // console.log(`[TF Provider Effect] Creating provider with fixedFrame: ${fixedFrame}`);
         customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransforms);
+        ros3dViewer.current.fixedFrame = customTFProvider.current.fixedFrame; // Set viewer frame on creation
         setIsProviderReady(true);
         didCreateProvider = true;
       } else {
         // Provider exists, update fixed frame if it changed
-        // console.log(`[TF Provider Effect] Updating fixedFrame to: ${fixedFrame}`);
-        customTFProvider.current.updateFixedFrame(fixedFrame);
+        const currentProviderFixedFrame = customTFProvider.current.fixedFrame;
+        const normalizedNewFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
+
+        if(currentProviderFixedFrame !== normalizedNewFixedFrame) {
+            // console.log(`[TF Provider Effect] Updating fixedFrame from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
+            customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame); // Update the provider
+            ros3dViewer.current.fixedFrame = normalizedNewFixedFrame; // <<< ALSO UPDATE THE VIEWER
+        }
+
         // Ensure readiness state is true if prerequisites re-established
         if (!isProviderReady) {
            setIsProviderReady(true);

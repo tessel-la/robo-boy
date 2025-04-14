@@ -49,4 +49,5 @@ To add a new custom gamepad layout (e.g., a "SNES Controller"):
 5.  **Update `AddPanelMenu.tsx`:**
     *   Add an entry to `availablePanelTypes` (e.g., `{ type: 'snes', label: 'SNES Control' }`).
 
-This integrates the new layout into the control panel system. 
+This integrates the new layout into the control panel system.
+
