@@ -30,11 +30,12 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
   <img src="images/gameboy.jpg" alt="GameBoy Control" width="30%">
   
 </p>
+
 ## Theme Customization
 
 The application supports multiple themes, including user-created custom themes. Themes define the color palette for the UI elements.
 
-## Creating & Managing Themes
+### Creating & Managing Themes
 
 1.  **Access Theme Menu:** Click the theme icon button (usually in the bottom-right corner). This opens a popup menu displaying available themes (default and custom).
 2.  **Create New Theme:** Click the "Create New Theme..." button in the popup. This opens the Theme Creator modal.
