@@ -20,7 +20,8 @@ import SettingsPopup from './SettingsPopup';
 import { useRos3dViewer } from '../hooks/useRos3dViewer';
 import { useTfProvider } from '../hooks/useTfProvider'; 
 import { usePointCloudClient } from '../hooks/usePointCloudClient';
-import { useTfVisualizer } from '../hooks/useTfVisualizer'; // <-- Import the new hook
+import { useTfVisualizer } from '../hooks/useTfVisualizer';
+import { useCameraInfoVisualizer } from '../hooks/useCameraInfoVisualizer'; // <-- Import new hook
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
@@ -40,14 +41,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // --- State and Refs for other parts ---
   const [transforms, setTransforms] = useState<TransformStore>({});
 
+  // Topic States
   const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
   const [selectedPointCloudTopic, setSelectedPointCloudTopic] = useState<string>('');
+  const [availableCameraInfoTopics, setAvailableCameraInfoTopics] = useState<string[]>([]); // <-- CameraInfo Topics
+  const [selectedCameraInfoTopic, setSelectedCameraInfoTopic] = useState<string | null>(null); // <-- Selected CameraInfo Topic
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
+
+  // Frame States
   const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
   const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]);
-  const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]); // <-- State for TF visualization selection
+  const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]); // State for TF visualization selection
   
-  // State for UI controls
+  // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false); // NEW state for popup
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
@@ -142,7 +148,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     selectedPointCloudTopic,
   });
 
-  // TF Visualizer Hook Call <-- NEW
+  // TF Visualizer Hook Call
   useTfVisualizer({
     isRosConnected,
     ros3dViewer,
@@ -151,33 +157,46 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     // axesScale: 0.3, // Optional: Adjust scale if needed
   });
 
+  // CameraInfo Visualizer Hook Call <-- NEW
+  useCameraInfoVisualizer({
+      ros,
+      isRosConnected,
+      ros3dViewer,
+      customTFProvider,
+      selectedCameraInfoTopic,
+      // lineColor: 0xffa500, // Optional: Orange
+      // lineScale: 0.5, // Optional: Smaller frustum
+  });
+
   // --- UI Handlers ---
 
   const toggleSettingsPopup = () => {
     setIsSettingsPopupOpen(!isSettingsPopupOpen);
   };
 
-  // Handler for topic selection change (within popup)
-  const handleTopicSelect = (topic: string) => {
+  // Handler for PointCloud topic selection change
+  const handlePointCloudTopicSelect = (topic: string) => {
     console.log(`Selected PointCloud topic: ${topic}`);
     setSelectedPointCloudTopic(topic);
-    // SettingsPopup manages closing its own topic dropdown
-    // setIsSettingsPopupOpen(false); // Optional: Close main popup on selection
   };
 
-  // Handler for fixed frame input change (now a select element)
+  // <-- NEW Handler for CameraInfo topic selection change -->
+  const handleCameraInfoTopicSelect = (topic: string | null) => {
+      console.log(`Selected CameraInfo topic: ${topic}`);
+      setSelectedCameraInfoTopic(topic);
+  };
+
+  // Handler for fixed frame input change
   const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
       const newFrame = event.target.value;
       setFixedFrame(newFrame || DEFAULT_FIXED_FRAME); // Use default if empty
       console.log("Fixed frame changed to:", newFrame || DEFAULT_FIXED_FRAME);
-      // setIsSettingsPopupOpen(false); // Optional: Close main popup on selection
   };
 
-  // <-- NEW Handler for displayed TF frames selection change -->
+  // Handler for displayed TF frames selection change
   const handleDisplayedTfFramesChange = (selectedFrames: string[]) => {
     setDisplayedTfFrames(selectedFrames);
     console.log("Displayed TF frames changed to:", selectedFrames);
-    // Don't close popup on selection
   };
 
    // Effect to handle clicks outside the popups
@@ -209,27 +228,45 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   }, [isSettingsPopupOpen]); // Only depends on the main popup state
 
-  // Effect to fetch PointCloud topics
+  // Effect to fetch ALL relevant topics (PointCloud2 and CameraInfo)
   useEffect(() => {
     if (ros && isRosConnected) {
       setFetchTopicsError(null);
+      console.log('[VisualizationPanel] Fetching topics...');
       ros.getTopics(
         (response: { topics: string[]; types: string[] }) => {
-          const pc2Topics: string[] = response.topics.filter((_, index) =>
-             response.types[index] === 'sensor_msgs/PointCloud2' || response.types[index] === 'sensor_msgs/msg/PointCloud2'
-          );
+          console.log('[VisualizationPanel] Received topics response:', response);
+          const pc2Topics: string[] = [];
+          const cameraInfoTopics: string[] = [];
+
+          response.topics.forEach((topic, index) => {
+              const type = response.types[index];
+              if (type === 'sensor_msgs/PointCloud2' || type === 'sensor_msgs/msg/PointCloud2') {
+                  pc2Topics.push(topic);
+              } else if (type === 'sensor_msgs/CameraInfo' || type === 'sensor_msgs/msg/CameraInfo') {
+                  cameraInfoTopics.push(topic);
+              }
+          });
+          
           setAvailablePointCloudTopics(pc2Topics);
+          setAvailableCameraInfoTopics(cameraInfoTopics);
+
           if (pc2Topics.length === 0) { console.warn(`No topics found with type sensor_msgs/PointCloud2`); }
+          if (cameraInfoTopics.length === 0) { console.warn(`No topics found with type sensor_msgs/CameraInfo`); }
         },
         (error: any) => {
           console.error(`Failed to fetch topics:`, error);
           setFetchTopicsError(`Failed to fetch topics: ${error?.message || error}`);
           setAvailablePointCloudTopics([]);
+          setAvailableCameraInfoTopics([]); // Clear camera topics on error too
         }
       );
     } else {
+      // Clear topics if not connected
       setAvailablePointCloudTopics([]);
+      setAvailableCameraInfoTopics([]);
       setSelectedPointCloudTopic('');
+      setSelectedCameraInfoTopic(null);
       setFetchTopicsError(isRosConnected ? null : 'ROS not connected.');
     }
   }, [ros, isRosConnected]);
@@ -240,7 +277,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     <div className="visualization-panel">
       {/* Settings Button */}
       <button id="viz-settings-button" className="settings-button" onClick={toggleSettingsPopup}>
-          {/* Simple Gear Icon (replace with SVG or icon library later) */}
           ⚙️
       </button>
 
@@ -256,19 +292,25 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               }}
           >
               <SettingsPopup
-                isOpen={isSettingsPopupOpen} // Still needed for internal logic/conditional rendering within Popup
+                isOpen={isSettingsPopupOpen}
                 onClose={toggleSettingsPopup}
+                // Frames
                 fixedFrame={fixedFrame}
                 availableFrames={availableFrames}
                 onFixedFrameChange={handleFixedFrameChange}
+                // PointCloud
                 selectedPointCloudTopic={selectedPointCloudTopic}
                 availablePointCloudTopics={availablePointCloudTopics}
-                onTopicSelect={handleTopicSelect}
+                onPointCloudTopicSelect={handlePointCloudTopicSelect} // Renamed prop for clarity
                 topicStatus={fetchTopicsError ? 'error' : (availablePointCloudTopics.length > 0 ? 'ok' : 'loading')} // Simplistic status
                 fetchTopicsError={fetchTopicsError}
-                // <-- Pass new props for TF display selection -->
+                // Displayed TFs
                 displayedTfFrames={displayedTfFrames}
                 onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
+                // CameraInfo <-- Pass new props
+                selectedCameraInfoTopic={selectedCameraInfoTopic}
+                availableCameraInfoTopics={availableCameraInfoTopics}
+                onCameraInfoTopicSelect={handleCameraInfoTopicSelect}
               />
           </div>
       )}

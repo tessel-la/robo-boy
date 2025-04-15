@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { FiX } from 'react-icons/fi';
+import React, { useRef, useEffect, useState } from 'react';
+import { FiX, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import './VisualizationPanel.css'; // Reuse styles for now
 
 // Consolidated and corrected props interface
@@ -15,14 +15,27 @@ interface SettingsPopupProps {
   // PointCloud Topic
   selectedPointCloudTopic: string;
   availablePointCloudTopics: string[];
-  onTopicSelect: (topic: string) => void;
+  onPointCloudTopicSelect: (topic: string) => void;
   fetchTopicsError: string | null; // Error during topic fetching
   topicStatus?: 'loading' | 'error' | 'ok' | null; // Status indicator for loading/error states
 
   // <-- Displayed TF Frames -->
   displayedTfFrames: string[];
   onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
+
+  // <-- Camera Info -->
+  selectedCameraInfoTopic: string | null;
+  availableCameraInfoTopics: string[];
+  onCameraInfoTopicSelect: (topic: string | null) => void;
 }
+
+// Type for section state
+type SectionVisibility = {
+    pointCloud: boolean;
+    tfFrames: boolean;
+    cameraInfo: boolean;
+    // Add more sections here if needed
+};
 
 // Explicitly type the props object here, then destructure
 const SettingsPopup = (props: SettingsPopupProps) => {
@@ -34,17 +47,37 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     onFixedFrameChange,
     selectedPointCloudTopic,
     availablePointCloudTopics,
-    onTopicSelect,
+    onPointCloudTopicSelect,
     topicStatus,
     fetchTopicsError,
     // <-- Destructure new props -->
     displayedTfFrames,
     onDisplayedTfFramesChange,
+    // <-- Camera Info props -->
+    selectedCameraInfoTopic,
+    availableCameraInfoTopics,
+    onCameraInfoTopicSelect,
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
   // Removed state and refs related to the custom topic dropdown (isTopicMenuOpen, topicMenuRef)
   // Removed toggleTopic and handleInternalTopicSelect
+
+  // --- State for collapsible sections --- 
+  const [openSections, setOpenSections] = useState<SectionVisibility>({
+      pointCloud: true, // Default PointCloud open
+      tfFrames: false,  // Default TF closed
+      cameraInfo: false // Default CameraInfo closed
+  });
+
+  // Function to toggle section visibility
+  const toggleSection = (section: keyof SectionVisibility) => {
+      setOpenSections((prev: SectionVisibility) => ({
+          ...prev,
+          [section]: !prev[section]
+      }));
+  };
+  // --- End Section State ---
 
   // Restore Effect to handle clicks outside the popup
   useEffect(() => {
@@ -119,7 +152,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
          </div>
          <div className="settings-popup-content">
            {/* Fixed Frame Selector */}
-           <div className="popup-control-item">
+           <div className="popup-control-item fixed-frame-section">
              <label htmlFor="fixed-frame-select">Fixed Frame:</label>
              <select
                id="fixed-frame-select"
@@ -140,52 +173,99 @@ const SettingsPopup = (props: SettingsPopupProps) => {
            </div>
 
            {/* PointCloud Topic Selector */}
-           <div className="popup-control-item">
-             <label htmlFor="pointcloud-topic-select">PointCloud Topic:</label>
-             <select
-               id="pointcloud-topic-select"
-               value={selectedPointCloudTopic}
-               onChange={(e) => onTopicSelect(e.target.value)}
-               disabled={isLoadingTopics || hasTopicError || noTopicsAvailable}
-             >
-               {isLoadingTopics && <option value="">Loading topics...</option>}
-               {hasTopicError && <option value="">Error loading topics</option>}
-               {noTopicsAvailable && !isLoadingTopics && !hasTopicError && <option value="">No topics available</option>}
-               {!isLoadingTopics && !hasTopicError && availablePointCloudTopics.length > 0 &&
-                 availablePointCloudTopics.map((topic) => (
-                   <option key={topic} value={topic}>
-                     {topic}
-                   </option>
-                 ))
-               }
-             </select>
-             {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
+           <div className="popup-section">
+             <button className="section-header" onClick={() => toggleSection('pointCloud')}>
+               <h4>PointCloud Topic</h4>
+               {openSections.pointCloud ? <FiChevronDown /> : <FiChevronRight />}
+             </button>
+             {openSections.pointCloud && (
+               <div className="section-content">
+                 <div className="popup-control-item">
+                   <select
+                     id="pointcloud-topic-select"
+                     value={selectedPointCloudTopic}
+                     onChange={(e) => onPointCloudTopicSelect(e.target.value)}
+                     disabled={isLoadingTopics || hasTopicError || noTopicsAvailable}
+                   >
+                     {isLoadingTopics && <option value="">Loading topics...</option>}
+                     {hasTopicError && <option value="">Error loading topics</option>}
+                     {noTopicsAvailable && !isLoadingTopics && !hasTopicError && <option value="">No topics available</option>}
+                     {!isLoadingTopics && !hasTopicError && availablePointCloudTopics.length > 0 &&
+                       availablePointCloudTopics.map((topic) => (
+                         <option key={topic} value={topic}>
+                           {topic}
+                         </option>
+                       ))
+                     }
+                   </select>
+                   {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
+                 </div>
+               </div>
+             )}
            </div>
 
-           {/* <-- Displayed TF Frames Selector --> */}
-           <div className="popup-control-group">
-                <h4>Displayed TF Frames:</h4>
-                {availableFrames.length > 0 ? (
-                    <ul className="tf-checkbox-list">
-                        {availableFrames.map((frame) => (
-                            <li key={frame}>
-                                <label>
-                                    <input
-                                        type="checkbox"
-                                        value={frame}
-                                        checked={displayedTfFrames.includes(frame)}
-                                        onChange={handleTfCheckboxChange}
-                                    />
-                                    {frame}
-                                </label>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="no-frames-message">No TF frames available.</p>
-                )}
-            </div>
+           {/* Displayed TF Frames Selector */}
+           <div className="popup-section">
+             <button className="section-header" onClick={() => toggleSection('tfFrames')}>
+               <h4>Displayed TF Frames</h4>
+               {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
+             </button>
+             {openSections.tfFrames && (
+               <div className="section-content">
+                 <div className="popup-control-group tf-frame-group">
+                   {availableFrames.length > 0 ? (
+                     <ul className="tf-checkbox-list">
+                       {availableFrames.map((frame) => (
+                         <li key={frame}>
+                           <label>
+                             <input
+                               type="checkbox"
+                               value={frame}
+                               checked={displayedTfFrames.includes(frame)}
+                               onChange={handleTfCheckboxChange}
+                             />
+                             {frame}
+                           </label>
+                         </li>
+                       ))}
+                     </ul>
+                   ) : (
+                     <p className="no-frames-message">No TF frames available.</p>
+                   )}
+                 </div>
+               </div>
+             )}
+           </div>
 
+           {/* <-- CameraInfo Topic Selector --> */}
+           <div className="popup-section">
+             <button className="section-header" onClick={() => toggleSection('cameraInfo')}>
+               <h4>Camera Info Topic</h4>
+               {openSections.cameraInfo ? <FiChevronDown /> : <FiChevronRight />}
+             </button>
+             {openSections.cameraInfo && (
+               <div className="section-content">
+                 <div className="popup-control-item">
+                   <select
+                     id="camerainfo-topic-select"
+                     value={selectedCameraInfoTopic ?? ''}
+                     onChange={(e) => onCameraInfoTopicSelect(e.target.value || null)}
+                     disabled={availableCameraInfoTopics.length === 0}
+                   >
+                     <option value="">-- Select CameraInfo --</option>
+                     {availableCameraInfoTopics.map((topic) => (
+                       <option key={topic} value={topic}>
+                         {topic}
+                       </option>
+                     ))}
+                   </select>
+                   {availableCameraInfoTopics.length === 0 && !fetchTopicsError && (
+                     <p className="no-frames-message">No CameraInfo topics found.</p>
+                   )}
+                 </div>
+               </div>
+             )}
+           </div>
          </div>
       </div>
     // </div>

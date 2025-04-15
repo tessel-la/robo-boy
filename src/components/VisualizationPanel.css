@@ -65,27 +65,9 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   min-width: 300px;
   max-width: 90%;
-  max-height: 80vh; /* Limit height */
-  overflow-y: auto; /* Allow vertical scroll if needed */
   border: 1px solid var(--border-color, #444);
-  /* Custom Scrollbar */
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #2f2f2f);
 }
 
-.settings-popup::-webkit-scrollbar {
-  width: 8px;
-}
-.settings-popup::-webkit-scrollbar-track {
-  background: var(--card-bg, #2f2f2f);
-}
-.settings-popup::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color, #32CD32);
-  border-radius: 4px;
-  border: 2px solid var(--card-bg, #2f2f2f);
-}
-
-/* SettingsPopup Header Adjustments */
 .settings-popup-header {
   display: flex;
   justify-content: space-between;
@@ -93,6 +75,7 @@
   margin-bottom: 15px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color, #444);
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .settings-popup-header h3 {
@@ -117,8 +100,93 @@
 .settings-popup-content {
   display: flex;
   flex-direction: column;
-  gap: 15px; /* Space between control groups */
+  gap: 0; /* Remove main gap, sections will handle spacing */
+  overflow-y: auto;
+  max-height: calc(80vh - 80px); /* Keep overall scroll */
+  padding-right: 10px; 
+  margin-right: -10px; 
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #2f2f2f);
 }
+
+.settings-popup-content::-webkit-scrollbar { width: 8px; }
+.settings-popup-content::-webkit-scrollbar-track { background: var(--card-bg, #2f2f2f); border-radius: 4px; }
+.settings-popup-content::-webkit-scrollbar-thumb { background-color: var(--primary-color, #32CD32); border-radius: 4px; border: 2px solid var(--card-bg, #2f2f2f); }
+
+/* Make fixed frame section look consistent */
+.fixed-frame-section {
+    padding-bottom: 15px; /* Add spacing below fixed frame */
+    margin-bottom: 10px; /* Add margin below fixed frame */
+    border-bottom: 1px solid var(--border-color, #444); /* Separator line */
+}
+
+/* --- Collapsible Section Styles --- */
+.popup-section {
+    border-bottom: 1px solid var(--border-color, #444); /* Separator between sections */
+    padding-bottom: 10px; /* Space below the entire section */
+    margin-bottom: 10px; /* Space between sections */
+}
+
+.popup-section:last-child {
+    border-bottom: none; /* No border for the last section */
+    margin-bottom: 0;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 8px 0; /* Vertical padding, no horizontal */
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-primary, #e0e0e0);
+    transition: background-color 0.1s ease;
+}
+
+.section-header:hover {
+    background-color: rgba(255, 255, 255, 0.05); /* Subtle hover */
+}
+
+.section-header h4 {
+    margin: 0;
+    font-weight: bold;
+    font-size: 1em; /* Match other labels/headers */
+    color: var(--text-secondary, #ccc);
+    border-bottom: none; /* Remove underline from h4 within header */
+    padding-bottom: 0;
+}
+
+.section-header svg { /* Style the chevron icon */
+    font-size: 1.2em;
+    color: var(--text-secondary, #aaa);
+}
+
+.section-content {
+    padding-top: 10px; /* Space between header and content */
+    /* Add specific styling for content containers if needed */
+}
+
+/* Adjustments for nested control groups/items */
+.section-content .popup-control-item,
+.section-content .popup-control-group {
+    gap: 8px; /* Slightly more gap inside sections */
+    padding-left: 10px; /* Indent content slightly */
+}
+
+.section-content .popup-control-group {
+    border-top: none; /* Remove extra border from TF group */
+    padding-top: 0;
+}
+
+.section-content label {
+    font-weight: normal; /* Labels inside sections are not bold */
+    font-size: 0.9em;
+}
+
+/* --- End Collapsible Section Styles --- */
 
 .popup-control-item, .popup-control-group {
   display: flex;
@@ -172,24 +240,18 @@ select:disabled {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 150px; /* Limit height and make scrollable */
-  overflow-y: auto;
-  /* Custom Scrollbar for list */
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #3a3a3a);
+  /* Remove height limit and overflow to allow natural expansion */
+  /* max-height: 150px; */
+  /* overflow-y: auto; */
+  /* Remove custom scrollbar styles for this list */
 }
 
-.tf-checkbox-list::-webkit-scrollbar {
-  width: 6px;
-}
-.tf-checkbox-list::-webkit-scrollbar-track {
-  background: var(--background-secondary, #3a3a3a);
-}
-.tf-checkbox-list::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color, #32CD32);
-  border-radius: 3px;
-  border: 1px solid var(--background-secondary, #3a3a3a);
-}
+/* Remove nested scrollbar styles */
+/*
+.tf-checkbox-list::-webkit-scrollbar { ... }
+.tf-checkbox-list::-webkit-scrollbar-track { ... }
+.tf-checkbox-list::-webkit-scrollbar-thumb { ... }
+*/
 
 .tf-checkbox-list li {
   padding: 4px 0;
