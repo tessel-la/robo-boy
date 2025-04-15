@@ -10,16 +10,17 @@ import './VisualizationPanel.css';
 import {
   TransformStore,
   StoredTransform,
-  // CustomTFProvider // Provider is now managed by the hook
+  CustomTFProvider, // Import provider CLASS now
 } from '../utils/tfUtils';
 
 // Import the new SettingsPopup component
 import SettingsPopup from './SettingsPopup';
 
-// Import custom hook for viewer management
+// Import custom hooks
 import { useRos3dViewer } from '../hooks/useRos3dViewer';
-import { useTfProvider } from '../hooks/useTfProvider'; // Import the new hook
-import { usePointCloudClient } from '../hooks/usePointCloudClient'; // Import the new hook
+import { useTfProvider } from '../hooks/useTfProvider'; 
+import { usePointCloudClient } from '../hooks/usePointCloudClient';
+import { useTfVisualizer } from '../hooks/useTfVisualizer'; // <-- Import the new hook
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
@@ -44,6 +45,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
   const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
   const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]);
+  const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]); // <-- State for TF visualization selection
   
   // State for UI controls
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false); // NEW state for popup
@@ -136,8 +138,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     ros,
     isRosConnected,
     ros3dViewer,
-    customTFProvider,
+    customTFProvider, // Pass the TF provider ref
     selectedPointCloudTopic,
+  });
+
+  // TF Visualizer Hook Call <-- NEW
+  useTfVisualizer({
+    isRosConnected,
+    ros3dViewer,
+    customTFProvider,
+    displayedTfFrames, // Pass the state controlling which frames to show
+    // axesScale: 0.3, // Optional: Adjust scale if needed
   });
 
   // --- UI Handlers ---
@@ -162,9 +173,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       // setIsSettingsPopupOpen(false); // Optional: Close main popup on selection
   };
 
-  // Toggle topic dropdown menu (within popup)
-   const toggleTopicMenu = () => {
-    // This function is removed as it's now managed by SettingsPopup
+  // <-- NEW Handler for displayed TF frames selection change -->
+  const handleDisplayedTfFramesChange = (selectedFrames: string[]) => {
+    setDisplayedTfFrames(selectedFrames);
+    console.log("Displayed TF frames changed to:", selectedFrames);
+    // Don't close popup on selection
   };
 
    // Effect to handle clicks outside the popups
@@ -250,22 +263,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
                 onFixedFrameChange={handleFixedFrameChange}
                 selectedPointCloudTopic={selectedPointCloudTopic}
                 availablePointCloudTopics={availablePointCloudTopics}
-                fetchTopicsError={fetchTopicsError}
                 onTopicSelect={handleTopicSelect}
+                topicStatus={fetchTopicsError ? 'error' : (availablePointCloudTopics.length > 0 ? 'ok' : 'loading')} // Simplistic status
+                fetchTopicsError={fetchTopicsError}
+                // <-- Pass new props for TF display selection -->
+                displayedTfFrames={displayedTfFrames}
+                onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
               />
           </div>
       )}
 
-      {/* Container div for the hook to manage - assign static ID */}
-      <div ref={viewerRef} id="ros3d-viewer" className="ros3d-viewer">
-        {/* Loading or connection status indicator (optional) */}
-        {(!ros || !isRosConnected) && <div className="viewer-overlay">Connecting to ROS...</div>}
-        {ros && isRosConnected && !selectedPointCloudTopic && <div className="viewer-overlay">Select a PointCloud topic</div>}
-         {/* Error Indicator */}
-         {fetchTopicsError && /* Don't show overlay if popup is open? Or maybe still show? */
-             <div className="viewer-overlay error-overlay">Error fetching topics. Check ROS connection.</div>
-         }
-      </div>
+      {/* Viewer Div */}
+      <div id="viewer" ref={viewerRef} style={{ width: '100%', height: '100%' }}></div>
     </div>
   );
 });

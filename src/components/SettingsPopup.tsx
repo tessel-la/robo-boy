@@ -18,6 +18,10 @@ interface SettingsPopupProps {
   onTopicSelect: (topic: string) => void;
   fetchTopicsError: string | null; // Error during topic fetching
   topicStatus?: 'loading' | 'error' | 'ok' | null; // Status indicator for loading/error states
+
+  // <-- Displayed TF Frames -->
+  displayedTfFrames: string[];
+  onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
 }
 
 // Explicitly type the props object here, then destructure
@@ -33,6 +37,9 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     onTopicSelect,
     topicStatus,
     fetchTopicsError,
+    // <-- Destructure new props -->
+    displayedTfFrames,
+    onDisplayedTfFramesChange,
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -80,6 +87,24 @@ const SettingsPopup = (props: SettingsPopupProps) => {
   const isLoadingTopics = topicStatus === 'loading';
   const hasTopicError = topicStatus === 'error' || !!fetchTopicsError;
   const noTopicsAvailable = !isLoadingTopics && availablePointCloudTopics.length === 0;
+
+  // <-- Handler for TF checkbox changes -->
+  const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const frameName = event.target.value;
+      const isChecked = event.target.checked;
+      let newSelectedFrames: string[];
+
+      if (isChecked) {
+          // Add frame if not already present
+          newSelectedFrames = displayedTfFrames.includes(frameName)
+              ? displayedTfFrames
+              : [...displayedTfFrames, frameName];
+      } else {
+          // Remove frame
+          newSelectedFrames = displayedTfFrames.filter(f => f !== frameName);
+      }
+      onDisplayedTfFramesChange(newSelectedFrames);
+  };
 
   return (
     // Restore wrapper div (though maybe not strictly necessary if parent handles overlay)
@@ -136,6 +161,31 @@ const SettingsPopup = (props: SettingsPopupProps) => {
              </select>
              {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
            </div>
+
+           {/* <-- Displayed TF Frames Selector --> */}
+           <div className="popup-control-group">
+                <h4>Displayed TF Frames:</h4>
+                {availableFrames.length > 0 ? (
+                    <ul className="tf-checkbox-list">
+                        {availableFrames.map((frame) => (
+                            <li key={frame}>
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        value={frame}
+                                        checked={displayedTfFrames.includes(frame)}
+                                        onChange={handleTfCheckboxChange}
+                                    />
+                                    {frame}
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="no-frames-message">No TF frames available.</p>
+                )}
+            </div>
+
          </div>
       </div>
     // </div>

@@ -11,7 +11,7 @@
   padding: 0; 
   box-sizing: border-box; /* Include padding in width/height */
   position: relative; /* Needed for positioning button and popup */
-  /* overflow: hidden; Remove again to prevent clipping overlay */
+  overflow: hidden; /* Contain the viewer */
 }
 
 /* Remove old controls bar */
@@ -22,169 +22,235 @@
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 20; /* Above viewer overlay, below popup */
-  background-color: rgba(40, 44, 52, 0.7); /* Semi-transparent */
+  z-index: 20; /* Above overlay */
+  background-color: rgba(50, 50, 50, 0.8);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%; /* Make it circular */
-  width: 40px;
-  height: 40px;
+  border: 1px solid #666;
+  border-radius: 50%;
+  width: 35px;
+  height: 35px;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.5em; /* Adjust icon size */
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  font-size: 1.2em;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .settings-button:hover {
-  background-color: rgba(60, 64, 72, 0.9);
+  background-color: rgba(80, 80, 80, 0.9);
+  border-color: #aaa;
 }
 
 /* --- Settings Popup Container (Now an Overlay) --- */
 .settings-popup-container {
   position: absolute;
-  inset: 0; /* Cover the entire parent */
-  z-index: 50;
-  /* pointer-events: none; Remove, container needs to catch clicks */
-  background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent overlay */
-  display: flex; /* Use flexbox to center the popup content */
-  align-items: center;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
+  display: flex;
   justify-content: center;
-  /* padding: 20px; Remove padding around the popup */
-  box-sizing: border-box;
+  align-items: center;
+  z-index: 19; /* Below button, above overlay */
 }
 
 /* --- Settings Popup (Content Box within Overlay) --- */
 .settings-popup {
-  /* position: absolute; Remove absolute positioning */
-  /* top: 70px; Remove */
-  /* right: 10px; Remove */
-  z-index: 100; /* Keep above overlay background */
-  background-color: var(--background-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 20px; /* Adjust padding */
-  box-shadow: var(--box-shadow-large);
-  /* min-width: 240px; Remove */
-  width: 95%; /* Occupy more width */
-  /* max-width: 500px; Remove max width limit */
-  /* max-height: 70vh; Remove, let flexbox handle height */
-  max-height: 90%; /* Limit height relative to container */
-  overflow-y: auto; /* Allow vertical scrolling WITHIN popup */
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  pointer-events: auto; /* Keep */
-  box-sizing: border-box;
+  background-color: var(--card-bg, #2f2f2f);
+  color: var(--text-primary, #e0e0e0);
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  min-width: 300px;
+  max-width: 90%;
+  max-height: 80vh; /* Limit height */
+  overflow-y: auto; /* Allow vertical scroll if needed */
+  border: 1px solid var(--border-color, #444);
+  /* Custom Scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #2f2f2f);
+}
+
+.settings-popup::-webkit-scrollbar {
+  width: 8px;
+}
+.settings-popup::-webkit-scrollbar-track {
+  background: var(--card-bg, #2f2f2f);
+}
+.settings-popup::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32);
+  border-radius: 4px;
+  border: 2px solid var(--card-bg, #2f2f2f);
 }
 
 /* SettingsPopup Header Adjustments */
 .settings-popup-header {
   display: flex;
-  justify-content: space-between; /* Pushes title and button apart */
-  align-items: center; /* Vertically aligns title and button */
-  margin-bottom: 15px; /* Add some space below header */
-  padding-bottom: 10px; /* Keep underline padding */
-  border-bottom: 1px solid var(--border-color); /* Keep underline */
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color, #444);
 }
 
 .settings-popup-header h3 {
-  margin: 0; /* Remove default margin */
-  padding: 0; /* Remove default padding */
-  border-bottom: none; /* Remove duplicate underline */
-  text-align: left; /* Align title to left */
+  margin: 0;
+  color: var(--primary-color, #32CD32);
 }
 
-.settings-popup-header .close-button {
-  /* Optional: Adjust button style if needed */
-  padding: 0; /* Remove padding if it causes alignment issues */
-  line-height: 1; /* Helps vertical alignment */
-}
-
-/* Specific styling for the close button */
-.settings-popup-header .close-button {
-  background-color: var(--button-background, rgba(80, 80, 80, 0.7)); /* Use theme variable or fallback */
-  color: var(--button-text, #fff);
-  border: 1px solid var(--button-border, rgba(255, 255, 255, 0.3));
-  border-radius: 50%; /* Make it circular */
-  width: 30px; /* Slightly smaller than gear */
-  height: 30px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.2em; /* Adjust icon size */
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #aaa);
+  font-size: 1.4em;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  padding: 0; /* Ensure no padding interferes */
-  line-height: 1; /* Ensure icon centers vertically */
+  padding: 0;
+  transition: color 0.2s ease;
 }
 
-.settings-popup-header .close-button:hover {
-  background-color: var(--button-background-hover, rgba(100, 100, 100, 0.9));
-  transform: scale(1.1);
+.close-button:hover {
+  color: var(--primary-color, #32CD32);
 }
 
-.settings-popup h4 {
-  margin: 0 0 10px 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 1.1em;
-  text-align: center;
-}
-
-.popup-control-item {
+.settings-popup-content {
   display: flex;
-  flex-direction: column; /* Stack label above control */
+  flex-direction: column;
+  gap: 15px; /* Space between control groups */
+}
+
+.popup-control-item, .popup-control-group {
+  display: flex;
+  flex-direction: column; /* Stack label and control vertically */
   gap: 5px;
 }
 
-.popup-control-item label {
-  font-size: 0.9em;
-  color: var(--text-secondary);
+.popup-control-item label, .popup-control-group h4 {
   font-weight: bold;
+  font-size: 0.95em;
+  color: var(--text-secondary, #ccc);
+  margin-bottom: 2px; /* Small space above control */
 }
 
-.popup-control-item select,
-.popup-control-item input[type="text"] /* Add styles for potential future inputs */ {
-  width: 100%; /* Make controls fill popup width */
+.popup-control-group h4 {
+  margin: 0 0 5px 0; /* Add margin below h4 */
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--border-color, #555);
+}
+
+select,
+input[type="text"] /* Style if needed */ {
   padding: 8px 10px;
-  border: 1px solid var(--border-color);
-  background-color: var(--input-background);
-  color: var(--text-primary);
-  border-radius: var(--border-radius-small);
+  border: 1px solid var(--border-color, #555);
+  background-color: var(--background-secondary, #3a3a3a);
+  color: var(--text-primary, #e0e0e0);
+  border-radius: 4px;
   font-size: 0.9em;
-  box-sizing: border-box;
 }
 
-/* Remove styles for the custom topic selector button */
-/* .popup-control-item .topic-selector-button { ... } */
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-/* Remove styles for the custom topic selector control positioning */
-/* .popup-control-item .topic-selector-control { ... } */
+.topic-error-message {
+  color: var(--error-color, #dc3545);
+  font-size: 0.85em;
+  margin-top: 5px;
+}
 
-/* Remove styles for the custom topic selector dropdown */
-/* .popup-control-item .topic-selector-dropdown { ... } */
+/* --- Styles for TF Checkbox List --- */
 
-/* Remove styles for the custom topic items */
-/* .popup-control-item .topic-item { ... } */
-/* .popup-control-item .topic-item:hover { ... } */
-/* .popup-control-item .topic-item.disabled, */
-/* .popup-control-item .topic-item.error { ... } */
-/* .popup-control-item .topic-item.error { ... } */
+.popup-control-group {
+  /* General group styling already defined */
+  border-top: 1px solid var(--border-color, #555); /* Separator */
+  padding-top: 15px;
+}
+
+.tf-checkbox-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px; /* Limit height and make scrollable */
+  overflow-y: auto;
+  /* Custom Scrollbar for list */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #3a3a3a);
+}
+
+.tf-checkbox-list::-webkit-scrollbar {
+  width: 6px;
+}
+.tf-checkbox-list::-webkit-scrollbar-track {
+  background: var(--background-secondary, #3a3a3a);
+}
+.tf-checkbox-list::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32);
+  border-radius: 3px;
+  border: 1px solid var(--background-secondary, #3a3a3a);
+}
+
+.tf-checkbox-list li {
+  padding: 4px 0;
+}
+
+.tf-checkbox-list label {
+  display: flex; /* Align checkbox and text */
+  align-items: center;
+  cursor: pointer;
+  font-weight: normal; /* Override bold label style if needed */
+  font-size: 0.9em;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.tf-checkbox-list input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+  /* Optional: Basic checkbox styling */
+  appearance: none;
+  background-color: var(--background-secondary, #3a3a3a);
+  border: 1px solid var(--border-color, #555);
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  position: relative; /* For checkmark */
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.tf-checkbox-list input[type="checkbox"]:checked {
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-color, #32CD32);
+}
+
+/* Custom Checkmark (optional) */
+.tf-checkbox-list input[type="checkbox"]:checked::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.no-frames-message {
+  font-style: italic;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.9em;
+  margin-top: 5px;
+}
 
 /* --- ROS3D Viewer Container --- */
 .ros3d-viewer {
   flex-grow: 1; /* Allow viewer to take remaining space */
   width: 100%;
-  height: 100%; /* Make viewer fill the flex item */
+  height: 100%;
+  /* No background color here, let ROS3D handle it or use the panel's */
   min-height: 0; /* Override previous min-height if needed */
   position: relative; /* Needed for absolute positioning of overlay */
-  background-color: #1e1e1e; /* Darker background for viewer */
-  border-radius: var(--border-radius); /* Apply theme border radius */
-  overflow: hidden; /* Important: Keep canvas contained */
   /* border: 1px solid var(--border-color); */ /* Optional border */
 }
 
@@ -205,17 +271,15 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font-style: italic;
-  background-color: rgba(30, 30, 30, 0.85); /* Semi-transparent overlay */
-  z-index: 10; /* Ensure it's above the canvas */
-  pointer-events: none; /* Allow interaction with canvas */
-  color: var(--text-secondary);
-  border-radius: var(--border-radius); /* Match container */
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 1.2em;
+  z-index: 10; /* Above the viewer canvas */
 }
 
 .viewer-overlay.error-overlay {
-    color: var(--error-color);
-    background-color: rgba(80, 30, 30, 0.85); /* Reddish overlay for error */
+  background-color: rgba(220, 53, 69, 0.8); /* Semi-transparent red */
+  color: white;
 }
 
 .viz-placeholder {

@@ -1,6 +1,6 @@
 declare module 'ros3d' {
     // Basic THREE types often used
-    import { Object3D, Material, Camera } from 'three';
+    import { Object3D, Material, Camera, LineSegments, BufferGeometry } from 'three';
 
     // Basic roslib types
     import { Ros } from 'roslib';
@@ -19,11 +19,44 @@ declare module 'ros3d' {
         resize(width: number, height: number): void;
         scene: Object3D; // Typically THREE.Scene
         camera: Camera; // Typically THREE.PerspectiveCamera
+        renderer: any; // Add renderer if needed for disposal
+        stop(): void; // Add stop method if used
+        fixedFrame: string; // Add fixedFrame property
     }
 
     // Basic grid declaration
     export class Grid extends Object3D {
         constructor(options?: any);
+    }
+
+    // Axes declaration
+    export class Axes extends Object3D {
+        constructor(options?: {
+            lineType?: string;
+            lineSize?: number;
+            shaftRadius?: number;
+            headRadius?: number;
+            headLength?: number;
+        });
+        // Expose lineSegments if needed for disposal
+        lineSegments?: { geometry: BufferGeometry | null; material: Material | Material[] | null; };
+    }
+
+    // TfClient declaration (basic stub)
+    export class TfClient {
+        constructor(options: {
+            ros: Ros;
+            fixedFrame: string;
+            angularThres?: number;
+            transThres?: number;
+            rate?: number;
+            topicTimeout?: number;
+            serverName?: string;
+            repubServiceName?: string;
+        });
+        subscribe(frameId: string, callback: (transform: any | null) => void): void;
+        unsubscribe(frameId: string, callback?: (transform: any | null) => void): void;
+        // Add other methods if needed
     }
 
     // PointCloud2 declaration
@@ -64,8 +97,10 @@ declare module 'ros3d' {
     const ROS3D: {
         Viewer: typeof Viewer;
         Grid: typeof Grid;
-        PointCloud2: typeof PointCloud2; // Add PointCloud2
-        OrbitControls: typeof OrbitControls; // Add OrbitControls if not present
+        Axes: typeof Axes;
+        TfClient: typeof TfClient;
+        PointCloud2: typeof PointCloud2;
+        OrbitControls: typeof OrbitControls;
         // ... other exports
     };
 
