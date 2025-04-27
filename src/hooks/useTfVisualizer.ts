@@ -158,11 +158,31 @@ export function useTfVisualizer({
 
       const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
 
+      // REMOVED: Coordinate system adjustment rotation
+      // const rotX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      // const rotZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+      // const rotAdjust = new THREE.Quaternion().multiplyQuaternions(rotZ, rotX); 
+
       currentMap.forEach((entry: { group: THREE.Group; axes: ROS3D.Axes }, frameName: string) => {
-        const transform = provider.lookupTransform(frameName, fixedFrame);
-        if (transform) {
-          entry.group.position.copy(transform.translation);
-          entry.group.quaternion.copy(transform.rotation);
+        // Use the TF Provider passed via props
+        const transform = provider.lookupTransform(fixedFrame, frameName);
+        if (transform && transform.translation && transform.rotation) {
+          // Apply standard ROS to Three.js axis mapping for position
+          const threePosition = new THREE.Vector3(
+            transform.translation.x, // ROS Y (Left) -> Three -X (Left)
+            transform.translation.y,  // ROS Z (Up)   -> Three Y (Up)
+            transform.translation.z  // ROS X (Fwd)  -> Three -Z (Fwd)
+          );
+          // Apply the raw TF rotation directly
+          const threeQuaternion = new THREE.Quaternion(
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w
+          );
+
+          entry.group.position.copy(threePosition);
+          entry.group.quaternion.copy(threeQuaternion);
           entry.group.visible = true;
         } else {
           // console.warn(`[useTfVisualizer Loop] TF lookup failed for ${frameName} relative to ${fixedFrame}`);

@@ -296,7 +296,9 @@ export class CustomTFProvider {
 
     // Ensure this public method uses the external helper
     public lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
-        return lookupTransform(targetFrame, sourceFrame, this.transforms);
+        // IMPORTANT: For ROS3D.PointCloud2 compatibility, we need to swap sourceFrame and targetFrame
+        // This is because pointcloud transformations expect the inverse direction compared to TF visualizations
+        return lookupTransform(sourceFrame, targetFrame, this.transforms);
     }
 
     dispose() {
