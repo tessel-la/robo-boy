@@ -20,8 +20,10 @@ const DEFAULT_LINE_SCALE = 1.0; // Default distance for frustum projection plane
 
 // Static rotation to align ROS camera frame (Z forward, X right, Y down)
 // with Three.js default view (Z backward, X right, Y up)
-// Rotate -90 degrees around X-axis
-const CAMERA_FRAME_ROTATION = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+// Apply -90deg rotation around X, then +90deg around Z
+const rotX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI );
+const rotZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+const CAMERA_FRAME_ROTATION = new THREE.Quaternion(); //.multiplyQuaternions(rotZ);
 
 export function useCameraInfoVisualizer({
   ros,
@@ -37,7 +39,7 @@ export function useCameraInfoVisualizer({
   const frustumContainerRef = useRef<THREE.Group | null>(null); // Container for lines + pose
   const [lastCameraInfo, setLastCameraInfo] = useState<any>(null); // Store the last received msg
   const [cameraFrameId, setCameraFrameId] = useState<string | null>(null);
-  const tfSubscriptionId = useRef<string | null>(null); // Store TF subscription ID for cleanup
+  const animationFrameId = useRef<number | null>(null); // ADDED: For animation loop
 
   // Effect 1: Manage Frustum Container and LineSegments Object
   useEffect(() => {
@@ -210,83 +212,75 @@ export function useCameraInfoVisualizer({
 
   }, [lastCameraInfo, lineScale]); // Only depends on info and scale, color handled in E1
 
-  // Effect 4: Manage TF Subscription and Apply Pose to Container
+  // Effect 4: Animation loop to update frustum pose using TF lookup
   useEffect(() => {
-    const provider = customTFProvider.current;
-    const container = frustumContainerRef.current;
-    const viewer = ros3dViewer.current;
+    const updatePose = () => {
+        const viewer = ros3dViewer.current;
+        const provider = customTFProvider.current;
+        const container = frustumContainerRef.current;
 
-    // Cleanup function for TF subscription
-    const cleanupTfSubscription = () => {
-      if (tfSubscriptionId.current && provider) {
-        // console.log(`[CameraInfoViz E4 Cleanup] Unsubscribing TF for ID: ${tfSubscriptionId.current}`);
-        try {
-           provider.unsubscribe(tfSubscriptionId.current);
-        } catch (e) {
-            console.error("[CameraInfoViz E4 Cleanup] Error unsubscribing TF:", e);
+        // Ensure all prerequisites are met
+        if (!isRosConnected || !viewer || !provider || !container || !cameraFrameId) {
+            if (container) container.visible = false; // Hide if prerequisites fail
+            animationFrameId.current = requestAnimationFrame(updatePose); // Continue loop
+            return;
         }
-        tfSubscriptionId.current = null;
-      }
-      // Hide container if TF is no longer valid
-      if (container) {
-        container.visible = false;
-      }
+
+        const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
+
+        // Look up the transform from fixedFrame -> cameraFrameId
+        // Match the logic from the corrected useTfVisualizer
+        const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
+
+        if (transform && transform.translation && transform.rotation) {
+            // Apply position directly (x, y, z)
+            container.position.set(
+                transform.translation.x,
+                transform.translation.y,
+                transform.translation.z
+            );
+
+            // Apply raw TF rotation combined with static camera adjustment
+            const tfQuaternion = new THREE.Quaternion(
+                transform.rotation.x,
+                transform.rotation.y,
+                transform.rotation.z,
+                transform.rotation.w
+            );
+
+            // Apply TF rotation first, then the static camera adjustment
+            container.quaternion.copy(tfQuaternion).multiply(CAMERA_FRAME_ROTATION);
+
+            container.visible = true; // Make container visible
+        } else {
+            // console.warn(`[CameraInfoViz E4 Loop] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}`);
+            container.visible = false; // Hide if transform fails
+        }
+
+        // Continue the loop
+        animationFrameId.current = requestAnimationFrame(updatePose);
     };
 
-    // Subscribe to TF if all prerequisites are met
-    if (provider && container && viewer && cameraFrameId && isRosConnected) {
-      // Ensure we clean up any previous subscription before creating a new one
-      cleanupTfSubscription();
-
-      // console.log(`[CameraInfoViz E4] Subscribing TF for frame: ${cameraFrameId}`);
-      try {
-        // Subscribe to the transform from cameraFrameId to the viewer's fixedFrame
-        // Explicitly type transform as any if ROSLIB.Transform is unavailable
-        tfSubscriptionId.current = provider.subscribe(cameraFrameId, (transform: any | null) => {
-          if (transform && transform.translation && transform.rotation && container) {
-              // console.log(`[CameraInfoViz TF Callback] Received transform for ${cameraFrameId}`);
-
-               // Apply standard ROS to Three.js axis mapping for position directly from TF
-               // ROS X (fwd) -> Three -Z
-               // ROS Y (left) -> Three -X
-               // ROS Z (up) -> Three Y
-              container.position.set(
-                  transform.translation.x,
-                  transform.translation.y,
-                  transform.translation.z
-              );
-
-              // Combine the TF rotation with the static camera frame rotation
-              const tfQuaternion = new THREE.Quaternion(
-                  transform.rotation.x,
-                  transform.rotation.y,
-                  transform.rotation.z,
-                  transform.rotation.w
-              );
-
-              // Apply TF rotation first, then the static camera adjustment
-              // Ensure the quaternion multiplication order is correct for world -> local -> static adjustment
-              container.quaternion.copy(tfQuaternion).multiply(CAMERA_FRAME_ROTATION);
-
-              container.visible = true; // Make container visible once pose is applied
-          } else if (container) {
-              // console.warn(`[CameraInfoViz TF Callback] Transform not available or invalid for ${cameraFrameId}, hiding container.`);
-              container.visible = false; // Hide if transform is lost or invalid
-          }
-        });
-      } catch (e) {
-          console.error(`[CameraInfoViz E4] Error subscribing to TF frame ${cameraFrameId}:`, e);
-          tfSubscriptionId.current = null; // Ensure ID is null if subscribe failed
-          if(container) container.visible = false;
-      }
+    // Start the loop if connected and container exists
+    if (isRosConnected && frustumContainerRef.current) {
+        // console.log('[CameraInfoViz E4] Starting animation loop');
+        animationFrameId.current = requestAnimationFrame(updatePose);
     } else {
-      // Cleanup if prerequisites are not met (e.g., cameraFrameId becomes null)
-      cleanupTfSubscription();
+        // console.log('[CameraInfoViz E4] Not starting animation loop (prerequisites not met)');
     }
 
-    // Return the cleanup function to be called on unmount or dependency change
-    return cleanupTfSubscription;
-
-  }, [customTFProvider, ros3dViewer, cameraFrameId, isRosConnected]); // Dependencies trigger TF updates
+    // Cleanup function for Effect 4: Cancel animation frame
+    return () => {
+        // console.log('[CameraInfoViz E4] Cleanup: Cancelling animation frame');
+        if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+            animationFrameId.current = null;
+        }
+        // Ensure container is hidden on cleanup if it still exists
+        if(frustumContainerRef.current) {
+             frustumContainerRef.current.visible = false;
+        }
+    };
+  }, [isRosConnected, ros3dViewer, customTFProvider, cameraFrameId]); // Dependencies that trigger restart of the loop
 
 } 
