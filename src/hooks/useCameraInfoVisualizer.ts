@@ -21,8 +21,6 @@ const DEFAULT_LINE_SCALE = 1.0; // Default distance for frustum projection plane
 // Static rotation to align ROS camera frame (Z forward, X right, Y down)
 // with Three.js default view (Z backward, X right, Y up)
 // Apply -90deg rotation around X, then +90deg around Z
-const rotX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI );
-const rotZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
 const CAMERA_FRAME_ROTATION = new THREE.Quaternion(); //.multiplyQuaternions(rotZ);
 
 export function useCameraInfoVisualizer({

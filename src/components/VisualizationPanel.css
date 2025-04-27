@@ -18,7 +18,8 @@
 /* .visualization-controls { ... } */
 
 /* --- Settings Button --- */
-.settings-button {
+.settings-button,
+.visualization-settings-button {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -37,7 +38,25 @@
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.settings-button:hover {
+/* Ensure icon button styling is defined */
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--text-color, #fff);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.icon-button:hover {
+  color: var(--primary-color, #32CD32);
+}
+
+.settings-button:hover,
+.visualization-settings-button:hover {
   background-color: rgba(80, 80, 80, 0.9);
   border-color: #aaa;
 }
@@ -122,23 +141,59 @@
 
 /* --- Collapsible Section Styles --- */
 .popup-section {
-    border-bottom: 1px solid var(--border-color, #444); /* Separator between sections */
-    padding-bottom: 10px; /* Space below the entire section */
-    margin-bottom: 10px; /* Space between sections */
+    border-bottom: 1px solid var(--border-color, #444);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
 }
 
 .popup-section:last-child {
-    border-bottom: none; /* No border for the last section */
+    border-bottom: none;
     margin-bottom: 0;
 }
 
+/* New style for header containing the add button */
+.section-header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* Match vertical padding of regular section header */
+    padding: 8px 0;
+}
+
+/* Make the original header button take available space */
+.section-header-with-action .section-header {
+    flex-grow: 1;
+    padding: 0; /* Remove default padding */
+    margin-right: 10px; /* Space before add button */
+    /* Ensure hover effect doesn't cover add button */
+    width: auto;
+}
+
+/* Add button specific style within popup */
+.add-viz-popup-button {
+    background: none;
+    border: none;
+    color: var(--primary-color); /* Use primary color */
+    font-size: 1.2em;
+    padding: 0 5px; /* Small padding */
+    cursor: pointer;
+    flex-shrink: 0; /* Prevent shrinking */
+    line-height: 1;
+}
+
+.add-viz-popup-button:hover {
+    color: var(--text-color); /* Slight dim on hover */
+    opacity: 0.8;
+}
+
+/* Original section header styles */
 .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: none;
     border: none;
-    padding: 8px 0; /* Vertical padding, no horizontal */
+    padding: 8px 0;
     width: 100%;
     cursor: pointer;
     text-align: left;
@@ -147,26 +202,25 @@
 }
 
 .section-header:hover {
-    background-color: rgba(255, 255, 255, 0.05); /* Subtle hover */
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
-.section-header h4 {
+.section-header h4 { /* Keep h4 styles */
     margin: 0;
     font-weight: bold;
-    font-size: 1em; /* Match other labels/headers */
+    font-size: 1em;
     color: var(--text-secondary, #ccc);
-    border-bottom: none; /* Remove underline from h4 within header */
+    border-bottom: none;
     padding-bottom: 0;
 }
 
-.section-header svg { /* Style the chevron icon */
+.section-header svg { /* Keep chevron styles */
     font-size: 1.2em;
     color: var(--text-secondary, #aaa);
 }
 
 .section-content {
-    padding-top: 10px; /* Space between header and content */
-    /* Add specific styling for content containers if needed */
+    padding-top: 10px;
 }
 
 /* Adjustments for nested control groups/items */
@@ -240,44 +294,22 @@ select:disabled {
   list-style: none;
   padding: 0;
   margin: 0;
-  /* Remove height limit and overflow to allow natural expansion */
-  /* max-height: 150px; */
-  /* overflow-y: auto; */
-  /* Remove custom scrollbar styles for this list */
+  max-height: 150px; /* Example max height */
+  overflow-y: auto;
 }
-
-/* Remove nested scrollbar styles */
-/*
-.tf-checkbox-list::-webkit-scrollbar { ... }
-.tf-checkbox-list::-webkit-scrollbar-track { ... }
-.tf-checkbox-list::-webkit-scrollbar-thumb { ... }
-*/
 
 .tf-checkbox-list li {
   padding: 4px 0;
 }
 
-.tf-checkbox-list label {
-  display: flex; /* Align checkbox and text */
+.tf-checkbox-list li label {
+  display: flex;
   align-items: center;
   cursor: pointer;
-  font-weight: normal; /* Override bold label style if needed */
-  font-size: 0.9em;
-  color: var(--text-primary, #e0e0e0);
 }
 
-.tf-checkbox-list input[type="checkbox"] {
+.tf-checkbox-list li input[type="checkbox"] {
   margin-right: 8px;
-  cursor: pointer;
-  /* Optional: Basic checkbox styling */
-  appearance: none;
-  background-color: var(--background-secondary, #3a3a3a);
-  border: 1px solid var(--border-color, #555);
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  position: relative; /* For checkmark */
-  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .tf-checkbox-list input[type="checkbox"]:checked {
@@ -358,4 +390,71 @@ select:disabled {
   background-color: rgba(40, 44, 52, 0.8); /* Semi-transparent overlay */
   z-index: 10; /* Ensure it's above the canvas */
   pointer-events: none; /* Allow interaction with canvas if needed later */
+}
+
+/* NEW: Ensure viewer container takes up space */
+.viewer-container {
+  flex-grow: 1; /* Takes available vertical space */
+  width: 100%;
+  height: 100%; /* Fill the flex item space */
+  min-height: 0; /* Important for flexbox shrinking */
+  position: relative; /* Needed for overlays if any */
+  background-color: #111; /* Default dark background */
+}
+
+/* --- Styles for Active Visualizations List --- */
+.active-visualizations-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 180px; /* Adjust as needed */
+  overflow-y: auto;
+}
+
+.active-visualizations-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-color-lighter, #444); /* Add a lighter border */
+}
+
+.active-visualizations-list li:last-child {
+  border-bottom: none;
+}
+
+.active-visualizations-list .viz-type {
+  font-weight: bold;
+  margin-right: 8px;
+  flex-shrink: 0; /* Prevent type from shrinking */
+}
+
+.active-visualizations-list .viz-topic {
+  flex-grow: 1; /* Allow topic name to take space */
+  margin-right: 8px;
+  overflow: hidden; /* Prevent long names from breaking layout */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-visualizations-list .remove-viz-button {
+  background: none;
+  border: none;
+  color: var(--text-color); /* Or maybe a red/error color? */
+  padding: 2px 4px; /* Smaller padding */
+  cursor: pointer;
+  font-size: 1em; /* Adjust icon size if needed */
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.active-visualizations-list .remove-viz-button:hover {
+  color: var(--primary-color); /* Highlight on hover */
+}
+
+.no-visualizations-message {
+  color: var(--text-color-secondary, #aaa);
+  font-style: italic;
+  text-align: center;
+  padding: 10px 0;
 } 

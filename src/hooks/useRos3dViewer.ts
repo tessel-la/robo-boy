@@ -81,6 +81,12 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
     if (currentViewerRef && isRosConnected) {
       // Only initialize if viewer doesn't exist yet
       if (!ros3dViewer.current) {
+        // Ensure the viewer container has an ID
+        if (!currentViewerRef.id) {
+          // Generate a unique ID if one doesn't exist
+          currentViewerRef.id = `viewer-container-${Date.now()}`;
+        }
+        
         console.log(`[useRos3dViewer Setup] Initializing ROS3D Viewer for div#${currentViewerRef.id}...`);
         if (currentViewerRef.clientWidth > 0 && currentViewerRef.clientHeight > 0) {
           try {

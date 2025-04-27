@@ -1,0 +1,84 @@
+/* AddVisualizationModal.css */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.add-viz-modal {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  min-width: 300px;
+  max-width: 90%;
+  border: 1px solid var(--border-color);
+}
+
+.add-viz-modal h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--primary-color);
+  text-align: center;
+}
+
+.add-viz-modal .form-group {
+  margin-bottom: 15px;
+}
+
+.add-viz-modal label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.add-viz-modal select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  box-sizing: border-box; /* Include padding and border in element's total width/height */
+}
+
+.add-viz-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 25px;
+}
+
+.add-viz-modal button {
+  padding: 8px 15px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  margin-left: 10px;
+  font-weight: bold;
+}
+
+.add-viz-modal button.add-button {
+  background-color: var(--primary-color);
+  color: var(--background-color);
+}
+
+.add-viz-modal button.add-button:disabled {
+  background-color: grey;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.add-viz-modal button.cancel-button {
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+} 

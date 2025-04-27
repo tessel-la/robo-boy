@@ -1,274 +1,200 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { FiX, FiChevronDown, FiChevronRight } from 'react-icons/fi';
+import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus } from 'react-icons/fi';
 import './VisualizationPanel.css'; // Reuse styles for now
+import { VisualizationConfig } from './VisualizationPanel'; // Import shared config type
 
-// Consolidated and corrected props interface
+// Updated props interface
 interface SettingsPopupProps {
-  isOpen: boolean; // Controls visibility
-  onClose: () => void; // Correct prop name for closing
-
-  // Fixed Frame
+  onClose: () => void;
   fixedFrame: string;
   availableFrames: string[];
   onFixedFrameChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
-
-  // PointCloud Topic
-  selectedPointCloudTopic: string;
-  availablePointCloudTopics: string[];
-  onPointCloudTopicSelect: (topic: string) => void;
-  fetchTopicsError: string | null; // Error during topic fetching
-  topicStatus?: 'loading' | 'error' | 'ok' | null; // Status indicator for loading/error states
-
-  // <-- Displayed TF Frames -->
   displayedTfFrames: string[];
   onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
-
-  // <-- Camera Info -->
-  selectedCameraInfoTopic: string | null;
-  availableCameraInfoTopics: string[];
-  onCameraInfoTopicSelect: (topic: string | null) => void;
+  activeVisualizations: VisualizationConfig[];
+  onRemoveVisualization: (id: string) => void;
+  onAddVisualizationClick: () => void; // Prop to open the Add modal
 }
 
-// Type for section state
-type SectionVisibility = {
-    pointCloud: boolean;
-    tfFrames: boolean;
-    cameraInfo: boolean;
-    // Add more sections here if needed
-};
+// Type for section visibility state
+interface SectionVisibility {
+  tfFrames: boolean;
+  activeViz: boolean;
+}
 
 // Explicitly type the props object here, then destructure
 const SettingsPopup = (props: SettingsPopupProps) => {
   const {
-    isOpen,
-    onClose, // Correct prop name
+    onClose,
     fixedFrame,
     availableFrames,
     onFixedFrameChange,
-    selectedPointCloudTopic,
-    availablePointCloudTopics,
-    onPointCloudTopicSelect,
-    topicStatus,
-    fetchTopicsError,
-    // <-- Destructure new props -->
     displayedTfFrames,
     onDisplayedTfFramesChange,
-    // <-- Camera Info props -->
-    selectedCameraInfoTopic,
-    availableCameraInfoTopics,
-    onCameraInfoTopicSelect,
+    // New props
+    activeVisualizations,
+    onRemoveVisualization,
+    onAddVisualizationClick, // Destructure new prop
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
-  // Removed state and refs related to the custom topic dropdown (isTopicMenuOpen, topicMenuRef)
-  // Removed toggleTopic and handleInternalTopicSelect
 
-  // --- State for collapsible sections --- 
+  // State for collapsible sections
   const [openSections, setOpenSections] = useState<SectionVisibility>({
-      pointCloud: true, // Default PointCloud open
       tfFrames: false,  // Default TF closed
-      cameraInfo: false // Default CameraInfo closed
+      activeViz: true // Default Active Visualizations open
   });
 
-  // Function to toggle section visibility
   const toggleSection = (section: keyof SectionVisibility) => {
       setOpenSections((prev: SectionVisibility) => ({
           ...prev,
           [section]: !prev[section]
       }));
   };
-  // --- End Section State ---
 
-  // Restore Effect to handle clicks outside the popup
+  // Effect to handle clicks outside the popup
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // If the popup is open and the click is outside the popup content, close it
-      if (isOpen && popupRef.current && !popupRef.current.contains(event.target as Node)) {
+      if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
         // Check if the click target is the toggle button itself to prevent immediate reopening
-        // IMPORTANT: Also check if click is on the container background (now handled by parent)
         const toggleButton = document.getElementById('viz-settings-button'); // Use correct button ID
-        const popupContainer = document.querySelector('.settings-popup-container'); // Get the container
-
-        // Close if click is outside popup content AND not on the toggle button
-        // The parent container now handles clicks on the background overlay
         if (!toggleButton || !toggleButton.contains(event.target as Node)) {
              onClose();
         }
       }
     };
 
-    if (isOpen) {
-      const timerId = setTimeout(() => {
-          document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-      return () => {
-        clearTimeout(timerId);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
+    // Add event listener
+    const timerId = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+    
     return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+      clearTimeout(timerId);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose]); // Restore dependencies
+  }, [onClose]);
 
-  // Don't render anything if not open
-  if (!isOpen) {
-    return null;
-  }
-
-  // Determine topic status display for the select element's disabled/option states
-  const isLoadingTopics = topicStatus === 'loading';
-  const hasTopicError = topicStatus === 'error' || !!fetchTopicsError;
-  const noTopicsAvailable = !isLoadingTopics && availablePointCloudTopics.length === 0;
-
-  // <-- Handler for TF checkbox changes -->
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const frameName = event.target.value;
       const isChecked = event.target.checked;
       let newSelectedFrames: string[];
-
       if (isChecked) {
-          // Add frame if not already present
           newSelectedFrames = displayedTfFrames.includes(frameName)
               ? displayedTfFrames
               : [...displayedTfFrames, frameName];
       } else {
-          // Remove frame
           newSelectedFrames = displayedTfFrames.filter(f => f !== frameName);
       }
       onDisplayedTfFramesChange(newSelectedFrames);
   };
 
   return (
-    // Restore wrapper div (though maybe not strictly necessary if parent handles overlay)
-    // Let's keep it simple for now and remove the wrapper, parent handles overlay
-    // <div className="settings-popup-overlay"> 
-      <div className="settings-popup" ref={popupRef}>
-         <div className="settings-popup-header">
-           <h3>Settings</h3>
-           <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
-             <FiX />
+    <div className="settings-popup" ref={popupRef}>
+       <div className="settings-popup-header">
+         <h3>Settings</h3>
+         <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
+           <FiX />
+         </button>
+       </div>
+       
+       <div className="settings-popup-content">
+         {/* Fixed Frame Selector */}
+         <div className="popup-control-item fixed-frame-section">
+           <label htmlFor="fixed-frame-select">Fixed Frame:</label>
+           <select
+             id="fixed-frame-select"
+             value={fixedFrame}
+             onChange={onFixedFrameChange}
+             disabled={availableFrames.length === 0}
+           >
+             {availableFrames.length > 0 ? (
+               availableFrames.map((frame) => (
+                 <option key={frame} value={frame}>
+                   {frame}
+                 </option>
+               ))
+             ) : (
+               <option value="" disabled>No frames available</option>
+             )}
+           </select>
+         </div>
+
+         {/* Displayed TF Frames Selector */}
+         <div className="popup-section">
+           <button className="section-header" onClick={() => toggleSection('tfFrames')}>
+             <h4>Displayed TF Frames</h4>
+             {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
            </button>
-         </div>
-         <div className="settings-popup-content">
-           {/* Fixed Frame Selector */}
-           <div className="popup-control-item fixed-frame-section">
-             <label htmlFor="fixed-frame-select">Fixed Frame:</label>
-             <select
-               id="fixed-frame-select"
-               value={fixedFrame}
-               onChange={onFixedFrameChange}
-               disabled={availableFrames.length === 0}
-             >
-               {availableFrames.length > 0 ? (
-                 availableFrames.map((frame) => (
-                   <option key={frame} value={frame}>
-                     {frame}
-                   </option>
-                 ))
-               ) : (
-                 <option value="" disabled>No frames available</option>
-               )}
-             </select>
-           </div>
-
-           {/* PointCloud Topic Selector */}
-           <div className="popup-section">
-             <button className="section-header" onClick={() => toggleSection('pointCloud')}>
-               <h4>PointCloud Topic</h4>
-               {openSections.pointCloud ? <FiChevronDown /> : <FiChevronRight />}
-             </button>
-             {openSections.pointCloud && (
-               <div className="section-content">
-                 <div className="popup-control-item">
-                   <select
-                     id="pointcloud-topic-select"
-                     value={selectedPointCloudTopic}
-                     onChange={(e) => onPointCloudTopicSelect(e.target.value)}
-                     disabled={isLoadingTopics || hasTopicError || noTopicsAvailable}
-                   >
-                     {isLoadingTopics && <option value="">Loading topics...</option>}
-                     {hasTopicError && <option value="">Error loading topics</option>}
-                     {noTopicsAvailable && !isLoadingTopics && !hasTopicError && <option value="">No topics available</option>}
-                     {!isLoadingTopics && !hasTopicError && availablePointCloudTopics.length > 0 &&
-                       availablePointCloudTopics.map((topic) => (
-                         <option key={topic} value={topic}>
-                           {topic}
-                         </option>
-                       ))
-                     }
-                   </select>
-                   {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
-                 </div>
-               </div>
-             )}
-           </div>
-
-           {/* Displayed TF Frames Selector */}
-           <div className="popup-section">
-             <button className="section-header" onClick={() => toggleSection('tfFrames')}>
-               <h4>Displayed TF Frames</h4>
-               {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
-             </button>
-             {openSections.tfFrames && (
-               <div className="section-content">
-                 <div className="popup-control-group tf-frame-group">
-                   {availableFrames.length > 0 ? (
-                     <ul className="tf-checkbox-list">
-                       {availableFrames.map((frame) => (
-                         <li key={frame}>
-                           <label>
-                             <input
-                               type="checkbox"
-                               value={frame}
-                               checked={displayedTfFrames.includes(frame)}
-                               onChange={handleTfCheckboxChange}
-                             />
-                             {frame}
-                           </label>
-                         </li>
-                       ))}
-                     </ul>
-                   ) : (
-                     <p className="no-frames-message">No TF frames available.</p>
-                   )}
-                 </div>
-               </div>
-             )}
-           </div>
-
-           {/* <-- CameraInfo Topic Selector --> */}
-           <div className="popup-section">
-             <button className="section-header" onClick={() => toggleSection('cameraInfo')}>
-               <h4>Camera Info Topic</h4>
-               {openSections.cameraInfo ? <FiChevronDown /> : <FiChevronRight />}
-             </button>
-             {openSections.cameraInfo && (
-               <div className="section-content">
-                 <div className="popup-control-item">
-                   <select
-                     id="camerainfo-topic-select"
-                     value={selectedCameraInfoTopic ?? ''}
-                     onChange={(e) => onCameraInfoTopicSelect(e.target.value || null)}
-                     disabled={availableCameraInfoTopics.length === 0}
-                   >
-                     <option value="">-- Select CameraInfo --</option>
-                     {availableCameraInfoTopics.map((topic) => (
-                       <option key={topic} value={topic}>
-                         {topic}
-                       </option>
+           {openSections.tfFrames && (
+             <div className="section-content">
+               <div className="popup-control-group tf-frame-group">
+                 {availableFrames.length > 0 ? (
+                   <ul className="tf-checkbox-list">
+                     {availableFrames.map((frame) => (
+                       <li key={frame}>
+                         <label>
+                           <input
+                             type="checkbox"
+                             value={frame}
+                             checked={displayedTfFrames.includes(frame)}
+                             onChange={handleTfCheckboxChange}
+                           />
+                           {frame}
+                         </label>
+                       </li>
                      ))}
-                   </select>
-                   {availableCameraInfoTopics.length === 0 && !fetchTopicsError && (
-                     <p className="no-frames-message">No CameraInfo topics found.</p>
-                   )}
-                 </div>
+                   </ul>
+                 ) : (
+                   <p className="no-frames-message">No TF frames available.</p>
+                 )}
                </div>
-             )}
-           </div>
+             </div>
+           )}
          </div>
-      </div>
-    // </div>
+
+         {/* --- Active Visualizations Section --- */}
+         <div className="popup-section">
+           <div className="section-header-with-action">
+              <button className="section-header" onClick={() => toggleSection('activeViz')}>
+                 <h4>Active Visualizations</h4>
+                 {openSections.activeViz ? <FiChevronDown /> : <FiChevronRight />}
+               </button>
+               <button
+                  className="add-viz-popup-button icon-button"
+                  onClick={onAddVisualizationClick}
+                  title="Add Visualization"
+               >
+                  <FiPlus />
+               </button>
+           </div>
+           {openSections.activeViz && (
+              <div className="section-content active-visualizations-list">
+                  {activeVisualizations.length > 0 ? (
+                      <ul>
+                          {activeVisualizations.map((viz) => (
+                              <li key={viz.id}>
+                                  <span className="viz-type">{viz.type.charAt(0).toUpperCase() + viz.type.slice(1)}:</span>
+                                  <span className="viz-topic">{viz.topic}</span>
+                                  <button
+                                      className="remove-viz-button icon-button"
+                                      onClick={() => onRemoveVisualization(viz.id)}
+                                      title="Remove Visualization"
+                                      aria-label={`Remove ${viz.type} visualization for topic ${viz.topic}`}
+                                  >
+                                      <FiTrash2 />
+                                  </button>
+                              </li>
+                          ))}
+                      </ul>
+                  ) : (
+                      <p className="no-visualizations-message">No active visualizations.</p>
+                  )}
+              </div>
+           )}
+         </div>
+       </div>
+    </div>
   );
 };
 
