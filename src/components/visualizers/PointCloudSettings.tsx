@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, ChangeEvent } from 'react';
 import { FiX } from 'react-icons/fi';
+import './PointCloudSettings.css';
 
 // Define the settings structure
 export interface PointCloudSettingsOptions {
@@ -11,6 +12,7 @@ export interface PointCloudSettingsOptions {
   minColor?: string;
   maxColor?: string;
   maxPoints?: number;
+  isCompactView: boolean;
 }
 
 interface PointCloudSettingsProps {
@@ -29,7 +31,8 @@ const defaultSettings: PointCloudSettingsOptions = {
   maxAxisValue: 5,
   minColor: '#0000ff',
   maxColor: '#ff0000',
-  maxPoints: 200000
+  maxPoints: 200000,
+  isCompactView: false,
 };
 
 const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
@@ -50,7 +53,7 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
     key: K, 
     value: PointCloudSettingsOptions[K]
   ) => {
-    setSettings(prev => ({
+    setSettings((prev: PointCloudSettingsOptions) => ({
       ...prev,
       [key]: value
     }));
@@ -58,7 +61,7 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
 
   // Handle number input changes
   const handleNumberChange = (
-    e: React.ChangeEvent<HTMLInputElement>, 
+    e: ChangeEvent<HTMLInputElement>, 
     key: keyof PointCloudSettingsOptions
   ) => {
     const value = parseFloat(e.target.value);
@@ -73,139 +76,159 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
     onClose();
   };
 
+  // Extract topic name for display
+  const shortTopicName = topic.split('/').pop() || topic;
+
   return (
     <div className="point-cloud-settings-popup">
       <div className="settings-popup-header">
-        <h3>Point Cloud Settings: {topic}</h3>
-        <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
-          <FiX />
-        </button>
+        <h3>Point Cloud Settings</h3>
+        <button className="close-button" onClick={onClose}>×</button>
       </div>
-
       <div className="settings-popup-content">
-        {/* Point Size */}
         <div className="setting-group">
-          <label htmlFor="point-size">Point Size:</label>
-          <div className="setting-control">
-            <input
-              id="point-size"
-              type="range"
-              min="0.01" 
-              max="0.5"
-              step="0.01"
-              value={settings.pointSize}
-              onChange={(e) => handleNumberChange(e, 'pointSize')}
-            />
-            <input
-              type="number"
-              min="0.01"
-              max="0.5"
-              step="0.01"
-              value={settings.pointSize}
-              onChange={(e) => handleNumberChange(e, 'pointSize')}
-              className="number-input"
-            />
+          <div className="setting-item">
+            <label>Compact View</label>
+            <div className="setting-input">
+              <input 
+                type="checkbox" 
+                checked={settings.isCompactView} 
+                onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('isCompactView', e.target.checked)}
+              />
+            </div>
           </div>
         </div>
-
-        {/* Max Points */}
-        <div className="setting-group">
-          <label htmlFor="max-points">Max Points:</label>
-          <div className="setting-control">
-            <input
-              id="max-points"
-              type="range"
-              min="1000" 
-              max="1000000"
-              step="1000"
-              value={settings.maxPoints}
-              onChange={(e) => handleNumberChange(e, 'maxPoints')}
-            />
-            <input
-              type="number"
-              min="1000"
-              max="1000000"
-              step="1000"
-              value={settings.maxPoints}
-              onChange={(e) => handleNumberChange(e, 'maxPoints')}
-              className="number-input"
-            />
+        
+        <div className="settings-columns">
+          {/* Point Size Setting */}
+          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+            <label htmlFor="point-size">Point Size</label>
+            <div className="setting-control">
+              <input
+                id="point-size"
+                type="range"
+                min="0.01" 
+                max="0.5"
+                step="0.01"
+                value={settings.pointSize}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'pointSize')}
+              />
+              <input
+                type="number"
+                min="0.01"
+                max="0.5"
+                step="0.01"
+                value={settings.pointSize}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'pointSize')}
+                className="number-input"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Color Method */}
-        <div className="setting-group">
-          <label htmlFor="color-axis">Color By:</label>
-          <select
-            id="color-axis"
-            value={settings.colorAxis}
-            onChange={(e) => updateSetting('colorAxis', e.target.value as 'x' | 'y' | 'z' | 'none')}
-          >
-            <option value="none">Fixed Color</option>
-            <option value="x">X Axis</option>
-            <option value="y">Y Axis</option>
-            <option value="z">Z Axis</option>
-          </select>
-        </div>
-
-        {/* Fixed Color (shown only when colorAxis is 'none') */}
-        {settings.colorAxis === 'none' && (
-          <div className="setting-group">
-            <label htmlFor="fixed-color">Color:</label>
-            <input
-              id="fixed-color"
-              type="color"
-              value={settings.color}
-              onChange={(e) => updateSetting('color', e.target.value)}
-            />
+          {/* Max Points Setting */}
+          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+            <label htmlFor="max-points">Max Points</label>
+            <div className="setting-control">
+              <input
+                id="max-points"
+                type="range"
+                min="1000" 
+                max="1000000"
+                step="1000"
+                value={settings.maxPoints}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxPoints')}
+              />
+              <input
+                type="number"
+                min="1000"
+                max="1000000"
+                step="1000"
+                value={settings.maxPoints}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxPoints')}
+                className="number-input"
+              />
+            </div>
           </div>
-        )}
 
-        {/* Axis Color Range (shown only when colorAxis is not 'none') */}
-        {settings.colorAxis !== 'none' && (
-          <>
-            <div className="setting-group axis-range">
-              <label>Axis Range:</label>
-              <div className="range-inputs">
+          {/* Color Method Setting */}
+          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+            <label htmlFor="color-axis">Color By</label>
+            <select
+              id="color-axis"
+              value={settings.colorAxis}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => updateSetting('colorAxis', e.target.value as 'x' | 'y' | 'z' | 'none')}
+              className="color-method-select"
+            >
+              <option value="none">Fixed Color</option>
+              <option value="x">X Axis</option>
+              <option value="y">Y Axis</option>
+              <option value="z">Z Axis</option>
+            </select>
+          </div>
+
+          {/* Fixed Color Setting */}
+          {settings.colorAxis === 'none' && (
+            <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+              <label htmlFor="fixed-color">Color</label>
+              <div className="color-container">
                 <input
-                  type="number"
-                  value={settings.minAxisValue}
-                  onChange={(e) => handleNumberChange(e, 'minAxisValue')}
-                  className="number-input"
-                />
-                <span>to</span>
-                <input
-                  type="number"
-                  value={settings.maxAxisValue}
-                  onChange={(e) => handleNumberChange(e, 'maxAxisValue')}
-                  className="number-input"
+                  id="fixed-color"
+                  type="color"
+                  value={settings.color}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
                 />
               </div>
             </div>
+          )}
 
-            <div className="setting-group color-gradient">
-              <label>Color Range:</label>
-              <div className="color-inputs">
-                <input
-                  type="color"
-                  value={settings.minColor}
-                  onChange={(e) => updateSetting('minColor', e.target.value)}
-                />
-                <div 
-                  className="gradient-preview"
-                  style={{
-                    background: `linear-gradient(to right, ${settings.minColor}, ${settings.maxColor})`
-                  }}
-                ></div>
-                <input
-                  type="color"
-                  value={settings.maxColor}
-                  onChange={(e) => updateSetting('maxColor', e.target.value)}
-                />
+          {/* Axis Range Settings */}
+          {settings.colorAxis !== 'none' && (
+            <>
+              <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+                <label>{settings.colorAxis.toUpperCase()} Range</label>
+                <div className="range-inputs">
+                  <input
+                    type="number"
+                    value={settings.minAxisValue}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'minAxisValue')}
+                    className="number-input"
+                  />
+                  <span>to</span>
+                  <input
+                    type="number"
+                    value={settings.maxAxisValue}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxAxisValue')}
+                    className="number-input"
+                  />
+                </div>
               </div>
-            </div>
-          </>
-        )}
+
+              <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
+                <label>Color Range</label>
+                <div className="color-inputs">
+                  <input
+                    type="color"
+                    value={settings.minColor}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('minColor', e.target.value)}
+                    title="Min value color"
+                  />
+                  <div 
+                    className="gradient-preview"
+                    style={{
+                      background: `linear-gradient(to right, ${settings.minColor}, ${settings.maxColor})`
+                    }}
+                  ></div>
+                  <input
+                    type="color"
+                    value={settings.maxColor}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('maxColor', e.target.value)}
+                    title="Max value color"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="settings-actions">
           <button className="cancel-button" onClick={onClose}>Cancel</button>

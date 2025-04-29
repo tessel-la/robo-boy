@@ -3,12 +3,12 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(95%, 400px);
+  width: min(95%, 450px); /* Increased width to accommodate the grid */
   background-color: var(--panel-bg-color, #202124);
   color: var(--text-color, #e8eaed);
   border: 1px solid var(--border-color, #5f6368);
-  border-radius: 8px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  border-radius: 10px; /* More rounded corners like mobile UI */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 2000;
   max-height: 90vh;
   display: flex;
@@ -17,154 +17,214 @@
 }
 
 /* Header styling */
-.point-cloud-settings-popup .settings-popup-header {
+.settings-popup-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color, #5f6368);
   flex-shrink: 0;
+  background-color: rgba(50, 50, 50, 0.3); /* Subtle header background */
 }
 
-.point-cloud-settings-popup .settings-popup-header h3 {
+.settings-popup-header h3 {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 80%;
-}
-
-/* Content styling */
-.point-cloud-settings-popup .settings-popup-content {
-  padding: 16px;
-  overflow-y: auto;
-  max-height: calc(90vh - 60px);
-  overscroll-behavior: contain;
-}
-
-/* Settings groups */
-.point-cloud-settings-popup .setting-group {
-  margin-bottom: 18px;
-}
-
-.point-cloud-settings-popup .setting-group label {
-  display: block;
-  margin-bottom: 6px;
+  font-size: 0.95rem;
   font-weight: 500;
 }
 
-.point-cloud-settings-popup .setting-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.point-cloud-settings-popup .setting-control input[type="range"] {
-  flex: 1;
-  height: 5px;
-  background: #4d4d4d;
-  border-radius: 5px;
-  appearance: none;
-}
-
-.point-cloud-settings-popup .setting-control input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--primary-color, #8ab4f8);
-  cursor: pointer;
-}
-
-.point-cloud-settings-popup .number-input {
-  width: 80px;
-  padding: 4px 8px;
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 4px;
-  color: var(--text-color, #e8eaed);
-}
-
-.point-cloud-settings-popup select {
-  width: 100%;
+/* Content styling */
+.settings-popup-content {
   padding: 8px;
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 4px;
+  overflow-y: auto;
+  max-height: calc(90vh - 50px);
+  overscroll-behavior: contain;
+}
+
+/* Settings layout as a grid */
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 5px;
+}
+
+/* Individual setting items */
+.setting-group {
+  border-radius: 6px;
+  background-color: rgba(60, 60, 60, 0.4);
+  padding: 8px 10px;
+  margin-bottom: 0; /* Remove margin bottom as we're using grid gap */
+  width: 100%; /* Take full width of grid cell */
+}
+
+.setting-group.compact {
+  margin-bottom: 1px;
+  padding: 4px 6px;
+}
+
+/* Label and control layout */
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  font-size: 0.85rem;
   color: var(--text-color, #e8eaed);
 }
 
-.point-cloud-settings-popup input[type="color"] {
-  width: 40px;
-  height: 30px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-/* Axis range inputs */
-.point-cloud-settings-popup .range-inputs {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.point-cloud-settings-popup .range-inputs span {
-  flex-shrink: 0;
-}
-
-/* Color gradient display */
-.point-cloud-settings-popup .color-inputs {
+/* Slider and number input row */
+.setting-control {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.point-cloud-settings-popup .gradient-preview {
+.setting-control input[type="range"] {
   flex: 1;
-  height: 20px;
+  height: 4px;
+  background: rgba(70, 70, 70, 0.8);
   border-radius: 4px;
-  border: 1px solid #555;
+  appearance: none;
 }
 
-/* Action buttons */
-.point-cloud-settings-popup .settings-actions {
+.setting-control input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary-color, #8ab4f8);
+  cursor: pointer;
+}
+
+.number-input {
+  width: 54px;
+  padding: 3px 5px;
+  background: rgba(50, 50, 50, 0.8);
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.8rem;
+}
+
+/* Color method dropdown */
+select {
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(50, 50, 50, 0.8);
+  border: 1px solid #555;
+  border-radius: 5px;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.85rem;
+  appearance: none; /* Custom dropdown style */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+}
+
+.color-method-select {
+  width: 100%;
+}
+
+/* Color input */
+input[type="color"] {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 15px; /* Circular color picker */
+  cursor: pointer;
+  padding: 0;
+  -webkit-appearance: none;
+}
+
+/* Color input container - make it look like a circle */
+.color-container {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #555;
+}
+
+/* Axis range inputs - make them look like they're in a card */
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(50, 50, 50, 0.5);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.range-inputs span {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+/* Color gradient display - make it look nicer */
+.color-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(50, 50, 50, 0.5);
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+.gradient-preview {
+  flex: 1;
+  height: 20px;
+  border-radius: 10px; /* More rounded corners */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Action buttons - more like mobile buttons */
+.settings-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
-.point-cloud-settings-popup .cancel-button,
-.point-cloud-settings-popup .save-button {
+.cancel-button,
+.save-button {
   padding: 8px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: 18px; /* Pill-shaped buttons */
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
 }
 
-.point-cloud-settings-popup .cancel-button {
-  background-color: transparent;
+.cancel-button {
+  background-color: rgba(70, 70, 70, 0.5);
   color: var(--text-color, #e8eaed);
-  border: 1px solid var(--border-color, #5f6368);
 }
 
-.point-cloud-settings-popup .save-button {
+.save-button {
   background-color: var(--primary-color, #8ab4f8);
   color: #000;
 }
 
-.point-cloud-settings-popup .cancel-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.cancel-button:hover {
+  background-color: rgba(90, 90, 90, 0.7);
 }
 
-.point-cloud-settings-popup .save-button:hover {
+.save-button:hover {
   background-color: var(--primary-hover-color, #aecbfa);
+  transform: translateY(-1px);
 }
 
 /* Mobile responsiveness */
@@ -174,16 +234,25 @@
     max-height: 85vh;
   }
 
-  .point-cloud-settings-popup .settings-popup-content {
-    max-height: calc(85vh - 60px);
+  .settings-popup-content {
+    max-height: calc(85vh - 50px);
+    padding: 6px;
   }
-
-  .point-cloud-settings-popup .setting-control {
+  
+  .setting-control {
     flex-direction: column;
     align-items: stretch;
+    gap: 6px;
   }
 
-  .point-cloud-settings-popup .number-input {
+  .number-input {
     width: 100%;
+  }
+}
+
+/* For mobile screens, revert to single column */
+@media (max-width: 480px) {
+  .settings-columns {
+    grid-template-columns: 1fr;
   }
 } 
