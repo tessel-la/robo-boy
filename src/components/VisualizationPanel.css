@@ -378,6 +378,7 @@
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-color-lighter, #444);
+  min-height: 40px; /* Ensure consistent height */
 }
 
 .active-visualizations-list li:last-child {
@@ -418,6 +419,7 @@
   margin-right: 80px; /* Reserve space for action buttons */
   min-width: 0; /* Allow container to shrink below content size */
   position: relative;
+  height: 28px; /* Match the height of buttons */
 }
 
 /* Improved dropdown styling */
@@ -427,11 +429,13 @@
   border: 1px solid #555;
   color: var(--text-color, #e8eaed);
   border-radius: 3px;
-  padding: 4px 5px;
+  padding: 0 5px; /* Reduce vertical padding */
   font-size: 0.9em;
   /* Improve text overflow handling */
   text-overflow: ellipsis;
-  max-height: 28px;
+  height: 28px; /* Match the exact height of buttons */
+  line-height: 28px; /* Center text vertically */
+  margin: 0; /* Remove any default margin */
   /* For Firefox */
   scrollbar-width: thin;
   /* For Webkit browsers */
@@ -554,12 +558,15 @@
   }
   
   .topic-dropdown-container {
-    margin-right: 70px; /* Less space for buttons on mobile */
+    height: 24px; /* Smaller on mobile */
+    margin-right: 70px;
   }
   
   .topic-dropdown {
     font-size: 0.85em;
-    padding: 3px 4px;
+    padding: 0 4px;
+    height: 24px;
+    line-height: 24px;
   }
   
   .active-visualizations-list .remove-viz-button,
