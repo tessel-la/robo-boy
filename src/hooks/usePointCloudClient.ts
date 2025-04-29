@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from 'ros3d';
 import * as THREE from 'three';
@@ -42,6 +42,17 @@ export function usePointCloudClient({
   options = {},
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
+  
+  // Add refs to track detected axis ranges
+  const axisRanges = useRef<{
+    x: {min: number, max: number},
+    y: {min: number, max: number},
+    z: {min: number, max: number}
+  }>({
+    x: {min: 0, max: 0},
+    y: {min: 0, max: 0},
+    z: {min: 0, max: 0}
+  });
 
   useEffect(() => {
     // console.log('[usePointCloudClient] Running effect. Deps:', { isRosConnected, selectedPointCloudTopic });
@@ -130,18 +141,22 @@ export function usePointCloudClient({
     let customMaterial: THREE.Material | undefined = undefined;
     
     // Check if we need to use axis-based coloring
-    if (material.colorMode && material.minAxisValue !== undefined && material.maxAxisValue !== undefined) {
-      const minValue = material.minAxisValue;
-      const maxValue = material.maxAxisValue;
+    if (material.colorMode) {
       const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
       const minColor = material.minColor || new THREE.Color(0x0000ff); // Default blue
       const maxColor = material.maxColor || new THREE.Color(0xff0000); // Default red
+
+      // Use default ranges initially, they will be updated dynamically
+      const initialMinValue = material.minAxisValue !== undefined ? material.minAxisValue : -10;
+      const initialMaxValue = material.maxAxisValue !== undefined ? material.maxAxisValue : 10;
       
       // Create a custom shader material for axis-based coloring - FIXED to avoid attribute/uniform redefinition
       customMaterial = new THREE.ShaderMaterial({
         vertexShader: `
           // Custom shader for point cloud coloring by axis position
           varying vec3 vColor;
+          uniform float minAxisValue;
+          uniform float maxAxisValue;
           
           void main() {
             // Position calculation using pre-defined attributes/uniforms
@@ -150,7 +165,7 @@ export function usePointCloudClient({
             
             // Color calculation based on position
             float value = position[${axisIndex}];
-            float normalized = clamp((value - ${minValue.toFixed(1)}) / (${maxValue.toFixed(1)} - ${minValue.toFixed(1)}), 0.0, 1.0);
+            float normalized = clamp((value - minAxisValue) / (maxAxisValue - minAxisValue), 0.0, 1.0);
             
             // Linear interpolation between min and max colors
             vec3 minCol = vec3(${minColor.r.toFixed(4)}, ${minColor.g.toFixed(4)}, ${minColor.b.toFixed(4)});
@@ -170,7 +185,11 @@ export function usePointCloudClient({
             gl_FragColor = vec4(vColor, 1.0);
           }
         `,
-        transparent: true
+        transparent: true,
+        uniforms: {
+          minAxisValue: { value: initialMinValue },
+          maxAxisValue: { value: initialMaxValue }
+        }
       });
     }
 
@@ -207,6 +226,7 @@ export function usePointCloudClient({
       // --- Post-Creation Logic (Intervals) --- (Moved from VisualizationPanel)
       let checkSceneInterval: ReturnType<typeof setInterval> | null = null;
       let checkPointsObjectInterval: ReturnType<typeof setInterval> | null = null;
+      let updateRangesInterval: ReturnType<typeof setInterval> | null = null;
 
       // Check for scene addition
       checkSceneInterval = setInterval(() => {
@@ -233,10 +253,64 @@ export function usePointCloudClient({
         }
       }, 100);
 
+      // Update axis ranges dynamically
+      if (customMaterial && material.colorMode) {
+        updateRangesInterval = setInterval(() => {
+          if (pointsClient.current?.points?.object) {
+            const pointsObj = pointsClient.current.points.object as THREE.Points;
+            const geometry = pointsObj.geometry as THREE.BufferGeometry;
+            const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+            
+            if (positions && positions.count > 0) {
+              const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
+              let min = Infinity;
+              let max = -Infinity;
+              
+              // Sample points to find min/max (checking every 10th point for performance)
+              const sampleStep = Math.max(1, Math.floor(positions.count / 100));
+              for (let i = 0; i < positions.count; i += sampleStep) {
+                const val = positions.getX(i + axisIndex);
+                if (val < min) min = val;
+                if (val > max) max = val;
+              }
+              
+              // Only update if we found valid values and they're different from current ones
+              if (isFinite(min) && isFinite(max) && max > min) {
+                const shader = (pointsObj.material as THREE.ShaderMaterial);
+                if (shader && shader.uniforms) {
+                  // Add small padding to range (5%)
+                  const range = max - min;
+                  const padding = range * 0.05;
+                  
+                  shader.uniforms.minAxisValue.value = min - padding;
+                  shader.uniforms.maxAxisValue.value = max + padding;
+                  
+                  console.log(`[usePointCloudClient] Updated ${material.colorMode}-axis range: ${min.toFixed(2)} to ${max.toFixed(2)}`);
+                  
+                  // Update stored ranges
+                  if (material.colorMode === 'x') {
+                    axisRanges.current.x = {min, max};
+                  } else if (material.colorMode === 'y') {
+                    axisRanges.current.y = {min, max};
+                  } else if (material.colorMode === 'z') {
+                    axisRanges.current.z = {min, max};
+                  }
+                  
+                  // Once we have good values, stop checking
+                  clearInterval(updateRangesInterval!);
+                  updateRangesInterval = null;
+                }
+              }
+            }
+          }
+        }, 500); // Check every 500ms until we get a good range
+      }
+
       // Cleanup function for intervals specific to THIS client instance
       const cleanupIntervals = () => {
         if(checkSceneInterval) clearInterval(checkSceneInterval);
         if(checkPointsObjectInterval) clearInterval(checkPointsObjectInterval);
+        if(updateRangesInterval) clearInterval(updateRangesInterval);
       };
 
       // --- Combined Cleanup for This Effect Run ---
@@ -264,5 +338,5 @@ export function usePointCloudClient({
 
   // This hook primarily manages side effects, doesn't need to return the client ref itself
   // unless the parent component needs direct access for some reason.
-  // return { pointsClient }; 
+  return { axisRanges: axisRanges.current }; 
 } 

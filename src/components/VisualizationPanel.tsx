@@ -188,6 +188,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     console.log("Removed visualization with ID:", idToRemove);
   };
 
+  // Add function to update topic for an existing visualization
+  const updateVisualizationTopic = (vizId: string, newTopic: string) => {
+    setVisualizations(prev => 
+      prev.map(viz => 
+        viz.id === vizId 
+          ? { ...viz, topic: newTopic } 
+          : viz
+      )
+    );
+    console.log(`Updated topic for visualization ${vizId} to: ${newTopic}`);
+  };
+
   // --- UI Handlers ---
   const toggleSettingsPopup = () => setIsSettingsPopupOpen(prev => !prev);
   const toggleAddVizModal = () => setIsAddVizModalOpen(prev => !prev); // Define toggle for Add modal
@@ -368,6 +380,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           onRemoveVisualization={removeVisualization}
           onAddVisualizationClick={toggleAddVizModal}
           onEditVisualization={openVisualizationSettings}
+          onUpdateVisualizationTopic={updateVisualizationTopic}
+          allTopics={allTopics}
         />
       )}
 

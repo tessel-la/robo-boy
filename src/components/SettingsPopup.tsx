@@ -3,6 +3,12 @@ import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus, FiSettings } from
 import './VisualizationPanel.css'; // Reuse styles for now
 import { VisualizationConfig } from './VisualizationPanel'; // Import shared config type
 
+// Define structure for storing fetched topics
+interface TopicInfo {
+  name: string;
+  type: string;
+}
+
 // Updated props interface
 interface SettingsPopupProps {
   onClose: () => void;
@@ -15,12 +21,19 @@ interface SettingsPopupProps {
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void; // Prop to open the Add modal
   onEditVisualization?: (id: string) => void; // New prop for editing visualizations
+  onUpdateVisualizationTopic?: (id: string, newTopic: string) => void; // New prop for changing topics
+  allTopics: TopicInfo[]; // Add allTopics to get available topics for type
 }
 
 // Type for section visibility state
 interface SectionVisibility {
   tfFrames: boolean;
   activeViz: boolean;
+}
+
+// Map to store which visualization item is showing a topic dropdown
+interface TopicEditState {
+  [vizId: string]: boolean;
 }
 
 // Explicitly type the props object here, then destructure
@@ -35,8 +48,10 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     // New props
     activeVisualizations,
     onRemoveVisualization,
-    onAddVisualizationClick, // Destructure new prop
-    onEditVisualization, // Destructure optional edit prop
+    onAddVisualizationClick,
+    onEditVisualization,
+    onUpdateVisualizationTopic,
+    allTopics = [], // Default to empty array if not provided
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -47,11 +62,22 @@ const SettingsPopup = (props: SettingsPopupProps) => {
       activeViz: true // Default Active Visualizations open
   });
 
+  // State to track which viz items are showing topic dropdown
+  const [showingTopicDropdown, setShowingTopicDropdown] = useState<TopicEditState>({});
+
   const toggleSection = (section: keyof SectionVisibility) => {
       setOpenSections((prev: SectionVisibility) => ({
           ...prev,
           [section]: !prev[section]
       }));
+  };
+
+  // Toggle topic dropdown for a visualization
+  const toggleTopicDropdown = (vizId: string) => {
+    setShowingTopicDropdown(prev => ({
+      ...prev,
+      [vizId]: !prev[vizId]
+    }));
   };
 
   // Effect to handle clicks outside the popup
@@ -97,6 +123,29 @@ const SettingsPopup = (props: SettingsPopupProps) => {
       onEditVisualization(id);
       onClose(); // Close settings popup when opening the specific visualization settings
     }
+  };
+
+  // Handle topic change for a visualization
+  const handleTopicChange = (vizId: string, event: React.ChangeEvent<HTMLSelectElement>) => {
+    const newTopic = event.target.value;
+    if (onUpdateVisualizationTopic && newTopic) {
+      onUpdateVisualizationTopic(vizId, newTopic);
+      // Close the dropdown after selection
+      toggleTopicDropdown(vizId);
+    }
+  };
+
+  // Filter available topics for a specific visualization type
+  const getTopicsForVisualizationType = (vizType: string): TopicInfo[] => {
+    // Define supported message types for each visualization type
+    const typeToMessageTypes: Record<string, string[]> = {
+      pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
+      camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
+      // Add more mappings as needed
+    };
+
+    const supportedTypes = typeToMessageTypes[vizType] || [];
+    return allTopics.filter(topic => supportedTypes.includes(topic.type));
   };
 
   return (
@@ -183,9 +232,25 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                   {activeVisualizations.length > 0 ? (
                       <ul>
                           {activeVisualizations.map((viz) => (
-                              <li key={viz.id}>
+                              <li key={viz.id} className="visualization-item">
                                   <span className="viz-type">{viz.type.charAt(0).toUpperCase() + viz.type.slice(1)}:</span>
-                                  <span className="viz-topic">{viz.topic}</span>
+                                  
+                                  {/* Always show topic as dropdown to prevent overflow */}
+                                  <div className="topic-dropdown-container">
+                                    <select
+                                      value={viz.topic}
+                                      onChange={(e) => handleTopicChange(viz.id, e)}
+                                      className="topic-dropdown"
+                                      title={viz.topic}
+                                    >
+                                      {getTopicsForVisualizationType(viz.type).map(topic => (
+                                        <option key={topic.name} value={topic.name}>
+                                          {topic.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  
                                   {/* Only show settings button for supported viz types */}
                                   {viz.type === 'pointcloud' && onEditVisualization && (
                                     <button

@@ -90,6 +90,10 @@
   min-width: 300px;
   max-width: 90%;
   border: 1px solid var(--border-color, #444);
+  z-index: 1000; /* Ensure it appears above other elements */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%); /* Center in viewport */
 }
 
 .settings-popup-header {
@@ -105,6 +109,7 @@
 .settings-popup-header h3 {
   margin: 0;
   color: var(--primary-color, #32CD32);
+  font-size: 1.1rem; /* Slightly smaller heading */
 }
 
 .close-button {
@@ -123,11 +128,12 @@
 
 .settings-popup-content {
   overflow-y: auto;
-  max-height: calc(85vh - 100px); /* Subtract header and padding */
+  max-height: calc(80vh - 80px); /* Adjusted for better fit */
   padding-right: 10px; 
   margin-right: -10px; 
   scrollbar-width: thin;
   scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #2f2f2f);
+  font-size: 0.9rem; /* Slightly smaller text */
 }
 
 .settings-popup-content::-webkit-scrollbar { width: 8px; }
@@ -210,7 +216,7 @@
 .section-header h4 { /* Keep h4 styles */
     margin: 0;
     font-weight: bold;
-    font-size: 1em;
+    font-size: 0.95em;
     color: var(--text-secondary, #ccc);
     border-bottom: none;
     padding-bottom: 0;
@@ -242,66 +248,18 @@
     font-size: 0.9em;
 }
 
-/* --- End Collapsible Section Styles --- */
-
-.popup-control-item, .popup-control-group {
-  display: flex;
-  flex-direction: column; /* Stack label and control vertically */
-  gap: 5px;
-}
-
-.popup-control-item label, .popup-control-group h4 {
-  font-weight: bold;
-  font-size: 0.95em;
-  color: var(--text-secondary, #ccc);
-  margin-bottom: 2px; /* Small space above control */
-}
-
-.popup-control-group h4 {
-  margin: 0 0 5px 0; /* Add margin below h4 */
-  padding-bottom: 5px;
-  border-bottom: 1px dashed var(--border-color, #555);
-}
-
-select,
-input[type="text"] /* Style if needed */ {
-  padding: 8px 10px;
-  border: 1px solid var(--border-color, #555);
-  background-color: var(--background-secondary, #3a3a3a);
-  color: var(--text-primary, #e0e0e0);
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-
-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.topic-error-message {
-  color: var(--error-color, #dc3545);
-  font-size: 0.85em;
-  margin-top: 5px;
-}
-
 /* --- Styles for TF Checkbox List --- */
-
-.popup-control-group {
-  /* General group styling already defined */
-  border-top: 1px solid var(--border-color, #555); /* Separator */
-  padding-top: 15px;
-}
-
 .tf-checkbox-list {
   list-style: none;
   padding: 0;
   margin: 0;
   max-height: 150px; /* Example max height */
   overflow-y: auto;
+  font-size: 0.85rem; /* Smaller font for list items */
 }
 
 .tf-checkbox-list li {
-  padding: 4px 0;
+  padding: 3px 0; /* Less padding for more compact list */
 }
 
 .tf-checkbox-list li label {
@@ -411,15 +369,15 @@ select:disabled {
   margin: 0;
   max-height: 180px; /* Adjust as needed */
   overflow-y: auto;
+  font-size: 0.85rem; /* Smaller font for visualization items */
 }
 
 .active-visualizations-list li {
   position: relative;
-  padding: 8px 10px; /* Increased padding */
+  padding: 6px 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-color-lighter, #444); /* Add a lighter border */
+  border-bottom: 1px solid var(--border-color-lighter, #444);
 }
 
 .active-visualizations-list li:last-child {
@@ -431,24 +389,83 @@ select:disabled {
   margin-right: 8px;
   flex-shrink: 0; /* Prevent type from shrinking */
   color: var(--primary-color, #32CD32);
+  width: 90px; /* Fixed width for type label */
 }
 
 .active-visualizations-list .viz-topic {
-  flex-grow: 1; /* Allow topic name to take space */
+  flex-grow: 1;
   margin-right: 8px;
-  overflow: hidden; /* Prevent long names from breaking layout */
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  max-width: calc(100% - 90px); /* Reserve space for buttons */
 }
 
-/* Improved styling for both buttons */
+.active-visualizations-list .viz-topic:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--primary-color, #32CD32);
+}
+
+/* Updated styles for the topic dropdown container */
+.topic-dropdown-container {
+  flex: 1; /* Take available space */
+  display: flex;
+  align-items: center;
+  margin-right: 80px; /* Reserve space for action buttons */
+  min-width: 0; /* Allow container to shrink below content size */
+  position: relative;
+}
+
+/* Improved dropdown styling */
+.topic-dropdown {
+  width: 100%;
+  background: #333;
+  border: 1px solid #555;
+  color: var(--text-color, #e8eaed);
+  border-radius: 3px;
+  padding: 4px 5px;
+  font-size: 0.9em;
+  /* Improve text overflow handling */
+  text-overflow: ellipsis;
+  max-height: 28px;
+  /* For Firefox */
+  scrollbar-width: thin;
+  /* For Webkit browsers */
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #666;
+    border-radius: 3px;
+  }
+}
+
+.cancel-topic-change {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 5px;
+  font-size: 0.9em;
+}
+
+.cancel-topic-change:hover {
+  color: var(--text-color, #e8eaed);
+}
+
+/* Improved positioning for the action buttons */
 .active-visualizations-list .remove-viz-button,
 .active-visualizations-list .viz-settings-button {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -465,26 +482,11 @@ select:disabled {
 
 /* Position the buttons properly */
 .active-visualizations-list .remove-viz-button {
-  right: 10px;
+  right: 8px;
 }
 
 .active-visualizations-list .viz-settings-button {
-  right: 45px; /* Position to the left of the delete button */
-}
-
-/* Add hover effects */
-.active-visualizations-list .remove-viz-button:hover {
-  color: #ff5252; /* Red color on hover */
-  background-color: rgba(255, 82, 82, 0.1);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
-  transform: translateY(-50%) scale(1.05);
-}
-
-.active-visualizations-list .viz-settings-button:hover {
-  color: var(--primary-color, #32CD32);
-  background-color: rgba(50, 205, 50, 0.1);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
-  transform: translateY(-50%) scale(1.05);
+  right: 40px; /* Position to the left of the delete button */
 }
 
 .no-visualizations-message {
@@ -524,21 +526,49 @@ select:disabled {
   color: var(--text-color, #fff);
 }
 
-/* Responsive adjustments for small screens */
+/* Mobile responsiveness for settings popup */
 @media (max-width: 768px) {
-  .viz-settings-button {
-    width: 28px;
-    height: 28px;
-    font-size: 0.8em;
+  .settings-popup {
+    max-width: 95%;
+    max-height: 90vh; /* More space on mobile */
+    padding: 12px 15px; /* Slightly less padding on mobile */
+  }
+  
+  .settings-popup-header h3 {
+    font-size: 1rem;
+  }
+  
+  .settings-popup-content {
+    font-size: 0.85rem; /* Even smaller text on mobile */
+    max-height: calc(90vh - 70px);
+  }
+  
+  .active-visualizations-list li,
+  .tf-checkbox-list li {
+    padding: 5px 0; /* Tighter spacing */
+  }
+  
+  .active-visualizations-list .viz-type {
+    width: 70px; /* Reduce width on small screens */
+    font-size: 0.9em;
+  }
+  
+  .topic-dropdown-container {
+    margin-right: 70px; /* Less space for buttons on mobile */
+  }
+  
+  .topic-dropdown {
+    font-size: 0.85em;
+    padding: 3px 4px;
   }
   
   .active-visualizations-list .remove-viz-button,
   .active-visualizations-list .viz-settings-button {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
   }
   
   .active-visualizations-list .viz-settings-button {
-    right: 35px;
+    right: 32px; /* Closer on small screens */
   }
 } 
