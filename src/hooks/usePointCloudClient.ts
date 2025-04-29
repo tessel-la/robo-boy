@@ -4,12 +4,31 @@ import * as ROS3D from 'ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
 
+// Define the material options interface
+interface PointCloudMaterialOptions {
+  size?: number;
+  color?: THREE.Color;
+  colorMode?: 'x' | 'y' | 'z';
+  minAxisValue?: number;
+  maxAxisValue?: number;
+  minColor?: THREE.Color;
+  maxColor?: THREE.Color;
+}
+
+// Define the client options interface
+interface PointCloudClientOptions {
+  maxPoints?: number;
+  throttleRate?: number;
+}
+
 interface UsePointCloudClientProps {
   ros: Ros | null;
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   selectedPointCloudTopic: string;
+  material?: PointCloudMaterialOptions;
+  options?: PointCloudClientOptions;
 }
 
 // Custom Hook for managing the PointCloud2 client lifecycle
@@ -19,6 +38,8 @@ export function usePointCloudClient({
   ros3dViewer,
   customTFProvider,
   selectedPointCloudTopic,
+  material = {},
+  options = {},
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
 
@@ -104,23 +125,85 @@ export function usePointCloudClient({
 
     // --- Create New Client --- (Moved from VisualizationPanel)
     console.log(`[usePointCloudClient] Creating new client for topic: ${selectedPointCloudTopic}`);
-    const options = {
-      ros: ros,
-      tfClient: customTFProvider.current, // Use the passed provider ref
-      rootObject: ros3dViewer.current.scene, // Use the passed viewer ref
-      topic: selectedPointCloudTopic,
-      material: { size: 0.05, color: 0x00ff00 },
-      max_pts: 200000,
-      throttle_rate: 100,
-      compression: 'none' as const,
+    
+    // Create custom material with shader modifications for axis coloring
+    let customMaterial: THREE.Material | undefined = undefined;
+    
+    // Check if we need to use axis-based coloring
+    if (material.colorMode && material.minAxisValue !== undefined && material.maxAxisValue !== undefined) {
+      const minValue = material.minAxisValue;
+      const maxValue = material.maxAxisValue;
+      const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
+      const minColor = material.minColor || new THREE.Color(0x0000ff); // Default blue
+      const maxColor = material.maxColor || new THREE.Color(0xff0000); // Default red
+      
+      // Create a custom shader material for axis-based coloring - FIXED to avoid attribute/uniform redefinition
+      customMaterial = new THREE.ShaderMaterial({
+        vertexShader: `
+          // Custom shader for point cloud coloring by axis position
+          varying vec3 vColor;
+          
+          void main() {
+            // Position calculation using pre-defined attributes/uniforms
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = ${material.size || 0.05} * 10.0;
+            
+            // Color calculation based on position
+            float value = position[${axisIndex}];
+            float normalized = clamp((value - ${minValue.toFixed(1)}) / (${maxValue.toFixed(1)} - ${minValue.toFixed(1)}), 0.0, 1.0);
+            
+            // Linear interpolation between min and max colors
+            vec3 minCol = vec3(${minColor.r.toFixed(4)}, ${minColor.g.toFixed(4)}, ${minColor.b.toFixed(4)});
+            vec3 maxCol = vec3(${maxColor.r.toFixed(4)}, ${maxColor.g.toFixed(4)}, ${maxColor.b.toFixed(4)});
+            vColor = mix(minCol, maxCol, normalized);
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          
+          void main() {
+            // Creating a circular point
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5)
+                discard;
+            
+            gl_FragColor = vec4(vColor, 1.0);
+          }
+        `,
+        transparent: true
+      });
+    }
+
+    // Prepare regular material options with defaults if not using custom shader
+    const materialOptions = {
+      size: material.size ?? 0.05,
+      color: material.color ?? new THREE.Color(0x00ff00)
     };
 
+    // Set client options with defaults
+    const clientOptions: any = {
+      ros: ros,
+      tfClient: customTFProvider.current,
+      rootObject: ros3dViewer.current.scene,
+      topic: selectedPointCloudTopic,
+      max_pts: options.maxPoints ?? 200000,
+      throttle_rate: options.throttleRate ?? 100,
+      compression: 'none' as const
+    };
+
+    // Add material or custom shader
+    if (customMaterial) {
+      clientOptions.material = customMaterial;
+      clientOptions.customShader = true;
+    } else {
+      clientOptions.material = materialOptions;
+    }
+
     try {
-      const newClient = new ROS3D.PointCloud2(options);
+      const newClient = new ROS3D.PointCloud2(clientOptions);
       pointsClient.current = newClient; // Update the main ref for this hook
       createdClientInstance = newClient; // Capture instance for this effect run's cleanup
-      // console.log(`[usePointCloudClient] New client created.`);
-
+      
       // --- Post-Creation Logic (Intervals) --- (Moved from VisualizationPanel)
       let checkSceneInterval: ReturnType<typeof setInterval> | null = null;
       let checkPointsObjectInterval: ReturnType<typeof setInterval> | null = null;
@@ -176,8 +259,8 @@ export function usePointCloudClient({
        cleanupPointCloudClient(); // Ensure cleanup if try block failed before returning
     };
 
-    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes
-  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic]);
+    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change
+  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options]);
 
   // This hook primarily manages side effects, doesn't need to return the client ref itself
   // unless the parent component needs direct access for some reason.

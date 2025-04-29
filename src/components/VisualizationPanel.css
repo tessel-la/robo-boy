@@ -77,6 +77,11 @@
 
 /* --- Settings Popup (Content Box within Overlay) --- */
 .settings-popup {
+  position: fixed;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background-color: var(--card-bg, #2f2f2f);
   color: var(--text-primary, #e0e0e0);
   padding: 15px 20px;
@@ -117,11 +122,8 @@
 }
 
 .settings-popup-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0; /* Remove main gap, sections will handle spacing */
   overflow-y: auto;
-  max-height: calc(80vh - 80px); /* Keep overall scroll */
+  max-height: calc(85vh - 100px); /* Subtract header and padding */
   padding-right: 10px; 
   margin-right: -10px; 
   scrollbar-width: thin;
@@ -412,10 +414,11 @@ select:disabled {
 }
 
 .active-visualizations-list li {
+  position: relative;
+  padding: 8px 10px; /* Increased padding */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 0;
   border-bottom: 1px solid var(--border-color-lighter, #444); /* Add a lighter border */
 }
 
@@ -427,6 +430,7 @@ select:disabled {
   font-weight: bold;
   margin-right: 8px;
   flex-shrink: 0; /* Prevent type from shrinking */
+  color: var(--primary-color, #32CD32);
 }
 
 .active-visualizations-list .viz-topic {
@@ -437,19 +441,50 @@ select:disabled {
   white-space: nowrap;
 }
 
-.active-visualizations-list .remove-viz-button {
+/* Improved styling for both buttons */
+.active-visualizations-list .remove-viz-button,
+.active-visualizations-list .viz-settings-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
-  color: var(--text-color); /* Or maybe a red/error color? */
-  padding: 2px 4px; /* Smaller padding */
-  cursor: pointer;
-  font-size: 1em; /* Adjust icon size if needed */
-  line-height: 1;
-  flex-shrink: 0;
+  padding: 0;
+  font-size: 1.1em;
+  color: var(--text-color, #e8eaed);
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background-color: rgba(50, 50, 50, 0.5);
 }
 
+/* Position the buttons properly */
+.active-visualizations-list .remove-viz-button {
+  right: 10px;
+}
+
+.active-visualizations-list .viz-settings-button {
+  right: 45px; /* Position to the left of the delete button */
+}
+
+/* Add hover effects */
 .active-visualizations-list .remove-viz-button:hover {
-  color: var(--primary-color); /* Highlight on hover */
+  color: #ff5252; /* Red color on hover */
+  background-color: rgba(255, 82, 82, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.active-visualizations-list .viz-settings-button:hover {
+  color: var(--primary-color, #32CD32);
+  background-color: rgba(50, 205, 50, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  transform: translateY(-50%) scale(1.05);
 }
 
 .no-visualizations-message {
@@ -457,4 +492,53 @@ select:disabled {
   font-style: italic;
   text-align: center;
   padding: 10px 0;
+}
+
+/* Individual visualization settings buttons */
+.viz-settings-button {
+  position: absolute; /* Positioned absolutely in the panel */
+  z-index: 20; /* Above viewer, same as settings button */
+  background-color: rgba(50, 50, 50, 0.8);
+  color: #fff;
+  border: 1px solid #666;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.viz-settings-button:hover {
+  background-color: rgba(80, 80, 80, 0.9);
+  border-color: #aaa;
+  color: var(--primary-color, #32CD32);
+}
+
+.viz-settings-button svg {
+  font-size: 1em;
+  color: var(--text-color, #fff);
+}
+
+/* Responsive adjustments for small screens */
+@media (max-width: 768px) {
+  .viz-settings-button {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8em;
+  }
+  
+  .active-visualizations-list .remove-viz-button,
+  .active-visualizations-list .viz-settings-button {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .active-visualizations-list .viz-settings-button {
+    right: 35px;
+  }
 } 

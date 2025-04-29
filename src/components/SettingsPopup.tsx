@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus, FiSettings } from 'react-icons/fi';
 import './VisualizationPanel.css'; // Reuse styles for now
 import { VisualizationConfig } from './VisualizationPanel'; // Import shared config type
 
@@ -14,6 +14,7 @@ interface SettingsPopupProps {
   activeVisualizations: VisualizationConfig[];
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void; // Prop to open the Add modal
+  onEditVisualization?: (id: string) => void; // New prop for editing visualizations
 }
 
 // Type for section visibility state
@@ -35,6 +36,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     activeVisualizations,
     onRemoveVisualization,
     onAddVisualizationClick, // Destructure new prop
+    onEditVisualization, // Destructure optional edit prop
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -87,6 +89,14 @@ const SettingsPopup = (props: SettingsPopupProps) => {
           newSelectedFrames = displayedTfFrames.filter(f => f !== frameName);
       }
       onDisplayedTfFramesChange(newSelectedFrames);
+  };
+
+  // Handle edit visualization click 
+  const handleEditClick = (id: string) => {
+    if (onEditVisualization) {
+      onEditVisualization(id);
+      onClose(); // Close settings popup when opening the specific visualization settings
+    }
   };
 
   return (
@@ -176,6 +186,17 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                               <li key={viz.id}>
                                   <span className="viz-type">{viz.type.charAt(0).toUpperCase() + viz.type.slice(1)}:</span>
                                   <span className="viz-topic">{viz.topic}</span>
+                                  {/* Only show settings button for supported viz types */}
+                                  {viz.type === 'pointcloud' && onEditVisualization && (
+                                    <button
+                                      className="viz-settings-button"
+                                      onClick={() => handleEditClick(viz.id)}
+                                      title={`Configure ${viz.type} visualization`}
+                                      aria-label={`Edit ${viz.type} visualization for topic ${viz.topic}`}
+                                    >
+                                      <FiSettings />
+                                    </button>
+                                  )}
                                   <button
                                       className="remove-viz-button icon-button"
                                       onClick={() => onRemoveVisualization(viz.id)}

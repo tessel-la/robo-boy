@@ -1,0 +1,189 @@
+.point-cloud-settings-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(95%, 400px);
+  background-color: var(--panel-bg-color, #202124);
+  color: var(--text-color, #e8eaed);
+  border: 1px solid var(--border-color, #5f6368);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  z-index: 2000;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header styling */
+.point-cloud-settings-popup .settings-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #5f6368);
+  flex-shrink: 0;
+}
+
+.point-cloud-settings-popup .settings-popup-header h3 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80%;
+}
+
+/* Content styling */
+.point-cloud-settings-popup .settings-popup-content {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: calc(90vh - 60px);
+  overscroll-behavior: contain;
+}
+
+/* Settings groups */
+.point-cloud-settings-popup .setting-group {
+  margin-bottom: 18px;
+}
+
+.point-cloud-settings-popup .setting-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.point-cloud-settings-popup .setting-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.point-cloud-settings-popup .setting-control input[type="range"] {
+  flex: 1;
+  height: 5px;
+  background: #4d4d4d;
+  border-radius: 5px;
+  appearance: none;
+}
+
+.point-cloud-settings-popup .setting-control input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary-color, #8ab4f8);
+  cursor: pointer;
+}
+
+.point-cloud-settings-popup .number-input {
+  width: 80px;
+  padding: 4px 8px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: var(--text-color, #e8eaed);
+}
+
+.point-cloud-settings-popup select {
+  width: 100%;
+  padding: 8px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: var(--text-color, #e8eaed);
+}
+
+.point-cloud-settings-popup input[type="color"] {
+  width: 40px;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Axis range inputs */
+.point-cloud-settings-popup .range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.point-cloud-settings-popup .range-inputs span {
+  flex-shrink: 0;
+}
+
+/* Color gradient display */
+.point-cloud-settings-popup .color-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.point-cloud-settings-popup .gradient-preview {
+  flex: 1;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid #555;
+}
+
+/* Action buttons */
+.point-cloud-settings-popup .settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.point-cloud-settings-popup .cancel-button,
+.point-cloud-settings-popup .save-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.point-cloud-settings-popup .cancel-button {
+  background-color: transparent;
+  color: var(--text-color, #e8eaed);
+  border: 1px solid var(--border-color, #5f6368);
+}
+
+.point-cloud-settings-popup .save-button {
+  background-color: var(--primary-color, #8ab4f8);
+  color: #000;
+}
+
+.point-cloud-settings-popup .cancel-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.point-cloud-settings-popup .save-button:hover {
+  background-color: var(--primary-hover-color, #aecbfa);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .point-cloud-settings-popup {
+    width: 95%;
+    max-height: 85vh;
+  }
+
+  .point-cloud-settings-popup .settings-popup-content {
+    max-height: calc(85vh - 60px);
+  }
+
+  .point-cloud-settings-popup .setting-control {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .point-cloud-settings-popup .number-input {
+    width: 100%;
+  }
+} 
