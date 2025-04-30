@@ -35,6 +35,11 @@ import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
 import { FaPlus, FaCog } from 'react-icons/fa'; // Import icons
 
+import {
+  saveVisualizationState,
+  getVisualizationState
+} from '../utils/visualizationState';
+
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
 }
@@ -96,6 +101,30 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>([]);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
+
+  // Load saved visualizations on initial mount
+  useEffect(() => {
+    const savedState = getVisualizationState();
+    if (savedState.visualizations.length > 0) {
+      setVisualizations(savedState.visualizations);
+      setFixedFrame(savedState.fixedFrame);
+      setDisplayedTfFrames(savedState.displayedTfFrames);
+      console.log('Restored saved visualization state:', savedState);
+    }
+  }, []);
+
+  // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
+  useEffect(() => {
+    if (isRosConnected) {
+      const stateToSave = {
+        visualizations,
+        fixedFrame,
+        displayedTfFrames
+      };
+      saveVisualizationState(stateToSave);
+      console.log('Saved visualization state:', stateToSave);
+    }
+  }, [visualizations, fixedFrame, displayedTfFrames, isRosConnected]);
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {

@@ -21,6 +21,12 @@ export type StoredTransform = {
     rotation: THREE.Quaternion;
 };
 
+// Reusable identity transform to avoid creating new objects
+export const IDENTITY_TRANSFORM: StoredTransform = {
+  translation: new THREE.Vector3(0, 0, 0),
+  rotation: new THREE.Quaternion(0, 0, 0, 1), // Identity quaternion
+};
+
 // --- Helper Functions for TF Logic (using THREE.js math) ---
 
 // Invert a Transform (represented by THREE.Vector3 and THREE.Quaternion)
@@ -99,48 +105,47 @@ export function lookupTransform(
   targetFrame: string,
   sourceFrame: string,
   transforms: TransformStore,
-  // fixedFrame: string // Removed fixedFrame, path finding doesn't need it directly
 ): StoredTransform | null {
 
   // Normalize frame IDs (remove leading slashes)
   const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
   const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
-  // const normalizedFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame; // Keep normalization local if needed
-
-  // console.log(`[TF Lookup] Request: ${normalizedSourceFrame} -> ${normalizedTargetFrame} (Fixed: ${normalizedFixedFrame})`);
 
   if (normalizedTargetFrame === normalizedSourceFrame) {
-    // Identity transform using THREE types
-    // console.log(`[TF Lookup] Target and source frames are identical. Returning identity.`);
-    return {
-      translation: new THREE.Vector3(0, 0, 0),
-      rotation: new THREE.Quaternion(0, 0, 0, 1),
-    };
+    // Return a shared identity transform to avoid memory allocation
+    return IDENTITY_TRANSFORM;
+  }
+
+  // First check direct parent-child relationship for fast path
+  if (transforms[normalizedSourceFrame]?.parentFrame === normalizedTargetFrame) {
+    // Direct inverse transform
+    return invertTransform(transforms[normalizedSourceFrame].transform);
+  } else if (transforms[normalizedTargetFrame]?.parentFrame === normalizedSourceFrame) {
+    // Direct transform
+    return transforms[normalizedTargetFrame].transform;
   }
 
   // Find path from source to target
-  // Pass transforms, source, and target. fixedFrame isn't needed for the path search itself.
   const path = findTransformPath(normalizedTargetFrame, normalizedSourceFrame, transforms);
 
   if (!path) {
-     console.warn(`[TF Lookup] No path found from ${normalizedSourceFrame} to ${normalizedTargetFrame}. Returning null.`);
      return null;
   }
 
   // Chain the transforms along the path
-  let finalTransform: StoredTransform = { // Start with identity using THREE types
-      translation: new THREE.Vector3(),
-      rotation: new THREE.Quaternion()
-  };
-
-  for (const step of path) {
-      finalTransform = multiplyTransforms(finalTransform, step.transform); // Use exported helper
+  let finalTransform: StoredTransform;
+  
+  if (path.length === 0) {
+    return IDENTITY_TRANSFORM;
+  } else if (path.length === 1) {
+    return path[0].transform;
+  } else {
+    finalTransform = path[0].transform;
+    for (let i = 1; i < path.length; i++) {
+      finalTransform = multiplyTransforms(finalTransform, path[i].transform);
+    }
   }
 
-  // console.log(`[TF Lookup] Found transform for ${normalizedSourceFrame} -> ${normalizedTargetFrame}:`, {
-  //   translation: {x: finalTransform.translation.x, y: finalTransform.translation.y, z: finalTransform.translation.z },
-  //   rotation: {x: finalTransform.rotation.x, y: finalTransform.rotation.y, z: finalTransform.rotation.z, w: finalTransform.rotation.w }
-  // });
   return finalTransform;
 }
 
@@ -164,57 +169,116 @@ export class CustomTFProvider {
 
     updateTransforms(newTransforms: TransformStore) {
         const changedFrames = new Set<string>();
-
-        // --- (Change detection logic remains the same) ---
-        const oldKeys = Object.keys(this.transforms);
-        const newKeys = Object.keys(newTransforms);
-        if (oldKeys.length !== newKeys.length || oldKeys.some((k, i) => k !== newKeys[i])) {
-             // Basic change detection - assume all subscribed frames might be affected
-            this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
-        } else {
-             // More detailed check (optional, can be complex)
-             for (const frameId of newKeys) {
-                 // Compare THREE objects using their equals methods for robustness
-                 const oldTf = this.transforms[frameId]?.transform;
-                 const newTf = newTransforms[frameId]?.transform;
-                 if (!oldTf || !newTf ||
-                     !oldTf.translation.equals(newTf.translation) ||
-                     !oldTf.rotation.equals(newTf.rotation))
-                 {
-                    // This frame or its parent changed, potentially affecting subscriptions
-                    changedFrames.add(frameId);
-                    // Very simplistic: Assume any change might affect any subscription for now
-                    this.callbacks.forEach((_, cbFrameId) => changedFrames.add(cbFrameId));
-                    break; // Optimization: if one change found, update all for now
-                 }
-             }
+        const oldTransforms = this.transforms;
+        
+        // Skip detailed change comparison if too many frames (performance optimization)
+        const hasLotsOfFrames = Object.keys(newTransforms).length > 100;
+        
+        // Fast path: If we have many frames, just check if key lengths changed
+        if (hasLotsOfFrames) {
+            if (Object.keys(oldTransforms).length !== Object.keys(newTransforms).length) {
+                // Basic change detection - assume all subscribed frames are affected
+                this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
+            } else {
+                // Just check a few random frames as a heuristic
+                const sampleKeys = Object.keys(newTransforms).slice(0, 5);
+                let hasChanges = false;
+                
+                for (const frameId of sampleKeys) {
+                    const oldTf = oldTransforms[frameId]?.transform;
+                    const newTf = newTransforms[frameId]?.transform;
+                    if (!oldTf || !newTf ||
+                        !oldTf.translation.equals(newTf.translation) ||
+                        !oldTf.rotation.equals(newTf.rotation)) 
+                    {
+                        hasChanges = true;
+                        break;
+                    }
+                }
+                
+                if (hasChanges) {
+                    this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
+                }
+            }
+        } 
+        // Detailed comparison for fewer frames
+        else {
+            // Check if set of keys changed
+            const oldKeys = Object.keys(oldTransforms);
+            const newKeys = Object.keys(newTransforms);
+            
+            if (oldKeys.length !== newKeys.length || !oldKeys.every(k => newKeys.includes(k))) {
+                // Frame set changed - assume all subscribed frames are affected
+                this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
+            } else {
+                // Check each frame for changes, but only if it affects subscribed frames
+                // Get all parent frames for subscribed frames
+                const relevantFrames = new Set<string>();
+                this.callbacks.forEach((_, frameId) => {
+                    // Add the frame itself
+                    relevantFrames.add(frameId);
+                    // Find all parent frames in the chain
+                    let currentFrame = frameId;
+                    while (newTransforms[currentFrame]?.parentFrame) {
+                        const parentFrame = newTransforms[currentFrame].parentFrame;
+                        relevantFrames.add(parentFrame);
+                        currentFrame = parentFrame;
+                    }
+                });
+                
+                // Only check frames that could affect our subscriptions
+                for (const frameId of relevantFrames) {
+                    const oldTf = oldTransforms[frameId]?.transform;
+                    const newTf = newTransforms[frameId]?.transform;
+                    if (!oldTf || !newTf ||
+                        !oldTf.translation.equals(newTf.translation) ||
+                        !oldTf.rotation.equals(newTf.rotation))
+                    {
+                        // Mark this frame as changed
+                        changedFrames.add(frameId);
+                        // Mark all dependent subscribed frames as needing updates
+                        this.callbacks.forEach((_, cbFrameId) => {
+                            // Check if this frame is in the parent chain of the callback frame
+                            let currentFrame = cbFrameId;
+                            while (currentFrame) {
+                                if (currentFrame === frameId) {
+                                    changedFrames.add(cbFrameId);
+                                    break;
+                                }
+                                currentFrame = newTransforms[currentFrame]?.parentFrame;
+                                if (!currentFrame) break;
+                            }
+                        });
+                    }
+                }
+            }
         }
-        // --- (End Change detection logic) ---
 
         this.transforms = newTransforms;
-        // console.log(`[CustomTFProvider] Transforms updated. Triggering callbacks for changed frames:`, changedFrames);
 
-        changedFrames.forEach(frameId => {
-            const frameCallbacks = this.callbacks.get(frameId);
-            if (frameCallbacks) {
-                const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId); // Use internal method
-                // Convert to plain object matching ROSLIB structure for the callback
-                const latestTransformObject = latestTransformTHREE
-                  ? { // Plain object, not new ROSLIB.Transform
-                      translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
-                      rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
-                    }
-                  : null;
-                // console.log(`[CustomTFProvider] Notifying ${frameCallbacks.size} callbacks for frame ${frameId} with transform:`, latestTransformObject);
-                frameCallbacks.forEach(cb => {
-                   try {
-                     cb(latestTransformObject); // Pass the plain object
-                   } catch (e) {
-                     console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId}:`, e);
-                   }
-                });
-            }
-        });
+        // Batch update callbacks to avoid redundant work
+        if (changedFrames.size > 0) {
+            changedFrames.forEach(frameId => {
+                const frameCallbacks = this.callbacks.get(frameId);
+                if (frameCallbacks) {
+                    const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
+                    const latestTransformObject = latestTransformTHREE
+                      ? {
+                          translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
+                          rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
+                        }
+                      : null;
+                    
+                    frameCallbacks.forEach(cb => {
+                       try {
+                         cb(latestTransformObject);
+                       } catch (e) {
+                         console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId}:`, e);
+                       }
+                    });
+                }
+            });
+        }
     }
 
      updateFixedFrame(newFixedFrame: string) {

@@ -224,13 +224,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
   }, [selectedPanelId, activePanels, ros]);
 
+  // View state management
+  const handleViewToggle = () => {
+    // Save current state before toggling
+    setViewMode(prev => prev === 'camera' ? '3d' : 'camera');
+  };
+
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
       <div className="top-bar">
         <div className="view-toggle">
           <button 
-            onClick={() => setViewMode('camera')} 
+            onClick={handleViewToggle} 
             className={viewMode === 'camera' ? 'active' : ''}
             title="Camera View"
             aria-label="Switch to Camera View"
@@ -238,7 +244,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {icons.camera}
           </button>
           <button 
-            onClick={() => setViewMode('3d')} 
+            onClick={handleViewToggle} 
             className={viewMode === '3d' ? 'active' : ''}
             title="3D View"
             aria-label="Switch to 3D View"
@@ -287,7 +293,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               )
             ) : (
               isConnected && ros ? (
-                <VisualizationPanel ros={ros} />
+                <VisualizationPanel ros={ros} key="visualization-panel" />
               ) : (
                 <div className="placeholder">Connecting to ROS...</div>
               )
