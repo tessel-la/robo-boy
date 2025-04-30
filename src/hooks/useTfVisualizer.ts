@@ -143,7 +143,15 @@ export function useTfVisualizer({
 
   // Effect 3: Animation loop to update axes poses
   useEffect(() => {
-    const updateAxesPoses = () => {
+    // Set refresh rate to 30 fps (33ms between frames)
+    const VISUALIZATION_REFRESH_RATE_MS = 33; // 30 fps
+    let lastUpdateTime = 0;
+    
+    // Reuse these objects to avoid garbage collection
+    const newPos = new THREE.Vector3();
+    const newQuat = new THREE.Quaternion();
+    
+    const updateAxesPoses = (timestamp: number) => {
       const viewer = ros3dViewer.current;
       const provider = customTFProvider.current;
       const container = tfAxesContainerRef.current;
@@ -151,42 +159,56 @@ export function useTfVisualizer({
 
       // Ensure everything needed is available
       if (!isRosConnected || !viewer || !provider || !container || currentMap.size === 0) {
-        // console.log('[useTfVisualizer Loop] Skipping update (prerequisites not met)');
-        animationFrameId.current = requestAnimationFrame(updateAxesPoses); // Continue loop
+        animationFrameId.current = requestAnimationFrame(updateAxesPoses);
         return;
       }
+      
+      // Throttle updates to target 30 fps
+      if (timestamp - lastUpdateTime < VISUALIZATION_REFRESH_RATE_MS) {
+        animationFrameId.current = requestAnimationFrame(updateAxesPoses);
+        return;
+      }
+      
+      lastUpdateTime = timestamp;
+      const fixedFrame = viewer.fixedFrame || 'odom';
 
-      const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
-
-      // REMOVED: Coordinate system adjustment rotation
-      // const rotX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-      // const rotZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
-      // const rotAdjust = new THREE.Quaternion().multiplyQuaternions(rotZ, rotX); 
+      // Use smaller thresholds for faster response but still avoid tiny changes
+      const POSITION_THRESHOLD = 0.00005;
+      const ROTATION_THRESHOLD = 0.00005;
 
       currentMap.forEach((entry: { group: THREE.Group; axes: ROS3D.Axes }, frameName: string) => {
-        // Use the TF Provider passed via props
         const transform = provider.lookupTransform(fixedFrame, frameName);
         if (transform && transform.translation && transform.rotation) {
-          // Apply standard ROS to Three.js axis mapping for position
-          const threePosition = new THREE.Vector3(
-            transform.translation.x, // ROS Y (Left) -> Three -X (Left)
-            transform.translation.y,  // ROS Z (Up)   -> Three Y (Up)
-            transform.translation.z  // ROS X (Fwd)  -> Three -Z (Fwd)
+          // Reuse objects to avoid garbage collection
+          newPos.set(
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z
           );
-          // Apply the raw TF rotation directly
-          const threeQuaternion = new THREE.Quaternion(
+          newQuat.set(
             transform.rotation.x,
             transform.rotation.y,
             transform.rotation.z,
             transform.rotation.w
           );
-
-          entry.group.position.copy(threePosition);
-          entry.group.quaternion.copy(threeQuaternion);
-          entry.group.visible = true;
-        } else {
-          // console.warn(`[useTfVisualizer Loop] TF lookup failed for ${frameName} relative to ${fixedFrame}`);
-          entry.group.visible = false; // Hide if transform fails
+          
+          // Only update if the change is significant
+          const positionChanged = !entry.group.position.equals(newPos) &&
+            entry.group.position.distanceToSquared(newPos) > POSITION_THRESHOLD;
+          
+          const rotationChanged = !entry.group.quaternion.equals(newQuat) &&
+            Math.abs(entry.group.quaternion.dot(newQuat) - 1.0) > ROTATION_THRESHOLD;
+            
+          if (positionChanged || rotationChanged) {
+            entry.group.position.copy(newPos);
+            entry.group.quaternion.copy(newQuat);
+          }
+          
+          if (!entry.group.visible) {
+            entry.group.visible = true;
+          }
+        } else if (entry.group.visible) {
+          entry.group.visible = false;
         }
       });
 

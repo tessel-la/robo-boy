@@ -123,7 +123,8 @@ export function useTfProvider({
           ros: ros,
           name: '/tf',
           messageType: 'tf2_msgs/TFMessage',
-          throttle_rate: 100,
+          throttle_rate: 25, // Update at 40Hz (25ms) to ensure smooth 30fps visualization
+          queue_size: 1, // Only keep the latest message
           compression: 'none'
         });
         tfSub.current.subscribe((msg: any) => handleTFMessage(msg, false));
@@ -133,7 +134,8 @@ export function useTfProvider({
           ros: ros,
           name: '/tf_static',
           messageType: 'tf2_msgs/TFMessage',
-          throttle_rate: 0,
+          throttle_rate: 1000, // Static transforms don't change often, throttle more aggressively
+          queue_size: 1, // Only keep the latest message
           compression: 'none'
         });
         tfStaticSub.current.subscribe((msg: any) => handleTFMessage(msg, true));
