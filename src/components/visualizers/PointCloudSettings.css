@@ -69,11 +69,6 @@
   box-sizing: border-box;
 }
 
-.setting-group.compact {
-  margin-bottom: 1px;
-  padding: 4px;
-}
-
 /* Setting group header with toggle switch and expand button */
 .setting-header {
   display: flex;

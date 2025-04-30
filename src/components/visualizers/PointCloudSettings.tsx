@@ -12,7 +12,6 @@ export interface PointCloudSettingsOptions {
   minColor?: string;
   maxColor?: string;
   maxPoints?: number;
-  isCompactView: boolean;
   // New toggle properties for enabling/disabling settings
   pointSizeEnabled: boolean;
   colorEnabled: boolean;
@@ -36,7 +35,6 @@ const defaultSettings: PointCloudSettingsOptions = {
   minColor: '#0000ff',
   maxColor: '#ff0000',
   maxPoints: 200000,
-  isCompactView: false,
   // Default all toggles to enabled
   pointSizeEnabled: true,
   colorEnabled: true,
@@ -48,7 +46,6 @@ interface SettingGroupProps {
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
   children: React.ReactNode;
-  isCompact?: boolean;
 }
 
 /**
@@ -58,13 +55,12 @@ const SettingGroup = ({
   title, 
   enabled, 
   onToggle, 
-  children, 
-  isCompact = false 
+  children
 }: SettingGroupProps): JSX.Element => {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className={`setting-group ${isCompact ? 'compact' : ''}`}>
+    <div className="setting-group">
       <div className="setting-header">
         <button 
           type="button" 
@@ -149,29 +145,12 @@ const PointCloudSettings = ({
         <button className="close-button" onClick={onClose}>×</button>
       </div>
       <div className="settings-popup-content">
-        <div className="setting-group">
-          <div className="setting-item">
-            <label>Compact View</label>
-            <div className="setting-input">
-              <label className="toggle-switch">
-                <input 
-                  type="checkbox" 
-                  checked={settings.isCompactView} 
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('isCompactView', e.target.checked)}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-        
         <div className="settings-grid">
           {/* Point Size Setting Group */}
           <SettingGroup 
             title="Point Size" 
             enabled={settings.pointSizeEnabled}
             onToggle={(enabled) => updateSetting('pointSizeEnabled', enabled)}
-            isCompact={settings.isCompactView}
           >
             <div className="setting-control">
               <input
@@ -200,7 +179,6 @@ const PointCloudSettings = ({
             title="Max Points" 
             enabled={settings.maxPointsEnabled}
             onToggle={(enabled) => updateSetting('maxPointsEnabled', enabled)}
-            isCompact={settings.isCompactView}
           >
             <div className="setting-control">
               <input
@@ -229,7 +207,6 @@ const PointCloudSettings = ({
             title="Color Settings" 
             enabled={settings.colorEnabled}
             onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
-            isCompact={settings.isCompactView}
           >
             <div className="color-method-container">
               <label htmlFor="color-axis">Color By</label>
