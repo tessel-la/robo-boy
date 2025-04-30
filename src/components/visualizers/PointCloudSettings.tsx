@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent } from 'react';
-import { FiX } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import './PointCloudSettings.css';
 
 // Define the settings structure
@@ -13,6 +13,10 @@ export interface PointCloudSettingsOptions {
   maxColor?: string;
   maxPoints?: number;
   isCompactView: boolean;
+  // New toggle properties for enabling/disabling settings
+  pointSizeEnabled: boolean;
+  colorEnabled: boolean;
+  maxPointsEnabled: boolean;
 }
 
 interface PointCloudSettingsProps {
@@ -33,15 +37,74 @@ const defaultSettings: PointCloudSettingsOptions = {
   maxColor: '#ff0000',
   maxPoints: 200000,
   isCompactView: false,
+  // Default all toggles to enabled
+  pointSizeEnabled: true,
+  colorEnabled: true,
+  maxPointsEnabled: true,
 };
 
-const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
+interface SettingGroupProps {
+  title: string;
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void;
+  children: React.ReactNode;
+  isCompact?: boolean;
+}
+
+/**
+ * SettingGroup - A component that renders a collapsible settings group with a toggle switch
+ */
+const SettingGroup = ({ 
+  title, 
+  enabled, 
+  onToggle, 
+  children, 
+  isCompact = false 
+}: SettingGroupProps): JSX.Element => {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className={`setting-group ${isCompact ? 'compact' : ''}`}>
+      <div className="setting-header">
+        <button 
+          type="button" 
+          className="expand-toggle" 
+          onClick={() => setExpanded(!expanded)}
+          aria-label={expanded ? "Collapse section" : "Expand section"}
+        >
+          {expanded ? <FiChevronDown /> : <FiChevronRight />}
+        </button>
+        <label>{title}</label>
+        <div className="toggle-switch-container">
+          <label className="toggle-switch">
+            <input 
+              type="checkbox" 
+              checked={enabled} 
+              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)} 
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      {expanded && enabled && (
+        <div className="setting-content">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * PointCloudSettings - A component for configuring point cloud visualization settings
+ */
+const PointCloudSettings = ({
   vizId,
   topic,
   initialOptions,
   onClose,
   onSaveSettings,
-}) => {
+}: PointCloudSettingsProps): JSX.Element => {
   // Merge initial options with defaults
   const [settings, setSettings] = useState<PointCloudSettingsOptions>({
     ...defaultSettings,
@@ -90,19 +153,26 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
           <div className="setting-item">
             <label>Compact View</label>
             <div className="setting-input">
-              <input 
-                type="checkbox" 
-                checked={settings.isCompactView} 
-                onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('isCompactView', e.target.checked)}
-              />
+              <label className="toggle-switch">
+                <input 
+                  type="checkbox" 
+                  checked={settings.isCompactView} 
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('isCompactView', e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
             </div>
           </div>
         </div>
         
-        <div className="settings-columns">
-          {/* Point Size Setting */}
-          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-            <label htmlFor="point-size">Point Size</label>
+        <div className="settings-grid">
+          {/* Point Size Setting Group */}
+          <SettingGroup 
+            title="Point Size" 
+            enabled={settings.pointSizeEnabled}
+            onToggle={(enabled) => updateSetting('pointSizeEnabled', enabled)}
+            isCompact={settings.isCompactView}
+          >
             <div className="setting-control">
               <input
                 id="point-size"
@@ -123,11 +193,15 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
                 className="number-input"
               />
             </div>
-          </div>
+          </SettingGroup>
 
-          {/* Max Points Setting */}
-          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-            <label htmlFor="max-points">Max Points</label>
+          {/* Max Points Setting Group */}
+          <SettingGroup 
+            title="Max Points" 
+            enabled={settings.maxPointsEnabled}
+            onToggle={(enabled) => updateSetting('maxPointsEnabled', enabled)}
+            isCompact={settings.isCompactView}
+          >
             <div className="setting-control">
               <input
                 id="max-points"
@@ -148,86 +222,93 @@ const PointCloudSettings: React.FC<PointCloudSettingsProps> = ({
                 className="number-input"
               />
             </div>
-          </div>
+          </SettingGroup>
 
-          {/* Color Method Setting */}
-          <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-            <label htmlFor="color-axis">Color By</label>
-            <select
-              id="color-axis"
-              value={settings.colorAxis}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => updateSetting('colorAxis', e.target.value as 'x' | 'y' | 'z' | 'none')}
-              className="color-method-select"
-            >
-              <option value="none">Fixed Color</option>
-              <option value="x">X Axis</option>
-              <option value="y">Y Axis</option>
-              <option value="z">Z Axis</option>
-            </select>
-          </div>
-
-          {/* Fixed Color Setting */}
-          {settings.colorAxis === 'none' && (
-            <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-              <label htmlFor="fixed-color">Color</label>
-              <div className="color-container">
-                <input
-                  id="fixed-color"
-                  type="color"
-                  value={settings.color}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
-                />
-              </div>
+          {/* Color Method Setting Group */}
+          <SettingGroup 
+            title="Color Settings" 
+            enabled={settings.colorEnabled}
+            onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
+            isCompact={settings.isCompactView}
+          >
+            <div className="color-method-container">
+              <label htmlFor="color-axis">Color By</label>
+              <select
+                id="color-axis"
+                value={settings.colorAxis}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => updateSetting('colorAxis', e.target.value as 'x' | 'y' | 'z' | 'none')}
+                className="color-method-select"
+              >
+                <option value="none">Fixed Color</option>
+                <option value="x">X Axis</option>
+                <option value="y">Y Axis</option>
+                <option value="z">Z Axis</option>
+              </select>
             </div>
-          )}
 
-          {/* Axis Range Settings */}
-          {settings.colorAxis !== 'none' && (
-            <>
-              <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-                <label>{settings.colorAxis.toUpperCase()} Range</label>
-                <div className="range-inputs">
+            {/* Fixed Color Setting */}
+            {settings.colorAxis === 'none' && (
+              <div className="color-container-wrapper">
+                <label htmlFor="fixed-color">Color</label>
+                <div className="color-container">
                   <input
-                    type="number"
-                    value={settings.minAxisValue}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'minAxisValue')}
-                    className="number-input"
-                  />
-                  <span>to</span>
-                  <input
-                    type="number"
-                    value={settings.maxAxisValue}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxAxisValue')}
-                    className="number-input"
+                    id="fixed-color"
+                    type="color"
+                    value={settings.color}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
                   />
                 </div>
               </div>
+            )}
 
-              <div className={`setting-group ${settings.isCompactView ? 'compact' : ''}`}>
-                <label>Color Range</label>
-                <div className="color-inputs">
-                  <input
-                    type="color"
-                    value={settings.minColor}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('minColor', e.target.value)}
-                    title="Min value color"
-                  />
-                  <div 
-                    className="gradient-preview"
-                    style={{
-                      background: `linear-gradient(to right, ${settings.minColor}, ${settings.maxColor})`
-                    }}
-                  ></div>
-                  <input
-                    type="color"
-                    value={settings.maxColor}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('maxColor', e.target.value)}
-                    title="Max value color"
-                  />
+            {/* Axis Range Settings */}
+            {settings.colorAxis !== 'none' && (
+              <>
+                <div className="range-section">
+                  <label>{settings.colorAxis.toUpperCase()} Range</label>
+                  <div className="range-inputs">
+                    <input
+                      type="number"
+                      value={settings.minAxisValue}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'minAxisValue')}
+                      className="number-input"
+                    />
+                    <span>to</span>
+                    <input
+                      type="number"
+                      value={settings.maxAxisValue}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxAxisValue')}
+                      className="number-input"
+                    />
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+
+                <div className="color-gradient-section">
+                  <label>Color Range</label>
+                  <div className="color-inputs">
+                    <input
+                      type="color"
+                      value={settings.minColor}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('minColor', e.target.value)}
+                      title="Min value color"
+                    />
+                    <div 
+                      className="gradient-preview"
+                      style={{
+                        background: `linear-gradient(to right, ${settings.minColor}, ${settings.maxColor})`
+                      }}
+                    ></div>
+                    <input
+                      type="color"
+                      value={settings.maxColor}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('maxColor', e.target.value)}
+                      title="Max value color"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </SettingGroup>
         </div>
 
         <div className="settings-actions">
