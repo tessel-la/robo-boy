@@ -15,6 +15,10 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 *   🕹️ Gamepad-style joystick control (publishing `sensor_msgs/Joy`).
 *   🗣️ Voice control input with recording animation.
 *   🧊 3D visualization support (using ros3djs).
+    * 🌈 Customizable point cloud rendering with options for:
+      * Point size adjustment
+      * Color selection (fixed or gradient based on x/y/z axis)
+      * Maximum points setting
 *   🌗 Animated Light/Dark mode toggle.
 *   🛡️ Local HTTPS development setup via Caddy and mkcert.
 
@@ -30,6 +34,28 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
   <img src="images/gameboy.jpg" alt="GameBoy Control" width="30%">
   
 </p>
+
+## 3D Visualization
+
+The application includes a powerful 3D viewer for ROS topics, with customizable visualization settings.
+
+### Point Cloud Visualization
+
+You can add point cloud visualizations to the 3D viewer and customize their appearance:
+
+1. Click the ⚙️ (settings) button in the bottom right of the 3D panel
+2. In the settings popup, click "Add Visualization"
+3. Select "Pointcloud" as the visualization type, then choose a valid point cloud topic
+4. Once added, a settings button (⚙️) appears next to each point cloud visualization
+5. Click this button to access point cloud-specific settings:
+   - **Point Size**: Adjust the size of individual points
+   - **Max Points**: Control the maximum number of points to display
+   - **Color Options**:
+     - Fixed color mode: Select any color for the entire point cloud
+     - Axis-based gradient: Color points according to their position along the X, Y, or Z axis
+     - Custom color gradients: Define the minimum and maximum colors for the gradient
+
+These visualization settings help optimize performance and highlight important features in your point cloud data.
 
 ## Theme Customization
 

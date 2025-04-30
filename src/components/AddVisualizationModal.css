@@ -1,0 +1,209 @@
+/* AddVisualizationModal.css */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.add-viz-modal {
+  background-color: var(--background-color, #202124);
+  color: var(--text-color, #e8eaed);
+  padding: 18px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  min-width: 300px;
+  max-width: 90%;
+  width: min(450px, 95%);
+  border: 1px solid var(--border-color, #5f6368);
+  overflow: hidden;
+}
+
+.add-viz-modal h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--primary-color, #8ab4f8);
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+/* Section label styling */
+.section-label {
+  font-weight: 500;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+/* Visualization grid section */
+.viz-grid-section {
+  margin-bottom: 20px;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.viz-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(60, 60, 60, 0.4);
+  border-radius: 8px;
+  padding: 16px 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-color, #e8eaed);
+  text-align: center;
+}
+
+.viz-grid-item:hover:not(:disabled) {
+  background-color: rgba(80, 80, 80, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.viz-grid-item:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.viz-grid-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.viz-icon {
+  font-size: 28px;
+  margin-bottom: 10px;
+  color: var(--primary-color, #8ab4f8);
+}
+
+.viz-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+.viz-topic-count {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Advanced section */
+.advanced-section {
+  margin-bottom: 16px;
+}
+
+.advanced-toggle {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--primary-color, #8ab4f8);
+  padding: 8px 0;
+  margin: 0;
+}
+
+.advanced-toggle:hover {
+  text-decoration: underline;
+}
+
+.advanced-content {
+  padding: 12px;
+  background-color: rgba(50, 50, 50, 0.3);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+/* Form elements */
+.add-viz-modal .form-group {
+  margin-bottom: 12px;
+}
+
+.add-viz-modal label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.add-viz-modal select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #5f6368);
+  background-color: rgba(50, 50, 50, 0.8);
+  color: var(--text-color, #e8eaed);
+  box-sizing: border-box;
+  font-size: 0.85rem;
+}
+
+.manual-add-button {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--primary-color, #8ab4f8);
+  color: var(--background-color, #202124);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.manual-add-button:disabled {
+  background-color: rgba(110, 110, 110, 0.5);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Footer actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.add-viz-modal button.cancel-button {
+  padding: 8px 15px;
+  border-radius: 18px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  background-color: rgba(70, 70, 70, 0.5);
+  color: var(--text-color, #e8eaed);
+}
+
+.add-viz-modal button.cancel-button:hover {
+  background-color: rgba(90, 90, 90, 0.7);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .add-viz-modal {
+    padding: 14px;
+    width: 90%;
+  }
+  
+  .viz-grid {
+    gap: 8px;
+  }
+  
+  .viz-grid-item {
+    padding: 12px 6px;
+  }
+  
+  .viz-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+} 

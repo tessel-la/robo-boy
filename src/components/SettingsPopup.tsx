@@ -1,144 +1,286 @@
-import React, { useRef, useEffect } from 'react';
-import { FiX } from 'react-icons/fi';
+import React, { useRef, useEffect, useState } from 'react';
+import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus, FiSettings } from 'react-icons/fi';
 import './VisualizationPanel.css'; // Reuse styles for now
+import { VisualizationConfig } from './VisualizationPanel'; // Import shared config type
 
-// Consolidated and corrected props interface
+// Define structure for storing fetched topics
+interface TopicInfo {
+  name: string;
+  type: string;
+}
+
+// Updated props interface
 interface SettingsPopupProps {
-  isOpen: boolean; // Controls visibility
-  onClose: () => void; // Correct prop name for closing
-
-  // Fixed Frame
+  onClose: () => void;
   fixedFrame: string;
   availableFrames: string[];
   onFixedFrameChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  displayedTfFrames: string[];
+  onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
+  activeVisualizations: VisualizationConfig[];
+  onRemoveVisualization: (id: string) => void;
+  onAddVisualizationClick: () => void; // Prop to open the Add modal
+  onEditVisualization?: (id: string) => void; // New prop for editing visualizations
+  onUpdateVisualizationTopic?: (id: string, newTopic: string) => void; // New prop for changing topics
+  allTopics: TopicInfo[]; // Add allTopics to get available topics for type
+}
 
-  // PointCloud Topic
-  selectedPointCloudTopic: string;
-  availablePointCloudTopics: string[];
-  onTopicSelect: (topic: string) => void;
-  fetchTopicsError: string | null; // Error during topic fetching
-  topicStatus?: 'loading' | 'error' | 'ok' | null; // Status indicator for loading/error states
+// Type for section visibility state
+interface SectionVisibility {
+  tfFrames: boolean;
+  activeViz: boolean;
+}
+
+// Map to store which visualization item is showing a topic dropdown
+interface TopicEditState {
+  [vizId: string]: boolean;
 }
 
 // Explicitly type the props object here, then destructure
 const SettingsPopup = (props: SettingsPopupProps) => {
   const {
-    isOpen,
-    onClose, // Correct prop name
+    onClose,
     fixedFrame,
     availableFrames,
     onFixedFrameChange,
-    selectedPointCloudTopic,
-    availablePointCloudTopics,
-    onTopicSelect,
-    topicStatus,
-    fetchTopicsError,
+    displayedTfFrames,
+    onDisplayedTfFramesChange,
+    // New props
+    activeVisualizations,
+    onRemoveVisualization,
+    onAddVisualizationClick,
+    onEditVisualization,
+    onUpdateVisualizationTopic,
+    allTopics = [], // Default to empty array if not provided
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
-  // Removed state and refs related to the custom topic dropdown (isTopicMenuOpen, topicMenuRef)
-  // Removed toggleTopic and handleInternalTopicSelect
 
-  // Restore Effect to handle clicks outside the popup
+  // State for collapsible sections
+  const [openSections, setOpenSections] = useState<SectionVisibility>({
+      tfFrames: false,  // Default TF closed
+      activeViz: true // Default Active Visualizations open
+  });
+
+  // State to track which viz items are showing topic dropdown
+  const [showingTopicDropdown, setShowingTopicDropdown] = useState<TopicEditState>({});
+
+  const toggleSection = (section: keyof SectionVisibility) => {
+      setOpenSections((prev: SectionVisibility) => ({
+          ...prev,
+          [section]: !prev[section]
+      }));
+  };
+
+  // Toggle topic dropdown for a visualization
+  const toggleTopicDropdown = (vizId: string) => {
+    setShowingTopicDropdown(prev => ({
+      ...prev,
+      [vizId]: !prev[vizId]
+    }));
+  };
+
+  // Effect to handle clicks outside the popup
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // If the popup is open and the click is outside the popup content, close it
-      if (isOpen && popupRef.current && !popupRef.current.contains(event.target as Node)) {
+      if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
         // Check if the click target is the toggle button itself to prevent immediate reopening
-        // IMPORTANT: Also check if click is on the container background (now handled by parent)
         const toggleButton = document.getElementById('viz-settings-button'); // Use correct button ID
-        const popupContainer = document.querySelector('.settings-popup-container'); // Get the container
-
-        // Close if click is outside popup content AND not on the toggle button
-        // The parent container now handles clicks on the background overlay
         if (!toggleButton || !toggleButton.contains(event.target as Node)) {
              onClose();
         }
       }
     };
 
-    if (isOpen) {
-      const timerId = setTimeout(() => {
-          document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-      return () => {
-        clearTimeout(timerId);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
+    // Add event listener
+    const timerId = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+    
     return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+      clearTimeout(timerId);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose]); // Restore dependencies
+  }, [onClose]);
 
-  // Don't render anything if not open
-  if (!isOpen) {
-    return null;
-  }
+  const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const frameName = event.target.value;
+      const isChecked = event.target.checked;
+      let newSelectedFrames: string[];
+      if (isChecked) {
+          newSelectedFrames = displayedTfFrames.includes(frameName)
+              ? displayedTfFrames
+              : [...displayedTfFrames, frameName];
+      } else {
+          newSelectedFrames = displayedTfFrames.filter(f => f !== frameName);
+      }
+      onDisplayedTfFramesChange(newSelectedFrames);
+  };
 
-  // Determine topic status display for the select element's disabled/option states
-  const isLoadingTopics = topicStatus === 'loading';
-  const hasTopicError = topicStatus === 'error' || !!fetchTopicsError;
-  const noTopicsAvailable = !isLoadingTopics && availablePointCloudTopics.length === 0;
+  // Handle edit visualization click 
+  const handleEditClick = (id: string) => {
+    if (onEditVisualization) {
+      onEditVisualization(id);
+      onClose(); // Close settings popup when opening the specific visualization settings
+    }
+  };
+
+  // Handle topic change for a visualization
+  const handleTopicChange = (vizId: string, event: React.ChangeEvent<HTMLSelectElement>) => {
+    const newTopic = event.target.value;
+    if (onUpdateVisualizationTopic && newTopic) {
+      onUpdateVisualizationTopic(vizId, newTopic);
+      // Close the dropdown after selection
+      toggleTopicDropdown(vizId);
+    }
+  };
+
+  // Filter available topics for a specific visualization type
+  const getTopicsForVisualizationType = (vizType: string): TopicInfo[] => {
+    // Define supported message types for each visualization type
+    const typeToMessageTypes: Record<string, string[]> = {
+      pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
+      camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
+      // Add more mappings as needed
+    };
+
+    const supportedTypes = typeToMessageTypes[vizType] || [];
+    return allTopics.filter(topic => supportedTypes.includes(topic.type));
+  };
 
   return (
-    // Restore wrapper div (though maybe not strictly necessary if parent handles overlay)
-    // Let's keep it simple for now and remove the wrapper, parent handles overlay
-    // <div className="settings-popup-overlay"> 
-      <div className="settings-popup" ref={popupRef}>
-         <div className="settings-popup-header">
-           <h3>Settings</h3>
-           <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
-             <FiX />
-           </button>
+    <div className="settings-popup" ref={popupRef}>
+       <div className="settings-popup-header">
+         <h3>Settings</h3>
+         <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
+           <FiX />
+         </button>
+       </div>
+       
+       <div className="settings-popup-content">
+         {/* Fixed Frame Selector */}
+         <div className="popup-control-item fixed-frame-section">
+           <label htmlFor="fixed-frame-select">Fixed Frame:</label>
+           <select
+             id="fixed-frame-select"
+             value={fixedFrame}
+             onChange={onFixedFrameChange}
+             disabled={availableFrames.length === 0}
+           >
+             {availableFrames.length > 0 ? (
+               availableFrames.map((frame) => (
+                 <option key={frame} value={frame}>
+                   {frame}
+                 </option>
+               ))
+             ) : (
+               <option value="" disabled>No frames available</option>
+             )}
+           </select>
          </div>
-         <div className="settings-popup-content">
-           {/* Fixed Frame Selector */}
-           <div className="popup-control-item">
-             <label htmlFor="fixed-frame-select">Fixed Frame:</label>
-             <select
-               id="fixed-frame-select"
-               value={fixedFrame}
-               onChange={onFixedFrameChange}
-               disabled={availableFrames.length === 0}
-             >
-               {availableFrames.length > 0 ? (
-                 availableFrames.map((frame) => (
-                   <option key={frame} value={frame}>
-                     {frame}
-                   </option>
-                 ))
-               ) : (
-                 <option value="" disabled>No frames available</option>
-               )}
-             </select>
-           </div>
 
-           {/* PointCloud Topic Selector */}
-           <div className="popup-control-item">
-             <label htmlFor="pointcloud-topic-select">PointCloud Topic:</label>
-             <select
-               id="pointcloud-topic-select"
-               value={selectedPointCloudTopic}
-               onChange={(e) => onTopicSelect(e.target.value)}
-               disabled={isLoadingTopics || hasTopicError || noTopicsAvailable}
-             >
-               {isLoadingTopics && <option value="">Loading topics...</option>}
-               {hasTopicError && <option value="">Error loading topics</option>}
-               {noTopicsAvailable && !isLoadingTopics && !hasTopicError && <option value="">No topics available</option>}
-               {!isLoadingTopics && !hasTopicError && availablePointCloudTopics.length > 0 &&
-                 availablePointCloudTopics.map((topic) => (
-                   <option key={topic} value={topic}>
-                     {topic}
-                   </option>
-                 ))
-               }
-             </select>
-             {hasTopicError && <p className="topic-error-message">{fetchTopicsError || 'Failed to load topics.'}</p>}
-           </div>
+         {/* Displayed TF Frames Selector */}
+         <div className="popup-section">
+           <button className="section-header" onClick={() => toggleSection('tfFrames')}>
+             <h4>Displayed TF Frames</h4>
+             {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
+           </button>
+           {openSections.tfFrames && (
+             <div className="section-content">
+               <div className="popup-control-group tf-frame-group">
+                 {availableFrames.length > 0 ? (
+                   <ul className="tf-checkbox-list">
+                     {availableFrames.map((frame) => (
+                       <li key={frame}>
+                         <label>
+                           <input
+                             type="checkbox"
+                             value={frame}
+                             checked={displayedTfFrames.includes(frame)}
+                             onChange={handleTfCheckboxChange}
+                           />
+                           {frame}
+                         </label>
+                       </li>
+                     ))}
+                   </ul>
+                 ) : (
+                   <p className="no-frames-message">No TF frames available.</p>
+                 )}
+               </div>
+             </div>
+           )}
          </div>
-      </div>
-    // </div>
+
+         {/* --- Active Visualizations Section --- */}
+         <div className="popup-section">
+           <div className="section-header-with-action">
+              <button className="section-header" onClick={() => toggleSection('activeViz')}>
+                 <h4>Active Visualizations</h4>
+                 {openSections.activeViz ? <FiChevronDown /> : <FiChevronRight />}
+               </button>
+               <button
+                  className="add-viz-popup-button icon-button"
+                  onClick={onAddVisualizationClick}
+                  title="Add Visualization"
+               >
+                  <FiPlus />
+               </button>
+           </div>
+           {openSections.activeViz && (
+              <div className="section-content active-visualizations-list">
+                  {activeVisualizations.length > 0 ? (
+                      <ul>
+                          {activeVisualizations.map((viz) => (
+                              <li key={viz.id} className="visualization-item">
+                                  <span className="viz-type">{viz.type.charAt(0).toUpperCase() + viz.type.slice(1)}:</span>
+                                  
+                                  {/* Always show topic as dropdown to prevent overflow */}
+                                  <div className="topic-dropdown-container">
+                                    <select
+                                      value={viz.topic}
+                                      onChange={(e) => handleTopicChange(viz.id, e)}
+                                      className="topic-dropdown"
+                                      title={viz.topic}
+                                    >
+                                      {getTopicsForVisualizationType(viz.type).map(topic => (
+                                        <option key={topic.name} value={topic.name}>
+                                          {topic.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  
+                                  {/* Only show settings button for supported viz types */}
+                                  {viz.type === 'pointcloud' && onEditVisualization && (
+                                    <button
+                                      className="viz-settings-button"
+                                      onClick={() => handleEditClick(viz.id)}
+                                      title={`Configure ${viz.type} visualization`}
+                                      aria-label={`Edit ${viz.type} visualization for topic ${viz.topic}`}
+                                    >
+                                      <FiSettings />
+                                    </button>
+                                  )}
+                                  <button
+                                      className="remove-viz-button icon-button"
+                                      onClick={() => onRemoveVisualization(viz.id)}
+                                      title="Remove Visualization"
+                                      aria-label={`Remove ${viz.type} visualization for topic ${viz.topic}`}
+                                  >
+                                      <FiTrash2 />
+                                  </button>
+                              </li>
+                          ))}
+                      </ul>
+                  ) : (
+                      <p className="no-visualizations-message">No active visualizations.</p>
+                  )}
+              </div>
+           )}
+         </div>
+       </div>
+    </div>
   );
 };
 

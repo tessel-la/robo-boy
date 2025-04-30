@@ -11,180 +11,300 @@
   padding: 0; 
   box-sizing: border-box; /* Include padding in width/height */
   position: relative; /* Needed for positioning button and popup */
-  /* overflow: hidden; Remove again to prevent clipping overlay */
+  overflow: hidden; /* Contain the viewer */
 }
 
 /* Remove old controls bar */
 /* .visualization-controls { ... } */
 
 /* --- Settings Button --- */
-.settings-button {
+.settings-button,
+.visualization-settings-button {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 20; /* Above viewer overlay, below popup */
-  background-color: rgba(40, 44, 52, 0.7); /* Semi-transparent */
+  z-index: 20; /* Above overlay */
+  background-color: rgba(50, 50, 50, 0.8);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%; /* Make it circular */
-  width: 40px;
-  height: 40px;
+  border: 1px solid #666;
+  border-radius: 50%;
+  width: 35px;
+  height: 35px;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.5em; /* Adjust icon size */
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  font-size: 1.2em;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.settings-button:hover {
-  background-color: rgba(60, 64, 72, 0.9);
+/* Ensure icon button styling is defined */
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--text-color, #fff);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.icon-button:hover {
+  color: var(--primary-color, #32CD32);
+}
+
+.settings-button:hover,
+.visualization-settings-button:hover {
+  background-color: rgba(80, 80, 80, 0.9);
+  border-color: #aaa;
 }
 
 /* --- Settings Popup Container (Now an Overlay) --- */
 .settings-popup-container {
   position: absolute;
-  inset: 0; /* Cover the entire parent */
-  z-index: 50;
-  /* pointer-events: none; Remove, container needs to catch clicks */
-  background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent overlay */
-  display: flex; /* Use flexbox to center the popup content */
-  align-items: center;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
+  display: flex;
   justify-content: center;
-  /* padding: 20px; Remove padding around the popup */
-  box-sizing: border-box;
+  align-items: center;
+  z-index: 19; /* Below button, above overlay */
 }
 
 /* --- Settings Popup (Content Box within Overlay) --- */
 .settings-popup {
-  /* position: absolute; Remove absolute positioning */
-  /* top: 70px; Remove */
-  /* right: 10px; Remove */
-  z-index: 100; /* Keep above overlay background */
-  background-color: var(--background-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 20px; /* Adjust padding */
-  box-shadow: var(--box-shadow-large);
-  /* min-width: 240px; Remove */
-  width: 95%; /* Occupy more width */
-  /* max-width: 500px; Remove max width limit */
-  /* max-height: 70vh; Remove, let flexbox handle height */
-  max-height: 90%; /* Limit height relative to container */
-  overflow-y: auto; /* Allow vertical scrolling WITHIN popup */
+  position: fixed;
+  max-height: 85vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  pointer-events: auto; /* Keep */
-  box-sizing: border-box;
+  background-color: var(--card-bg, #2f2f2f);
+  color: var(--text-primary, #e0e0e0);
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  min-width: 300px;
+  max-width: 90%;
+  border: 1px solid var(--border-color, #444);
+  z-index: 1000; /* Ensure it appears above other elements */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%); /* Center in viewport */
 }
 
-/* SettingsPopup Header Adjustments */
 .settings-popup-header {
   display: flex;
-  justify-content: space-between; /* Pushes title and button apart */
-  align-items: center; /* Vertically aligns title and button */
-  margin-bottom: 15px; /* Add some space below header */
-  padding-bottom: 10px; /* Keep underline padding */
-  border-bottom: 1px solid var(--border-color); /* Keep underline */
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color, #444);
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .settings-popup-header h3 {
-  margin: 0; /* Remove default margin */
-  padding: 0; /* Remove default padding */
-  border-bottom: none; /* Remove duplicate underline */
-  text-align: left; /* Align title to left */
+  margin: 0;
+  color: var(--primary-color, #32CD32);
+  font-size: 1.1rem; /* Slightly smaller heading */
 }
 
-.settings-popup-header .close-button {
-  /* Optional: Adjust button style if needed */
-  padding: 0; /* Remove padding if it causes alignment issues */
-  line-height: 1; /* Helps vertical alignment */
-}
-
-/* Specific styling for the close button */
-.settings-popup-header .close-button {
-  background-color: var(--button-background, rgba(80, 80, 80, 0.7)); /* Use theme variable or fallback */
-  color: var(--button-text, #fff);
-  border: 1px solid var(--button-border, rgba(255, 255, 255, 0.3));
-  border-radius: 50%; /* Make it circular */
-  width: 30px; /* Slightly smaller than gear */
-  height: 30px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.2em; /* Adjust icon size */
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #aaa);
+  font-size: 1.4em;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  padding: 0; /* Ensure no padding interferes */
-  line-height: 1; /* Ensure icon centers vertically */
+  padding: 0;
+  transition: color 0.2s ease;
 }
 
-.settings-popup-header .close-button:hover {
-  background-color: var(--button-background-hover, rgba(100, 100, 100, 0.9));
-  transform: scale(1.1);
+.close-button:hover {
+  color: var(--primary-color, #32CD32);
 }
 
-.settings-popup h4 {
-  margin: 0 0 10px 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 1.1em;
-  text-align: center;
+.settings-popup-content {
+  overflow-y: auto;
+  max-height: calc(80vh - 80px); /* Adjusted for better fit */
+  padding-right: 10px; 
+  margin-right: -10px; 
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #2f2f2f);
+  font-size: 0.9rem; /* Slightly smaller text */
 }
 
-.popup-control-item {
+.settings-popup-content::-webkit-scrollbar { width: 8px; }
+.settings-popup-content::-webkit-scrollbar-track { background: var(--card-bg, #2f2f2f); border-radius: 4px; }
+.settings-popup-content::-webkit-scrollbar-thumb { background-color: var(--primary-color, #32CD32); border-radius: 4px; border: 2px solid var(--card-bg, #2f2f2f); }
+
+/* Make fixed frame section look consistent */
+.fixed-frame-section {
+    padding-bottom: 15px; /* Add spacing below fixed frame */
+    margin-bottom: 10px; /* Add margin below fixed frame */
+    border-bottom: 1px solid var(--border-color, #444); /* Separator line */
+}
+
+/* --- Collapsible Section Styles --- */
+.popup-section {
+    border-bottom: 1px solid var(--border-color, #444);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.popup-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+/* New style for header containing the add button */
+.section-header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* Match vertical padding of regular section header */
+    padding: 8px 0;
+}
+
+/* Make the original header button take available space */
+.section-header-with-action .section-header {
+    flex-grow: 1;
+    padding: 0; /* Remove default padding */
+    margin-right: 10px; /* Space before add button */
+    /* Ensure hover effect doesn't cover add button */
+    width: auto;
+}
+
+/* Add button specific style within popup */
+.add-viz-popup-button {
+    background: none;
+    border: none;
+    color: var(--primary-color); /* Use primary color */
+    font-size: 1.2em;
+    padding: 0 5px; /* Small padding */
+    cursor: pointer;
+    flex-shrink: 0; /* Prevent shrinking */
+    line-height: 1;
+}
+
+.add-viz-popup-button:hover {
+    color: var(--text-color); /* Slight dim on hover */
+    opacity: 0.8;
+}
+
+/* Original section header styles */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 8px 0;
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-primary, #e0e0e0);
+    transition: background-color 0.1s ease;
+}
+
+.section-header:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.section-header h4 { /* Keep h4 styles */
+    margin: 0;
+    font-weight: bold;
+    font-size: 0.95em;
+    color: var(--text-secondary, #ccc);
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.section-header svg { /* Keep chevron styles */
+    font-size: 1.2em;
+    color: var(--text-secondary, #aaa);
+}
+
+.section-content {
+    padding-top: 10px;
+}
+
+/* Adjustments for nested control groups/items */
+.section-content .popup-control-item,
+.section-content .popup-control-group {
+    gap: 8px; /* Slightly more gap inside sections */
+    padding-left: 10px; /* Indent content slightly */
+}
+
+.section-content .popup-control-group {
+    border-top: none; /* Remove extra border from TF group */
+    padding-top: 0;
+}
+
+.section-content label {
+    font-weight: normal; /* Labels inside sections are not bold */
+    font-size: 0.9em;
+}
+
+/* --- Styles for TF Checkbox List --- */
+.tf-checkbox-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px; /* Example max height */
+  overflow-y: auto;
+  font-size: 0.85rem; /* Smaller font for list items */
+}
+
+.tf-checkbox-list li {
+  padding: 3px 0; /* Less padding for more compact list */
+}
+
+.tf-checkbox-list li label {
   display: flex;
-  flex-direction: column; /* Stack label above control */
-  gap: 5px;
+  align-items: center;
+  cursor: pointer;
 }
 
-.popup-control-item label {
+.tf-checkbox-list li input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.tf-checkbox-list input[type="checkbox"]:checked {
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-color, #32CD32);
+}
+
+/* Custom Checkmark (optional) */
+.tf-checkbox-list input[type="checkbox"]:checked::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.no-frames-message {
+  font-style: italic;
+  color: var(--text-secondary, #aaa);
   font-size: 0.9em;
-  color: var(--text-secondary);
-  font-weight: bold;
+  margin-top: 5px;
 }
-
-.popup-control-item select,
-.popup-control-item input[type="text"] /* Add styles for potential future inputs */ {
-  width: 100%; /* Make controls fill popup width */
-  padding: 8px 10px;
-  border: 1px solid var(--border-color);
-  background-color: var(--input-background);
-  color: var(--text-primary);
-  border-radius: var(--border-radius-small);
-  font-size: 0.9em;
-  box-sizing: border-box;
-}
-
-/* Remove styles for the custom topic selector button */
-/* .popup-control-item .topic-selector-button { ... } */
-
-/* Remove styles for the custom topic selector control positioning */
-/* .popup-control-item .topic-selector-control { ... } */
-
-/* Remove styles for the custom topic selector dropdown */
-/* .popup-control-item .topic-selector-dropdown { ... } */
-
-/* Remove styles for the custom topic items */
-/* .popup-control-item .topic-item { ... } */
-/* .popup-control-item .topic-item:hover { ... } */
-/* .popup-control-item .topic-item.disabled, */
-/* .popup-control-item .topic-item.error { ... } */
-/* .popup-control-item .topic-item.error { ... } */
 
 /* --- ROS3D Viewer Container --- */
 .ros3d-viewer {
   flex-grow: 1; /* Allow viewer to take remaining space */
   width: 100%;
-  height: 100%; /* Make viewer fill the flex item */
+  height: 100%;
+  /* No background color here, let ROS3D handle it or use the panel's */
   min-height: 0; /* Override previous min-height if needed */
   position: relative; /* Needed for absolute positioning of overlay */
-  background-color: #1e1e1e; /* Darker background for viewer */
-  border-radius: var(--border-radius); /* Apply theme border radius */
-  overflow: hidden; /* Important: Keep canvas contained */
   /* border: 1px solid var(--border-color); */ /* Optional border */
 }
 
@@ -205,17 +325,15 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font-style: italic;
-  background-color: rgba(30, 30, 30, 0.85); /* Semi-transparent overlay */
-  z-index: 10; /* Ensure it's above the canvas */
-  pointer-events: none; /* Allow interaction with canvas */
-  color: var(--text-secondary);
-  border-radius: var(--border-radius); /* Match container */
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 1.2em;
+  z-index: 10; /* Above the viewer canvas */
 }
 
 .viewer-overlay.error-overlay {
-    color: var(--error-color);
-    background-color: rgba(80, 30, 30, 0.85); /* Reddish overlay for error */
+  background-color: rgba(220, 53, 69, 0.8); /* Semi-transparent red */
+  color: white;
 }
 
 .viz-placeholder {
@@ -232,4 +350,232 @@
   background-color: rgba(40, 44, 52, 0.8); /* Semi-transparent overlay */
   z-index: 10; /* Ensure it's above the canvas */
   pointer-events: none; /* Allow interaction with canvas if needed later */
+}
+
+/* NEW: Ensure viewer container takes up space */
+.viewer-container {
+  flex-grow: 1; /* Takes available vertical space */
+  width: 100%;
+  height: 100%; /* Fill the flex item space */
+  min-height: 0; /* Important for flexbox shrinking */
+  position: relative; /* Needed for overlays if any */
+  background-color: #111; /* Default dark background */
+}
+
+/* --- Styles for Active Visualizations List --- */
+.active-visualizations-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 180px; /* Adjust as needed */
+  overflow-y: auto;
+  font-size: 0.85rem; /* Smaller font for visualization items */
+}
+
+.active-visualizations-list li {
+  position: relative;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color-lighter, #444);
+  min-height: 40px; /* Ensure consistent height */
+}
+
+.active-visualizations-list li:last-child {
+  border-bottom: none;
+}
+
+.active-visualizations-list .viz-type {
+  font-weight: bold;
+  margin-right: 8px;
+  flex-shrink: 0; /* Prevent type from shrinking */
+  color: var(--primary-color, #32CD32);
+  width: 90px; /* Fixed width for type label */
+}
+
+.active-visualizations-list .viz-topic {
+  flex-grow: 1;
+  margin-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  max-width: calc(100% - 90px); /* Reserve space for buttons */
+}
+
+.active-visualizations-list .viz-topic:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--primary-color, #32CD32);
+}
+
+/* Updated styles for the topic dropdown container */
+.topic-dropdown-container {
+  flex: 1; /* Take available space */
+  display: flex;
+  align-items: center;
+  margin-right: 80px; /* Reserve space for action buttons */
+  min-width: 0; /* Allow container to shrink below content size */
+  position: relative;
+  height: 28px; /* Match the height of buttons */
+}
+
+/* Improved dropdown styling */
+.topic-dropdown {
+  width: 100%;
+  background: #333;
+  border: 1px solid #555;
+  color: var(--text-color, #e8eaed);
+  border-radius: 3px;
+  padding: 0 5px; /* Reduce vertical padding */
+  font-size: 0.9em;
+  /* Improve text overflow handling */
+  text-overflow: ellipsis;
+  height: 28px; /* Match the exact height of buttons */
+  line-height: 28px; /* Center text vertically */
+  margin: 0; /* Remove any default margin */
+  /* For Firefox */
+  scrollbar-width: thin;
+  /* For Webkit browsers */
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #666;
+    border-radius: 3px;
+  }
+}
+
+.cancel-topic-change {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 5px;
+  font-size: 0.9em;
+}
+
+.cancel-topic-change:hover {
+  color: var(--text-color, #e8eaed);
+}
+
+/* Improved positioning for the action buttons */
+.active-visualizations-list .remove-viz-button,
+.active-visualizations-list .viz-settings-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1.1em;
+  color: var(--text-color, #e8eaed);
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background-color: rgba(50, 50, 50, 0.5);
+}
+
+/* Position the buttons properly */
+.active-visualizations-list .remove-viz-button {
+  right: 8px;
+}
+
+.active-visualizations-list .viz-settings-button {
+  right: 40px; /* Position to the left of the delete button */
+}
+
+.no-visualizations-message {
+  color: var(--text-color-secondary, #aaa);
+  font-style: italic;
+  text-align: center;
+  padding: 10px 0;
+}
+
+/* Individual visualization settings buttons */
+.viz-settings-button {
+  position: absolute; /* Positioned absolutely in the panel */
+  z-index: 20; /* Above viewer, same as settings button */
+  background-color: rgba(50, 50, 50, 0.8);
+  color: #fff;
+  border: 1px solid #666;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.viz-settings-button:hover {
+  background-color: rgba(80, 80, 80, 0.9);
+  border-color: #aaa;
+  color: var(--primary-color, #32CD32);
+}
+
+.viz-settings-button svg {
+  font-size: 1em;
+  color: var(--text-color, #fff);
+}
+
+/* Mobile responsiveness for settings popup */
+@media (max-width: 768px) {
+  .settings-popup {
+    max-width: 95%;
+    max-height: 90vh; /* More space on mobile */
+    padding: 12px 15px; /* Slightly less padding on mobile */
+  }
+  
+  .settings-popup-header h3 {
+    font-size: 1rem;
+  }
+  
+  .settings-popup-content {
+    font-size: 0.85rem; /* Even smaller text on mobile */
+    max-height: calc(90vh - 70px);
+  }
+  
+  .active-visualizations-list li,
+  .tf-checkbox-list li {
+    padding: 5px 0; /* Tighter spacing */
+  }
+  
+  .active-visualizations-list .viz-type {
+    width: 70px; /* Reduce width on small screens */
+    font-size: 0.9em;
+  }
+  
+  .topic-dropdown-container {
+    height: 24px; /* Smaller on mobile */
+    margin-right: 70px;
+  }
+  
+  .topic-dropdown {
+    font-size: 0.85em;
+    padding: 0 4px;
+    height: 24px;
+    line-height: 24px;
+  }
+  
+  .active-visualizations-list .remove-viz-button,
+  .active-visualizations-list .viz-settings-button {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .active-visualizations-list .viz-settings-button {
+    right: 32px; /* Closer on small screens */
+  }
 } 

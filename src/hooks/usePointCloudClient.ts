@@ -1,8 +1,25 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from 'ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
+
+// Define the material options interface
+interface PointCloudMaterialOptions {
+  size?: number;
+  color?: THREE.Color;
+  colorMode?: 'x' | 'y' | 'z';
+  minAxisValue?: number;
+  maxAxisValue?: number;
+  minColor?: THREE.Color;
+  maxColor?: THREE.Color;
+}
+
+// Define the client options interface
+interface PointCloudClientOptions {
+  maxPoints?: number;
+  throttleRate?: number;
+}
 
 interface UsePointCloudClientProps {
   ros: Ros | null;
@@ -10,6 +27,8 @@ interface UsePointCloudClientProps {
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   selectedPointCloudTopic: string;
+  material?: PointCloudMaterialOptions;
+  options?: PointCloudClientOptions;
 }
 
 // Custom Hook for managing the PointCloud2 client lifecycle
@@ -19,8 +38,21 @@ export function usePointCloudClient({
   ros3dViewer,
   customTFProvider,
   selectedPointCloudTopic,
+  material = {},
+  options = {},
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
+  
+  // Add refs to track detected axis ranges
+  const axisRanges = useRef<{
+    x: {min: number, max: number},
+    y: {min: number, max: number},
+    z: {min: number, max: number}
+  }>({
+    x: {min: 0, max: 0},
+    y: {min: 0, max: 0},
+    z: {min: 0, max: 0}
+  });
 
   useEffect(() => {
     // console.log('[usePointCloudClient] Running effect. Deps:', { isRosConnected, selectedPointCloudTopic });
@@ -104,26 +136,97 @@ export function usePointCloudClient({
 
     // --- Create New Client --- (Moved from VisualizationPanel)
     console.log(`[usePointCloudClient] Creating new client for topic: ${selectedPointCloudTopic}`);
-    const options = {
-      ros: ros,
-      tfClient: customTFProvider.current, // Use the passed provider ref
-      rootObject: ros3dViewer.current.scene, // Use the passed viewer ref
-      topic: selectedPointCloudTopic,
-      material: { size: 0.05, color: 0x00ff00 },
-      max_pts: 200000,
-      throttle_rate: 100,
-      compression: 'none' as const,
+    
+    // Create custom material with shader modifications for axis coloring
+    let customMaterial: THREE.Material | undefined = undefined;
+    
+    // Check if we need to use axis-based coloring
+    if (material.colorMode) {
+      const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
+      const minColor = material.minColor || new THREE.Color(0x0000ff); // Default blue
+      const maxColor = material.maxColor || new THREE.Color(0xff0000); // Default red
+
+      // Use default ranges initially, they will be updated dynamically
+      const initialMinValue = material.minAxisValue !== undefined ? material.minAxisValue : -10;
+      const initialMaxValue = material.maxAxisValue !== undefined ? material.maxAxisValue : 10;
+      
+      // Create a custom shader material for axis-based coloring - FIXED to avoid attribute/uniform redefinition
+      customMaterial = new THREE.ShaderMaterial({
+        vertexShader: `
+          // Custom shader for point cloud coloring by axis position
+          varying vec3 vColor;
+          uniform float minAxisValue;
+          uniform float maxAxisValue;
+          
+          void main() {
+            // Position calculation using pre-defined attributes/uniforms
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = ${material.size || 0.05} * 10.0;
+            
+            // Color calculation based on position
+            float value = position[${axisIndex}];
+            float normalized = clamp((value - minAxisValue) / (maxAxisValue - minAxisValue), 0.0, 1.0);
+            
+            // Linear interpolation between min and max colors
+            vec3 minCol = vec3(${minColor.r.toFixed(4)}, ${minColor.g.toFixed(4)}, ${minColor.b.toFixed(4)});
+            vec3 maxCol = vec3(${maxColor.r.toFixed(4)}, ${maxColor.g.toFixed(4)}, ${maxColor.b.toFixed(4)});
+            vColor = mix(minCol, maxCol, normalized);
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          
+          void main() {
+            // Creating a circular point
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5)
+                discard;
+            
+            gl_FragColor = vec4(vColor, 1.0);
+          }
+        `,
+        transparent: true,
+        uniforms: {
+          minAxisValue: { value: initialMinValue },
+          maxAxisValue: { value: initialMaxValue }
+        }
+      });
+    }
+
+    // Prepare regular material options with defaults if not using custom shader
+    const materialOptions = {
+      size: material.size ?? 0.05,
+      color: material.color ?? new THREE.Color(0x00ff00)
     };
 
+    // Set client options with defaults
+    const clientOptions: any = {
+      ros: ros,
+      tfClient: customTFProvider.current,
+      rootObject: ros3dViewer.current.scene,
+      topic: selectedPointCloudTopic,
+      max_pts: options.maxPoints ?? 200000,
+      throttle_rate: options.throttleRate ?? 100,
+      compression: 'none' as const
+    };
+
+    // Add material or custom shader
+    if (customMaterial) {
+      clientOptions.material = customMaterial;
+      clientOptions.customShader = true;
+    } else {
+      clientOptions.material = materialOptions;
+    }
+
     try {
-      const newClient = new ROS3D.PointCloud2(options);
+      const newClient = new ROS3D.PointCloud2(clientOptions);
       pointsClient.current = newClient; // Update the main ref for this hook
       createdClientInstance = newClient; // Capture instance for this effect run's cleanup
-      // console.log(`[usePointCloudClient] New client created.`);
-
+      
       // --- Post-Creation Logic (Intervals) --- (Moved from VisualizationPanel)
       let checkSceneInterval: ReturnType<typeof setInterval> | null = null;
       let checkPointsObjectInterval: ReturnType<typeof setInterval> | null = null;
+      let updateRangesInterval: ReturnType<typeof setInterval> | null = null;
 
       // Check for scene addition
       checkSceneInterval = setInterval(() => {
@@ -150,10 +253,64 @@ export function usePointCloudClient({
         }
       }, 100);
 
+      // Update axis ranges dynamically
+      if (customMaterial && material.colorMode) {
+        updateRangesInterval = setInterval(() => {
+          if (pointsClient.current?.points?.object) {
+            const pointsObj = pointsClient.current.points.object as THREE.Points;
+            const geometry = pointsObj.geometry as THREE.BufferGeometry;
+            const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+            
+            if (positions && positions.count > 0) {
+              const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
+              let min = Infinity;
+              let max = -Infinity;
+              
+              // Sample points to find min/max (checking every 10th point for performance)
+              const sampleStep = Math.max(1, Math.floor(positions.count / 100));
+              for (let i = 0; i < positions.count; i += sampleStep) {
+                const val = positions.getX(i + axisIndex);
+                if (val < min) min = val;
+                if (val > max) max = val;
+              }
+              
+              // Only update if we found valid values and they're different from current ones
+              if (isFinite(min) && isFinite(max) && max > min) {
+                const shader = (pointsObj.material as THREE.ShaderMaterial);
+                if (shader && shader.uniforms) {
+                  // Add small padding to range (5%)
+                  const range = max - min;
+                  const padding = range * 0.05;
+                  
+                  shader.uniforms.minAxisValue.value = min - padding;
+                  shader.uniforms.maxAxisValue.value = max + padding;
+                  
+                  console.log(`[usePointCloudClient] Updated ${material.colorMode}-axis range: ${min.toFixed(2)} to ${max.toFixed(2)}`);
+                  
+                  // Update stored ranges
+                  if (material.colorMode === 'x') {
+                    axisRanges.current.x = {min, max};
+                  } else if (material.colorMode === 'y') {
+                    axisRanges.current.y = {min, max};
+                  } else if (material.colorMode === 'z') {
+                    axisRanges.current.z = {min, max};
+                  }
+                  
+                  // Once we have good values, stop checking
+                  clearInterval(updateRangesInterval!);
+                  updateRangesInterval = null;
+                }
+              }
+            }
+          }
+        }, 500); // Check every 500ms until we get a good range
+      }
+
       // Cleanup function for intervals specific to THIS client instance
       const cleanupIntervals = () => {
         if(checkSceneInterval) clearInterval(checkSceneInterval);
         if(checkPointsObjectInterval) clearInterval(checkPointsObjectInterval);
+        if(updateRangesInterval) clearInterval(updateRangesInterval);
       };
 
       // --- Combined Cleanup for This Effect Run ---
@@ -176,10 +333,10 @@ export function usePointCloudClient({
        cleanupPointCloudClient(); // Ensure cleanup if try block failed before returning
     };
 
-    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes
-  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic]);
+    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change
+  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options]);
 
   // This hook primarily manages side effects, doesn't need to return the client ref itself
   // unless the parent component needs direct access for some reason.
-  // return { pointsClient }; 
+  return { axisRanges: axisRanges.current }; 
 } 

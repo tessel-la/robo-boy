@@ -16,10 +16,10 @@ export interface TransformStore {
 }
 
 // Type alias for the structure stored in the TransformStore
- export type StoredTransform = {
+export type StoredTransform = {
     translation: THREE.Vector3;
     rotation: THREE.Quaternion;
- };
+};
 
 // --- Helper Functions for TF Logic (using THREE.js math) ---
 
@@ -294,15 +294,22 @@ export class CustomTFProvider {
         }
     }
 
-    // Internal lookup uses THREE types and calls the exported helper function
-    private lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
-       // The fixedFrame context for the lookup is the provider's current fixedFrame
-       return lookupTransform(targetFrame, sourceFrame, this.transforms);
+    // Ensure this public method uses the external helper
+    public lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
+        // IMPORTANT: For ROS3D.PointCloud2 compatibility, we need to swap sourceFrame and targetFrame
+        // This is because pointcloud transformations expect the inverse direction compared to TF visualizations
+        return lookupTransform(sourceFrame, targetFrame, this.transforms);
     }
 
     dispose() {
-        // console.log("[CustomTFProvider] Disposing...");
-        this.callbacks.clear();
-        // No other resources to dispose of specific to this class currently
+        console.log("[CustomTFProvider] Disposing provider.");
+        this.transforms = {}; // Clear transforms
+        this.callbacks.clear(); // Clear callbacks
     }
+}
+
+// Interface defining the expected structure of the TF provider object
+// Useful for typing refs or props that hold the provider instance.
+export interface ITFProvider extends CustomTFProvider {
+  // Add any other methods/properties expected by consumers if needed
 } 
