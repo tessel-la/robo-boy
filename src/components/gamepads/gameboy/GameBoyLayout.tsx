@@ -1,44 +1,67 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { Ros, Topic } from 'roslib';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
-import './GameBoyLayout.css'; // Import the renamed CSS file
+import { throttle } from 'lodash-es';
+import './GameBoyLayout.css';
+import { GamepadProps } from '../GamepadInterface';
 
-interface GameBoyLayoutProps {
-  ros: Ros;
-}
+// Constants for ROS messages
+const JOY_TOPIC = '/joy'; // Standard topic for joystick data
+const JOY_MSG_TYPE = 'sensor_msgs/Joy'; // Using standard Joy message
+const THROTTLE_INTERVAL = 100; // Milliseconds
 
-// Constants
-const JOY_TOPIC = '/joy';
-const JOY_MSG_TYPE = 'sensor_msgs/Joy';
-const NUM_BUTTONS = 6; // D-pad (4) + B (1) + A (1)
-
-// Button index mapping
+// Button mapping (follows joy message conventions)
+// For a standard joy message with axes and buttons
 const BUTTON_MAP = {
   UP: 0,
-  DOWN: 1,
-  LEFT: 2,
-  RIGHT: 3,
-  B: 4,
-  A: 5,
+  RIGHT: 1,
+  DOWN: 2,
+  LEFT: 3,
+  A: 4,
+  B: 5,
+  SELECT: 6,
+  START: 7
 };
 
-const GameBoyLayout: React.FC<GameBoyLayoutProps> = ({ ros }) => {
-  const joyTopic = useRef<Topic | null>(null);
-  const [buttons, setButtons] = useState<number[]>(Array(NUM_BUTTONS).fill(0));
+// For reference: NUM_BUTTONS = Object.keys(BUTTON_MAP).length;
+const NUM_BUTTONS = 8; // Updated for SELECT and START buttons
+const NUM_AXES = 0; // Our implementation doesn't use axes, only buttons
 
-  // Function to publish Joy message - Define before useEffect that depends on it
-  const publishJoy = useCallback((currentButtons: number[]) => {
+const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
+  // Topic reference
+  const joyTopic = useRef<Topic | null>(null);
+  
+  // Track button states - Array of 0/1 for released/pressed
+  const [buttonStates, setButtonStates] = useState<number[]>(Array(NUM_BUTTONS).fill(0));
+  
+  // Keep track of last sent state to avoid unnecessary messages
+  const lastSentState = useRef<number[]>([...buttonStates]);
+
+  // Function to publish Joy message
+  const publishJoy = useCallback((buttons: number[]) => {
     if (!joyTopic.current) return;
+
     const joyMsg = new ROSLIB.Message({
-      header: { stamp: { secs: 0, nsecs: 0 }, frame_id: '' },
-      axes: [], // No axes for this panel
-      buttons: currentButtons,
+      header: {
+        stamp: { secs: 0, nsecs: 0 },
+        frame_id: ''
+      },
+      axes: Array(NUM_AXES).fill(0.0), // No axes used
+      buttons: buttons
     });
+    
     // console.log('Publishing GameBoy Joy:', joyMsg);
     joyTopic.current.publish(joyMsg);
-  }, []); // Empty dependency array because it doesn't depend on external state/props
+    lastSentState.current = [...buttons]; // Update last sent state
+  }, []);
 
-  // Initialize publisher
+  // Throttled version of the publish function
+  const publishJoyThrottled = useCallback(
+    throttle(publishJoy, THROTTLE_INTERVAL, { leading: true, trailing: true }),
+    [publishJoy]
+  );
+
+  // Initialize the topic publisher
   useEffect(() => {
     joyTopic.current = new ROSLIB.Topic({
       ros: ros,
@@ -46,113 +69,102 @@ const GameBoyLayout: React.FC<GameBoyLayoutProps> = ({ ros }) => {
       messageType: JOY_MSG_TYPE,
     });
     joyTopic.current.advertise();
-    console.log(`Advertised ${JOY_TOPIC} for GameBoyLayout`); // Updated log
+    console.log(`Advertised ${JOY_TOPIC} for GameBoyLayout`);
 
     return () => {
-      // Ensure all buttons are released on unmount
-      publishJoy(Array(NUM_BUTTONS).fill(0));
+      // If any buttons are pressed, send a message with all released
+      if (lastSentState.current.some(b => b !== 0)) {
+        publishJoyThrottled.cancel(); // Cancel any pending throttled calls
+        publishJoy(Array(NUM_BUTTONS).fill(0)); // Send immediate "all released" message
+      }
+      
       joyTopic.current?.unadvertise();
-      console.log(`Unadvertised ${JOY_TOPIC} for GameBoyLayout`); // Updated log
+      console.log(`Unadvertised ${JOY_TOPIC} for GameBoyLayout`);
       joyTopic.current = null;
     };
-  }, [ros, publishJoy]); // publishJoy is stable due to useCallback
+  }, [ros, publishJoy, publishJoyThrottled]);
 
-  // Handlers using Pointer Events for touch/mouse compatibility
-  const handleButtonDown = useCallback((buttonIndex: number) => {
-    setButtons((prev: number[]) => { // Explicit type for prev
-      // Check if already pressed to avoid redundant updates/publishes
-      if (prev[buttonIndex] === 1) return prev;
-      const newButtons = [...prev];
-      newButtons[buttonIndex] = 1;
-      publishJoy(newButtons); // Publish immediately on press
-      return newButtons;
+  // Handler for button press/release
+  const handleButtonAction = (buttonIndex: number, isPressed: boolean) => {
+    setButtonStates(prevStates => {
+      const newStates = [...prevStates];
+      newStates[buttonIndex] = isPressed ? 1 : 0;
+      // Only publish if state actually changed
+      if (newStates[buttonIndex] !== lastSentState.current[buttonIndex]) {
+        publishJoyThrottled(newStates);
+      }
+      return newStates;
     });
-  }, [publishJoy]); // Added dependency
+  };
 
-  const handleButtonUp = useCallback((buttonIndex: number) => {
-    setButtons((prev: number[]) => { // Explicit type for prev
-      // Check if already released
-      if (prev[buttonIndex] === 0) return prev;
-      const newButtons = [...prev];
-      newButtons[buttonIndex] = 0;
-      publishJoy(newButtons); // Publish immediately on release
-      return newButtons;
-    });
-  }, [publishJoy]); // Added dependency
+  // Individual button press handlers
+  const handleUp = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.UP, isPressed);
+  const handleRight = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.RIGHT, isPressed);
+  const handleDown = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.DOWN, isPressed);
+  const handleLeft = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.LEFT, isPressed);
+  const handleA = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.A, isPressed);
+  const handleB = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.B, isPressed);
 
-  // Handle pointer leaving the button area while pressed
-  const handlePointerLeave = useCallback((buttonIndex: number) => {
-     setButtons((prev: number[]) => { // Explicit type for prev
-       // Only publish release if the button was actually pressed
-       if (prev[buttonIndex] === 1) {
-         const newButtons = [...prev];
-         newButtons[buttonIndex] = 0;
-         publishJoy(newButtons);
-         return newButtons;
-       }
-       return prev;
-     });
-  }, [publishJoy]); // Added dependency
+  // Add handlers for START and SELECT
+  const handleSelect = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.SELECT, isPressed);
+  const handleStart = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.START, isPressed);
 
   return (
-    <div className="gameboy-layout"> {/* Renamed class */}
-      <div className="d-pad">
-        <button
-          className="d-pad-button up"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.UP)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.UP)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.UP)} // Release if pointer leaves while pressed
-        >
-          ▲
-        </button>
-        <button
-          className="d-pad-button left"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.LEFT)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.LEFT)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.LEFT)}
-        >
-          ◀︎
-        </button>
-        {/* Placeholder for center (optional) */}
-        <div className="d-pad-center"></div> 
-        <button
-          className="d-pad-button right"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.RIGHT)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.RIGHT)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.RIGHT)}
-        >
-          ▶︎
-        </button>
-        <button
-          className="d-pad-button down"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.DOWN)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.DOWN)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.DOWN)}
-        >
-          ▼
-        </button>
-      </div>
-
-      <div className="ab-buttons">
-        <button
-          className="ab-button b"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.B)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.B)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.B)}
-        >
-          B
-        </button>
-        <button
-          className="ab-button a"
-          onPointerDown={() => handleButtonDown(BUTTON_MAP.A)}
-          onPointerUp={() => handleButtonUp(BUTTON_MAP.A)}
-          onPointerLeave={() => handlePointerLeave(BUTTON_MAP.A)}
-        >
-          A
-        </button>
+    <div className="gameboy-layout">
+      <div className="gameboy-outer">
+        <div className="gameboy-controls">
+          {/* D-pad */}
+          <div className="dpad">
+            <button 
+              className={`dpad-up ${buttonStates[BUTTON_MAP.UP] ? 'active' : ''}`}
+              onPointerDown={() => handleUp(true)}
+              onPointerUp={() => handleUp(false)}
+              onPointerLeave={() => handleUp(false)}
+            />
+            <button 
+              className={`dpad-right ${buttonStates[BUTTON_MAP.RIGHT] ? 'active' : ''}`}
+              onPointerDown={() => handleRight(true)}
+              onPointerUp={() => handleRight(false)}
+              onPointerLeave={() => handleRight(false)}
+            />
+            <button 
+              className={`dpad-down ${buttonStates[BUTTON_MAP.DOWN] ? 'active' : ''}`}
+              onPointerDown={() => handleDown(true)}
+              onPointerUp={() => handleDown(false)}
+              onPointerLeave={() => handleDown(false)}
+            />
+            <button 
+              className={`dpad-left ${buttonStates[BUTTON_MAP.LEFT] ? 'active' : ''}`}
+              onPointerDown={() => handleLeft(true)}
+              onPointerUp={() => handleLeft(false)}
+              onPointerLeave={() => handleLeft(false)}
+            />
+            <div className="dpad-center" />
+          </div>
+          
+          {/* A/B buttons */}
+          <div className="action-buttons">
+            <button 
+              className={`button b ${buttonStates[BUTTON_MAP.B] ? 'active' : ''}`}
+              onPointerDown={() => handleB(true)}
+              onPointerUp={() => handleB(false)}
+              onPointerLeave={() => handleB(false)}
+            >
+              B
+            </button>
+            <button 
+              className={`button a ${buttonStates[BUTTON_MAP.A] ? 'active' : ''}`}
+              onPointerDown={() => handleA(true)}
+              onPointerUp={() => handleA(false)}
+              onPointerLeave={() => handleA(false)}
+            >
+              A
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default GameBoyLayout; // Renamed export 
+export default GameBoyLayout; 

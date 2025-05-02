@@ -12,14 +12,17 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 *   📱 Responsive design for desktop and mobile.
 *   🔗 ROS 2 connection (via rosbridge).
 *   📷 Camera stream display (via web_video_server).
-*   🕹️ Gamepad-style joystick control (publishing `sensor_msgs/Joy`).
-*   🗣️ Voice control input with recording animation.
+*   🕹️ Interchangeable control interfaces:
+    * Standard gamepad with dual joysticks (`sensor_msgs/Joy`)
+    * Retro GameBoy-style control layout
+    * Voice control input with recording animation
 *   🧊 3D visualization support (using ros3djs).
     * 🌈 Customizable point cloud rendering with options for:
       * Point size adjustment
       * Color selection (fixed or gradient based on x/y/z axis)
       * Maximum points setting
 *   🌗 Animated Light/Dark mode toggle.
+*   🎨 Customizable themes with user-created color palettes.
 *   🛡️ Local HTTPS development setup via Caddy and mkcert.
 
 ## 🖼️ Screenshot
@@ -34,6 +37,21 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
   <img src="images/gameboy.jpg" alt="GameBoy Control" width="30%">
   
 </p>
+
+## 🎮 Control Interfaces
+
+The application provides multiple control interfaces that can be swapped during runtime:
+
+### Standard Gamepad
+A dual-joystick layout for precise control, publishing to the `/joy` topic with ROS standard `sensor_msgs/Joy` messages.
+
+### GameBoy Layout
+A nostalgic GameBoy-inspired control interface with D-pad and A/B buttons.
+
+### Voice Control
+Record voice commands that can be sent to your robot for voice-activated control.
+
+You can open multiple control panels and switch between them with tabs.
 
 ## 3D Visualization
 
@@ -87,6 +105,24 @@ The application supports multiple themes, including user-created custom themes. 
 *   Custom themes are stored in the browser's `localStorage`.
 *   When a custom theme is selected, JavaScript dynamically generates a `<style>` tag containing CSS variable overrides based on the saved colors and injects it into the document head. The `<body>` element also gets a `data-theme="custom-theme-id"` attribute.
 *   UI components should primarily use the defined CSS variables (e.g., `var(--primary-color)`, `var(--background-color)`) for styling to ensure they adapt correctly to the selected theme. 
+
+## 🧩 Codebase Organization
+
+The codebase follows a component-based architecture:
+
+- `/src/components` - Main UI components
+- `/src/components/gamepads` - All gamepad control interfaces
+  - `/standard` - Standard dual joystick layout
+  - `/gameboy` - GameBoy-style control layout  
+  - `/voice` - Voice control interface
+- `/src/hooks` - Custom React hooks including ROS connection
+- `/src/utils` - Utility functions and helpers
+- `/src/features` - Feature-specific code (e.g., theme system)
+- `/src/types` - TypeScript type definitions
+
+### Adding Custom Gamepad Layouts
+
+See the dedicated README in the `/src/components/gamepads` directory for instructions on creating custom control interfaces.
 
 ## 🚀 Getting Started
 
