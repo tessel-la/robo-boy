@@ -4,116 +4,155 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center; /* Center the interactive area */
+  justify-content: flex-start; /* Align speed controls to top, then interactive area */
   width: 100%;
   height: 100%;
-  padding: 5px;
+  padding: 8px 5px; /* Adjusted padding */
   box-sizing: border-box;
   overflow: hidden;
+  gap: 8px; /* Gap between speed controls and interactive area */
+}
+
+.speed-controls-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px; /* Gap between speed buttons */
+  margin-bottom: 8px; /* Space below speed controls */
+  width: 100%;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.speed-button {
+  background-color: var(--background-secondary, #3c4043);
+  border: 1.5px solid var(--border-color, #5f6368);
+  color: var(--text-color-secondary, #9aa0a6); /* Icon color for non-active */
+  border-radius: 8px; /* Slightly rounded rectangles */
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 38px; /* Fixed size */
+  height: 32px; /* Fixed size */
+}
+
+.speed-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.speed-button:hover {
+  border-color: var(--text-color, #e8eaed);
+  color: var(--text-color, #e8eaed);
+}
+
+.speed-button.active {
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-dark-color, #28a745);
+  color: var(--button-text-color, white); /* Icon color for active */
+  box-shadow: 0 0 5px var(--primary-color-glow, rgba(50, 205, 50, 0.5));
+}
+
+/* Style active turtle and turbo differently if needed */
+.speed-button.active [data-icon-name="turtle"],
+.speed-button.active [data-icon-name="turbo"] {
+  /* Example: if Icon components had a data-icon-name prop */
 }
 
 .drone-pad-interactive-area {
   display: flex;
-  align-items: center; /* Vertically align buttons and joysticks */
-  justify-content: space-around; /* Distribute space around items */
+  align-items: center;
+  justify-content: space-around;
   width: 100%;
-  max-width: 400px; /* Max width for this control group */
-  height: auto; /* Height based on content */
+  max-width: 380px; /* Slightly reduced max-width */
+  flex-grow: 1; /* Allow this area to take remaining space */
+  min-height: 0; /* For flex-grow */
 }
 
-/* Buttons are now icon-based and smaller */
 .drone-button {
   padding: 5px;
-  border-radius: 50%; /* Circular buttons */
+  border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   justify-content: center;
   align-items: center;
   background-color: var(--background-secondary, #3c4043);
-  color: var(--text-color, #e8eaed); /* Icon stroke color */
-  border: 2px solid var(--border-color, #5f6368); /* Thicker border */
-  width: 44px; /* Slightly larger to accommodate thicker border */
-  height: 44px; /* Slightly larger */
+  color: var(--text-color, #e8eaed);
+  border: 2px solid var(--border-color, #5f6368);
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), /* Standard shadow */
-              inset 0 1px 1px rgba(255, 255, 255, 0.1); /* Subtle inner highlight */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
 .drone-button svg {
-  width: 22px; /* Adjusted icon size */
+  width: 22px;
   height: 22px;
-  stroke: currentColor; /* Inherit color from .drone-button color property */
+  stroke: currentColor;
 }
 
 .takeoff-button {
   border-color: var(--primary-color, #32CD32);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2), /* Base shadow */
-              0 0 8px var(--primary-color-glow, rgba(50, 205, 50, 0.5)), /* Theme glow */
-              inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 0 8px var(--primary-color-glow, rgba(50, 205, 50, 0.5)), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
 .land-button {
   border-color: var(--secondary-color, #6c757d);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2), /* Base shadow */
-              0 0 8px var(--secondary-color-glow, rgba(108, 117, 125, 0.5)), /* Theme glow */
-              inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 0 8px var(--secondary-color-glow, rgba(108, 117, 125, 0.5)), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
 .joysticks-container {
   display: flex;
   justify-content: center;
-  align-items: stretch; /* Stretch joystick wrappers to fill height if different */
-  gap: 10px; /* Gap between the two joysticks */
-  flex-grow: 1; /* Allow joystick area to take available space between buttons */
-  min-width: 180px; /* Minimum width to prevent excessive squishing */
-  padding: 0 8px; /* Increased padding so buttons don't touch joysticks directly */
+  align-items: stretch;
+  gap: 8px; /* Slightly reduced gap */
+  flex-grow: 1;
+  min-width: 160px; /* Slightly reduced min-width */
+  padding: 0 5px; /* Reduced padding */
 }
 
 .joystick-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px; /* Reduced gap */
   justify-content: center; 
-  flex-basis: 0; /* Allow them to grow equally */
+  flex-basis: 0;
   flex-grow: 1;
 }
 
-/* Joystick label */
 .joystick-label {
-  font-size: 0.6rem;
+  font-size: 0.55rem; /* Smaller */
   font-weight: 500;
   color: var(--text-color-secondary, #9aa0a6);
   margin-bottom: 1px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background-color: transparent; /* No background for labels now */
-  padding: 1px 4px;
-  border-radius: 4px;
+  background-color: transparent;
+  padding: 1px 3px;
+  border-radius: 3px;
 }
 
-/* Joystick value display */
 .joystick-values {
-  font-size: 0.6rem;
+  font-size: 0.55rem; /* Smaller */
   color: var(--text-color-faded, rgba(232, 234, 237, 0.7));
   margin-top: 1px;
   background-color: rgba(0, 0, 0, 0.15);
-  padding: 1px 4px;
+  padding: 1px 3px;
   border-radius: 3px;
-  min-width: 70px;
+  min-width: 65px; /* Adjusted */
   text-align: center;
   line-height: 1.2;
   white-space: nowrap;
 }
 
-/* Dark theme specific adjustments - already handled by var() and specific takeoff/land shadows */
-/* [data-theme="dark"] .drone-button { ... } no longer needed for general button color if using vars properly */
-
-/* Active state for buttons */
 .drone-button.active {
-  transform: scale(0.95) translateY(1px); /* Add slight press down */
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); /* Stronger inner shadow when pressed */
+  transform: scale(0.95) translateY(1px);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
 }
 .takeoff-button.active {
   background-color: var(--primary-active-color, #28a745);
@@ -124,37 +163,45 @@
   border-color: var(--secondary-dark-color, #495057);
 }
 
-/* Hover state */
 .drone-button:hover {
   opacity: 1;
-  /* border-color: var(--text-color, #e8eaed); No, keep theme border */
-  box-shadow: 0 3px 7px rgba(0,0,0,0.25), /* Enhanced base shadow on hover */
-              0 0 10px var(--border-color), /* Glow with its own border color */
-              inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px var(--border-color), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }
 
 .takeoff-button:hover {
-   border-color: var(--primary-light-color, #5cb85c); /* Lighter primary on hover */
-   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 
-              0 0 12px var(--primary-color-glow, rgba(50, 205, 50, 0.7)),
-              inset 0 1px 1px rgba(255, 255, 255, 0.15);
+   border-color: var(--primary-light-color, #5cb85c);
+   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 12px var(--primary-color-glow, rgba(50, 205, 50, 0.7)), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }
 
 .land-button:hover {
-   border-color: var(--secondary-light-color, #868e96); /* Lighter secondary on hover */
-   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 
-              0 0 12px var(--secondary-color-glow, rgba(108, 117, 125, 0.7)),
-              inset 0 1px 1px rgba(255, 255, 255, 0.15);
+   border-color: var(--secondary-light-color, #868e96);
+   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 12px var(--secondary-color-glow, rgba(108, 117, 125, 0.7)), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }
 
 /* Media Queries */
-@media (max-width: 380px) { /* Adjust for very narrow screens */
+@media (max-width: 380px) { 
+  .drone-pad-layout {
+    padding: 5px;
+    gap: 5px;
+  }
+  .speed-controls-container {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+  .speed-button {
+    width: 36px;
+    height: 30px;
+    padding: 4px;
+  }
+  .speed-button svg {
+    width: 18px;
+    height: 18px;
+  }
   .drone-pad-interactive-area {
-    gap: 5px; /* Reduce gap between buttons and joystick container */
-    justify-content: space-between;
+    max-width: 100%; /* Allow full width on small screens */
   }
   .drone-button {
-    width: 40px; /* Maintain a reasonable minimum size */
+    width: 40px;
     height: 40px;
     border-width: 1.5px;
   }
@@ -163,27 +210,37 @@
     height: 20px;
   }
   .joysticks-container {
-    min-width: 150px;
-    gap: 5px;
-    padding: 0 3px;
+    min-width: auto; /* Allow to shrink more */
+    gap: 3px;
+    padding: 0 2px;
   }
-   .joystick-wrapper > div:nth-child(2) { /* react-joystick-component div */
-    transform: scale(0.75);
-  }
-  .joystick-label, .joystick-values {
-    font-size: 0.55rem;
-  }
-  .joystick-values {
-    min-width: 60px;
-    padding: 1px 3px;
-  }
-}
-
-@media (max-height: 400px) { /* For very short screens */
-  .joystick-wrapper > div:nth-child(2) { /* react-joystick-component div */
-    transform: scale(0.7);
+   .joystick-wrapper > div:nth-child(2) { 
+    transform: scale(0.70);
   }
   .joystick-label, .joystick-values {
     font-size: 0.5rem;
   }
+  .joystick-values {
+    min-width: 55px;
+  }
+}
+
+@media (max-height: 450px) { /* For very short screens, after speed controls added */
+  .drone-pad-layout {
+    padding-top: 3px;
+    gap: 3px;
+  }
+  .speed-controls-container {
+    margin-bottom: 3px;
+  }
+  .joystick-wrapper > div:nth-child(2) { 
+    transform: scale(0.65);
+  }
+  .joystick-label, .joystick-values {
+    font-size: 0.5rem;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: 1px 2px;
+  }
+  .joystick-wrapper { gap: 0; }
 } 

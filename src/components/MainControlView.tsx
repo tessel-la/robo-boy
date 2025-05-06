@@ -5,7 +5,6 @@ import './MainControlView.css';
 // Import placeholder components (we'll create these next)
 import CameraView from './CameraView'; // Import the new CameraView
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
-import ControlPanel from './ControlPanel'; // We will create this next
 import StandardPadLayout from './gamepads/standard/StandardPadLayout'; // Import the new StandardPad layout
 import VoiceLayout from './gamepads/voice/VoiceLayout'; // Import the new Voice layout
 import GameBoyLayout from './gamepads/gameboy/GameBoyLayout'; // Import the new GameBoy layout
@@ -83,16 +82,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   // --- New State for Modular Control Panels ---
   const initialPanelId = generateUniqueId('panel');
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([
-    { id: initialPanelId, type: GamepadType.Standard, name: 'Pad 1' } // Start with standard pad
+    { id: initialPanelId, type: GamepadType.Drone, name: 'Drone 1' } // Start with Drone pad
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   // Counter for naming new panels of the same type
   const panelCounters = useRef<Record<PanelType, number>>({ 
-    [GamepadType.Standard]: 1, 
+    [GamepadType.Standard]: 0, 
     [GamepadType.Voice]: 0, 
     [GamepadType.GameBoy]: 0,
-    [GamepadType.Drone]: 0
+    [GamepadType.Drone]: 1 // Drone counter starts at 1 as it's the default
   }); // Updated counters
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -182,7 +181,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const typeLabels: Record<PanelType, string> = {
         [GamepadType.Standard]: 'Pad',
         [GamepadType.Voice]: 'Voice',
-        [GamepadType.GameBoy]: 'GameBoy'
+        [GamepadType.GameBoy]: 'GameBoy',
+        [GamepadType.Drone]: 'Drone' // Added Drone label
     };
     panelCounters.current[type]++;
     const newName = `${typeLabels[type]} ${panelCounters.current[type]}`; // Use label for name

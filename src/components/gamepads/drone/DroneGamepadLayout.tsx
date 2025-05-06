@@ -8,6 +8,43 @@ import { throttle } from 'lodash-es';
 import './DroneGamepadLayout.css';
 import { GamepadProps } from '../GamepadInterface';
 
+// SpeedMode enum
+enum SpeedMode { Slow, Normal, Fast }
+
+// SCALING FACTORS
+const SPEED_FACTORS = {
+  [SpeedMode.Slow]: 0.5,
+  [SpeedMode.Normal]: 1.0,
+  [SpeedMode.Fast]: 1.5, 
+};
+
+// --- SVG Icons for Speed Controls ---
+const IconTurtle = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2C7.58 2 4 5.58 4 10c0 2.05.78 3.92 2.08 5.34L4 18h16l-2.08-2.66A7.932 7.932 0 0 0 20 10c0-4.42-3.58-8-8-8z" />
+    <path d="M2.5 9.5c-.67 0-1.28.17-1.78.45" />
+    <path d="M21.5 9.5c.67 0 1.28.17 1.78.45" />
+    <path d="M4.22 18.78L3 20l1.34-1.34" />
+    <path d="M19.78 18.78L21 20l-1.34-1.34" />
+    <path d="M9 10v-.5A2.5 2.5 0 0 1 11.5 7h1A2.5 2.5 0 0 1 15 9.5V10" />
+  </svg>
+);
+
+const IconNormalSpeed = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+  </svg>
+);
+
+const IconTurbo = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 19.5L11 14.5L6.5 12.5L8 7.5L12 2.5L16 7.5L17.5 12.5L13 14.5L14.5 19.5Z" />
+    <line x1="12" y1="2.5" x2="12" y2="6.5" />
+    <path d="M7.5 16.5 C7.5 18.5 10 20.5 12 21.5 C14 20.5 16.5 18.5 16.5 16.5" />
+  </svg>
+);
+// --- End SVG Speed Icons ---
+
 // Constants for sensor_msgs/Joy
 const JOY_TOPIC = '/joy';
 const JOY_MSG_TYPE = 'sensor_msgs/Joy';
@@ -17,7 +54,7 @@ const NUM_AXES = 4; // Number of axes
 const NUM_BUTTONS = 2; // Two buttons: takeoff and landing
 const JOYSTICK_DEADZONE = 0.01; // Small deadzone to filter noise
 
-// --- SVG Icons for Buttons ---
+// --- SVG Icons for Takeoff/Land Buttons ---
 const IconArrowUp = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="19" x2="12" y2="5" />
@@ -31,18 +68,16 @@ const IconArrowDown = () => (
     <polyline points="19 12 12 19 5 12" />
   </svg>
 );
-// --- End SVG Icons ---
+// --- End SVG Takeoff/Land Icons ---
 
 const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const joyTopic = useRef<Topic | null>(null);
-  // State to hold axes values - Initialize with zeros
   const [axes, setAxes] = useState<number[]>(Array(NUM_AXES).fill(0.0));
-  // State to track button presses - initialize with [0, 0] for takeoff and land
   const [buttons, setButtons] = useState<number[]>([0, 0]);
   const lastSentAxes = useRef<number[]>([...axes]);
   const lastSentButtons = useRef<number[]>([...buttons]);
+  const [currentSpeedMode, setCurrentSpeedMode] = useState<SpeedMode>(SpeedMode.Normal);
   
-  // Get current theme colors dynamically
   const getThemeColor = (variableName: string) => {
     return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
@@ -50,39 +85,24 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const baseJoystickColor = getThemeColor('--secondary-color') || '#6c757d';
   const stickJoystickColor = getThemeColor('--primary-color') || '#32CD32';
 
-  // Function to map joystick values (-1.0 to 1.0) to desired output range (0-255)
-  const mapJoystickToOutput = useCallback((value: number): number => {
-    // Apply minimal deadzone to filter only true noise
-    if (Math.abs(value) < JOYSTICK_DEADZONE) {
-      return 0;
-    }
-    
-    // Scale from deadzone to full range
-    const adjustedValue = Math.sign(value) * 
-                        (Math.abs(value) - JOYSTICK_DEADZONE) / 
-                        (1.0 - JOYSTICK_DEADZONE);
-    
-    // Map to 0-255 range
-    const outputValue = Math.sign(adjustedValue) * 
-                       Math.abs(adjustedValue) * MAX_JOYSTICK_VALUE;
-    
-    return outputValue;
-  }, []);
+  const handleSetSpeedMode = (mode: SpeedMode) => {
+    setCurrentSpeedMode(mode);
+  };
 
-  // Function to publish Joy message with both buttons
+  const mapJoystickToOutput = useCallback((value: number): number => {
+    if (Math.abs(value) < JOYSTICK_DEADZONE) return 0;
+    const adjustedValue = Math.sign(value) * (Math.abs(value) - JOYSTICK_DEADZONE) / (1.0 - JOYSTICK_DEADZONE);
+    const baseOutput = Math.sign(adjustedValue) * Math.abs(adjustedValue) * MAX_JOYSTICK_VALUE;
+    return baseOutput * SPEED_FACTORS[currentSpeedMode]; // Apply speed scaling
+  }, [currentSpeedMode]);
+
   const publishJoy = useCallback((currentAxes: number[], currentButtons: number[]) => {
     if (!joyTopic.current) return;
-
-    // Log what we're sending - only when values are non-zero to avoid console spam
     if (currentAxes.some(v => v !== 0) || currentButtons.some(b => b !== 0)) {
-      console.log('Publishing joy message:', { axes: currentAxes, buttons: currentButtons });
+      // console.log('Publishing joy message:', { axes: currentAxes, buttons: currentButtons, speed: SpeedMode[currentSpeedMode] });
     }
-
     const joyMsg = new ROSLIB.Message({
-      header: {
-        stamp: { secs: 0, nsecs: 0 },
-        frame_id: ''
-      },
+      header: { stamp: { secs: 0, nsecs: 0 }, frame_id: '' },
       axes: currentAxes,
       buttons: currentButtons
     });
@@ -91,59 +111,33 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
     lastSentButtons.current = [...currentButtons];
   }, []);
 
-  // Throttled version of the publish function
   const publishJoyThrottled = useCallback(
     throttle(publishJoy, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [publishJoy]
   );
 
-  // Initialize the topic publisher
   useEffect(() => {
-    joyTopic.current = new ROSLIB.Topic({
-      ros: ros,
-      name: JOY_TOPIC,
-      messageType: JOY_MSG_TYPE,
-    });
+    joyTopic.current = new ROSLIB.Topic({ ros: ros, name: JOY_TOPIC, messageType: JOY_MSG_TYPE });
     joyTopic.current.advertise();
-    console.log(`Advertised ${JOY_TOPIC} for DroneGamepadLayout`);
-
+    // console.log(`Advertised ${JOY_TOPIC} for DroneGamepadLayout`);
     return () => {
-      // Send a zero axes and buttons command when component unmounts
-      if (lastSentAxes.current.some((a: number) => a !== 0) || 
-          lastSentButtons.current.some((b: number) => b !== 0)) {
+      if (lastSentAxes.current.some((a: number) => a !== 0) || lastSentButtons.current.some((b: number) => b !== 0)) {
         publishJoyThrottled.cancel();
-        publishJoy(Array(NUM_AXES).fill(0.0), [0, 0]); // Reset all axes and buttons
+        publishJoy(Array(NUM_AXES).fill(0.0), [0, 0]);
       }
       joyTopic.current?.unadvertise();
-      console.log(`Unadvertised ${JOY_TOPIC} for DroneGamepadLayout`);
+      // console.log(`Unadvertised ${JOY_TOPIC} for DroneGamepadLayout`);
       joyTopic.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ros, publishJoyThrottled, publishJoy]);
 
-  // --- Left Joystick Handlers (Axes 0 & 1) ---
   const handleMoveLeft = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null) return;
-    const size = 100;
-    const halfSize = size / 2;
-    
-    // Map joystick x/y to raw values from -1.0 to 1.0
-    const rawX = (event.x / halfSize);
-    const rawY = (event.y / halfSize);
-    
-    // Convert to output range using our mapper function
-    const newAxis0 = mapJoystickToOutput(rawX);
-    const newAxis1 = mapJoystickToOutput(rawY);
-    
-    console.log('Left joystick:', { 
-      rawX, rawY, 
-      mappedX: newAxis0, mappedY: newAxis1
-    });
-
+    const rawX = (event.x / 50); 
+    const rawY = (event.y / 50);
     const newAxes = [...lastSentAxes.current];
-    newAxes[0] = newAxis0;
-    newAxes[1] = newAxis1;
-
+    newAxes[0] = mapJoystickToOutput(rawX);
+    newAxes[1] = mapJoystickToOutput(rawY);
     setAxes(newAxes);
     publishJoyThrottled(newAxes, buttons);
   }, [publishJoyThrottled, buttons, mapJoystickToOutput]);
@@ -151,36 +145,19 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const handleStopLeft = useCallback(() => {
     publishJoyThrottled.cancel();
     const newAxes = [...lastSentAxes.current];
-    // Set to 0 when stopped
     newAxes[0] = 0;
     newAxes[1] = 0;
     setAxes(newAxes);
     publishJoy(newAxes, buttons);
   }, [publishJoy, publishJoyThrottled, buttons]);
 
-  // --- Right Joystick Handlers (Axes 2 & 3) ---
   const handleMoveRight = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null) return;
-    const size = 100;
-    const halfSize = size / 2;
-    
-    // Map joystick x/y to raw values from -1.0 to 1.0
-    const rawX = (event.x / halfSize);
-    const rawY = (event.y / halfSize);
-    
-    // Convert to output range using our mapper function
-    const newAxis2 = mapJoystickToOutput(rawX);
-    const newAxis3 = mapJoystickToOutput(rawY);
-    
-    console.log('Right joystick:', { 
-      rawX, rawY, 
-      mappedX: newAxis2, mappedY: newAxis3
-    });
-
+    const rawX = (event.x / 50);
+    const rawY = (event.y / 50);
     const newAxes = [...lastSentAxes.current];
-    newAxes[2] = newAxis2;
-    newAxes[3] = newAxis3;
-
+    newAxes[2] = mapJoystickToOutput(rawX);
+    newAxes[3] = mapJoystickToOutput(rawY);
     setAxes(newAxes);
     publishJoyThrottled(newAxes, buttons);
   }, [publishJoyThrottled, buttons, mapJoystickToOutput]);
@@ -188,42 +165,63 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const handleStopRight = useCallback(() => {
     publishJoyThrottled.cancel();
     const newAxes = [...lastSentAxes.current];
-    // Set to 0 when stopped
     newAxes[2] = 0;
     newAxes[3] = 0;
     setAxes(newAxes);
     publishJoy(newAxes, buttons);
   }, [publishJoy, publishJoyThrottled, buttons]);
 
-  // --- Take Off Button Handler ---
   const handleTakeOffPress = useCallback(() => {
-    const newButtons = [1, 0]; // Activate takeoff button, deactivate land button
+    const newButtons = [1, 0];
     setButtons(newButtons);
     publishJoy(lastSentAxes.current, newButtons);
   }, [publishJoy]);
 
-  // --- Land Button Handler ---
   const handleLandPress = useCallback(() => {
-    const newButtons = [0, 1]; // Deactivate takeoff button, activate land button
+    const newButtons = [0, 1];
     setButtons(newButtons);
     publishJoy(lastSentAxes.current, newButtons);
   }, [publishJoy]);
   
-  // --- Button Release Handler ---
   const handleButtonRelease = useCallback(() => {
-    const newButtons = [0, 0]; // Reset both buttons when released
+    const newButtons = [0, 0];
     setButtons(newButtons);
     publishJoy(lastSentAxes.current, newButtons);
   }, [publishJoy]);
 
-  // Display current joystick values
   const getAxisDisplay = useCallback((axisIndex: number) => {
-    const value = axes[axisIndex];
-    return value.toFixed(0);
+    return axes[axisIndex].toFixed(0);
   }, [axes]);
 
   return (
     <div className="drone-pad-layout">
+      <div className="speed-controls-container">
+        <button 
+          onClick={() => handleSetSpeedMode(SpeedMode.Slow)} 
+          className={`speed-button ${currentSpeedMode === SpeedMode.Slow ? 'active' : ''}`}
+          title="Slow Mode"
+          aria-label="Slow Mode"
+        >
+          <IconTurtle />
+        </button>
+        <button 
+          onClick={() => handleSetSpeedMode(SpeedMode.Normal)} 
+          className={`speed-button ${currentSpeedMode === SpeedMode.Normal ? 'active' : ''}`}
+          title="Normal Mode"
+          aria-label="Normal Mode"
+        >
+          <IconNormalSpeed />
+        </button>
+        <button 
+          onClick={() => handleSetSpeedMode(SpeedMode.Fast)} 
+          className={`speed-button ${currentSpeedMode === SpeedMode.Fast ? 'active' : ''}`}
+          title="Fast Mode"
+          aria-label="Fast Mode"
+        >
+          <IconTurbo />
+        </button>
+      </div>
+
       <div className="drone-pad-interactive-area">
         <button 
           title="Take Off"
@@ -239,7 +237,6 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
         </button>
 
         <div className="joysticks-container">
-          {/* Left Joystick - Movement */}
           <div className="joystick-wrapper">
             <div className="joystick-label">Altitude</div>
             <Joystick
@@ -255,8 +252,6 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
               L/R: {getAxisDisplay(0)} / F/B: {getAxisDisplay(1)}
             </div>
           </div>
-
-          {/* Right Joystick - Rotation/Altitude */}
           <div className="joystick-wrapper">
             <div className="joystick-label">Rotation</div>
             <Joystick
@@ -269,7 +264,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
               throttle={THROTTLE_INTERVAL / 2}
             />
             <div className="joystick-values">
-              Yaw: {getAxisDisplay(2)} / Thr: {getAxisDisplay(3)}
+               Yaw: {getAxisDisplay(2)} / Thr: {getAxisDisplay(3)}
             </div>
           </div>
         </div>
