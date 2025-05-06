@@ -1,18 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Ros, Topic } from 'roslib';
+import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import './VoiceLayout.css'; // Renamed CSS import
-
-interface VoiceLayoutProps { // Renamed interface
-  ros: Ros;
-}
+import { GamepadProps } from '../GamepadInterface';
 
 // Define the topic and message type for voice commands (e.g., Float32MultiArray)
 // Adjust based on your specific ROS setup
 const VOICE_CMD_TOPIC = '/voice_cmd'; // Example topic
 const VOICE_CMD_MSG_TYPE = 'std_msgs/Float32MultiArray'; // Example message type
 
-const VoiceLayout: React.FC<VoiceLayoutProps> = ({ ros }) => { // Renamed component
+const VoiceLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using GamepadProps
   const [isRecording, setIsRecording] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Click Record to start');
   const voiceCmdTopic = useRef<Topic | null>(null);

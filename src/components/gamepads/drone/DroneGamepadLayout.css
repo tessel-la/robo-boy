@@ -1,0 +1,246 @@
+/* src/components/gamepads/drone/DroneGamepadLayout.css */
+
+.drone-pad-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* Align speed controls to top, then interactive area */
+  width: 100%;
+  height: 100%;
+  padding: 8px 5px; /* Adjusted padding */
+  box-sizing: border-box;
+  overflow: hidden;
+  gap: 8px; /* Gap between speed controls and interactive area */
+}
+
+.speed-controls-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px; /* Gap between speed buttons */
+  margin-bottom: 8px; /* Space below speed controls */
+  width: 100%;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.speed-button {
+  background-color: var(--background-secondary, #3c4043);
+  border: 1.5px solid var(--border-color, #5f6368);
+  color: var(--text-color-secondary, #9aa0a6); /* Icon color for non-active */
+  border-radius: 8px; /* Slightly rounded rectangles */
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 38px; /* Fixed size */
+  height: 32px; /* Fixed size */
+}
+
+.speed-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.speed-button:hover {
+  border-color: var(--text-color, #e8eaed);
+  color: var(--text-color, #e8eaed);
+}
+
+.speed-button.active {
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-dark-color, #28a745);
+  color: var(--button-text-color, white); /* Icon color for active */
+  box-shadow: 0 0 5px var(--primary-color-glow, rgba(50, 205, 50, 0.5));
+}
+
+/* Style active turtle and turbo differently if needed */
+.speed-button.active [data-icon-name="turtle"],
+.speed-button.active [data-icon-name="turbo"] {
+  /* Example: if Icon components had a data-icon-name prop */
+}
+
+.drone-pad-interactive-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  max-width: 380px; /* Slightly reduced max-width */
+  flex-grow: 1; /* Allow this area to take remaining space */
+  min-height: 0; /* For flex-grow */
+}
+
+.drone-button {
+  padding: 5px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--background-secondary, #3c4043);
+  color: var(--text-color, #e8eaed);
+  border: 2px solid var(--border-color, #5f6368);
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.drone-button svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+}
+
+.takeoff-button {
+  border-color: var(--primary-color, #32CD32);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 0 8px var(--primary-color-glow, rgba(50, 205, 50, 0.5)), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.land-button {
+  border-color: var(--secondary-color, #6c757d);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 0 8px var(--secondary-color-glow, rgba(108, 117, 125, 0.5)), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.joysticks-container {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 8px; /* Slightly reduced gap */
+  flex-grow: 1;
+  min-width: 160px; /* Slightly reduced min-width */
+  padding: 0 5px; /* Reduced padding */
+}
+
+.joystick-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px; /* Reduced gap */
+  justify-content: center; 
+  flex-basis: 0;
+  flex-grow: 1;
+}
+
+.joystick-label {
+  font-size: 0.55rem; /* Smaller */
+  font-weight: 500;
+  color: var(--text-color-secondary, #9aa0a6);
+  margin-bottom: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: transparent;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+.joystick-values {
+  font-size: 0.55rem; /* Smaller */
+  color: var(--text-color-faded, rgba(232, 234, 237, 0.7));
+  margin-top: 1px;
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 1px 3px;
+  border-radius: 3px;
+  min-width: 65px; /* Adjusted */
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.drone-button.active {
+  transform: scale(0.95) translateY(1px);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+.takeoff-button.active {
+  background-color: var(--primary-active-color, #28a745);
+  border-color: var(--primary-dark-color, #1e7e34);
+}
+.land-button.active {
+  background-color: var(--secondary-active-color, #5a6268);
+  border-color: var(--secondary-dark-color, #495057);
+}
+
+.drone-button:hover {
+  opacity: 1;
+  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px var(--border-color), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.takeoff-button:hover {
+   border-color: var(--primary-light-color, #5cb85c);
+   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 12px var(--primary-color-glow, rgba(50, 205, 50, 0.7)), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.land-button:hover {
+   border-color: var(--secondary-light-color, #868e96);
+   box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 12px var(--secondary-color-glow, rgba(108, 117, 125, 0.7)), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Media Queries */
+@media (max-width: 380px) { 
+  .drone-pad-layout {
+    padding: 5px;
+    gap: 5px;
+  }
+  .speed-controls-container {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+  .speed-button {
+    width: 36px;
+    height: 30px;
+    padding: 4px;
+  }
+  .speed-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .drone-pad-interactive-area {
+    max-width: 100%; /* Allow full width on small screens */
+  }
+  .drone-button {
+    width: 40px;
+    height: 40px;
+    border-width: 1.5px;
+  }
+  .drone-button svg {
+    width: 20px;
+    height: 20px;
+  }
+  .joysticks-container {
+    min-width: auto; /* Allow to shrink more */
+    gap: 3px;
+    padding: 0 2px;
+  }
+   .joystick-wrapper > div:nth-child(2) { 
+    transform: scale(0.70);
+  }
+  .joystick-label, .joystick-values {
+    font-size: 0.5rem;
+  }
+  .joystick-values {
+    min-width: 55px;
+  }
+}
+
+@media (max-height: 450px) { /* For very short screens, after speed controls added */
+  .drone-pad-layout {
+    padding-top: 3px;
+    gap: 3px;
+  }
+  .speed-controls-container {
+    margin-bottom: 3px;
+  }
+  .joystick-wrapper > div:nth-child(2) { 
+    transform: scale(0.65);
+  }
+  .joystick-label, .joystick-values {
+    font-size: 0.5rem;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: 1px 2px;
+  }
+  .joystick-wrapper { gap: 0; }
+} 

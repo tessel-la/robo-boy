@@ -199,145 +199,70 @@ input:checked + .toggle-slider:before {
 .setting-control {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
-  flex-wrap: wrap;
 }
 
 .setting-control input[type="range"] {
   flex: 1;
-  min-width: 60px;
-  height: 4px;
-  background: rgba(70, 70, 70, 0.8);
-  border-radius: 4px;
-  appearance: none;
+  -webkit-appearance: none;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(100, 100, 100, 0.5);
 }
 
 .setting-control input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--primary-color, #8ab4f8);
   cursor: pointer;
 }
 
 .number-input {
-  width: 45px;
-  padding: 2px 4px;
-  background: rgba(50, 50, 50, 0.8);
-  border: 1px solid #555;
+  width: 60px;
+  padding: 4px 6px;
+  background-color: rgba(80, 80, 80, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   color: var(--text-color, #e8eaed);
-  font-size: 0.75rem;
-}
-
-/* Color method container */
-.color-method-container {
-  margin-bottom: 8px;
-  width: 100%;
-}
-
-/* Color method dropdown */
-select {
-  width: 100%;
-  padding: 4px 6px;
-  background: rgba(50, 50, 50, 0.8);
-  border: 1px solid #555;
-  border-radius: 5px;
-  color: var(--text-color, #e8eaed);
   font-size: 0.8rem;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
 }
 
-.color-method-select {
-  width: 100%;
-}
-
-/* Color container wrapper */
+/* Color picker styling */
 .color-container-wrapper {
-  margin-top: 8px;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 6px;
 }
 
-/* Color input */
+/* Enhanced color input styling */
 input[type="color"] {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  padding: 0;
   -webkit-appearance: none;
-}
-
-/* Color input container */
-.color-container {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  border-radius: 12px;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 0 0 1px #555;
+  padding: 0;
+  cursor: pointer;
+  background: none;
 }
 
-/* Range section */
-.range-section {
-  margin-top: 8px;
-  margin-bottom: 8px;
-  width: 100%;
-}
-
-/* Color gradient section */
-.color-gradient-section {
-  margin-top: 8px;
-  width: 100%;
-}
-
-/* Axis range inputs */
-.range-inputs {
+/* Create a circular container for the color picker */
+.color-container {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(50, 50, 50, 0.5);
-  border-radius: 5px;
-  padding: 4px 6px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.range-inputs span {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  color: #aaa;
-}
-
-.range-inputs .number-input {
-  width: 42px;
-  padding: 2px 3px;
-}
-
-/* Color gradient display */
-.color-inputs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(50, 50, 50, 0.5);
-  border-radius: 5px;
-  padding: 4px 6px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.gradient-preview {
-  flex: 1;
-  height: 16px;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 /* Action buttons */
@@ -463,7 +388,7 @@ input[type="color"] {
   }
   
   /* Smaller range inputs to fit grid */
-  .range-inputs .number-input {
+  .number-input {
     width: 36px;
     padding: 1px 2px;
     font-size: 0.7rem;
@@ -475,20 +400,15 @@ input[type="color"] {
     height: 16px;
   }
   
-  /* Smaller gradient and color pickers */
-  .gradient-preview {
-    height: 12px;
-  }
-  
   input[type="color"] {
-    width: 20px;
-    height: 20px;
-    border-radius: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
   }
   
   .color-container {
-    width: 20px;
-    height: 20px;
-    border-radius: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
   }
 } 

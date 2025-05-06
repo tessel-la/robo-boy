@@ -5,13 +5,14 @@ import './MainControlView.css';
 // Import placeholder components (we'll create these next)
 import CameraView from './CameraView'; // Import the new CameraView
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
-import ControlPanel from './ControlPanel'; // We will create this next
 import StandardPadLayout from './gamepads/standard/StandardPadLayout'; // Import the new StandardPad layout
 import VoiceLayout from './gamepads/voice/VoiceLayout'; // Import the new Voice layout
 import GameBoyLayout from './gamepads/gameboy/GameBoyLayout'; // Import the new GameBoy layout
+import DroneGamepadLayout from './gamepads/drone/DroneGamepadLayout'; // Import the new Drone gamepad layout
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
+import { GamepadType } from './gamepads/GamepadInterface';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -58,7 +59,7 @@ const icons = {
 };
 
 // Define Panel Types
-export type PanelType = 'standardpad' | 'voicelayout' | 'gameboy'; // Updated types
+export type PanelType = GamepadType; // Now using the enum
 export interface ActivePanel {
   id: string;
   type: PanelType;
@@ -81,12 +82,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   // --- New State for Modular Control Panels ---
   const initialPanelId = generateUniqueId('panel');
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([
-    { id: initialPanelId, type: 'standardpad', name: 'Pad 1' } // Start with standard pad
+    { id: initialPanelId, type: GamepadType.Drone, name: 'Drone 1' } // Start with Drone pad
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   // Counter for naming new panels of the same type
-  const panelCounters = useRef<Record<PanelType, number>>({ standardpad: 1, voicelayout: 0, gameboy: 0 }); // Updated counters
+  const panelCounters = useRef<Record<PanelType, number>>({ 
+    [GamepadType.Standard]: 0, 
+    [GamepadType.Voice]: 0, 
+    [GamepadType.GameBoy]: 0,
+    [GamepadType.Drone]: 1 // Drone counter starts at 1 as it's the default
+  }); // Updated counters
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -173,9 +179,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleAddPanelType = (type: PanelType) => {
     // Define labels based on the new types
     const typeLabels: Record<PanelType, string> = {
-        standardpad: 'Pad',
-        voicelayout: 'Voice',
-        gameboy: 'GameBoy'
+        [GamepadType.Standard]: 'Pad',
+        [GamepadType.Voice]: 'Voice',
+        [GamepadType.GameBoy]: 'GameBoy',
+        [GamepadType.Drone]: 'Drone' // Added Drone label
     };
     panelCounters.current[type]++;
     const newName = `${typeLabels[type]} ${panelCounters.current[type]}`; // Use label for name
@@ -213,12 +220,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (!panel || !ros) return null; // Need ROS connection for panels
 
     switch (panel.type) {
-      case 'standardpad':
+      case GamepadType.Standard:
         return <StandardPadLayout ros={ros} key={panel.id} />;
-      case 'voicelayout':
+      case GamepadType.Voice:
         return <VoiceLayout ros={ros} key={panel.id} />;
-      case 'gameboy':
+      case GamepadType.GameBoy:
         return <GameBoyLayout ros={ros} key={panel.id} />;
+      case GamepadType.Drone:
+        return <DroneGamepadLayout ros={ros} key={panel.id} />;
       default:
         return <div>Unknown Panel Type</div>;
     }

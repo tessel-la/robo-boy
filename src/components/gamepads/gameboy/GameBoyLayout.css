@@ -1,151 +1,209 @@
 /* src/components/gamepads/gameboy/GameBoyLayout.css */
 
-.gameboy-layout { /* Renamed class */
-    display: flex;
-    /* Push D-pad left, AB buttons right */
-    justify-content: space-between; 
-    align-items: center; /* Changed back to center */
-    padding: 5px 30px 20px 30px; /* Keep padding for now */
-    /* Match app theme */
-    background-color: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 8px; /* Revert to original radius */
-    width: 100%;
-    height: 100%; 
-    box-sizing: border-box;
-    user-select: none; 
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    touch-action: manipulation; 
-    /* Remove GameBoy theme shadow */
-    /* box-shadow: inset 0 0 10px rgba(0,0,0,0.1); */
-}
-
-/* D-Pad Styles */
-.d-pad {
-    position: relative;
-    /* Removed fixed width and height */
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: 1fr 1fr 1fr;
-    gap: 2px; 
-}
-
-.d-pad-button {
-    /* Dark grey matching theme */
-    background-color: #555;
-    border: 1px solid #333; 
-    color: var(--text-secondary); /* Use theme secondary text */
-    cursor: pointer;
+.gameboy-layout {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.2em;
-    border-radius: 4px;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.gameboy-outer {
+    width: 280px;
+    background-color: transparent;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+/* Controls area */
+.gameboy-controls {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* D-Pad */
+.dpad {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+
+/* D-pad buttons */
+.dpad button {
+    position: absolute;
+    background-color: #222;
+    border: 2px solid #555;
+    color: transparent;
+    cursor: pointer;
     transition: all 0.1s ease;
+    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+    z-index: 2; /* Ensure buttons are above center */
 }
 
-.d-pad-button:active {
-    /* Green background on active */
-    background-color: var(--primary-color);
-    color: var(--background-color); /* Contrast text color */
-    border-color: var(--primary-color);
+.dpad button.active {
+    background-color: var(--primary-color, #32CD32);
     transform: scale(0.95);
+    border-color: #fff;
 }
 
-/* Explicit grid placement */
-.d-pad-button.up    { grid-column: 2; grid-row: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.d-pad-button.down  { grid-column: 2; grid-row: 3; border-top-left-radius: 0; border-top-right-radius: 0; }
-.d-pad-button.left  { grid-column: 1; grid-row: 2; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.d-pad-button.right { grid-column: 3; grid-row: 2; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-
-.d-pad-center {
-    grid-column: 2;
-    grid-row: 2;
-    /* Use secondary color for better theme integration */
-    background-color: var(--secondary-color, #444); /* Use secondary, fallback to grey */
-    border-radius: 50%;
-    border: 1px solid var(--border-color); /* Use theme border color */
+.dpad-up {
+    width: 32px;
+    height: 32px;
+    top: 0;
+    left: 44px;
+    border-radius: 6px 6px 0 0;
 }
 
-/* A/B Button Styles */
-.ab-buttons {
-    position: relative; /* Needed for absolute positioning of children */
-    width: 120px;  /* Increase width */
-    height: 100px; /* Match D-pad height */
-    /* Remove flex styles */
-    /* display: flex; */
-    /* flex-direction: column; */
-    /* justify-content: space-between; */
-    /* align-items: center; */
+.dpad-down {
+    width: 32px;
+    height: 32px;
+    bottom: 0;
+    left: 44px;
+    border-radius: 0 0 6px 6px;
 }
 
-.ab-button {
+.dpad-left {
+    width: 32px;
+    height: 32px;
+    top: 44px;
+    left: 0;
+    border-radius: 6px 0 0 6px;
+}
+
+.dpad-right {
+    width: 32px;
+    height: 32px;
+    top: 44px;
+    right: 0;
+    border-radius: 0 6px 6px 0;
+}
+
+.dpad-center {
+    width: 32px;
+    height: 32px;
+    top: 44px;
+    left: 44px;
+    position: absolute;
+    background-color: var(--card-border, #333);
+    border-radius: 5px;
+    z-index: 1; /* Below the buttons */
+    border: 1px solid #555;
+}
+
+/* A/B buttons */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+}
+
+.button {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    border: 1px solid var(--primary-darker-color, #28a745); /* Darker green border */
-    background-color: var(--primary-color); /* Green background */
-    color: var(--background-color); /* High contrast text */
+    background-color: var(--primary-color, #32CD32);
+    border: 2px solid #555;
+    color: var(--background-color, #fff);
     font-weight: bold;
-    font-size: 1.1em;
+    font-size: 16px;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
     transition: all 0.1s ease;
-    position: absolute; /* Position individually */
 }
 
-.ab-button:active {
-    background-color: var(--primary-hover-color, #28a745); /* Darker green */
+.button.active {
+    background-color: var(--primary-darker-color, #28a745);
     transform: scale(0.95);
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    border-color: #fff;
 }
 
-/* Diagonal positioning - shallow angle, more separation */
-.ab-button.b { /* Lower-left */
-    bottom: 20px; /* Lowered slightly */
-    left: 10px;  /* Moved further left */
+.button.a {
+    margin-left: 25px;
 }
 
-.ab-button.a { /* Upper-right */
-    top: 20px;   /* Raised slightly */
-    right: 10px; /* Moved further right */
+.button.b {
+    margin-right: 25px;
 }
 
-/* Responsive Scaling */
-@media (max-width: 768px) {
-    .gameboy-layout { /* Renamed class */
-        padding: 5px 20px 15px 20px; /* Minimal Top, Larger Bottom padding */
+/* Responsive adjustments with special handling for iPhones */
+@media (max-width: 375px) {
+    .gameboy-outer {
+        width: 240px;
+        padding: 10px;
     }
+    
+    /* Fix iPhone specific issues */
+    .dpad {
+        width: 110px;
+        height: 110px;
+    }
+    
+    .dpad button {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .dpad-up {
+        left: 40px;
+    }
+    
+    .dpad-down {
+        left: 40px;
+    }
+    
+    .dpad-left {
+        top: 40px;
+    }
+    
+    .dpad-right {
+        top: 40px;
+    }
+    
+    .dpad-center {
+        width: 28px;
+        height: 28px;
+        top: 41px;
+        left: 41px;
+    }
+    
+    .button {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+    }
+}
 
-    .d-pad {
-        /* Removed fixed width and height */
+/* Dark theme specific enhancements */
+@media (prefers-color-scheme: dark) {
+    .dpad button {
+        background-color: #111;
+        border-color: #666;
     }
-
-    .ab-buttons {
-        width: 100px; /* Smaller AB container */
-        /* Removed fixed height */
+    
+    .dpad-center {
+        background-color: #222;
+        border-color: #666;
     }
-
-    .ab-button {
-        width: 38px;  /* Scale down AB buttons */
-        height: 38px;
-        font-size: 0.9em; /* Reduce font size */
+    
+    .button {
+        border-color: #666;
     }
-
-    /* Adjust AB button positions for smaller container */
-    .ab-button.b { 
-        bottom: 10px; /* Lower position */
-        left: 10px; 
-    }
-    .ab-button.a { 
-        top: 10px;    /* Higher position */
-        right: 10px;
-    }
-
-    .d-pad-button {
-        font-size: 1em; /* Reduce D-pad font size */
+    
+    .dpad button.active,
+    .button.active {
+        border-color: #aaa;
     }
 } 

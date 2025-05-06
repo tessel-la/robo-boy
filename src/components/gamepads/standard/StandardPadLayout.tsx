@@ -1,14 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Ros, Topic } from 'roslib';
+import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
 import type { IJoystickUpdateEvent } from 'react-joystick-component'; // Use the correct type import
 import { throttle } from 'lodash-es'; // Import throttle
 import './StandardPadLayout.css'; // Renamed CSS import
-
-interface StandardPadLayoutProps { // Renamed interface
-  ros: Ros;
-}
+import { GamepadProps } from '../GamepadInterface';
 
 // Constants - Updated for sensor_msgs/Joy
 const JOY_TOPIC = '/joy'; // Standard topic for joystick data
@@ -17,7 +14,7 @@ const THROTTLE_INTERVAL = 100; // Milliseconds
 const JOYSTICK_MAX_VALUE = 1.0; // Max absolute value for axes
 const NUM_AXES = 4; // Define the number of axes we are using (adjust if needed)
 
-const StandardPadLayout: React.FC<StandardPadLayoutProps> = ({ ros }) => { // Renamed component
+const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using GamepadProps
   const joyTopic = useRef<Topic | null>(null); // Renamed ref
   // State to hold axes values - Initialize with zeros
   const [axes, setAxes] = useState<number[]>(Array(NUM_AXES).fill(0.0));

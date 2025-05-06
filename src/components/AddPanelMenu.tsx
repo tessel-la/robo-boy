@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, RefObject } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
 import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
+import { GamepadType } from './gamepads/GamepadInterface';
 
 interface AddPanelMenuProps {
   isOpen: boolean;
@@ -11,10 +12,11 @@ interface AddPanelMenuProps {
 }
 
 // Define available panel types here or pass them as props
-const availablePanelTypes: { type: PanelType, label: string }[] = [
-  { type: 'standardpad', label: 'Standard Pad' },
-  { type: 'voicelayout', label: 'Voice Input' },
-  { type: 'gameboy', label: 'GameBoy Control' },
+const availablePanelTypes = [
+  { type: GamepadType.Standard, label: 'Standard Pad' },
+  { type: GamepadType.Voice, label: 'Voice Control' },
+  { type: GamepadType.GameBoy, label: 'GameBoy' },
+  { type: GamepadType.Drone, label: 'Drone Control' },
   // Add other layouts here as they are created
 ];
 

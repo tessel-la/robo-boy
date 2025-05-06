@@ -6,11 +6,6 @@ import './PointCloudSettings.css';
 export interface PointCloudSettingsOptions {
   pointSize: number;
   color: string;
-  colorAxis?: 'x' | 'y' | 'z' | 'none';
-  minAxisValue?: number;
-  maxAxisValue?: number;
-  minColor?: string;
-  maxColor?: string;
   maxPoints?: number;
   // New toggle properties for enabling/disabling settings
   pointSizeEnabled: boolean;
@@ -29,11 +24,6 @@ interface PointCloudSettingsProps {
 const defaultSettings: PointCloudSettingsOptions = {
   pointSize: 0.05,
   color: '#00ff00',
-  colorAxis: 'none',
-  minAxisValue: -5,
-  maxAxisValue: 5,
-  minColor: '#0000ff',
-  maxColor: '#ff0000',
   maxPoints: 200000,
   // Default all toggles to enabled
   pointSizeEnabled: true,
@@ -202,89 +192,23 @@ const PointCloudSettings = ({
             </div>
           </SettingGroup>
 
-          {/* Color Method Setting Group */}
+          {/* Color Setting Group */}
           <SettingGroup 
             title="Color Settings" 
             enabled={settings.colorEnabled}
             onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
           >
-            <div className="color-method-container">
-              <label htmlFor="color-axis">Color By</label>
-              <select
-                id="color-axis"
-                value={settings.colorAxis}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => updateSetting('colorAxis', e.target.value as 'x' | 'y' | 'z' | 'none')}
-                className="color-method-select"
-              >
-                <option value="none">Fixed Color</option>
-                <option value="x">X Axis</option>
-                <option value="y">Y Axis</option>
-                <option value="z">Z Axis</option>
-              </select>
-            </div>
-
-            {/* Fixed Color Setting */}
-            {settings.colorAxis === 'none' && (
-              <div className="color-container-wrapper">
-                <label htmlFor="fixed-color">Color</label>
-                <div className="color-container">
-                  <input
-                    id="fixed-color"
-                    type="color"
-                    value={settings.color}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
-                  />
-                </div>
+            <div className="color-container-wrapper">
+              <label htmlFor="fixed-color">Color</label>
+              <div className="color-container">
+                <input
+                  id="fixed-color"
+                  type="color"
+                  value={settings.color}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
+                />
               </div>
-            )}
-
-            {/* Axis Range Settings */}
-            {settings.colorAxis !== 'none' && (
-              <>
-                <div className="range-section">
-                  <label>{settings.colorAxis.toUpperCase()} Range</label>
-                  <div className="range-inputs">
-                    <input
-                      type="number"
-                      value={settings.minAxisValue}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'minAxisValue')}
-                      className="number-input"
-                    />
-                    <span>to</span>
-                    <input
-                      type="number"
-                      value={settings.maxAxisValue}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxAxisValue')}
-                      className="number-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="color-gradient-section">
-                  <label>Color Range</label>
-                  <div className="color-inputs">
-                    <input
-                      type="color"
-                      value={settings.minColor}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('minColor', e.target.value)}
-                      title="Min value color"
-                    />
-                    <div 
-                      className="gradient-preview"
-                      style={{
-                        background: `linear-gradient(to right, ${settings.minColor}, ${settings.maxColor})`
-                      }}
-                    ></div>
-                    <input
-                      type="color"
-                      value={settings.maxColor}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('maxColor', e.target.value)}
-                      title="Max value color"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+            </div>
           </SettingGroup>
         </div>
 
