@@ -1,0 +1,136 @@
+/* src/components/gamepads/drone/DroneGamepadLayout.css */
+
+.drone-pad-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  gap: 15px;
+}
+
+.joysticks-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  width: 100%;
+}
+
+.joystick-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Joystick value display */
+.joystick-values {
+  font-size: 0.8rem;
+  color: var(--text-color, #e8eaed);
+  opacity: 0.8;
+  margin-top: 5px;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 90px;
+  text-align: center;
+}
+
+/* Drone control buttons container */
+.drone-control-buttons {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  padding: 10px 0;
+  margin-top: 5px;
+  gap: 20px;
+}
+
+.drone-button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--background-secondary, #333);
+  color: var(--text-color, #fff);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.takeoff-button {
+  background-color: var(--primary-color, #32CD32);
+  color: white;
+}
+
+.land-button {
+  background-color: var(--secondary-color, #6c757d);
+  color: white;
+}
+
+/* Active state for buttons */
+.drone-button.active {
+  transform: translateY(2px);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.9;
+}
+
+.takeoff-button.active {
+  background-color: var(--primary-active-color, #28a745);
+}
+
+.land-button.active {
+  background-color: var(--secondary-active-color, #5a6268);
+}
+
+/* Hover state */
+.drone-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Media Query for very small screens */
+@media (max-width: 375px) {
+  .drone-pad-layout {
+    padding: 5px;
+    gap: 5px;
+  }
+
+  .joysticks-container {
+    gap: 15px;
+    margin-bottom: 5px;
+  }
+
+  .joystick-wrapper > div:first-child {
+    width: 80px !important;
+    height: 80px !important;
+  }
+
+  .joystick-values {
+    font-size: 0.7rem;
+    min-width: 70px;
+    padding: 1px 4px;
+  }
+
+  .drone-control-buttons {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .drone-button {
+    padding: 8px 15px;
+    font-size: 0.8rem;
+    min-width: 100px;
+  }
+} 

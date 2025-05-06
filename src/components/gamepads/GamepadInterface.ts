@@ -16,5 +16,6 @@ export interface GamepadProps {
 export enum GamepadType {
   Standard = 'standardpad',
   Voice = 'voicelayout',
-  GameBoy = 'gameboy'
+  GameBoy = 'gameboy',
+  Drone = 'dronepad'
 } 
