@@ -17,6 +17,22 @@ const NUM_AXES = 4; // Number of axes
 const NUM_BUTTONS = 2; // Two buttons: takeoff and landing
 const JOYSTICK_DEADZONE = 0.01; // Small deadzone to filter noise
 
+// --- SVG Icons for Buttons ---
+const IconArrowUp = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="19" x2="12" y2="5" />
+    <polyline points="5 12 12 5 19 12" />
+  </svg>
+);
+
+const IconArrowDown = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <polyline points="19 12 12 19 5 12" />
+  </svg>
+);
+// --- End SVG Icons ---
+
 const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const joyTopic = useRef<Topic | null>(null);
   // State to hold axes values - Initialize with zeros
@@ -208,43 +224,10 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
 
   return (
     <div className="drone-pad-layout">
-      <div className="joysticks-container">
-        {/* Left Joystick */}
-        <div className="joystick-wrapper">
-          <Joystick
-            size={100}
-            stickSize={60}
-            baseColor={baseJoystickColor}
-            stickColor={stickJoystickColor}
-            move={handleMoveLeft}
-            stop={handleStopLeft}
-            throttle={THROTTLE_INTERVAL / 2}
-          />
-          <div className="joystick-values">
-            X: {getAxisDisplay(0)} / Y: {getAxisDisplay(1)}
-          </div>
-        </div>
-
-        {/* Right Joystick */}
-        <div className="joystick-wrapper">
-          <Joystick
-            size={100}
-            stickSize={60}
-            baseColor={baseJoystickColor}
-            stickColor={stickJoystickColor}
-            move={handleMoveRight}
-            stop={handleStopRight}
-            throttle={THROTTLE_INTERVAL / 2}
-          />
-          <div className="joystick-values">
-            X: {getAxisDisplay(2)} / Y: {getAxisDisplay(3)}
-          </div>
-        </div>
-      </div>
-
-      {/* Drone Control Buttons */}
-      <div className="drone-control-buttons">
+      <div className="drone-pad-interactive-area">
         <button 
+          title="Take Off"
+          aria-label="Take Off"
           className={`drone-button takeoff-button ${buttons[0] === 1 ? 'active' : ''}`}
           onMouseDown={handleTakeOffPress}
           onMouseUp={handleButtonRelease}
@@ -252,9 +235,48 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
           onTouchStart={handleTakeOffPress}
           onTouchEnd={handleButtonRelease}
         >
-          Take Off
+          <IconArrowUp />
         </button>
+
+        <div className="joysticks-container">
+          {/* Left Joystick - Movement */}
+          <div className="joystick-wrapper">
+            <div className="joystick-label">Altitude</div>
+            <Joystick
+              size={100}
+              stickSize={60}
+              baseColor={baseJoystickColor}
+              stickColor={stickJoystickColor}
+              move={handleMoveLeft}
+              stop={handleStopLeft}
+              throttle={THROTTLE_INTERVAL / 2}
+            />
+            <div className="joystick-values">
+              L/R: {getAxisDisplay(0)} / F/B: {getAxisDisplay(1)}
+            </div>
+          </div>
+
+          {/* Right Joystick - Rotation/Altitude */}
+          <div className="joystick-wrapper">
+            <div className="joystick-label">Rotation</div>
+            <Joystick
+              size={100}
+              stickSize={60}
+              baseColor={baseJoystickColor}
+              stickColor={stickJoystickColor}
+              move={handleMoveRight}
+              stop={handleStopRight}
+              throttle={THROTTLE_INTERVAL / 2}
+            />
+            <div className="joystick-values">
+              Yaw: {getAxisDisplay(2)} / Thr: {getAxisDisplay(3)}
+            </div>
+          </div>
+        </div>
+
         <button 
+          title="Land"
+          aria-label="Land"
           className={`drone-button land-button ${buttons[1] === 1 ? 'active' : ''}`}
           onMouseDown={handleLandPress}
           onMouseUp={handleButtonRelease}
@@ -262,7 +284,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
           onTouchStart={handleLandPress}
           onTouchEnd={handleButtonRelease}
         >
-          Land
+          <IconArrowDown />
         </button>
       </div>
     </div>
