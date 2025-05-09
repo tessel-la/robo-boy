@@ -13,6 +13,7 @@ import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
+import anime from 'animejs';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -99,6 +100,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   // Ref to prevent multiple connection attempts
   const isConnecting = useRef(false);
+
+  const viewPanelRef = useRef<HTMLDivElement>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const ropeRef = useRef<SVGPathElement>(null);
+  const [ropePath, setRopePath] = useState<string>('');
 
   // Fetch topics when connected
   useEffect(() => {
@@ -233,11 +239,89 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
   }, [selectedPanelId, activePanels, ros]);
 
-  // View state management
+  // View state management with animation
   const handleViewToggle = () => {
-    // Save current state before toggling
-    setViewMode(prev => prev === 'camera' ? '3d' : 'camera');
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+
+    const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
+    const currentView = viewPanelRef.current;
+    if (!currentView) return;
+
+    // Create timeline for the animation
+    const timeline = anime.timeline({
+      easing: 'easeOutElastic(1, .7)', // Even less bouncy effect
+      complete: () => {
+        setIsTransitioning(false);
+      }
+    });
+
+    // Create a clone of the current view for the transition
+    const currentViewClone = currentView.cloneNode(true) as HTMLElement;
+    currentViewClone.style.position = 'absolute';
+    currentViewClone.style.top = '0';
+    currentViewClone.style.left = '0';
+    currentViewClone.style.width = '100%';
+    currentViewClone.style.height = '100%';
+    currentView.parentElement?.appendChild(currentViewClone);
+
+    // Position the new view further off-screen
+    currentView.style.transform = `translateX(${newViewMode === '3d' ? '150%' : '-150%'})`;
+    
+    // Update view mode immediately to show the new content
+    setViewMode(newViewMode);
+
+    // Animate both views simultaneously
+    timeline.add({
+      targets: [currentViewClone, currentView],
+      translateX: (el, i) => {
+        // First element (clone) moves out, second element (new view) moves in
+        return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
+      },
+      duration: 1500, // 1.5 seconds duration
+      easing: 'easeOutElastic(1, .7)', // Even less bouncy effect
+      complete: () => {
+        // Clean up the clone after animation
+        currentViewClone.remove();
+      }
+    });
+
+    // Animate the rope in parallel with the panel movement
+    if (ropeRef.current) {
+      anime({
+        targets: ropeRef.current,
+        strokeDashoffset: [0, -100, 0],
+        duration: 1500, // Match the 1.5 second duration
+        easing: 'easeInOutQuad'
+      });
+    }
   };
+
+  // Update rope path when container size changes
+  useEffect(() => {
+    const updateRopePath = () => {
+      if (!viewPanelRef.current) return;
+      
+      const { width } = viewPanelRef.current.getBoundingClientRect();
+      
+      // Create a path that only spans between the panels (using 40% of the width)
+      const startX = width * 0.3; // Start at 30% of the width
+      const endX = width * 0.7;   // End at 70% of the width
+      const midY = 50;            // Keep it centered vertically
+      
+      // Create a curved path between the panels
+      const path = `M ${startX} ${midY} 
+                   C ${startX + (endX - startX) * 0.25} ${midY},
+                     ${startX + (endX - startX) * 0.75} ${midY},
+                     ${endX} ${midY}`;
+      
+      setRopePath(path);
+    };
+
+    updateRopePath();
+    window.addEventListener('resize', updateRopePath);
+    return () => window.removeEventListener('resize', updateRopePath);
+  }, [viewMode]);
 
   return (
     <div className="main-control-view">
@@ -284,14 +368,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className="main-content-area">
         <div className="view-panel-container">
-          {/* Conditionally render Camera or 3D View Component based on viewMode */}
-          <div className="view-panel card">
+          <div className="view-panel card" ref={viewPanelRef}>
             {viewMode === 'camera' ? (
               isConnected && ros && selectedCameraTopic ? (
                 <CameraView 
                   ros={ros} 
                   cameraTopic={selectedCameraTopic} 
-                  // Pass available topics and selection handler down to CameraView
                   availableTopics={availableCameraTopics}
                   onTopicChange={setSelectedCameraTopic} 
                 />
@@ -308,6 +390,39 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               )
             )}
           </div>
+          <svg 
+            className="rope-animation" 
+            viewBox="0 0 100 100" 
+            preserveAspectRatio="none"
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: 0,
+              width: '100%',
+              height: '16px',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+              zIndex: 2
+            }}
+          >
+            <path
+              ref={ropeRef}
+              d={ropePath}
+              className="rope-path"
+              strokeDasharray="20,12"
+              strokeWidth="16"
+              style={{
+                fill: 'var(--primary-color)',
+                fillOpacity: 0.3,
+                stroke: 'var(--primary-color)',
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round',
+                filter: 'drop-shadow(0 0 8px var(--primary-color))',
+                opacity: 1,
+                strokeOpacity: 0.8
+              }}
+            />
+          </svg>
         </div>
 
         <div className="control-panel-container">

@@ -238,3 +238,61 @@ body.no-scroll {
         /* width: 1.1em; height: 1.1em; */
     }
 }
+
+/* View Panel Animation Styles */
+.view-panel {
+    transform-origin: center center;
+    will-change: transform, opacity;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    backface-visibility: hidden;
+    z-index: 1;
+}
+
+.view-panel-container {
+    position: relative;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+/* Rope Animation Styles */
+.rope-animation {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+}
+
+.rope-path {
+    fill: none;
+    stroke: var(--primary-color);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 8;
+    filter: drop-shadow(0 0 12px var(--primary-color));
+    opacity: 1;
+    transition: stroke 0.3s ease;
+}
+
+/* Ensure the view panel doesn't block the rope */
+.view-panel {
+    position: relative;
+    z-index: 1;
+    background: var(--background-color);
+}
+
+/* Control panel should be below the rope */
+.control-panel-container {
+    position: relative;
+    z-index: 1;
+}
