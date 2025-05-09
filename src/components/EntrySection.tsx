@@ -38,11 +38,13 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickConnectRef = useRef<HTMLButtonElement>(null);
   const dashRef = useRef<HTMLSpanElement>(null);
+  const transitionOverlayRef = useRef<HTMLDivElement>(null);
   // Track theme changes
   const [themeColors, setThemeColors] = useState({
     primary: '',
@@ -190,14 +192,68 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   };
 
   const handleQuickConnect = () => {
-    // Animate the quick connect button on press
-    animateButtonPress(quickConnectRef.current);
+    if (isTransitioning) return;
     
-    const params: ConnectionParams = {
-      ros2Option: 'ip',
-      ros2Value: currentHostname,
-    };
-    onConnect(params);
+    setIsTransitioning(true);
+    const button = quickConnectRef.current;
+    if (!button) return;
+
+    const buttonRect = button.getBoundingClientRect();
+    const overlay = transitionOverlayRef.current;
+    if (!overlay) return;
+
+    // Get the button's position relative to the viewport
+    const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+    const buttonCenterY = buttonRect.top + buttonRect.height / 2;
+
+    // Hide button immediately
+    button.style.opacity = '0';
+    button.style.pointerEvents = 'none';
+
+    // Set initial position of the overlay
+    overlay.style.left = `${buttonCenterX}px`;
+    overlay.style.top = `${buttonCenterY}px`;
+    overlay.style.width = `${buttonRect.width}px`;
+    overlay.style.height = `${buttonRect.height}px`;
+    overlay.style.borderRadius = '4px';
+    overlay.style.display = 'block';
+
+    // Create a timeline for the animation sequence
+    const timeline = anime.timeline({
+      easing: 'easeInOutQuad',
+      complete: () => {
+        // Call onConnect after animation completes
+        const params: ConnectionParams = {
+          ros2Option: 'ip',
+          ros2Value: currentHostname,
+        };
+        onConnect(params);
+      }
+    });
+
+    // First shrink to a dot
+    timeline.add({
+      targets: overlay,
+      width: '20px',
+      height: '20px',
+      borderRadius: '50%',
+      duration: 300
+    })
+    // Then drop to bottom of screen
+    .add({
+      targets: overlay,
+      top: `${window.innerHeight - 10}px`,
+      duration: 500,
+      easing: 'easeInQuad'
+    })
+    // Finally expand to fill screen
+    .add({
+      targets: overlay,
+      width: '200vmax',
+      height: '200vmax',
+      duration: 600,
+      easing: 'easeOutQuad'
+    });
   };
 
   const toggleAdvanced = () => {
@@ -221,7 +277,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
             onClick={handleQuickConnect}
             title={`Connect to ${currentHostname}`}
             ref={quickConnectRef}
-            style={{ position: 'relative' }}
+            style={{ 
+              position: 'relative',
+              transition: 'opacity 0.1s ease'
+            }}
+            disabled={isTransitioning}
           >
             Quick Connect
             <span className="quick-connect-ip">{currentHostname}</span>
@@ -290,6 +350,17 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
           </form>
         </div>
       </div>
+      <div 
+        ref={transitionOverlayRef}
+        style={{
+          position: 'fixed',
+          backgroundColor: themeColors.primary,
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1000,
+          display: 'none',
+          pointerEvents: 'none'
+        }}
+      />
     </div>
   );
 };
