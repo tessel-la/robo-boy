@@ -42,11 +42,6 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   const formRef = useRef<HTMLFormElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const quickConnectRef = useRef<HTMLButtonElement>(null);
-  const animatedLineRef = useRef<HTMLSpanElement>(null);
-  const topLineRef = useRef<HTMLSpanElement>(null);
-  const rightLineRef = useRef<HTMLSpanElement>(null);
-  const bottomLineRef = useRef<HTMLSpanElement>(null);
-  const leftLineRef = useRef<HTMLSpanElement>(null);
   const dashRef = useRef<HTMLSpanElement>(null);
   // Track theme changes
   const [themeColors, setThemeColors] = useState({
@@ -94,66 +89,18 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   // Handle advanced form animation when its visibility changes
   useEffect(() => {
     animateAdvancedForm(formRef.current, showAdvanced);
-  }, [showAdvanced]);
-
-  // Replace the line animation with a rotating square border
-  useEffect(() => {
-    if (!quickConnectRef.current || !topLineRef.current || !rightLineRef.current || 
-        !bottomLineRef.current || !leftLineRef.current) return;
-
-    const updateBorderColor = () => {
-      const primaryColor = themeColors.primary || getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
-      [topLineRef, rightLineRef, bottomLineRef, leftLineRef].forEach(ref => {
-        if (ref.current) {
-          ref.current.style.backgroundColor = primaryColor;
-        }
+    
+    // Animate gear icon rotation
+    const gearIcon = document.querySelector('.advanced-toggle-content svg');
+    if (gearIcon) {
+      anime({
+        targets: gearIcon,
+        rotate: showAdvanced ? 180 : 0,
+        duration: 500,
+        easing: 'easeInOutQuad'
       });
-    };
-    updateBorderColor();
-
-    const timeline = anime.timeline({
-      loop: true,
-      easing: 'linear'
-    });
-
-    // Top line animation
-    timeline.add({
-      targets: topLineRef.current,
-      width: ['0%', '100%'],
-      duration: 500,
-      easing: 'linear'
-    })
-    // Right line animation
-    .add({
-      targets: rightLineRef.current,
-      height: ['0%', '100%'],
-      duration: 500,
-      easing: 'linear'
-    }, '-=500')
-    // Bottom line animation
-    .add({
-      targets: bottomLineRef.current,
-      width: ['100%', '0%'],
-      duration: 500,
-      easing: 'linear'
-    }, '-=500')
-    // Left line animation
-    .add({
-      targets: leftLineRef.current,
-      height: ['100%', '0%'],
-      duration: 500,
-      easing: 'linear'
-    }, '-=500');
-
-    return () => {
-      timeline.pause();
-      // Reset all lines to initial state
-      if (topLineRef.current) topLineRef.current.style.width = '0%';
-      if (rightLineRef.current) rightLineRef.current.style.height = '0%';
-      if (bottomLineRef.current) bottomLineRef.current.style.width = '100%';
-      if (leftLineRef.current) leftLineRef.current.style.height = '100%';
-    };
-  }, [themeColors.primary]);
+    }
+  }, [showAdvanced]);
 
   // Helper function to convert hex to rgb
   const hexToRgb = (hex: string): string => {
@@ -274,59 +221,10 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
             onClick={handleQuickConnect}
             title={`Connect to ${currentHostname}`}
             ref={quickConnectRef}
-            style={{ position: 'relative', overflow: 'visible' }}
+            style={{ position: 'relative' }}
           >
             Quick Connect
             <span className="quick-connect-ip">{currentHostname}</span>
-            {/* Animated border lines */}
-            <span
-              ref={topLineRef}
-              style={{
-                position: 'absolute',
-                top: '0',
-                left: '0',
-                width: '0%',
-                height: '2px',
-                backgroundColor: themeColors.primary,
-                transformOrigin: 'left'
-              }}
-            />
-            <span
-              ref={rightLineRef}
-              style={{
-                position: 'absolute',
-                top: '0',
-                right: '0',
-                width: '2px',
-                height: '0%',
-                backgroundColor: themeColors.primary,
-                transformOrigin: 'top'
-              }}
-            />
-            <span
-              ref={bottomLineRef}
-              style={{
-                position: 'absolute',
-                bottom: '0',
-                right: '0',
-                width: '100%',
-                height: '2px',
-                backgroundColor: themeColors.primary,
-                transformOrigin: 'right'
-              }}
-            />
-            <span
-              ref={leftLineRef}
-              style={{
-                position: 'absolute',
-                bottom: '0',
-                left: '0',
-                width: '2px',
-                height: '100%',
-                backgroundColor: themeColors.primary,
-                transformOrigin: 'bottom'
-              }}
-            />
           </button>
 
           <button 
