@@ -19,11 +19,20 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   margin-bottom: 8px;
   width: 100%;
   flex-shrink: 0;
-  /* No explicit background for the container itself */
+  padding: 0 8px;
+}
+
+.speed-buttons-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  flex-grow: 0;
+  width: fit-content;
 }
 
 .speed-button {
@@ -39,6 +48,10 @@
   transition: all 0.2s ease;
   width: 38px;
   height: 32px;
+  touch-action: manipulation;
+  margin: 0 -1px;
+  flex-shrink: 0;
+  flex-grow: 0;
 }
 
 .speed-button svg {
@@ -61,7 +74,7 @@
 
 .manipulator-pad-interactive-area {
   display: flex;
-  flex-direction: column; /* Stack main content (joysticks + Z buttons row) */
+  flex-direction: column;
   align-items: center;
   width: 100%;
   flex-grow: 1;
@@ -70,48 +83,64 @@
 
 .manipulator-buttons-and-joysticks {
   display: flex;
-  justify-content: space-around; /* Joysticks and Z-controls group */
-  align-items: center; /* Center items vertically */
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  max-width: 420px; /* Adjust as needed for 2 joysticks + Z buttons */
+  height: 100%;
+  max-width: 420px;
   margin: auto;
 }
 
-.joysticks-container { /* This class is used in TSX for grouping the two joysticks */
+.joysticks-container {
   display: flex;
-  justify-content: space-between; /* Space out the two joysticks */
+  justify-content: space-between;
   align-items: center;
-  gap: 15px; /* Gap between the two joysticks */
+  width: 100%;
+  height: 100%;
+  gap: 8px;
   flex-grow: 1;
+  margin-top: -8px;
 }
 
 .joystick-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px; 
-  justify-content: center; 
+  gap: 4px;
+  justify-content: center;
+  flex-grow: 1;
+  min-height: 0;
 }
 
 .joystick-label {
   font-size: 0.55rem;
   font-weight: 500;
-  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) */
+  color: #e8eaed;
   margin-bottom: 1px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   background-color: transparent;
   padding: 1px 3px;
   border-radius: 3px;
+  text-align: center;
 }
 
 /* Z-Axis Controls Specific Container */
+.z-controls-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  margin-top: -20px;
+}
+
 .z-axis-controls {
   display: flex;
-  flex-direction: column; /* Stack Z+ and Z- buttons vertically */
+  flex-direction: column;
   align-items: center;
-  gap: 10px; /* Gap between Z+ and Z- buttons */
-  margin-left: 15px; /* Space from the right joystick */
+  gap: 12px;
 }
 
 /* Generic Manipulator Button for Z-axis (Square) */
@@ -128,6 +157,7 @@
   align-items: center;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  touch-action: manipulation;
 }
 
 .manipulator-button svg {
@@ -154,25 +184,22 @@
 .frame-toggle-switch-container {
   display: flex;
   align-items: center;
-  justify-content: center; /* Center the whole component */
-  gap: 8px; /* Gap between labels and the switch track */
-  margin-top: 8px;
-  margin-bottom: 12px;
-  padding: 5px;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 8px;
   cursor: pointer;
-  user-select: none; /* Prevent text selection on click */
-  width: fit-content; /* Adjust width to content */
-  margin-left: auto; /* Center component */
-  margin-right: auto; /* Center component */
-  background-color: #3c4043; /* var(--background-secondary) */
-  border-radius: 20px; /* Rounded container */
+  user-select: none;
+  touch-action: manipulation;
+  background-color: #3c4043;
+  border-radius: 20px;
 }
 
 .frame-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #9aa0a6; /* var(--text-color-secondary) */
   font-weight: 500;
-  transition: color 0.3s ease;
+  transition: color 0.2s ease;
 }
 
 .frame-label.active {
@@ -181,12 +208,12 @@
 }
 
 .frame-toggle-track {
-  width: 44px; /* Width of the track */
-  height: 22px; /* Height of the track */
+  width: 40px; /* Width of the track */
+  height: 20px; /* Height of the track */
   background-color: #5f6368; /* var(--border-color) */
-  border-radius: 11px; /* Half of height for pill shape */
+  border-radius: 10px; /* Half of height for pill shape */
   position: relative;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease;
 }
 
 .frame-toggle-track.toggled-right {
@@ -194,114 +221,218 @@
 }
 
 .frame-toggle-thumb {
-  width: 18px;  /* Diameter of the thumb */
-  height: 18px; /* Diameter of the thumb */
+  width: 16px;  /* Diameter of the thumb */
+  height: 16px; /* Diameter of the thumb */
   background-color: white;
   border-radius: 50%; /* Circular thumb */
   position: absolute;
   top: 2px; /* (Track height - Thumb height) / 2 */
   left: 2px; /* Initial position (left) */
-  transition: transform 0.3s ease;
+  transition: transform 0.2s ease;
 }
 
 .frame-toggle-track.toggled-right .frame-toggle-thumb {
-  transform: translateX(22px); /* Track width - Thumb width - (2 * padding/offset) = 44 - 18 - 4 = 22px */
+  transform: translateX(20px); /* Track width - Thumb width - (2 * padding/offset) = 40 - 16 - 4 = 20px */
 }
 
 /* Joystick Output Value Display Styling */
 .joystick-output-display {
-  font-size: 0.6rem; /* Small font size */
-  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) / Slightly faded */
-  margin-top: 4px; /* Space above the display */
-  background-color: rgba(0, 0, 0, 0.2); /* Subtle background */
-  padding: 2px 5px;
+  font-size: 0.6rem;
+  color: rgba(232, 234, 237, 0.85);
+  background-color: rgba(60, 64, 67, 0.3);
+  padding: 2px 4px;
   border-radius: 4px;
-  min-width: 100px; /* Ensure it has some width */
+  min-width: 100px;
   text-align: center;
-  line-height: 1.3;
-  white-space: nowrap; /* Prevent wrapping */
-  font-family: 'Monaco', 'Consolas', monospace; /* Monospaced font for numbers */
-}
-
-.z-controls-wrapper {
-  display: flex;
-  flex-direction: column; /* Stack Z buttons and Z display vertically */
-  align-items: center; /* Center items horizontally */
-  gap: 8px; /* Gap between Z buttons and Z display */
+  margin-top: 4px;
 }
 
 /* Specific styling for Z output if needed, e.g., to match joystick displays more closely */
 .z-output-display {
-  /* Potentially different min-width or other tweaks if needed */
-  /* For now, inherits most styles from .joystick-output-display */
-  min-width: 70px; /* Smaller min-width for just one value */
+  min-width: 80px;
 }
 
 /* Media Queries adapted from Drone */
 @media (max-width: 420px) { 
   .manipulator-pad-layout {
-    padding: 5px;
-    gap: 5px;
+    padding: 4px 2px;
+    gap: 4px;
   }
   .speed-controls-container {
-    gap: 5px;
-    margin-bottom: 5px;
+    gap: 24px;
+    margin-bottom: 4px;
+    padding: 0 4px;
+  }
+  .speed-buttons-group {
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    width: fit-content;
   }
   .speed-button {
-    width: 36px;
-    height: 30px;
-    padding: 4px;
+    width: 32px;
+    height: 28px;
+    padding: 2px;
+    margin: 0 -1px;
+    flex-shrink: 0;
+    flex-grow: 0;
   }
   .speed-button svg {
-    width: 18px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .frame-toggle-switch-container {
+    margin: 0;
+    padding: 2px 6px;
+    gap: 4px;
+  }
+  .frame-label {
+    font-size: 0.6rem;
+  }
+  .frame-toggle-track {
+    width: 36px;
     height: 18px;
   }
+  .frame-toggle-thumb {
+    width: 14px;
+    height: 14px;
+  }
+  .frame-toggle-track.toggled-right .frame-toggle-thumb {
+    transform: translateX(18px);
+  }
+
+  .manipulator-pad-interactive-area {
+    flex-grow: 1;
+    min-height: 0;
+  }
+
   .manipulator-buttons-and-joysticks {
-    flex-direction: column; /* Stack joysticks and Z buttons on very small screens */
-    gap: 10px;
+    gap: 8px;
   }
   .joysticks-container {
-     justify-content: space-around; /* Evenly space joysticks when stacked with Z*/
-     width: 100%;
+    gap: 8px;
+    margin-top: -8px;
   }
-   .joystick-wrapper > div:nth-child(2) { /* This targets the react-joystick-component itself */
-    transform: scale(0.85); /* Slightly smaller joysticks */
+  .joystick-wrapper {
+    transform: scale(1.2);
+  }
+  .joystick-label {
+    font-size: 0.5rem;
+  }
+  .joystick-output-display {
+    font-size: 0.5rem;
+    min-width: 80px;
+    margin-top: -12px;
+    color: rgba(232, 234, 237, 0.85);
+    background-color: rgba(60, 64, 67, 0.3);
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
   }
   .z-axis-controls {
-    flex-direction: row; /* Z buttons side-by-side if main layout is column */
-    margin-left: 0;
-    margin-top: 10px;
+    gap: 12px;
   }
   .manipulator-button {
-    width: 45px;
-    height: 45px;
+    width: 44px;
+    height: 44px;
   }
   .manipulator-button svg {
     width: 20px;
     height: 20px;
   }
+  .z-output-display {
+    min-width: 70px;
+  }
 }
 
-@media (max-height: 480px) { 
+/* Extra small screens */
+@media (max-width: 360px) {
   .manipulator-pad-layout {
-    padding-top: 3px;
-    gap: 3px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .speed-controls-container {
+    gap: 12px;
+    padding: 0 2px;
+  }
+  .speed-buttons-group {
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    width: fit-content;
+  }
+  .speed-button {
+    width: 28px;
+    height: 24px;
+    margin: 0 -1px;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+  .speed-button svg {
+    width: 14px;
+    height: 14px;
+  }
+  .joystick-wrapper {
+    transform: scale(1.1);
+  }
+  .manipulator-button {
+    width: 40px;
+    height: 40px;
+  }
+  .manipulator-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .joystick-output-display {
+    margin-top: -12px;
+  }
+
+  .joysticks-container {
+    gap: 8px;
+    margin-top: -8px;
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .z-axis-controls {
+    gap: 12px;
+  }
+}
+
+/* Height-based adjustments */
+@media (max-height: 480px) {
+  .manipulator-pad-layout {
+    padding-top: 2px;
+    gap: 2px;
   }
   .speed-controls-container {
     margin-bottom: 3px;
   }
-   .joystick-wrapper > div:nth-child(2) { 
-    transform: scale(0.75);
+  .joystick-wrapper {
+    transform: scale(1.2);
   }
-  .joystick-label {
-    font-size: 0.5rem; 
-    margin-top: 0;
-    margin-bottom: 0;
-    padding: 1px 2px;
+  .joystick-output-display {
+    margin-top: -12px;
   }
-  .joystick-wrapper { gap: 0; }
-  .manipulator-button {
-    width: 40px;
-    height: 40px;
+
+  .joysticks-container {
+    gap: 8px;
+    margin-top: -8px;
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .z-axis-controls {
+    gap: 12px;
   }
 } 

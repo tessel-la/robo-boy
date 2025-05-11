@@ -365,104 +365,120 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   return (
     <div className="manipulator-pad-layout">
       <div className="speed-controls-container">
-        <button
-          onClick={() => handleSetSpeedMode(SpeedMode.Slow)}
-          className={`speed-button ${currentSpeedMode === SpeedMode.Slow ? 'active' : ''}`}
-          title="Slow Mode"
-          aria-label="Slow Mode"
-        >
-          <IconTurtle />
-        </button>
-        <button
-          onClick={() => handleSetSpeedMode(SpeedMode.Normal)}
-          className={`speed-button ${currentSpeedMode === SpeedMode.Normal ? 'active' : ''}`}
-          title="Normal Mode"
-          aria-label="Normal Mode"
-        >
-          <IconNormalSpeed />
-        </button>
-        <button
-          onClick={() => handleSetSpeedMode(SpeedMode.Fast)}
-          className={`speed-button ${currentSpeedMode === SpeedMode.Fast ? 'active' : ''}`}
-          title="Fast Mode"
-          aria-label="Fast Mode"
-        >
-          <IconTurbo />
-        </button>
-      </div>
-
-      {/* New Frame ID Toggle Switch */}
-      <div className="frame-toggle-switch-container" onClick={toggleFrameId} role="switch" aria-checked={currentFrameId === GRIPPER_FRAME} tabIndex={0} onKeyDown={(e) => e.key === ' ' || e.key === 'Enter' ? toggleFrameId() : null}>
-        <span className={`frame-label left-label ${currentFrameId === WORLD_FRAME ? 'active' : ''}`}>World</span>
-        <div className={`frame-toggle-track ${currentFrameId === GRIPPER_FRAME ? 'toggled-right' : ''}`}>
-          <div className="frame-toggle-thumb" />
+        <div className="speed-buttons-group">
+          <button
+            onClick={() => handleSetSpeedMode(SpeedMode.Slow)}
+            className={`speed-button ${currentSpeedMode === SpeedMode.Slow ? 'active' : ''}`}
+            title="Slow Mode"
+            aria-label="Slow Mode"
+          >
+            <IconTurtle />
+          </button>
+          <button
+            onClick={() => handleSetSpeedMode(SpeedMode.Normal)}
+            className={`speed-button ${currentSpeedMode === SpeedMode.Normal ? 'active' : ''}`}
+            title="Normal Mode"
+            aria-label="Normal Mode"
+          >
+            <IconNormalSpeed />
+          </button>
+          <button
+            onClick={() => handleSetSpeedMode(SpeedMode.Fast)}
+            className={`speed-button ${currentSpeedMode === SpeedMode.Fast ? 'active' : ''}`}
+            title="Fast Mode"
+            aria-label="Fast Mode"
+          >
+            <IconTurbo />
+          </button>
         </div>
-        <span className={`frame-label right-label ${currentFrameId === GRIPPER_FRAME ? 'active' : ''}`}>Gripper</span>
+
+        {/* Frame ID Toggle Switch */}
+        <div 
+          className="frame-toggle-switch-container" 
+          onClick={toggleFrameId} 
+          role="switch" 
+          aria-checked={currentFrameId === GRIPPER_FRAME} 
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleFrameId();
+            }
+          }}
+        >
+          <span className={`frame-label ${currentFrameId === WORLD_FRAME ? 'active' : ''}`}>World</span>
+          <div className={`frame-toggle-track ${currentFrameId === GRIPPER_FRAME ? 'toggled-right' : ''}`}>
+            <div className="frame-toggle-thumb" />
+          </div>
+          <span className={`frame-label ${currentFrameId === GRIPPER_FRAME ? 'active' : ''}`}>Gripper</span>
+        </div>
       </div>
 
       <div className="manipulator-pad-interactive-area">
         <div className="manipulator-buttons-and-joysticks">
-          <div className="joystick-wrapper">
-            <div className="joystick-label">Angular (Y: Roll, X: Pitch)</div>
-            <Joystick
-              size={100}
-              stickSize={60}
-              baseColor={baseJoystickColor}
-              stickColor={stickJoystickColor}
-              move={handleMoveLeftJoystick}
-              stop={handleStopLeftJoystick}
-              throttle={THROTTLE_INTERVAL / 2}
-            />
-            <div className="joystick-output-display">
-              Ang X: {currentTwist.angular.x.toFixed(2)}, Ang Y: {currentTwist.angular.y.toFixed(2)}
+          <div className="joysticks-container">
+            <div className="joystick-wrapper">
+              <div className="joystick-label">Angular (Y: Roll, X: Pitch)</div>
+              <Joystick
+                size={90}
+                stickSize={50}
+                baseColor={baseJoystickColor}
+                stickColor={stickJoystickColor}
+                move={handleMoveLeftJoystick}
+                stop={handleStopLeftJoystick}
+                throttle={THROTTLE_INTERVAL / 2}
+              />
+              <div className="joystick-output-display">
+                Ang X: {currentTwist.angular.x.toFixed(2)}, Ang Y: {currentTwist.angular.y.toFixed(2)}
+              </div>
             </div>
-          </div>
 
-          <div className="joystick-wrapper">
-            <div className="joystick-label">Linear Control (Y: X-axis, X: Y-axis)</div>
-            <Joystick
-              size={100}
-              stickSize={60}
-              baseColor={baseJoystickColor}
-              stickColor={stickJoystickColor}
-              move={handleMoveRightJoystick}
-              stop={handleStopRightJoystick}
-              throttle={THROTTLE_INTERVAL / 2}
-            />
-            <div className="joystick-output-display">
-              Lin X: {currentTwist.linear.x.toFixed(2)}, Lin Y: {currentTwist.linear.y.toFixed(2)}
+            <div className="joystick-wrapper">
+              <div className="joystick-label">Linear Control (Y: X-axis, X: Y-axis)</div>
+              <Joystick
+                size={90}
+                stickSize={50}
+                baseColor={baseJoystickColor}
+                stickColor={stickJoystickColor}
+                move={handleMoveRightJoystick}
+                stop={handleStopRightJoystick}
+                throttle={THROTTLE_INTERVAL / 2}
+              />
+              <div className="joystick-output-display">
+                Lin X: {currentTwist.linear.x.toFixed(2)}, Lin Y: {currentTwist.linear.y.toFixed(2)}
+              </div>
             </div>
-          </div>
-          
-          <div className="z-controls-wrapper">
-            <div className="z-axis-controls">
-              <button
-                title="Move Linear Z+"
-                aria-label="Move Linear Z Positive"
-                className={`manipulator-button ${zButtonsState[0] === 1 ? 'active' : ''}`}
-                onMouseDown={handleLinearZUpPress}
-                onMouseUp={handleLinearZRelease}
-                onMouseLeave={handleLinearZRelease}
-                onTouchStart={handleLinearZUpPress}
-                onTouchEnd={handleLinearZRelease}
-              >
-                <IconArrowUp />
-              </button>
-              <button
-                title="Move Linear Z-"
-                aria-label="Move Linear Z Negative"
-                className={`manipulator-button ${zButtonsState[1] === 1 ? 'active' : ''}`}
-                onMouseDown={handleLinearZDownPress}
-                onMouseUp={handleLinearZRelease}
-                onMouseLeave={handleLinearZRelease}
-                onTouchStart={handleLinearZDownPress}
-                onTouchEnd={handleLinearZRelease}
-              >
-                <IconArrowDown />
-              </button>
-            </div>
-            <div className="joystick-output-display z-output-display">
-              Lin Z: {currentTwist.linear.z.toFixed(2)}
+
+            <div className="z-controls-wrapper">
+              <div className="z-axis-controls">
+                <button
+                  title="Move Linear Z+"
+                  aria-label="Move Linear Z Positive"
+                  className={`manipulator-button ${zButtonsState[0] === 1 ? 'active' : ''}`}
+                  onMouseDown={handleLinearZUpPress}
+                  onMouseUp={handleLinearZRelease}
+                  onMouseLeave={handleLinearZRelease}
+                  onTouchStart={handleLinearZUpPress}
+                  onTouchEnd={handleLinearZRelease}
+                >
+                  <IconArrowUp />
+                </button>
+                <button
+                  title="Move Linear Z-"
+                  aria-label="Move Linear Z Negative"
+                  className={`manipulator-button ${zButtonsState[1] === 1 ? 'active' : ''}`}
+                  onMouseDown={handleLinearZDownPress}
+                  onMouseUp={handleLinearZRelease}
+                  onMouseLeave={handleLinearZRelease}
+                  onTouchStart={handleLinearZDownPress}
+                  onTouchEnd={handleLinearZRelease}
+                >
+                  <IconArrowDown />
+                </button>
+              </div>
+              <div className="joystick-output-display z-output-display">
+                Lin Z: {currentTwist.linear.z.toFixed(2)}
+              </div>
             </div>
           </div>
         </div>
