@@ -103,8 +103,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const ropeRef = useRef<SVGPathElement>(null);
-  const [ropePath, setRopePath] = useState<string>('');
 
   // Fetch topics when connected
   useEffect(() => {
@@ -285,43 +283,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         currentViewClone.remove();
       }
     });
-
-    // Animate the rope in parallel with the panel movement
-    if (ropeRef.current) {
-      anime({
-        targets: ropeRef.current,
-        strokeDashoffset: [0, -100, 0],
-        duration: 1500, // Match the 1.5 second duration
-        easing: 'easeInOutQuad'
-      });
-    }
   };
-
-  // Update rope path when container size changes
-  useEffect(() => {
-    const updateRopePath = () => {
-      if (!viewPanelRef.current) return;
-      
-      const { width } = viewPanelRef.current.getBoundingClientRect();
-      
-      // Create a path that only spans between the panels (using 40% of the width)
-      const startX = width * 0.3; // Start at 30% of the width
-      const endX = width * 0.7;   // End at 70% of the width
-      const midY = 50;            // Keep it centered vertically
-      
-      // Create a curved path between the panels
-      const path = `M ${startX} ${midY} 
-                   C ${startX + (endX - startX) * 0.25} ${midY},
-                     ${startX + (endX - startX) * 0.75} ${midY},
-                     ${endX} ${midY}`;
-      
-      setRopePath(path);
-    };
-
-    updateRopePath();
-    window.addEventListener('resize', updateRopePath);
-    return () => window.removeEventListener('resize', updateRopePath);
-  }, [viewMode]);
 
   return (
     <div className="main-control-view">
@@ -390,39 +352,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               )
             )}
           </div>
-          <svg 
-            className="rope-animation" 
-            viewBox="0 0 100 100" 
-            preserveAspectRatio="none"
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: 0,
-              width: '100%',
-              height: '16px',
-              transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-              zIndex: 2
-            }}
-          >
-            <path
-              ref={ropeRef}
-              d={ropePath}
-              className="rope-path"
-              strokeDasharray="20,12"
-              strokeWidth="16"
-              style={{
-                fill: 'var(--primary-color)',
-                fillOpacity: 0.3,
-                stroke: 'var(--primary-color)',
-                strokeLinecap: 'round',
-                strokeLinejoin: 'round',
-                filter: 'drop-shadow(0 0 8px var(--primary-color))',
-                opacity: 1,
-                strokeOpacity: 0.8
-              }}
-            />
-          </svg>
         </div>
 
         <div className="control-panel-container">
