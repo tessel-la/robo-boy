@@ -1,5 +1,8 @@
 # 🤖 Robo-Boy
 
+[![CI](https://github.com/tessel-la/robo-boy/actions/workflows/ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/ci.yml)
+[![Deploy](https://github.com/tessel-la/robo-boy/actions/workflows/deploy.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/deploy.yml)
+
 <!-- Replace with actual logo path if different -->
 <p align="center">
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
@@ -213,6 +216,82 @@ You should now be connected to the ROS environment and can use all of Foxglove S
 *   Caddy logs can be viewed with `docker compose logs caddy`.
 *   ROS stack logs can be viewed with `docker compose logs ros-stack`.
 
+## 🚀 CI/CD Workflow
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+### CI Workflow
+
+The CI workflow runs automatically on every push to the `main` branch and on every pull request. It performs the following checks:
+
+1. **Dependency Installation**: Installs all npm dependencies using `npm ci`
+2. **Linting**: Runs ESLint to check for code style and potential issues
+3. **TypeScript Type Checking**: Verifies type correctness across the codebase
+4. **Build**: Ensures the application builds correctly
+
+You can see the build status at the top of this README, or view detailed CI run history in the [Actions tab](https://github.com/OWNER_USERNAME/robo-boy/actions) of the repository.
+
+### Deployment Workflow
+
+The deployment workflow automatically builds and deploys the application to GitHub Pages when:
+
+1. You push to the `main` branch
+2. You create a new release
+3. You manually trigger the workflow
+
+To enable GitHub Pages deployment:
+
+1. Go to your repository settings
+2. Navigate to "Pages" section
+3. Select "GitHub Actions" as the source
+4. The site will be published at `https://YOUR_USERNAME.github.io/robo-boy/`
+
+### Setting Up CI for Forks
+
+If you fork this repository, you'll need to update the badge URLs in the README to point to your own repository:
+
+```markdown
+[![CI](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/ci.yml)
+[![Deploy](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/deploy.yml)
+```
+
+## 🚢 Production Deployment
+
+### Docker Deployment
+
+For production deployment, you can use the provided production Docker setup:
+
+```bash
+# Build and run using production Docker Compose file
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+This will:
+1. Build the React application in a Node.js container
+2. Copy the built files to an Nginx container
+3. Serve the application on port 80
+
+The production setup uses a multi-stage Dockerfile (`Dockerfile.prod`) that:
+- Creates a minimal build environment
+- Builds the optimized production version of the app
+- Packages only the necessary files in a lightweight Nginx container
+
+### Manual Deployment
+
+Alternatively, you can build the application locally and deploy the static files to any web server:
+
+```bash
+# Install dependencies
+npm ci
+
+# Build for production
+npm run build
+
+# The 'dist' directory now contains the deployable files
+```
+
+The built files in the `dist` directory can be deployed to any static hosting service like GitHub Pages, Netlify, Vercel, or a traditional web server.
+
 ## PWA Configuration and Icons
 
 ### Setting Up PWA Icons
@@ -234,38 +313,4 @@ You can generate these icons in one of these ways:
 If you have [ImageMagick](https://imagemagick.org/) installed:
 
 1. Run the PowerShell script: `powershell -ExecutionPolicy Bypass -File generate-icons.ps1`
-2. This will generate all required icon sizes in the `public/images/` directory
-
-#### Option 2: Manual Generation
-
-If you don't have ImageMagick:
-
-1. Use an image editor like Photoshop, GIMP, or an online tool
-2. Create resized versions of `images/logo.png` at all sizes listed above
-3. Save them in the `public/images/` directory with the following naming convention:
-   - Small sizes: `favicon-16x16.png`, `favicon-32x32.png`, etc.
-   - Standard sizes: `icon-72x72.png`, `icon-96x96.png`, etc.
-   - PWA specific: `pwa-192x192.png`, `pwa-512x512.png`
-   - Special: `apple-touch-icon.png`, `maskable-icon-512x512.png` (with padding)
-
-#### Option 3: Online PWA Icon Generators
-
-Use online tools that can generate all the required sizes from your source image:
-
-- [PWA Builder](https://www.pwabuilder.com/imageGenerator)
-- [App Icon Generator](https://appicon.co/)
-- [Favicon Generator](https://realfavicongenerator.net/)
-
-After generating icons, place them in the `public/images/` directory.
-
-### Manifest Configuration
-
-The PWA configuration is handled by:
-
-1. `manifest.webmanifest` - Contains the main PWA configuration including icon references
-2. `vite.config.ts` - Contains the build-time PWA plugin configuration
-3. `index.html` - Contains favicon and Apple touch icon references
-
-**Note**: After changing icon files, make sure to clean your browser cache or use incognito mode to test the PWA installation with the new icons.
-
-```
+2. This will generate all required icon sizes in the `
