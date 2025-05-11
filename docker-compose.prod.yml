@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: always
+    ports:
+      - "80:80"
+    # Optional: Add volumes or environment variables if needed
+    # volumes:
+    #   - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    # environment:
+    #   - NODE_ENV=production
+
+  # You can add other services here as needed
+  # For example, a backend API service, database, etc. 

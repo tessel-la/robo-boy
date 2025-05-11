@@ -21,34 +21,11 @@ export default defineConfig({
       devOptions: {
         enabled: true // Enable PWA in development for testing
       },
-      manifest: {
-        name: 'Robot Web Controller',
-        short_name: 'RobotCtrl',
-        description: 'Web interface for controlling ROS 2 robots.',
-        theme_color: '#282c34', // Match dark theme background
-        background_color: '#ffffff', // White background for splash screen
-        display: 'standalone',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: 'pwa-192x192.png', // Standard icon size
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png', // Larger icon size
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png', // Maskable icon (if you create one)
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      }
+      // Use our external manifest file instead of inline configuration
+      manifest: false, // Disable inline manifest
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico'], // Include any additional assets
+      // The manifest is now defined in the manifest.webmanifest file
     }),
     // mkcert() // Ensure mkcert is commented out/removed
   ],

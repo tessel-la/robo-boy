@@ -32,13 +32,13 @@
 
 /* Main Content Area Styles */
 .main-content-area {
-    padding: 15px; 
-    padding-top: calc(40px + 15px); 
+    padding: 10px; /* Reduced from 15px */
+    padding-top: calc(40px + 10px); /* Reduced from 15px */
     display: flex;
     flex-direction: column;
     align-items: stretch; 
-    gap: 15px; 
-    overflow: hidden; /* Changed from auto to hidden */
+    gap: 10px; /* Reduced from 15px */
+    overflow: hidden;
     height: calc(100vh - 10px); 
     box-sizing: border-box;
 }
@@ -176,12 +176,37 @@
     flex-grow: 1; 
     display: flex;
     flex-direction: column; 
-    overflow-y: auto; /* Allow internal scrolling if content exceeds fixed height */
+    overflow-y: auto;
     width: 100%;
-    /* height: 100%; /* Removed */
-    /* min-height: 250px; /* Removed */
     box-sizing: border-box;
-    padding: 5px; /* Reduced padding */
+}
+
+.view-panel {
+    padding: 0 !important; /* Force remove all padding */
+}
+
+.view-panel .card {
+    padding: 0 !important; /* Force remove padding from card class */
+    margin: 0 !important; /* Remove any margin */
+}
+
+.control-panel {
+    padding: 2px; /* Keep padding for control panel */
+}
+
+/* Center placeholder message */
+.view-panel .placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    text-align: center;
+    color: var(--text-color, #666);
+    font-size: 1.1em;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 /* Prevent scrolling on body if main-control-view is active */
@@ -216,9 +241,9 @@ body.no-scroll {
 /* Responsive Adjustments for new layout */
 @media (max-width: 768px) { 
     .main-content-area {
-        padding: 10px;
-        padding-top: calc(40px + 10px); /* Adjusted padding */
-        gap: 10px;
+        padding: 5px; /* Reduced from 10px */
+        padding-top: calc(40px + 5px); /* Reduced from 10px */
+        gap: 5px; /* Reduced from 10px */
     }
 
     /* Adjust top bar height/padding on mobile if needed */
@@ -237,4 +262,89 @@ body.no-scroll {
         /* Adjust icon sizes for mobile if needed */
         /* width: 1.1em; height: 1.1em; */
     }
+}
+
+/* View Panel Animation Styles */
+.view-panel {
+    transform-origin: center center;
+    will-change: transform, opacity;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    backface-visibility: hidden;
+    z-index: 1;
+}
+
+.view-panel-container {
+    position: relative;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+/* Delete all transition-rope and rope-dot styles from here */
+
+/* Center placeholder message */
+.view-panel .placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    text-align: center;
+    color: var(--text-color, #666);
+    font-size: 1.1em;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Remove the previous loading animation styles */
+.loading-animation-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    border-radius: var(--border-radius, 8px);
+}
+
+.loading-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.loading-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--primary-color, #4285f4);
+    opacity: 0.7;
+}
+
+.loading-dot:nth-child(2) {
+    background-color: var(--secondary-color, #34a853);
+}
+
+.loading-dot:nth-child(3) {
+    background-color: var(--accent-color, #fbbc05);
+}
+
+.loading-dot:nth-child(4) {
+    background-color: var(--primary-color-light, #ea4335);
+}
+
+.loading-dot:nth-child(5) {
+    background-color: var(--secondary-color-light, #4285f4);
 }

@@ -13,6 +13,7 @@ import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
+import anime from 'animejs';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -99,6 +100,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   // Ref to prevent multiple connection attempts
   const isConnecting = useRef(false);
+
+  const viewPanelRef = useRef<HTMLDivElement>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -233,10 +237,55 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
   }, [selectedPanelId, activePanels, ros]);
 
-  // View state management
+  // View state management with animation
   const handleViewToggle = () => {
-    // Save current state before toggling
-    setViewMode(prev => prev === 'camera' ? '3d' : 'camera');
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    
+    const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
+    
+    const currentView = viewPanelRef.current;
+    if (!currentView) return;
+
+    // Create timeline for the animation
+    const timeline = anime.timeline({
+      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
+      complete: () => {
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 200);
+      }
+    });
+
+    // Create a clone of the current view for the transition
+    const currentViewClone = currentView.cloneNode(true) as HTMLElement;
+    currentViewClone.style.position = 'absolute';
+    currentViewClone.style.top = '0';
+    currentViewClone.style.left = '0';
+    currentViewClone.style.width = '100%';
+    currentViewClone.style.height = '100%';
+    currentView.parentElement?.appendChild(currentViewClone);
+
+    // Position the new view further off-screen
+    currentView.style.transform = `translateX(${newViewMode === '3d' ? '150%' : '-150%'})`;
+    
+    // Update view mode immediately to show the new content
+    setViewMode(newViewMode);
+
+    // Animate both views simultaneously
+    timeline.add({
+      targets: [currentViewClone, currentView],
+      translateX: (el, i) => {
+        // First element (clone) moves out, second element (new view) moves in
+        return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
+      },
+      duration: 800, // Reduced from 1500ms to 800ms for a quicker transition
+      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
+      complete: () => {
+        // Clean up the clone after animation
+        currentViewClone.remove();
+      }
+    });
   };
 
   return (
@@ -284,14 +333,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className="main-content-area">
         <div className="view-panel-container">
-          {/* Conditionally render Camera or 3D View Component based on viewMode */}
-          <div className="view-panel card">
+          <div className="view-panel card" ref={viewPanelRef}>
             {viewMode === 'camera' ? (
               isConnected && ros && selectedCameraTopic ? (
                 <CameraView 
                   ros={ros} 
                   cameraTopic={selectedCameraTopic} 
-                  // Pass available topics and selection handler down to CameraView
                   availableTopics={availableCameraTopics}
                   onTopicChange={setSelectedCameraTopic} 
                 />

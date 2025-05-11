@@ -1,46 +1,207 @@
-.entry-section {
-    max-width: 500px; /* Re-added */
-    margin: 20px auto; /* Reduced top/bottom margin */
-    padding: 20px; /* Reduced padding */
-    width: 90%; /* Ensure it doesn't hit edges on small screens */
+.entry-section-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
     box-sizing: border-box;
 }
 
-/* Style for the new H1 title */
-.app-title {
-    font-size: 2.5em; /* Adjust size as needed */
-    font-weight: bold;
+.entry-section {
+    max-width: 500px;
+    width: 90%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+    opacity: 0; /* Start hidden for animation */
+    transform: translateY(20px); /* Start below final position */
+}
+
+/* Logo Container */
+.logo-container {
+    text-align: center;
+    margin-bottom: 30px;
+    opacity: 0; /* Start hidden for animation */
+}
+
+.ascii-logo {
+    font-family: monospace;
+    white-space: pre;
+    font-size: 0.7em;
+    line-height: 1.2;
     color: var(--primary-color);
+    margin: 0;
+    overflow: auto; /* For small screens */
+    text-align: center;
+}
+
+/* Style for the H1 title */
+.app-title {
+    font-size: 2.8em;
+    font-weight: bold; /* Use theme text color */
+    color: var(--text-color); /* Use theme text color */
     text-align: center;
     margin-bottom: 20px;
-    margin-top: 0; /* Remove default H1 margin */
+    margin-top: 0;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+}
+
+/* Title segments styling */
+.title-robo, .title-boy {
+    display: inline-block;
+    color: var(--text-color); /* Use theme text color */
+}
+
+/* Style for the animated dash character */
+.title-dash {
+    display: inline-block;
+    color: var(--primary-color) !important; /* Force theme primary color */
+    font-weight: bold;
+    font-size: 1.5em; /* Larger size for dash */
+    margin: 0 5px;
+    transform-origin: center;
+    position: relative;
+    top: 0px; /* Lowered position as requested */
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 24px; /* Width for the dash */
+    height: 24px; /* Set explicit height */
+    will-change: transform;
+    /* Ensure text doesn't wrap */
+    white-space: nowrap;
+    overflow: visible;
+    filter: drop-shadow(0 0 4px var(--primary-color)); /* Use drop-shadow instead of text-shadow */
+}
+
+/* Connection Options */
+.connection-options {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Quick Connect Button */
+.quick-connect-btn {
+    width: 70%;
+    padding: 12px;
+    font-size: 1rem;
+    background-color: var(--primary-color);
+    color: var(--button-text-color);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.quick-connect-btn:hover {
+    background-color: var(--primary-hover-color);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+.quick-connect-ip {
+    font-size: 0.8em;
+    margin-top: 5px;
+    opacity: 0.9;
+}
+
+/* Advanced Toggle Button */
+.advanced-toggle {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 15px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.advanced-toggle:hover {
+    background-color: var(--background-secondary);
+}
+
+/* Advanced Form */
+.advanced-form {
+    width: 100%;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.5s ease-in-out;
+    opacity: 0;
+}
+
+.advanced-form.visible {
+    max-height: 300px;
+    opacity: 1;
 }
 
 .form-group {
-    margin-bottom: 15px; /* Slightly reduce gap */
-    text-align: center; /* Center labels and content */
+    margin-bottom: 15px;
+    text-align: center;
 }
 
 .radio-group {
-    /* Styles for the radio button container */
-    text-align: center; /* Center the radio buttons/labels */
+    text-align: center;
+    margin: 10px 0;
 }
 
 .radio-group label {
     margin-right: 15px;
-    display: inline-flex; /* Align radio button and text */
+    display: inline-flex;
     align-items: center;
     cursor: pointer;
-    margin-left: 15px; /* Add left margin for spacing */
+    margin-left: 15px;
 }
 
 .radio-group input[type="radio"] {
     margin-right: 5px;
-    accent-color: var(--primary-color); /* Style the radio button */
+    accent-color: var(--primary-color);
 }
 
-.entry-section button[type="submit"] {
+/* Connect Button */
+.connect-btn {
     width: 100%;
     padding: 12px;
     font-size: 1rem;
+    background-color: var(--primary-color);
+    color: var(--button-text-color);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.connect-btn:hover {
+    background-color: var(--primary-hover-color);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+    .app-title {
+        font-size: 2.2em;
+    }
+    
+    .ascii-logo {
+        font-size: 0.6em;
+    }
+    
+    .entry-section {
+        padding: 20px;
+    }
+
+    .title-dash {
+        font-size: 1.2em;
+        width: 18px;
+        height: 18px;
+    }
 } 

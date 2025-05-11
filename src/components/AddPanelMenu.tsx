@@ -68,6 +68,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         // Remove the transform
         // transform: 'translateX(-100%)',
         opacity: 1, 
+        zIndex: 9999, // Add high z-index
       });
     } else {
       // Reset styles when hiding (keep display: none)
