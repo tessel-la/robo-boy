@@ -1,7 +1,6 @@
 # 🤖 Robo-Boy
 
-[![CI](https://github.com/tessel-la/robo-boy/actions/workflows/ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/ci.yml)
-[![Deploy](https://github.com/tessel-la/robo-boy/actions/workflows/deploy.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/deploy.yml)
+[![Docker CI](https://github.com/OWNER_USERNAME/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/OWNER_USERNAME/robo-boy/actions/workflows/docker-ci.yml)
 
 <!-- Replace with actual logo path if different -->
 <p align="center">
@@ -218,67 +217,52 @@ You should now be connected to the ROS environment and can use all of Foxglove S
 
 ## 🚀 CI/CD Workflow
 
-The project uses GitHub Actions for continuous integration and deployment:
+The project uses GitHub Actions for continuous integration:
 
-### CI Workflow
+### Docker CI Workflow
 
-The CI workflow runs automatically on every push to the `main` branch and on every pull request. It performs the following checks:
+The Docker CI workflow runs automatically on every push to the `main` branch and on every pull request. It tests the container build process:
 
-1. **Dependency Installation**: Installs all npm dependencies using `npm ci`
-2. **Linting**: Runs ESLint to check for code style and potential issues
-3. **TypeScript Type Checking**: Verifies type correctness across the codebase
-4. **Build**: Ensures the application builds correctly
+1. **Docker Setup**: Sets up Docker Buildx for multi-platform builds
+2. **App Container**: Builds the React application container from `Dockerfile.dev`
+3. **ROS Stack Container**: Builds the ROS 2 stack container from `Dockerfile.ros`
+4. **Docker Compose**: Tests the full stack build with docker-compose
+
+This approach ensures that all Docker containers and the full stack can be built successfully.
+
+### Testing Locally
+
+#### Testing Docker Builds Locally
+
+You can test the Docker builds locally using the provided scripts:
+
+**Linux/macOS:**
+```bash
+# Make the script executable
+chmod +x scripts/test-docker-build.sh
+
+# Run the Docker build tests
+./scripts/test-docker-build.sh
+```
+
+> **Note for WSL users**: If you encounter errors like `bash\r: No such file or directory`, you need to convert the file to Unix line endings. Install dos2unix (`sudo apt install dos2unix`) and run `dos2unix scripts/test-docker-build.sh` to fix the line endings.
+
+**Windows:**
+```cmd
+scripts\test-docker-build.bat
+```
+
+These scripts will build all Docker containers and test the full docker-compose setup, ensuring everything builds correctly.
+
+> **Note**: The deployment workflow is temporarily disabled.
 
 You can see the build status at the top of this README, or view detailed CI run history in the [Actions tab](https://github.com/OWNER_USERNAME/robo-boy/actions) of the repository.
 
-### Deployment Workflow
-
-The deployment workflow automatically builds and deploys the application to GitHub Pages when:
-
-1. You push to the `main` branch
-2. You create a new release
-3. You manually trigger the workflow
-
-To enable GitHub Pages deployment:
-
-1. Go to your repository settings
-2. Navigate to "Pages" section
-3. Select "GitHub Actions" as the source
-4. The site will be published at `https://YOUR_USERNAME.github.io/robo-boy/`
-
-### Setting Up CI for Forks
-
-If you fork this repository, you'll need to update the badge URLs in the README to point to your own repository:
-
-```markdown
-[![CI](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/ci.yml)
-[![Deploy](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR_USERNAME/robo-boy/actions/workflows/deploy.yml)
-```
-
 ## 🚢 Production Deployment
-
-### Docker Deployment
-
-For production deployment, you can use the provided production Docker setup:
-
-```bash
-# Build and run using production Docker Compose file
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-This will:
-1. Build the React application in a Node.js container
-2. Copy the built files to an Nginx container
-3. Serve the application on port 80
-
-The production setup uses a multi-stage Dockerfile (`Dockerfile.prod`) that:
-- Creates a minimal build environment
-- Builds the optimized production version of the app
-- Packages only the necessary files in a lightweight Nginx container
 
 ### Manual Deployment
 
-Alternatively, you can build the application locally and deploy the static files to any web server:
+To deploy the application:
 
 ```bash
 # Install dependencies
@@ -291,6 +275,21 @@ npm run build
 ```
 
 The built files in the `dist` directory can be deployed to any static hosting service like GitHub Pages, Netlify, Vercel, or a traditional web server.
+
+### GitHub Pages Deployment
+
+Once you enable the deployment workflow (by renaming `.github/workflows/deploy.yml.disabled` to `.github/workflows/deploy.yml`), the application will automatically deploy to GitHub Pages when:
+
+1. You push to the `main` branch
+2. You create a new release
+3. You manually trigger the workflow
+
+To enable GitHub Pages deployment:
+
+1. Go to your repository settings
+2. Navigate to "Pages" section
+3. Select "GitHub Actions" as the source
+4. The site will be published at `https://YOUR_USERNAME.github.io/robo-boy/`
 
 ## PWA Configuration and Icons
 
