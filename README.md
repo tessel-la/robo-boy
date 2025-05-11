@@ -213,4 +213,59 @@ You should now be connected to the ROS environment and can use all of Foxglove S
 *   Caddy logs can be viewed with `docker compose logs caddy`.
 *   ROS stack logs can be viewed with `docker compose logs ros-stack`.
 
+## PWA Configuration and Icons
+
+### Setting Up PWA Icons
+
+For the PWA to properly install on devices, specific icon sizes are required. The application uses the following icon sizes:
+
+1. **Favicon sizes**: 16x16, 32x32, 48x48, 64x64
+2. **Standard PWA icons**: 72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512
+3. **Special icons**:
+   - Apple Touch Icon: 180x180
+   - Maskable Icon: 512x512 (with 10% padding on all sides for safe area)
+
+### Generating Icons
+
+You can generate these icons in one of these ways:
+
+#### Option 1: Using ImageMagick (Recommended)
+
+If you have [ImageMagick](https://imagemagick.org/) installed:
+
+1. Run the PowerShell script: `powershell -ExecutionPolicy Bypass -File generate-icons.ps1`
+2. This will generate all required icon sizes in the `public/images/` directory
+
+#### Option 2: Manual Generation
+
+If you don't have ImageMagick:
+
+1. Use an image editor like Photoshop, GIMP, or an online tool
+2. Create resized versions of `images/logo.png` at all sizes listed above
+3. Save them in the `public/images/` directory with the following naming convention:
+   - Small sizes: `favicon-16x16.png`, `favicon-32x32.png`, etc.
+   - Standard sizes: `icon-72x72.png`, `icon-96x96.png`, etc.
+   - PWA specific: `pwa-192x192.png`, `pwa-512x512.png`
+   - Special: `apple-touch-icon.png`, `maskable-icon-512x512.png` (with padding)
+
+#### Option 3: Online PWA Icon Generators
+
+Use online tools that can generate all the required sizes from your source image:
+
+- [PWA Builder](https://www.pwabuilder.com/imageGenerator)
+- [App Icon Generator](https://appicon.co/)
+- [Favicon Generator](https://realfavicongenerator.net/)
+
+After generating icons, place them in the `public/images/` directory.
+
+### Manifest Configuration
+
+The PWA configuration is handled by:
+
+1. `manifest.webmanifest` - Contains the main PWA configuration including icon references
+2. `vite.config.ts` - Contains the build-time PWA plugin configuration
+3. `index.html` - Contains favicon and Apple touch icon references
+
+**Note**: After changing icon files, make sure to clean your browser cache or use incognito mode to test the PWA installation with the new icons.
+
 ```

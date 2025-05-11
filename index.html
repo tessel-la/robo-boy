@@ -2,12 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/images/logo.png" />
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/images/favicon-48x48.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Viewport and PWA settings -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- PWA Stuff -->
     <meta name="theme-color" content="#282c34" />
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/images/logo.png">
+    <link rel="apple-touch-icon-precomposed" href="/images/ios-apple-touch-icon.png?v=2">
+    
+    <!-- Apple specific PWA tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Robo-Boy">
+    
+    <!-- Apple touch icons - iOS is very specific about these -->
+    <link rel="apple-touch-icon" href="/images/ios-apple-touch-icon.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/ios-apple-touch-icon.png?v=2">
+    
+    <!-- iPhone 12 mini specific icon -->
+    <link rel="apple-touch-icon" media="(device-width: 375px) and (device-height: 812px)" href="/images/ios-mini-touch-icon.png?v=2">
+    
+    <!-- Apple launch screen images -->
+    <link rel="apple-touch-startup-image" href="/images/apple-launch-2732x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/images/apple-launch-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <!-- iPhone 12 mini, 11 Pro, XS, X -->
+    <link rel="apple-touch-startup-image" href="/images/apple-launch-1125x2436.png?v=2" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    
+    <!-- iOS specific manifest -->
+    <link rel="manifest" href="/apple-app-manifest.json" media="(display-mode: standalone) and (-webkit-max-device-pixel-ratio: 4)">
     
     <title>Robo-Boy</title>
   </head>

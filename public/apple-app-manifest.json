@@ -1,0 +1,16 @@
+{
+  "name": "Robo-Boy",
+  "short_name": "Robo-Boy",
+  "description": "A vibe web application for controlling ROS 2 robots with a retro handheld console feel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#282c34",
+  "theme_color": "#282c34",
+  "icons": [
+    {
+      "src": "/images/ios-mini-touch-icon.png?v=2",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+} 
