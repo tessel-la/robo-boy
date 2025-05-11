@@ -12,6 +12,7 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 *   📱 Responsive design for desktop and mobile.
 *   🔗 ROS 2 connection (via rosbridge).
 *   📷 Camera stream display (via web_video_server).
+*   🦊 Foxglove WebSocket server for advanced data visualization and debugging.
 *   🕹️ Interchangeable control interfaces:
     * Standard gamepad with dual joysticks (`sensor_msgs/Joy`)
     * Retro GameBoy-style control layout
@@ -181,11 +182,29 @@ docker compose down -v
 *   **`ros-stack`**: Runs ROS 2 components.
     *   `rosbridge_server`: Provides WebSocket connection at `ws://ros-stack:9090`.
     *   `web_video_server`: Streams video topics over HTTP at `http://ros-stack:8080`.
+    *   `foxglove_bridge`: Provides WebSocket connection for Foxglove Studio at `ws://ros-stack:8765`.
 *   **`caddy`**: Acts as a reverse proxy.
     *   Listens on host ports `80` and `443`.
     *   Provides HTTPS using the generated `mkcert` certificates.
     *   Routes `/websocket` requests to `ros-stack:9090`.
+    *   Routes `/foxglove` requests to `ros-stack:8765`.
     *   Routes all other requests to the Vite dev server (`app:5173`).
+
+## 🦊 Foxglove Studio Integration
+
+The application includes a Foxglove WebSocket server that allows you to connect and visualize your ROS data using [Foxglove Studio](https://foxglove.dev/studio). This provides advanced data visualization, plotting, and debugging capabilities.
+
+### Connecting to Foxglove Studio
+
+1. Launch Foxglove Studio (web or desktop version)
+2. Click "Open Connection" and select "WebSocket"
+3. Enter one of the following URLs:
+   - Local machine: `ws://localhost:8765` (direct connection to the port)
+   - Local machine via Caddy proxy: `wss://localhost/foxglove`
+   - From another device on the same network: `wss://YOUR_HOST_IP/foxglove`
+4. Click "Open"
+
+You should now be connected to the ROS environment and can use all of Foxglove Studio's features to visualize and analyze your robot's data.
 
 ## 🛠️ Development Notes
 

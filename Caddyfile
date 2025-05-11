@@ -22,6 +22,12 @@
        reverse_proxy ros-stack:9090 
     }
 
+    # Route Foxglove WebSocket requests to the ros-stack container
+    handle /foxglove* {
+       uri strip_prefix /foxglove
+       reverse_proxy ros-stack:8765
+    }
+
     # Route video stream requests to the ros-stack container
     handle /video_stream* {
         uri strip_prefix /video_stream
