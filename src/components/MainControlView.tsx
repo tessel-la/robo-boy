@@ -241,8 +241,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleViewToggle = () => {
     if (isTransitioning) return;
     setIsTransitioning(true);
-
+    
     const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
+    
     const currentView = viewPanelRef.current;
     if (!currentView) return;
 
@@ -250,7 +251,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const timeline = anime.timeline({
       easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
       complete: () => {
-        setIsTransitioning(false);
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 200);
       }
     });
 
