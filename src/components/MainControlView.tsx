@@ -248,7 +248,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     // Create timeline for the animation
     const timeline = anime.timeline({
-      easing: 'easeOutElastic(1, .7)', // Even less bouncy effect
+      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
       complete: () => {
         setIsTransitioning(false);
       }
@@ -276,8 +276,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         // First element (clone) moves out, second element (new view) moves in
         return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
       },
-      duration: 1500, // 1.5 seconds duration
-      easing: 'easeOutElastic(1, .7)', // Even less bouncy effect
+      duration: 800, // Reduced from 1500ms to 800ms for a quicker transition
+      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
       complete: () => {
         // Clean up the clone after animation
         currentViewClone.remove();
