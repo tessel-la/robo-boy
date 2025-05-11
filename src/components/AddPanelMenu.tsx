@@ -17,6 +17,7 @@ const availablePanelTypes = [
   { type: GamepadType.Voice, label: 'Voice Control' },
   { type: GamepadType.GameBoy, label: 'GameBoy' },
   { type: GamepadType.Drone, label: 'Drone Control' },
+  { type: GamepadType.Manipulator, label: 'Manipulator Control' },
   // Add other layouts here as they are created
 ];
 

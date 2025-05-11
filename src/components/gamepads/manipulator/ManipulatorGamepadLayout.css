@@ -1,0 +1,307 @@
+/* src/components/gamepads/drone/DroneGamepadLayout.css */
+
+.manipulator-pad-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 8px 5px;
+  box-sizing: border-box;
+  overflow: hidden;
+  gap: 8px;
+  /* background-color: transparent; (or remove rule to inherit) */
+  /* color: inherit; (or remove rule to inherit) */
+}
+
+.speed-controls-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+  flex-shrink: 0;
+  /* No explicit background for the container itself */
+}
+
+.speed-button {
+  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
+  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
+  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) */
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 38px;
+  height: 32px;
+}
+
+.speed-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.speed-button:hover {
+  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+}
+
+.speed-button.active {
+  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
+  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
+  color: white; /* Hardcoded: var(--button-text-color, white) */
+  box-shadow: 0 0 5px rgba(50, 205, 50, 0.5); /* Hardcoded: var(--primary-color-glow, rgba(50, 205, 50, 0.5)) */
+}
+
+.manipulator-pad-interactive-area {
+  display: flex;
+  flex-direction: column; /* Stack main content (joysticks + Z buttons row) */
+  align-items: center;
+  width: 100%;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.manipulator-buttons-and-joysticks {
+  display: flex;
+  justify-content: space-around; /* Joysticks and Z-controls group */
+  align-items: center; /* Center items vertically */
+  width: 100%;
+  max-width: 420px; /* Adjust as needed for 2 joysticks + Z buttons */
+  margin: auto;
+}
+
+.joysticks-container { /* This class is used in TSX for grouping the two joysticks */
+  display: flex;
+  justify-content: space-between; /* Space out the two joysticks */
+  align-items: center;
+  gap: 15px; /* Gap between the two joysticks */
+  flex-grow: 1;
+}
+
+.joystick-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px; 
+  justify-content: center; 
+}
+
+.joystick-label {
+  font-size: 0.55rem;
+  font-weight: 500;
+  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) */
+  margin-bottom: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: transparent;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+/* Z-Axis Controls Specific Container */
+.z-axis-controls {
+  display: flex;
+  flex-direction: column; /* Stack Z+ and Z- buttons vertically */
+  align-items: center;
+  gap: 10px; /* Gap between Z+ and Z- buttons */
+  margin-left: 15px; /* Space from the right joystick */
+}
+
+/* Generic Manipulator Button for Z-axis (Square) */
+.manipulator-button {
+  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
+  width: 50px;  /* Square button */
+  height: 50px; /* Square button */
+  border-radius: 8px; /* Slightly rounded square */
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.manipulator-button svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+}
+
+.manipulator-button:hover {
+  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px #5f6368, inset 0 1px 1px rgba(255, 255, 255, 0.15); /* var(--border-color) */
+}
+
+.manipulator-button.active {
+  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
+  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
+  color: white; /* Hardcoded: var(--button-text-color, white) */
+  transform: scale(0.95) translateY(1px); /* Press animation */
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* New Toggle Switch Styling */
+.frame-toggle-switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center the whole component */
+  gap: 8px; /* Gap between labels and the switch track */
+  margin-top: 8px;
+  margin-bottom: 12px;
+  padding: 5px;
+  cursor: pointer;
+  user-select: none; /* Prevent text selection on click */
+  width: fit-content; /* Adjust width to content */
+  margin-left: auto; /* Center component */
+  margin-right: auto; /* Center component */
+  background-color: #3c4043; /* var(--background-secondary) */
+  border-radius: 20px; /* Rounded container */
+}
+
+.frame-label {
+  font-size: 0.75rem;
+  color: #9aa0a6; /* var(--text-color-secondary) */
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.frame-label.active {
+  color: #e8eaed; /* var(--text-color) */
+  font-weight: 700;
+}
+
+.frame-toggle-track {
+  width: 44px; /* Width of the track */
+  height: 22px; /* Height of the track */
+  background-color: #5f6368; /* var(--border-color) */
+  border-radius: 11px; /* Half of height for pill shape */
+  position: relative;
+  transition: background-color 0.3s ease;
+}
+
+.frame-toggle-track.toggled-right {
+  background-color: #28a745; /* var(--primary-dark-color) - Active color when toggled right */
+}
+
+.frame-toggle-thumb {
+  width: 18px;  /* Diameter of the thumb */
+  height: 18px; /* Diameter of the thumb */
+  background-color: white;
+  border-radius: 50%; /* Circular thumb */
+  position: absolute;
+  top: 2px; /* (Track height - Thumb height) / 2 */
+  left: 2px; /* Initial position (left) */
+  transition: transform 0.3s ease;
+}
+
+.frame-toggle-track.toggled-right .frame-toggle-thumb {
+  transform: translateX(22px); /* Track width - Thumb width - (2 * padding/offset) = 44 - 18 - 4 = 22px */
+}
+
+/* Joystick Output Value Display Styling */
+.joystick-output-display {
+  font-size: 0.6rem; /* Small font size */
+  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) / Slightly faded */
+  margin-top: 4px; /* Space above the display */
+  background-color: rgba(0, 0, 0, 0.2); /* Subtle background */
+  padding: 2px 5px;
+  border-radius: 4px;
+  min-width: 100px; /* Ensure it has some width */
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap; /* Prevent wrapping */
+  font-family: 'Monaco', 'Consolas', monospace; /* Monospaced font for numbers */
+}
+
+.z-controls-wrapper {
+  display: flex;
+  flex-direction: column; /* Stack Z buttons and Z display vertically */
+  align-items: center; /* Center items horizontally */
+  gap: 8px; /* Gap between Z buttons and Z display */
+}
+
+/* Specific styling for Z output if needed, e.g., to match joystick displays more closely */
+.z-output-display {
+  /* Potentially different min-width or other tweaks if needed */
+  /* For now, inherits most styles from .joystick-output-display */
+  min-width: 70px; /* Smaller min-width for just one value */
+}
+
+/* Media Queries adapted from Drone */
+@media (max-width: 420px) { 
+  .manipulator-pad-layout {
+    padding: 5px;
+    gap: 5px;
+  }
+  .speed-controls-container {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+  .speed-button {
+    width: 36px;
+    height: 30px;
+    padding: 4px;
+  }
+  .speed-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .manipulator-buttons-and-joysticks {
+    flex-direction: column; /* Stack joysticks and Z buttons on very small screens */
+    gap: 10px;
+  }
+  .joysticks-container {
+     justify-content: space-around; /* Evenly space joysticks when stacked with Z*/
+     width: 100%;
+  }
+   .joystick-wrapper > div:nth-child(2) { /* This targets the react-joystick-component itself */
+    transform: scale(0.85); /* Slightly smaller joysticks */
+  }
+  .z-axis-controls {
+    flex-direction: row; /* Z buttons side-by-side if main layout is column */
+    margin-left: 0;
+    margin-top: 10px;
+  }
+  .manipulator-button {
+    width: 45px;
+    height: 45px;
+  }
+  .manipulator-button svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-height: 480px) { 
+  .manipulator-pad-layout {
+    padding-top: 3px;
+    gap: 3px;
+  }
+  .speed-controls-container {
+    margin-bottom: 3px;
+  }
+   .joystick-wrapper > div:nth-child(2) { 
+    transform: scale(0.75);
+  }
+  .joystick-label {
+    font-size: 0.5rem; 
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: 1px 2px;
+  }
+  .joystick-wrapper { gap: 0; }
+  .manipulator-button {
+    width: 40px;
+    height: 40px;
+  }
+} 
