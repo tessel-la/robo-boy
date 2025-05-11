@@ -1,6 +1,6 @@
 # 🤖 Robo-Boy
 
-[![Docker CI](https://github.com/OWNER_USERNAME/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/OWNER_USERNAME/robo-boy/actions/workflows/docker-ci.yml)
+[![Docker CI](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
 
 <!-- Replace with actual logo path if different -->
 <p align="center">
