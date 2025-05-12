@@ -1,0 +1,438 @@
+/* src/components/gamepads/drone/DroneGamepadLayout.css */
+
+.manipulator-pad-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 8px 5px;
+  box-sizing: border-box;
+  overflow: hidden;
+  gap: 8px;
+  /* background-color: transparent; (or remove rule to inherit) */
+  /* color: inherit; (or remove rule to inherit) */
+}
+
+.speed-controls-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+
+.speed-buttons-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  flex-grow: 0;
+  width: fit-content;
+}
+
+.speed-button {
+  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
+  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
+  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) */
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 38px;
+  height: 32px;
+  touch-action: manipulation;
+  margin: 0 -1px;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+.speed-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.speed-button:hover {
+  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+}
+
+.speed-button.active {
+  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
+  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
+  color: white; /* Hardcoded: var(--button-text-color, white) */
+  box-shadow: 0 0 5px rgba(50, 205, 50, 0.5); /* Hardcoded: var(--primary-color-glow, rgba(50, 205, 50, 0.5)) */
+}
+
+.manipulator-pad-interactive-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.manipulator-buttons-and-joysticks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  max-width: 420px;
+  margin: auto;
+}
+
+.joysticks-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
+  flex-grow: 1;
+  margin-top: -8px;
+}
+
+.joystick-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.joystick-label {
+  font-size: 0.55rem;
+  font-weight: 500;
+  color: #e8eaed;
+  margin-bottom: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: transparent;
+  padding: 1px 3px;
+  border-radius: 3px;
+  text-align: center;
+}
+
+/* Z-Axis Controls Specific Container */
+.z-controls-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  margin-top: -20px;
+}
+
+.z-axis-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Generic Manipulator Button for Z-axis (Square) */
+.manipulator-button {
+  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
+  width: 50px;  /* Square button */
+  height: 50px; /* Square button */
+  border-radius: 8px; /* Slightly rounded square */
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  touch-action: manipulation;
+}
+
+.manipulator-button svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+}
+
+.manipulator-button:hover {
+  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px #5f6368, inset 0 1px 1px rgba(255, 255, 255, 0.15); /* var(--border-color) */
+}
+
+.manipulator-button.active {
+  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
+  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
+  color: white; /* Hardcoded: var(--button-text-color, white) */
+  transform: scale(0.95) translateY(1px); /* Press animation */
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* New Toggle Switch Styling */
+.frame-toggle-switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  background-color: #3c4043;
+  border-radius: 20px;
+}
+
+.frame-label {
+  font-size: 0.7rem;
+  color: #9aa0a6; /* var(--text-color-secondary) */
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.frame-label.active {
+  color: #e8eaed; /* var(--text-color) */
+  font-weight: 700;
+}
+
+.frame-toggle-track {
+  width: 40px; /* Width of the track */
+  height: 20px; /* Height of the track */
+  background-color: #5f6368; /* var(--border-color) */
+  border-radius: 10px; /* Half of height for pill shape */
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.frame-toggle-track.toggled-right {
+  background-color: #28a745; /* var(--primary-dark-color) - Active color when toggled right */
+}
+
+.frame-toggle-thumb {
+  width: 16px;  /* Diameter of the thumb */
+  height: 16px; /* Diameter of the thumb */
+  background-color: white;
+  border-radius: 50%; /* Circular thumb */
+  position: absolute;
+  top: 2px; /* (Track height - Thumb height) / 2 */
+  left: 2px; /* Initial position (left) */
+  transition: transform 0.2s ease;
+}
+
+.frame-toggle-track.toggled-right .frame-toggle-thumb {
+  transform: translateX(20px); /* Track width - Thumb width - (2 * padding/offset) = 40 - 16 - 4 = 20px */
+}
+
+/* Joystick Output Value Display Styling */
+.joystick-output-display {
+  font-size: 0.6rem;
+  color: rgba(232, 234, 237, 0.85);
+  background-color: rgba(60, 64, 67, 0.3);
+  padding: 2px 4px;
+  border-radius: 4px;
+  min-width: 100px;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* Specific styling for Z output if needed, e.g., to match joystick displays more closely */
+.z-output-display {
+  min-width: 80px;
+}
+
+/* Media Queries adapted from Drone */
+@media (max-width: 420px) { 
+  .manipulator-pad-layout {
+    padding: 4px 2px;
+    gap: 4px;
+  }
+  .speed-controls-container {
+    gap: 24px;
+    margin-bottom: 4px;
+    padding: 0 4px;
+  }
+  .speed-buttons-group {
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    width: fit-content;
+  }
+  .speed-button {
+    width: 32px;
+    height: 28px;
+    padding: 2px;
+    margin: 0 -1px;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+  .speed-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .frame-toggle-switch-container {
+    margin: 0;
+    padding: 2px 6px;
+    gap: 4px;
+  }
+  .frame-label {
+    font-size: 0.6rem;
+  }
+  .frame-toggle-track {
+    width: 36px;
+    height: 18px;
+  }
+  .frame-toggle-thumb {
+    width: 14px;
+    height: 14px;
+  }
+  .frame-toggle-track.toggled-right .frame-toggle-thumb {
+    transform: translateX(18px);
+  }
+
+  .manipulator-pad-interactive-area {
+    flex-grow: 1;
+    min-height: 0;
+  }
+
+  .manipulator-buttons-and-joysticks {
+    gap: 8px;
+  }
+  .joysticks-container {
+    gap: 8px;
+    margin-top: -8px;
+  }
+  .joystick-wrapper {
+    transform: scale(1.2);
+  }
+  .joystick-label {
+    font-size: 0.5rem;
+  }
+  .joystick-output-display {
+    font-size: 0.5rem;
+    min-width: 80px;
+    margin-top: -12px;
+    color: rgba(232, 234, 237, 0.85);
+    background-color: rgba(60, 64, 67, 0.3);
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .z-axis-controls {
+    gap: 12px;
+  }
+  .manipulator-button {
+    width: 44px;
+    height: 44px;
+  }
+  .manipulator-button svg {
+    width: 20px;
+    height: 20px;
+  }
+  .z-output-display {
+    min-width: 70px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+  .manipulator-pad-layout {
+    padding: 2px;
+    gap: 2px;
+  }
+  .speed-controls-container {
+    gap: 12px;
+    padding: 0 2px;
+  }
+  .speed-buttons-group {
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    width: fit-content;
+  }
+  .speed-button {
+    width: 28px;
+    height: 24px;
+    margin: 0 -1px;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+  .speed-button svg {
+    width: 14px;
+    height: 14px;
+  }
+  .joystick-wrapper {
+    transform: scale(1.1);
+  }
+  .manipulator-button {
+    width: 40px;
+    height: 40px;
+  }
+  .manipulator-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .joystick-output-display {
+    margin-top: -12px;
+  }
+
+  .joysticks-container {
+    gap: 8px;
+    margin-top: -8px;
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .z-axis-controls {
+    gap: 12px;
+  }
+}
+
+/* Height-based adjustments */
+@media (max-height: 480px) {
+  .manipulator-pad-layout {
+    padding-top: 2px;
+    gap: 2px;
+  }
+  .speed-controls-container {
+    margin-bottom: 3px;
+  }
+  .joystick-wrapper {
+    transform: scale(1.2);
+  }
+  .joystick-output-display {
+    margin-top: -12px;
+  }
+
+  .joysticks-container {
+    gap: 8px;
+    margin-top: -8px;
+  }
+
+  .z-controls-wrapper {
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .z-axis-controls {
+    gap: 12px;
+  }
+} 
