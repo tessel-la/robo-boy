@@ -20,7 +20,8 @@
     "ros3d": "^1.1.0",
     "roslib": "^1.4.1",
     "three": "^0.89.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "animejs": "^3.2.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

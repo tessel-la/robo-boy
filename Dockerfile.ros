@@ -13,6 +13,7 @@ RUN apt-get update && \
     ros-humble-cv-bridge \
     ros-humble-web-video-server \
     ros-humble-rosidl-default-generators \
+    ros-humble-foxglove-bridge \
     python3-opencv \
     python3-pip \
     git \
@@ -79,6 +80,8 @@ RUN echo '#!/bin/bash' > /ros_ws/entrypoint.sh && \
     echo 'ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=0.0.0.0 &' >> /ros_ws/entrypoint.sh && \
     # Launch web_video_server
     echo 'ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &' >> /ros_ws/entrypoint.sh && \
+    # Launch Foxglove Bridge
+    echo 'ros2 launch foxglove_bridge foxglove_bridge_launch.xml address:=0.0.0.0 port:=8765 &' >> /ros_ws/entrypoint.sh && \
     # Launch tf2_web_republisher package, but use the expected executable/node name
 #    echo 'if [ -d "/republisher_ws/install/tf2_web_republisher_py" ]; then ros2 run tf2_web_republisher_py tf2_web_republisher_py & else echo "tf2_web_republisher_py not found, skipping launch."; fi' >> /ros_ws/entrypoint.sh && \
     # Keep the container running

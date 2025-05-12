@@ -1,5 +1,7 @@
 # 🤖 Robo-Boy
 
+[![Docker CI](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
+
 <!-- Replace with actual logo path if different -->
 <p align="center">
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
@@ -12,6 +14,7 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 *   📱 Responsive design for desktop and mobile.
 *   🔗 ROS 2 connection (via rosbridge).
 *   📷 Camera stream display (via web_video_server).
+*   🦊 Foxglove WebSocket server for advanced data visualization and debugging.
 *   🕹️ Interchangeable control interfaces:
     * Standard gamepad with dual joysticks (`sensor_msgs/Joy`)
     * Retro GameBoy-style control layout
@@ -181,11 +184,29 @@ docker compose down -v
 *   **`ros-stack`**: Runs ROS 2 components.
     *   `rosbridge_server`: Provides WebSocket connection at `ws://ros-stack:9090`.
     *   `web_video_server`: Streams video topics over HTTP at `http://ros-stack:8080`.
+    *   `foxglove_bridge`: Provides WebSocket connection for Foxglove Studio at `ws://ros-stack:8765`.
 *   **`caddy`**: Acts as a reverse proxy.
     *   Listens on host ports `80` and `443`.
     *   Provides HTTPS using the generated `mkcert` certificates.
     *   Routes `/websocket` requests to `ros-stack:9090`.
+    *   Routes `/foxglove` requests to `ros-stack:8765`.
     *   Routes all other requests to the Vite dev server (`app:5173`).
+
+## 🦊 Foxglove Studio Integration
+
+The application includes a Foxglove WebSocket server that allows you to connect and visualize your ROS data using [Foxglove Studio](https://foxglove.dev/studio). This provides advanced data visualization, plotting, and debugging capabilities.
+
+### Connecting to Foxglove Studio
+
+1. Launch Foxglove Studio (web or desktop version)
+2. Click "Open Connection" and select "WebSocket"
+3. Enter one of the following URLs:
+   - Local machine: `ws://localhost:8765` (direct connection to the port)
+   - Local machine via Caddy proxy: `wss://localhost/foxglove`
+   - From another device on the same network: `wss://YOUR_HOST_IP/foxglove`
+4. Click "Open"
+
+You should now be connected to the ROS environment and can use all of Foxglove Studio's features to visualize and analyze your robot's data.
 
 ## 🛠️ Development Notes
 
@@ -194,4 +215,101 @@ docker compose down -v
 *   Caddy logs can be viewed with `docker compose logs caddy`.
 *   ROS stack logs can be viewed with `docker compose logs ros-stack`.
 
+## 🚀 CI/CD Workflow
+
+The project uses GitHub Actions for continuous integration:
+
+### Docker CI Workflow
+
+The Docker CI workflow runs automatically on every push to the `main` branch and on every pull request. It tests the container build process:
+
+1. **Docker Setup**: Sets up Docker Buildx for multi-platform builds
+2. **App Container**: Builds the React application container from `Dockerfile.dev`
+3. **ROS Stack Container**: Builds the ROS 2 stack container from `Dockerfile.ros`
+4. **Docker Compose**: Tests the full stack build with docker-compose
+
+This approach ensures that all Docker containers and the full stack can be built successfully.
+
+### Testing Locally
+
+#### Testing Docker Builds Locally
+
+You can test the Docker builds locally using the provided scripts:
+
+**Linux/macOS:**
+```bash
+# Make the script executable
+chmod +x scripts/test-docker-build.sh
+
+# Run the Docker build tests
+./scripts/test-docker-build.sh
 ```
+
+> **Note for WSL users**: If you encounter errors like `bash\r: No such file or directory`, you need to convert the file to Unix line endings. Install dos2unix (`sudo apt install dos2unix`) and run `dos2unix scripts/test-docker-build.sh` to fix the line endings.
+
+**Windows:**
+```cmd
+scripts\test-docker-build.bat
+```
+
+These scripts will build all Docker containers and test the full docker-compose setup, ensuring everything builds correctly.
+
+> **Note**: The deployment workflow is temporarily disabled.
+
+You can see the build status at the top of this README, or view detailed CI run history in the [Actions tab](https://github.com/OWNER_USERNAME/robo-boy/actions) of the repository.
+
+## 🚢 Production Deployment
+
+### Manual Deployment
+
+To deploy the application:
+
+```bash
+# Install dependencies
+npm ci
+
+# Build for production
+npm run build
+
+# The 'dist' directory now contains the deployable files
+```
+
+The built files in the `dist` directory can be deployed to any static hosting service like GitHub Pages, Netlify, Vercel, or a traditional web server.
+
+### GitHub Pages Deployment
+
+Once you enable the deployment workflow (by renaming `.github/workflows/deploy.yml.disabled` to `.github/workflows/deploy.yml`), the application will automatically deploy to GitHub Pages when:
+
+1. You push to the `main` branch
+2. You create a new release
+3. You manually trigger the workflow
+
+To enable GitHub Pages deployment:
+
+1. Go to your repository settings
+2. Navigate to "Pages" section
+3. Select "GitHub Actions" as the source
+4. The site will be published at `https://YOUR_USERNAME.github.io/robo-boy/`
+
+## PWA Configuration and Icons
+
+### Setting Up PWA Icons
+
+For the PWA to properly install on devices, specific icon sizes are required. The application uses the following icon sizes:
+
+1. **Favicon sizes**: 16x16, 32x32, 48x48, 64x64
+2. **Standard PWA icons**: 72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512
+3. **Special icons**:
+   - Apple Touch Icon: 180x180
+   - Maskable Icon: 512x512 (with 10% padding on all sides for safe area)
+
+### Generating Icons
+
+You can generate these icons in one of these ways:
+
+#### Option 1: Using ImageMagick (Recommended)
+
+If you have [ImageMagick](https://imagemagick.org/) installed:
+
+1. Run the PowerShell script: `powershell -ExecutionPolicy Bypass -File generate-icons.ps1`
+2. This will generate all required icon sizes in the `
