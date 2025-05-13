@@ -31,9 +31,9 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
 
 ## 🎥 App Demo
 
-<div>
-  <video src="images/app_functions.mp4" width="80%" controls></video>
-</div>
+<p align="center">
+  <video src="images/app_functions.webm" width="40%" controls></video>
+</p>
 
 ## 🎮 Control Interfaces
 
@@ -58,9 +58,9 @@ You can open multiple control panels and switch between them with tabs.
 
 ## Theme Customization
 
-<div>
-  <video src="images/theme_custom.mp4" width="80%" controls></video>
-</div>
+<p align="center">
+  <video src="images/theme_custom.webm" width="40%" controls></video>
+</p>
 
 The application supports multiple themes, including user-created custom themes. Themes define the color palette for the UI elements.
 
