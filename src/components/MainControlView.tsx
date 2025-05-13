@@ -9,6 +9,7 @@ import StandardPadLayout from './gamepads/standard/StandardPadLayout'; // Import
 import VoiceLayout from './gamepads/voice/VoiceLayout'; // Import the new Voice layout
 import GameBoyLayout from './gamepads/gameboy/GameBoyLayout'; // Import the new GameBoy layout
 import DroneGamepadLayout from './gamepads/drone/DroneGamepadLayout'; // Import the new Drone gamepad layout
+import ManipulatorGamepadLayout from './gamepads/manipulator/ManipulatorGamepadLayout'; // Import the new Manipulator gamepad layout
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
@@ -92,7 +93,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     [GamepadType.Standard]: 0, 
     [GamepadType.Voice]: 0, 
     [GamepadType.GameBoy]: 0,
-    [GamepadType.Drone]: 1 // Drone counter starts at 1 as it's the default
+    [GamepadType.Drone]: 1, // Drone counter starts at 1 as it's the default
+    [GamepadType.Manipulator]: 1
   }); // Updated counters
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -186,7 +188,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         [GamepadType.Standard]: 'Pad',
         [GamepadType.Voice]: 'Voice',
         [GamepadType.GameBoy]: 'GameBoy',
-        [GamepadType.Drone]: 'Drone' // Added Drone label
+        [GamepadType.Drone]: 'Drone',
+        [GamepadType.Manipulator]: 'Manipulator'
     };
     panelCounters.current[type]++;
     const newName = `${typeLabels[type]} ${panelCounters.current[type]}`; // Use label for name
@@ -232,6 +235,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         return <GameBoyLayout ros={ros} key={panel.id} />;
       case GamepadType.Drone:
         return <DroneGamepadLayout ros={ros} key={panel.id} />;
+      case GamepadType.Manipulator:
+        return <ManipulatorGamepadLayout ros={ros} key={panel.id} />;
       default:
         return <div>Unknown Panel Type</div>;
     }
