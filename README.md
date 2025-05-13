@@ -18,6 +18,8 @@ A vibe web application for controlling ROS 2 robots, featuring a React frontend,
     * Standard gamepad with dual joysticks (`sensor_msgs/Joy`)
     * Retro GameBoy-style control layout
     * Voice control input with recording animation
+    * 🚁 Drone control pad for aerial vehicles
+    * 🦾 Manipulator control for robotic arms
 *   🧊 3D visualization support (using ros3djs)
     * 🌈 Customizable point cloud rendering with options for:
       * Point size adjustment
@@ -46,29 +48,13 @@ A nostalgic GameBoy-inspired control interface with D-pad and A/B buttons.
 ### Voice Control
 Record voice commands that can be sent to your robot for voice-activated control.
 
+### Drone Control Pad
+Specialized control interface for aerial vehicles. For testing, use in conjunction with [aerial-sim](https://github.com/tessel-la/aerial-sim) repository.
+
+### Manipulator Control
+Interface for controlling robotic arms with precise joint movements. For testing, use in conjunction with [manipulator-sim](https://github.com/tessel-la/manipulator-sim) repository.
+
 You can open multiple control panels and switch between them with tabs.
-
-## 3D Visualization
-
-The application includes a powerful 3D viewer for ROS topics, with customizable visualization settings.
-
-### Point Cloud Visualization
-
-You can add point cloud visualizations to the 3D viewer and customize their appearance:
-
-1. Click the ⚙️ (settings) button in the bottom right of the 3D panel
-2. In the settings popup, click "Add Visualization"
-3. Select "Pointcloud" as the visualization type, then choose a valid point cloud topic
-4. Once added, a settings button (⚙️) appears next to each point cloud visualization
-5. Click this button to access point cloud-specific settings:
-   - **Point Size**: Adjust the size of individual points
-   - **Max Points**: Control the maximum number of points to display
-   - **Color Options**:
-     - Fixed color mode: Select any color for the entire point cloud
-     - Axis-based gradient: Color points according to their position along the X, Y, or Z axis
-     - Custom color gradients: Define the minimum and maximum colors for the gradient
-
-These visualization settings help optimize performance and highlight important features in your point cloud data.
 
 ## Theme Customization
 
@@ -105,6 +91,8 @@ The codebase follows a component-based architecture:
   - `/standard` - Standard dual joystick layout
   - `/gameboy` - GameBoy-style control layout  
   - `/voice` - Voice control interface
+  - `/drone` - Drone control interface
+  - `/manipulator` - Robotic arm control interface
 - `/src/hooks` - Custom React hooks including ROS connection
 - `/src/utils` - Utility functions and helpers
 - `/src/features` - Feature-specific code (e.g., theme system)
