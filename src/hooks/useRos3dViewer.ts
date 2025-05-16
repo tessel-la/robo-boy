@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Needed for type hints during disposal
 
 // Custom Hook for managing ROS3D Viewer lifecycle

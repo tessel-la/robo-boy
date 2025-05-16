@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib'; 
 import * as ROSLIB from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
 import './VisualizationPanel.css';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys

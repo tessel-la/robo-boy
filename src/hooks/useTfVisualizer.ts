@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Ros } from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { Material } from 'three';
 import { CustomTFProvider } from '../utils/tfUtils'; // Import the provider class

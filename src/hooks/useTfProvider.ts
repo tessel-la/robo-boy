@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, TransformStore } from '../utils/tfUtils';
-import * as ROS3D from 'ros3d'; // Needed for Viewer type hint
+import * as ROS3D from '../utils/ros3d'; // Use internal implementation
 
 interface UseTfProviderProps {
   ros: Ros | null;

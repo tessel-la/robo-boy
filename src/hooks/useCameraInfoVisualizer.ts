@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
 
