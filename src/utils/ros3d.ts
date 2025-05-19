@@ -52,6 +52,9 @@ export class Viewer {
       this.camera.position.set(3, 3, 3);
     }
     this.camera.lookAt(0, 0, 0);
+    
+    // Set camera up vector to Z-up (using type assertion as any to bypass TypeScript limitation)
+    (this.camera as any).up = new THREE.Vector3(0, 0, 1);
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -104,6 +107,10 @@ export class Grid extends THREE.Object3D {
     const colorGrid = options.colorGrid || 0x888888;
     
     const gridHelper = new THREE.GridHelper(size, divisions, colorCenterLine, colorGrid);
+    
+    // Rotate grid to be flat on XY plane with Z up
+    gridHelper.rotation.x = Math.PI / 2;
+    
     super.add(gridHelper);
   }
 }
@@ -193,17 +200,17 @@ export class TfClient {
       const translation = transform.transform.translation;
       const rotation = transform.transform.rotation;
       
-      // Create a transform with ROS-to-THREE coordinate conversion
+      // Create a transform with ROS-to-THREE coordinate conversion for Z-up
       const convertedTransform = {
         translation: new THREE.Vector3(
           translation.x,
-          translation.z,  // ROS Z becomes THREE.js Y (up)
-          -translation.y  // ROS Y becomes negative THREE.js Z
+          translation.y,  // ROS Y stays as THREE.js Y 
+          translation.z   // ROS Z stays as THREE.js Z (up)
         ),
         rotation: new THREE.Quaternion(
           rotation.x,
-          rotation.z,    // ROS Z rotation axis becomes THREE.js Y
-          -rotation.y,   // ROS Y rotation axis becomes negative THREE.js Z
+          rotation.y,    // ROS Y rotation axis stays as THREE.js Y
+          rotation.z,    // ROS Z rotation axis stays as THREE.js Z
           rotation.w
         )
       };
@@ -264,6 +271,7 @@ export class PointCloud2 extends THREE.Object3D {
   private originX: number = 0.0;
   private originY: number = 0.0;
   private originZ: number = 0.0;
+  private messageFrameId: string = '';
   
   // Add points object to store the actual visualization
   public points: {
@@ -328,6 +336,52 @@ export class PointCloud2 extends THREE.Object3D {
     
     // Setup subscription
     this.subscribe();
+    
+    // Setup TF frame handling - subscribe to transformation updates
+    this.setupTfHandling();
+  }
+  
+  // Set up TF frame handling
+  private setupTfHandling(): void {
+    // Use requestAnimationFrame to update the transform periodically
+    const updateTransform = () => {
+      if (this.messageFrameId && this.tfClient) {
+        const fixedFrame = this.tfClient.getFixedFrame();
+        try {
+          // Look up transformation from the message frame to the fixed frame
+          // IMPORTANT: The CustomTFProvider already swaps the source and target frames internally,
+          // so we need to pass frames in the expected order: (targetFrame, sourceFrame)
+          const tf = (this.tfClient as any).lookupTransform(this.messageFrameId, fixedFrame);
+          if (tf && tf.translation && tf.rotation) {
+            // Apply transformation to the whole point cloud object
+            this.position.set(
+              tf.translation.x,
+              tf.translation.y,
+              tf.translation.z
+            );
+            this.quaternion.set(
+              tf.rotation.x,
+              tf.rotation.y,
+              tf.rotation.z,
+              tf.rotation.w
+            );
+            (this as any).visible = true;
+          } else {
+            // If transformation not available, hide the point cloud
+            (this as any).visible = false;
+          }
+        } catch (e) {
+          console.warn(`[PointCloud2] Could not transform from ${this.messageFrameId} to ${fixedFrame}: ${e}`);
+          (this as any).visible = false;
+        }
+      }
+      
+      // Continue the update loop
+      requestAnimationFrame(updateTransform);
+    };
+    
+    // Start the update loop
+    requestAnimationFrame(updateTransform);
   }
   
   // Initialize point cloud geometry and material
@@ -465,6 +519,17 @@ export class PointCloud2 extends THREE.Object3D {
     try {
       console.log('[PointCloud2] Processing message:', message);
       
+      // Store the message frame_id for TF transformation
+      if (message.header && message.header.frame_id) {
+        // Remove any leading '/' from the frame_id to be consistent with TF
+        const frameId = message.header.frame_id.startsWith('/') ? 
+          message.header.frame_id.substring(1) : message.header.frame_id;
+        this.messageFrameId = frameId;
+        console.log(`[PointCloud2] Message frame_id: ${this.messageFrameId}`);
+      } else {
+        console.warn('[PointCloud2] Message has no frame_id in header');
+      }
+      
       // Log message structure for debugging
       console.log('[PointCloud2] Message structure:', {
         height: message.height,
@@ -561,10 +626,9 @@ export class PointCloud2 extends THREE.Object3D {
           y = y * this.scaleY + this.originY;
           z = z * this.scaleZ + this.originZ;
           
-          // Swap Y and Z to convert from ROS Z-up to THREE.js Y-up
-          // In THREE.js: Y is up, X is right, Z is toward viewer (right-handed)
-          // In ROS: Z is up, X is forward, Y is left (right-handed)
-          positions.setXYZ(i, x, z, -y);
+          // For Z-up coordinate system, we keep the coordinates as is
+          // No need to swap Y and Z - in Z-up system, we keep ROS coordinates directly
+          positions.setXYZ(i, x, y, z);
         } catch (e) {
           console.error(`[PointCloud2] Error processing point ${i}:`, e);
           // Skip this point and continue with the rest
@@ -805,18 +869,18 @@ export class OrbitControls {
     // Pan in screen-space
     offset.copy(position).sub(this.target);
     
-    // Get right and up vectors from camera
-    const up = new THREE.Vector3(0, 1, 0);
+    // Get Z-up vector (changed from Y-up)
+    const up = new THREE.Vector3(0, 0, 1);
     
     const pan = new THREE.Vector3();
     
-    // Calculate right vector (cross product of camera direction and world up)
+    // Calculate right vector (cross product of camera direction and Z-up)
     const right = new THREE.Vector3().crossVectors(up, offset).normalize();
     
     // Pan right/left
     pan.copy(right).multiplyScalar(deltaX);
     
-    // Pan up/down (use true up vector)
+    // Pan up/down (use Z-up vector)
     pan.add(up.multiplyScalar(deltaY));
     
     // Apply pan to camera and target
