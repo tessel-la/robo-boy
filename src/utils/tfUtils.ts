@@ -282,30 +282,36 @@ export class CustomTFProvider {
     }
 
      updateFixedFrame(newFixedFrame: string) {
-        const normalizedNewFixedFrame = newFixedFrame.startsWith('/') ? newFixedFrame.substring(1) : newFixedFrame;
-        if (this.fixedFrame !== normalizedNewFixedFrame) {
-            // console.log(`[CustomTFProvider] Fixed frame updated from ${this.fixedFrame} to ${normalizedNewFixedFrame}`);
-            this.fixedFrame = normalizedNewFixedFrame;
-
-            // Re-evaluate transforms for all subscribed frames relative to the new fixed frame
-            this.callbacks.forEach((frameCallbacks, frameId) => {
-                 const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId); // Use internal method
-                 const latestTransformObject = latestTransformTHREE
-                   ? { // Plain object
-                       translation: { x: latestTransformTHREE.translation.x, y: latestTransformTHREE.translation.y, z: latestTransformTHREE.translation.z },
-                       rotation: { x: latestTransformTHREE.rotation.x, y: latestTransformTHREE.rotation.y, z: latestTransformTHREE.rotation.z, w: latestTransformTHREE.rotation.w }
-                     }
-                   : null;
-                 // console.log(`[CustomTFProvider] Re-notifying ${frameCallbacks.size} callbacks for frame ${frameId} due to fixedFrame change.`);
-                 frameCallbacks.forEach(cb => {
-                   try {
-                     cb(latestTransformObject); // Pass the plain object
-                   } catch (e) {
-                     console.error(`[CustomTFProvider] Error in TF callback for frame ${frameId} (fixedFrame update):`, e);
-                   }
-                 });
-            });
+        // Normalize frame ID (remove leading slash)
+        const normalizedNewFrame = newFixedFrame.startsWith('/') ? newFixedFrame.substring(1) : newFixedFrame;
+        
+        // Only update if actually changed
+        if (this.fixedFrame === normalizedNewFrame) {
+          console.log(`[TFProvider] Fixed frame is already ${normalizedNewFrame}, no change needed`);
+          return;
         }
+        
+        console.log(`[TFProvider] Updating fixed frame from ${this.fixedFrame} to ${normalizedNewFrame}`);
+        this.fixedFrame = normalizedNewFrame;
+        
+        // Notify all callback subscribers that their transforms may have changed
+        let updatedCount = 0;
+        this.callbacks.forEach((callbackSet, frameId) => {
+          callbackSet.forEach(callback => {
+            try {
+              // Recalculate transform with new fixed frame
+              const transform = this.lookupTransform(this.fixedFrame, frameId);
+              // Trigger callback with updated transform
+              callback(this.transformToROSLIB(transform));
+              updatedCount++;
+            } catch (error) {
+              console.warn(`[TFProvider] Error updating callback for ${frameId} after fixed frame change:`, error);
+              callback(null); // Frame is now unavailable
+            }
+          });
+        });
+        
+        console.log(`[TFProvider] Updated ${updatedCount} transform subscribers after fixed frame change`);
     }
 
     // Modify subscribe to provide plain object initially
@@ -369,6 +375,25 @@ export class CustomTFProvider {
         console.log("[CustomTFProvider] Disposing provider.");
         this.transforms = {}; // Clear transforms
         this.callbacks.clear(); // Clear callbacks
+    }
+
+    // Helper method to convert THREE.js transform to ROSLIB format for callbacks
+    private transformToROSLIB(transform: StoredTransform | null): any {
+      if (!transform) return null;
+      
+      return {
+        translation: {
+          x: transform.translation.x,
+          y: transform.translation.y,
+          z: transform.translation.z
+        },
+        rotation: {
+          x: transform.rotation.x,
+          y: transform.rotation.y,
+          z: transform.rotation.z,
+          w: transform.rotation.w
+        }
+      };
     }
 }
 

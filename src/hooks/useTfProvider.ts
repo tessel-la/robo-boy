@@ -155,6 +155,43 @@ export function useTfProvider({
   // customTFProvider ref shouldn't be a dependency itself, readiness flag handles it.
   }, [isProviderReady, ros, handleTFMessage]);
 
+  // Function to check if the provider is properly initialized with all required methods
+  const ensureProviderFunctionality = () => {
+    if (!customTFProvider.current) {
+      console.error("[TF Provider] Provider not initialized yet");
+      return false;
+    }
+    
+    // Check for required methods
+    const requiredMethods = ['lookupTransform', 'updateFixedFrame', 'subscribe', 'unsubscribe'];
+    for (const method of requiredMethods) {
+      if (typeof (customTFProvider.current as any)[method] !== 'function') {
+        console.error(`[TF Provider] Provider missing required method: ${method}`);
+        return false;
+      }
+    }
+    
+    // Add a getFixedFrame method if it doesn't exist (needed by some components)
+    if (typeof (customTFProvider.current as any).getFixedFrame !== 'function') {
+      console.log("[TF Provider] Adding getFixedFrame method to provider");
+      (customTFProvider.current as any).getFixedFrame = function() {
+        return this.fixedFrame;
+      };
+    }
+    
+    return true;
+  };
+  
+  // Call this function each time the provider is created or updated
+  useEffect(() => {
+    if (customTFProvider.current) {
+      ensureProviderFunctionality();
+    }
+  }, [isProviderReady]);
+
   // Return the TF provider instance ref, needed by the PointCloud client
-  return { customTFProvider };
+  return { 
+    customTFProvider,
+    ensureProviderFunctionality // Export the function for external use
+  };
 } 
