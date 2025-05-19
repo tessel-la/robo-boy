@@ -53,8 +53,8 @@ export class Viewer {
     }
     this.camera.lookAt(0, 0, 0);
     
-    // Set camera up vector to Z-up (using type assertion as any to bypass TypeScript limitation)
-    (this.camera as any).up = new THREE.Vector3(0, 0, 1);
+    // Set camera up vector to Z-up
+    this.camera.up = new THREE.Vector3(0, 0, 1);
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -103,15 +103,17 @@ export class Grid extends THREE.Object3D {
     
     const size = options.size || 10;
     const divisions = options.divisions || 10;
-    const colorCenterLine = options.colorCenterLine || 0x444444;
-    const colorGrid = options.colorGrid || 0x888888;
+    const colorCenterLine = options.colorCenterLine !== undefined ? 
+      options.colorCenterLine : 0x444444;
+    const colorGrid = options.colorGrid !== undefined ? 
+      options.colorGrid : 0x888888;
     
     const gridHelper = new THREE.GridHelper(size, divisions, colorCenterLine, colorGrid);
     
     // Rotate grid to be flat on XY plane with Z up
     gridHelper.rotation.x = Math.PI / 2;
     
-    super.add(gridHelper);
+    this.add(gridHelper);
   }
 }
 
@@ -130,7 +132,7 @@ export class Axes extends THREE.Object3D {
     
     const size = options.lineSize || 1;
     const axesHelper = new THREE.AxesHelper(size);
-    super.add(axesHelper);
+    this.add(axesHelper);
     
     // Store for disposal if needed
     this.lineSegments = {

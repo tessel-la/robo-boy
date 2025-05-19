@@ -1,6 +1,6 @@
 declare module 'ros3d' {
     // Basic THREE types often used
-    import { Object3D, Material, Camera, LineSegments, BufferGeometry } from 'three';
+    import { Object3D, Material, Camera, PerspectiveCamera, WebGLRenderer, Scene, Vector3, Quaternion, BufferGeometry } from 'three';
 
     // Basic roslib types
     import { Ros } from 'roslib';
@@ -17,11 +17,11 @@ declare module 'ros3d' {
         });
         addObject(object: Object3D): void;
         resize(width: number, height: number): void;
-        scene: Object3D; // Typically THREE.Scene
-        camera: Camera; // Typically THREE.PerspectiveCamera
-        renderer: any; // Add renderer if needed for disposal
-        stop(): void; // Add stop method if used
-        fixedFrame: string; // Add fixedFrame property
+        scene: Scene;
+        camera: PerspectiveCamera;
+        renderer: WebGLRenderer;
+        stop(): void;
+        fixedFrame: string;
     }
 
     // Basic grid declaration
@@ -56,36 +56,63 @@ declare module 'ros3d' {
         });
         subscribe(frameId: string, callback: (transform: any | null) => void): void;
         unsubscribe(frameId: string, callback?: (transform: any | null) => void): void;
-        // Add other methods if needed
+        getFixedFrame(): string;
     }
 
     // PointCloud2 declaration
-    export class PointCloud2 extends Object3D { // Extends Object3D as it's added to the scene
+    export class PointCloud2 extends Object3D { 
         constructor(options: {
             ros: Ros;
             topic: string;
             tfClient: TfClient;
             rootObject: Object3D;
-            max_pts?: number;     // Correct option name
+            max_pts?: number;
             size?: number;
-            material?: Material | { [key: string]: any }; // Allow custom material or options
-            colorsrc?: string;    // Field name for color
-            compression?: 'cbor' | 'png' | 'none'; // Specify allowed compression types
+            material?: Material | { [key: string]: any };
+            colorsrc?: string;
+            compression?: 'cbor' | 'png' | 'none';
             throttle_rate?: number;
+            scaleX?: number;
+            scaleY?: number;
+            scaleZ?: number;
+            originX?: number;
+            originY?: number;
+            originZ?: number;
+            fixedFrame?: string;
         });
-        // Add methods if needed, e.g., unsubscribe is likely internal
+        subscribe(): void;
+        unsubscribe(): void;
+        safeResetPoints(material?: Material | { [key: string]: any }): boolean;
+        processMessage(message: any): void;
+        updateSettings(options: {
+            scaleX?: number;
+            scaleY?: number;
+            scaleZ?: number;
+            originX?: number;
+            originY?: number;
+            originZ?: number;
+            pointSize?: number;
+        }): void;
+        points: {
+            object: THREE.Points | null;
+            material: Material | null;
+            geometry: BufferGeometry | null;
+            setup: boolean;
+        };
     }
 
     // OrbitControls declaration
     export class OrbitControls {
         constructor(options: {
             scene: Object3D;
-            camera: Camera;
+            camera: PerspectiveCamera;
             userZoomSpeed?: number;
             userPanSpeed?: number;
+            userRotateSpeed?: number;
             element?: HTMLElement;
         });
-        // Add methods if needed, e.g., dispose()
+        update(): void;
+        dispose(): void;
     }
 
     // Add other ros3d classes/types here as needed (e.g., UrdfClient, MarkerClient)
