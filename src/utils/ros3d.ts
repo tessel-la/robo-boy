@@ -349,9 +349,7 @@ export class PointCloud2 extends THREE.Object3D {
         const fixedFrame = this.tfClient.getFixedFrame();
         try {
           // Look up transformation from the message frame to the fixed frame
-          // IMPORTANT: The CustomTFProvider already swaps the source and target frames internally,
-          // so we need to pass frames in the expected order: (targetFrame, sourceFrame)
-          const tf = (this.tfClient as any).lookupTransform(this.messageFrameId, fixedFrame);
+          const tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
           if (tf && tf.translation && tf.rotation) {
             // Apply transformation to the whole point cloud object
             this.position.set(
