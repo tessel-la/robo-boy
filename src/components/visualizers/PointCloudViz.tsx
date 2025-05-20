@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from '../../utils/ros3d';
 import * as THREE from 'three';
@@ -25,6 +25,9 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   fixedFrame,
   options,
 }) => {
+  // Keep a reference to the current client
+  const clientRef = useRef<ROS3D.PointCloud2 | null>(null);
+
   // Prepare material options based on settings
   const materialOptions = {
     size: options?.pointSize ?? 0.05,
@@ -42,7 +45,8 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
     maxPoints: options?.maxPoints ?? 200000,
   };
 
-  usePointCloudClient({
+  // Use the hook and capture the client reference
+  const { pointCloudClient } = usePointCloudClient({
     ros,
     isRosConnected,
     ros3dViewer,
@@ -51,7 +55,31 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
     selectedPointCloudTopic: topic,
     material: materialOptions,
     options: clientOptions,
+    clientRef,  // Pass the ref to store the client
   });
+
+  // Effect to update settings when options change
+  useEffect(() => {
+    if (clientRef.current && isRosConnected && options) {
+      console.log('[PointCloudViz] Updating settings for point cloud:', topic);
+      
+      // Only apply settings that are enabled in the UI
+      const updateOptions: any = {};
+      
+      // Update point size if enabled
+      if (options.pointSizeEnabled && options.pointSize !== undefined) {
+        updateOptions.pointSize = options.pointSize;
+      }
+      
+      // Update color if enabled
+      if (options.colorEnabled && options.color) {
+        updateOptions.color = options.color;
+      }
+      
+      // Apply the settings to the client
+      clientRef.current.updateSettings(updateOptions);
+    }
+  }, [options, isRosConnected, topic]);
 
   // This component manages the hook lifecycle but renders nothing itself
   return null;

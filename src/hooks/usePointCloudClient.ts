@@ -170,6 +170,7 @@ interface PointCloudClientOptions {
   throttleRate?: number;
 }
 
+// Define the hook props interface
 interface UsePointCloudClientProps {
   ros: Ros | null;
   isRosConnected: boolean;
@@ -179,6 +180,7 @@ interface UsePointCloudClientProps {
   fixedFrame: string;
   material?: PointCloudMaterialOptions;
   options?: PointCloudClientOptions;
+  clientRef?: React.MutableRefObject<ROS3D.PointCloud2 | null>;
 }
 
 // Custom Hook for managing the PointCloud2 client lifecycle
@@ -191,6 +193,7 @@ export function usePointCloudClient({
   fixedFrame,
   material = {},
   options = {},
+  clientRef,
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
   
@@ -777,6 +780,11 @@ export function usePointCloudClient({
       pointsClient.current = newClient; // Update the main ref for this hook
       createdClientInstance = newClient; // Capture instance for this effect run's cleanup
       
+      // If an external ref was provided, update it too
+      if (clientRef) {
+        clientRef.current = newClient;
+      }
+      
       // Add a short delay before allowing message processing
       // This gives the points object time to be fully set up
       setTimeout(() => {
@@ -1028,7 +1036,9 @@ export function usePointCloudClient({
     // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change or fixedFrame changes
   }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame]);
 
-  // This hook primarily manages side effects, doesn't need to return the client ref itself
-  // unless the parent component needs direct access for some reason.
-  return { axisRanges: axisRanges.current }; 
+  // Update return value to include the client
+  return { 
+    axisRanges: axisRanges.current,
+    pointCloudClient: pointsClient.current 
+  }; 
 } 

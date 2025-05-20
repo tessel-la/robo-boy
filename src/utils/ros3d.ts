@@ -722,6 +722,12 @@ export class PointCloud2 extends THREE.Object3D {
     originY?: number;
     originZ?: number;
     pointSize?: number;
+    color?: THREE.Color | number | string;
+    minColor?: THREE.Color;
+    maxColor?: THREE.Color;
+    colorMode?: string;
+    minAxisValue?: number;
+    maxAxisValue?: number;
   }): void {
     // Update scale factors if provided
     if (options.scaleX !== undefined) this.scaleX = options.scaleX;
@@ -733,14 +739,53 @@ export class PointCloud2 extends THREE.Object3D {
     if (options.originY !== undefined) this.originY = options.originY;
     if (options.originZ !== undefined) this.originZ = options.originZ;
     
-    // Update point size if provided and points object exists
-    if (options.pointSize !== undefined && this.points?.material) {
-      this.pointSize = options.pointSize;
+    // Update material properties if points object exists
+    if (this.points?.material) {
+      const material = this.points.material;
       
-      // Update point size in material if it's a PointsMaterial
-      if (this.points.material instanceof THREE.PointsMaterial) {
-        this.points.material.size = this.pointSize;
-        this.points.material.needsUpdate = true;
+      // Update point size if provided
+      if (options.pointSize !== undefined) {
+        this.pointSize = options.pointSize;
+        
+        // Update point size in material if it's a PointsMaterial
+        if (material instanceof THREE.PointsMaterial) {
+          material.size = this.pointSize;
+        }
+      }
+      
+      // Update color if provided
+      if (options.color !== undefined && material instanceof THREE.PointsMaterial) {
+        if (options.color instanceof THREE.Color) {
+          material.color = options.color;
+        } else {
+          material.color = new THREE.Color(options.color);
+        }
+      }
+      
+      // Force material update
+      if (material) {
+        material.needsUpdate = true;
+      }
+      
+      // If we need to rebuild the point cloud with new settings (for complex changes)
+      if (options.colorMode !== undefined || 
+          options.minColor !== undefined || 
+          options.maxColor !== undefined ||
+          options.minAxisValue !== undefined ||
+          options.maxAxisValue !== undefined) {
+        
+        // Create a new material with updated settings
+        const newMaterial = new THREE.PointsMaterial({
+          size: this.pointSize,
+          sizeAttenuation: true,
+          color: material instanceof THREE.PointsMaterial ? material.color : new THREE.Color(0x00ff00)
+        });
+        
+        // Apply color mode settings if needed
+        // This would be expanded based on how you want to handle color gradients
+        
+        // Recreate points with new material
+        this.safeResetPoints(newMaterial);
       }
     }
     
@@ -752,7 +797,8 @@ export class PointCloud2 extends THREE.Object3D {
       originX: this.originX,
       originY: this.originY,
       originZ: this.originZ,
-      pointSize: this.pointSize
+      pointSize: this.pointSize,
+      color: options.color ? 'color updated' : undefined
     });
   }
 }
