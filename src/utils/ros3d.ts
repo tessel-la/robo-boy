@@ -260,29 +260,28 @@ export class TfClient {
 export class PointCloud2 extends THREE.Object3D {
   private ros: Ros;
   private topic: string;
-  private tfClient: TfClient;
+  private tfClient: any; // TfClient or any compatible TF provider
   private rootObject: THREE.Object3D;
   private maxPoints: number;
   private pointSize: number;
   private compression: string;
   private throttleRate: number;
-  private topicSubscription: any;
+  private points: any;
+  private messageFrameId: string | null = null;
+  private fixedFrame: string;
+  
+  // Scaling factors for points
   private scaleX: number = 1.0;
   private scaleY: number = 1.0;
   private scaleZ: number = 1.0;
+  
+  // Origin offset
   private originX: number = 0.0;
   private originY: number = 0.0;
   private originZ: number = 0.0;
-  private messageFrameId: string = '';
-  private fixedFrame: string = 'odom'; // Store fixed frame here
   
-  // Add points object to store the actual visualization
-  public points: {
-    object: THREE.Points | null;
-    material: THREE.Material | null;
-    geometry: THREE.BufferGeometry | null;
-    setup: boolean;
-  };
+  // For animation loop tracking
+  private transformUpdateAnimationId: number | null = null;
   
   constructor(options: {
     ros: Ros;
@@ -326,14 +325,6 @@ export class PointCloud2 extends THREE.Object3D {
     if (options.originZ !== undefined) this.originZ = options.originZ;
     
     // Initialize the points object
-    this.points = {
-      object: null,
-      material: null,
-      geometry: null,
-      setup: false
-    };
-    
-    // Initialize and set up point cloud
     this.initializePoints(options.material);
     
     // Add to the root object
@@ -350,21 +341,22 @@ export class PointCloud2 extends THREE.Object3D {
   private setupTfHandling(): void {
     // Track the current fixed frame to detect changes
     let currentFixedFrame = this.fixedFrame;
-    
-    // Function to safely get the fixed frame
-    const getFixedFrame = () => {
-      // First try to get it from the tfClient
-      if (this.tfClient && typeof this.tfClient.getFixedFrame === 'function') {
-        return this.tfClient.getFixedFrame();
-      }
-      // Otherwise use our stored value
-      return this.fixedFrame;
-    };
+    let lastTransformTime = 0;
+    let retryCount = 0;
+    let lastVisibleState = false;
     
     // Use requestAnimationFrame to update the transform periodically
-    const updateTransform = () => {
+    const updateTransform = (timestamp: number) => {
+      // Run at most 30fps to avoid excessive CPU usage
+      const now = performance.now();
+      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless we're retrying
+        this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
+        return;
+      }
+      lastTransformTime = now;
+      
       if (this.messageFrameId) {
-        const fixedFrame = getFixedFrame();
+        const fixedFrame = this.getFixedFrame();
         
         // Check if fixed frame has changed
         const frameChanged = currentFixedFrame !== fixedFrame;
@@ -373,12 +365,40 @@ export class PointCloud2 extends THREE.Object3D {
           this.fixedFrame = fixedFrame; // Update our stored value
           // Log the change for debugging
           console.log(`[PointCloud2] Fixed frame changed to: ${fixedFrame}`);
-          (this as any).visible = false; // Hide until we get a new transform
+          // Reset retry counter when frame changes
+          retryCount = 0;
+          // Don't immediately hide - try to get the transform first
         }
         
         try {
           // Look up transformation from the message frame to the fixed frame
-          const tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
+          let tf;
+          try {
+            tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
+          } catch (error) {
+            // If we get a "not a function" error, try a more direct approach
+            if (error instanceof TypeError && error.message.includes('is not a function')) {
+              console.warn(`[PointCloud2] Transform lookup method failed, trying fallback with direct access to transforms`);
+              
+              // Try to access the transforms directly if possible
+              const provider = this.tfClient;
+              if (provider && (provider as any).transforms) {
+                try {
+                  // Use the lookupTransform function from tfUtils if available
+                  if (typeof (provider as any).lookupTransform === 'function') {
+                    tf = (provider as any).lookupTransform(fixedFrame, this.messageFrameId);
+                  }
+                } catch (fallbackError) {
+                  throw error; // Rethrow the original error if fallback fails
+                }
+              } else {
+                throw error; // Rethrow if we can't access the transforms
+              }
+            } else {
+              throw error; // Rethrow other errors
+            }
+          }
+          
           if (tf && tf.translation && tf.rotation) {
             // Apply transformation to the whole point cloud object
             this.position.set(
@@ -392,7 +412,16 @@ export class PointCloud2 extends THREE.Object3D {
               tf.rotation.z,
               tf.rotation.w
             );
+            
+            if (!lastVisibleState) {
+              console.log(`[PointCloud2] Transform found for ${this.messageFrameId} in ${fixedFrame}, showing point cloud`);
+            }
+            
             (this as any).visible = true;
+            lastVisibleState = true;
+            
+            // Reset retry counter since we succeeded
+            retryCount = 0;
             
             // Force position and quaternion update
             this.updateMatrix();
@@ -403,21 +432,58 @@ export class PointCloud2 extends THREE.Object3D {
               this.points.object.matrixWorldNeedsUpdate = true;
             }
           } else {
-            // If transformation not available, hide the point cloud
-            (this as any).visible = false;
+            // If transformation not immediately available, increment retry count
+            retryCount++;
+            
+            // Only hide after a few retries to avoid flickering
+            if (retryCount > 30) { // About 1 second of retries
+              if (lastVisibleState) {
+                console.warn(`[PointCloud2] Transform not available from ${this.messageFrameId} to ${fixedFrame} after ${retryCount} retries`);
+              }
+              (this as any).visible = false;
+              lastVisibleState = false;
+              
+              // Limit retry count to avoid overflow
+              if (retryCount > 300) { // About 10 seconds
+                retryCount = 300;
+              }
+            }
           }
         } catch (e) {
-          console.warn(`[PointCloud2] Could not transform from ${this.messageFrameId} to ${fixedFrame}: ${e}`);
-          (this as any).visible = false;
+          retryCount++;
+          
+          // Only log errors after several retries to reduce spam
+          if (retryCount % 30 === 0) {
+            console.warn(`[PointCloud2] Could not transform from ${this.messageFrameId} to ${fixedFrame}: ${e instanceof Error ? e.message : e}`);
+            
+            // Log more detailed info for troubleshooting
+            if (retryCount === 30) {
+              console.debug(`[PointCloud2] Error details:`, e);
+              
+              // Log available methods on tfClient for debugging
+              if (this.tfClient) {
+                console.debug(`[PointCloud2] TF client methods:`, 
+                  Object.getOwnPropertyNames(Object.getPrototypeOf(this.tfClient))
+                    .filter(prop => typeof (this.tfClient as any)[prop] === 'function')
+                );
+              }
+            }
+          }
+          
+          // Only hide after a few retries
+          if (retryCount > 30) {
+            (this as any).visible = false;
+            lastVisibleState = false;
+          }
         }
       }
       
       // Continue the update loop
-      requestAnimationFrame(updateTransform);
+      this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
     };
     
     // Start the update loop
-    requestAnimationFrame(updateTransform);
+    this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
   }
   
   // Initialize point cloud geometry and material
@@ -800,6 +866,89 @@ export class PointCloud2 extends THREE.Object3D {
       pointSize: this.pointSize,
       color: options.color ? 'color updated' : undefined
     });
+  }
+
+  // Add a method to force a transform update immediately
+  public forceTransformUpdate(): void {
+    if (!this.messageFrameId) {
+      console.warn('[PointCloud2] Cannot force transform update - no message frame ID set yet');
+      return;
+    }
+    
+    const fixedFrame = this.getFixedFrame();
+    console.log(`[PointCloud2] Forcing transform update from ${this.messageFrameId} to ${fixedFrame}`);
+    
+    try {
+      // Look up transformation from the message frame to the fixed frame
+      let tf;
+      try {
+        tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
+      } catch (error) {
+        // If we get a "not a function" error, try a more direct approach
+        if (error instanceof TypeError && error.message.includes('is not a function')) {
+          console.warn(`[PointCloud2] Force transform lookup method failed, trying fallback with direct access`);
+          
+          // Try to access the transforms directly if possible
+          const provider = this.tfClient;
+          if (provider && (provider as any).transforms) {
+            try {
+              // Use the lookupTransform function from tfUtils if available
+              if (typeof (provider as any).lookupTransform === 'function') {
+                tf = (provider as any).lookupTransform(fixedFrame, this.messageFrameId);
+              }
+            } catch (fallbackError) {
+              throw error; // Rethrow the original error if fallback fails
+            }
+          } else {
+            throw error; // Rethrow if we can't access the transforms
+          }
+        } else {
+          throw error; // Rethrow other errors
+        }
+      }
+      
+      if (tf && tf.translation && tf.rotation) {
+        // Apply transformation to the whole point cloud object
+        this.position.set(
+          tf.translation.x,
+          tf.translation.y,
+          tf.translation.z
+        );
+        this.quaternion.set(
+          tf.rotation.x,
+          tf.rotation.y,
+          tf.rotation.z,
+          tf.rotation.w
+        );
+        (this as any).visible = true;
+        
+        // Force position and quaternion update
+        this.updateMatrix();
+        this.matrixWorldNeedsUpdate = true;
+        
+        // Also update children (the points object)
+        if (this.points.object) {
+          this.points.object.matrixWorldNeedsUpdate = true;
+        }
+        
+        console.log(`[PointCloud2] Transform update successful`);
+      } else {
+        console.warn(`[PointCloud2] No transform available for force update`);
+      }
+    } catch (e) {
+      console.error(`[PointCloud2] Error during forced transform update: ${e instanceof Error ? e.message : e}`);
+      console.debug(`[PointCloud2] Error details:`, e);
+    }
+  }
+  
+  // Helper method to get the fixed frame
+  private getFixedFrame(): string {
+    // First try to get it from the tfClient
+    if (this.tfClient && typeof this.tfClient.getFixedFrame === 'function') {
+      return this.tfClient.getFixedFrame();
+    }
+    // Otherwise use our stored value
+    return this.fixedFrame;
   }
 }
 

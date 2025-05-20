@@ -111,7 +111,7 @@ See the dedicated README in the `/src/components/gamepads` directory for instruc
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <your-repository-url>
+    git clone git@github.com:tessel-la/robo-boy.git
     cd robo-boy # Or your actual directory name
     ```
 

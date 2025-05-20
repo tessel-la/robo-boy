@@ -27,6 +27,7 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
 }) => {
   // Keep a reference to the current client
   const clientRef = useRef<ROS3D.PointCloud2 | null>(null);
+  const previousFixedFrameRef = useRef<string>(fixedFrame);
 
   // Prepare material options based on settings
   const materialOptions = {
@@ -80,6 +81,36 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
       clientRef.current.updateSettings(updateOptions);
     }
   }, [options, isRosConnected, topic]);
+
+  // Effect to handle fixed frame changes
+  useEffect(() => {
+    if (!clientRef.current || !isRosConnected) return;
+    
+    // Check if the fixed frame has changed
+    if (previousFixedFrameRef.current !== fixedFrame) {
+      console.log(`[PointCloudViz] Fixed frame changed from ${previousFixedFrameRef.current} to ${fixedFrame}`);
+      
+      // Update the client's fixed frame
+      if (clientRef.current) {
+        try {
+          // Directly set the fixedFrame on the client
+          (clientRef.current as any).fixedFrame = fixedFrame;
+          
+          // Force an immediate transform update if possible
+          if (typeof (clientRef.current as any).forceTransformUpdate === 'function') {
+            (clientRef.current as any).forceTransformUpdate();
+          }
+          
+          console.log(`[PointCloudViz] Updated point cloud fixed frame to ${fixedFrame}`);
+        } catch (e) {
+          console.error(`[PointCloudViz] Error updating point cloud fixed frame:`, e);
+        }
+      }
+      
+      // Store the new frame
+      previousFixedFrameRef.current = fixedFrame;
+    }
+  }, [fixedFrame, isRosConnected]);
 
   // This component manages the hook lifecycle but renders nothing itself
   return null;

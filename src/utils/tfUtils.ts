@@ -31,9 +31,43 @@ export const IDENTITY_TRANSFORM: StoredTransform = {
 
 // Invert a Transform (represented by THREE.Vector3 and THREE.Quaternion)
 export function invertTransform(transform: StoredTransform): StoredTransform {
-  // Use .inverse() for three.js r89 compatibility
-  const invQuaternion = transform.rotation.clone().inverse();
-  const invTranslation = transform.translation.clone().negate().applyQuaternion(invQuaternion); // Use THREE methods
+  // Safely handle quaternion inversion - try different methods based on what's available
+  let invQuaternion: THREE.Quaternion;
+  if (typeof transform.rotation.invert === 'function') {
+    // Newer THREE.js versions use .invert()
+    invQuaternion = transform.rotation.clone().invert();
+  } else if (typeof transform.rotation.inverse === 'function') {
+    // Some versions use .inverse()
+    invQuaternion = transform.rotation.clone().inverse();
+  } else {
+    // Fallback: do the inversion manually
+    // Create conjugate (negate x, y, z but keep w)
+    invQuaternion = new THREE.Quaternion(
+      -transform.rotation.x,
+      -transform.rotation.y,
+      -transform.rotation.z,
+      transform.rotation.w
+    );
+    
+    // Normalize to ensure unit quaternion
+    const length = Math.sqrt(
+      invQuaternion.x * invQuaternion.x +
+      invQuaternion.y * invQuaternion.y +
+      invQuaternion.z * invQuaternion.z +
+      invQuaternion.w * invQuaternion.w
+    );
+    
+    if (length > 0) {
+      invQuaternion.x /= length;
+      invQuaternion.y /= length;
+      invQuaternion.z /= length;
+      invQuaternion.w /= length;
+    }
+  }
+
+  // Safely calculate inverted translation using the inverted quaternion
+  const invTranslation = transform.translation.clone().negate();
+  invTranslation.applyQuaternion(invQuaternion);
 
   return {
     translation: invTranslation,
@@ -111,42 +145,72 @@ export function lookupTransform(
   const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
   const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
 
-  if (normalizedTargetFrame === normalizedSourceFrame) {
-    // Return a shared identity transform to avoid memory allocation
-    return IDENTITY_TRANSFORM;
-  }
+  // For debugging
+  const startTime = performance.now();
 
-  // First check direct parent-child relationship for fast path
-  if (transforms[normalizedSourceFrame]?.parentFrame === normalizedTargetFrame) {
-    // Direct inverse transform
-    return invertTransform(transforms[normalizedSourceFrame].transform);
-  } else if (transforms[normalizedTargetFrame]?.parentFrame === normalizedSourceFrame) {
-    // Direct transform
-    return transforms[normalizedTargetFrame].transform;
-  }
+  try {
+    if (normalizedTargetFrame === normalizedSourceFrame) {
+      // Return a shared identity transform to avoid memory allocation
+      return IDENTITY_TRANSFORM;
+    }
 
-  // Find path from source to target
-  const path = findTransformPath(normalizedTargetFrame, normalizedSourceFrame, transforms);
+    // First check direct parent-child relationship for fast path
+    if (transforms[normalizedSourceFrame]?.parentFrame === normalizedTargetFrame) {
+      // Direct inverse transform
+      try {
+        return invertTransform(transforms[normalizedSourceFrame].transform);
+      } catch (err) {
+        console.error(`[TF] Error inverting direct transform from ${normalizedSourceFrame} to ${normalizedTargetFrame}:`, err);
+        // Fall back to slower path search
+      }
+    } else if (transforms[normalizedTargetFrame]?.parentFrame === normalizedSourceFrame) {
+      // Direct transform
+      return transforms[normalizedTargetFrame].transform;
+    }
 
-  if (!path) {
-     return null;
-  }
+    // Find path from source to target
+    const path = findTransformPath(normalizedTargetFrame, normalizedSourceFrame, transforms);
 
-  // Chain the transforms along the path
-  let finalTransform: StoredTransform;
-  
-  if (path.length === 0) {
-    return IDENTITY_TRANSFORM;
-  } else if (path.length === 1) {
-    return path[0].transform;
-  } else {
-    finalTransform = path[0].transform;
-    for (let i = 1; i < path.length; i++) {
-      finalTransform = multiplyTransforms(finalTransform, path[i].transform);
+    if (!path) {
+      // For debugging only - log frames that might be available
+      if (normalizedSourceFrame.includes('lidar') || normalizedTargetFrame.includes('lidar')) {
+        const availableFrames = Object.keys(transforms);
+        console.debug(`[TF] No path found from ${normalizedSourceFrame} to ${normalizedTargetFrame}. Available frames: ` + 
+                    availableFrames.filter(f => f.includes('lidar') || transforms[f].parentFrame.includes('lidar')).join(', '));
+      }
+      return null;
+    }
+
+    // Chain the transforms along the path
+    let finalTransform: StoredTransform;
+    
+    if (path.length === 0) {
+      return IDENTITY_TRANSFORM;
+    } else if (path.length === 1) {
+      return path[0].transform;
+    } else {
+      try {
+        finalTransform = path[0].transform;
+        for (let i = 1; i < path.length; i++) {
+          finalTransform = multiplyTransforms(finalTransform, path[i].transform);
+        }
+        return finalTransform;
+      } catch (err) {
+        console.error(`[TF] Error chaining transforms from ${normalizedSourceFrame} to ${normalizedTargetFrame}:`, err);
+        return null;
+      }
+    }
+  } catch (err) {
+    console.error(`[TF] Unexpected error in lookupTransform from ${normalizedSourceFrame} to ${normalizedTargetFrame}:`, err);
+    return null; 
+  } finally {
+    // Performance logging for slow transforms (> 10ms)
+    const endTime = performance.now(); 
+    const duration = endTime - startTime;
+    if (duration > 10) {
+      console.warn(`[TF] Slow transform lookup from ${normalizedSourceFrame} to ${normalizedTargetFrame}: ${duration.toFixed(2)}ms`);
     }
   }
-
-  return finalTransform;
 }
 
 
@@ -164,7 +228,7 @@ export class CustomTFProvider {
         this.fixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
         this.transforms = initialTransforms;
         this.callbacks = new Map();
-        // console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
+        console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
     }
 
     updateTransforms(newTransforms: TransformStore) {
@@ -287,31 +351,44 @@ export class CustomTFProvider {
         
         // Only update if actually changed
         if (this.fixedFrame === normalizedNewFrame) {
-          console.log(`[TFProvider] Fixed frame is already ${normalizedNewFrame}, no change needed`);
-          return;
+            console.log(`[TFProvider] Fixed frame is already ${normalizedNewFrame}, no change needed`);
+            return;
         }
         
         console.log(`[TFProvider] Updating fixed frame from ${this.fixedFrame} to ${normalizedNewFrame}`);
+        
+        // Update the frame first
         this.fixedFrame = normalizedNewFrame;
         
-        // Notify all callback subscribers that their transforms may have changed
+        // Now update all callbacks - this must happen after the frame is updated
+        // so lookupTransform uses the new fixed frame
         let updatedCount = 0;
+        let errorCount = 0;
+        
         this.callbacks.forEach((callbackSet, frameId) => {
-          callbackSet.forEach(callback => {
-            try {
-              // Recalculate transform with new fixed frame
-              const transform = this.lookupTransform(this.fixedFrame, frameId);
-              // Trigger callback with updated transform
-              callback(this.transformToROSLIB(transform));
-              updatedCount++;
-            } catch (error) {
-              console.warn(`[TFProvider] Error updating callback for ${frameId} after fixed frame change:`, error);
-              callback(null); // Frame is now unavailable
-            }
-          });
+            callbackSet.forEach(callback => {
+                try {
+                    // Recalculate transform with new fixed frame
+                    const transform = this.lookupTransform(this.fixedFrame, frameId);
+                    if (transform) {
+                        // Convert to proper format and trigger callback
+                        const transformObject = this.transformToROSLIB(transform);
+                        callback(transformObject);
+                        updatedCount++;
+                    } else {
+                        console.warn(`[TFProvider] No transform found for ${frameId} after fixed frame change to ${this.fixedFrame}`);
+                        callback(null); // Frame is now unavailable
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.warn(`[TFProvider] Error updating callback for ${frameId} after fixed frame change:`, error);
+                    callback(null); // Frame is now unavailable
+                    errorCount++;
+                }
+            });
         });
         
-        console.log(`[TFProvider] Updated ${updatedCount} transform subscribers after fixed frame change`);
+        console.log(`[TFProvider] Updated ${updatedCount} transform subscribers after fixed frame change (${errorCount} errors)`);
     }
 
     // Modify subscribe to provide plain object initially
@@ -366,9 +443,26 @@ export class CustomTFProvider {
 
     // Ensure this public method uses the external helper
     public lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
+        // Normalize frames for consistency
+        const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
+        const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
+        
         // IMPORTANT: For ROS3D.PointCloud2 compatibility, we need to swap sourceFrame and targetFrame
         // This is because pointcloud transformations expect the inverse direction compared to TF visualizations
-        return lookupTransform(sourceFrame, targetFrame, this.transforms);
+        const result = lookupTransform(normalizedSourceFrame, normalizedTargetFrame, this.transforms);
+        
+        if (!result) {
+            // Log detailed debug info when transform lookup fails
+            const availableFrames = Object.keys(this.transforms).join(', ');
+            const sourceParent = this.transforms[normalizedSourceFrame]?.parentFrame;
+            const targetParent = this.transforms[normalizedTargetFrame]?.parentFrame;
+            
+            console.debug(`[TFProvider] Could not find transform from ${normalizedSourceFrame} to ${normalizedTargetFrame}. ` +
+                         `Source parent: ${sourceParent || 'none'}, Target parent: ${targetParent || 'none'}. ` +
+                         `Available frames: ${availableFrames}`);
+        }
+        
+        return result;
     }
 
     dispose() {

@@ -274,19 +274,44 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newFixedFrame = event.target.value;
+    console.log(`[VisualizationPanel] Changing fixed frame from ${fixedFrame} to: ${newFixedFrame}`);
+    
+    // Update state first
     setFixedFrame(newFixedFrame);
     
-    // If we have a viewer, update its fixed frame 
-    if (ros3dViewer.current) {
-      ros3dViewer.current.fixedFrame = newFixedFrame;
-    }
+    // Keep a count of updated components for diagnostic purposes
+    let updatedComponentCount = 0;
     
-    // If we have a custom TF provider, update its fixed frame
-    if (customTFProvider.current) {
-      customTFProvider.current.updateFixedFrame(newFixedFrame);
+    try {
+      // If we have a viewer, update its fixed frame 
+      if (ros3dViewer.current) {
+        ros3dViewer.current.fixedFrame = newFixedFrame;
+        updatedComponentCount++;
+        console.log(`[VisualizationPanel] Updated viewer fixed frame to: ${newFixedFrame}`);
+      }
+      
+      // If we have a custom TF provider, update its fixed frame
+      if (customTFProvider.current) {
+        // This will trigger callbacks to all subscribers
+        customTFProvider.current.updateFixedFrame(newFixedFrame);
+        updatedComponentCount++;
+        console.log(`[VisualizationPanel] Updated TF provider fixed frame to: ${newFixedFrame}`);
+      }
+      
+      // Force a viewer render if possible
+      if (ros3dViewer.current && typeof (ros3dViewer.current as any).render === 'function') {
+        try {
+          (ros3dViewer.current as any).render();
+          console.log(`[VisualizationPanel] Forced viewer render after frame change`);
+        } catch (e) {
+          console.warn(`[VisualizationPanel] Error forcing viewer render:`, e);
+        }
+      }
+      
+      console.log(`[VisualizationPanel] Successfully changed fixed frame to: ${newFixedFrame} (${updatedComponentCount} components updated)`);
+    } catch (error) {
+      console.error(`[VisualizationPanel] Error updating fixed frame:`, error);
     }
-    
-    console.log(`Changed fixed frame to: ${newFixedFrame}`);
   };
 
   const handleDisplayedTfFramesChange = (selectedFrames: string[]) => {
