@@ -59,9 +59,8 @@ export function useCameraInfoVisualizer({
            // console.log('[CameraInfoViz E1] Creating LineSegments');
           const vertices = new Float32Array(15);
           const initialGeometry = new THREE.BufferGeometry();
-          // Use setAttribute instead of addAttribute for newer THREE versions
-          // Reverted to addAttribute for THREE r89 compatibility
-          initialGeometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+          // Use setAttribute for newer THREE versions
+          initialGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
           initialGeometry.setIndex([]);
           const material = new THREE.LineBasicMaterial({ color: lineColor });
           frustumLinesRef.current = new THREE.LineSegments(initialGeometry, material);

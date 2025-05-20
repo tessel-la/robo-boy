@@ -932,13 +932,51 @@ export class OrbitControls {
         this.rotateEnd.set(event.clientX, event.clientY);
         this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
         
-        // Rotating across the whole screen goes 360 degrees around
-        const element = this.element === document.body ? 
-          document.body : this.element;
+        // Get element dimensions for rotation calculations
+        const element = this.element === document.body ? document.body : this.element;
+        const elementWidth = element.clientWidth;
+        const elementHeight = element.clientHeight;
         
-        // Calculate rotation angle
-        this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
-        this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+        // Scale factor for rotation (adjust as needed for sensitivity)
+        const rotateSpeed = this.rotateSpeed;
+        
+        // Completely separate axis handling for Z-up system
+        // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
+        const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
+        
+        // Apply rotation around world Z axis (phi in spherical coordinates)
+        const rotationZ = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1), 
+          -horizontalRotationAngle
+        );
+        
+        // Apply Z-axis rotation to current camera position
+        const cameraPosition = new THREE.Vector3().subVectors(
+          this.camera.position,
+          this.target
+        );
+        cameraPosition.applyQuaternion(rotationZ);
+        
+        // Vertical movement (Y) - rotate around local X axis (polar angle)
+        // First get the right vector (perpendicular to camera direction and Z-up)
+        const forward = cameraPosition.clone().normalize();
+        const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
+        
+        // Calculate vertical rotation angle
+        const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
+        
+        // Apply rotation around right vector
+        const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
+        cameraPosition.applyQuaternion(rotationX);
+        
+        // Update camera position based on rotated vector
+        this.camera.position.copy(this.target).add(cameraPosition);
+        
+        // Ensure camera up vector stays aligned with world Z
+        this.camera.up.set(0, 0, 1);
+        
+        // Look at target
+        this.camera.lookAt(this.target);
         
         this.rotateStart.copy(this.rotateEnd);
         break;
@@ -952,8 +990,6 @@ export class OrbitControls {
         this.panStart.copy(this.panEnd);
         break;
     }
-    
-    this.update();
   }
   
   private onMouseUp(event: MouseEvent): void {
@@ -1022,13 +1058,51 @@ export class OrbitControls {
           );
           this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
           
-          // Rotating across the whole screen goes 360 degrees around
-          const element = this.element === document.body ? 
-            document.body : this.element;
+          // Get element dimensions for rotation calculations
+          const element = this.element === document.body ? document.body : this.element;
+          const elementWidth = element.clientWidth;
+          const elementHeight = element.clientHeight;
           
-          // Calculate rotation angle
-          this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
-          this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+          // Scale factor for rotation (adjust as needed for sensitivity)
+          const rotateSpeed = this.rotateSpeed;
+          
+          // Completely separate axis handling for Z-up system
+          // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
+          const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
+          
+          // Apply rotation around world Z axis (phi in spherical coordinates)
+          const rotationZ = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 0, 1), 
+            -horizontalRotationAngle
+          );
+          
+          // Apply Z-axis rotation to current camera position
+          const cameraPosition = new THREE.Vector3().subVectors(
+            this.camera.position,
+            this.target
+          );
+          cameraPosition.applyQuaternion(rotationZ);
+          
+          // Vertical movement (Y) - rotate around local X axis (polar angle)
+          // First get the right vector (perpendicular to camera direction and Z-up)
+          const forward = cameraPosition.clone().normalize();
+          const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
+          
+          // Calculate vertical rotation angle
+          const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
+          
+          // Apply rotation around right vector
+          const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
+          cameraPosition.applyQuaternion(rotationX);
+          
+          // Update camera position based on rotated vector
+          this.camera.position.copy(this.target).add(cameraPosition);
+          
+          // Ensure camera up vector stays aligned with world Z
+          this.camera.up.set(0, 0, 1);
+          
+          // Look at target
+          this.camera.lookAt(this.target);
           
           this.rotateStart.copy(this.rotateEnd);
         }
@@ -1083,29 +1157,31 @@ export class OrbitControls {
     deltaX *= targetDistance * this.panSpeed / element.clientWidth;
     deltaY *= targetDistance * this.panSpeed / element.clientHeight;
     
-    // Calculate pan offset
-    const offset = new THREE.Vector3();
+    // For Z-up system:
+    // Create precise panning vectors that align with the screen
+    const worldUp = new THREE.Vector3(0, 0, 1);
     
-    // Pan in screen-space
-    offset.copy(position).sub(this.target);
+    // Get the vector from target to camera (camera direction reversed)
+    const offset = new THREE.Vector3().subVectors(position, this.target);
     
-    // Get Z-up vector (changed from Y-up)
-    const up = new THREE.Vector3(0, 0, 1);
+    // Get right vector (screen X direction)
+    // Cross product of camera direction and world up
+    const panX = new THREE.Vector3().crossVectors(offset, worldUp).normalize();
     
-    const pan = new THREE.Vector3();
+    // Get the screen's Y axis vector (perpendicular to both)
+    // This ensures correct panning in the screen plane
+    const forward = offset.clone().normalize();
+    const panY = new THREE.Vector3().crossVectors(panX, forward).normalize();
     
-    // Calculate right vector (cross product of camera direction and Z-up)
-    const right = new THREE.Vector3().crossVectors(up, offset).normalize();
+    // Move along right vector for X movement 
+    const moveX = panX.clone().multiplyScalar(-deltaX);
     
-    // Pan right/left
-    pan.copy(right).multiplyScalar(deltaX);
+    // Move along screen Y vector for Y movement
+    const moveY = panY.clone().multiplyScalar(deltaY);
     
-    // Pan up/down (use Z-up vector)
-    pan.add(up.multiplyScalar(deltaY));
-    
-    // Apply pan to camera and target
-    position.add(pan);
-    this.target.add(pan);
+    // Apply the combined movement
+    position.add(moveX).add(moveY);
+    this.target.add(moveX).add(moveY);
   }
   
   private dollyIn(): void {
@@ -1117,41 +1193,36 @@ export class OrbitControls {
   }
   
   public update(): void {
-    const offset = new THREE.Vector3();
+    // This method is now simplified since most rotation handling 
+    // is done directly in onMouseMove and onTouchMove
     
-    // Get current camera position in spherical coordinates
-    offset.copy(this.camera.position).sub(this.target);
-    this.spherical.setFromVector3(offset);
+    // Apply scale (zooming) if needed
+    if (this.scale !== 1) {
+      const position = this.camera.position;
+      const offset = position.clone().sub(this.target);
+      
+      // Scale distance from target
+      offset.multiplyScalar(this.scale);
+      
+      // Update position based on scaled offset
+      position.copy(this.target).add(offset);
+      
+      // Reset scale
+      this.scale = 1;
+    }
     
-    // Apply delta rotations
-    this.spherical.theta += this.sphericalDelta.theta;
-    this.spherical.phi += this.sphericalDelta.phi;
+    // Apply pan offset if needed
+    if (!this.panOffset.equals(new THREE.Vector3(0, 0, 0))) {
+      this.target.add(this.panOffset);
+      this.camera.position.add(this.panOffset);
+      this.panOffset.set(0, 0, 0);
+    }
     
-    // Restrict phi to be between EPS and PI - EPS
-    this.spherical.phi = Math.max(this.EPS, Math.min(Math.PI - this.EPS, this.spherical.phi));
-    
-    // Apply scale (zooming)
-    this.spherical.radius *= this.scale;
-    
-    // Restrict radius to be between desired limits
-    this.spherical.radius = Math.max(0.1, Math.min(100, this.spherical.radius));
-    
-    // Move target by pan offset
-    this.target.add(this.panOffset);
-    
-    // Convert back to cartesian coordinates
-    offset.setFromSpherical(this.spherical);
-    
-    // Set camera position
-    this.camera.position.copy(this.target).add(offset);
-    
-    // Look at target
+    // Ensure camera is looking at target
     this.camera.lookAt(this.target);
     
-    // Reset deltas
-    this.sphericalDelta.set(0, 0, 0);
-    this.panOffset.set(0, 0, 0);
-    this.scale = 1;
+    // Always maintain Z-up orientation
+    this.camera.up.set(0, 0, 1);
   }
   
   public dispose(): void {
