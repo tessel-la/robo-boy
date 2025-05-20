@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ros } from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../../utils/ros3d';
 import * as THREE from 'three';
 import { useCameraInfoVisualizer } from '../../hooks/useCameraInfoVisualizer';
 import { CustomTFProvider } from '../../utils/tfUtils';

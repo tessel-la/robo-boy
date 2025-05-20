@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib'; 
 import * as ROSLIB from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
 import './VisualizationPanel.css';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys
@@ -179,8 +179,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     });
   }, []);
 
-  // Call the TF provider hook
-  const { customTFProvider } = useTfProvider({
+  // Update the TF provider hook call
+  const { customTFProvider, ensureProviderFunctionality } = useTfProvider({
     ros,
     isRosConnected,
     ros3dViewer, // Pass viewer ref from the other hook
@@ -188,6 +188,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     initialTransforms: transforms, // Pass current transforms state for initial setup
     handleTFMessage, // Pass the callback
   });
+  
+  // Add an effect to ensure TF provider is properly initialized
+  useEffect(() => {
+    if (isRosConnected && customTFProvider.current) {
+      // Ensure the TF provider has all required methods
+      const isProviderValid = ensureProviderFunctionality();
+      if (isProviderValid) {
+        console.log("[VisualizationPanel] TF provider initialized successfully");
+      } else {
+        console.error("[VisualizationPanel] TF provider initialization failed");
+      }
+    }
+  }, [isRosConnected, customTFProvider, ensureProviderFunctionality]);
 
   // REMOVED Direct PointCloud Client Hook Call
   // usePointCloudClient({ ... });
@@ -260,9 +273,45 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // const handleCameraInfoTopicSelect = ...
 
   const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const newFrame = event.target.value;
-      setFixedFrame(newFrame || DEFAULT_FIXED_FRAME);
-      console.log("Fixed frame changed to:", newFrame || DEFAULT_FIXED_FRAME);
+    const newFixedFrame = event.target.value;
+    console.log(`[VisualizationPanel] Changing fixed frame from ${fixedFrame} to: ${newFixedFrame}`);
+    
+    // Update state first
+    setFixedFrame(newFixedFrame);
+    
+    // Keep a count of updated components for diagnostic purposes
+    let updatedComponentCount = 0;
+    
+    try {
+      // If we have a viewer, update its fixed frame 
+      if (ros3dViewer.current) {
+        ros3dViewer.current.fixedFrame = newFixedFrame;
+        updatedComponentCount++;
+        console.log(`[VisualizationPanel] Updated viewer fixed frame to: ${newFixedFrame}`);
+      }
+      
+      // If we have a custom TF provider, update its fixed frame
+      if (customTFProvider.current) {
+        // This will trigger callbacks to all subscribers
+        customTFProvider.current.updateFixedFrame(newFixedFrame);
+        updatedComponentCount++;
+        console.log(`[VisualizationPanel] Updated TF provider fixed frame to: ${newFixedFrame}`);
+      }
+      
+      // Force a viewer render if possible
+      if (ros3dViewer.current && typeof (ros3dViewer.current as any).render === 'function') {
+        try {
+          (ros3dViewer.current as any).render();
+          console.log(`[VisualizationPanel] Forced viewer render after frame change`);
+        } catch (e) {
+          console.warn(`[VisualizationPanel] Error forcing viewer render:`, e);
+        }
+      }
+      
+      console.log(`[VisualizationPanel] Successfully changed fixed frame to: ${newFixedFrame} (${updatedComponentCount} components updated)`);
+    } catch (error) {
+      console.error(`[VisualizationPanel] Error updating fixed frame:`, error);
+    }
   };
 
   const handleDisplayedTfFramesChange = (selectedFrames: string[]) => {
@@ -349,6 +398,24 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // console.log(`--- VisualizationPanel Render End ---`);
 
+  // Render pointclouds
+  const renderPointClouds = () => {
+    return visualizations
+      .filter(viz => viz.type === 'pointcloud')
+      .map(viz => (
+        <PointCloudViz
+          key={viz.id}
+          ros={ros}
+          isRosConnected={isRosConnected}
+          ros3dViewer={ros3dViewer}
+          customTFProvider={customTFProvider}
+          topic={viz.topic}
+          fixedFrame={fixedFrame}
+          options={viz.options as PointCloudOptions}
+        />
+      ));
+  };
+
   return (
     <div className="visualization-panel">
       {/* Render Visualization Wrapper Components */}
@@ -362,6 +429,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
                 ros3dViewer={ros3dViewer}
                 customTFProvider={customTFProvider}
                 topic={viz.topic}
+                fixedFrame={fixedFrame}
                 options={viz.options as PointCloudOptions}
               />
             </React.Fragment>

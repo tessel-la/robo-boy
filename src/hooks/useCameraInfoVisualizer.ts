@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
 
@@ -59,9 +59,8 @@ export function useCameraInfoVisualizer({
            // console.log('[CameraInfoViz E1] Creating LineSegments');
           const vertices = new Float32Array(15);
           const initialGeometry = new THREE.BufferGeometry();
-          // Use setAttribute instead of addAttribute for newer THREE versions
-          // Reverted to addAttribute for THREE r89 compatibility
-          initialGeometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+          // Use setAttribute for newer THREE versions
+          initialGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
           initialGeometry.setIndex([]);
           const material = new THREE.LineBasicMaterial({ color: lineColor });
           frustumLinesRef.current = new THREE.LineSegments(initialGeometry, material);
@@ -226,32 +225,68 @@ export function useCameraInfoVisualizer({
 
         const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
 
-        // Look up the transform from fixedFrame -> cameraFrameId
-        // Match the logic from the corrected useTfVisualizer
-        const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
+        try {
+            // Look up the transform from fixedFrame -> cameraFrameId
+            const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
 
-        if (transform && transform.translation && transform.rotation) {
-            // Apply position directly (x, y, z)
-            container.position.set(
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z
-            );
+            if (transform && transform.translation && transform.rotation) {
+                // Apply position directly (x, y, z)
+                container.position.set(
+                    transform.translation.x,
+                    transform.translation.y,
+                    transform.translation.z
+                );
 
-            // Apply raw TF rotation combined with static camera adjustment
-            const tfQuaternion = new THREE.Quaternion(
-                transform.rotation.x,
-                transform.rotation.y,
-                transform.rotation.z,
-                transform.rotation.w
-            );
+                // Apply raw TF rotation combined with static camera adjustment
+                try {
+                    // Create a fresh quaternion to avoid modifying the original transform
+                    const tfQuaternion = new THREE.Quaternion(
+                        transform.rotation.x,
+                        transform.rotation.y,
+                        transform.rotation.z,
+                        transform.rotation.w
+                    );
 
-            // Apply TF rotation first, then the static camera adjustment
-            container.quaternion.copy(tfQuaternion).multiply(CAMERA_FRAME_ROTATION);
+                    // Apply TF rotation first, then the static camera adjustment
+                    // Use a safer approach for quaternion multiplication
+                    container.quaternion.copy(tfQuaternion);
+                    if (CAMERA_FRAME_ROTATION) {
+                        container.quaternion.multiply(CAMERA_FRAME_ROTATION);
+                    }
 
-            container.visible = true; // Make container visible
-        } else {
-            // console.warn(`[CameraInfoViz E4 Loop] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}`);
+                    container.visible = true; // Make container visible if transform is valid
+                } catch (rotationError) {
+                    console.warn(`[CameraInfoViz] Quaternion operation failed:`, rotationError);
+                    // Even if rotation fails, we can still show at the right position with default orientation
+                    container.quaternion.set(0, 0, 0, 1); // Identity quaternion as fallback
+                    container.visible = true;
+                }
+            } else {
+                // console.warn(`[CameraInfoViz] TF lookup returned incomplete transform for ${cameraFrameId} relative to ${fixedFrame}`);
+                container.visible = false; // Hide if transform data is incomplete
+            }
+        } catch (tfError) {
+            console.warn(`[CameraInfoViz] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}:`, 
+                tfError instanceof Error ? tfError.message : tfError);
+            
+            // Log more details on first error
+            if (container.visible) {
+                console.debug(`[CameraInfoViz] TF lookup error details:`, tfError);
+                
+                // Try to show available frames for debugging
+                try {
+                    if (provider && (provider as any).transforms) {
+                        const frames = Object.keys((provider as any).transforms);
+                        console.debug(`[CameraInfoViz] Available frames:`, 
+                            frames.includes(cameraFrameId) ? `${cameraFrameId} (found)` : `${cameraFrameId} (not found)`,
+                            frames.includes(fixedFrame) ? `${fixedFrame} (found)` : `${fixedFrame} (not found)`
+                        );
+                    }
+                } catch (e) {
+                    // Ignore errors in debug code
+                }
+            }
+            
             container.visible = false; // Hide if transform fails
         }
 

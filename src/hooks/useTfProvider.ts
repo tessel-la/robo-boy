@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, TransformStore } from '../utils/tfUtils';
-import * as ROS3D from 'ros3d'; // Needed for Viewer type hint
+import * as ROS3D from '../utils/ros3d'; // Use internal implementation
 
 interface UseTfProviderProps {
   ros: Ros | null;
@@ -38,7 +38,7 @@ export function useTfProvider({
       if (!customTFProvider.current) {
         // console.log(`[TF Provider Effect] Creating provider with fixedFrame: ${fixedFrame}`);
         customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransforms);
-        ros3dViewer.current.fixedFrame = customTFProvider.current.fixedFrame; // Set viewer frame on creation
+        ros3dViewer.current.fixedFrame = fixedFrame; // Set viewer frame on creation
         setIsProviderReady(true);
         didCreateProvider = true;
       } else {
@@ -47,9 +47,26 @@ export function useTfProvider({
         const normalizedNewFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
 
         if(currentProviderFixedFrame !== normalizedNewFixedFrame) {
-            // console.log(`[TF Provider Effect] Updating fixedFrame from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
-            customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame); // Update the provider
-            ros3dViewer.current.fixedFrame = normalizedNewFixedFrame; // <<< ALSO UPDATE THE VIEWER
+            console.log(`[TF Provider Effect] Fixed frame changed from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
+            
+            // First update the viewer to ensure consistent state
+            if (ros3dViewer.current) {
+                ros3dViewer.current.fixedFrame = normalizedNewFixedFrame;
+                console.log(`[TF Provider Effect] Updated viewer fixed frame to: ${normalizedNewFixedFrame}`);
+            }
+            
+            // Then update the provider - this will trigger callbacks to visualizations
+            customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame);
+            
+            // Force a render update on the viewer if needed
+            if (ros3dViewer.current && typeof ros3dViewer.current.render === 'function') {
+                try {
+                    ros3dViewer.current.render();
+                    console.log(`[TF Provider Effect] Forced viewer render after frame change`);
+                } catch (e) {
+                    console.warn(`[TF Provider Effect] Error forcing viewer render:`, e);
+                }
+            }
         }
 
         // Ensure readiness state is true if prerequisites re-established
@@ -72,37 +89,13 @@ export function useTfProvider({
 
     // Cleanup function for *this* effect (Provider instance lifecycle)
     return () => {
-      // If the component unmounts OR if dependencies change causing cleanup,
-      // ensure the provider instance is disposed *if it was created by this run and still exists*
-      // However, standard cleanup should handle component unmount. 
-      // We mainly rely on the prerequisite check above to dispose when connection is lost.
-      // Let's simplify: only dispose if unmounting *while* provider exists?
-      // No, the prerequisite check handles disposal on dependency change (like disconnect).
-      // The main purpose of *this* return cleanup is component unmount.
-      // If we created it this run, and it still exists (wasn't cleaned by prereq check), dispose? Seems complex. 
-      
-      // Let's stick to the original simple idea: if the provider exists when this effect cleans up,
-      // try disposing it. This handles component unmount.
-      // It might be redundant if prereqs were lost *just* before unmount, but safe.
-      // Update: This is wrong, causes disposal on fixedFrame change. 
-      
-      // Corrected Logic: This cleanup should ONLY dispose if the component itself is unmounting.
-      // How to detect unmount vs. dependency change? React doesn't provide a direct flag.
-      // Best practice: Let Effect B handle subscription cleanup based on isProviderReady.
-      // Let this effect solely manage the provider *instance*. If prereqs are lost,
-      // instance is nulled. If component unmounts, this cleanup doesn't need to do much
-      // because Effect B's cleanup will have run based on isProviderReady potentially changing.
-      
       // Let's remove explicit disposal here and rely on the prerequisite logic
       // and Effect B's cleanup.
       // console.log('[TF Provider Effect] Component unmounting? No explicit disposal here.')
     };
 
   // Depend on prerequisites and fixedFrame for updates
-  // initialTransforms is only needed for the very first creation
-  // Adding it might cause unnecessary recreation if the parent passes a new object/array inadvertently.
-  // Let's omit initialTransforms and rely on the check `!customTFProvider.current`
-  }, [ros, isRosConnected, ros3dViewer, fixedFrame, initialTransforms]); // Re-add initialTransforms - needed for first creation if fixedFrame hasn't changed yet
+  }, [ros, isRosConnected, ros3dViewer, fixedFrame, initialTransforms]);
 
   // Effect 2: Manage TF Subscriptions based on provider readiness
   useEffect(() => {
@@ -155,6 +148,43 @@ export function useTfProvider({
   // customTFProvider ref shouldn't be a dependency itself, readiness flag handles it.
   }, [isProviderReady, ros, handleTFMessage]);
 
+  // Function to check if the provider is properly initialized with all required methods
+  const ensureProviderFunctionality = () => {
+    if (!customTFProvider.current) {
+      console.error("[TF Provider] Provider not initialized yet");
+      return false;
+    }
+    
+    // Check for required methods
+    const requiredMethods = ['lookupTransform', 'updateFixedFrame', 'subscribe', 'unsubscribe'];
+    for (const method of requiredMethods) {
+      if (typeof (customTFProvider.current as any)[method] !== 'function') {
+        console.error(`[TF Provider] Provider missing required method: ${method}`);
+        return false;
+      }
+    }
+    
+    // Add a getFixedFrame method if it doesn't exist (needed by some components)
+    if (typeof (customTFProvider.current as any).getFixedFrame !== 'function') {
+      console.log("[TF Provider] Adding getFixedFrame method to provider");
+      (customTFProvider.current as any).getFixedFrame = function() {
+        return this.fixedFrame;
+      };
+    }
+    
+    return true;
+  };
+  
+  // Call this function each time the provider is created or updated
+  useEffect(() => {
+    if (customTFProvider.current) {
+      ensureProviderFunctionality();
+    }
+  }, [isProviderReady]);
+
   // Return the TF provider instance ref, needed by the PointCloud client
-  return { customTFProvider };
+  return { 
+    customTFProvider,
+    ensureProviderFunctionality // Export the function for external use
+  };
 } 

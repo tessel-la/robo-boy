@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Ros } from 'roslib';
-import * as ROS3D from 'ros3d';
+import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
 
@@ -170,14 +170,17 @@ interface PointCloudClientOptions {
   throttleRate?: number;
 }
 
+// Define the hook props interface
 interface UsePointCloudClientProps {
   ros: Ros | null;
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   selectedPointCloudTopic: string;
+  fixedFrame: string;
   material?: PointCloudMaterialOptions;
   options?: PointCloudClientOptions;
+  clientRef?: React.MutableRefObject<ROS3D.PointCloud2 | null>;
 }
 
 // Custom Hook for managing the PointCloud2 client lifecycle
@@ -187,8 +190,10 @@ export function usePointCloudClient({
   ros3dViewer,
   customTFProvider,
   selectedPointCloudTopic,
+  fixedFrame,
   material = {},
   options = {},
+  clientRef,
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
   
@@ -215,7 +220,12 @@ export function usePointCloudClient({
   });
 
   useEffect(() => {
-    // console.log('[usePointCloudClient] Running effect. Deps:', { isRosConnected, selectedPointCloudTopic });
+    console.log('[usePointCloudClient] Running effect. Deps:', { 
+      isRosConnected, 
+      selectedPointCloudTopic, 
+      fixedFrame,  // Log fixedFrame to show changes
+      materialChanged: !!material 
+    });
 
     // Keep track of the client created *specifically* in this effect run for targeted cleanup
     let createdClientInstance: ROS3D.PointCloud2 | null = null;
@@ -515,6 +525,22 @@ export function usePointCloudClient({
       pointsClient.current = null; // Nullify the main ref before creating the new one
     }
 
+    // Check if we're changing fixed frame - force recreation in this case
+    const isFixedFrameChange = pointsClient.current && 
+                        ros && isRosConnected &&
+                        // If the client already exists but the fixed frame changed
+                        fixedFrame !== ((pointsClient.current as any)._fixedFrame || '');
+                                                
+    if (isFixedFrameChange) {
+      console.log(`[usePointCloudClient] Fixed frame changed from ${(pointsClient.current as any)._fixedFrame} to ${fixedFrame}. Recreating client.`);
+      
+      // Temporarily assign the main ref to createdClientInstance for cleanup
+      createdClientInstance = pointsClient.current;
+      cleanupPointCloudClient(); // Run the standard cleanup for the *previous* instance
+      createdClientInstance = null; // Reset captured instance
+      pointsClient.current = null; // Nullify the main ref before creating the new one
+    }
+
     // --- Create New Client --- (Moved from VisualizationPanel)
     console.log(`[usePointCloudClient] Creating new client for topic: ${selectedPointCloudTopic}`);
     
@@ -593,7 +619,7 @@ export function usePointCloudClient({
           
           void main() {
             // Higher quality rendering for desktop
-            vec2 coord = gl_PointCoord - vec2(0.5);
+            vec2 coord = gl_PointCoord - vec2(0.45, 0.5);
             float dist = length(coord);
             
             // Smoother edge
@@ -664,13 +690,32 @@ export function usePointCloudClient({
       queue_size: isMobile() ? 1 : 2, // Smaller queue for mobile
       max_delay: isMobile() ? 0.2 : 0.5, // Shorter delay on mobile
       
+      // ***IMPORTANT: Always explicitly set the fixed frame***
+      fixedFrame: fixedFrame,
+      
       // Add a custom message handler wrapper to catch errors
       messageHandler: function(message: any) {
-        // We no longer need extensive error handling here
-        // since we patched the underlying processMessage method
         try {
-          // This is now safe due to our patch
-          this.processMessage(message);
+          // Store the fixed frame in a property for easy access
+          this.fixedFrame = fixedFrame;
+          
+          // SAFETY CHECK: Ensure lookupTransform is available
+          if (!this.tfClient || typeof this.tfClient.lookupTransform !== 'function') {
+            console.warn('[PointCloud2] TF Client missing or lookupTransform not available');
+            return;
+          }
+          
+          // Process the message if all checks pass
+          if (message.header && message.header.frame_id) {
+            // Safe call to process message
+            try {
+              this.processMessage(message);
+            } catch (error) {
+              console.error('[PointCloud2] Error in processMessage:', error);
+            }
+          } else {
+            console.warn('[PointCloud2] Message missing header or frame_id');
+          }
         } catch (error) {
           console.error('[PointCloud2] Unhandled error in message handler:', error);
         }
@@ -702,6 +747,9 @@ export function usePointCloudClient({
     try {
       const newClient = new ROS3D.PointCloud2(clientOptions);
       
+      // Store the fixed frame in a private property for change detection
+      (newClient as any)._fixedFrame = fixedFrame;
+      
       // Verify the client was created properly - this helps catch potential issues
       if (!(newClient as any).points || !(newClient as any).points.setup) {
         console.warn("[usePointCloudClient] WARNING: Points object not properly initialized, will attempt recovery");
@@ -731,6 +779,11 @@ export function usePointCloudClient({
       
       pointsClient.current = newClient; // Update the main ref for this hook
       createdClientInstance = newClient; // Capture instance for this effect run's cleanup
+      
+      // If an external ref was provided, update it too
+      if (clientRef) {
+        clientRef.current = newClient;
+      }
       
       // Add a short delay before allowing message processing
       // This gives the points object time to be fully set up
@@ -980,10 +1033,12 @@ export function usePointCloudClient({
        cleanupPointCloudClient(); // Ensure cleanup if try block failed before returning
     };
 
-    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change
-  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options]);
+    // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change or fixedFrame changes
+  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame]);
 
-  // This hook primarily manages side effects, doesn't need to return the client ref itself
-  // unless the parent component needs direct access for some reason.
-  return { axisRanges: axisRanges.current }; 
+  // Update return value to include the client
+  return { 
+    axisRanges: axisRanges.current,
+    pointCloudClient: pointsClient.current 
+  }; 
 } 
