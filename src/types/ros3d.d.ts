@@ -113,6 +113,14 @@ declare module 'ros3d' {
         });
         update(): void;
         dispose(): void;
+        // Add private methods to the type definition
+        private onMouseDown(event: MouseEvent): void;
+        private onMouseMove(event: MouseEvent): void;
+        private onMouseUp(event: MouseEvent): void;
+        private onMouseWheel(event: WheelEvent): void;
+        private onTouchStart(event: TouchEvent): void;
+        private onTouchMove(event: TouchEvent): void;
+        private onTouchEnd(event: TouchEvent): void;
     }
 
     // Add other ros3d classes/types here as needed (e.g., UrdfClient, MarkerClient)

@@ -830,6 +830,10 @@ export class OrbitControls {
   private panEnd = new THREE.Vector2();
   private panDelta = new THREE.Vector2();
   
+  // Track touch points for multi-touch gestures
+  private touches = { ONE: 0, TWO: 1 };
+  private prevTouchDistance = -1;
+  
   private EPS = 0.000001;
   
   constructor(options: {
@@ -864,14 +868,24 @@ export class OrbitControls {
     this.onMouseUp = this.onMouseUp.bind(this);
     this.onMouseWheel = this.onMouseWheel.bind(this);
     
+    // Bind touch methods
+    this.onTouchStart = this.onTouchStart.bind(this);
+    this.onTouchMove = this.onTouchMove.bind(this);
+    this.onTouchEnd = this.onTouchEnd.bind(this);
+    
     // Add event listeners
     this.element.addEventListener('mousedown', this.onMouseDown, false);
     this.element.addEventListener('wheel', this.onMouseWheel, false);
     
+    // Add touch event listeners
+    this.element.addEventListener('touchstart', this.onTouchStart, false);
+    this.element.addEventListener('touchmove', this.onTouchMove, false);
+    this.element.addEventListener('touchend', this.onTouchEnd, false);
+    
     // Initial update
     this.update();
     
-    console.log('[OrbitControls] Initialized');
+    console.log('[OrbitControls] Initialized with touch support');
   }
   
   private updateSpherical(): void {
@@ -963,6 +977,100 @@ export class OrbitControls {
     this.update();
   }
   
+  private onTouchStart(event: TouchEvent): void {
+    if (!this.enabled) return;
+    
+    event.preventDefault();
+    
+    switch (event.touches.length) {
+      case 1: // Single touch - handle as rotation
+        this.state = this.STATE.ROTATE;
+        this.rotateStart.set(
+          event.touches[0].clientX,
+          event.touches[0].clientY
+        );
+        break;
+        
+      case 2: // Two touches - handle as pinch zoom or pan
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        this.prevTouchDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Use the midpoint as the pan starting point
+        const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        this.panStart.set(x, y);
+        this.state = this.STATE.PAN;
+        break;
+        
+      default:
+        this.state = this.STATE.NONE;
+    }
+  }
+  
+  private onTouchMove(event: TouchEvent): void {
+    if (!this.enabled) return;
+    
+    event.preventDefault();
+    
+    switch (event.touches.length) {
+      case 1: // Single touch - handle as rotation
+        if (this.state === this.STATE.ROTATE) {
+          this.rotateEnd.set(
+            event.touches[0].clientX,
+            event.touches[0].clientY
+          );
+          this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
+          
+          // Rotating across the whole screen goes 360 degrees around
+          const element = this.element === document.body ? 
+            document.body : this.element;
+          
+          // Calculate rotation angle
+          this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
+          this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+          
+          this.rotateStart.copy(this.rotateEnd);
+        }
+        break;
+        
+      case 2: // Two touches - handle as pinch zoom and pan
+        // Calculate current distance between touch points
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const touchDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If we have a previous distance, use it for pinch zoom
+        if (this.prevTouchDistance > 0 && touchDistance > 0) {
+          // If new distance is greater, zoom in, otherwise zoom out
+          if (touchDistance > this.prevTouchDistance) {
+            this.dollyIn();
+          } else {
+            this.dollyOut();
+          }
+          this.prevTouchDistance = touchDistance;
+        }
+        
+        // Use the midpoint for panning
+        const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        this.panEnd.set(x, y);
+        this.panDelta.subVectors(this.panEnd, this.panStart);
+        
+        this.pan(this.panDelta.x, this.panDelta.y);
+        
+        this.panStart.copy(this.panEnd);
+        break;
+    }
+    
+    this.update();
+  }
+  
+  private onTouchEnd(event: TouchEvent): void {
+    this.state = this.STATE.NONE;
+    this.prevTouchDistance = -1;
+  }
+  
   private pan(deltaX: number, deltaY: number): void {
     const element = this.element === document.body ? 
       document.body : this.element;
@@ -1051,6 +1159,11 @@ export class OrbitControls {
     this.element.removeEventListener('wheel', this.onMouseWheel, false);
     document.removeEventListener('mousemove', this.onMouseMove, false);
     document.removeEventListener('mouseup', this.onMouseUp, false);
+    
+    // Remove touch event listeners
+    this.element.removeEventListener('touchstart', this.onTouchStart, false);
+    this.element.removeEventListener('touchmove', this.onTouchMove, false);
+    this.element.removeEventListener('touchend', this.onTouchEnd, false);
   }
 }
 
