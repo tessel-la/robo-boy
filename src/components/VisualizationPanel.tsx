@@ -33,7 +33,8 @@ import { useTfVisualizer } from '../hooks/useTfVisualizer';
 // Import Wrapper Components
 import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
-import { FaPlus, FaCog } from 'react-icons/fa'; // Import icons
+import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
+import { FaPlus, FaCog, FaCube } from 'react-icons/fa'; // Import icons, added FaCube for URDF
 
 import {
   saveVisualizationState,
@@ -47,16 +48,21 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo'; // Expandable later
-  topic: string;
-  options?: Record<string, any>; // Use more specific types for each visualization type
+  type: 'pointcloud' | 'camerainfo' | 'urdf'; // Added 'urdf'
+  topic: string; // For pointcloud/camerainfo. For URDF, this might be robot_description topic
+  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions; // Union of option types
 }
 
 // Define more specific option types
 export interface PointCloudOptions extends PointCloudSettingsOptions {}
 export interface CameraInfoOptions {
-  scale?: number;
-  color?: string;
+  lineColor?: THREE.Color | number | string;
+  lineScale?: number;
+}
+export interface UrdfOptions {
+  robotDescriptionTopic?: string;
+  urdfPath?: string;
+  // Add other URDF specific options here, e.g., loaderType
 }
 
 // Define structure for storing fetched topics
@@ -90,6 +96,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
   const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]);
   const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]);
+  const [tfAxesScale, setTfAxesScale] = useState<number>(0.5); // Add TF axes scale state
 
   // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false);
@@ -101,15 +108,28 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>([]);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
+  
+  // Add a ref to track TF provider initialization to prevent repeated logging
+  const tfProviderInitialized = useRef<boolean>(false);
 
   // Load saved visualizations on initial mount
   useEffect(() => {
     const savedState = getVisualizationState();
-    if (savedState.visualizations.length > 0) {
-      setVisualizations(savedState.visualizations);
-      setFixedFrame(savedState.fixedFrame);
-      setDisplayedTfFrames(savedState.displayedTfFrames);
-      console.log('Restored saved visualization state:', savedState);
+    if (savedState.visualizations && savedState.visualizations.length > 0) {
+      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf'];
+      const filteredVisualizations = savedState.visualizations.filter(
+        (viz: any) => validTypes.includes(viz.type)
+      ) as VisualizationConfig[];
+      
+      setVisualizations(filteredVisualizations);
+      setFixedFrame(savedState.fixedFrame || DEFAULT_FIXED_FRAME);
+      setDisplayedTfFrames(savedState.displayedTfFrames || []);
+      console.log('Restored and filtered saved visualization state:', savedState, 'Filtered:', filteredVisualizations);
+    } else {
+      // Initialize with some default visualization if none are saved (optional)
+      // setVisualizations([
+      //   { id: uuidv4(), type: 'pointcloud', topic: '/your_default_pointcloud_topic', options: {} },
+      // ]);
     }
   }, []);
 
@@ -191,14 +211,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   
   // Add an effect to ensure TF provider is properly initialized
   useEffect(() => {
-    if (isRosConnected && customTFProvider.current) {
+    if (isRosConnected && customTFProvider.current && !tfProviderInitialized.current) {
       // Ensure the TF provider has all required methods
       const isProviderValid = ensureProviderFunctionality();
       if (isProviderValid) {
         console.log("[VisualizationPanel] TF provider initialized successfully");
+        tfProviderInitialized.current = true; // Mark as initialized to prevent repeated logging
       } else {
         console.error("[VisualizationPanel] TF provider initialization failed");
       }
+    }
+    
+    // Reset the flag when ROS disconnects
+    if (!isRosConnected) {
+      tfProviderInitialized.current = false;
     }
   }, [isRosConnected, customTFProvider, ensureProviderFunctionality]);
 
@@ -211,7 +237,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     ros3dViewer,
     customTFProvider,
     displayedTfFrames,
-    // axesScale: 0.3,
+    axesScale: tfAxesScale, // Use the state value for axes scale
   });
 
   // REMOVED Direct CameraInfo Visualizer Hook Call
@@ -398,24 +424,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // console.log(`--- VisualizationPanel Render End ---`);
 
-  // Render pointclouds
-  const renderPointClouds = () => {
-    return visualizations
-      .filter(viz => viz.type === 'pointcloud')
-      .map(viz => (
-        <PointCloudViz
-          key={viz.id}
-          ros={ros}
-          isRosConnected={isRosConnected}
-          ros3dViewer={ros3dViewer}
-          customTFProvider={customTFProvider}
-          topic={viz.topic}
-          fixedFrame={fixedFrame}
-          options={viz.options as PointCloudOptions}
-        />
-      ));
-  };
-
   return (
     <div className="visualization-panel">
       {/* Render Visualization Wrapper Components */}
@@ -446,8 +454,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               options={viz.options as CameraInfoOptions}
             />
           );
+        } else if (viz.type === 'urdf') { // Added URDF rendering
+          return (
+            <React.Fragment key={viz.id}>
+              <UrdfViz
+                ros={ros}
+                isRosConnected={isRosConnected}
+                ros3dViewer={ros3dViewer}
+                customTFProvider={customTFProvider}
+                robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
+                urdfPath={(viz.options as UrdfOptions)?.urdfPath}
+                // Pass other URDF options as needed
+              />
+            </React.Fragment>
+          );
         }
-        // Add other visualization types here later
         return null;
       })}
 
@@ -456,12 +477,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
       {/* Settings Button */}
       <button
-        id="viz-settings-button" // Keep ID for outside click detection
+        id="viz-settings-button"
         className="icon-button visualization-settings-button"
         onClick={toggleSettingsPopup}
         title="Settings"
       >
-        ⚙️ {/* Using emoji for simplicity, replace with icon component if needed */}
+        ⚙️
       </button>
 
       {/* Settings Popup */}
@@ -479,6 +500,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           onEditVisualization={openVisualizationSettings}
           onUpdateVisualizationTopic={updateVisualizationTopic}
           allTopics={allTopics}
+          tfAxesScale={tfAxesScale}
+          onTfAxesScaleChange={(newScale: number) => setTfAxesScale(newScale)}
         />
       )}
 

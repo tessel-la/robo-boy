@@ -23,6 +23,8 @@ interface SettingsPopupProps {
   onEditVisualization?: (id: string) => void; // New prop for editing visualizations
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void; // New prop for changing topics
   allTopics: TopicInfo[]; // Add allTopics to get available topics for type
+  tfAxesScale: number; // Add TF axes scale prop
+  onTfAxesScaleChange: (newScale: number) => void; // Add TF axes scale change handler
 }
 
 // Type for section visibility state
@@ -52,6 +54,8 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     onEditVisualization,
     onUpdateVisualizationTopic,
     allTopics = [], // Default to empty array if not provided
+    tfAxesScale, // Add TF axes scale prop
+    onTfAxesScaleChange, // Add TF axes scale change handler
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -141,6 +145,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     const typeToMessageTypes: Record<string, string[]> = {
       pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
       camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
+      urdf: ['std_msgs/String', 'std_msgs/msg/String'], // Add URDF support
       // Add more mappings as needed
     };
 
@@ -187,6 +192,24 @@ const SettingsPopup = (props: SettingsPopupProps) => {
            </button>
            {openSections.tfFrames && (
              <div className="section-content">
+               {/* TF Axes Scale Control */}
+               <div className="popup-control-item">
+                 <label htmlFor="tf-axes-scale">TF Axes Size:</label>
+                 <div className="range-input-container">
+                   <input
+                     type="range"
+                     id="tf-axes-scale"
+                     min="0.1"
+                     max="2.0"
+                     step="0.1"
+                     value={tfAxesScale}
+                     onChange={(e) => onTfAxesScaleChange(parseFloat(e.target.value))}
+                     className="range-input"
+                   />
+                   <span className="range-value">{tfAxesScale.toFixed(1)}</span>
+                 </div>
+               </div>
+               
                <div className="popup-control-group tf-frame-group">
                  {availableFrames.length > 0 ? (
                    <ul className="tf-checkbox-list">
@@ -243,11 +266,23 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                                       className="topic-dropdown"
                                       title={viz.topic}
                                     >
-                                      {getTopicsForVisualizationType(viz.type).map(topic => (
-                                        <option key={topic.name} value={topic.name}>
-                                          {topic.name}
+                                      {/* Always show current topic even if not in filtered list */}
+                                      {!getTopicsForVisualizationType(viz.type).some(t => t.name === viz.topic) && (
+                                        <option key={viz.topic} value={viz.topic}>
+                                          {viz.topic} (current)
                                         </option>
-                                      ))}
+                                      )}
+                                      {getTopicsForVisualizationType(viz.type).length > 0 ? (
+                                        getTopicsForVisualizationType(viz.type).map(topic => (
+                                          <option key={topic.name} value={topic.name}>
+                                            {topic.name}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        <option value="" disabled>
+                                          No {viz.type} topics available
+                                        </option>
+                                      )}
                                     </select>
                                   </div>
                                   
