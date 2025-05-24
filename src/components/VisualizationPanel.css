@@ -297,6 +297,50 @@
   margin-top: 5px;
 }
 
+/* --- Range Input Styles --- */
+.range-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.range-input {
+  flex: 1;
+  height: 6px;
+  background: var(--background-secondary, #444);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--primary-color, #32CD32);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.range-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--primary-color, #32CD32);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.range-value {
+  font-size: 0.9em;
+  font-weight: bold;
+  color: var(--text-primary, #fff);
+  min-width: 30px;
+  text-align: center;
+}
+
 /* --- ROS3D Viewer Container --- */
 .ros3d-viewer {
   flex-grow: 1; /* Allow viewer to take remaining space */

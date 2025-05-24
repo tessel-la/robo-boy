@@ -5,6 +5,12 @@ declare module 'ros3d' {
     // Basic roslib types
     import { Ros } from 'roslib';
 
+    // Import CustomTFProvider type from its definition. 
+    // This path might need adjustment based on your project structure and how tfUtils is exported/imported.
+    // Assuming tfUtils.ts exports CustomTFProvider and is in the same directory level as ros3d.ts for simplicity here.
+    // In a real project, you'd use the correct module path.
+    import { CustomTFProvider } from '../utils/tfUtils'; // Adjusted path
+
     // Basic viewer class declaration
     export class Viewer {
         constructor(options: {
@@ -64,7 +70,7 @@ declare module 'ros3d' {
         constructor(options: {
             ros: Ros;
             topic: string;
-            tfClient: TfClient;
+            tfClient: CustomTFProvider;
             rootObject: Object3D;
             max_pts?: number;
             size?: number;
@@ -123,6 +129,23 @@ declare module 'ros3d' {
         private onTouchEnd(event: TouchEvent): void;
     }
 
+    // UrdfClient declaration
+    export class UrdfClient extends Object3D {
+        constructor(options: {
+            ros: Ros;
+            tfClient: CustomTFProvider;
+            rootObject: Object3D; // The THREE.Object3D to attach the URDF model to
+            robotDescriptionParam?: string; // ROS parameter name for the URDF (e.g., '/robot_description')
+            robotDescriptionTopic?: string; // ROS topic name for the URDF (e.g., '/robot_description')
+            loader?: any; // Specify loader type, e.g., COLLADA_LOADER, STLLoader. Define more strictly if possible.
+            onComplete?: (model: Object3D) => void; // Callback when URDF is loaded
+            // Consider adding options for loading specific meshes like DAE, STL, OBJ, etc.
+            // Example: colladaLoaderOptions?: any, stlLoaderOptions?: any
+        });
+        dispose(): void; // Method to clean up the URDF model and subscriptions
+        // Add any other public methods or properties that UrdfClient will have
+    }
+
     // Add other ros3d classes/types here as needed (e.g., UrdfClient, MarkerClient)
 
     // You might need to export the THREE namespace if ros3d relies on it implicitly
@@ -136,6 +159,7 @@ declare module 'ros3d' {
         TfClient: typeof TfClient;
         PointCloud2: typeof PointCloud2;
         OrbitControls: typeof OrbitControls;
+        UrdfClient: typeof UrdfClient;
         // ... other exports
     };
 

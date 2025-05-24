@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { VisualizationConfig } from './VisualizationPanel'; // Assuming types are exported
+import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaMapMarker, FaCubes } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube } from 'react-icons/fa';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
@@ -14,6 +14,7 @@ interface TopicInfo {
 const SUPPORTED_VIZ_TYPES: Record<VisualizationConfig['type'], string[]> = {
   pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
+  urdf: ['std_msgs/String', 'std_msgs/msg/String'], // URDF is often a string on /robot_description
   // Add more types here, e.g.:
   // marker: ['visualization_msgs/Marker', 'visualization_msgs/msg/Marker'],
   // markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
@@ -23,6 +24,7 @@ const SUPPORTED_VIZ_TYPES: Record<VisualizationConfig['type'], string[]> = {
 const VIZ_TYPE_ICONS: Record<VisualizationConfig['type'], React.ReactNode> = {
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
+  urdf: <FaCube />,
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
   // markerarray: <FaCubes />,
@@ -43,9 +45,20 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [selectedType, setSelectedType] = useState<VisualizationConfig['type'] | ''>('');
+  // URDF specific options state
+  const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>('/robot_description');
 
   // Check if a type has available topics
   const getAvailableTopics = (type: VisualizationConfig['type']): TopicInfo[] => {
+    if (type === 'urdf') {
+      // For URDF, the primary topic is usually /robot_description
+      const robotDescriptionTopics = allTopics.filter(topic => 
+        SUPPORTED_VIZ_TYPES.urdf.includes(topic.type) && topic.name.includes('robot_description')
+      );
+      if (robotDescriptionTopics.length > 0) return robotDescriptionTopics;
+      // Fallback: show all string topics if no specific robot_description found
+      return allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
+    }
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
     return allTopics.filter(topic => validRosTypes.includes(topic.type));
   };
@@ -53,27 +66,46 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   // Add quick visualization (auto-select first available topic)
   const addQuickVisualization = (type: VisualizationConfig['type']) => {
     const availableTopics = getAvailableTopics(type);
-    
-    if (availableTopics.length > 0) {
+    let config: Omit<VisualizationConfig, 'id'>;
+
+    if (type === 'urdf') {
+      config = {
+        type: 'urdf',
+        // For quick add, use default topic and path. User can change in settings.
+        topic: availableTopics.find(t => t.name === '/robot_description')?.name || availableTopics[0]?.name || '/robot_description',
+        options: {
+          robotDescriptionTopic: urdfRobotDescriptionTopic, // Use state or default
+        } as UrdfOptions,
+      };
+    } else if (availableTopics.length > 0) {
       const firstTopic = availableTopics[0].name;
-      const config: Omit<VisualizationConfig, 'id'> = {
+      config = {
         type: type,
         topic: firstTopic,
         options: {},
       };
-      onAddVisualization(config);
+    } else {
+      return; // Cannot add if no topics for non-URDF types
     }
+    onAddVisualization(config);
   };
 
   // Helper function to capitalize type name for display
   const formatTypeName = (type: string): string => {
+    if (type === 'urdf') return 'URDF';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   // Handle manual topic selection (only used if user wants to select a specific topic)
   const handleTypeSelect = (type: VisualizationConfig['type']) => {
     setSelectedType(type);
+    if (type === 'urdf') {
+      // Pre-fill topic if a common one exists, or clear if not
+      const defaultUrdfTopic = getAvailableTopics('urdf').find(t => t.name.includes('robot_description'))?.name;
+      setSelectedTopic(defaultUrdfTopic || '');
+    } else {
     setSelectedTopic('');
+    }
   };
 
   const handleTopicChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -81,13 +113,25 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   };
 
   const handleManualAddClick = () => {
-    if (!selectedType || !selectedTopic) return;
+    if (!selectedType) return;
+    let config: Omit<VisualizationConfig, 'id'>;
 
-    const config: Omit<VisualizationConfig, 'id'> = {
+    if (selectedType === 'urdf') {
+      config = {
+        type: 'urdf',
+        topic: selectedTopic || urdfRobotDescriptionTopic, // Use selected or default from input
+        options: {
+          robotDescriptionTopic: urdfRobotDescriptionTopic,
+        } as UrdfOptions,
+      };
+    } else {
+      if (!selectedTopic) return;
+      config = {
       type: selectedType,
       topic: selectedTopic,
       options: {},
     };
+    }
     onAddVisualization(config);
   };
 
@@ -104,25 +148,31 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
             {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
               const vizType = type as VisualizationConfig['type'];
               const availableTopics = getAvailableTopics(vizType);
-              const hasTopics = availableTopics.length > 0;
+              const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
               const icon = VIZ_TYPE_ICONS[vizType];
+              
+              let title = `Add ${formatTypeName(type)}`;
+              if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
+                title += ` (${availableTopics[0]?.name || 'first available'})`;
+              } else if (vizType === 'urdf') {
+                title += ` (default: ${urdfRobotDescriptionTopic})`;
+              } else {
+                title = 'No compatible topics available';
+              }
               
               return (
                 <button 
                   key={type}
-                  className={`viz-grid-item ${!hasTopics ? 'disabled' : ''}`}
-                  onClick={() => hasTopics && addQuickVisualization(vizType)}
-                  disabled={!hasTopics}
-                  title={!hasTopics 
-                    ? 'No compatible topics available' 
-                    : `Add ${formatTypeName(type)} (${availableTopics[0]?.name || 'first available topic'})`
-                  }
+                  className={`viz-grid-item ${!hasTopicsOrIsUrdf ? 'disabled' : ''}`}
+                  onClick={() => hasTopicsOrIsUrdf && addQuickVisualization(vizType)}
+                  disabled={!hasTopicsOrIsUrdf}
+                  title={title}
                 >
                   <div className="viz-icon">
                     {icon}
                   </div>
                   <div className="viz-name">{formatTypeName(type)}</div>
-                  {hasTopics && (
+                  {vizType !== 'urdf' && hasTopicsOrIsUrdf && (
                     <div className="viz-topic-count">{availableTopics.length} topic{availableTopics.length !== 1 ? 's' : ''}</div>
                   )}
                 </button>
@@ -133,7 +183,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 
         <div className="advanced-section">
           <details>
-            <summary className="advanced-toggle">Advanced (select specific topic)</summary>
+            <summary className="advanced-toggle">Advanced (customize options)</summary>
             <div className="advanced-content">
               <div className="form-group">
                 <label htmlFor="advanced-viz-type">Visualization Type:</label>
@@ -146,28 +196,20 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                   {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
                     const vizType = type as VisualizationConfig['type'];
                     const hasTopics = getAvailableTopics(vizType).length > 0;
-                    
+                    const canAdd = vizType === 'urdf' || hasTopics;
                     return (
-                      <option 
-                        key={type} 
-                        value={type}
-                        disabled={!hasTopics}
-                      >
-                        {formatTypeName(type)} {!hasTopics ? '(No topics)' : ''}
+                      <option key={type} value={type} disabled={!canAdd}>
+                        {formatTypeName(type)} {vizType !== 'urdf' && !hasTopics ? '(No topics)' : ''}
                       </option>
                     );
                   })}
                 </select>
               </div>
 
-              {selectedType && (
+              {selectedType && selectedType !== 'urdf' && (
                 <div className="form-group">
                   <label htmlFor="viz-topic-select">Topic:</label>
-                  <select
-                    id="viz-topic-select"
-                    value={selectedTopic}
-                    onChange={handleTopicChange}
-                  >
+                  <select id="viz-topic-select" value={selectedTopic} onChange={handleTopicChange}>
                     <option value="" disabled>-- Select Topic --</option>
                     {getAvailableTopics(selectedType).map(topic => (
                       <option key={topic.name} value={topic.name}>{topic.name}</option>
@@ -175,13 +217,28 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                   </select>
                 </div>
               )}
+
+              {selectedType === 'urdf' && (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="urdf-robot-description-topic">Robot Description Topic:</label>
+                    <input 
+                      type="text" 
+                      id="urdf-robot-description-topic" 
+                      value={urdfRobotDescriptionTopic} 
+                      onChange={(e) => setUrdfRobotDescriptionTopic(e.target.value)} 
+                      placeholder="/robot_description"
+                    />
+                  </div>
+                </>
+              )}
               
               <button
                 className="manual-add-button"
                 onClick={handleManualAddClick}
-                disabled={!selectedType || !selectedTopic}
+                disabled={!selectedType || (selectedType !== 'urdf' && !selectedTopic)}
               >
-                Add Selected Topic
+                Add Visualization
               </button>
             </div>
           </details>

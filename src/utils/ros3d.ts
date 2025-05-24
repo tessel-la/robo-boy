@@ -2,9 +2,12 @@
 import * as THREE from 'three';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
+import { CustomTFProvider, StoredTransform } from './tfUtils';
+import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 // Basic viewer class implementation
-export class Viewer {
+class Viewer {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
@@ -32,6 +35,22 @@ export class Viewer {
     } else {
       this.scene.background = new THREE.Color(0x111111);
     }
+
+    // Add lighting for 3D meshes
+    // Add ambient light for overall illumination
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // soft white light
+    this.scene.add(ambientLight);
+    
+    // Add directional light for shading
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 5, 5);
+    directionalLight.castShadow = false; // Disable shadows for performance
+    this.scene.add(directionalLight);
+    
+    // Add another directional light from opposite direction for better illumination
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight2.position.set(-5, -5, 5);
+    this.scene.add(directionalLight2);
 
     // Create camera
     this.camera = new THREE.PerspectiveCamera(
@@ -61,6 +80,8 @@ export class Viewer {
       antialias: options.antialias,
     });
     this.renderer.setSize(options.width, options.height);
+    // Enable shadows if needed
+    this.renderer.shadowMap.enabled = false; // Keep disabled for performance
     
     // Append renderer to container
     container.appendChild(this.renderer.domElement);
@@ -97,7 +118,7 @@ export class Viewer {
 }
 
 // Grid implementation - Now properly extends Object3D
-export class Grid extends THREE.Object3D {
+class Grid extends THREE.Object3D {
   constructor(options: any = {}) {
     super();
     
@@ -118,7 +139,7 @@ export class Grid extends THREE.Object3D {
 }
 
 // Axes implementation - Now properly extends Object3D
-export class Axes extends THREE.Object3D {
+class Axes extends THREE.Object3D {
   lineSegments?: { geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null; };
 
   constructor(options: {
@@ -143,7 +164,7 @@ export class Axes extends THREE.Object3D {
 }
 
 // TfClient implementation (simplified)
-export class TfClient {
+class TfClient {
   private ros: Ros;
   private frameCallbacks: Map<string, ((transform: any | null) => void)[]> = new Map();
   private fixedFrame: string;
@@ -257,10 +278,10 @@ export class TfClient {
 }
 
 // PointCloud2 implementation (enhanced)
-export class PointCloud2 extends THREE.Object3D {
+class PointCloud2 extends THREE.Object3D {
   private ros: Ros;
   private topic: string;
-  private tfClient: any; // TfClient or any compatible TF provider
+  private tfClient: CustomTFProvider;
   private rootObject: THREE.Object3D;
   private maxPoints: number;
   private pointSize: number;
@@ -269,6 +290,7 @@ export class PointCloud2 extends THREE.Object3D {
   private points: any;
   private messageFrameId: string | null = null;
   private fixedFrame: string;
+  private rosTopicInstance: ROSLIB.Topic | null = null; // Added for managing subscription
   
   // Scaling factors for points
   private scaleX: number = 1.0;
@@ -286,7 +308,7 @@ export class PointCloud2 extends THREE.Object3D {
   constructor(options: {
     ros: Ros;
     topic: string;
-    tfClient: TfClient;
+    tfClient: CustomTFProvider;
     rootObject: THREE.Object3D;
     max_pts?: number;
     size?: number;
@@ -371,32 +393,9 @@ export class PointCloud2 extends THREE.Object3D {
         }
         
         try {
-          // Look up transformation from the message frame to the fixed frame
-          let tf;
-          try {
-            tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
-          } catch (error) {
-            // If we get a "not a function" error, try a more direct approach
-            if (error instanceof TypeError && error.message.includes('is not a function')) {
-              console.warn(`[PointCloud2] Transform lookup method failed, trying fallback with direct access to transforms`);
-              
-              // Try to access the transforms directly if possible
-              const provider = this.tfClient;
-              if (provider && (provider as any).transforms) {
-                try {
-                  // Use the lookupTransform function from tfUtils if available
-                  if (typeof (provider as any).lookupTransform === 'function') {
-                    tf = (provider as any).lookupTransform(fixedFrame, this.messageFrameId);
-                  }
-                } catch (fallbackError) {
-                  throw error; // Rethrow the original error if fallback fails
-                }
-              } else {
-                throw error; // Rethrow if we can't access the transforms
-              }
-            } else {
-              throw error; // Rethrow other errors
-            }
+          let tf: StoredTransform | null = null;
+          if (this.messageFrameId) {
+            tf = this.tfClient.lookupTransform(fixedFrame, this.messageFrameId);
           }
           
           if (tf && tf.translation && tf.rotation) {
@@ -489,23 +488,17 @@ export class PointCloud2 extends THREE.Object3D {
   // Initialize point cloud geometry and material
   private initializePoints(material?: THREE.Material | { [key: string]: any }): void {
     try {
-      // Create buffer geometry
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(this.maxPoints * 3); // 3 values per point (x, y, z)
-      
-      // Fill with zeros initially
-      for (let i = 0; i < positions.length; i++) {
-        positions[i] = 0;
-      }
-      
-      // Create attribute for positions - use addAttribute for THREE.js r89 compatibility
-      // THREE.js r89 uses addAttribute instead of setAttribute
-      if (geometry.addAttribute) {
-        geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
-      } else {
-        // Fallback to setAttribute for newer THREE.js versions
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      }
+      const geometry = new THREE.BufferGeometry(); // Use a local variable for geometry
+
+      // Add attributes: position and color
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(new Float32Array(this.maxPoints * 3), 3)
+      );
+      geometry.setAttribute(
+        'color',
+        new THREE.Float32BufferAttribute(new Float32Array(this.maxPoints * 3), 3)
+      );
       
       // Create material - either use provided one or default
       let pointMaterial: THREE.Material;
@@ -522,19 +515,19 @@ export class PointCloud2 extends THREE.Object3D {
       }
       
       // Create the points object
-      const points = new THREE.Points(geometry, pointMaterial);
-      points.frustumCulled = false; // Disable frustum culling
+      const pointsObject = new THREE.Points(geometry, pointMaterial);
+      pointsObject.frustumCulled = false; // Disable frustum culling
       
       // Store in the points object
       this.points = {
-        object: points,
+        object: pointsObject,
         material: pointMaterial,
-        geometry: geometry,
+        geometry: geometry, // Assign the local geometry
         setup: true
       };
       
       // Add points to this object
-      super.add(points);
+      super.add(pointsObject);
     } catch (error) {
       console.error('Error initializing points:', error);
     }
@@ -542,70 +535,72 @@ export class PointCloud2 extends THREE.Object3D {
   
   // Subscribe to the point cloud topic
   private subscribe(): void {
-    if (!this.ros) return;
-    
     try {
-      console.log(`[PointCloud2] Subscribing to topic: ${this.topic}`);
-      
-      this.topicSubscription = new ROSLIB.Topic({
+      // Ensure topicSubscription is initialized as a ROSLIB.Topic instance
+      this.rosTopicInstance = new ROSLIB.Topic({
         ros: this.ros,
         name: this.topic,
         messageType: 'sensor_msgs/PointCloud2',
         compression: this.compression,
         throttle_rate: this.throttleRate,
-        queue_size: 1
+        queue_size: 1 // Keep only the latest message
       });
-      
-      this.topicSubscription.subscribe((message: any) => {
-        console.log(`[PointCloud2] Received message on topic ${this.topic}`);
-        this.processMessage(message);
-      });
+
+      this.rosTopicInstance.subscribe(this.processMessage.bind(this));
+      console.log(`[PointCloud2] Subscribed to ${this.topic}`);
     } catch (error) {
-      console.error('Error subscribing to topic:', error);
+      console.error(`[PointCloud2] Error subscribing to topic ${this.topic}:`, error);
     }
   }
   
   // Unsubscribe from the topic
   public unsubscribe(): void {
-    if (this.topicSubscription) {
-      this.topicSubscription.unsubscribe();
-      this.topicSubscription = null;
+    try {
+      if (this.rosTopicInstance) {
+        this.rosTopicInstance.unsubscribe();
+        this.rosTopicInstance = null; // Clear the instance after unsubscribing
+        console.log(`[PointCloud2] Unsubscribed from ${this.topic}`);
+      } else {
+        console.warn(`[PointCloud2] Attempted to unsubscribe, but no active subscription found for ${this.topic}`);
+      }
+    } catch (error) {
+      console.error(`[PointCloud2] Error unsubscribing from topic ${this.topic}:`, error);
     }
+    
+    // Stop transform update loop if it's running
+    if (this.transformUpdateAnimationId !== null) {
+      cancelAnimationFrame(this.transformUpdateAnimationId);
+      this.transformUpdateAnimationId = null;
+    }
+    
+    // Clear the message frame ID
+    this.messageFrameId = null;
+    
+    // Optionally, hide the points
+    // (this as any).visible = false; // Uncomment if desired behavior
   }
   
   // Safe method to reset/reinitialize points 
   public safeResetPoints(material?: THREE.Material | { [key: string]: any }): boolean {
     try {
-      console.log('[PointCloud2] Attempting to safely reset points');
-      
-      // Remove existing points from scene if they exist
-      if (this.points && this.points.object) {
-        super.remove(this.points.object);
+      // Unsubscribe from the current topic before re-initializing
+      if (this.rosTopicInstance) {
+        this.rosTopicInstance.unsubscribe();
+        this.rosTopicInstance = null; 
+        console.log(`[PointCloud2] Unsubscribed from ${this.topic} before resetting points.`);
       }
-      
-      // Clean up geometry and material
-      if (this.points && this.points.geometry) {
-        this.points.geometry.dispose();
-      }
-      
-      if (this.points && this.points.material) {
-        this.points.material.dispose();
-      }
-      
-      // Reset points object
-      this.points = {
-        object: null,
-        material: null,
-        geometry: null,
-        setup: false
-      };
       
       // Re-initialize points
       this.initializePoints(material);
       
-      return this.points.setup;
+      // Re-subscribe to the topic
+      // This ensures that if the topic name or other parameters changed, they are reapplied
+      this.subscribe(); 
+      
+      console.log('[PointCloud2] Points reset and re-subscribed successfully.');
+      return true;
     } catch (e) {
-      console.error('[PointCloud2] Error in safeResetPoints:', e);
+      console.error('[PointCloud2] Error safely resetting points:', e);
       return false;
     }
   }
@@ -637,26 +632,28 @@ export class PointCloud2 extends THREE.Object3D {
         
         // Immediately trigger a transform lookup to update position
         // Use stored fixedFrame instead of trying to call getFixedFrame
-        try {
-          const tf = (this.tfClient as any).lookupTransform(this.fixedFrame, this.messageFrameId);
-          if (tf && tf.translation && tf.rotation) {
-            this.position.set(
-              tf.translation.x,
-              tf.translation.y,
-              tf.translation.z
-            );
-            this.quaternion.set(
-              tf.rotation.x,
-              tf.rotation.y,
-              tf.rotation.z,
-              tf.rotation.w
-            );
-            (this as any).visible = true;
-            this.updateMatrix();
-            this.matrixWorldNeedsUpdate = true;
+        if (this.messageFrameId) {
+          try {
+            const tf = this.tfClient.lookupTransform(this.fixedFrame, this.messageFrameId);
+            if (tf && tf.translation && tf.rotation) {
+              this.position.set(
+                tf.translation.x,
+                tf.translation.y,
+                tf.translation.z
+              );
+              this.quaternion.set(
+                tf.rotation.x,
+                tf.rotation.y,
+                tf.rotation.z,
+                tf.rotation.w
+              );
+              (this as any).visible = true;
+              this.updateMatrix();
+              this.matrixWorldNeedsUpdate = true;
+            }
+          } catch (e) {
+            console.warn(`[PointCloud2] Initial transform lookup failed: ${e}`);
           }
-        } catch (e) {
-          console.warn(`[PointCloud2] Initial transform lookup failed: ${e}`);
         }
       } else {
         console.warn('[PointCloud2] Message has no frame_id in header');
@@ -879,32 +876,9 @@ export class PointCloud2 extends THREE.Object3D {
     console.log(`[PointCloud2] Forcing transform update from ${this.messageFrameId} to ${fixedFrame}`);
     
     try {
-      // Look up transformation from the message frame to the fixed frame
-      let tf;
-      try {
-        tf = (this.tfClient as any).lookupTransform(fixedFrame, this.messageFrameId);
-      } catch (error) {
-        // If we get a "not a function" error, try a more direct approach
-        if (error instanceof TypeError && error.message.includes('is not a function')) {
-          console.warn(`[PointCloud2] Force transform lookup method failed, trying fallback with direct access`);
-          
-          // Try to access the transforms directly if possible
-          const provider = this.tfClient;
-          if (provider && (provider as any).transforms) {
-            try {
-              // Use the lookupTransform function from tfUtils if available
-              if (typeof (provider as any).lookupTransform === 'function') {
-                tf = (provider as any).lookupTransform(fixedFrame, this.messageFrameId);
-              }
-            } catch (fallbackError) {
-              throw error; // Rethrow the original error if fallback fails
-            }
-          } else {
-            throw error; // Rethrow if we can't access the transforms
-          }
-        } else {
-          throw error; // Rethrow other errors
-        }
+      let tf: StoredTransform | null = null;
+      if (this.messageFrameId) {
+        tf = this.tfClient.lookupTransform(fixedFrame, this.messageFrameId);
       }
       
       if (tf && tf.translation && tf.rotation) {
@@ -943,17 +917,13 @@ export class PointCloud2 extends THREE.Object3D {
   
   // Helper method to get the fixed frame
   private getFixedFrame(): string {
-    // First try to get it from the tfClient
-    if (this.tfClient && typeof this.tfClient.getFixedFrame === 'function') {
-      return this.tfClient.getFixedFrame();
-    }
-    // Otherwise use our stored value
+    // CustomTFProvider does not have getFixedFrame(), so PointCloud2 uses its own this.fixedFrame.
     return this.fixedFrame;
   }
 }
 
-// Improved OrbitControls implementation
-export class OrbitControls {
+// OrbitControls implementation
+class OrbitControls {
   private camera: THREE.PerspectiveCamera;
   private element: HTMLElement;
   private target = new THREE.Vector3(0, 0, 0);
@@ -1387,6 +1357,439 @@ export class OrbitControls {
   }
 }
 
+// UrdfClient implementation
+// Adapted from ROS1 ros3djs example, needs further refinement for ROS2 and mesh loading.
+class UrdfClient extends THREE.Object3D {
+  private ros: Ros;
+  private tfClient: CustomTFProvider;
+  private path: string; // Base path for mesh resources
+  private rootObject: THREE.Object3D;
+  private urdfModel: THREE.Object3D | null = null;
+  private robotDescriptionTopic: ROSLIB.Topic | null = null;
+  private onComplete?: (model: THREE.Object3D) => void;
+  private linkNameMap: Map<string, THREE.Object3D> = new Map();
+  private colladaLoader: ColladaLoader;
+  private stlLoader: STLLoader;
+
+  constructor(options: {
+    ros: Ros;
+    tfClient: CustomTFProvider;
+    rootObject: THREE.Object3D;
+    robotDescriptionTopic?: string;
+    onComplete?: (model: THREE.Object3D) => void;
+    // Removed loader option, will use internal Collada and STL loaders
+  }) {
+    super();
+    this.ros = options.ros;
+    this.tfClient = options.tfClient;
+    this.path = '/mesh_resources/'; // Hardcoded path
+    this.rootObject = options.rootObject;
+    this.onComplete = options.onComplete;
+
+    this.colladaLoader = new ColladaLoader();
+    this.stlLoader = new STLLoader();
+
+    this.rootObject.add(this);
+
+    const descriptionTopicName = options.robotDescriptionTopic || '/robot_description';
+    this.robotDescriptionTopic = new ROSLIB.Topic({
+      ros: this.ros,
+      name: descriptionTopicName,
+      messageType: 'std_msgs/String',
+      compression: 'none',
+      throttle_rate: 0,
+      queue_size: 1,
+      latch: true,
+    });
+
+    console.log(`[UrdfClient] Subscribing to ${descriptionTopicName} for URDF.`);
+    this.robotDescriptionTopic.subscribe(this.handleUrdfString.bind(this));
+  }
+
+  private handleUrdfString(message: any): void {
+    if (this.urdfModel) {
+      console.log('[UrdfClient] URDF already loaded, ignoring new message.');
+      return;
+    }
+    console.log('[UrdfClient] Received URDF string.');
+    this.robotDescriptionTopic?.unsubscribe();
+    this.loadUrdf(message.data);
+  }
+
+  private parseUrdf(urdfString: string): XMLDocument | null {
+    try {
+      const parser = new DOMParser();
+      return parser.parseFromString(urdfString, 'application/xml');
+    } catch (e) {
+      console.error('[UrdfClient] Error parsing URDF XML:', e);
+      return null;
+    }
+  }
+
+  private loadUrdf(urdfString: string): void {
+    const xmlDoc = this.parseUrdf(urdfString);
+    if (!xmlDoc) return;
+
+    const robotNode = xmlDoc.getElementsByTagName('robot')[0];
+    if (!robotNode) {
+      console.error('[UrdfClient] <robot> tag not found in URDF.');
+      return;
+    }
+
+    this.urdfModel = new THREE.Group();
+    this.urdfModel.name = robotNode.getAttribute('name') || 'urdf_robot';
+    this.add(this.urdfModel); // Add the main robot model to this UrdfClient object
+
+    const links = Array.from(robotNode.getElementsByTagName('link'));
+    const joints = Array.from(robotNode.getElementsByTagName('joint'));
+
+    // Create Object3D for each link
+    links.forEach(linkElement => {
+      const linkName = linkElement.getAttribute('name');
+      if (linkName) {
+        const linkObject = new THREE.Group();
+        linkObject.name = linkName;
+        this.linkNameMap.set(linkName, linkObject);
+        // Visuals are added later, joints will parent them
+      }
+    });
+
+    // Keep track of root links (links that are not children of any joint)
+    const childLinks = new Set<string>();
+    const rootLinks: string[] = [];
+
+    // Process joints to establish hierarchy and add visuals/collisions to parent links
+    joints.forEach(jointElement => {
+      const jointName = jointElement.getAttribute('name');
+      const jointType = jointElement.getAttribute('type');
+      const parentLinkName = jointElement.getElementsByTagName('parent')[0]?.getAttribute('link');
+      const childLinkName = jointElement.getElementsByTagName('child')[0]?.getAttribute('link');
+
+      if (jointName && parentLinkName && childLinkName) {
+        const parentObject = this.linkNameMap.get(parentLinkName);
+        const childObject = this.linkNameMap.get(childLinkName);
+
+        if (parentObject && childObject) {
+          parentObject.add(childObject); // Add child link to parent link
+          childLinks.add(childLinkName); // Mark this link as a child
+          
+          console.log(`[UrdfClient] Joint ${jointName}: ${parentLinkName} -> ${childLinkName}`);
+
+          const originElement = jointElement.getElementsByTagName('origin')[0];
+          if (originElement) {
+            const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0,0,0];
+            const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
+            childObject.position.set(xyz[0], xyz[1], xyz[2]);
+            // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
+            // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
+            // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
+            // For Z-up coordinate system, we need to be careful about axis mapping
+            const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+            childObject.rotation.copy(euler);
+            
+            console.log(`[UrdfClient] Joint ${jointName} origin: pos(${xyz.join(',')}) rot(${rpy.join(',')})`);
+          }
+        } else {
+          console.warn(`[UrdfClient] Parent or child link not found for joint ${jointName}`);
+        }
+      }      
+    });
+
+    // Identify root links (not children of any joint)
+    this.linkNameMap.forEach((linkObject, linkName) => {
+      if (!childLinks.has(linkName)) {
+        rootLinks.push(linkName);
+      }
+    });
+
+    console.log(`[UrdfClient] Found ${rootLinks.length} root links:`, rootLinks);
+
+    // Add visuals to their respective link objects AFTER hierarchy is set
+    links.forEach(linkElement => {
+      const linkName = linkElement.getAttribute('name');
+      const linkObject = linkName ? this.linkNameMap.get(linkName) : null;
+      if (!linkObject) return;
+
+      const visualElements = Array.from(linkElement.getElementsByTagName('visual'));
+      visualElements.forEach(visualElement => {
+        this.loadVisual(visualElement, linkObject);
+      });
+    });
+
+    // Add only root links to the main urdfModel
+    rootLinks.forEach(rootLinkName => {
+      const rootLinkObject = this.linkNameMap.get(rootLinkName);
+      if (rootLinkObject && this.urdfModel) {
+        this.urdfModel.add(rootLinkObject);
+      }
+    });
+
+    console.log('[UrdfClient] URDF structure processed.', this.urdfModel);
+    if (this.onComplete && this.urdfModel) {
+      this.onComplete(this.urdfModel);
+    }
+    this.setupTfUpdates(rootLinks);
+  }
+
+  private loadVisual(visualElement: Element, linkObject: THREE.Object3D): void {
+    const geometryElement = visualElement.getElementsByTagName('geometry')[0];
+    if (!geometryElement) return;
+
+    let mesh: THREE.Object3D | null = null;
+    const meshElement = geometryElement.getElementsByTagName('mesh')[0];
+    const boxElement = geometryElement.getElementsByTagName('box')[0];
+    const cylinderElement = geometryElement.getElementsByTagName('cylinder')[0];
+    const sphereElement = geometryElement.getElementsByTagName('sphere')[0];
+
+    // Load URDF material if specified
+    const materialElement = visualElement.getElementsByTagName('material')[0];
+    const urdfMaterial = materialElement ? this.loadMaterial(materialElement) : null;
+
+    if (meshElement) {
+      const filename = meshElement.getAttribute('filename');
+      if (filename) {
+        const fullPath = this.resolvePackagePath(filename);
+        const scaleAttr = meshElement.getAttribute('scale')?.split(' ').map(Number) || [1,1,1];
+        const scaleVec = new THREE.Vector3(scaleAttr[0], scaleAttr[1], scaleAttr[2]);
+
+        if (filename.toLowerCase().endsWith('.dae') || filename.toLowerCase().endsWith('.collada')) {
+          this.colladaLoader.load(fullPath, (collada) => {
+            const daeMesh = collada.scene;
+            daeMesh.scale.copy(scaleVec);
+            
+            // Counter-rotate to undo ColladaLoader's automatic Y-up conversion
+            // ColladaLoader rotates Z-up assets to Y-up, but we want Z-up
+            // The automatic rotation is usually -90 degrees around X-axis
+            daeMesh.rotateX(Math.PI / 2); // Rotate +90 degrees around X to restore Z-up
+            
+            this.applyOrigin(visualElement, daeMesh);
+            
+            // Only override materials if URDF explicitly specifies a material
+            if (urdfMaterial) {
+              daeMesh.traverse(child => { 
+                if (child instanceof THREE.Mesh) {
+                  child.material = urdfMaterial; 
+                }
+              });
+            } else {
+              // Improve the existing materials for better visibility
+              daeMesh.traverse(child => { 
+                if (child instanceof THREE.Mesh) {
+                  if (child.material) {
+                    // If material exists, ensure it works with lighting
+                    if (child.material instanceof THREE.MeshLambertMaterial || 
+                        child.material instanceof THREE.MeshPhongMaterial) {
+                      // Keep existing material but ensure it's visible
+                    } else {
+                      // Convert basic materials to lit materials
+                      const existingColor = (child.material as any).color || new THREE.Color(0xcccccc);
+                      child.material = new THREE.MeshLambertMaterial({ 
+                        color: existingColor,
+                        transparent: false 
+                      });
+                    }
+                  } else {
+                    // No material, use default
+                    child.material = new THREE.MeshLambertMaterial({ 
+                      color: 0xcccccc,
+                      transparent: false 
+                    });
+                  }
+                }
+              });
+            }
+            
+            linkObject.add(daeMesh);
+            console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
+          }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
+        } else if (filename.toLowerCase().endsWith('.stl')) {
+          this.stlLoader.load(fullPath, (geometry) => {
+            const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
+            const stlMesh = new THREE.Mesh(geometry, material);
+            stlMesh.scale.copy(scaleVec);
+            this.applyOrigin(visualElement, stlMesh);
+            linkObject.add(stlMesh);
+            console.log(`[UrdfClient] Loaded STL: ${fullPath}`);
+          }, undefined, (error) => console.error(`[UrdfClient] Error loading STL ${fullPath}:`, error));
+        } else {
+          console.warn(`[UrdfClient] Unsupported mesh type: ${filename}`);
+        }
+      }
+    } else if (boxElement) {
+      const size = boxElement.getAttribute('size')?.split(' ').map(Number) || [0.1, 0.1, 0.1];
+      const geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
+      const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
+      mesh = new THREE.Mesh(geometry, material);
+    } else if (cylinderElement) {
+      const radius = parseFloat(cylinderElement.getAttribute('radius') || '0.05');
+      const length = parseFloat(cylinderElement.getAttribute('length') || '0.1');
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 16);
+      const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.rotateX(Math.PI / 2); // Align with URDF cylinder convention (Z-axis along length)
+    } else if (sphereElement) {
+      const radius = parseFloat(sphereElement.getAttribute('radius') || '0.05');
+      const geometry = new THREE.SphereGeometry(radius, 16, 16);
+      const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
+      mesh = new THREE.Mesh(geometry, material);
+    }
+
+    if (mesh) { // For primitive shapes
+      this.applyOrigin(visualElement, mesh);
+      linkObject.add(mesh);
+    }
+  }
+  
+  private applyOrigin(visualOrCollisionElement: Element, object: THREE.Object3D): void {
+    const originElement = visualOrCollisionElement.getElementsByTagName('origin')[0];
+    if (originElement) {
+        const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0,0,0];
+        const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
+        object.position.set(xyz[0], xyz[1], xyz[2]);
+        
+        // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
+        // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
+        // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
+        // For Z-up coordinate system, we need to be careful about axis mapping
+        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+        object.rotation.copy(euler);
+    }
+  }
+
+  private resolvePackagePath(filePath: string): string {
+    if (filePath.startsWith('package://')) {
+      // Replace package://<package_name>/ with the base path + <package_name>/
+      const resolved = filePath.replace(/package:\/\/([^\/]*)\//, (match, packageName) => {
+        const basePath = this.path.endsWith('/') ? this.path : this.path + '/';
+        return `${basePath}${packageName}/`;
+      });
+      console.log(`[UrdfClient] Resolved path: ${filePath} -> ${resolved}`);
+      return resolved;
+    }
+    // If not a package path, assume it's relative to the main URDF or an absolute URL
+    // If this.path is a base URL for resources, and filePath is relative to that:
+    if (!filePath.startsWith('http://') && !filePath.startsWith('https://') && this.path) {
+        return (this.path.endsWith('/') ? this.path : this.path + '/') + filePath;
+    }
+    return filePath;
+  }
+  
+  private loadMaterial(materialElement?: Element): THREE.Material {
+    let color = new THREE.Color(0xcccccc); // Default light grey instead of darker grey
+    let texture = null;
+
+    if (materialElement) {
+        const colorElement = materialElement.getElementsByTagName('color')[0];
+        if (colorElement) {
+            const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
+            if (rgba && rgba.length === 4) {
+                color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
+            }
+        }
+        const textureElement = materialElement.getElementsByTagName('texture')[0];
+        if (textureElement) {
+            const filename = textureElement.getAttribute('filename');
+            if (filename) {
+                // Basic texture loading, assuming PNG or JPG
+                // Proper path resolution for textures is also needed here
+                const texturePath = this.resolvePackagePath(filename);
+                try {
+                    texture = new THREE.TextureLoader().load(texturePath);
+                    console.log(`[UrdfClient] Loading texture: ${texturePath}`);
+                } catch (e) {
+                    console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
+                }
+            }
+        }
+    }
+    // Use MeshLambertMaterial for better performance and compatibility with our lighting setup
+    return new THREE.MeshLambertMaterial({ 
+      color: color, 
+      map: texture,
+      transparent: false,
+      side: THREE.FrontSide
+    });
+  }
+
+  private setupTfUpdates(rootLinks: string[]): void {
+    if (this.urdfModel) {
+        // Subscribe to TF updates for ALL links to capture joint movements
+        // Apply TF transforms directly as world positions - this is the standard approach
+        this.linkNameMap.forEach((linkObject, linkName) => {
+            // Removed per-link logging to reduce console spam
+            this.tfClient.subscribe(linkName, (transform: StoredTransform | null) => {
+                if (transform) {
+                    // Remove the link from its current parent to apply world transform
+                    const currentParent = linkObject.parent;
+                    if (currentParent) {
+                        currentParent.remove(linkObject);
+                    }
+                    
+                    // Apply world transform directly
+                    linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+                    linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+                    
+                    // Add directly to the main urdfModel (as world-positioned object)
+                    if (this.urdfModel && linkObject.parent !== this.urdfModel) {
+                        this.urdfModel.add(linkObject);
+                    }
+                    
+                    // Update the matrix to ensure proper rendering
+                    linkObject.updateMatrix();
+                    linkObject.matrixWorldNeedsUpdate = true;
+                    
+                    // Removed excessive TF logging to reduce console spam
+                    // Only log significant events instead of every update
+                }
+            });
+        });
+        
+        // If no links found, try subscribing to common robot base frames as fallback
+        if (this.linkNameMap.size === 0) {
+            console.warn('[UrdfClient] No links found, trying common base frame names');
+            const commonBaseFrames = ['base_link', 'base_footprint', 'robot_base', 'panda_link0'];
+            commonBaseFrames.forEach(frameName => {
+                console.log(`[UrdfClient] Setting up TF updates for common base frame: ${frameName}`);
+                this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
+                    if (transform && this.urdfModel) {
+                        this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+                        this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+                    }
+                });
+            });
+        }
+    }
+    console.log(`[UrdfClient] TF update subscriptions set up for ${this.linkNameMap.size} links.`);
+  }
+
+  public dispose(): void {
+    if (this.robotDescriptionTopic) {
+      this.robotDescriptionTopic.unsubscribe();
+      this.robotDescriptionTopic = null;
+    }
+    if (this.urdfModel) {
+      // Traverse and dispose geometries/materials
+      this.urdfModel.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        }
+      });
+      this.remove(this.urdfModel);
+      this.urdfModel = null;
+    }
+    this.linkNameMap.clear();
+    // TODO: Unsubscribe from all TF frames if tfClient.unsubscribe supports targeted removal based on callback or ID
+    console.log('[UrdfClient] Disposed.');
+  }
+}
+
 // Export as default and named exports to match the original module
 const ROS3D = {
   Viewer,
@@ -1395,6 +1798,8 @@ const ROS3D = {
   TfClient,
   PointCloud2,
   OrbitControls,
+  UrdfClient,
 };
 
+export { Viewer, Grid, Axes, TfClient, PointCloud2, OrbitControls, UrdfClient };
 export default ROS3D; 
