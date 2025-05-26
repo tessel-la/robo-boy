@@ -23,19 +23,35 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   onComponentUpdate,
   onComponentDelete
 }) => {
+  // Calculate optimal cell size to fit the container better
+  const calculateOptimalCellSize = () => {
+    if (isEditing) {
+      return layout.cellSize; // Use original size in editing mode
+    }
+    
+    // For display mode, use percentage-based sizing to fill available space
+    // This makes the gamepad responsive and fill the container like default gamepads
+    return 'auto'; // Let CSS handle the sizing
+  };
+
+  const cellSize = calculateOptimalCellSize();
+
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: `repeat(${layout.gridSize.width}, ${layout.cellSize}px)`,
-    gridTemplateRows: `repeat(${layout.gridSize.height}, ${layout.cellSize}px)`,
-    gap: '2px',
-    padding: '10px',
-    backgroundColor: 'var(--background-color, #f8f9fa)',
-    borderRadius: '8px',
-    border: isEditing ? '2px dashed var(--border-color, #ddd)' : 'none',
+    gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`, // Always use fractional units for consistent sizing
+    gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`, // Always use fractional units for consistent sizing
+    gap: '8px', // Consistent gap for both modes
+    padding: '16px', // Consistent padding for both modes
+    backgroundColor: 'transparent', // Always transparent to match theme
+    borderRadius: '0', // No border radius for cleaner look
+    border: 'none', // No border for cleaner look
     position: 'relative',
-    width: 'fit-content',
-    height: 'fit-content',
-    margin: '0 auto'
+    width: '100%', // Always full width for better representation
+    height: isEditing ? '300px' : '100%', // Fixed height in editing mode to prevent excessive vertical space
+    margin: '0',
+    maxWidth: '100%',
+    maxHeight: '100%',
+    minHeight: isEditing ? '300px' : 'auto' // Ensure consistent minimum height
   };
 
   const handleComponentSelect = (id: string) => {
@@ -58,30 +74,29 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
 
   return (
     <div className={`custom-gamepad-layout ${isEditing ? 'editing' : ''}`}>
-      {/* Layout info */}
-      <div className="layout-header">
-        <h3 className="layout-title">{layout.name}</h3>
-        {layout.description && (
-          <p className="layout-description">{layout.description}</p>
-        )}
-      </div>
-
+      {/* Gamepad preview header (only in editing mode) */}
+      {isEditing && (
+        <div className="gamepad-preview-header">
+          <h4 className="gamepad-preview-title">{layout.name}</h4>
+          <p className="gamepad-preview-subtitle">Custom Gamepad Preview</p>
+        </div>
+      )}
+      
       {/* Grid container */}
       <div className="gamepad-grid" style={gridStyle}>
         {/* Grid background (visible only in editing mode) */}
         {isEditing && (
-          <div className="grid-background">
+          <div 
+            className="grid-background"
+            style={{
+              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`,
+              gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`
+            }}
+          >
             {Array.from({ length: layout.gridSize.width * layout.gridSize.height }).map((_, index) => (
               <div
                 key={index}
                 className="grid-cell"
-                style={{
-                  gridColumn: (index % layout.gridSize.width) + 1,
-                  gridRow: Math.floor(index / layout.gridSize.width) + 1,
-                  border: '1px solid var(--border-color-light, #e9ecef)',
-                  backgroundColor: 'transparent',
-                  opacity: 0.5
-                }}
               />
             ))}
           </div>
@@ -102,27 +117,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
         ))}
       </div>
 
-      {/* Layout metadata (visible only in editing mode) */}
-      {isEditing && (
-        <div className="layout-metadata">
-          <div className="metadata-item">
-            <span className="metadata-label">Grid Size:</span>
-            <span className="metadata-value">{layout.gridSize.width} × {layout.gridSize.height}</span>
-          </div>
-          <div className="metadata-item">
-            <span className="metadata-label">Cell Size:</span>
-            <span className="metadata-value">{layout.cellSize}px</span>
-          </div>
-          <div className="metadata-item">
-            <span className="metadata-label">Components:</span>
-            <span className="metadata-value">{layout.components.length}</span>
-          </div>
-          <div className="metadata-item">
-            <span className="metadata-label">Default Topic:</span>
-            <span className="metadata-value">{layout.rosConfig.defaultTopic}</span>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

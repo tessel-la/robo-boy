@@ -54,7 +54,7 @@ export const defaultGameBoyLayout: CustomGamepadLayout = {
   id: 'default-gameboy',
   name: 'GameBoy Style',
   description: 'Retro GameBoy-inspired control layout',
-  gridSize: { width: 8, height: 6 },
+  gridSize: { width: 8, height: 4 },
   cellSize: 80,
   components: [
     {
@@ -79,7 +79,7 @@ export const defaultGameBoyLayout: CustomGamepadLayout = {
     {
       id: 'button-b',
       type: 'button',
-      position: { x: 5, y: 2, width: 1, height: 1 },
+      position: { x: 5, y: 1, width: 1, height: 1 },
       label: 'B',
       action: {
         topic: '/joy',
@@ -97,7 +97,7 @@ export const defaultGameBoyLayout: CustomGamepadLayout = {
     {
       id: 'button-a',
       type: 'button',
-      position: { x: 7, y: 2, width: 1, height: 1 },
+      position: { x: 6, y: 2, width: 1, height: 1 },
       label: 'A',
       action: {
         topic: '/joy',
@@ -115,7 +115,7 @@ export const defaultGameBoyLayout: CustomGamepadLayout = {
     {
       id: 'select-button',
       type: 'button',
-      position: { x: 3, y: 5, width: 1, height: 1 },
+      position: { x: 2, y: 3, width: 1, height: 1 },
       label: 'SELECT',
       action: {
         topic: '/joy',
@@ -133,7 +133,7 @@ export const defaultGameBoyLayout: CustomGamepadLayout = {
     {
       id: 'start-button',
       type: 'button',
-      position: { x: 4, y: 5, width: 1, height: 1 },
+      position: { x: 5, y: 3, width: 1, height: 1 },
       label: 'START',
       action: {
         topic: '/joy',

@@ -35,8 +35,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       id: generateGamepadId('new-gamepad'),
       name: 'New Gamepad',
       description: '',
-      gridSize: { width: 12, height: 8 },
-      cellSize: 60,
+      gridSize: { width: 8, height: 4 },
+      cellSize: 80,
       components: [],
       rosConfig: {
         defaultTopic: '/joy',
@@ -59,7 +59,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     snapToGrid: true
   });
 
-  const [activeTab, setActiveTab] = useState<'design' | 'settings' | 'preview'>('design');
+  const [activeTab, setActiveTab] = useState<'design' | 'settings'>('design');
 
   const handleLayoutNameChange = useCallback((name: string) => {
     setLayout(prev => ({ ...prev, name }));
@@ -162,15 +162,19 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     if (!editorState.draggedComponent) return;
 
     const gridRect = event.currentTarget.getBoundingClientRect();
-    const x = Math.floor((event.clientX - gridRect.left - 10) / (layout.cellSize + 2));
-    const y = Math.floor((event.clientY - gridRect.top - 10) / (layout.cellSize + 2));
+    // Calculate grid cell size based on actual container dimensions
+    const cellWidth = (gridRect.width - 32) / layout.gridSize.width; // 32px for padding (16px each side)
+    const cellHeight = (gridRect.height - 32) / layout.gridSize.height; // 32px for padding (16px each side)
+    
+    const x = Math.floor((event.clientX - gridRect.left - 16) / cellWidth); // 16px for left padding
+    const y = Math.floor((event.clientY - gridRect.top - 16) / cellHeight); // 16px for top padding
 
     if (x >= 0 && x < layout.gridSize.width && y >= 0 && y < layout.gridSize.height) {
       handleAddComponent(editorState.draggedComponent.componentType, x, y);
     }
 
     setEditorState(prev => ({ ...prev, draggedComponent: null }));
-  }, [editorState.draggedComponent, layout.cellSize, layout.gridSize, handleAddComponent]);
+  }, [editorState.draggedComponent, layout.gridSize, handleAddComponent]);
 
   if (!isOpen) return null;
 
@@ -197,12 +201,6 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
           >
             Settings
           </button>
-          <button 
-            className={`tab ${activeTab === 'preview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('preview')}
-          >
-            Preview
-          </button>
         </div>
 
         <div className="editor-content">
@@ -210,19 +208,11 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
             <div className="design-tab">
               <div className="component-palette">
                 <h3>Components</h3>
-                <div className="component-list">
+                <div className="component-grid">
                   {componentLibrary.map(component => (
-                    <div
+                    <button
                       key={component.type}
-                      className="component-item"
-                      draggable
-                      onDragStart={() => setEditorState(prev => ({
-                        ...prev,
-                        draggedComponent: {
-                          componentType: component.type,
-                          defaultSize: component.defaultSize
-                        }
-                      }))}
+                      className={`component-grid-item ${editorState.draggedComponent?.componentType === component.type ? 'selected' : ''}`}
                       onClick={() => setEditorState(prev => ({
                         ...prev,
                         draggedComponent: {
@@ -230,12 +220,19 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                           defaultSize: component.defaultSize
                         }
                       }))}
+                      title={`Add ${component.name} - ${component.description}`}
                     >
-                      <span className="component-icon">{component.icon}</span>
-                      <span className="component-name">{component.name}</span>
-                    </div>
+                      <div className="component-icon">{component.icon}</div>
+                      <div className="component-name">{component.name}</div>
+                      <div className="component-description">{component.description}</div>
+                    </button>
                   ))}
                 </div>
+                {editorState.draggedComponent && (
+                  <div className="component-hint">
+                    <p>Click on the grid to place the {componentLibrary.find(c => c.type === editorState.draggedComponent?.componentType)?.name}</p>
+                  </div>
+                )}
               </div>
 
               <div className="design-area">
@@ -448,7 +445,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                 />
               </div>
               <div className="settings-group">
-                <label>Grid Width:</label>
+                <label>Grid Columns:</label>
                 <input
                   type="number"
                   min="4"
@@ -456,10 +453,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                   value={layout.gridSize.width}
                   onChange={(e) => handleGridSizeChange(parseInt(e.target.value), layout.gridSize.height)}
                 />
-                <small>Recommended: 6-8 for mobile</small>
+                <small>Number of columns for component placement (logical division only)</small>
               </div>
               <div className="settings-group">
-                <label>Grid Height:</label>
+                <label>Grid Rows:</label>
                 <input
                   type="number"
                   min="3"
@@ -467,32 +464,13 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                   value={layout.gridSize.height}
                   onChange={(e) => handleGridSizeChange(layout.gridSize.width, parseInt(e.target.value))}
                 />
-                <small>Recommended: 4-6 for mobile</small>
+                <small>Number of rows for component placement (logical division only)</small>
               </div>
-              <div className="settings-group">
-                <label>Cell Size:</label>
-                <input
-                  type="number"
-                  min="60"
-                  max="120"
-                  step="10"
-                  value={layout.cellSize}
-                  onChange={(e) => handleCellSizeChange(parseInt(e.target.value))}
-                />
-                <small>Recommended: 80-100 for mobile</small>
-              </div>
+
             </div>
           )}
 
-          {activeTab === 'preview' && (
-            <div className="preview-tab">
-              <LayoutRenderer
-                layout={layout}
-                ros={ros}
-                isEditing={false}
-              />
-            </div>
-          )}
+
         </div>
 
         <div className="editor-footer">
