@@ -247,6 +247,18 @@
   font-weight: 600;
 }
 
+.no-selection-message {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-color-secondary, #666);
+  font-style: italic;
+}
+
+.no-selection-message p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .property-group {
   margin-bottom: 12px;
 }

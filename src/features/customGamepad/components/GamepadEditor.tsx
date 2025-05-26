@@ -252,9 +252,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                 </div>
               </div>
 
-              {selectedComponent && (
-                <div className="component-properties">
-                  <h3>Properties</h3>
+              <div className="component-properties">
+                <h3>Properties</h3>
+                {selectedComponent ? (
+                  <>
                   
                   {/* Position Controls */}
                   <div className="property-group">
@@ -421,8 +422,13 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                       })}
                     />
                   </div>
-                </div>
-              )}
+                  </>
+                ) : (
+                  <div className="no-selection-message">
+                    <p>Select a component to edit its properties</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
