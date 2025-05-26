@@ -36,6 +36,8 @@ services:
       - ros-stack
     networks:
       - app-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ROS 2 Stack (Rosbridge + Image Publisher)
   ros-stack:
