@@ -3,11 +3,13 @@ import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
 import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
 import { GamepadType } from './gamepads/GamepadInterface';
+import { loadGamepadLibrary, deleteCustomGamepad } from '../features/customGamepad/gamepadStorage';
 
 interface AddPanelMenuProps {
   isOpen: boolean;
-  onSelectType: (type: PanelType) => void;
+  onSelectType: (type: PanelType, layoutId?: string) => void;
   onClose: () => void;
+  onOpenCustomEditor: () => void;
   addButtonRef: RefObject<HTMLButtonElement>; // Re-add button ref
 }
 
@@ -18,6 +20,7 @@ const availablePanelTypes = [
   { type: GamepadType.GameBoy, label: 'GameBoy' },
   { type: GamepadType.Drone, label: 'Drone Control' },
   { type: GamepadType.Manipulator, label: 'Manipulator Control' },
+  { type: GamepadType.Custom, label: 'Custom Gamepad' },
   // Add other layouts here as they are created
 ];
 
@@ -33,10 +36,12 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   isOpen,
   onSelectType,
   onClose,
+  onOpenCustomEditor,
   addButtonRef, // Use the ref
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Calculate position based on button ref
   useEffect(() => {
@@ -97,9 +102,35 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
     }
   }, [isOpen, onClose, addButtonRef]);
 
+  // Load custom gamepads (refreshKey forces re-evaluation)
+  // This must be called before any early returns to follow Rules of Hooks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const gamepadLibrary = React.useMemo(() => loadGamepadLibrary(), [refreshKey]);
+  const customGamepads = gamepadLibrary.filter((item: any) => !item.isDefault);
+
   if (!isOpen || !portalRoot) { // Also check if portalRoot exists
     return null;
   }
+
+  const handleMenuItemClick = (panelInfo: any) => {
+    if (panelInfo.type === GamepadType.Custom) {
+      onOpenCustomEditor();
+    } else {
+      onSelectType(panelInfo.type);
+    }
+  };
+
+  const handleCustomGamepadSelect = (layoutId: string) => {
+    onSelectType(GamepadType.Custom, layoutId);
+  };
+
+  const handleDeleteCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the select action
+    if (confirm('Are you sure you want to delete this custom gamepad?')) {
+      deleteCustomGamepad(layoutId);
+      setRefreshKey((prev: number) => prev + 1); // Force re-render to update the list
+    }
+  };
 
   // Render into the portal
   return ReactDOM.createPortal(
@@ -108,15 +139,53 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         ref={menuRef} 
         style={menuStyle} // Apply dynamic style
       >
-        <ul>
-          {availablePanelTypes.map(panelInfo => (
-            <li key={panelInfo.type}>
-              <button onClick={() => onSelectType(panelInfo.type)}>
-                {panelInfo.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="menu-section">
+          <h4>Default Layouts</h4>
+          <ul>
+            {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
+              <li key={panelInfo.type}>
+                <button onClick={() => onSelectType(panelInfo.type)}>
+                  {panelInfo.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {customGamepads.length > 0 && (
+          <div className="menu-section">
+            <h4>Custom Layouts</h4>
+            <ul>
+              {customGamepads.map(gamepad => (
+                <li key={gamepad.id} className="custom-gamepad-item">
+                  <button 
+                    className="custom-gamepad-button"
+                    onClick={() => handleCustomGamepadSelect(gamepad.id)}
+                  >
+                    {gamepad.name}
+                  </button>
+                  <button 
+                    className="delete-gamepad-button"
+                    onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
+                    title="Delete custom gamepad"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="menu-section">
+          <button 
+            className="create-custom-button"
+            onClick={() => onOpenCustomEditor()}
+          >
+            <span className="icon">✏️</span>
+            Create Custom Gamepad
+          </button>
+        </div>
       </div>,
       portalRoot // Target element for the portal
   );

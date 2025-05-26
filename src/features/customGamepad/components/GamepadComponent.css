@@ -1,0 +1,220 @@
+/* GamepadComponent.css */
+
+.gamepad-component {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  background-color: var(--card-bg, #ffffff);
+  overflow: hidden;
+}
+
+.gamepad-component.editing {
+  border-color: var(--border-color, #ddd);
+  cursor: pointer;
+}
+
+.gamepad-component.editing:hover {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.gamepad-component.selected {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+}
+
+.component-label {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7em;
+  font-weight: bold;
+  color: var(--text-color, #333);
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editing-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.delete-button {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--error-color, #dc3545);
+  color: white;
+  border: 2px solid white;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+  z-index: 30;
+}
+
+.delete-button:hover {
+  background-color: var(--error-hover-color, #c82333);
+  transform: scale(1.1);
+}
+
+.resize-handles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  background-color: var(--primary-color, #007bff);
+  border: 1px solid white;
+  border-radius: 2px;
+}
+
+.resize-handle.bottom-right {
+  bottom: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  cursor: se-resize;
+}
+
+/* Component-specific styles */
+
+.joystick-component {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-component {
+  font-family: inherit;
+  outline: none;
+}
+
+.button-component:focus {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+.dpad-component {
+  padding: 4px;
+}
+
+.dpad-component button {
+  border: none;
+  outline: none;
+  font-family: inherit;
+}
+
+.dpad-component button:focus {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+.toggle-component {
+  padding: 8px;
+}
+
+.toggle-switch {
+  outline: none;
+}
+
+.toggle-switch:focus {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+.slider-component {
+  padding: 8px;
+}
+
+.slider-component input[type="range"] {
+  outline: none;
+}
+
+.slider-component input[type="range"]:focus {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+/* Slider thumb styling */
+.slider-component input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-color, #007bff);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.slider-component input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-color, #007bff);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Unknown component fallback */
+.unknown-component {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--error-bg, #f8d7da);
+  color: var(--error-color, #721c24);
+  font-size: 0.8em;
+  text-align: center;
+  border-radius: 4px;
+  border: 1px dashed var(--error-color, #721c24);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .component-label {
+    font-size: 0.6em;
+  }
+  
+  .delete-button {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+  
+  .resize-handle.bottom-right {
+    width: 6px;
+    height: 6px;
+  }
+} 
