@@ -10,10 +10,13 @@
   gap: 0;
   padding: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   background-color: transparent;
   border-radius: 0;
   min-height: 0;
+  min-width: 0;
+  position: relative;
+  flex-shrink: 1;
 }
 
 /* Unified styling for both editing and display modes */
@@ -67,7 +70,7 @@
   pointer-events: none;
   z-index: 0;
   border-radius: 0;
-  overflow: hidden;
+  overflow: visible;
   display: grid;
   box-sizing: border-box;
 }
@@ -78,6 +81,7 @@
   opacity: 0.3;
   transition: opacity 0.2s ease;
   border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .custom-gamepad-layout.editing:hover .grid-cell {
@@ -119,8 +123,12 @@
   border: 1px solid var(--border-color-light, #e9ecef);
 }
 
-/* Simplified responsive design that works with the unified scaling */
+/* Improved responsive design that works with the enhanced scaling */
 @media (max-width: 768px) {
+  .custom-gamepad-layout {
+    min-height: 300px;
+  }
+  
   .layout-header {
     margin-bottom: 4px;
   }
@@ -143,6 +151,10 @@
 }
 
 @media (max-width: 480px) {
+  .custom-gamepad-layout {
+    min-height: 250px;
+  }
+  
   .layout-title {
     font-size: 0.9em;
   }
@@ -167,6 +179,17 @@
   
   .metadata-label {
     min-width: 60px;
+  }
+}
+
+/* Extra small screens (very small phones) */
+@media (max-width: 350px) {
+  .custom-gamepad-layout {
+    min-height: 200px;
+  }
+  
+  .gamepad-grid {
+    margin: 10px;
   }
 }
 

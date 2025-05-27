@@ -135,14 +135,52 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, isEditing]);
 
-  const baseSize = config.style?.size === 'small' ? 60 : config.style?.size === 'large' ? 120 : 80;
-  const size = Math.floor(baseSize * scaleFactor);
-  const stickSize = Math.floor(size * 0.6);
+  // Improved sizing logic that maintains better proportions and prevents oval distortion
+  const baseSize = config.style?.size === 'small' ? 100 : config.style?.size === 'large' ? 180 : 140; // Significantly increased base sizes
+  
+  // Enhanced scaling approach that considers screen size and maintains usability
+  const isSmallScreen = scaleFactor < 0.8;
+  const isTinyScreen = scaleFactor < 0.7;
+  
+  // Adjust minimum size based on screen size for better usability - much higher minimums
+  let minSize: number;
+  if (isTinyScreen) {
+    minSize = 80; // Much higher minimum for very small screens
+  } else if (isSmallScreen) {
+    minSize = 90; // Higher minimum
+  } else {
+    minSize = 100; // High minimum for normal screens
+  }
+  
+  // Calculate scaled size with improved logic - much less aggressive scaling
+  const scaledSize = Math.max(minSize, Math.floor(baseSize * Math.max(0.8, scaleFactor))); // Much higher minimum scale factor
+  
+  // Maintain proper stick-to-base ratio for circular appearance
+  const stickRatio = 0.6; // Adjusted ratio for better proportion
+  const stickSize = Math.max(24, Math.floor(scaledSize * stickRatio));
+
+  // Enhanced container style to ensure proper centering and prevent oval distortion
+  const containerStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    // Ensure container maintains square aspect ratio to prevent oval joysticks
+    aspectRatio: '1',
+    // Ensure minimum dimensions for joystick movement
+    minWidth: `${scaledSize + 20}px`,
+    minHeight: `${scaledSize + 20}px`,
+    // Allow overflow for joystick movement
+    overflow: 'visible',
+    boxSizing: 'border-box'
+  };
 
   return (
-    <div className="joystick-component">
+    <div className="joystick-component" style={containerStyle}>
       <Joystick
-        size={size}
+        size={scaledSize}
         stickSize={stickSize}
         baseColor={config.style?.color || baseColor}
         stickColor={stickColor}

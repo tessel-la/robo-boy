@@ -9,7 +9,7 @@
   border-radius: 8px;
   transition: all 0.2s ease;
   background-color: var(--card-bg, #ffffff);
-  overflow: hidden;
+  overflow: visible; /* Allow joystick movement outside component bounds */
 }
 
 .gamepad-component.editing {
@@ -115,6 +115,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: visible; /* Critical: Ensure joystick movement isn't clipped */
+  box-sizing: border-box;
+  /* Use transform instead of padding/margin to avoid layout issues */
+  transform: scale(1);
+  transform-origin: center;
+}
+
+/* Ensure the react-joystick-component maintains circular shape */
+.joystick-component > div {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Force circular aspect ratio for the joystick canvas/svg */
+.joystick-component canvas,
+.joystick-component svg {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
 }
 
 .button-component {
