@@ -188,48 +188,13 @@
 .design-area {
   flex: 1;
   padding: 8px;
-  overflow: hidden;
+  overflow: visible;
   background-color: var(--card-bg, #ffffff);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.design-area-header {
-  text-align: center;
-  margin-bottom: 8px;
-  padding: 6px 8px;
-  background-color: transparent;
-  border-radius: 0;
-  border: none;
-}
-
-.design-area-header h3 {
-  margin: 0 0 1px 0;
-  color: var(--text-color, #333);
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.design-area-header p {
-  margin: 0;
-  color: var(--text-color-secondary, #666);
-  font-size: 0.75rem;
-}
-
-.grid-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  flex: 1;
-  overflow: hidden;
-  background-color: transparent;
-  border-radius: 0;
-  border: none;
   position: relative;
-  width: 100%;
-  height: 100%;
-  margin: 0;
+  box-sizing: border-box;
 }
 
 .component-properties {
@@ -524,6 +489,9 @@
     flex: 1;
     padding: 12px;
     overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   
   .component-properties {
@@ -616,6 +584,9 @@
   
   .design-area {
     padding: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   
   .settings-tab {

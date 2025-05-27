@@ -10,63 +10,25 @@
   gap: 0;
   padding: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   background-color: transparent;
   border-radius: 0;
 }
 
-/* Gamepad preview styling - make it look like an actual gamepad */
+/* Gamepad preview styling - simplified for better alignment */
 .custom-gamepad-layout.editing {
-  background: linear-gradient(145deg, var(--card-bg, #ffffff), var(--background-secondary, #f8f9fa));
-  border: 2px solid var(--border-color, #ddd);
-  border-radius: 16px;
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
-  margin: 8px;
-  padding: 12px;
-  position: relative;
-}
-
-/* Add a subtle gamepad-like bezel effect */
-.custom-gamepad-layout.editing::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  right: 4px;
-  bottom: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  pointer-events: none;
-}
-
-/* Gamepad preview header styling */
-.gamepad-preview-header {
-  text-align: center;
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.05));
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.gamepad-preview-title {
-  margin: 0 0 2px 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-color, #333);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.gamepad-preview-subtitle {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   margin: 0;
-  font-size: 0.7rem;
-  color: var(--text-color-secondary, #666);
-  font-style: italic;
-  opacity: 0.8;
+  padding: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
+
+
 
 /* Display mode - make it look like default gamepads */
 .custom-gamepad-layout:not(.editing) {
@@ -80,15 +42,15 @@
   max-height: 100%;
 }
 
-/* Editing mode - make it representative */
+/* Editing mode - simplified for better alignment */
 .custom-gamepad-layout.editing .gamepad-grid {
   flex: 1;
   max-width: 100%;
   max-height: 100%;
-  background-color: var(--background-secondary, #f8f9fa);
+  background-color: transparent;
   border: 1px solid var(--border-color-light, #e9ecef);
-  border-radius: 12px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .layout-header {
@@ -112,24 +74,26 @@
 
 .gamepad-grid {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   width: 100%;
   height: 100%;
   flex: 1;
+  box-sizing: border-box;
 }
 
 .grid-background {
   position: absolute;
-  top: 16px; /* Match the grid padding */
-  left: 16px; /* Match the grid padding */
-  right: 16px; /* Match the grid padding */
-  bottom: 16px; /* Match the grid padding */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   pointer-events: none;
   z-index: 0;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   display: grid;
   gap: 8px; /* Match the grid gap */
+  padding: 16px; /* Match the actual grid padding */
 }
 
 .grid-cell {
@@ -204,7 +168,7 @@
   .gamepad-grid {
     /* Ensure grid scales properly on mobile */
     max-width: 100%;
-    overflow: hidden; /* Prevent scrollbars on mobile */
+    overflow: visible; /* Allow proper grid display on mobile */
   }
   
   .layout-metadata {
@@ -279,33 +243,10 @@
 
 /* Dark theme support for gamepad preview */
 @media (prefers-color-scheme: dark) {
-  .custom-gamepad-layout.editing {
-    background: linear-gradient(145deg, var(--card-bg, #2c2c2c), var(--background-secondary, #1e1e1e));
-    border-color: var(--border-color, #555);
-    box-shadow: 
-      0 4px 12px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  }
-  
   .custom-gamepad-layout.editing .gamepad-grid {
-    background-color: var(--background-secondary, #1e1e1e);
+    background-color: transparent;
     border-color: var(--border-color-light, #444);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-  }
-  
-  .gamepad-preview-header {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.1));
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .gamepad-preview-title {
-    color: var(--text-color, #e8eaed);
-    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
-  }
-  
-  .gamepad-preview-subtitle {
-    color: var(--text-color-secondary, #9aa0a6);
+    box-shadow: none;
   }
 }
 

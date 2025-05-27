@@ -47,11 +47,12 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     border: 'none', // No border for cleaner look
     position: 'relative',
     width: '100%', // Always full width for better representation
-    height: isEditing ? '300px' : '100%', // Fixed height in editing mode to prevent excessive vertical space
+    height: isEditing ? '350px' : '100%', // Adjusted height for better fit in editing mode
     margin: '0',
     maxWidth: '100%',
     maxHeight: '100%',
-    minHeight: isEditing ? '300px' : 'auto' // Ensure consistent minimum height
+    minHeight: isEditing ? '350px' : 'auto', // Ensure consistent minimum height
+    boxSizing: 'border-box' // Ensure padding is included in dimensions
   };
 
   const handleComponentSelect = (id: string) => {
@@ -74,14 +75,6 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
 
   return (
     <div className={`custom-gamepad-layout ${isEditing ? 'editing' : ''}`}>
-      {/* Gamepad preview header (only in editing mode) */}
-      {isEditing && (
-        <div className="gamepad-preview-header">
-          <h4 className="gamepad-preview-title">{layout.name}</h4>
-          <p className="gamepad-preview-subtitle">Custom Gamepad Preview</p>
-        </div>
-      )}
-      
       {/* Grid container */}
       <div className="gamepad-grid" style={gridStyle}>
         {/* Grid background (visible only in editing mode) */}

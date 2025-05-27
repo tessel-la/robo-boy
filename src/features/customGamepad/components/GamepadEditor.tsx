@@ -235,21 +235,16 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                 )}
               </div>
 
-              <div className="design-area">
-                <div 
-                  className="grid-container"
-                  onClick={handleGridClick}
-                >
-                  <LayoutRenderer
-                    layout={layout}
-                    ros={ros}
-                    isEditing={true}
-                    selectedComponentId={editorState.selectedComponentId}
-                    onComponentSelect={handleComponentSelect}
-                    onComponentUpdate={handleComponentUpdate}
-                    onComponentDelete={handleComponentDelete}
-                  />
-                </div>
+              <div className="design-area" onClick={handleGridClick}>
+                <LayoutRenderer
+                  layout={layout}
+                  ros={ros}
+                  isEditing={true}
+                  selectedComponentId={editorState.selectedComponentId}
+                  onComponentSelect={handleComponentSelect}
+                  onComponentUpdate={handleComponentUpdate}
+                  onComponentDelete={handleComponentDelete}
+                />
               </div>
 
               <div className="component-properties">
