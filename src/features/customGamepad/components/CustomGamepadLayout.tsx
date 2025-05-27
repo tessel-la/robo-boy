@@ -58,7 +58,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       };
     }
 
-    // Calculate the ideal grid dimensions based on layout
+    // Calculate the ideal grid dimensions based on fixed cell sizes
     const basePadding = 20;
     const baseGap = 8;
     const idealGridWidth = layout.gridSize.width * layout.cellSize + (layout.gridSize.width - 1) * baseGap + (basePadding * 2);
@@ -73,40 +73,40 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     let extraPadding: number;
     
     if (isTinyScreen) {
-      marginFactor = 0.08; // Minimal margin for tiny screens
-      extraPadding = 20; // Minimal padding
+      marginFactor = 0.12; // Slightly more margin for tiny screens to prevent overflow
+      extraPadding = 25; // More padding to prevent overflow
     } else if (isSmallScreen) {
-      marginFactor = 0.05; // Very small margin
-      extraPadding = 15;
+      marginFactor = 0.08; // Slightly more margin for small screens
+      extraPadding = 20;
     } else {
       marginFactor = 0.02; // Almost no margin for normal screens
       extraPadding = 10;
     }
     
     // Ensure we never exceed container dimensions but prioritize larger components
-    const availableWidth = Math.max(300, containerDimensions.width * (1 - marginFactor) - extraPadding);
-    const availableHeight = Math.max(200, containerDimensions.height * (1 - marginFactor) - extraPadding);
+    const availableWidth = Math.max(250, containerDimensions.width * (1 - marginFactor) - extraPadding);
+    const availableHeight = Math.max(180, containerDimensions.height * (1 - marginFactor) - extraPadding);
     
     // Calculate scale factor to fit within available space
     const scaleX = availableWidth / idealGridWidth;
     const scaleY = availableHeight / idealGridHeight;
-    let scaleFactor = Math.min(scaleX, scaleY, 1.2); // Allow slight scaling up for very large screens
+    let scaleFactor = Math.min(scaleX, scaleY); // Remove max scale limit to ensure proper fitting
     
-    // Much higher minimum scale factors to keep components usable
+    // Set minimum scale factors to prevent components from becoming too small
     let minScale: number;
     if (isTinyScreen) {
-      minScale = 0.7; // High minimum scale for very small screens
+      minScale = 0.3; // Lower minimum for tiny screens to ensure fitting
     } else if (isSmallScreen) {
-      minScale = 0.8; // Higher minimum scale
+      minScale = 0.4; // Lower minimum for small screens
     } else {
-      minScale = 0.9; // Very high minimum scale for normal screens
+      minScale = 0.5; // Lower minimum for normal screens
     }
     
     scaleFactor = Math.max(minScale, scaleFactor);
 
     // Calculate final dimensions ensuring they fit within container
-    const finalGridWidth = Math.min(idealGridWidth * scaleFactor, availableWidth);
-    const finalGridHeight = Math.min(idealGridHeight * scaleFactor, availableHeight);
+    const finalGridWidth = idealGridWidth * scaleFactor;
+    const finalGridHeight = idealGridHeight * scaleFactor;
     
     // Calculate container padding to ensure proper centering - minimal padding to maximize space
     const containerPadding = Math.max(4, extraPadding / 3);
@@ -121,23 +121,32 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
 
   const scaling = calculateScaling();
 
-  // Simplified grid style that ensures proper centering without absolute positioning
+  // Calculate fixed cell dimensions that fit within the scaled grid
+  const cellWidth = Math.floor(layout.cellSize * scaling.scaleFactor);
+  const cellHeight = Math.floor(layout.cellSize * scaling.scaleFactor);
+  const gap = Math.max(2, Math.floor(8 * scaling.scaleFactor));
+  const padding = Math.max(6, Math.floor(16 * scaling.scaleFactor));
+
+  // Use the pre-calculated grid dimensions from scaling to ensure proper fit
+  const actualGridWidth = scaling.gridWidth;
+  const actualGridHeight = scaling.gridHeight;
+
+  // Grid style with fixed cell dimensions - content must fit within these cells
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`,
-    gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`,
-    gap: `${Math.max(2, 8 * scaling.scaleFactor)}px`,
-    padding: `${Math.max(6, 16 * scaling.scaleFactor)}px`,
+    gridTemplateColumns: `repeat(${layout.gridSize.width}, ${cellWidth}px)`,
+    gridTemplateRows: `repeat(${layout.gridSize.height}, ${cellHeight}px)`,
+    gap: `${gap}px`,
+    padding: `${padding}px`,
     backgroundColor: 'transparent',
     borderRadius: isEditing ? '8px' : '0',
     border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none',
     position: 'relative',
-    width: `${scaling.gridWidth}px`,
-    height: `${scaling.gridHeight}px`,
+    width: `${actualGridWidth}px`,
+    height: `${actualGridHeight}px`,
     boxSizing: 'border-box',
-    overflow: 'visible', // Critical: Allow components to extend beyond grid for joystick movement
-    // Center the grid within its container
-    margin: '0 auto',
+    overflow: 'visible', // Allow joystick movement outside grid bounds
+    margin: 'auto',
     flexShrink: 0 // Prevent the grid from shrinking
   };
 
@@ -151,7 +160,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     position: 'relative',
     padding: `${scaling.containerPadding}px`,
     boxSizing: 'border-box',
-    overflow: 'visible', // Allow joystick movement outside container
+    overflow: 'hidden', // Prevent scrollbars by hiding overflow
     // Ensure container fits within parent constraints
     maxWidth: '100%',
     maxHeight: '100%',
@@ -191,10 +200,10 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
           <div 
             className="grid-background"
             style={{
-              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`,
-              gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`,
-              gap: `${Math.max(2, 8 * scaling.scaleFactor)}px`,
-              padding: `${Math.max(6, 16 * scaling.scaleFactor)}px`
+              gridTemplateColumns: `repeat(${layout.gridSize.width}, ${cellWidth}px)`,
+              gridTemplateRows: `repeat(${layout.gridSize.height}, ${cellHeight}px)`,
+              gap: `${gap}px`,
+              padding: `${padding}px`
             }}
           >
             {Array.from({ length: layout.gridSize.width * layout.gridSize.height }).map((_, index) => (

@@ -16,6 +16,29 @@ const THROTTLE_INTERVAL = 100;
 const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [pressedDirections, setPressedDirections] = useState<Set<string>>(new Set());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // Monitor container size for proper scaling
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setContainerSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    updateSize();
+    
+    const resizeObserver = new ResizeObserver(updateSize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   const publishMessage = useCallback((directions: Set<string>) => {
     if (!topicRef.current || isEditing) return;
@@ -88,17 +111,59 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     });
   }, [publishThrottled, isEditing]);
 
-  const dpadStyle: React.CSSProperties = {
+  // Calculate optimal D-pad size that fits within the grid cell
+  const calculateDPadSize = () => {
+    if (containerSize.width === 0 || containerSize.height === 0) {
+      return { size: 120, padding: 8 };
+    }
+
+    // The container represents the exact grid cell size allocated to this component
+    // We need to fit the D-pad within this exact space
+    const availableWidth = containerSize.width;
+    const availableHeight = containerSize.height;
+    
+    // Use the smaller dimension to ensure the D-pad fits and stays square
+    const availableSize = Math.min(availableWidth, availableHeight);
+    
+    // Reserve minimal space for padding and borders
+    const padding = Math.max(4, availableSize * 0.05);
+    const maxSize = availableSize - (padding * 2);
+    
+    // Set minimum size for usability but prioritize fitting within grid cell
+    const minSize = Math.min(60, maxSize);
+    const size = Math.max(minSize, maxSize);
+    
+    return { size, padding: padding / 2 };
+  };
+
+  const { size: dpadSize, padding } = calculateDPadSize();
+
+  // Container style that centers the D-pad and constrains it
+  const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden', // Prevent overflow
+    boxSizing: 'border-box'
+  };
+
+  // D-pad style with fixed dimensions
+  const dpadStyle: React.CSSProperties = {
+    width: `${dpadSize}px`,
+    height: `${dpadSize}px`,
     display: 'grid',
     gridTemplate: `
       ". up ." 1fr
       "left center right" 1fr  
       ". down ." 1fr
     `,
-    gap: '2px',
-    opacity: isEditing ? 0.7 : 1
+    gap: `${Math.max(2, padding / 2)}px`,
+    opacity: isEditing ? 0.7 : 1,
+    flexShrink: 0,
+    position: 'relative'
   };
 
   const buttonStyle = (direction: string): React.CSSProperties => ({
@@ -115,66 +180,72 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: `${1.2 * scaleFactor}em`,
+    fontSize: `${Math.max(12, dpadSize * 0.15)}px`,
     fontWeight: 'bold',
-    color: pressedDirections.has(direction) ? 'white' : 'var(--text-color)'
+    color: pressedDirections.has(direction) ? 'white' : 'var(--text-color)',
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden'
   });
 
+  const centerStyle: React.CSSProperties = {
+    gridArea: 'center',
+    backgroundColor: 'var(--background-color)',
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid var(--border-color)`,
+    borderRadius: '50%',
+    minWidth: 0,
+    minHeight: 0
+  };
+
   return (
-    <div className="dpad-component" style={dpadStyle}>
-      <button
-        className="dpad-up"
-        style={{ ...buttonStyle('up'), gridArea: 'up' }}
-        onPointerDown={() => handleDirectionPress('up', true)}
-        onPointerUp={() => handleDirectionPress('up', false)}
-        onPointerLeave={() => handleDirectionPress('up', false)}
-        disabled={isEditing}
-      >
-        ▲
-      </button>
-      
-      <button
-        className="dpad-left"
-        style={{ ...buttonStyle('left'), gridArea: 'left' }}
-        onPointerDown={() => handleDirectionPress('left', true)}
-        onPointerUp={() => handleDirectionPress('left', false)}
-        onPointerLeave={() => handleDirectionPress('left', false)}
-        disabled={isEditing}
-      >
-        ◀
-      </button>
-      
-      <div 
-        className="dpad-center" 
-        style={{ 
-          gridArea: 'center', 
-          backgroundColor: 'var(--background-color)',
-          border: '2px solid var(--border-color)',
-          borderRadius: '50%'
-        }}
-      />
-      
-      <button
-        className="dpad-right"
-        style={{ ...buttonStyle('right'), gridArea: 'right' }}
-        onPointerDown={() => handleDirectionPress('right', true)}
-        onPointerUp={() => handleDirectionPress('right', false)}
-        onPointerLeave={() => handleDirectionPress('right', false)}
-        disabled={isEditing}
-      >
-        ▶
-      </button>
-      
-      <button
-        className="dpad-down"
-        style={{ ...buttonStyle('down'), gridArea: 'down' }}
-        onPointerDown={() => handleDirectionPress('down', true)}
-        onPointerUp={() => handleDirectionPress('down', false)}
-        onPointerLeave={() => handleDirectionPress('down', false)}
-        disabled={isEditing}
-      >
-        ▼
-      </button>
+    <div className="dpad-component" ref={containerRef} style={containerStyle}>
+      <div style={dpadStyle}>
+        <button
+          className="dpad-up"
+          style={{ ...buttonStyle('up'), gridArea: 'up' }}
+          onPointerDown={() => handleDirectionPress('up', true)}
+          onPointerUp={() => handleDirectionPress('up', false)}
+          onPointerLeave={() => handleDirectionPress('up', false)}
+          disabled={isEditing}
+        >
+          ▲
+        </button>
+        
+        <button
+          className="dpad-left"
+          style={{ ...buttonStyle('left'), gridArea: 'left' }}
+          onPointerDown={() => handleDirectionPress('left', true)}
+          onPointerUp={() => handleDirectionPress('left', false)}
+          onPointerLeave={() => handleDirectionPress('left', false)}
+          disabled={isEditing}
+        >
+          ◀
+        </button>
+        
+        <div className="dpad-center" style={centerStyle} />
+        
+        <button
+          className="dpad-right"
+          style={{ ...buttonStyle('right'), gridArea: 'right' }}
+          onPointerDown={() => handleDirectionPress('right', true)}
+          onPointerUp={() => handleDirectionPress('right', false)}
+          onPointerLeave={() => handleDirectionPress('right', false)}
+          disabled={isEditing}
+        >
+          ▶
+        </button>
+        
+        <button
+          className="dpad-down"
+          style={{ ...buttonStyle('down'), gridArea: 'down' }}
+          onPointerDown={() => handleDirectionPress('down', true)}
+          onPointerUp={() => handleDirectionPress('down', false)}
+          onPointerLeave={() => handleDirectionPress('down', false)}
+          disabled={isEditing}
+        >
+          ▼
+        </button>
+      </div>
     </div>
   );
 };

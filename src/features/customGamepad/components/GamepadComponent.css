@@ -10,6 +10,12 @@
   transition: all 0.2s ease;
   background-color: var(--card-bg, #ffffff);
   overflow: visible; /* Allow joystick movement outside component bounds */
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  /* Ensure components don't exceed their grid cell boundaries */
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .gamepad-component.editing {
@@ -141,6 +147,9 @@
 .button-component {
   font-family: inherit;
   outline: none;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
 }
 
 .button-component:focus {
@@ -148,7 +157,13 @@
 }
 
 .dpad-component {
-  padding: 4px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .dpad-component button {

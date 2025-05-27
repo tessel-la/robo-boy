@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
@@ -18,6 +18,29 @@ const THROTTLE_INTERVAL = 100;
 const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // Monitor container size for proper scaling
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setContainerSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    updateSize();
+    
+    const resizeObserver = new ResizeObserver(updateSize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Get theme colors
   const getThemeColor = (variableName: string) => {
@@ -135,31 +158,34 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, isEditing]);
 
-  // Improved sizing logic that maintains better proportions and prevents oval distortion
-  const baseSize = config.style?.size === 'small' ? 100 : config.style?.size === 'large' ? 180 : 140; // Significantly increased base sizes
-  
-  // Enhanced scaling approach that considers screen size and maintains usability
-  const isSmallScreen = scaleFactor < 0.8;
-  const isTinyScreen = scaleFactor < 0.7;
-  
-  // Adjust minimum size based on screen size for better usability - much higher minimums
-  let minSize: number;
-  if (isTinyScreen) {
-    minSize = 80; // Much higher minimum for very small screens
-  } else if (isSmallScreen) {
-    minSize = 90; // Higher minimum
-  } else {
-    minSize = 100; // High minimum for normal screens
-  }
-  
-  // Calculate scaled size with improved logic - much less aggressive scaling
-  const scaledSize = Math.max(minSize, Math.floor(baseSize * Math.max(0.8, scaleFactor))); // Much higher minimum scale factor
-  
-  // Maintain proper stick-to-base ratio for circular appearance
-  const stickRatio = 0.6; // Adjusted ratio for better proportion
-  const stickSize = Math.max(24, Math.floor(scaledSize * stickRatio));
+  // Calculate optimal joystick size that fits within the grid cell
+  const calculateJoystickSize = () => {
+    if (containerSize.width === 0 || containerSize.height === 0) {
+      return { size: 100, stickSize: 40 };
+    }
 
-  // Enhanced container style to ensure proper centering and prevent oval distortion
+    // The container represents the exact grid cell size allocated to this component
+    // Use the smaller dimension to ensure the joystick stays circular and fits
+    const availableSize = Math.min(containerSize.width, containerSize.height);
+    
+    // Reserve minimal space for padding - joystick needs less padding than D-pad
+    const padding = Math.max(8, availableSize * 0.08);
+    const maxSize = availableSize - padding;
+    
+    // Set minimum size for usability but prioritize fitting within grid cell
+    const minSize = Math.min(50, maxSize);
+    const size = Math.max(minSize, maxSize);
+    
+    // Calculate stick size as a proportion of the base size
+    const stickRatio = 0.4;
+    const stickSize = Math.max(16, Math.floor(size * stickRatio));
+    
+    return { size, stickSize };
+  };
+
+  const { size: joystickSize, stickSize } = calculateJoystickSize();
+
+  // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
@@ -167,20 +193,14 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    // Ensure container maintains square aspect ratio to prevent oval joysticks
-    aspectRatio: '1',
-    // Ensure minimum dimensions for joystick movement
-    minWidth: `${scaledSize + 20}px`,
-    minHeight: `${scaledSize + 20}px`,
-    // Allow overflow for joystick movement
-    overflow: 'visible',
+    overflow: 'visible', // Allow joystick movement outside bounds
     boxSizing: 'border-box'
   };
 
   return (
-    <div className="joystick-component" style={containerStyle}>
+    <div className="joystick-component" ref={containerRef} style={containerStyle}>
       <Joystick
-        size={scaledSize}
+        size={joystickSize}
         stickSize={stickSize}
         baseColor={config.style?.color || baseColor}
         stickColor={stickColor}

@@ -10,13 +10,15 @@
   gap: 0;
   padding: 0;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: hidden;
   background-color: transparent;
   border-radius: 0;
   min-height: 0;
   min-width: 0;
   position: relative;
   flex-shrink: 1;
+  place-items: center;
+  place-content: center;
 }
 
 /* Unified styling for both editing and display modes */
@@ -59,6 +61,17 @@
   box-sizing: border-box;
   min-height: 0;
   transition: all 0.2s ease;
+}
+
+/* Ensure grid cells maintain proper sizing and don't overflow */
+.gamepad-grid > * {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  /* Force components to stay within their allocated grid cell */
+  max-width: 100%;
+  max-height: 100%;
+  overflow: visible; /* Allow joystick movement but constrain base size */
 }
 
 .grid-background {
