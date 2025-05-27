@@ -169,7 +169,14 @@
 .dpad-component button {
   border: none;
   outline: none;
-  font-family: inherit;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
 .dpad-component button:focus {
