@@ -8,11 +8,12 @@ interface ButtonComponentProps {
   config: GamepadComponentConfig;
   ros: Ros;
   isEditing?: boolean;
+  scaleFactor?: number;
 }
 
 const THROTTLE_INTERVAL = 100;
 
-const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditing }) => {
+const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [isPressed, setIsPressed] = useState(false);
   const [toggleState, setToggleState] = useState(false);
@@ -121,13 +122,16 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
   const size = config.style?.size || 'medium';
   const color = config.style?.color;
 
+  const baseFontSize = size === 'small' ? 0.8 : size === 'large' ? 1.2 : 1;
+  const basePadding = size === 'small' ? 4 : size === 'large' ? 12 : 8;
+  
   const buttonStyle: React.CSSProperties = {
     backgroundColor: isActive ? (color || 'var(--primary-color)') : 'var(--secondary-color)',
     color: isActive ? 'white' : 'var(--text-color)',
-    border: `2px solid ${isActive ? (color || 'var(--primary-color)') : 'var(--border-color)'}`,
-    borderRadius: '8px',
-    padding: size === 'small' ? '4px 8px' : size === 'large' ? '12px 24px' : '8px 16px',
-    fontSize: size === 'small' ? '0.8em' : size === 'large' ? '1.2em' : '1em',
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${isActive ? (color || 'var(--primary-color)') : 'var(--border-color)'}`,
+    borderRadius: `${Math.floor(8 * scaleFactor)}px`,
+    padding: `${Math.floor(basePadding * scaleFactor)}px ${Math.floor(basePadding * 2 * scaleFactor)}px`,
+    fontSize: `${baseFontSize * scaleFactor}em`,
     fontWeight: 'bold',
     cursor: isEditing ? 'default' : 'pointer',
     userSelect: 'none',

@@ -112,40 +112,65 @@
     font-size: 1.1em;
 }
 
-/* Custom gamepad item with delete button */
+/* Custom gamepad item with edit and delete buttons */
 .add-panel-menu .custom-gamepad-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
 }
 
 .add-panel-menu .custom-gamepad-button {
-    flex: 1;
-    margin-right: 4px;
+  flex: 1;
+  margin-right: 4px;
+}
+
+.add-panel-menu .edit-gamepad-button {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--primary-color, #007bff);
+  background-color: transparent;
+  color: var(--primary-color, #007bff);
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+  margin-right: 4px;
+}
+
+.add-panel-menu .edit-gamepad-button:hover {
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  transform: scale(1.1);
 }
 
 .add-panel-menu .delete-gamepad-button {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 1px solid var(--error-color, #dc3545);
-    background-color: transparent;
-    color: var(--error-color, #dc3545);
-    border-radius: 50%;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    line-height: 1;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--error-color, #dc3545);
+  background-color: transparent;
+  color: var(--error-color, #dc3545);
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
 }
 
 .add-panel-menu .delete-gamepad-button:hover {
-    background-color: var(--error-color, #dc3545);
-    color: white;
-    transform: scale(1.1);
+  background-color: var(--error-color, #dc3545);
+  color: white;
+  transform: scale(1.1);
 } 

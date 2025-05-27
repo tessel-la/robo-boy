@@ -5,18 +5,19 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   gap: 0;
   padding: 0;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: hidden;
   background-color: transparent;
   border-radius: 0;
+  min-height: 0;
 }
 
-/* Gamepad preview styling - simplified for better alignment */
-.custom-gamepad-layout.editing {
+/* Unified styling for both editing and display modes */
+.custom-gamepad-layout {
   background-color: transparent;
   border: none;
   border-radius: 0;
@@ -26,31 +27,8 @@
   position: relative;
   width: 100%;
   height: 100%;
-}
-
-
-
-/* Display mode - make it look like default gamepads */
-.custom-gamepad-layout:not(.editing) {
-  padding: 0;
-  gap: 0;
-}
-
-.custom-gamepad-layout:not(.editing) .gamepad-grid {
-  flex: 1;
-  max-width: 100%;
-  max-height: 100%;
-}
-
-/* Editing mode - simplified for better alignment */
-.custom-gamepad-layout.editing .gamepad-grid {
-  flex: 1;
-  max-width: 100%;
-  max-height: 100%;
-  background-color: transparent;
-  border: 1px solid var(--border-color-light, #e9ecef);
-  border-radius: 8px;
-  box-shadow: none;
+  align-items: center;
+  justify-content: center;
 }
 
 .layout-header {
@@ -75,10 +53,9 @@
 .gamepad-grid {
   position: relative;
   overflow: visible;
-  width: 100%;
-  height: 100%;
-  flex: 1;
   box-sizing: border-box;
+  min-height: 0;
+  transition: all 0.2s ease;
 }
 
 .grid-background {
@@ -92,8 +69,7 @@
   border-radius: 0;
   overflow: hidden;
   display: grid;
-  gap: 8px; /* Match the grid gap */
-  padding: 16px; /* Match the actual grid padding */
+  box-sizing: border-box;
 }
 
 .grid-cell {
@@ -143,15 +119,8 @@
   border: 1px solid var(--border-color-light, #e9ecef);
 }
 
-/* Editing mode styles - removed for cleaner appearance */
-
-/* Responsive design */
+/* Simplified responsive design that works with the unified scaling */
 @media (max-width: 768px) {
-  .custom-gamepad-layout {
-    padding: 8px;
-    gap: 8px;
-  }
-  
   .layout-header {
     margin-bottom: 4px;
   }
@@ -161,56 +130,32 @@
   }
   
   .layout-description {
-    font-size: 0.75em;
+    font-size: 0.8em;
     max-width: 300px;
-  }
-  
-  .gamepad-grid {
-    /* Ensure grid scales properly on mobile */
-    max-width: 100%;
-    overflow: visible; /* Allow proper grid display on mobile */
   }
   
   .layout-metadata {
     gap: 8px;
-    padding: 6px;
-    font-size: 0.75em;
-    margin-top: 8px;
-  }
-  
-  .metadata-item {
-    gap: 1px;
-  }
-  
-  .metadata-label {
+    padding: 8px;
     font-size: 0.8em;
-  }
-  
-  .metadata-value {
-    padding: 1px 4px;
-    font-size: 0.9em;
+    margin-top: 8px;
   }
 }
 
 @media (max-width: 480px) {
-  .custom-gamepad-layout {
-    padding: 4px;
-    gap: 6px;
-  }
-  
   .layout-title {
     font-size: 0.9em;
   }
   
   .layout-description {
-    font-size: 0.7em;
+    font-size: 0.75em;
     max-width: 250px;
   }
   
   .layout-metadata {
     gap: 6px;
-    padding: 4px;
-    font-size: 0.7em;
+    padding: 6px;
+    font-size: 0.75em;
     margin-top: 6px;
     flex-direction: column;
   }
@@ -221,33 +166,13 @@
   }
   
   .metadata-label {
-    font-size: 0.75em;
     min-width: 60px;
   }
-  
-  .metadata-value {
-    padding: 1px 3px;
-    font-size: 0.8em;
-  }
 }
 
-/* Animation for smooth transitions */
-.gamepad-grid {
-  transition: all 0.3s ease;
-}
-
-/* Removed scaling transform that was causing alignment issues */
-.custom-gamepad-layout.editing .gamepad-grid {
-  /* transform: scale(1.02); - Removed to fix grid alignment */
-}
-
-/* Dark theme support for gamepad preview */
+/* Dark theme support */
 @media (prefers-color-scheme: dark) {
-  .custom-gamepad-layout.editing .gamepad-grid {
-    background-color: transparent;
+  .grid-cell {
     border-color: var(--border-color-light, #444);
-    box-shadow: none;
   }
-}
-
-/* Removed problematic CSS grid overlay - using component-rendered grid cells instead */ 
+} 

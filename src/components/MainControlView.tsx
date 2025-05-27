@@ -94,6 +94,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   const [isCustomEditorOpen, setIsCustomEditorOpen] = useState(false);
+  const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
   // Counter for naming new panels of the same type
   const panelCounters = useRef<Record<PanelType, number>>({ 
     [GamepadType.Standard]: 0, 
@@ -237,13 +238,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsAddPanelMenuOpen(false);
   };
 
-  const handleOpenCustomEditor = () => {
+  const handleOpenCustomEditor = (layoutId?: string) => {
+    setEditingLayoutId(layoutId || null);
     setIsCustomEditorOpen(true);
     setIsAddPanelMenuOpen(false);
   };
 
   const handleCloseCustomEditor = () => {
     setIsCustomEditorOpen(false);
+    setEditingLayoutId(null);
   };
 
   const handleSaveCustomGamepad = (layout: CustomGamepadLayout) => {
@@ -435,6 +438,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           isOpen={isCustomEditorOpen}
           onClose={handleCloseCustomEditor}
           onSave={handleSaveCustomGamepad}
+          initialLayout={editingLayoutId ? getGamepadLayout(editingLayoutId)?.layout || null : null}
           ros={ros}
         />
       )}

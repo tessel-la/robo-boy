@@ -201,20 +201,47 @@
   border: 1px dashed var(--error-color, #721c24);
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments - simplified to work with unified scaling */
 @media (max-width: 768px) {
   .component-label {
-    font-size: 0.6em;
+    font-size: 0.65em;
+    padding: 1px 3px;
   }
   
   .delete-button {
     width: 18px;
     height: 18px;
-    font-size: 10px;
+    font-size: 11px;
+    top: -6px;
+    right: -6px;
   }
   
   .resize-handle.bottom-right {
     width: 6px;
     height: 6px;
+    bottom: -3px;
+    right: -3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .component-label {
+    font-size: 0.6em;
+    padding: 1px 2px;
+  }
+  
+  .delete-button {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    top: -5px;
+    right: -5px;
+  }
+  
+  .resize-handle.bottom-right {
+    width: 5px;
+    height: 5px;
+    bottom: -2px;
+    right: -2px;
   }
 } 

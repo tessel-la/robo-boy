@@ -13,6 +13,7 @@ interface GamepadComponentProps {
   ros: Ros;
   isEditing?: boolean;
   isSelected?: boolean;
+  scaleFactor?: number;
   onSelect?: (id: string) => void;
   onUpdate?: (config: GamepadComponentConfig) => void;
   onDelete?: (id: string) => void;
@@ -23,6 +24,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   ros,
   isEditing = false,
   isSelected = false,
+  scaleFactor = 1,
   onSelect,
   onUpdate,
   onDelete
@@ -45,7 +47,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     const commonProps = {
       config,
       ros,
-      isEditing
+      isEditing,
+      scaleFactor
     };
 
     switch (config.type) {
@@ -81,7 +84,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       
       {/* Label */}
       {config.label && (
-        <div className="component-label">
+        <div className="component-label" style={{ fontSize: `${0.7 * scaleFactor}em` }}>
           {config.label}
         </div>
       )}

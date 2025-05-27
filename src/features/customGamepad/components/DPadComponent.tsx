@@ -8,11 +8,12 @@ interface DPadComponentProps {
   config: GamepadComponentConfig;
   ros: Ros;
   isEditing?: boolean;
+  scaleFactor?: number;
 }
 
 const THROTTLE_INTERVAL = 100;
 
-const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing }) => {
+const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [pressedDirections, setPressedDirections] = useState<Set<string>>(new Set());
 
@@ -104,7 +105,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing })
     backgroundColor: pressedDirections.has(direction) 
       ? (config.style?.color || 'var(--primary-color)') 
       : 'var(--secondary-color)',
-    border: `2px solid ${pressedDirections.has(direction) 
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${pressedDirections.has(direction) 
       ? (config.style?.color || 'var(--primary-color)') 
       : 'var(--border-color)'}`,
     borderRadius: '4px',
@@ -114,7 +115,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing })
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '1.2em',
+    fontSize: `${1.2 * scaleFactor}em`,
     fontWeight: 'bold',
     color: pressedDirections.has(direction) ? 'white' : 'var(--text-color)'
   });

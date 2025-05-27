@@ -7,9 +7,10 @@ interface ToggleComponentProps {
   config: GamepadComponentConfig;
   ros: Ros;
   isEditing?: boolean;
+  scaleFactor?: number;
 }
 
-const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditing }) => {
+const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [isOn, setIsOn] = useState(false);
 
@@ -70,36 +71,36 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'column',
-    gap: '8px',
+    gap: `${Math.max(4, 8 * scaleFactor)}px`,
     opacity: isEditing ? 0.7 : 1
   };
 
   const switchStyle: React.CSSProperties = {
-    width: '60px',
-    height: '30px',
+    width: `${Math.floor(60 * scaleFactor)}px`,
+    height: `${Math.floor(30 * scaleFactor)}px`,
     backgroundColor: isOn ? (config.style?.color || 'var(--primary-color)') : 'var(--secondary-color)',
-    borderRadius: '15px',
-    border: `2px solid ${isOn ? (config.style?.color || 'var(--primary-color)') : 'var(--border-color)'}`,
+    borderRadius: `${Math.floor(15 * scaleFactor)}px`,
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${isOn ? (config.style?.color || 'var(--primary-color)') : 'var(--border-color)'}`,
     cursor: isEditing ? 'default' : 'pointer',
     transition: 'all 0.2s ease',
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
-    padding: '2px'
+    padding: `${Math.floor(2 * scaleFactor)}px`
   };
 
   const knobStyle: React.CSSProperties = {
-    width: '22px',
-    height: '22px',
+    width: `${Math.floor(22 * scaleFactor)}px`,
+    height: `${Math.floor(22 * scaleFactor)}px`,
     backgroundColor: 'white',
     borderRadius: '50%',
     transition: 'transform 0.2s ease',
-    transform: isOn ? 'translateX(30px)' : 'translateX(0px)',
+    transform: isOn ? `translateX(${Math.floor(30 * scaleFactor)}px)` : 'translateX(0px)',
     boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: '0.9em',
+    fontSize: `${0.9 * scaleFactor}em`,
     fontWeight: 'bold',
     color: 'var(--text-color)',
     textAlign: 'center'
@@ -119,7 +120,7 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
       >
         <div className="toggle-knob" style={knobStyle} />
       </div>
-      <div style={{ fontSize: '0.8em', color: 'var(--text-color-secondary)' }}>
+      <div style={{ fontSize: `${0.8 * scaleFactor}em`, color: 'var(--text-color-secondary)' }}>
         {isOn ? 'ON' : 'OFF'}
       </div>
     </div>

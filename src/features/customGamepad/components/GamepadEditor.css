@@ -188,13 +188,14 @@
 .design-area {
   flex: 1;
   padding: 8px;
-  overflow: visible;
+  overflow: hidden;
   background-color: var(--card-bg, #ffffff);
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   box-sizing: border-box;
+  min-height: 0; /* Allow flex item to shrink below content size */
 }
 
 .component-properties {
@@ -487,8 +488,8 @@
   
   .design-area {
     flex: 1;
-    padding: 12px;
-    overflow: auto;
+    padding: 8px;
+    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -551,6 +552,7 @@
     width: 100vw;
     height: 100vh;
     border-radius: 0;
+    overflow: hidden;
   }
   
   .component-palette {
@@ -583,7 +585,8 @@
   }
   
   .design-area {
-    padding: 8px;
+    padding: 4px;
+    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -591,5 +594,40 @@
   
   .settings-tab {
     padding: 12px;
+  }
+}
+
+/* Very small screens (iPhone SE and similar) */
+@media (max-width: 375px) {
+  .gamepad-editor-modal {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  
+  .design-tab {
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .component-palette {
+    height: 80px;
+    padding: 4px;
+    overflow: hidden;
+  }
+  
+  .design-area {
+    flex: 1;
+    padding: 2px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  
+  .component-properties {
+    height: 120px;
+    padding: 4px;
+    overflow-y: auto;
   }
 } 

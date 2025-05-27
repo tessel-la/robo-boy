@@ -8,11 +8,12 @@ interface SliderComponentProps {
   config: GamepadComponentConfig;
   ros: Ros;
   isEditing?: boolean;
+  scaleFactor?: number;
 }
 
 const THROTTLE_INTERVAL = 100;
 
-const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditing }) => {
+const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [value, setValue] = useState(0);
 
@@ -94,17 +95,17 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     flexDirection: orientation === 'horizontal' ? 'column' : 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
-    padding: '8px',
+    gap: `${Math.max(4, 8 * scaleFactor)}px`,
+    padding: `${Math.max(4, 8 * scaleFactor)}px`,
     opacity: isEditing ? 0.7 : 1
   };
 
   const sliderStyle: React.CSSProperties = {
-    width: orientation === 'horizontal' ? '100%' : '30px',
-    height: orientation === 'horizontal' ? '8px' : '100%',
+    width: orientation === 'horizontal' ? '100%' : `${Math.floor(30 * scaleFactor)}px`,
+    height: orientation === 'horizontal' ? `${Math.floor(8 * scaleFactor)}px` : '100%',
     appearance: 'none',
     backgroundColor: 'var(--secondary-color)',
-    borderRadius: '4px',
+    borderRadius: `${Math.floor(4 * scaleFactor)}px`,
     outline: 'none',
     cursor: isEditing ? 'default' : 'pointer',
     writingMode: orientation === 'vertical' ? 'bt-lr' : undefined,
@@ -112,14 +113,14 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: '0.9em',
+    fontSize: `${0.9 * scaleFactor}em`,
     fontWeight: 'bold',
     color: 'var(--text-color)',
     textAlign: 'center'
   };
 
   const valueStyle: React.CSSProperties = {
-    fontSize: '0.8em',
+    fontSize: `${0.8 * scaleFactor}em`,
     color: 'var(--text-color-secondary)',
     fontFamily: 'monospace'
   };

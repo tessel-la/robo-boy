@@ -10,11 +10,12 @@ interface JoystickComponentProps {
   config: GamepadComponentConfig;
   ros: Ros;
   isEditing?: boolean;
+  scaleFactor?: number;
 }
 
 const THROTTLE_INTERVAL = 100;
 
-const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing }) => {
+const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
 
@@ -134,7 +135,8 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, isEditing]);
 
-  const size = config.style?.size === 'small' ? 60 : config.style?.size === 'large' ? 120 : 80;
+  const baseSize = config.style?.size === 'small' ? 60 : config.style?.size === 'large' ? 120 : 80;
+  const size = Math.floor(baseSize * scaleFactor);
   const stickSize = Math.floor(size * 0.6);
 
   return (

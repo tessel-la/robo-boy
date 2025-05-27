@@ -9,7 +9,7 @@ interface AddPanelMenuProps {
   isOpen: boolean;
   onSelectType: (type: PanelType, layoutId?: string) => void;
   onClose: () => void;
-  onOpenCustomEditor: () => void;
+  onOpenCustomEditor: (layoutId?: string) => void;
   addButtonRef: RefObject<HTMLButtonElement>; // Re-add button ref
 }
 
@@ -126,10 +126,13 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
 
   const handleDeleteCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent triggering the select action
-    if (confirm('Are you sure you want to delete this custom gamepad?')) {
-      deleteCustomGamepad(layoutId);
-      setRefreshKey((prev: number) => prev + 1); // Force re-render to update the list
-    }
+    deleteCustomGamepad(layoutId);
+    setRefreshKey((prev: number) => prev + 1); // Force re-render to update the list
+  };
+
+  const handleEditCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the select action
+    onOpenCustomEditor(layoutId);
   };
 
   // Render into the portal
@@ -163,6 +166,13 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
                     onClick={() => handleCustomGamepadSelect(gamepad.id)}
                   >
                     {gamepad.name}
+                  </button>
+                  <button 
+                    className="edit-gamepad-button"
+                    onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
+                    title="Edit custom gamepad"
+                  >
+                    ✏️
                   </button>
                   <button 
                     className="delete-gamepad-button"
