@@ -145,7 +145,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       ? `repeat(${layout.gridSize.width}, ${cellWidth}px)`
       : `repeat(${layout.gridSize.width}, ${cellWidth})`,
     gridTemplateRows: isEditing 
-      ? `repeat(${layout.gridSize.height}, ${cellHeight}px)`
+      ? `repeat(${layout.gridSize.height}, minmax(${cellHeight}px, auto))`
       : `repeat(${layout.gridSize.height}, ${cellHeight})`,
     gap: `${gap}px`,
     padding: `${padding}px`,
@@ -153,9 +153,9 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     borderRadius: isEditing ? '8px' : '0',
     border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none',
     position: 'relative',
-    // When not editing, use 100% width and height to stretch the grid
-    width: isEditing ? `${actualGridWidth}px` : '100%',
-    height: isEditing ? `${actualGridHeight}px` : '100%',
+    // Use full width but auto height to maintain proportions while allowing expansion
+    width: '100%',
+    height: isEditing ? 'auto' : '100%',
     boxSizing: 'border-box',
     overflow: 'visible', // Allow joystick movement outside grid bounds
     margin: 'auto',
@@ -213,7 +213,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
             className="grid-background"
             style={{
               gridTemplateColumns: `repeat(${layout.gridSize.width}, ${cellWidth}px)`,
-              gridTemplateRows: `repeat(${layout.gridSize.height}, ${cellHeight}px)`,
+              gridTemplateRows: `repeat(${layout.gridSize.height}, minmax(${cellHeight}px, auto))`,
               gap: `${gap}px`,
               padding: `${padding}px`
             }}

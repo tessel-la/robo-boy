@@ -13,28 +13,15 @@
   box-sizing: border-box;
   overflow: hidden;
   background-color: transparent;
+  border: none;
   border-radius: 0;
+  box-shadow: none;
   min-height: 0;
   min-width: 0;
   position: relative;
   flex-shrink: 1;
   place-items: center;
   place-content: center;
-}
-
-/* Unified styling for both editing and display modes */
-.custom-gamepad-layout {
-  background-color: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  margin: 0;
-  padding: 0;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
 }
 
 .layout-header {
@@ -63,12 +50,12 @@
   min-height: 0;
   min-width: 0;
   transition: all 0.2s ease;
-  flex-grow: 1;
+  flex-grow: 0;
   flex-shrink: 0;
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
 /* Ensure grid cells maintain proper sizing and don't overflow */
@@ -86,8 +73,8 @@
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 0;
   border-radius: 0;
