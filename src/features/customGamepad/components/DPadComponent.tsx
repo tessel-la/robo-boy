@@ -112,74 +112,107 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     });
   }, [publishThrottled, isEditing]);
 
-  // Calculate optimal D-pad size that fits within the grid cell
-  const calculateDPadSize = () => {
-    // Always use 100% of the available container space
-    // The grid system already handles the proper sizing
-    return { 
-      size: '100%', 
-      padding: '0%' 
+  // Calculate optimal D-pad size that maximizes the use of allocated grid space
+  const calculateOptimalDPadSize = () => {
+    if (containerSize.width === 0 || containerSize.height === 0) {
+      return { width: '100%', height: '100%', maxSize: 100 };
+    }
+
+    // The container represents the exact 2x2 grid space allocated to the D-pad
+    const containerWidth = containerSize.width;
+    const containerHeight = containerSize.height;
+    
+    // For medium screens (550-770px), be more aggressive about filling space
+    const isTargetScreenSize = window.innerWidth >= 550 && window.innerWidth <= 770;
+    
+    let usableWidth, usableHeight;
+    
+    if (isTargetScreenSize) {
+      // Use almost the entire allocated space on problematic screen sizes
+      usableWidth = containerWidth * 0.98;
+      usableHeight = containerHeight * 0.98;
+    } else {
+      // Use most of the space but leave some breathing room on other sizes
+      usableWidth = containerWidth * 0.95;
+      usableHeight = containerHeight * 0.95;
+    }
+    
+    // Calculate the maximum size that fits within the allocated space
+    const maxSize = Math.min(usableWidth, usableHeight);
+    
+    return {
+      width: `${usableWidth}px`,
+      height: `${usableHeight}px`,
+      maxSize
     };
   };
 
-  const { size: dpadSize } = calculateDPadSize();
+  const optimalSize = calculateOptimalDPadSize();
 
-  // Container style that centers the D-pad and constrains it
+  // Container style that ensures the D-pad fills the entire allocated space
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
+    position: 'relative',
+    overflow: 'visible',
+    boxSizing: 'border-box',
+    minWidth: 0,
+    minHeight: 0,
+    margin: 0,
+    padding: 0,
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'visible', // Changed from 'hidden' to allow proper scaling
-    boxSizing: 'border-box',
-    // Remove any size constraints
-    minWidth: 0,
-    minHeight: 0
+    justifyContent: 'center'
   };
 
-  // D-pad style with responsive dimensions that scale with container
+  // D-pad style with calculated optimal dimensions
   const dpadStyle: React.CSSProperties = {
-    width: '100%',  // Fill the entire container
-    height: '100%', // Fill the entire container
+    width: optimalSize.width,
+    height: optimalSize.height,
     position: 'relative',
     opacity: isEditing ? 0.7 : 1,
-    flexShrink: 1, // Allow shrinking
-    flexGrow: 1,   // Allow growing to fill space
-    aspectRatio: '1', // Maintain square aspect ratio
     maxWidth: '100%',
     maxHeight: '100%',
     minWidth: 0,
     minHeight: 0,
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    margin: 0,
+    padding: 0
   };
 
   const buttonStyle = (direction: string): React.CSSProperties => {
-    // Get actual container size for calculations
-    const actualSize = Math.min(containerSize.width, containerSize.height);
+    // Use the calculated optimal size for font scaling
+    const effectiveSize = optimalSize.maxSize;
     
-    // Calculate font size based on actual container size
+    // Calculate font size based on the optimal D-pad size
     let baseFontSize: number;
-    if (actualSize < 60) {
-      baseFontSize = Math.max(8, actualSize * 0.2); // Scale with container size
-    } else if (actualSize < 80) {
-      baseFontSize = Math.max(10, actualSize * 0.15); // Scale with container size
+    
+    if (effectiveSize < 60) {
+      baseFontSize = Math.max(8, effectiveSize * 0.25);
+    } else if (effectiveSize < 80) {
+      baseFontSize = Math.max(10, effectiveSize * 0.20);
+    } else if (effectiveSize < 120) {
+      baseFontSize = Math.max(12, effectiveSize * 0.18);
+    } else if (effectiveSize < 160) {
+      baseFontSize = Math.max(14, effectiveSize * 0.16);
     } else {
-      baseFontSize = Math.max(12, Math.min(24, actualSize * 0.12)); // Standard scaling
+      baseFontSize = Math.max(16, Math.min(36, effectiveSize * 0.14));
     }
     
     const scaledFontSize = Math.floor(baseFontSize * scaleFactor);
+
+    // Border radius based on effective size
+    const borderRadius = Math.max(3, Math.min(12, Math.floor(effectiveSize * 0.05)));
 
     // Base button style for grid items - ensure they fill their cells
     const baseStyle: React.CSSProperties = {
       backgroundColor: pressedDirections.has(direction) 
         ? (config.style?.color || 'var(--primary-color)') 
         : 'var(--secondary-color)',
-      border: `${Math.max(1, Math.floor(1.5 * scaleFactor))}px solid ${pressedDirections.has(direction) 
+      border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${pressedDirections.has(direction) 
         ? (config.style?.color || 'var(--primary-color)') 
         : 'var(--border-color)'}`,
-      borderRadius: `${Math.max(2, Math.floor(actualSize * 0.03))}px`,
+      borderRadius: `${borderRadius}px`,
       cursor: isEditing ? 'default' : 'pointer',
       userSelect: 'none',
       transition: 'all 0.1s ease',
@@ -194,21 +227,20 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       lineHeight: 1,
       textAlign: 'center' as const,
       boxShadow: pressedDirections.has(direction) 
-        ? 'inset 0 1px 2px rgba(0,0,0,0.2)' 
-        : '0 1px 2px rgba(0,0,0,0.1)',
+        ? 'inset 0 2px 4px rgba(0,0,0,0.2)' 
+        : '0 2px 4px rgba(0,0,0,0.1)',
       transform: pressedDirections.has(direction) ? 'scale(0.95)' : 'scale(1)',
       zIndex: 2,
       // Ensure buttons fill their grid cells completely
-      width: '100% !important',
-      height: '100% !important',
-      minWidth: '0 !important',
-      minHeight: '0 !important',
+      width: '100%',
+      height: '100%',
+      minWidth: 0,
+      minHeight: 0,
       maxWidth: '100%',
       maxHeight: '100%',
       boxSizing: 'border-box',
-      // Remove any padding that might cause overflow
-      padding: '0',
-      margin: '0'
+      padding: 0,
+      margin: 0
     };
 
     // Grid positioning for each button
@@ -216,26 +248,26 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       case 'up':
         return {
           ...baseStyle,
-          gridColumn: '2 / 3', // More explicit grid positioning
-          gridRow: '1 / 2'     // More explicit grid positioning
+          gridColumn: '2 / 3',
+          gridRow: '1 / 2'
         };
       case 'down':
         return {
           ...baseStyle,
-          gridColumn: '2 / 3', // More explicit grid positioning
-          gridRow: '3 / 4'     // More explicit grid positioning
+          gridColumn: '2 / 3',
+          gridRow: '3 / 4'
         };
       case 'left':
         return {
           ...baseStyle,
-          gridColumn: '1 / 2', // More explicit grid positioning
-          gridRow: '2 / 3'     // More explicit grid positioning
+          gridColumn: '1 / 2',
+          gridRow: '2 / 3'
         };
       case 'right':
         return {
           ...baseStyle,
-          gridColumn: '3 / 4', // More explicit grid positioning
-          gridRow: '2 / 3'     // More explicit grid positioning
+          gridColumn: '3 / 4',
+          gridRow: '2 / 3'
         };
       default:
         return baseStyle;
@@ -243,22 +275,22 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
   };
 
   const centerStyle: React.CSSProperties = {
-    gridColumn: '2 / 3', // More explicit grid positioning
-    gridRow: '2 / 3',    // More explicit grid positioning
+    gridColumn: '2 / 3',
+    gridRow: '2 / 3',
     backgroundColor: 'var(--card-bg, #f8f9fa)',
-    border: `${Math.max(1, Math.floor(1.5 * scaleFactor))}px solid var(--border-color)`,
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid var(--border-color)`,
     borderRadius: '50%',
-    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
     zIndex: 1,
-    width: '100% !important',
-    height: '100% !important',
-    minWidth: '0 !important',
-    minHeight: '0 !important',
+    width: '100%',
+    height: '100%',
+    minWidth: 0,
+    minHeight: 0,
     maxWidth: '100%',
     maxHeight: '100%',
     boxSizing: 'border-box',
-    padding: '0',
-    margin: '0'
+    padding: 0,
+    margin: 0
   };
 
   return (

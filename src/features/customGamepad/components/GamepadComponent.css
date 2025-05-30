@@ -11,11 +11,35 @@
   background-color: var(--card-bg, #ffffff);
   overflow: visible; /* Allow joystick movement outside component bounds */
   box-sizing: border-box;
+  /* Remove any min/max constraints that could limit scaling */
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
-  /* Ensure components don't exceed their grid cell boundaries */
+  /* Ensure components scale to fill their grid cell completely */
   max-width: 100%;
   max-height: 100%;
+}
+
+/* Override for D-pad to remove centering and let it fill the entire space */
+.gamepad-component.dpad {
+  display: block;
+  align-items: unset;
+  justify-content: unset;
+}
+
+/* Ensure D-pad components in editing mode can scale beyond any implicit constraints */
+.gamepad-component.dpad.editing {
+  /* Force D-pad to use full grid cell allocation */
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  /* Ensure no artificial size constraints */
+  flex-shrink: 0;
+  flex-grow: 1;
 }
 
 .gamepad-component.editing {
@@ -159,11 +183,22 @@
 .dpad-component {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  /* Ensure D-pad component fills allocated space completely */
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+/* Ensure D-pad component in editing mode uses full space */
+.gamepad-component.dpad.editing .dpad-component {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
 }
 
 .dpad-component button {

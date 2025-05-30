@@ -92,17 +92,17 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     const scaleY = availableHeight / idealGridHeight;
     let scaleFactor = Math.min(scaleX, scaleY);
     
-    // Allow larger scale factors to better utilize space
-    // Remove artificial maximum scale limits completely
+    // Remove artificial maximum scale limits to allow components to truly fill grid space
+    // Allow scale factors greater than 1 to maximize space utilization
     
-    // Set minimal minimum scale factors to allow maximum expansion
+    // Set very minimal minimum scale factors to allow maximum expansion
     let minScale: number;
     if (isTinyScreen) {
-      minScale = 0.2; // Very small minimum for tiny screens
+      minScale = 0.15; // Even smaller minimum for tiny screens
     } else if (isSmallScreen) {
-      minScale = 0.3; // Small minimum for small screens
+      minScale = 0.2; // Smaller minimum for small screens
     } else {
-      minScale = 0.35; // Reasonable minimum for normal screens
+      minScale = 0.25; // Reasonable minimum for normal screens
     }
     
     scaleFactor = Math.max(minScale, scaleFactor);
