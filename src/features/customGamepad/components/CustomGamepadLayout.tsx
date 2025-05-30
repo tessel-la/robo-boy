@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { CustomGamepadLayout as LayoutType } from '../types';
+import { CustomGamepadLayout as LayoutType, ComponentInteractionMode } from '../types';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -9,9 +9,11 @@ interface CustomGamepadLayoutProps {
   ros: Ros;
   isEditing?: boolean;
   selectedComponentId?: string | null;
+  interactionMode?: ComponentInteractionMode;
   onComponentSelect?: (id: string) => void;
   onComponentUpdate?: (id: string, config: any) => void;
   onComponentDelete?: (id: string) => void;
+  onOpenSettings?: (id: string) => void;
 }
 
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
@@ -19,9 +21,11 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   ros,
   isEditing = false,
   selectedComponentId = null,
+  interactionMode,
   onComponentSelect,
   onComponentUpdate,
-  onComponentDelete
+  onComponentDelete,
+  onOpenSettings
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
@@ -237,9 +241,11 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
             ros={ros}
             isEditing={isEditing}
             isSelected={selectedComponentId === component.id}
+            interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
             onSelect={handleComponentSelect}
             onUpdate={handleComponentUpdate}
             onDelete={handleComponentDelete}
+            onOpenSettings={onOpenSettings}
             scaleFactor={scaling.scaleFactor}
           />
         ))}

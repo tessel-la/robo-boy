@@ -7,7 +7,7 @@
   justify-content: center;
   border: 2px solid transparent;
   border-radius: 8px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   background-color: var(--card-bg, #ffffff);
   overflow: visible; /* Allow joystick movement outside component bounds */
   box-sizing: border-box;
@@ -55,6 +55,62 @@
 .gamepad-component.selected {
   border-color: var(--primary-color, #007bff);
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+  animation: selectedPulse 2s infinite;
+}
+
+@keyframes selectedPulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 0 5px rgba(0, 123, 255, 0.5);
+  }
+}
+
+/* Interaction mode specific styling */
+.gamepad-component.translate-mode {
+  border-color: #28a745;
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+  animation: translateModePulse 2s infinite;
+}
+
+@keyframes translateModePulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 0 5px rgba(40, 167, 69, 0.5);
+  }
+}
+
+.gamepad-component.resize-mode {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+  animation: resizeModePulse 2s infinite;
+}
+
+@keyframes resizeModePulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 0 5px rgba(255, 193, 7, 0.5);
+  }
+}
+
+.gamepad-component.settings-mode {
+  border-color: #6f42c1;
+  box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.3);
+  animation: settingsModePulse 2s infinite;
+}
+
+@keyframes settingsModePulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 0 5px rgba(111, 66, 193, 0.5);
+  }
 }
 
 .component-label {
@@ -76,7 +132,7 @@
   text-overflow: ellipsis;
 }
 
-.editing-controls {
+.interaction-controls {
   position: absolute;
   top: 0;
   left: 0;
@@ -86,15 +142,11 @@
   z-index: 20;
 }
 
-.delete-button {
+.control-button {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background-color: var(--error-color, #dc3545);
-  color: white;
   border: 2px solid white;
   font-size: 12px;
   font-weight: bold;
@@ -105,36 +157,111 @@
   pointer-events: auto;
   transition: all 0.2s ease;
   z-index: 30;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.delete-button:hover {
-  background-color: var(--error-hover-color, #c82333);
+.control-button:hover {
   transform: scale(1.1);
 }
 
-.resize-handles {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
+.control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
 }
 
-.resize-handle {
-  position: absolute;
-  pointer-events: auto;
-  background-color: var(--primary-color, #007bff);
-  border: 1px solid white;
-  border-radius: 2px;
+.delete-button {
+  top: -12px;
+  right: -12px;
+  background-color: var(--error-color, #dc3545);
+  color: white;
 }
 
-.resize-handle.bottom-right {
-  bottom: -4px;
-  right: -4px;
-  width: 8px;
-  height: 8px;
-  cursor: se-resize;
+.delete-button:hover:not(:disabled) {
+  background-color: var(--error-hover-color, #c82333);
+}
+
+.settings-button {
+  top: -12px;
+  left: -12px;
+  background-color: #6f42c1;
+  color: white;
+  font-size: 10px;
+}
+
+.settings-button:hover:not(:disabled) {
+  background-color: #5a32a3;
+}
+
+/* Translation controls */
+.translate-controls .control-button {
+  background-color: #28a745;
+  color: white;
+  width: 20px;
+  height: 20px;
+}
+
+.translate-controls .translate-button.up {
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.translate-controls .translate-button.down {
+  bottom: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.translate-controls .translate-button.left {
+  left: -25px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.translate-controls .translate-button.right {
+  right: -25px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.translate-controls .control-button:hover:not(:disabled) {
+  background-color: #1e7e34;
+}
+
+/* Resize controls */
+.resize-controls .control-button {
+  background-color: #ffc107;
+  color: #212529;
+  width: 28px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.resize-controls .resize-button.width-plus {
+  top: -25px;
+  right: 10px;
+}
+
+.resize-controls .resize-button.width-minus {
+  top: -25px;
+  right: 45px;
+}
+
+.resize-controls .resize-button.height-plus {
+  bottom: -25px;
+  right: 10px;
+}
+
+.resize-controls .resize-button.height-minus {
+  bottom: -25px;
+  right: 45px;
+}
+
+.resize-controls .control-button:hover:not(:disabled) {
+  background-color: #e0a800;
 }
 
 /* Component-specific styles */

@@ -95,6 +95,7 @@
 /* Design Tab */
 .design-tab {
   display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
@@ -210,67 +211,6 @@
   min-width: 300px; /* Ensure minimum usable space */
 }
 
-.component-properties {
-  width: 240px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border-color, #e0e0e0);
-  padding: 12px;
-  background-color: var(--card-bg, #ffffff);
-  overflow-y: auto;
-}
-
-.component-properties h3 {
-  margin: 0 0 12px 0;
-  font-size: 0.9rem;
-  color: var(--text-color, #333);
-  font-weight: 600;
-}
-
-.no-selection-message {
-  text-align: center;
-  padding: 20px;
-  color: var(--text-color-secondary, #666);
-  font-style: italic;
-}
-
-.no-selection-message p {
-  margin: 0;
-  font-size: 0.85rem;
-}
-
-.property-group {
-  margin-bottom: 12px;
-}
-
-.property-group label {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-color, #333);
-}
-
-.property-group input,
-.property-group textarea,
-.property-group select {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 4px;
-  font-size: 0.8rem;
-  background-color: var(--card-bg, #ffffff);
-  color: var(--text-color, #333);
-  transition: border-color 0.2s ease;
-}
-
-.property-group input:focus,
-.property-group textarea:focus,
-.property-group select:focus {
-  outline: none;
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 2px var(--primary-color-light, #e3f2fd);
-}
-
 /* Settings Tab */
 .settings-tab {
   padding: 20px;
@@ -360,84 +300,6 @@
   cursor: not-allowed;
 }
 
-/* Position controls */
-.position-controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.position-control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.position-control-group label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-color-secondary, #666);
-}
-
-.position-control-group input {
-  padding: 4px 6px;
-  font-size: 0.8rem;
-}
-
-.move-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
-  gap: 3px;
-  margin-bottom: 12px;
-  max-width: 100px;
-}
-
-.move-button {
-  padding: 6px;
-  border: 1px solid var(--border-color, #e0e0e0);
-  background-color: var(--card-bg, #ffffff);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 0.75rem;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-}
-
-.move-button:hover {
-  background-color: var(--primary-color-light, #e3f2fd);
-  border-color: var(--primary-color, #007bff);
-}
-
-.move-button:active {
-  background-color: var(--primary-color, #007bff);
-  color: white;
-}
-
-.move-button:nth-child(2) { /* Up */
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.move-button:nth-child(1) { /* Left */
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.move-button:nth-child(3) { /* Right */
-  grid-column: 3;
-  grid-row: 2;
-}
-
-.move-button:nth-child(4) { /* Down */
-  grid-column: 2;
-  grid-row: 3;
-}
-
 /* Responsive design */
 @media (max-width: 768px) {
   .gamepad-editor-modal {
@@ -487,33 +349,6 @@
     min-width: unset; /* Remove min-width constraint on mobile */
   }
   
-  .component-properties {
-    width: 100%;
-    height: 180px;
-    border-left: none;
-    border-top: 1px solid var(--border-color, #e0e0e0);
-    padding: 12px;
-  }
-  
-  .component-properties h3 {
-    font-size: 0.9rem;
-    margin-bottom: 12px;
-  }
-  
-  .property-group {
-    margin-bottom: 12px;
-  }
-  
-  .property-group label {
-    font-size: 0.8rem;
-  }
-  
-  .property-group input,
-  .property-group textarea {
-    padding: 6px 8px;
-    font-size: 0.9rem;
-  }
-  
   .settings-tab {
     padding: 16px;
   }
@@ -555,19 +390,6 @@
     max-height: 180px;
   }
   
-  .component-properties {
-    height: 160px;
-    padding: 8px;
-  }
-  
-  .design-area {
-    padding: 4px;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
   .settings-tab {
     padding: 12px;
   }
@@ -603,8 +425,7 @@
     min-height: 0;
   }
   
-  .component-properties {
-    height: 120px;
+  .settings-tab {
     padding: 4px;
     overflow-y: auto;
   }

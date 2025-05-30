@@ -24,6 +24,13 @@ export type ComponentAction = ROSTopicConfig | ActionServiceConfig | {
   handler: string; // Function name for custom handlers
 };
 
+export enum ComponentInteractionMode {
+  None = 'none',
+  Translate = 'translate',
+  Resize = 'resize',
+  Settings = 'settings'
+}
+
 export interface GamepadComponentConfig {
   id: string;
   type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider';
@@ -93,6 +100,7 @@ export interface DragItem {
 
 export interface EditorState {
   selectedComponentId: string | null;
+  componentInteractionMode: ComponentInteractionMode;
   draggedComponent: DragItem | null;
   gridSize: { width: number; height: number };
   cellSize: number;

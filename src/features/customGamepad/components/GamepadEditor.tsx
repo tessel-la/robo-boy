@@ -4,12 +4,14 @@ import {
   CustomGamepadLayout, 
   GamepadComponentConfig, 
   EditorState,
-  DragItem 
+  DragItem,
+  ComponentInteractionMode
 } from '../types';
 import { componentLibrary } from '../defaultLayouts';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
 import ComponentPalette from './ComponentPalette';
+import ComponentSettingsModal from './ComponentSettingsModal';
 import './GamepadEditor.css';
 
 interface GamepadEditorProps {
@@ -53,6 +55,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
 
   const [editorState, setEditorState] = useState<EditorState>({
     selectedComponentId: null,
+    componentInteractionMode: ComponentInteractionMode.None,
     draggedComponent: null,
     gridSize: layout.gridSize,
     cellSize: layout.cellSize,
@@ -61,6 +64,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   });
 
   const [activeTab, setActiveTab] = useState<'design' | 'settings'>('design');
+  
+  // Settings modal state
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsComponent, setSettingsComponent] = useState<GamepadComponentConfig | null>(null);
 
   const handleLayoutNameChange = useCallback((name: string) => {
     setLayout(prev => ({ ...prev, name }));
@@ -118,11 +125,55 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   }, [layout.rosConfig]);
 
   const handleComponentSelect = useCallback((id: string) => {
-    setEditorState(prev => ({
-      ...prev,
-      selectedComponentId: id
-    }));
-  }, []);
+    setEditorState(prev => {
+      // If clicking the same component, cycle through interaction modes
+      if (prev.selectedComponentId === id) {
+        let nextMode: ComponentInteractionMode;
+        switch (prev.componentInteractionMode) {
+          case ComponentInteractionMode.None:
+            nextMode = ComponentInteractionMode.Translate;
+            break;
+          case ComponentInteractionMode.Translate:
+            nextMode = ComponentInteractionMode.Resize;
+            break;
+          case ComponentInteractionMode.Resize:
+            nextMode = ComponentInteractionMode.Settings;
+            break;
+          case ComponentInteractionMode.Settings:
+            // Cycle back to translate or deselect
+            nextMode = ComponentInteractionMode.None;
+            return {
+              ...prev,
+              selectedComponentId: null,
+              componentInteractionMode: ComponentInteractionMode.None
+            };
+          default:
+            nextMode = ComponentInteractionMode.Translate;
+        }
+        
+        // Open settings modal if we're in settings mode
+        if (nextMode === ComponentInteractionMode.Settings) {
+          const component = layout.components.find(c => c.id === id);
+          if (component) {
+            setSettingsComponent(component);
+            setSettingsModalOpen(true);
+          }
+        }
+        
+        return {
+          ...prev,
+          componentInteractionMode: nextMode
+        };
+      } else {
+        // Selecting a different component, start with translate mode
+        return {
+          ...prev,
+          selectedComponentId: id,
+          componentInteractionMode: ComponentInteractionMode.Translate
+        };
+      }
+    });
+  }, [layout.components]);
 
   const handleComponentUpdate = useCallback((id: string, config: GamepadComponentConfig) => {
     setLayout(prev => ({
@@ -138,9 +189,36 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     }));
     setEditorState(prev => ({
       ...prev,
-      selectedComponentId: prev.selectedComponentId === id ? null : prev.selectedComponentId
+      selectedComponentId: prev.selectedComponentId === id ? null : prev.selectedComponentId,
+      componentInteractionMode: prev.selectedComponentId === id ? ComponentInteractionMode.None : prev.componentInteractionMode
     }));
   }, []);
+
+  const handleOpenSettings = useCallback((id: string) => {
+    const component = layout.components.find(c => c.id === id);
+    if (component) {
+      setSettingsComponent(component);
+      setSettingsModalOpen(true);
+      setEditorState(prev => ({
+        ...prev,
+        componentInteractionMode: ComponentInteractionMode.Settings
+      }));
+    }
+  }, [layout.components]);
+
+  const handleCloseSettings = useCallback(() => {
+    setSettingsModalOpen(false);
+    setSettingsComponent(null);
+    setEditorState(prev => ({
+      ...prev,
+      componentInteractionMode: ComponentInteractionMode.None
+    }));
+  }, []);
+
+  const handleSaveSettings = useCallback((config: GamepadComponentConfig) => {
+    handleComponentUpdate(config.id, config);
+    handleCloseSettings();
+  }, [handleComponentUpdate, handleCloseSettings]);
 
   const handleSave = useCallback(() => {
     const updatedLayout = {
@@ -224,188 +302,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                   ros={ros}
                   isEditing={true}
                   selectedComponentId={editorState.selectedComponentId}
+                  interactionMode={editorState.componentInteractionMode}
                   onComponentSelect={handleComponentSelect}
                   onComponentUpdate={handleComponentUpdate}
                   onComponentDelete={handleComponentDelete}
+                  onOpenSettings={handleOpenSettings}
                 />
-              </div>
-
-              <div className="component-properties">
-                <h3>Properties</h3>
-                {selectedComponent ? (
-                  <>
-                  
-                  {/* Position Controls */}
-                  <div className="property-group">
-                    <label>Position:</label>
-                    <div className="position-controls">
-                      <div className="position-control-group">
-                        <label>X:</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={layout.gridSize.width - selectedComponent.position.width}
-                          value={selectedComponent.position.x}
-                          onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: {
-                              ...selectedComponent.position,
-                              x: parseInt(e.target.value) || 0
-                            }
-                          })}
-                        />
-                      </div>
-                      <div className="position-control-group">
-                        <label>Y:</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={layout.gridSize.height - selectedComponent.position.height}
-                          value={selectedComponent.position.y}
-                          onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: {
-                              ...selectedComponent.position,
-                              y: parseInt(e.target.value) || 0
-                            }
-                          })}
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Move Buttons */}
-                    <div className="move-buttons">
-                      <button 
-                        className="move-button"
-                        onClick={() => {
-                          const newX = Math.max(0, selectedComponent.position.x - 1);
-                          handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: { ...selectedComponent.position, x: newX }
-                          });
-                        }}
-                        disabled={selectedComponent.position.x <= 0}
-                      >
-                        ←
-                      </button>
-                      <button 
-                        className="move-button"
-                        onClick={() => {
-                          const newY = Math.max(0, selectedComponent.position.y - 1);
-                          handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: { ...selectedComponent.position, y: newY }
-                          });
-                        }}
-                        disabled={selectedComponent.position.y <= 0}
-                      >
-                        ↑
-                      </button>
-                      <button 
-                        className="move-button"
-                        onClick={() => {
-                          const newX = Math.min(
-                            layout.gridSize.width - selectedComponent.position.width,
-                            selectedComponent.position.x + 1
-                          );
-                          handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: { ...selectedComponent.position, x: newX }
-                          });
-                        }}
-                        disabled={selectedComponent.position.x >= layout.gridSize.width - selectedComponent.position.width}
-                      >
-                        →
-                      </button>
-                      <button 
-                        className="move-button"
-                        onClick={() => {
-                          const newY = Math.min(
-                            layout.gridSize.height - selectedComponent.position.height,
-                            selectedComponent.position.y + 1
-                          );
-                          handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: { ...selectedComponent.position, y: newY }
-                          });
-                        }}
-                        disabled={selectedComponent.position.y >= layout.gridSize.height - selectedComponent.position.height}
-                      >
-                        ↓
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Size Controls */}
-                  <div className="property-group">
-                    <label>Size:</label>
-                    <div className="position-controls">
-                      <div className="position-control-group">
-                        <label>Width:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={layout.gridSize.width - selectedComponent.position.x}
-                          value={selectedComponent.position.width}
-                          onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: {
-                              ...selectedComponent.position,
-                              width: parseInt(e.target.value) || 1
-                            }
-                          })}
-                        />
-                      </div>
-                      <div className="position-control-group">
-                        <label>Height:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={layout.gridSize.height - selectedComponent.position.y}
-                          value={selectedComponent.position.height}
-                          onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                            ...selectedComponent,
-                            position: {
-                              ...selectedComponent.position,
-                              height: parseInt(e.target.value) || 1
-                            }
-                          })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="property-group">
-                    <label>Label:</label>
-                    <input
-                      type="text"
-                      value={selectedComponent.label || ''}
-                      onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                        ...selectedComponent,
-                        label: e.target.value
-                      })}
-                    />
-                  </div>
-                  <div className="property-group">
-                    <label>Topic:</label>
-                    <input
-                      type="text"
-                      value={(selectedComponent.action as any)?.topic || ''}
-                      onChange={(e) => handleComponentUpdate(selectedComponent.id, {
-                        ...selectedComponent,
-                        action: {
-                          ...selectedComponent.action,
-                          topic: e.target.value
-                        } as any
-                      })}
-                    />
-                  </div>
-                  </>
-                ) : (
-                  <div className="no-selection-message">
-                    <p>Select a component to edit its properties</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -466,6 +368,14 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
           </button>
         </div>
       </div>
+      
+      {/* Component Settings Modal */}
+      <ComponentSettingsModal
+        isOpen={settingsModalOpen}
+        component={settingsComponent}
+        onClose={handleCloseSettings}
+        onSave={handleSaveSettings}
+      />
     </div>
   );
 };
