@@ -99,12 +99,23 @@
   overflow: hidden;
 }
 
-.component-palette {
-  width: 260px;
+/* Updated for new ComponentPalette */
+.design-tab .component-palette {
+  flex-shrink: 0;
   border-right: 1px solid var(--border-color, #e0e0e0);
-  padding: 12px;
-  background-color: var(--card-bg, #ffffff);
+  background-color: var(--background-secondary, #f8f9fa);
   overflow-y: auto;
+  transition: width 0.3s ease;
+}
+
+/* When collapsed, make it narrower */
+.design-tab .component-palette.collapsed {
+  width: 200px;
+}
+
+/* When expanded, give it more space */
+.design-tab .component-palette.expanded {
+  width: 380px;
 }
 
 .component-palette h3 {
@@ -196,10 +207,12 @@
   position: relative;
   box-sizing: border-box;
   min-height: 0; /* Allow flex item to shrink below content size */
+  min-width: 300px; /* Ensure minimum usable space */
 }
 
 .component-properties {
-  width: 220px;
+  width: 240px;
+  flex-shrink: 0;
   border-left: 1px solid var(--border-color, #e0e0e0);
   padding: 12px;
   background-color: var(--card-bg, #ffffff);
@@ -448,42 +461,20 @@
     height: 100%;
   }
   
-  .component-palette {
-    width: 100%;
-    height: 140px;
+  .design-tab .component-palette {
+    width: 100% !important; /* Override width on mobile */
+    flex-shrink: 0;
+    height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border-color, #e0e0e0);
-    padding: 12px;
   }
-  
-  .component-palette h3 {
-    font-size: 0.9rem;
-    margin-bottom: 8px;
+
+  .design-tab .component-palette.collapsed {
+    max-height: 80px;
   }
-  
-  .component-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    overflow-x: auto;
-  }
-  
-  .component-grid-item {
-    min-height: 80px;
-    padding: 8px 4px;
-  }
-  
-  .component-grid-item .component-icon {
-    font-size: 20px;
-    margin-bottom: 4px;
-  }
-  
-  .component-grid-item .component-name {
-    font-size: 0.8rem;
-  }
-  
-  .component-grid-item .component-description {
-    font-size: 0.7rem;
-    display: none; /* Hide description on mobile to save space */
+
+  .design-tab .component-palette.expanded {
+    max-height: 250px;
   }
   
   .design-area {
@@ -493,6 +484,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    min-width: unset; /* Remove min-width constraint on mobile */
   }
   
   .component-properties {
@@ -555,28 +547,12 @@
     overflow: hidden;
   }
   
-  .component-palette {
-    height: 100px;
-    padding: 8px;
+  .design-tab .component-palette.collapsed {
+    max-height: 60px;
   }
-  
-  .component-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  
-  .component-grid-item {
-    min-height: 70px;
-    padding: 6px 4px;
-  }
-  
-  .component-grid-item .component-icon {
-    font-size: 18px;
-    margin-bottom: 2px;
-  }
-  
-  .component-grid-item .component-name {
-    font-size: 0.75rem;
+
+  .design-tab .component-palette.expanded {
+    max-height: 180px;
   }
   
   .component-properties {
@@ -612,10 +588,12 @@
     overflow: hidden;
   }
   
-  .component-palette {
-    height: 80px;
-    padding: 4px;
-    overflow: hidden;
+  .design-tab .component-palette.collapsed {
+    max-height: 50px;
+  }
+
+  .design-tab .component-palette.expanded {
+    max-height: 140px;
   }
   
   .design-area {

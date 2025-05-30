@@ -9,6 +9,7 @@ import {
 import { componentLibrary } from '../defaultLayouts';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
+import ComponentPalette from './ComponentPalette';
 import './GamepadEditor.css';
 
 interface GamepadEditorProps {
@@ -206,34 +207,16 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         <div className="editor-content">
           {activeTab === 'design' && (
             <div className="design-tab">
-              <div className="component-palette">
-                <h3>Components</h3>
-                <div className="component-grid">
-                  {componentLibrary.map(component => (
-                    <button
-                      key={component.type}
-                      className={`component-grid-item ${editorState.draggedComponent?.componentType === component.type ? 'selected' : ''}`}
-                      onClick={() => setEditorState(prev => ({
-                        ...prev,
-                        draggedComponent: {
-                          componentType: component.type,
-                          defaultSize: component.defaultSize
-                        }
-                      }))}
-                      title={`Add ${component.name} - ${component.description}`}
-                    >
-                      <div className="component-icon">{component.icon}</div>
-                      <div className="component-name">{component.name}</div>
-                      <div className="component-description">{component.description}</div>
-                    </button>
-                  ))}
-                </div>
-                {editorState.draggedComponent && (
-                  <div className="component-hint">
-                    <p>Click on the grid to place the {componentLibrary.find(c => c.type === editorState.draggedComponent?.componentType)?.name}</p>
-                  </div>
-                )}
-              </div>
+              <ComponentPalette
+                selectedComponent={editorState.draggedComponent?.componentType || null}
+                onComponentSelect={(componentType) => setEditorState(prev => ({
+                  ...prev,
+                  draggedComponent: {
+                    componentType,
+                    defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
+                  }
+                }))}
+              />
 
               <div className="design-area" onClick={handleGridClick}>
                 <LayoutRenderer
