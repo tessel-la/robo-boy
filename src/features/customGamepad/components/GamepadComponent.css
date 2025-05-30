@@ -226,23 +226,27 @@
 }
 
 .resize-controls .resize-button.width-plus {
-  top: -25px;
-  right: 10px;
+  right: -35px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .resize-controls .resize-button.width-minus {
-  top: -25px;
-  right: 45px;
+  left: -35px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .resize-controls .resize-button.height-plus {
-  bottom: -25px;
-  right: 10px;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .resize-controls .resize-button.height-minus {
   bottom: -25px;
-  right: 45px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .resize-controls .control-button:hover:not(:disabled) {
