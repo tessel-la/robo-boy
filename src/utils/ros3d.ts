@@ -1713,53 +1713,109 @@ class UrdfClient extends THREE.Object3D {
 
   private setupTfUpdates(rootLinks: string[]): void {
     if (this.urdfModel) {
-        // Subscribe to TF updates for ALL links to capture joint movements
-        // Apply TF transforms directly as world positions - this is the standard approach
-        this.linkNameMap.forEach((linkObject, linkName) => {
-            // Removed per-link logging to reduce console spam
-            this.tfClient.subscribe(linkName, (transform: StoredTransform | null) => {
+        console.log(`[UrdfClient] Setting up TF updates for ${this.linkNameMap.size} links.`);
+        
+        const robotModelName = this.urdfModel.name || ''; // e.g., "drone0" or "my_robot"
+        let topicNamespace = '';
+        if (this.robotDescriptionTopic?.name) {
+            const parts = this.robotDescriptionTopic.name.split('/').filter(p => p.length > 0);
+            // A common pattern for robot_description is /namespace/robot_description or /robot_description
+            // If namespaced, parts[0] would be the namespace.
+            if (parts.length > 1 && parts[0] !== 'robot_description') { 
+                topicNamespace = parts[0]; 
+            }
+        }
+
+        this.linkNameMap.forEach((linkObject, urdfLinkName) => {
+            const framesToTry: string[] = [];
+            // 1. Direct URDF link name
+            framesToTry.push(urdfLinkName);
+
+            // 2. Namespace from topic + URDF link name
+            if (topicNamespace) {
+                framesToTry.push(`${topicNamespace}/${urdfLinkName}`);
+            }
+
+            // 3. Robot model name from URDF + URDF link name (if different from topic namespace)
+            if (robotModelName && robotModelName !== topicNamespace) {
+                framesToTry.push(`${robotModelName}/${urdfLinkName}`);
+            }
+            
+            const uniqueFramesToTry = [...new Set(framesToTry)];
+            let activeSubscriptionFrame: string | null = null;
+
+            console.log(`[UrdfClient] For URDF link "${urdfLinkName}", trying TF frames: ${uniqueFramesToTry.join(', ')}`);
+
+            const subscriptionCallback = (tfFrameName: string, transform: StoredTransform | null) => {
                 if (transform) {
-                    // Remove the link from its current parent to apply world transform
-                    const currentParent = linkObject.parent;
-                    if (currentParent) {
-                        currentParent.remove(linkObject);
+                    if (!activeSubscriptionFrame) {
+                        activeSubscriptionFrame = tfFrameName;
+                        console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
+                        // If other subscriptions were made for this link, they should be cancelled here if possible
+                        // For now, this logic means the first to provide data 'wins'.
+                    } else if (activeSubscriptionFrame !== tfFrameName) {
+                        // Already have an active subscription for this link from a different TF frame name.
+                        // This callback is from an alternative name that also got data; we ignore it.
+                        return; 
                     }
-                    
-                    // Apply world transform directly
-                    linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                    linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    
-                    // Add directly to the main urdfModel (as world-positioned object)
-                    if (this.urdfModel && linkObject.parent !== this.urdfModel) {
+
+                    const currentParent = linkObject.parent;
+                    if (currentParent && currentParent !== this.urdfModel && this.urdfModel) {
+                        currentParent.remove(linkObject);
+                        if (linkObject.parent !== this.urdfModel) { 
+                           this.urdfModel.add(linkObject);
+                        }
+                    } else if (!currentParent && this.urdfModel) {
                         this.urdfModel.add(linkObject);
                     }
-                    
-                    // Update the matrix to ensure proper rendering
+
+                    linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+                    linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
                     linkObject.updateMatrix();
                     linkObject.matrixWorldNeedsUpdate = true;
-                    
-                    // Removed excessive TF logging to reduce console spam
-                    // Only log significant events instead of every update
                 }
+            };
+
+            uniqueFramesToTry.forEach(frameName => {
+                this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
+                    subscriptionCallback(frameName, transform);
+                });
             });
+
+            // Optional: Initial check for immediate availability (for faster first render)
+            let initialFrameFound = false;
+            for (const frameName of uniqueFramesToTry) {
+                try {
+                    // Use a common fixed frame like 'odom' for the lookup check
+                    const initialTransform = this.tfClient.lookupTransform('odom', frameName); // Default to 'odom'
+                    if (initialTransform) {
+                        console.log(`[UrdfClient] URDF link "${urdfLinkName}" initially found active TF frame "${frameName}"`);
+                        // Trigger the callback manually with this initial transform to potentially render faster
+                        // subscriptionCallback(frameName, initialTransform);
+                        initialFrameFound = true;
+                        break; 
+                    }
+                } catch (e) { /* lookup failed, try next */ }
+            }
+            if (!initialFrameFound) {
+                 console.warn(`[UrdfClient] URDF link "${urdfLinkName}": No TF frame immediately found among [${uniqueFramesToTry.join(', ')}]. Waiting for subscription data.`);
+            }
         });
         
-        // If no links found, try subscribing to common robot base frames as fallback
-        if (this.linkNameMap.size === 0) {
-            console.warn('[UrdfClient] No links found, trying common base frame names');
-            const commonBaseFrames = ['base_link', 'base_footprint', 'robot_base', 'panda_link0'];
-            commonBaseFrames.forEach(frameName => {
-                console.log(`[UrdfClient] Setting up TF updates for common base frame: ${frameName}`);
-                this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
-                    if (transform && this.urdfModel) {
-                        this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                        this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    }
-                });
+        if (this.linkNameMap.size === 0 && this.urdfModel && rootLinks.length > 0) {
+            const baseFrameToTry = rootLinks[0]; 
+            console.warn(`[UrdfClient] Fallback: No links in URDF. Subscribing to ${baseFrameToTry} for the whole model.`);
+            this.tfClient.subscribe(baseFrameToTry, (transform: StoredTransform | null) => {
+                if (transform && this.urdfModel) {
+                    this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+                    this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+                    this.urdfModel.updateMatrix();
+                    this.urdfModel.matrixWorldNeedsUpdate = true;
+                }
             });
         }
     }
-    console.log(`[UrdfClient] TF update subscriptions set up for ${this.linkNameMap.size} links.`);
+    console.log(`[UrdfClient] TF update subscriptions configured.`);
   }
 
   public dispose(): void {

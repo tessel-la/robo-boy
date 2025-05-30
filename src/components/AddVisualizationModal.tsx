@@ -45,19 +45,15 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [selectedType, setSelectedType] = useState<VisualizationConfig['type'] | ''>('');
-  // URDF specific options state
-  const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>('/robot_description');
+  // Find all available URDF topics (std_msgs/String)
+  const availableUrdfTopics = allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
+  const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(availableUrdfTopics[0]?.name || '');
 
   // Check if a type has available topics
   const getAvailableTopics = (type: VisualizationConfig['type']): TopicInfo[] => {
     if (type === 'urdf') {
-      // For URDF, the primary topic is usually /robot_description
-      const robotDescriptionTopics = allTopics.filter(topic => 
-        SUPPORTED_VIZ_TYPES.urdf.includes(topic.type) && topic.name.includes('robot_description')
-      );
-      if (robotDescriptionTopics.length > 0) return robotDescriptionTopics;
-      // Fallback: show all string topics if no specific robot_description found
-      return allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
+      // For URDF, just return all available URDF topics
+      return availableUrdfTopics;
     }
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
     return allTopics.filter(topic => validRosTypes.includes(topic.type));
@@ -71,10 +67,10 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     if (type === 'urdf') {
       config = {
         type: 'urdf',
-        // For quick add, use default topic and path. User can change in settings.
-        topic: availableTopics.find(t => t.name === '/robot_description')?.name || availableTopics[0]?.name || '/robot_description',
+        // For quick add, use the first available topic (if any)
+        topic: availableTopics[0]?.name || '',
         options: {
-          robotDescriptionTopic: urdfRobotDescriptionTopic, // Use state or default
+          robotDescriptionTopic: availableTopics[0]?.name || '',
         } as UrdfOptions,
       };
     } else if (availableTopics.length > 0) {
@@ -222,13 +218,22 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 <>
                   <div className="form-group">
                     <label htmlFor="urdf-robot-description-topic">Robot Description Topic:</label>
-                    <input 
-                      type="text" 
-                      id="urdf-robot-description-topic" 
-                      value={urdfRobotDescriptionTopic} 
-                      onChange={(e) => setUrdfRobotDescriptionTopic(e.target.value)} 
-                      placeholder="/robot_description"
-                    />
+                    <select
+                      id="urdf-robot-description-topic"
+                      value={urdfRobotDescriptionTopic}
+                      onChange={(e) => setUrdfRobotDescriptionTopic(e.target.value)}
+                      disabled={availableUrdfTopics.length === 0}
+                    >
+                      {availableUrdfTopics.length === 0 && (
+                        <option value="" disabled>No URDF topics available</option>
+                      )}
+                      {availableUrdfTopics.map(topic => (
+                        <option key={topic.name} value={topic.name}>{topic.name}</option>
+                      ))}
+                    </select>
+                    {availableUrdfTopics.length === 0 && (
+                      <div style={{ color: 'red', marginTop: 4 }}>No URDF topics of type std_msgs/String found.</div>
+                    )}
                   </div>
                 </>
               )}
@@ -236,7 +241,11 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
               <button
                 className="manual-add-button"
                 onClick={handleManualAddClick}
-                disabled={!selectedType || (selectedType !== 'urdf' && !selectedTopic)}
+                disabled={
+                  !selectedType ||
+                  (selectedType === 'urdf' && (!urdfRobotDescriptionTopic || availableUrdfTopics.length === 0)) ||
+                  (selectedType !== 'urdf' && !selectedTopic)
+                }
               >
                 Add Visualization
               </button>

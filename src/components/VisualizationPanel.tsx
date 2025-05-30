@@ -259,11 +259,24 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // Add function to update topic for an existing visualization
   const updateVisualizationTopic = (vizId: string, newTopic: string) => {
     setVisualizations(prev => 
-      prev.map(viz => 
-        viz.id === vizId 
-          ? { ...viz, topic: newTopic } 
-          : viz
-      )
+      prev.map(viz => {
+        if (viz.id === vizId) {
+          if (viz.type === 'urdf') {
+            // For URDF, update both topic and options.robotDescriptionTopic
+            return {
+              ...viz,
+              topic: newTopic,
+              options: {
+                ...(viz.options || {}),
+                robotDescriptionTopic: newTopic,
+              },
+            };
+          } else {
+            return { ...viz, topic: newTopic };
+          }
+        }
+        return viz;
+      })
     );
     console.log(`Updated topic for visualization ${vizId} to: ${newTopic}`);
   };
