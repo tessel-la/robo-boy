@@ -153,13 +153,15 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     borderRadius: isEditing ? '8px' : '0',
     border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none',
     position: 'relative',
-    // Use full width but auto height to maintain proportions while allowing expansion
-    width: '100%',
+    // Use auto width when editing to center properly, 100% when displaying
+    width: isEditing ? 'auto' : '100%',
     height: isEditing ? 'auto' : '100%',
     boxSizing: 'border-box',
     overflow: 'visible', // Allow joystick movement outside grid bounds
-    margin: 'auto',
-    flexShrink: 0 // Prevent the grid from shrinking
+    margin: '0 auto', // Center the grid horizontally
+    flexShrink: 0, // Prevent the grid from shrinking
+    justifyContent: 'center', // Center grid content horizontally
+    alignContent: 'center' // Center grid content vertically
   };
 
   // Container style to ensure proper centering and prevent scrollbars
