@@ -137,10 +137,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
             nextMode = ComponentInteractionMode.Resize;
             break;
           case ComponentInteractionMode.Resize:
-            nextMode = ComponentInteractionMode.Settings;
-            break;
-          case ComponentInteractionMode.Settings:
-            // Cycle back to translate or deselect
+            // Cycle back to None instead of Settings
             nextMode = ComponentInteractionMode.None;
             return {
               ...prev,
@@ -149,15 +146,6 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
             };
           default:
             nextMode = ComponentInteractionMode.Translate;
-        }
-        
-        // Open settings modal if we're in settings mode
-        if (nextMode === ComponentInteractionMode.Settings) {
-          const component = layout.components.find(c => c.id === id);
-          if (component) {
-            setSettingsComponent(component);
-            setSettingsModalOpen(true);
-          }
         }
         
         return {

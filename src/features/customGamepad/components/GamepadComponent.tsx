@@ -125,8 +125,6 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         className += ' translate-mode';
       } else if (interactionMode === ComponentInteractionMode.Resize) {
         className += ' resize-mode';
-      } else if (interactionMode === ComponentInteractionMode.Settings) {
-        className += ' settings-mode';
       }
     }
     return className;

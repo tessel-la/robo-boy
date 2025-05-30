@@ -98,21 +98,6 @@
   }
 }
 
-.gamepad-component.settings-mode {
-  border-color: #6f42c1;
-  box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.3);
-  animation: settingsModePulse 2s infinite;
-}
-
-@keyframes settingsModePulse {
-  0%, 100% { 
-    box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.3);
-  }
-  50% { 
-    box-shadow: 0 0 0 5px rgba(111, 66, 193, 0.5);
-  }
-}
-
 .component-label {
   position: absolute;
   top: 2px;
