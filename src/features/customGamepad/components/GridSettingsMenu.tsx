@@ -126,69 +126,76 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
                   placeholder="Enter pad name..."
                 />
               </div>
+            </div>
+
+            {/* Grid Size Controls - Moved as second setting and made compact */}
+            <div className="settings-section">
+              <h4>Grid Layout</h4>
+              
+              {/* Row and Column controls on same row with 50/50 split */}
+              <div className="grid-controls-row">
+                <div className="grid-control compact">
+                  <label>Width: {gridWidth}</label>
+                  <div className="control-buttons">
+                    <button
+                      className="control-btn minus"
+                      onClick={() => handleWidthChange(-1)}
+                      disabled={gridWidth <= 1}
+                      title="Decrease width"
+                    >
+                      −
+                    </button>
+                    <span className="control-value">{gridWidth}</span>
+                    <button
+                      className="control-btn plus"
+                      onClick={() => handleWidthChange(1)}
+                      disabled={gridWidth >= 16}
+                      title="Increase width"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid-control compact">
+                  <label>Height: {gridHeight}</label>
+                  <div className="control-buttons">
+                    <button
+                      className="control-btn minus"
+                      onClick={() => handleHeightChange(-1)}
+                      disabled={gridHeight <= 1}
+                      title="Decrease height"
+                    >
+                      −
+                    </button>
+                    <span className="control-value">{gridHeight}</span>
+                    <button
+                      className="control-btn plus"
+                      onClick={() => handleHeightChange(1)}
+                      disabled={gridHeight >= 12}
+                      title="Increase height"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid-info">
+                <small>Grid size: {gridWidth} × {gridHeight} cells ({gridWidth * gridHeight} total)</small>
+              </div>
+            </div>
+
+            {/* Description moved to the end for better mobile layout */}
+            <div className="settings-section">
+              <h4>Description</h4>
               <div className="settings-group">
-                <label>Description:</label>
                 <textarea
                   value={layoutDescription}
                   onChange={(e) => onDescriptionChange(e.target.value)}
                   rows={2}
                   placeholder="Optional description..."
                 />
-              </div>
-            </div>
-
-            {/* Grid Size Controls */}
-            <div className="settings-section">
-              <h4>Grid Layout</h4>
-              
-              <div className="grid-control">
-                <label>Width: {gridWidth} cells</label>
-                <div className="control-buttons">
-                  <button
-                    className="control-btn minus"
-                    onClick={() => handleWidthChange(-1)}
-                    disabled={gridWidth <= 1}
-                    title="Decrease width"
-                  >
-                    −
-                  </button>
-                  <span className="control-value">{gridWidth}</span>
-                  <button
-                    className="control-btn plus"
-                    onClick={() => handleWidthChange(1)}
-                    disabled={gridWidth >= 16}
-                    title="Increase width"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid-control">
-                <label>Height: {gridHeight} cells</label>
-                <div className="control-buttons">
-                  <button
-                    className="control-btn minus"
-                    onClick={() => handleHeightChange(-1)}
-                    disabled={gridHeight <= 1}
-                    title="Decrease height"
-                  >
-                    −
-                  </button>
-                  <span className="control-value">{gridHeight}</span>
-                  <button
-                    className="control-btn plus"
-                    onClick={() => handleHeightChange(1)}
-                    disabled={gridHeight >= 12}
-                    title="Increase height"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid-info">
-                <small>Grid size: {gridWidth} × {gridHeight} cells ({gridWidth * gridHeight} total)</small>
               </div>
             </div>
           </div>

@@ -50,7 +50,7 @@
 
 /* Expanded state styling */
 .settings-content {
-  padding: 16px;
+  padding: 12px;
   overflow-y: auto;
   flex: 1;
   opacity: 1;
@@ -383,6 +383,32 @@
   font-style: italic;
 }
 
+/* New compact grid controls row for side-by-side layout */
+.grid-controls-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.grid-control.compact {
+  flex: 1;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.grid-control.compact label {
+  text-align: center;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.grid-control.compact .control-buttons {
+  justify-content: center;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .grid-settings-menu.collapsed {
@@ -423,6 +449,21 @@
     flex-direction: column;
     gap: 8px;
     text-align: center;
+  }
+
+  .grid-controls-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .grid-control.compact {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .grid-control.compact label {
+    font-size: 0.85rem;
   }
 
   .control-buttons {
@@ -471,6 +512,21 @@
 
   .settings-content {
     padding: 12px;
+  }
+
+  .grid-controls-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .grid-control.compact {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .grid-control.compact label {
+    font-size: 0.8rem;
   }
 
   .control-btn {
