@@ -214,7 +214,7 @@
 
 .component-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -231,6 +231,7 @@
   background-color: var(--card-bg, #ffffff);
   position: relative;
   overflow: hidden;
+  justify-content: space-between;
 }
 
 .component-card:hover,
@@ -308,6 +309,14 @@
 .component-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.component-details {
+  flex: 1;
+  min-width: 0;
 }
 
 .component-name {
@@ -327,10 +336,15 @@
 }
 
 .component-size {
-  font-size: 0.75rem;
-  color: var(--text-color-tertiary, #999);
-  font-weight: 500;
-  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.7rem;
+  color: var(--primary-color, #007bff);
+  font-weight: 600;
+  background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
+  padding: 2px 6px;
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .selection-hint {
@@ -413,20 +427,51 @@
     height: 20px;
   }
 
-  .component-card {
-    flex-direction: column;
-    text-align: center;
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
-    padding: 16px 12px;
   }
 
-  .component-preview {
-    width: 60px;
-    height: 60px;
+  .component-card {
+    flex-direction: row;
+    text-align: left;
+    gap: 8px;
+    padding: 8px;
+    align-items: center;
   }
 
   .component-info {
-    text-align: center;
+    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+  }
+
+  .component-preview {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .component-details {
+    text-align: left;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .component-name {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+  }
+
+  .component-description {
+    display: none; /* Hide description on mobile for compactness */
+  }
+
+  .component-size {
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    flex-shrink: 0;
   }
 
   .hint-content {
@@ -462,16 +507,37 @@
 
   .palette-content {
     padding: 12px;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
 
   .component-card {
-    padding: 12px 8px;
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .component-info {
+    gap: 6px;
   }
 
   .component-preview,
   .hint-preview {
-    width: 50px;
-    height: 50px;
+    width: 35px;
+    height: 35px;
+  }
+
+  .component-name {
+    font-size: 0.75rem;
+  }
+
+  .component-size {
+    font-size: 0.6rem;
+    padding: 1px 3px;
   }
 
   .quick-component {
@@ -482,5 +548,63 @@
   .more-button {
     width: 40px;
     height: 40px;
+  }
+}
+
+/* Very small screens for better component menu visibility */
+@media (max-width: 375px) {
+  .palette-content {
+    padding: 8px;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .component-card {
+    padding: 4px;
+    gap: 4px;
+    border-width: 1px;
+  }
+
+  .component-info {
+    gap: 4px;
+  }
+
+  .component-preview,
+  .hint-preview {
+    width: 30px;
+    height: 30px;
+  }
+
+  .component-name {
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  .component-size {
+    font-size: 0.55rem;
+    padding: 1px 2px;
+  }
+
+  .expanded-header {
+    padding: 8px 12px;
+  }
+
+  .expanded-header h3 {
+    font-size: 1rem;
+  }
+
+  .close-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .close-button svg {
+    width: 18px;
+    height: 18px;
   }
 } 

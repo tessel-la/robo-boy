@@ -171,15 +171,17 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     onMouseLeave={() => setHoveredComponent(null)}
                     title={`Add ${component.name} - ${component.description}`}
                   >
-                    <div className="component-preview">
-                      {renderComponentPreview(component.type)}
-                    </div>
                     <div className="component-info">
-                      <div className="component-name">{component.name}</div>
-                      <div className="component-description">{component.description}</div>
-                      <div className="component-size">
-                        Size: {component.defaultSize.width}×{component.defaultSize.height}
+                      <div className="component-preview">
+                        {renderComponentPreview(component.type)}
                       </div>
+                      <div className="component-details">
+                        <div className="component-name">{component.name}</div>
+                        <div className="component-description">{component.description}</div>
+                      </div>
+                    </div>
+                    <div className="component-size">
+                      {component.defaultSize.width}×{component.defaultSize.height}
                     </div>
                   </div>
                 );
