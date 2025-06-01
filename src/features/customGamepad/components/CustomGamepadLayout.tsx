@@ -142,14 +142,14 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const actualGridWidth = scaling.gridWidth;
   const actualGridHeight = scaling.gridHeight;
 
-  // Grid style with adaptive cell dimensions for better horizontal and vertical space usage
+  // Grid style with adaptive cell dimensions that maintain proper aspect ratios
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: isEditing 
-      ? `repeat(${layout.gridSize.width}, 1fr)` // Use fractional units for flexible scaling
+      ? `repeat(${layout.gridSize.width}, 1fr)` // Use fractional units for flexible horizontal scaling
       : `repeat(${layout.gridSize.width}, ${cellWidth})`,
     gridTemplateRows: isEditing 
-      ? `repeat(${layout.gridSize.height}, 1fr)` // Use fractional units for flexible vertical scaling too
+      ? `repeat(${layout.gridSize.height}, ${Math.floor(layout.cellSize * scaling.scaleFactor)}px)` // Use calculated size to maintain proportions
       : `repeat(${layout.gridSize.height}, ${cellHeight})`,
     gap: `${gap}px`,
     padding: `${padding}px`,
@@ -225,8 +225,8 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
           <div 
             className="grid-background"
             style={{
-              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`, // Use fractional units for consistent scaling
-              gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`, // Use fractional units for vertical scaling too
+              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`, // Use fractional units for horizontal scaling
+              gridTemplateRows: `repeat(${layout.gridSize.height}, ${Math.floor(layout.cellSize * scaling.scaleFactor)}px)`, // Use calculated size to maintain proportions
               gap: `${gap}px`,
               padding: `${padding}px`
             }}
