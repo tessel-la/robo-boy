@@ -141,7 +141,8 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    opacity: isEditing ? 0.7 : 1
+    opacity: isEditing ? 0.7 : 1,
+    pointerEvents: isEditing ? 'none' : 'auto'
   };
 
   return (

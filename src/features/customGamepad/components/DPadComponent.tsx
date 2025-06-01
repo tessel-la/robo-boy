@@ -240,7 +240,9 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       maxHeight: '100%',
       boxSizing: 'border-box',
       padding: 0,
-      margin: 0
+      margin: 0,
+      // In editing mode, don't consume pointer events so parent can handle clicks
+      pointerEvents: isEditing ? 'none' : 'auto'
     };
 
     // Grid positioning for each button

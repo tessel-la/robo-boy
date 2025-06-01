@@ -109,7 +109,8 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     outline: 'none',
     cursor: isEditing ? 'default' : 'pointer',
     writingMode: orientation === 'vertical' ? 'bt-lr' : undefined,
-    transform: orientation === 'vertical' ? 'rotate(-90deg)' : undefined
+    transform: orientation === 'vertical' ? 'rotate(-90deg)' : undefined,
+    pointerEvents: isEditing ? 'none' : 'auto'
   };
 
   const labelStyle: React.CSSProperties = {

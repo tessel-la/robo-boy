@@ -86,7 +86,8 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
-    padding: `${Math.floor(2 * scaleFactor)}px`
+    padding: `${Math.floor(2 * scaleFactor)}px`,
+    pointerEvents: isEditing ? 'none' : 'auto'
   };
 
   const knobStyle: React.CSSProperties = {
