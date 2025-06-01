@@ -9,20 +9,11 @@
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
+  position: relative;
 }
 
-.component-palette.expanded {
-  overflow: hidden;
-}
-
-.component-palette.expanded .palette-content {
-  flex: 1;
-  overflow-y: auto;
-  opacity: 1;
-  max-height: 600px;
-  transform: translateY(0);
-}
-
+/* Remove the old expanded/collapsed specific rules since we now handle this conditionally */
+.component-palette.expanded,
 .component-palette.collapsed {
   overflow: visible;
   height: auto;
@@ -30,11 +21,8 @@
   max-height: none;
 }
 
-.component-palette.collapsed .palette-content {
-  display: none;
-}
-
-.component-palette.collapsed .palette-collapsed {
+/* Collapsed state styling */
+.palette-collapsed {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -47,8 +35,15 @@
   overflow: visible;
 }
 
-.component-palette.expanded .palette-collapsed {
-  display: none;
+/* Expanded state styling */
+.palette-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  opacity: 1;
+  max-height: 600px;
+  transform: translateY(0);
+  animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .palette-header {
@@ -180,26 +175,6 @@
   transition: transform 0.2s ease;
 }
 
-.palette-content {
-  padding: 20px;
-  animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  opacity: 0;
-  animation-fill-mode: forwards;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 600px;
-  }
-}
-
 .component-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -328,10 +303,6 @@
   color: var(--text-color-secondary, #666);
 }
 
-.palette-collapsed {
-  display: none; /* Will be shown only when collapsed */
-}
-
 /* Remove the old quick components section */
 .quick-components,
 .quick-component,
@@ -341,21 +312,6 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .component-palette.collapsed {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-  }
-
-  .component-palette.collapsed .palette-collapsed {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-    padding: 14px 16px;
-  }
-
   .collapsed-content {
     gap: 8px;
   }
@@ -403,21 +359,6 @@
 }
 
 @media (max-width: 480px) {
-  .component-palette.collapsed {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-  }
-
-  .component-palette.collapsed .palette-collapsed {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-    padding: 12px 12px;
-  }
-
   .collapsed-title {
     font-size: 0.9rem;
   }

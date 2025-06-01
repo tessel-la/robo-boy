@@ -11,6 +11,7 @@ import { componentLibrary } from '../defaultLayouts';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
 import ComponentPalette from './ComponentPalette';
+import GridSettingsMenu from './GridSettingsMenu';
 import ComponentSettingsModal from './ComponentSettingsModal';
 import './GamepadEditor.css';
 
@@ -63,11 +64,29 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     snapToGrid: true
   });
 
-  const [activeTab, setActiveTab] = useState<'design' | 'settings'>('design');
-  
   // Settings modal state
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsComponent, setSettingsComponent] = useState<GamepadComponentConfig | null>(null);
+
+  // Track expanded state of sidebar components
+  const [componentPaletteExpanded, setComponentPaletteExpanded] = useState(false);
+  const [gridSettingsExpanded, setGridSettingsExpanded] = useState(false);
+
+  // Handle component palette expansion with mutual exclusion
+  const handleComponentPaletteExpandedChange = useCallback((expanded: boolean) => {
+    setComponentPaletteExpanded(expanded);
+    if (expanded) {
+      setGridSettingsExpanded(false); // Collapse the other component
+    }
+  }, []);
+
+  // Handle grid settings expansion with mutual exclusion
+  const handleGridSettingsExpandedChange = useCallback((expanded: boolean) => {
+    setGridSettingsExpanded(expanded);
+    if (expanded) {
+      setComponentPaletteExpanded(false); // Collapse the other component
+    }
+  }, []);
 
   const handleLayoutNameChange = useCallback((name: string) => {
     setLayout(prev => ({ ...prev, name }));
@@ -255,96 +274,84 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
           <button className="close-button" onClick={onClose}>×</button>
         </div>
 
-        <div className="editor-tabs">
-          <button 
-            className={`tab ${activeTab === 'design' ? 'active' : ''}`}
-            onClick={() => setActiveTab('design')}
-          >
-            Design
-          </button>
-          <button 
-            className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            Settings
-          </button>
-        </div>
-
         <div className="editor-content">
-          {activeTab === 'design' && (
-            <div className="design-tab">
-              <ComponentPalette
-                selectedComponent={editorState.draggedComponent?.componentType || null}
-                onComponentSelect={(componentType) => setEditorState(prev => ({
-                  ...prev,
-                  draggedComponent: {
-                    componentType,
-                    defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
-                  }
-                }))}
+          <div className="design-tab">
+            <div className={`editor-sidebar ${componentPaletteExpanded ? 'component-palette-expanded' : ''} ${gridSettingsExpanded ? 'grid-settings-expanded' : ''}`}>
+              
+              {/* Buttons row - always visible at the top */}
+              <div className="sidebar-buttons-row">
+                <ComponentPalette
+                  selectedComponent={editorState.draggedComponent?.componentType || null}
+                  onComponentSelect={(componentType) => setEditorState(prev => ({
+                    ...prev,
+                    draggedComponent: {
+                      componentType,
+                      defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
+                    }
+                  }))}
+                  onExpandedChange={handleComponentPaletteExpandedChange}
+                  forceCollapsed={gridSettingsExpanded}
+                />
+
+                <GridSettingsMenu
+                  layoutName={layout.name}
+                  layoutDescription={layout.description}
+                  gridWidth={layout.gridSize.width}
+                  gridHeight={layout.gridSize.height}
+                  onNameChange={handleLayoutNameChange}
+                  onDescriptionChange={handleLayoutDescriptionChange}
+                  onGridSizeChange={handleGridSizeChange}
+                  onExpandedChange={handleGridSettingsExpandedChange}
+                  forceCollapsed={componentPaletteExpanded}
+                />
+              </div>
+
+              {/* Expanded content area - full width when expanded */}
+              <div className="sidebar-expanded-content">
+                {componentPaletteExpanded && (
+                  <ComponentPalette
+                    selectedComponent={editorState.draggedComponent?.componentType || null}
+                    onComponentSelect={(componentType) => setEditorState(prev => ({
+                      ...prev,
+                      draggedComponent: {
+                        componentType,
+                        defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
+                      }
+                    }))}
+                    onExpandedChange={handleComponentPaletteExpandedChange}
+                    forceCollapsed={gridSettingsExpanded}
+                  />
+                )}
+
+                {gridSettingsExpanded && (
+                  <GridSettingsMenu
+                    layoutName={layout.name}
+                    layoutDescription={layout.description}
+                    gridWidth={layout.gridSize.width}
+                    gridHeight={layout.gridSize.height}
+                    onNameChange={handleLayoutNameChange}
+                    onDescriptionChange={handleLayoutDescriptionChange}
+                    onGridSizeChange={handleGridSizeChange}
+                    onExpandedChange={handleGridSettingsExpandedChange}
+                    forceCollapsed={componentPaletteExpanded}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="design-area" onClick={handleGridClick}>
+              <LayoutRenderer
+                layout={layout}
+                isEditing={true}
+                selectedComponentId={editorState.selectedComponentId}
+                interactionMode={editorState.componentInteractionMode}
+                onComponentSelect={handleComponentSelect}
+                onComponentUpdate={handleComponentUpdate}
+                onComponentDelete={handleComponentDelete}
+                onOpenSettings={handleOpenSettings}
               />
-
-              <div className="design-area" onClick={handleGridClick}>
-                <LayoutRenderer
-                  layout={layout}
-                  ros={ros}
-                  isEditing={true}
-                  selectedComponentId={editorState.selectedComponentId}
-                  interactionMode={editorState.componentInteractionMode}
-                  onComponentSelect={handleComponentSelect}
-                  onComponentUpdate={handleComponentUpdate}
-                  onComponentDelete={handleComponentDelete}
-                  onOpenSettings={handleOpenSettings}
-                />
-              </div>
             </div>
-          )}
-
-          {activeTab === 'settings' && (
-            <div className="settings-tab">
-              <div className="settings-group">
-                <label>Name:</label>
-                <input
-                  type="text"
-                  value={layout.name}
-                  onChange={(e) => handleLayoutNameChange(e.target.value)}
-                />
-              </div>
-              <div className="settings-group">
-                <label>Description:</label>
-                <textarea
-                  value={layout.description}
-                  onChange={(e) => handleLayoutDescriptionChange(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <div className="settings-group">
-                <label>Grid Columns:</label>
-                <input
-                  type="number"
-                  min="4"
-                  max="12"
-                  value={layout.gridSize.width}
-                  onChange={(e) => handleGridSizeChange(parseInt(e.target.value), layout.gridSize.height)}
-                />
-                <small>Number of columns for component placement (logical division only)</small>
-              </div>
-              <div className="settings-group">
-                <label>Grid Rows:</label>
-                <input
-                  type="number"
-                  min="3"
-                  max="10"
-                  value={layout.gridSize.height}
-                  onChange={(e) => handleGridSizeChange(layout.gridSize.width, parseInt(e.target.value))}
-                />
-                <small>Number of rows for component placement (logical division only)</small>
-              </div>
-
-            </div>
-          )}
-
-
+          </div>
         </div>
 
         <div className="editor-footer">

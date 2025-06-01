@@ -1,0 +1,412 @@
+/* GridSettingsMenu.css */
+
+.grid-settings-menu {
+  width: 100%;
+  background-color: var(--card-bg, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+/* Remove the old expanded/collapsed specific rules since we now handle this conditionally */
+.grid-settings-menu.expanded,
+.grid-settings-menu.collapsed {
+  overflow: visible;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+}
+
+/* Collapsed state styling */
+.settings-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 16px;
+  gap: 12px;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+/* Expanded state styling */
+.settings-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  opacity: 1;
+  max-height: 400px;
+  transform: translateY(0);
+  min-height: 0;
+}
+
+.collapsed-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.collapsed-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin: 0;
+  text-transform: capitalize;
+  letter-spacing: 0.5px;
+}
+
+.grid-icon-button {
+  background: var(--card-bg, #ffffff);
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.grid-icon-button:hover {
+  border-color: var(--success-color, #28a745);
+  background-color: var(--success-color-light, #d4edda);
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+}
+
+.grid-icon-button:active {
+  transform: translateY(-1px) scale(1.02);
+  transition: all 0.1s ease;
+}
+
+.grid-icon-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background-color: var(--success-color-light, #d4edda);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+  z-index: 0;
+}
+
+.grid-icon-button:hover::before {
+  width: 100%;
+  height: 100%;
+}
+
+.grid-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--text-color-secondary, #666);
+  transition: all 0.3s ease;
+  z-index: 1;
+  position: relative;
+}
+
+.grid-icon-button:hover .grid-icon {
+  color: var(--success-color, #28a745);
+  transform: rotate(15deg) scale(1.1);
+}
+
+/* Expanded state header */
+.expanded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  position: relative;
+}
+
+.expanded-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-color, #333);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color-secondary, #666);
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.close-button:hover {
+  background-color: var(--background-hover, #e9ecef);
+  color: var(--text-color, #333);
+  transform: rotate(90deg);
+}
+
+.close-button svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  padding-bottom: 8px;
+}
+
+.settings-group {
+  margin-bottom: 16px;
+}
+
+.settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  font-size: 0.95rem;
+}
+
+.settings-group input,
+.settings-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background-color: var(--card-bg, #ffffff);
+  color: var(--text-color, #333);
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.settings-group input:focus,
+.settings-group textarea:focus {
+  outline: none;
+  border-color: var(--success-color, #28a745);
+  box-shadow: 0 0 0 2px var(--success-color-light, #d4edda);
+}
+
+/* Grid control styling */
+.grid-control {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.grid-control label {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.control-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--card-bg, #ffffff);
+  color: var(--text-color, #333);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.control-btn:hover:not(:disabled) {
+  border-color: var(--success-color, #28a745);
+  background-color: var(--success-color-light, #d4edda);
+  color: var(--success-color, #28a745);
+  transform: scale(1.1);
+}
+
+.control-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.control-btn.minus {
+  font-size: 18px;
+}
+
+.control-btn.plus {
+  font-size: 16px;
+}
+
+.control-value {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  font-size: 1rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+.grid-info {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.grid-info small {
+  color: var(--text-color-secondary, #666);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .grid-settings-menu.collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+  }
+
+  .grid-settings-menu.collapsed .settings-collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    padding: 14px 16px;
+  }
+
+  .collapsed-content {
+    gap: 8px;
+  }
+
+  .collapsed-title {
+    font-size: 0.95rem;
+  }
+
+  .grid-icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+  }
+
+  .grid-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .grid-control {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .control-buttons {
+    justify-content: center;
+  }
+
+  .settings-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-settings-menu.collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+  }
+
+  .grid-settings-menu.collapsed .settings-collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    padding: 12px 12px;
+  }
+
+  .collapsed-title {
+    font-size: 0.9rem;
+  }
+
+  .grid-icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+  }
+
+  .grid-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .expanded-header {
+    padding: 12px 16px;
+  }
+
+  .settings-content {
+    padding: 12px;
+  }
+
+  .control-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .control-btn.minus {
+    font-size: 16px;
+  }
+} 

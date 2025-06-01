@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { componentLibrary } from '../defaultLayouts';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
@@ -10,11 +10,15 @@ import './ComponentPalette.css';
 interface ComponentPaletteProps {
   selectedComponent: string | null;
   onComponentSelect: (componentType: string) => void;
+  onExpandedChange?: (expanded: boolean) => void;
+  forceCollapsed?: boolean;
 }
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   selectedComponent,
-  onComponentSelect
+  onComponentSelect,
+  onExpandedChange,
+  forceCollapsed = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredComponent, setHoveredComponent] = useState<string | null>(null);
@@ -26,6 +30,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     on: () => {},
     off: () => {}
   } as any;
+
+  // Force collapse when other component expands
+  useEffect(() => {
+    if (forceCollapsed && isExpanded) {
+      setIsExpanded(false);
+    }
+  }, [forceCollapsed, isExpanded]);
 
   const renderComponentPreview = (componentType: string, size: 'small' | 'medium' = 'small') => {
     const mockConfig = {
@@ -77,13 +88,38 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   };
 
   const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    onExpandedChange?.(newExpanded);
   };
 
+  // Determine if we're in the buttons row (parent has sidebar-buttons-row class)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isInButtonsRow, setIsInButtonsRow] = useState(false);
+
+  useEffect(() => {
+    const checkParent = () => {
+      if (containerRef.current) {
+        const parent = containerRef.current.parentElement;
+        const inButtonsRow = parent?.classList.contains('sidebar-buttons-row') || false;
+        setIsInButtonsRow(inButtonsRow);
+      }
+    };
+    
+    checkParent();
+    // Check again on next tick to ensure DOM is ready
+    const timeoutId = setTimeout(checkParent, 0);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Also check on every render to be safe
+  const currentIsInButtonsRow = containerRef.current?.parentElement?.classList.contains('sidebar-buttons-row') || false;
+
   return (
-    <div className={`component-palette ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      {/* Collapsed State */}
-      {!isExpanded && (
+    <div ref={containerRef} className={`component-palette ${isExpanded ? 'expanded' : 'collapsed'}`}>
+      {/* Collapsed State - only shown in buttons row */}
+      {currentIsInButtonsRow && (
         <div className="palette-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">component</h3>
@@ -104,8 +140,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         </div>
       )}
 
-      {/* Expanded State */}
-      {isExpanded && (
+      {/* Expanded State - shown when in expanded area OR when expanded in buttons row */}
+      {!currentIsInButtonsRow && (
         <>
           <div className="expanded-header">
             <h3>Component Gallery</h3>
