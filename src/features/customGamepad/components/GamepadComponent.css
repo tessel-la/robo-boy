@@ -152,7 +152,7 @@
 .control-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none !important;
+  transform: scale(1) !important;
 }
 
 .delete-button {
@@ -214,6 +214,23 @@
   background-color: #1e7e34;
 }
 
+/* Ensure disabled translate buttons maintain their positioning */
+.translate-controls .translate-button.up:disabled {
+  transform: translateX(-50%) scale(1) !important;
+}
+
+.translate-controls .translate-button.down:disabled {
+  transform: translateX(-50%) scale(1) !important;
+}
+
+.translate-controls .translate-button.left:disabled {
+  transform: translateY(-50%) scale(1) !important;
+}
+
+.translate-controls .translate-button.right:disabled {
+  transform: translateY(-50%) scale(1) !important;
+}
+
 /* Resize controls */
 .resize-controls .control-button {
   background-color: #ffc107;
@@ -251,6 +268,23 @@
 
 .resize-controls .control-button:hover:not(:disabled) {
   background-color: #e0a800;
+}
+
+/* Ensure disabled resize buttons maintain their positioning */
+.resize-controls .resize-button.width-plus:disabled {
+  transform: translateY(-50%) scale(1) !important;
+}
+
+.resize-controls .resize-button.width-minus:disabled {
+  transform: translateY(-50%) scale(1) !important;
+}
+
+.resize-controls .resize-button.height-plus:disabled {
+  transform: translateX(-50%) scale(1) !important;
+}
+
+.resize-controls .resize-button.height-minus:disabled {
+  transform: translateX(-50%) scale(1) !important;
 }
 
 /* Component-specific styles */
