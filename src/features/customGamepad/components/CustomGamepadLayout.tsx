@@ -142,14 +142,14 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const actualGridWidth = scaling.gridWidth;
   const actualGridHeight = scaling.gridHeight;
 
-  // Grid style with fixed cell dimensions - content must fit within these cells
+  // Grid style with adaptive cell dimensions for better horizontal and vertical space usage
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: isEditing 
-      ? `repeat(${layout.gridSize.width}, ${cellWidth}px)`
+      ? `repeat(${layout.gridSize.width}, 1fr)` // Use fractional units for flexible scaling
       : `repeat(${layout.gridSize.width}, ${cellWidth})`,
     gridTemplateRows: isEditing 
-      ? `repeat(${layout.gridSize.height}, minmax(${cellHeight}px, auto))`
+      ? `repeat(${layout.gridSize.height}, 1fr)` // Use fractional units for flexible vertical scaling too
       : `repeat(${layout.gridSize.height}, ${cellHeight})`,
     gap: `${gap}px`,
     padding: `${padding}px`,
@@ -157,24 +157,29 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     borderRadius: isEditing ? '8px' : '0',
     border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none',
     position: 'relative',
-    // Use auto width when editing to center properly, 100% when displaying
-    width: isEditing ? 'auto' : '100%',
+    // Use 100% width and auto height to prevent collapse
+    width: '100%',
     height: isEditing ? 'auto' : '100%',
+    minHeight: isEditing ? `${Math.max(300, scaling.gridHeight)}px` : 'auto', // Prevent collapse with minimum height
     boxSizing: 'border-box',
     overflow: 'visible', // Allow joystick movement outside grid bounds
     margin: '0 auto', // Center the grid horizontally
     flexShrink: 0, // Prevent the grid from shrinking
     justifyContent: 'center', // Center grid content horizontally
-    alignContent: 'center' // Center grid content vertically
+    alignContent: 'center', // Center grid content vertically
+    // Ensure grid scales to use available space
+    minWidth: 0,
+    maxWidth: '100%',
+    maxHeight: '100%'
   };
 
-  // Container style to ensure proper centering and prevent scrollbars
+  // Container style to ensure proper scaling and space utilization
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', // Keep centering for proper layout
+    justifyContent: 'center', // Keep centering for proper layout
     position: 'relative',
     padding: `${scaling.containerPadding}px`,
     boxSizing: 'border-box',
@@ -184,7 +189,9 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     maxHeight: '100%',
     // Prevent the container from creating scrollbars in parent
     minHeight: 0,
-    minWidth: 0
+    minWidth: 0,
+    // Support flex growth for proper scaling
+    flex: '1 1 auto'
   };
 
   const handleComponentSelect = (id: string) => {
@@ -218,8 +225,8 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
           <div 
             className="grid-background"
             style={{
-              gridTemplateColumns: `repeat(${layout.gridSize.width}, ${cellWidth}px)`,
-              gridTemplateRows: `repeat(${layout.gridSize.height}, minmax(${cellHeight}px, auto))`,
+              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`, // Use fractional units for consistent scaling
+              gridTemplateRows: `repeat(${layout.gridSize.height}, 1fr)`, // Use fractional units for vertical scaling too
               gap: `${gap}px`,
               padding: `${padding}px`
             }}

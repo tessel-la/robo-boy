@@ -18,9 +18,10 @@
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   width: 95vw;
-  height: 95vh;
+  height: auto;
+  min-height: 60vh;
+  max-height: 95vh;
   max-width: 1400px;
-  max-height: 900px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -90,6 +91,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* Allow content to shrink if needed */
 }
 
 /* Design Tab */
@@ -98,6 +100,7 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  min-height: 50vh; /* Ensure minimum height for design functionality */
 }
 
 /* Updated for new ComponentPalette */
@@ -199,61 +202,76 @@
 
 .design-area {
   flex: 1;
-  padding: 8px;
-  overflow: hidden;
-  background-color: var(--card-bg, #ffffff);
+  padding: 16px;
+  overflow: auto;
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative;
+  min-width: 0;
+  min-height: 300px; /* Minimum height for usable design area */
+  width: 100%;
   box-sizing: border-box;
-  min-height: 0; /* Allow flex item to shrink below content size */
-  min-width: 300px; /* Ensure minimum usable space */
+}
+
+/* Ensure the direct child of design-area (the layout renderer) can grow */
+.design-area > * {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Settings Tab */
 .settings-tab {
   padding: 20px;
   overflow-y: auto;
-  max-width: 500px;
+  flex: 1;
+  min-height: 0;
+  max-height: none; /* Allow content to determine height */
 }
 
-.settings-group {
+.settings-tab .settings-group {
   margin-bottom: 20px;
 }
 
-.settings-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  color: var(--text-color, #333);
+.settings-tab .settings-group:last-child {
+  margin-bottom: 0;
 }
 
-.settings-group input,
-.settings-group textarea {
+.settings-tab .settings-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  font-size: 0.95rem;
+}
+
+.settings-tab .settings-group input,
+.settings-tab .settings-group textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 0.9rem;
   background-color: var(--card-bg, #ffffff);
   color: var(--text-color, #333);
   transition: border-color 0.2s ease;
+  box-sizing: border-box;
 }
 
-.settings-group small {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.8rem;
-  color: var(--text-color-secondary, #666);
-  font-style: italic;
-}
-
-.settings-group input:focus,
-.settings-group textarea:focus {
+.settings-tab .settings-group input:focus,
+.settings-tab .settings-group textarea:focus {
   outline: none;
   border-color: var(--primary-color, #007bff);
   box-shadow: 0 0 0 2px var(--primary-color-light, #e3f2fd);
+}
+
+.settings-tab .settings-group small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-color-secondary, #666);
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 
 /* Footer */
@@ -304,9 +322,10 @@
 @media (max-width: 768px) {
   .gamepad-editor-modal {
     width: 98vw;
-    height: 98vh;
+    height: auto;
+    min-height: 70vh;
+    max-height: 98vh;
     max-width: none;
-    max-height: none;
   }
   
   .editor-header h2 {
@@ -347,6 +366,7 @@
     justify-content: center;
     align-items: center;
     min-width: unset; /* Remove min-width constraint on mobile */
+    min-height: 200px; /* Reduced minimum height for mobile */
   }
   
   .settings-tab {
@@ -377,7 +397,9 @@
 @media (max-width: 480px) {
   .gamepad-editor-modal {
     width: 100vw;
-    height: 100vh;
+    height: auto;
+    min-height: 80vh;
+    max-height: 100vh;
     border-radius: 0;
     overflow: hidden;
   }
@@ -399,7 +421,9 @@
 @media (max-width: 375px) {
   .gamepad-editor-modal {
     width: 100vw;
-    height: 100vh;
+    height: auto;
+    min-height: 90vh;
+    max-height: 100vh;
     border-radius: 0;
     overflow: hidden;
   }
@@ -422,7 +446,7 @@
     flex: 1;
     padding: 2px;
     overflow: hidden;
-    min-height: 0;
+    min-height: 150px; /* Further reduced for very small screens */
   }
   
   .settings-tab {

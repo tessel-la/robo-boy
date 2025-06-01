@@ -17,9 +17,13 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   width: 400px;
   max-width: 90vw;
-  max-height: 90vh;
+  height: auto;
+  min-height: 200px;
+  max-height: 80vh;
   overflow: hidden;
   animation: modalSlideIn 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes modalSlideIn {
@@ -70,6 +74,9 @@
 
 .modal-content {
   padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .setting-group {
@@ -108,6 +115,7 @@
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .cancel-btn,

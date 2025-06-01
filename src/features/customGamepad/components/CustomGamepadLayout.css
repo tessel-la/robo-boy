@@ -50,12 +50,15 @@
   min-height: 0;
   min-width: 0;
   transition: all 0.2s ease;
-  flex-grow: 0;
+  flex-grow: 1;
   flex-shrink: 0;
   margin: 0;
   padding: 0;
   width: 100%;
   height: auto;
+  max-width: 100%;
+  /* Support grid scaling to fill available space */
+  place-self: center;
 }
 
 /* Ensure grid cells maintain proper sizing and don't overflow */
