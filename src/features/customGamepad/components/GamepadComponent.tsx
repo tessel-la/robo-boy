@@ -15,6 +15,7 @@ interface GamepadComponentProps {
   isSelected?: boolean;
   interactionMode?: ComponentInteractionMode;
   scaleFactor?: number;
+  gridSize?: { width: number; height: number };
   onSelect?: (id: string) => void;
   onUpdate?: (config: GamepadComponentConfig) => void;
   onDelete?: (id: string) => void;
@@ -28,6 +29,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   isSelected = false,
   interactionMode = ComponentInteractionMode.None,
   scaleFactor = 1,
+  gridSize = { width: 8, height: 4 },
   onSelect,
   onUpdate,
   onDelete,
@@ -57,8 +59,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const handleTranslate = (deltaX: number, deltaY: number) => {
     if (!onUpdate) return;
     
-    const newX = Math.max(0, Math.min(config.position.x + deltaX, 7 - config.position.width));
-    const newY = Math.max(0, Math.min(config.position.y + deltaY, 3 - config.position.height));
+    const newX = Math.max(0, Math.min(config.position.x + deltaX, gridSize.width - config.position.width));
+    const newY = Math.max(0, Math.min(config.position.y + deltaY, gridSize.height - config.position.height));
     
     onUpdate({
       ...config,
@@ -73,8 +75,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const handleResize = (deltaWidth: number, deltaHeight: number) => {
     if (!onUpdate) return;
     
-    const newWidth = Math.max(1, Math.min(config.position.width + deltaWidth, 8 - config.position.x));
-    const newHeight = Math.max(1, Math.min(config.position.height + deltaHeight, 4 - config.position.y));
+    const newWidth = Math.max(1, Math.min(config.position.width + deltaWidth, gridSize.width - config.position.x));
+    const newHeight = Math.max(1, Math.min(config.position.height + deltaHeight, gridSize.height - config.position.y));
     
     onUpdate({
       ...config,
@@ -187,7 +189,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                   e.stopPropagation();
                   handleTranslate(0, 1);
                 }}
-                disabled={config.position.y >= 3 - config.position.height}
+                disabled={config.position.y >= gridSize.height - config.position.height}
                 title="Move down"
               >
                 ↓
@@ -209,7 +211,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                   e.stopPropagation();
                   handleTranslate(1, 0);
                 }}
-                disabled={config.position.x >= 7 - config.position.width}
+                disabled={config.position.x >= gridSize.width - config.position.width}
                 title="Move right"
               >
                 →
@@ -226,7 +228,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                   e.stopPropagation();
                   handleResize(1, 0);
                 }}
-                disabled={config.position.width >= 8 - config.position.x}
+                disabled={config.position.width >= gridSize.width - config.position.x}
                 title="Increase width"
               >
                 ⟷+
@@ -248,7 +250,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                   e.stopPropagation();
                   handleResize(0, 1);
                 }}
-                disabled={config.position.height >= 4 - config.position.y}
+                disabled={config.position.height >= gridSize.height - config.position.y}
                 title="Increase height"
               >
                 ↕+

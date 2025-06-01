@@ -266,6 +266,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
             isEditing={isEditing}
             isSelected={selectedComponentId === component.id}
             interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
+            gridSize={layout.gridSize}
             onSelect={handleComponentSelect}
             onUpdate={handleComponentUpdate}
             onDelete={handleComponentDelete}
