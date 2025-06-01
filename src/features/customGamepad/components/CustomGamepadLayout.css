@@ -59,6 +59,11 @@
   max-width: 100%;
   /* Support grid scaling to fill available space */
   place-self: center;
+  /* Force crisp rendering to prevent sub-pixel differences */
+  transform: translateZ(0);
+  will-change: auto;
+  /* Ensure exact pixel alignment */
+  backface-visibility: hidden;
 }
 
 /* Ensure grid cells maintain proper sizing and don't overflow */
@@ -73,17 +78,14 @@
 }
 
 .grid-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  /* Minimal CSS - let inline styles control positioning and sizing */
   pointer-events: none;
   z-index: 0;
-  border-radius: 0;
-  overflow: visible;
-  display: grid;
-  box-sizing: border-box;
+  /* Force crisp rendering to prevent sub-pixel differences */
+  transform: translateZ(0);
+  will-change: auto;
+  /* Ensure exact pixel alignment */
+  backface-visibility: hidden;
 }
 
 .grid-cell {

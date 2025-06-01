@@ -220,15 +220,32 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     >
       {/* Grid container */}
       <div className="gamepad-grid" style={gridStyle}>
-        {/* Grid background (visible only in editing mode) */}
+        {/* Grid background (visible only in editing mode) - positioned to exactly match main grid */}
         {isEditing && (
           <div 
             className="grid-background"
             style={{
-              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`, // Use fractional units for horizontal scaling
-              gridTemplateRows: `repeat(${layout.gridSize.height}, ${Math.floor(layout.cellSize * scaling.scaleFactor)}px)`, // Use calculated size to maintain proportions
+              // Make the background grid exactly mirror the main grid layout
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) translateZ(0)', // Center both horizontally and vertically, plus force GPU acceleration
+              width: '100%',
+              display: 'grid',
+              gridTemplateColumns: `repeat(${layout.gridSize.width}, 1fr)`,
+              gridTemplateRows: `repeat(${layout.gridSize.height}, ${Math.floor(layout.cellSize * scaling.scaleFactor)}px)`,
               gap: `${gap}px`,
-              padding: `${padding}px`
+              padding: `${padding}px`,
+              // Mirror all size-affecting properties from main grid - EXACT match
+              backgroundColor: 'transparent',
+              borderRadius: isEditing ? '8px' : '0',
+              border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none', // Use same border as main grid, not transparent
+              boxSizing: 'border-box',
+              margin: '0',
+              transition: 'all 0.2s ease', // Match the transition from .gamepad-grid CSS
+              // Ensure it's exactly overlaid
+              zIndex: '0',
+              pointerEvents: 'none'
             }}
           >
             {Array.from({ length: layout.gridSize.width * layout.gridSize.height }).map((_, index) => (
