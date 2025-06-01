@@ -155,7 +155,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     padding: `${padding}px`,
     backgroundColor: 'transparent',
     borderRadius: isEditing ? '8px' : '0',
-    border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none',
+    border: 'none', // Remove border completely for both editing and non-editing modes
     position: 'relative',
     // Use 100% width and auto height to prevent collapse
     width: '100%',
@@ -239,7 +239,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
               // Mirror all size-affecting properties from main grid - EXACT match
               backgroundColor: 'transparent',
               borderRadius: isEditing ? '8px' : '0',
-              border: isEditing ? '1px solid var(--border-color-light, #e9ecef)' : 'none', // Use same border as main grid, not transparent
+              border: 'none', // Remove border completely to match main grid
               boxSizing: 'border-box',
               margin: '0',
               transition: 'all 0.2s ease', // Match the transition from .gamepad-grid CSS

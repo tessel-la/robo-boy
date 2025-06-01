@@ -368,6 +368,11 @@
 
 /* Mobile responsive design updates */
 @media (max-width: 768px) {
+  .gamepad-editor-modal {
+    min-height: auto; /* Remove fixed min-height for mobile */
+    max-height: 90vh; /* Keep reasonable max height */
+  }
+
   .design-tab {
     flex-direction: column;
     height: 100%;
@@ -418,7 +423,8 @@
     justify-content: center;
     align-items: center;
     min-width: unset;
-    min-height: 200px;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 40vh; /* Reduced from 50vh to 40vh */
   }
   
   .editor-footer {
@@ -436,8 +442,8 @@
   .gamepad-editor-modal {
     width: 100vw;
     height: auto;
-    min-height: 80vh;
-    max-height: 100vh;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 95vh;
     border-radius: 0;
     overflow: hidden;
   }
@@ -466,6 +472,18 @@
     min-width: 0;
     box-sizing: border-box;
   }
+
+  .design-area {
+    flex: 1;
+    padding: 6px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: unset;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 30vh; /* Reduced from 40vh to 30vh */
+  }
 }
 
 /* Very small screens (iPhone SE and similar) */
@@ -473,8 +491,8 @@
   .gamepad-editor-modal {
     width: 100vw;
     height: auto;
-    min-height: 90vh;
-    max-height: 100vh;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 98vh;
     border-radius: 0;
     overflow: hidden;
   }
@@ -512,8 +530,9 @@
   
   .design-area {
     flex: 1;
-    padding: 2px;
+    padding: 4px;
     overflow: hidden;
-    min-height: 150px;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 25vh; /* Reduced from 35vh to 25vh */
   }
 } 
