@@ -1657,20 +1657,31 @@ class UrdfClient extends THREE.Object3D {
   }
 
   private resolvePackagePath(filePath: string): string {
+    // First handle package:// URLs
     if (filePath.startsWith('package://')) {
       // Replace package://<package_name>/ with the base path + <package_name>/
       const resolved = filePath.replace(/package:\/\/([^\/]*)\//, (match, packageName) => {
         const basePath = this.path.endsWith('/') ? this.path : this.path + '/';
         return `${basePath}${packageName}/`;
       });
-      console.log(`[UrdfClient] Resolved path: ${filePath} -> ${resolved}`);
+      console.log(`[UrdfClient] Resolved package path: ${filePath} -> ${resolved}`);
       return resolved;
     }
-    // If not a package path, assume it's relative to the main URDF or an absolute URL
-    // If this.path is a base URL for resources, and filePath is relative to that:
-    if (!filePath.startsWith('http://') && !filePath.startsWith('https://') && this.path) {
-        return (this.path.endsWith('/') ? this.path : this.path + '/') + filePath;
+
+    // Handle localhost:8000 URLs by replacing them with /mesh_resources
+    if (filePath.startsWith('http://localhost:8000/')) {
+      const resolved = filePath.replace('http://localhost:8000/', '/mesh_resources/');
+      console.log(`[UrdfClient] Resolved localhost path: ${filePath} -> ${resolved}`);
+      return resolved;
     }
+
+    // If not a package path or localhost URL, assume it's relative to the main URDF or an absolute URL
+    if (!filePath.startsWith('http://') && !filePath.startsWith('https://') && this.path) {
+      const resolved = (this.path.endsWith('/') ? this.path : this.path + '/') + filePath;
+      console.log(`[UrdfClient] Resolved relative path: ${filePath} -> ${resolved}`);
+      return resolved;
+    }
+
     return filePath;
   }
   
