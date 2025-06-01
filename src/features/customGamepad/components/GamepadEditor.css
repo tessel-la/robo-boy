@@ -11,6 +11,16 @@
   justify-content: center;
   align-items: center;
   z-index: 10000;
+  animation: fadeInOverlay 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInOverlay {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.5);
+  }
 }
 
 .gamepad-editor-modal {
@@ -25,6 +35,19 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: slideInModal 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+@keyframes slideInModal {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .editor-header {
@@ -34,6 +57,7 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
   background-color: var(--background-secondary, #f8f9fa);
+  flex-shrink: 0;
 }
 
 .editor-header h2 {
@@ -50,12 +74,13 @@
   color: var(--text-color-secondary, #666);
   padding: 4px 8px;
   border-radius: 4px;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .close-button:hover {
   background-color: var(--background-hover, #e9ecef);
   color: var(--text-color, #333);
+  transform: scale(1.1);
 }
 
 .editor-content {
@@ -72,7 +97,7 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  min-height: 50vh; /* Ensure minimum height for design functionality */
+  min-height: 0; /* Allow flex shrinking */
 }
 
 /* Editor Sidebar - Contains ComponentPalette and GridSettingsMenu side by side */
@@ -86,6 +111,9 @@
   padding: 16px;
   box-sizing: border-box;
   position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0; /* Don't shrink the sidebar */
+  max-height: 35vh; /* Limit sidebar to 35% of viewport height */
 }
 
 /* Buttons row - always visible at the top */
@@ -95,23 +123,38 @@
   gap: 16px;
   margin-bottom: 16px;
   width: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
 }
 
 /* Expanded content area - takes full width when expanded */
 .sidebar-expanded-content {
   width: 100%;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  flex: 1;
+  min-height: 0;
 }
 
 /* When ComponentPalette is expanded */
+.editor-sidebar.component-palette-expanded {
+  max-height: 35vh; /* Constrain to 35% of viewport height */
+}
+
 .editor-sidebar.component-palette-expanded .sidebar-expanded-content {
   display: block;
+  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .editor-sidebar.component-palette-expanded .sidebar-expanded-content .component-palette {
   width: 100%;
   display: block;
+  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .editor-sidebar.component-palette-expanded .sidebar-expanded-content .grid-settings-menu {
@@ -119,17 +162,36 @@
 }
 
 /* When GridSettingsMenu is expanded */
+.editor-sidebar.grid-settings-expanded {
+  max-height: 35vh; /* Constrain to 35% of viewport height */
+}
+
 .editor-sidebar.grid-settings-expanded .sidebar-expanded-content {
   display: block;
+  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .editor-sidebar.grid-settings-expanded .sidebar-expanded-content .grid-settings-menu {
   width: 100%;
   display: block;
+  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .editor-sidebar.grid-settings-expanded .sidebar-expanded-content .component-palette {
   display: none;
+}
+
+@keyframes expandContent {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Update ComponentPalette to work in new layout */
@@ -138,7 +200,7 @@
   min-width: 0;
   margin-bottom: 0;
   box-sizing: border-box;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Update GridSettingsMenu to work in new layout */
@@ -147,7 +209,7 @@
   min-width: 0;
   margin-bottom: 0;
   box-sizing: border-box;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* When neither is expanded, show buttons side by side */
@@ -157,6 +219,9 @@
 
 .editor-sidebar:not(.component-palette-expanded):not(.grid-settings-expanded) .sidebar-expanded-content {
   display: none;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 /* Component Grid - Similar to 3D Panel */
@@ -177,7 +242,7 @@
   border-radius: 6px;
   padding: 12px 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
   min-height: 80px;
   position: relative;
@@ -240,7 +305,8 @@
   justify-content: center;
   align-items: center;
   min-width: 300px;
-  min-height: 300px;
+  min-height: 0; /* Allow it to shrink */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Ensure the direct child of design-area (the layout renderer) can grow */
@@ -259,6 +325,7 @@
   padding: 12px 16px;
   border-top: 1px solid var(--border-color, #e0e0e0);
   background-color: var(--background-secondary, #f8f9fa);
+  flex-shrink: 0;
 }
 
 .cancel-button,
@@ -268,7 +335,7 @@
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .cancel-button {
@@ -278,6 +345,7 @@
 
 .cancel-button:hover {
   background-color: var(--border-color, #dee2e6);
+  transform: translateY(-1px);
 }
 
 .save-button {
@@ -287,12 +355,15 @@
 
 .save-button:hover {
   background-color: var(--primary-color-dark, #0056b3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
 }
 
 .save-button:disabled {
   background-color: var(--border-color, #dee2e6);
   color: var(--text-color-secondary, #666);
   cursor: not-allowed;
+  transform: none;
 }
 
 /* Mobile responsive design updates */
