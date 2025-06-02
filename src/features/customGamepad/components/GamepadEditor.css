@@ -137,6 +137,31 @@
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   flex: 1;
   min-height: 0;
+  
+  /* Custom Scrollbar Styling */
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #f8f9fa);
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.sidebar-expanded-content::-webkit-scrollbar {
+  width: 8px; /* Width of the vertical scrollbar */
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-track {
+  background: var(--background-secondary, #f8f9fa); /* Track color */
+  border-radius: 4px;
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32); /* Thumb color */
+  border-radius: 4px;
+  border: 2px solid var(--background-secondary, #f8f9fa); /* Border around thumb */
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
 }
 
 /* When ComponentPalette is expanded */

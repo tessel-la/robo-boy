@@ -57,6 +57,31 @@
   transform: translateY(0);
   animation: expandIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 0;
+  
+  /* Custom Scrollbar Styling */
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #ffffff);
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.palette-content::-webkit-scrollbar {
+  width: 8px; /* Width of the vertical scrollbar */
+}
+
+.palette-content::-webkit-scrollbar-track {
+  background: var(--card-bg, #ffffff); /* Track color */
+  border-radius: 4px;
+}
+
+.palette-content::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32); /* Thumb color */
+  border-radius: 4px;
+  border: 2px solid var(--card-bg, #ffffff); /* Border around thumb */
+}
+
+.palette-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
 }
 
 @keyframes expandIn {
