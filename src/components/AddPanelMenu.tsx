@@ -17,9 +17,7 @@ interface AddPanelMenuProps {
 
 // Define available panel types here or pass them as props
 const availablePanelTypes = [
-  { type: GamepadType.Standard, label: 'Standard Pad' },
   { type: GamepadType.Voice, label: 'Voice Control' },
-  { type: GamepadType.GameBoy, label: 'GameBoy' },
   { type: GamepadType.Drone, label: 'Drone Control' },
   { type: GamepadType.Manipulator, label: 'Manipulator Control' },
   { type: GamepadType.Custom, label: 'Custom Gamepad' },
@@ -56,32 +54,24 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
       // Adjust margins based on screen size
       const margin = viewportWidth < 480 ? 8 : viewportWidth < 768 ? 12 : 16;
       
-      // Calculate menu dimensions
-      const menuWidth = Math.min(
-        menuRef.current.offsetWidth || 250,
-        viewportWidth - (2 * margin)
-      );
+      // Calculate menu width - more conservative to fit content
+      const menuWidth = Math.min(280, viewportWidth - (2 * margin));
       
-      // Calculate available space with better small screen handling
-      const spaceBelow = viewportHeight - buttonRect.bottom;
-      const spaceAbove = buttonRect.top;
-      
-      // For very small screens, prioritize showing more content
-      const minMenuHeight = viewportHeight < 500 ? 150 : 180;
-      const maxMenuHeight = Math.min(
-        450,
-        viewportHeight - (2 * margin)
-      );
+      // Calculate available space more conservatively
+      const spaceBelow = viewportHeight - buttonRect.bottom - margin - 20; // Extra buffer
+      const spaceAbove = buttonRect.top - margin - 20; // Extra buffer
       
       // Determine if menu should open upward or downward
-      const openUpward = spaceBelow < minMenuHeight && spaceAbove > spaceBelow;
+      const openUpward = spaceBelow < 150 && spaceAbove > spaceBelow;
       
-      // Calculate final height
-      const availableHeight = openUpward ? spaceAbove - margin : spaceBelow - margin;
-      const menuHeight = Math.max(minMenuHeight, Math.min(maxMenuHeight, availableHeight));
+      // Calculate max height based on chosen direction, with conservative limits
+      const maxHeight = Math.min(
+        openUpward ? spaceAbove : spaceBelow,
+        300 // Cap at 300px to ensure manageability
+      );
       
-      // Calculate horizontal position - always try to align with button first
-      let left = buttonRect.right - menuWidth; // Right-align with button
+      // Calculate horizontal position - align with button
+      let left = buttonRect.right - menuWidth;
       
       // Ensure menu stays within horizontal bounds
       if (left < margin) {
@@ -90,33 +80,36 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         left = viewportWidth - menuWidth - margin;
       }
       
-      // Calculate vertical position - always try to position near button first
+      // Calculate vertical position
       let top;
-      const gap = 8; // Gap between button and menu
+      const gap = 8;
       
       if (openUpward) {
-        top = buttonRect.top - menuHeight - gap;
+        top = buttonRect.top - gap; // Position from here, will expand upward with transform
       } else {
         top = buttonRect.bottom + gap;
       }
       
-      // Only adjust vertical position if it goes outside bounds
-      if (top < margin) {
-        top = margin;
-      } else if (top + menuHeight > viewportHeight - margin) {
-        top = viewportHeight - menuHeight - margin;
+      // Ensure top position doesn't go negative or exceed viewport
+      if (openUpward) {
+        top = Math.max(margin, top);
+      } else {
+        top = Math.min(top, viewportHeight - maxHeight - margin);
       }
-
+      
+      // Apply positioning with content-based sizing
       setMenuStyle({
         position: 'fixed',
         top: `${top}px`,
         left: `${left}px`,
         width: `${menuWidth}px`,
-        height: `${menuHeight}px`,
+        maxHeight: `${maxHeight}px`,
+        transform: openUpward ? 'translateY(-100%)' : 'none',
         opacity: 1, 
         zIndex: 9999,
         overflowY: 'auto',
         overflowX: 'hidden',
+        boxSizing: 'border-box',
       });
     } else {
       // Reset styles when hiding
@@ -188,7 +181,14 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         ref={menuRef} 
         style={menuStyle} // Apply dynamic style
       >
-        <div className="add-panel-menu-content">
+        <div 
+          className="add-panel-menu-content"
+          style={{ 
+            height: '100%', 
+            overflowY: 'auto',
+            overflowX: 'hidden'
+          }}
+        >
           <div className="menu-section">
             <h4>Default Layouts</h4>
             <ul>

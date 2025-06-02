@@ -101,7 +101,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     [GamepadType.Voice]: 0, 
     [GamepadType.GameBoy]: 0,
     [GamepadType.Drone]: 1, // Drone counter starts at 1 as it's the default
-    [GamepadType.Manipulator]: 1,
+    [GamepadType.Manipulator]: 0,
     [GamepadType.Custom]: 0
   }); // Updated counters
   // State to trigger refresh of custom gamepads in AddPanelMenu
