@@ -50,40 +50,78 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   useEffect(() => {
     if (isOpen && addButtonRef.current && menuRef.current) {
       const buttonRect = addButtonRef.current.getBoundingClientRect();
-      const menuWidth = menuRef.current.offsetWidth || 150; // Need menu width
       const viewportWidth = window.innerWidth;
-      const scrollX = window.scrollX;
-      const scrollY = window.scrollY;
-      const margin = 10; // Small margin from viewport edge
-
-      // Initial desired position (right-aligned with button)
-      let desiredLeft = buttonRect.right + scrollX - menuWidth;
+      const viewportHeight = window.innerHeight;
       
-      // Check for right edge overflow
-      if (buttonRect.right + scrollX > viewportWidth) {
-          // If button's right edge is off-screen, align menu's right edge to viewport edge
-          desiredLeft = viewportWidth - menuWidth - margin;
+      // Adjust margins based on screen size
+      const margin = viewportWidth < 480 ? 8 : viewportWidth < 768 ? 12 : 16;
+      
+      // Calculate menu dimensions
+      const menuWidth = Math.min(
+        menuRef.current.offsetWidth || 250,
+        viewportWidth - (2 * margin)
+      );
+      
+      // Calculate available space with better small screen handling
+      const spaceBelow = viewportHeight - buttonRect.bottom;
+      const spaceAbove = buttonRect.top;
+      
+      // For very small screens, prioritize showing more content
+      const minMenuHeight = viewportHeight < 500 ? 150 : 180;
+      const maxMenuHeight = Math.min(
+        450,
+        viewportHeight - (2 * margin)
+      );
+      
+      // Determine if menu should open upward or downward
+      const openUpward = spaceBelow < minMenuHeight && spaceAbove > spaceBelow;
+      
+      // Calculate final height
+      const availableHeight = openUpward ? spaceAbove - margin : spaceBelow - margin;
+      const menuHeight = Math.max(minMenuHeight, Math.min(maxMenuHeight, availableHeight));
+      
+      // Calculate horizontal position - always try to align with button first
+      let left = buttonRect.right - menuWidth; // Right-align with button
+      
+      // Ensure menu stays within horizontal bounds
+      if (left < margin) {
+        left = margin;
+      } else if (left + menuWidth > viewportWidth - margin) {
+        left = viewportWidth - menuWidth - margin;
       }
-
-      // Check for left edge overflow (less common, but good practice)
-      if (desiredLeft < scrollX + margin) {
-          desiredLeft = scrollX + margin;
+      
+      // Calculate vertical position - always try to position near button first
+      let top;
+      const gap = 8; // Gap between button and menu
+      
+      if (openUpward) {
+        top = buttonRect.top - menuHeight - gap;
+      } else {
+        top = buttonRect.bottom + gap;
+      }
+      
+      // Only adjust vertical position if it goes outside bounds
+      if (top < margin) {
+        top = margin;
+      } else if (top + menuHeight > viewportHeight - margin) {
+        top = viewportHeight - menuHeight - margin;
       }
 
       setMenuStyle({
         position: 'fixed',
-        top: `${buttonRect.bottom + scrollY + 4}px`,
-        left: `${desiredLeft}px`, // Use the potentially adjusted left position
-        // Remove the transform
-        // transform: 'translateX(-100%)',
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${menuWidth}px`,
+        height: `${menuHeight}px`,
         opacity: 1, 
-        zIndex: 9999, // Add high z-index
+        zIndex: 9999,
+        overflowY: 'auto',
+        overflowX: 'hidden',
       });
     } else {
-      // Reset styles when hiding (keep display: none)
+      // Reset styles when hiding
       setMenuStyle({ display: 'none', transform: 'none', opacity: 0 });
     }
-    // Add menuRef.current?.offsetWidth to dependencies? Might cause loops. Let's test without first.
   }, [isOpen, addButtonRef]);
 
   // Effect to handle clicks outside the menu
@@ -150,59 +188,61 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         ref={menuRef} 
         style={menuStyle} // Apply dynamic style
       >
-        <div className="menu-section">
-          <h4>Default Layouts</h4>
-          <ul>
-            {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
-              <li key={panelInfo.type}>
-                <button onClick={() => onSelectType(panelInfo.type)}>
-                  {panelInfo.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {customGamepads.length > 0 && (
+        <div className="add-panel-menu-content">
           <div className="menu-section">
-            <h4>Custom Layouts</h4>
+            <h4>Default Layouts</h4>
             <ul>
-              {customGamepads.map(gamepad => (
-                <li key={gamepad.id} className="custom-gamepad-item">
-                  <button 
-                    className="custom-gamepad-button"
-                    onClick={() => handleCustomGamepadSelect(gamepad.id)}
-                  >
-                    {gamepad.name}
-                  </button>
-                  <button 
-                    className="edit-gamepad-button"
-                    onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
-                    title="Edit custom gamepad"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    className="delete-gamepad-button"
-                    onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
-                    title="Delete custom gamepad"
-                  >
-                    ×
+              {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
+                <li key={panelInfo.type}>
+                  <button onClick={() => onSelectType(panelInfo.type)}>
+                    {panelInfo.label}
                   </button>
                 </li>
               ))}
             </ul>
           </div>
-        )}
 
-        <div className="menu-section">
-          <button 
-            className="create-custom-button"
-            onClick={() => onOpenCustomEditor()}
-          >
-            <span className="icon">✏️</span>
-            Create Custom Gamepad
-          </button>
+          {customGamepads.length > 0 && (
+            <div className="menu-section">
+              <h4>Custom Layouts</h4>
+              <ul>
+                {customGamepads.map(gamepad => (
+                  <li key={gamepad.id} className="custom-gamepad-item">
+                    <button 
+                      className="custom-gamepad-button"
+                      onClick={() => handleCustomGamepadSelect(gamepad.id)}
+                    >
+                      {gamepad.name}
+                    </button>
+                    <button 
+                      className="edit-gamepad-button"
+                      onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
+                      title="Edit custom gamepad"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="delete-gamepad-button"
+                      onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
+                      title="Delete custom gamepad"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="menu-section">
+            <button 
+              className="create-custom-button"
+              onClick={() => onOpenCustomEditor()}
+            >
+              <span className="icon">✏️</span>
+              Create Custom Gamepad
+            </button>
+          </div>
         </div>
       </div>,
       portalRoot // Target element for the portal
