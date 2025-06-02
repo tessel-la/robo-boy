@@ -3,11 +3,14 @@
   --primary-color: #32CD32; /* Lime Green */
   --primary-hover-color: #28a745; /* Darker Lime */
   --primary-darker-color: #218838; /* Even Darker Lime */
+  --primary-dark-color: #28a745; /* Alias for primary darker */
   --secondary-color: #6c757d; /* Grey */
   --background-color: #ffffff;
   --background-secondary: #f8f9fa; /* Very light grey */
   --text-color: #212529; /* Dark grey/black */
   --text-secondary: #6c757d; /* Medium grey */
+  --text-color-secondary: #6c757d; /* Alias for text secondary */
+  --text-color-faded: rgba(33, 37, 41, 0.7); /* Faded text color */
   --border-color: #dee2e6;
   --card-bg: #ffffff;
   --card-border: #dee2e6;
@@ -15,17 +18,23 @@
   --error-color: #dc3545; /* Red */
   --error-hover-color: #c82333; /* Darker Red */
   --error-rgb: 220, 53, 69; /* For RGBA shadows */
+  --background-secondary-transparent: rgba(248, 249, 250, 0.3); /* Semi-transparent secondary background */
+  --background-dark-transparent: rgba(0, 0, 0, 0.15); /* Semi-transparent dark overlay */
+  --primary-color-glow: rgba(50, 205, 50, 0.5); /* Primary color glow effect */
 }
 
 [data-theme='dark'] {
   --primary-color: #32CD32; /* Lime Green */
   --primary-hover-color: #40e040; /* Brighter Lime for hover */
   --primary-darker-color: #28a745; /* Slightly darker for borders */
+  --primary-dark-color: #28a745; /* Alias for primary darker */
   --secondary-color: #adb5bd; /* Lighter grey */
   --background-color: #121212; /* Dark grey/black */
   --background-secondary: #2c2c2c; /* Medium dark grey */
   --text-color: #e0e0e0; /* Light grey text */
   --text-secondary: #adb5bd; /* Medium light grey */
+  --text-color-secondary: #adb5bd; /* Alias for text secondary */
+  --text-color-faded: rgba(224, 224, 224, 0.7); /* Faded text color */
   --border-color: #444444; /* Dark grey border */
   --card-bg: #1e1e1e; /* Slightly lighter card background */
   --card-border: #333333;
@@ -33,6 +42,9 @@
   --error-color: #e74c3c; /* Brighter Red for dark */
   --error-hover-color: #c0392b; /* Darker Red */
   --error-rgb: 231, 76, 60; /* For RGBA shadows */
+  --background-secondary-transparent: rgba(44, 44, 44, 0.3); /* Semi-transparent secondary background */
+  --background-dark-transparent: rgba(0, 0, 0, 0.3); /* Semi-transparent dark overlay */
+  --primary-color-glow: rgba(50, 205, 50, 0.5); /* Primary color glow effect */
 }
 
 /* Solarized Theme */
@@ -40,11 +52,14 @@
   --primary-color: #cb4b16; /* Orange */
   --primary-hover-color: #bd360b; /* Darker Orange */
   --primary-darker-color: #a52f08; /* Even Darker Orange */
+  --primary-dark-color: #a52f08; /* Alias for primary darker */
   --secondary-color: #6c71c4; /* Violet */
   --background-color: #fdf6e3; /* Base3 - Sand */
   --background-secondary: #eee8d5; /* Base2 - Lighter Sand */
   --text-color: #657b83; /* Base00 - Dark grey-blue */
   --text-secondary: #93a1a1; /* Base0 - Medium grey-blue */
+  --text-color-secondary: #93a1a1; /* Alias for text secondary */
+  --text-color-faded: rgba(101, 123, 131, 0.7); /* Faded text color */
   --border-color: #93a1a1; /* Base0 */
   --card-bg: #eee8d5; /* Base2 */
   --card-border: #93a1a1; /* Base0 */
@@ -52,6 +67,9 @@
   --error-color: #dc322f; /* Red */
   --error-hover-color: #b5262a; /* Darker Red */
   --error-rgb: 220, 50, 47; /* For RGBA shadows */
+  --background-secondary-transparent: rgba(238, 232, 213, 0.3); /* Semi-transparent secondary background */
+  --background-dark-transparent: rgba(101, 123, 131, 0.15); /* Semi-transparent dark overlay */
+  --primary-color-glow: rgba(203, 75, 22, 0.5); /* Primary color glow effect */
 }
 
 body {
