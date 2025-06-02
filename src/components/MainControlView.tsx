@@ -104,6 +104,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     [GamepadType.Manipulator]: 1,
     [GamepadType.Custom]: 0
   }); // Updated counters
+  // State to trigger refresh of custom gamepads in AddPanelMenu
+  const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -252,6 +254,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleSaveCustomGamepad = (layout: CustomGamepadLayout) => {
     // Add the new custom gamepad as a panel
     handleAddPanelType(GamepadType.Custom, layout.id);
+    // Trigger refresh of custom gamepad list in AddPanelMenu
+    setCustomGamepadRefreshKey(prev => prev + 1);
+  };
+
+  const handleCustomGamepadDeleted = () => {
+    // Trigger refresh of custom gamepad list in AddPanelMenu
+    setCustomGamepadRefreshKey(prev => prev + 1);
   };
   // --- End Panel Handlers ---
 
@@ -430,6 +439,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         onClose={handleCloseMenu}
         onOpenCustomEditor={handleOpenCustomEditor}
         addButtonRef={addButtonRef}
+        refreshKey={customGamepadRefreshKey}
+        onCustomGamepadDeleted={handleCustomGamepadDeleted}
       />
 
       {/* Render GamepadEditor modal */}

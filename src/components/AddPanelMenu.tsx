@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, RefObject } from 'react';
+import React, { useEffect, useRef, useState, RefObject, useCallback } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
 import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
@@ -11,6 +11,8 @@ interface AddPanelMenuProps {
   onClose: () => void;
   onOpenCustomEditor: (layoutId?: string) => void;
   addButtonRef: RefObject<HTMLButtonElement>; // Re-add button ref
+  refreshKey?: number; // New prop to force refresh
+  onCustomGamepadDeleted?: () => void; // Callback when a custom gamepad is deleted
 }
 
 // Define available panel types here or pass them as props
@@ -38,10 +40,11 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   onClose,
   onOpenCustomEditor,
   addButtonRef, // Use the ref
+  refreshKey, // Use the refreshKey prop
+  onCustomGamepadDeleted, // Use the onCustomGamepadDeleted prop
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-  const [refreshKey, setRefreshKey] = useState(0);
 
   // Calculate position based on button ref
   useEffect(() => {
@@ -127,7 +130,12 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   const handleDeleteCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent triggering the select action
     deleteCustomGamepad(layoutId);
-    setRefreshKey((prev: number) => prev + 1); // Force re-render to update the list
+    // Force re-render by reloading from localStorage
+    // Note: This won't automatically refresh, user needs to reopen menu
+    // For full refresh, parent component should manage the refreshKey
+    if (onCustomGamepadDeleted) {
+      onCustomGamepadDeleted();
+    }
   };
 
   const handleEditCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
