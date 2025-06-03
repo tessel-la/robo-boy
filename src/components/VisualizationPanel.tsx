@@ -20,6 +20,7 @@ import SettingsPopup from './SettingsPopup';
 import AddVisualizationModal from './AddVisualizationModal';
 // Import the PointCloudSettings component
 import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
+import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
 import './visualizers/PointCloudSettings.css';
 
 // Import custom hooks
@@ -34,6 +35,7 @@ import { useTfVisualizer } from '../hooks/useTfVisualizer';
 import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
+import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
 import { FaPlus, FaCog, FaCube } from 'react-icons/fa'; // Import icons, added FaCube for URDF
 
 import {
@@ -48,9 +50,9 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf'; // Added 'urdf'
-  topic: string; // For pointcloud/camerainfo. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions; // Union of option types
+  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan'; // Added 'laserscan'
+  topic: string; // For pointcloud/camerainfo/laserscan. For URDF, this might be robot_description topic
+  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -64,6 +66,8 @@ export interface UrdfOptions {
   urdfPath?: string;
   // Add other URDF specific options here, e.g., loaderType
 }
+
+// LaserScanOptions are already imported from LaserScanViz.tsx
 
 // Define structure for storing fetched topics
 interface TopicInfo {
@@ -116,7 +120,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   useEffect(() => {
     const savedState = getVisualizationState();
     if (savedState.visualizations && savedState.visualizations.length > 0) {
-      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf'];
+      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan'];
       const filteredVisualizations = savedState.visualizations.filter(
         (viz: any) => validTypes.includes(viz.type)
       ) as VisualizationConfig[];
@@ -481,6 +485,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'laserscan') {
+          return (
+            <React.Fragment key={viz.id}>
+              <LaserScanViz
+                ros={ros}
+                isRosConnected={isRosConnected}
+                ros3dViewer={ros3dViewer}
+                customTFProvider={customTFProvider}
+                topic={viz.topic}
+                fixedFrame={fixedFrame}
+                options={viz.options as LaserScanOptions} // Cast options to LaserScanOptions
+              />
+            </React.Fragment>
+          );
         }
         return null;
       })}
@@ -534,6 +552,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           vizId={activeSettingsVizId}
           topic={activeViz.topic}
           initialOptions={activeViz.options as PointCloudOptions}
+          onClose={closeVisualizationSettings}
+          onSaveSettings={updateVisualizationSettings}
+        />
+      )}
+
+      {/* LaserScan Settings Popup */}
+      {activeSettingsVizId && activeViz?.type === 'laserscan' && (
+        <LaserScanSettings
+          vizId={activeSettingsVizId}
+          topic={activeViz.topic}
+          initialOptions={activeViz.options as LaserScanSettingsOptions}
           onClose={closeVisualizationSettings}
           onSaveSettings={updateVisualizationSettings}
         />

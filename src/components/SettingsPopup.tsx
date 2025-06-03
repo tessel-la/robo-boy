@@ -146,6 +146,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
       pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
       camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
       urdf: ['std_msgs/String', 'std_msgs/msg/String'], // Add URDF support
+      laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan support
       // Add more mappings as needed
     };
 
@@ -287,7 +288,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                                   </div>
                                   
                                   {/* Only show settings button for supported viz types */}
-                                  {viz.type === 'pointcloud' && onEditVisualization && (
+                                  {(viz.type === 'pointcloud' || viz.type === 'laserscan') && onEditVisualization && (
                                     <button
                                       className="viz-settings-button"
                                       onClick={() => handleEditClick(viz.id)}
