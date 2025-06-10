@@ -20,6 +20,7 @@ interface TopicInfo {
 const MESSAGE_TYPES = {
   'sensor_msgs/Joy': {
     label: 'Joy Message',
+    alternativeTypes: ['sensor_msgs/msg/Joy'], // ROS2 format
     fields: {
       'axes': { type: 'number_array', label: 'Axes (float array)' },
       'buttons': { type: 'boolean_array', label: 'Buttons (boolean array)' }
@@ -27,6 +28,7 @@ const MESSAGE_TYPES = {
   },
   'geometry_msgs/Twist': {
     label: 'Twist Message',
+    alternativeTypes: ['geometry_msgs/msg/Twist'], // ROS2 format
     fields: {
       'linear.x': { type: 'float', label: 'Linear X' },
       'linear.y': { type: 'float', label: 'Linear Y' },
@@ -38,24 +40,28 @@ const MESSAGE_TYPES = {
   },
   'std_msgs/Float32': {
     label: 'Float32',
+    alternativeTypes: ['std_msgs/msg/Float32'], // ROS2 format
     fields: {
       'data': { type: 'float', label: 'Data' }
     }
   },
   'std_msgs/Float64': {
     label: 'Float64',
+    alternativeTypes: ['std_msgs/msg/Float64'], // ROS2 format
     fields: {
       'data': { type: 'double', label: 'Data' }
     }
   },
   'std_msgs/Int32': {
     label: 'Int32',
+    alternativeTypes: ['std_msgs/msg/Int32'], // ROS2 format
     fields: {
       'data': { type: 'int', label: 'Data' }
     }
   },
   'std_msgs/Bool': {
     label: 'Boolean',
+    alternativeTypes: ['std_msgs/msg/Bool'], // ROS2 format
     fields: {
       'data': { type: 'bool', label: 'Data' }
     }
@@ -157,7 +163,25 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // Get available topics filtered by message type
   const filteredTopics = useMemo(() => {
     if (!messageType) return availableTopics;
-    return availableTopics.filter(t => t.type === messageType);
+    
+    // Get the message type configuration
+    const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
+    if (!messageConfig) return [];
+    
+    // Create a list of all possible type formats to match against
+    const typesToMatch = [messageType, ...(messageConfig.alternativeTypes || [])];
+    
+    const filtered = availableTopics.filter(topic => 
+      typesToMatch.some(typeToMatch => topic.type === typeToMatch)
+    );
+    
+    // Debug logging to help troubleshoot
+    console.log('Filtering topics for message type:', messageType);
+    console.log('Types to match:', typesToMatch);
+    console.log('Available topics:', availableTopics.map(t => `${t.name} (${t.type})`));
+    console.log('Filtered topics:', filtered.map(t => `${t.name} (${t.type})`));
+    
+    return filtered;
   }, [availableTopics, messageType]);
 
   // Get available fields for the selected message type
@@ -272,11 +296,25 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   <option value="">
                     {isLoadingTopics ? 'Loading topics...' : 'Select existing topic...'}
                   </option>
-                  {filteredTopics.map((topicInfo) => (
-                    <option key={topicInfo.name} value={topicInfo.name}>
-                      {topicInfo.name}
-                    </option>
-                  ))}
+                  {filteredTopics.length > 0 ? (
+                    filteredTopics.map((topicInfo) => (
+                      <option key={topicInfo.name} value={topicInfo.name}>
+                        {topicInfo.name} ({topicInfo.type})
+                      </option>
+                    ))
+                  ) : messageType && availableTopics.length > 0 ? (
+                    <>
+                      <option disabled>── No {messageType} topics found ──</option>
+                      <option disabled>── All available topics ──</option>
+                      {availableTopics.map((topicInfo) => (
+                        <option key={topicInfo.name} value={topicInfo.name}>
+                          {topicInfo.name} ({topicInfo.type})
+                        </option>
+                      ))}
+                    </>
+                  ) : (
+                    <option disabled>No topics available</option>
+                  )}
                 </select>
                 <span className="topic-input-separator">or</span>
                 <input
@@ -288,9 +326,14 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   className="setting-input topic-input"
                 />
               </div>
-              {messageType && filteredTopics.length === 0 && !isLoadingTopics && (
+              {messageType && filteredTopics.length === 0 && availableTopics.length > 0 && !isLoadingTopics && (
                 <div className="topic-warning">
-                  No existing topics found for {messageType}. You can enter a custom topic name.
+                  No existing topics found for {messageType}. You can select from all available topics above or enter a custom topic name.
+                </div>
+              )}
+              {messageType && availableTopics.length === 0 && !isLoadingTopics && (
+                <div className="topic-warning">
+                  No topics available from ROS. Make sure ROS is connected and topics are being published.
                 </div>
               )}
             </div>

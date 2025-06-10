@@ -160,6 +160,16 @@
   min-width: 200px;
 }
 
+.topic-select option {
+  padding: 4px 8px;
+}
+
+.topic-select option:disabled {
+  color: var(--text-secondary, #666);
+  font-style: italic;
+  background-color: var(--background-secondary, #2a2a2a);
+}
+
 .topic-input-separator {
   color: var(--text-secondary, #aaa);
   font-weight: 500;
