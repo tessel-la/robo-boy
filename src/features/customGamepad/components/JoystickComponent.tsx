@@ -56,17 +56,32 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     const action = config.action as ROSTopicConfig;
     if (!action || !action.topic) return;
 
+    // Apply range and data type settings
+    const minValue = config.config?.min ?? -1;
+    const maxValue = config.config?.max ?? config.config?.maxValue ?? 1;
+    
+    // Map input values to configured range and apply data type
+    const mappedValues = values.map(value => {
+      // Clamp to [-1, 1] first (joystick natural range)
+      const clampedValue = Math.max(-1, Math.min(1, value));
+      // Map to configured range
+      const mappedValue = ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
+      // Apply data type
+      return Number.isInteger(maxValue) && Number.isInteger(minValue) ? Math.round(mappedValue) : mappedValue;
+    });
+
     let message: any;
 
     if (action.messageType === 'sensor_msgs/Joy') {
       // For Joy messages, update the specific axes
-      const axes = Array(4).fill(0.0);
+      const axesCount = Math.max(4, ...((config.config?.axes || ['0', '1']).map(a => parseInt(a) + 1).filter(n => !isNaN(n))));
+      const axes = Array(axesCount).fill(0.0);
       const axesConfig = config.config?.axes || ['0', '1'];
       
       axesConfig.forEach((axisStr, index) => {
         const axisIndex = parseInt(axisStr);
-        if (!isNaN(axisIndex) && index < values.length) {
-          axes[axisIndex] = values[index];
+        if (!isNaN(axisIndex) && index < mappedValues.length) {
+          axes[axisIndex] = mappedValues[index];
         }
       });
 
@@ -85,14 +100,14 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
       axesConfig.forEach((axis, index) => {
-        if (index < values.length) {
+        if (index < mappedValues.length) {
           const parts = axis.split('.');
           if (parts.length === 2) {
             const [type, component] = parts;
             if (type === 'linear' && component in linear) {
-              (linear as any)[component] = values[index];
+              (linear as any)[component] = mappedValues[index];
             } else if (type === 'angular' && component in angular) {
-              (angular as any)[component] = values[index];
+              (angular as any)[component] = mappedValues[index];
             }
           }
         }
@@ -101,6 +116,16 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       message = new ROSLIB.Message({
         linear,
         angular
+      });
+    } else if (action.messageType.includes('Float32') || action.messageType.includes('Float64')) {
+      // For float messages
+      message = new ROSLIB.Message({
+        data: mappedValues[0] || 0
+      });
+    } else if (action.messageType.includes('Int32')) {
+      // For integer messages
+      message = new ROSLIB.Message({
+        data: Math.round(mappedValues[0] || 0)
       });
     }
 
@@ -144,13 +169,13 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     
     const size = 100;
     const halfSize = size / 2;
-    const maxValue = config.config?.maxValue || 1.0;
     
-    const x = (event.x / halfSize) * maxValue;
-    const y = (event.y / halfSize) * maxValue;
+    // Normalize to [-1, 1] range (natural joystick range)
+    const x = event.x / halfSize;
+    const y = event.y / halfSize;
     
     publishThrottled([x, y]);
-  }, [publishThrottled, config.config?.maxValue, isEditing]);
+  }, [publishThrottled, isEditing]);
 
   const handleStop = useCallback(() => {
     if (isEditing) return;

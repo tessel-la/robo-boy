@@ -370,6 +370,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         component={settingsComponent}
         onClose={handleCloseSettings}
         onSave={handleSaveSettings}
+        ros={ros}
       />
     </div>
   );
