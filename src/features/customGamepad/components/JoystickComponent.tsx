@@ -222,8 +222,9 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       return;
     }
 
-    // atan2 gets the angle from the raw x/y pixel values. Y is inverted for Cartesian coordinates.
-    const angleRad = Math.atan2(-event.y, event.x);
+    // atan2 gets the angle from the raw x/y pixel values. 
+    // Y is not inverted here, so that moving the joystick up results in a positive Y value.
+    const angleRad = Math.atan2(event.y, event.x);
 
     // Reconstruct the normalized x and y from the magnitude and angle.
     const x = magnitude * Math.cos(angleRad);
