@@ -20,6 +20,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   const lastSentValues = useRef<number[]>([0, 0]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const joystickSizeRef = useRef(100); // Use ref to hold joystick size
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -50,37 +51,74 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   const baseColor = getThemeColor('--secondary-color') || '#6c757d';
   const stickColor = getThemeColor('--primary-color') || '#32CD32';
 
+  // Calculate optimal joystick size that fits within the grid cell
+  const calculateJoystickSize = () => {
+    let size, stickSize;
+    if (containerSize.width === 0 || containerSize.height === 0) {
+      size = 100;
+      stickSize = 40;
+    } else {
+      // The container represents the exact grid cell size allocated to this component
+      // Use the smaller dimension to ensure the joystick stays circular and fits
+      const availableSize = Math.min(containerSize.width, containerSize.height);
+      
+      // Reserve minimal space for padding
+      const padding = Math.max(8, availableSize * 0.08);
+      const maxSize = availableSize - padding;
+      
+      // Set minimum size for usability
+      const minSize = Math.min(50, maxSize);
+      size = Math.max(minSize, maxSize);
+      
+      // Calculate stick size as a proportion of the base size
+      const stickRatio = 0.4;
+      stickSize = Math.max(16, Math.floor(size * stickRatio));
+    }
+    joystickSizeRef.current = size; // Update ref
+    return { size, stickSize };
+  };
+
+  const { size: joystickSize, stickSize } = calculateJoystickSize();
+
   const publishMessage = useCallback((values: number[]) => {
     if (!topicRef.current || isEditing) return;
 
     const action = config.action as ROSTopicConfig;
     if (!action || !action.topic) return;
 
-    // Apply range and data type settings
-    const minValue = config.config?.min ?? -1;
-    const maxValue = config.config?.max ?? config.config?.maxValue ?? 1;
+    // Get range settings - use default joystick range if not configured
+    const minValue = config.config?.min;
+    const maxValue = config.config?.max ?? config.config?.maxValue;
     
-    // Map input values to configured range and apply data type
-    const mappedValues = values.map(value => {
-      // Clamp to [-1, 1] first (joystick natural range)
-      const clampedValue = Math.max(-1, Math.min(1, value));
-      // Map to configured range
-      const mappedValue = ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
-      // Apply data type
-      return Number.isInteger(maxValue) && Number.isInteger(minValue) ? Math.round(mappedValue) : mappedValue;
-    });
+    // Only apply range mapping if custom range is explicitly set
+    const mappedValues = (minValue !== undefined && maxValue !== undefined) ? 
+      values.map(value => {
+        // Clamp to [-1, 1] first (joystick natural range)
+        const clampedValue = Math.max(-1, Math.min(1, value));
+        // Map to configured range. Rounding is now handled based on the message type,
+        // not the range configuration, allowing for float outputs.
+        return ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
+      }) : 
+      values; // Use raw joystick values [-1, 1] when no custom range is set
+
+    // Debug logging
+    console.log('Joystick values:', values);
+    console.log('Config range:', { min: minValue, max: maxValue });
+    console.log('Mapped values:', mappedValues);
+    console.log('Topic:', action.topic, 'Type:', action.messageType);
 
     let message: any;
 
-    if (action.messageType === 'sensor_msgs/Joy') {
+    if (action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy') {
       // For Joy messages, update the specific axes
-      const axesCount = Math.max(4, ...((config.config?.axes || ['0', '1']).map(a => parseInt(a) + 1).filter(n => !isNaN(n))));
-      const axes = Array(axesCount).fill(0.0);
       const axesConfig = config.config?.axes || ['0', '1'];
+      const maxAxisIndex = Math.max(...axesConfig.map(a => parseInt(a)).filter(n => !isNaN(n)));
+      const axesCount = Math.max(4, maxAxisIndex + 1); // Ensure enough axes
+      const axes = Array(axesCount).fill(0.0);
       
       axesConfig.forEach((axisStr, index) => {
         const axisIndex = parseInt(axisStr);
-        if (!isNaN(axisIndex) && index < mappedValues.length) {
+        if (!isNaN(axisIndex) && index < mappedValues.length && axisIndex < axes.length) {
           axes[axisIndex] = mappedValues[index];
         }
       });
@@ -93,7 +131,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
         axes: axes,
         buttons: []
       });
-    } else if (action.messageType === 'geometry_msgs/Twist') {
+    } else if (action.messageType === 'geometry_msgs/Twist' || action.messageType === 'geometry_msgs/msg/Twist') {
       // For Twist messages
       const linear = { x: 0, y: 0, z: 0 };
       const angular = { x: 0, y: 0, z: 0 };
@@ -130,6 +168,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     }
 
     if (message) {
+      console.log('Publishing message:', message);
       topicRef.current.publish(message);
       lastSentValues.current = [...values];
     }
@@ -165,14 +204,37 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   }, [ros, config.action, publishMessage, publishThrottled, isEditing]);
 
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
-    if (event.x === null || event.y === null || isEditing) return;
+    if (event.x === null || event.y === null || event.distance === null || isEditing) return;
     
-    const size = 100;
-    const halfSize = size / 2;
+    // Debug: Log raw joystick component values
+    console.log('Raw joystick event:', { 
+      x: event.x, 
+      y: event.y, 
+      distance: event.distance,
+      direction: event.direction 
+    });
     
-    // Normalize to [-1, 1] range (natural joystick range)
-    const x = event.x / halfSize;
-    const y = event.y / halfSize;
+    // Use distance (0-100) from the event to ensure correct scaling.
+    const magnitude = event.distance / 100; // Normalize distance to 0-1.
+
+    if (magnitude === 0) {
+      publishThrottled([0, 0]);
+      return;
+    }
+
+    // atan2 gets the angle from the raw x/y pixel values. Y is inverted for Cartesian coordinates.
+    const angleRad = Math.atan2(-event.y, event.x);
+
+    // Reconstruct the normalized x and y from the magnitude and angle.
+    const x = magnitude * Math.cos(angleRad);
+    const y = magnitude * Math.sin(angleRad);
+    
+    console.log('Calculated normalized values:', { 
+      magnitude,
+      angleRad,
+      normalizedX: x, 
+      normalizedY: y 
+    });
     
     publishThrottled([x, y]);
   }, [publishThrottled, isEditing]);
@@ -182,33 +244,6 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     publishThrottled.cancel();
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, isEditing]);
-
-  // Calculate optimal joystick size that fits within the grid cell
-  const calculateJoystickSize = () => {
-    if (containerSize.width === 0 || containerSize.height === 0) {
-      return { size: 100, stickSize: 40 };
-    }
-
-    // The container represents the exact grid cell size allocated to this component
-    // Use the smaller dimension to ensure the joystick stays circular and fits
-    const availableSize = Math.min(containerSize.width, containerSize.height);
-    
-    // Reserve minimal space for padding - joystick needs less padding than D-pad
-    const padding = Math.max(8, availableSize * 0.08);
-    const maxSize = availableSize - padding;
-    
-    // Set minimum size for usability but prioritize fitting within grid cell
-    const minSize = Math.min(50, maxSize);
-    const size = Math.max(minSize, maxSize);
-    
-    // Calculate stick size as a proportion of the base size
-    const stickRatio = 0.4;
-    const stickSize = Math.max(16, Math.floor(size * stickRatio));
-    
-    return { size, stickSize };
-  };
-
-  const { size: joystickSize, stickSize } = calculateJoystickSize();
 
   // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {
