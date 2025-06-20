@@ -76,6 +76,8 @@
   max-height: calc(90vh - 120px);
 }
 
+
+
 /* Settings Sections */
 .settings-section {
   padding: 20px 24px;
@@ -196,6 +198,38 @@
   color: #ffc107;
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+/* Inline Error Message */
+.error-message-inline {
+  margin-top: 6px;
+  padding: 0;
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.error-content-inline {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.error-content-inline .error-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.error-content-inline .error-text {
+  flex: 1;
+  color: #ff6b6b;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  font-weight: 500;
 }
 
 /* Range Inputs */

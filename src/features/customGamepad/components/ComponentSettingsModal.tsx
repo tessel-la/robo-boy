@@ -145,6 +145,35 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   
   // Loading state
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
+  
+  // Error state
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Continuous topic validation effect
+  useEffect(() => {
+    // Clear error message initially
+    setErrorMessage('');
+
+    // Only validate if we have a topic name and message type
+    if (!topic || !messageType || availableTopics.length === 0) {
+      return;
+    }
+
+    // Check if custom topic name conflicts with existing topic with different message type
+    const existingTopic = availableTopics.find(t => t.name === topic);
+    if (existingTopic) {
+      // Get the message type configuration to check for alternative formats
+      const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
+      const acceptableTypes = messageConfig 
+        ? [messageType, ...(messageConfig.alternativeTypes || [])]
+        : [messageType];
+      
+      // Check if the existing topic type matches any acceptable format
+      if (!acceptableTypes.includes(existingTopic.type)) {
+        setErrorMessage(`Topic name "${topic}" is already in use by an existing topic with message type "${existingTopic.type}". Please choose a different topic name or select the correct message type.`);
+      }
+    }
+  }, [topic, messageType, availableTopics]);
 
   const getPrecision = (num: number) => {
     const numString = String(num);
@@ -322,11 +351,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     // Additional validation for toggle components
     if (component.type === 'toggle') {
       if (!['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(messageType)) {
-        alert('Toggle components can only use Boolean message types (std_msgs/Bool).');
+        setErrorMessage('Toggle components can only use Boolean message types (std_msgs/Bool).');
         return;
       }
       if (field !== 'data') {
-        alert('Toggle components can only use the "data" field.');
+        setErrorMessage('Toggle components can only use the "data" field.');
         return;
       }
     }
@@ -334,11 +363,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     // Additional validation for dpad components
     if (component.type === 'dpad') {
       if (!['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'].includes(messageType)) {
-        alert('D-Pad components can only use Joy message types (sensor_msgs/Joy).');
+        setErrorMessage('D-Pad components can only use Joy message types (sensor_msgs/Joy).');
         return;
       }
       if (field !== 'buttons') {
-        alert('D-Pad components can only use the "buttons" field.');
+        setErrorMessage('D-Pad components can only use the "buttons" field.');
         return;
       }
     }
@@ -531,15 +560,26 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   className="setting-input topic-input"
                 />
               </div>
-              {messageType && filteredTopics.length === 0 && availableTopics.length > 0 && !isLoadingTopics && (
-                <div className="topic-warning">
-                  No existing topics found for {messageType}. Please enter a custom topic name below.
+              {errorMessage ? (
+                <div className="error-message-inline">
+                  <div className="error-content-inline">
+                    <span className="error-icon">⚠️</span>
+                    <span className="error-text">{errorMessage}</span>
+                  </div>
                 </div>
-              )}
-              {messageType && availableTopics.length === 0 && !isLoadingTopics && (
-                <div className="topic-warning">
-                  No topics available from ROS. Make sure ROS is connected and topics are being published.
-                </div>
+              ) : (
+                <>
+                  {messageType && filteredTopics.length === 0 && availableTopics.length > 0 && !isLoadingTopics && (
+                    <div className="topic-warning">
+                      No existing topics found for {messageType}. Please enter a custom topic name below.
+                    </div>
+                  )}
+                  {messageType && availableTopics.length === 0 && !isLoadingTopics && (
+                    <div className="topic-warning">
+                      No topics available from ROS. Make sure ROS is connected and topics are being published.
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -952,7 +992,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           <button 
             className="save-btn" 
             onClick={handleSave}
-            disabled={!topic || !messageType}
+            disabled={!topic || !messageType || !!errorMessage}
           >
             Save Configuration
           </button>
