@@ -340,8 +340,8 @@ export const defaultManipulatorLayout: CustomGamepadLayout = {
     }
   ],
   rosConfig: {
-    defaultTopic: '/joint_commands',
-    defaultMessageType: 'sensor_msgs/JointState'
+    defaultTopic: '',
+    defaultMessageType: ''
   },
   metadata: {
     created: new Date().toISOString(),
@@ -407,8 +407,8 @@ export const defaultMobileLayout: CustomGamepadLayout = {
     }
   ],
   rosConfig: {
-    defaultTopic: '/cmd_vel',
-    defaultMessageType: 'geometry_msgs/Twist'
+    defaultTopic: '',
+    defaultMessageType: ''
   },
   metadata: {
     created: new Date().toISOString(),

@@ -116,6 +116,32 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     const componentDef = componentLibrary.find(c => c.type === componentType);
     if (!componentDef) return;
 
+    // Set default topic and message type based on component type
+    let action: { topic: string; messageType: string; field?: string } = {
+      topic: `/${componentType}`,
+      messageType: 'sensor_msgs/Joy', // Default fallback
+    };
+
+    switch (componentType) {
+      case 'joystick':
+        action = { topic: '/joystick', messageType: 'sensor_msgs/Joy', field: 'axes' };
+        break;
+      case 'dpad':
+        action = { topic: '/dpad', messageType: 'sensor_msgs/Joy', field: 'buttons' };
+        break;
+      case 'button':
+        action = { topic: '/button', messageType: 'std_msgs/Bool', field: 'data' };
+        break;
+      case 'toggle':
+        action = { topic: '/toggle', messageType: 'std_msgs/Bool', field: 'data' };
+        break;
+      case 'slider':
+        action = { topic: '/slider', messageType: 'std_msgs/Float32', field: 'data' };
+        break;
+      default:
+        action = { topic: `/${componentType}`, messageType: layout.rosConfig.defaultMessageType };
+    }
+
     const newComponent: GamepadComponentConfig = {
       id: `${componentType}-${Date.now()}`,
       type: componentType as any,
@@ -126,10 +152,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         height: componentDef.defaultSize.height
       },
       label: componentDef.name,
-      action: {
-        topic: layout.rosConfig.defaultTopic,
-        messageType: layout.rosConfig.defaultMessageType
-      }
+      action: action
     };
 
     setLayout(prev => ({

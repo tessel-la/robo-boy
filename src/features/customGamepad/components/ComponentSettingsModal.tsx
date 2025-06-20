@@ -213,32 +213,57 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setLabel(component.label || '');
       
       const action = component.action as ROSTopicConfig;
+      
+      // Set defaults for new components first
+      let defaultTopic = `/${component.type}`;
+      let defaultMessageType = 'sensor_msgs/Joy';
+      let defaultField = 'axes';
+
+      switch (component.type) {
+        case 'dpad':
+          defaultTopic = '/dpad';
+          defaultMessageType = 'sensor_msgs/Joy';
+          defaultField = 'buttons';
+          break;
+        case 'slider':
+          defaultTopic = '/slider';
+          defaultMessageType = 'std_msgs/Float32';
+          defaultField = 'data';
+          break;
+        case 'button':
+          defaultTopic = '/button';
+          defaultMessageType = 'std_msgs/Bool';
+          defaultField = 'data';
+          break;
+        case 'toggle':
+          defaultTopic = '/toggle';
+          defaultMessageType = 'std_msgs/Bool';
+          defaultField = 'data';
+          break;
+        case 'joystick':
+          defaultTopic = '/joystick';
+          defaultMessageType = 'sensor_msgs/Joy';
+          defaultField = 'axes';
+          break;
+      }
+
+      // Set topic, message type, and field from action if it exists, otherwise use defaults
+      setTopic((action?.topic && action.topic.trim() !== '') ? action.topic : defaultTopic);
+      setMessageType(action?.messageType || defaultMessageType);
+      setField(action?.field || defaultField);
+
+      // Force component-specific message type restrictions for existing configs
       if (action) {
-        setTopic(action.topic || '');
-        
-        // Force component-specific message type restrictions
         if (component.type === 'dpad') {
           setMessageType(action.messageType || 'sensor_msgs/Joy');
           setField('buttons');
         } else if (component.type === 'toggle') {
-          // Force toggle to use Bool message type and data field - always
           const validToggleType = ['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(action.messageType || '') 
             ? action.messageType 
             : 'std_msgs/Bool';
           setMessageType(validToggleType);
           setField('data');
-        } else {
-          setMessageType(action.messageType || 'sensor_msgs/Joy');
-          setField(action.field || (component.type === 'joystick' ? 'axes' : 'buttons'));
         }
-      } else if (component.type === 'dpad') {
-        // Set defaults for new D-pad components
-        setMessageType('sensor_msgs/Joy');
-        setField('buttons');
-      } else if (component.type === 'toggle') {
-        // Set defaults for new toggle components - always Bool
-        setMessageType('std_msgs/Bool');
-        setField('data');
       }
       
       // Initialize component-specific settings
