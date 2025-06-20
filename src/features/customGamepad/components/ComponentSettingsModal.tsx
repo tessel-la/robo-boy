@@ -515,18 +515,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                         {topicInfo.name} ({topicInfo.type})
                       </option>
                     ))
-                  ) : messageType && availableTopics.length > 0 ? (
-                    <>
-                      <option disabled>── No {messageType} topics found ──</option>
-                      <option disabled>── All available topics ──</option>
-                      {availableTopics.map((topicInfo) => (
-                        <option key={topicInfo.name} value={topicInfo.name}>
-                          {topicInfo.name} ({topicInfo.type})
-                        </option>
-                      ))}
-                    </>
+                  ) : messageType ? (
+                    <option disabled>No {messageType} topics found</option>
                   ) : (
-                    <option disabled>No topics available</option>
+                    <option disabled>Select message type first</option>
                   )}
                 </select>
                 <span className="topic-input-separator">or</span>
@@ -541,7 +533,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               </div>
               {messageType && filteredTopics.length === 0 && availableTopics.length > 0 && !isLoadingTopics && (
                 <div className="topic-warning">
-                  No existing topics found for {messageType}. You can select from all available topics above or enter a custom topic name.
+                  No existing topics found for {messageType}. Please enter a custom topic name below.
                 </div>
               )}
               {messageType && availableTopics.length === 0 && !isLoadingTopics && (
