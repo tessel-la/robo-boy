@@ -66,13 +66,14 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       const padding = Math.max(8, availableSize * 0.08);
       const maxSize = availableSize - padding;
       
-      // Set minimum size for usability
-      const minSize = Math.min(50, maxSize);
+      // Set minimum size for usability, but scale it down for editing mode
+      const minSize = isEditing ? Math.min(30, maxSize) : Math.min(50, maxSize);
       size = Math.max(minSize, maxSize);
       
       // Calculate stick size as a proportion of the base size
       const stickRatio = 0.4;
-      stickSize = Math.max(16, Math.floor(size * stickRatio));
+      const minStickSize = isEditing ? 4 : 12;
+      stickSize = Math.max(minStickSize, Math.floor(size * stickRatio));
     }
     joystickSizeRef.current = size; // Update ref
     return { size, stickSize };
