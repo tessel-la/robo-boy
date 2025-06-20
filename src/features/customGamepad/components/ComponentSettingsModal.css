@@ -122,8 +122,10 @@
 }
 
 /* Input Styles */
-.setting-input,
-.setting-select {
+.settings-input,
+.setting-select,
+.modal-content input:not([type="range"]),
+.modal-content select {
   width: 100%;
   padding: 8px 12px;
   background-color: var(--background-secondary, #2a2a2a);
@@ -133,16 +135,19 @@
   font-size: 0.875rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
+  margin-bottom: 0 !important;
 }
 
-.setting-input:focus,
-.setting-select:focus {
+.settings-input:focus,
+.setting-select:focus,
+.modal-content input:not([type="range"]):focus,
+.modal-content select:focus {
   outline: none;
   border-color: var(--primary-color, #32CD32);
   box-shadow: 0 0 0 2px rgba(50, 205, 50, 0.2);
 }
 
-.setting-input.small {
+.settings-input.small {
   width: auto;
   min-width: 80px;
 }
@@ -202,6 +207,9 @@
 
 .range-input-item {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .range-input-item label {
@@ -210,6 +218,83 @@
   font-weight: 500;
   color: var(--text-color, #e8eaed);
   font-size: 0.875rem;
+  text-align: center;
+}
+
+.range-input-item input {
+  width: 50% !important;
+  text-align: center;
+}
+
+/* Range Controls */
+.range-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+}
+
+.range-controls .range-input-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.range-controls .range-input-item input {
+  width: 60px !important;
+  text-align: center;
+}
+
+/* Value Range Slider */
+.value-range-container {
+  margin: 10px 0;
+}
+
+.value-range-container input[type="range"] {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: transparent !important;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.value-range-container input[type="range"]::-webkit-slider-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: var(--border-color, #444);
+  border-radius: 3px;
+}
+
+.value-range-container input[type="range"]::-webkit-slider-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: var(--primary-color, #32CD32);
+  cursor: pointer;
+  -webkit-appearance: none;
+  border: 2px solid var(--background-color, #1a1a1a);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.value-range-container input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: var(--border-color, #444);
+  border-radius: 3px;
+  border: none;
+}
+
+.value-range-container input[type="range"]::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: var(--primary-color, #32CD32);
+  cursor: pointer;
+  border: 2px solid var(--background-color, #1a1a1a);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Axis Configuration */
@@ -245,12 +330,79 @@
   padding: 8px 0;
 }
 
+.axis-selection h5 {
+  margin: 16px 0 8px 0;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color, #444);
+}
+
+.axis-selection h5:first-child {
+  margin-top: 8px;
+}
+
 .custom-axes {
   margin-top: 12px;
 }
 
 .custom-axes label {
   margin-bottom: 6px;
+}
+
+.axis-help-text {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.axis-config-disabled {
+  background-color: var(--background-tertiary, #3a3a3a);
+  border: 1px solid var(--border-color, #555);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 6px;
+}
+
+.axis-config-disabled p {
+  margin: 4px 0;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.875rem;
+}
+
+.axis-config-disabled strong {
+  color: var(--text-color, #e8eaed);
+}
+
+/* D-Pad Button Mapping */
+.dpad-button-mapping {
+  margin-top: 8px;
+}
+
+.button-mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.button-mapping-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.button-mapping-item label {
+  font-size: 0.8rem;
+  color: var(--text-color, #e8eaed);
+  margin-bottom: 2px;
+}
+
+.button-mapping-item input {
+  width: 60px;
 }
 
 /* Modal Footer */
@@ -365,4 +517,94 @@
 
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary, #666);
+}
+
+.enhanced-component-settings-modal .settings-section {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+}
+
+/* Override for general input/select margins within setting groups */
+.setting-group input[type="text"],
+.setting-group input[type="number"],
+.setting-group select {
+  margin-bottom: 0;
+}
+
+/* Ensure no margin-bottom on inputs within ValueControl used in this modal */
+.value-control input[type="number"] {
+  margin-bottom: 0;
+}
+
+/* Range Slider Override - Ensure RangeSlider component inputs are not affected by general modal styles */
+.modal-content .range-slider-container input[type="range"],
+.modal-content .range-slider input[type="range"],
+.modal-content input[type="range"].thumb {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 5px !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* Fix circular thumb positioning */
+.modal-content .range-slider-container input[type="range"]::-webkit-slider-thumb,
+.modal-content .range-slider input[type="range"]::-webkit-slider-thumb,
+.modal-content input[type="range"].thumb::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  pointer-events: all !important;
+  width: 18px !important;
+  height: 18px !important;
+  background-color: var(--primary-color) !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--background-color) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  top: 0 !important;
+  transform: translateY(0) !important;
+  margin-top: -6.5px !important; /* Center the 18px thumb on 5px track */
+}
+
+.modal-content .range-slider-container input[type="range"]::-moz-range-thumb,
+.modal-content .range-slider input[type="range"]::-moz-range-thumb,
+.modal-content input[type="range"].thumb::-moz-range-thumb {
+  -moz-appearance: none !important;
+  pointer-events: all !important;
+  width: 18px !important;
+  height: 18px !important;
+  background-color: var(--primary-color) !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--background-color) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  top: 0 !important;
+  transform: translateY(0) !important;
+  margin-top: -6.5px !important; /* Center the 18px thumb on 5px track */
+}
+
+.modal-content .range-slider-container input[type="range"]:focus,
+.modal-content .range-slider input[type="range"]:focus,
+.modal-content input[type="range"].thumb:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Ensure slider track and range elements are also properly centered */
+.modal-content .range-slider-container .slider-track,
+.modal-content .range-slider-container .slider-range {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 } 

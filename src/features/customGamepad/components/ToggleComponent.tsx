@@ -22,14 +22,13 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
 
     let message: any;
 
-    if (action.messageType === 'std_msgs/Bool') {
+    if (action.messageType === 'std_msgs/Bool' || action.messageType === 'std_msgs/msg/Bool') {
       message = new ROSLIB.Message({
         data: state
       });
-    } else if (action.messageType === 'std_msgs/Int32') {
-      message = new ROSLIB.Message({
-        data: state ? 1 : 0
-      });
+    } else {
+      console.warn(`Toggle component only supports Boolean message types (std_msgs/Bool). Received: ${action.messageType}`);
+      return;
     }
 
     if (message) {
@@ -42,6 +41,11 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
 
     const action = config.action as ROSTopicConfig;
     if (!action.topic || !action.messageType) return;
+
+    if (!['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(action.messageType)) {
+      console.error(`Toggle component only supports Boolean message types. Invalid type: ${action.messageType}`);
+      return;
+    }
 
     topicRef.current = new ROSLIB.Topic({
       ros: ros,

@@ -1,0 +1,79 @@
+.value-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.value-control label {
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: var(--text-color);
+}
+
+.control-input-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 34px;
+}
+
+.control-btn {
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  width: 34px;
+  height: 100%;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.control-btn:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-btn.minus {
+  border-radius: 4px 0 0 4px;
+}
+
+.control-btn.plus {
+  border-radius: 0 4px 4px 0;
+}
+
+.control-value-input {
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-right: none;
+  height: 100%;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  -moz-appearance: textfield;
+  box-sizing: border-box;
+  font-size: 14px;
+  padding: 0 4px;
+  margin-bottom: 0;
+  line-height: 34px;
+  vertical-align: middle;
+}
+
+.control-value-input::-webkit-outer-spin-button,
+.control-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+} 
