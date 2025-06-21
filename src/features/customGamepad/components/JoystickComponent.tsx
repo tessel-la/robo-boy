@@ -21,6 +21,8 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const joystickSizeRef = useRef(100); // Use ref to hold joystick size
+  const [baseColor, setBaseColor] = useState<string>('#6c757d');
+  const [stickColor, setStickColor] = useState<string>('#32CD32');
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -48,8 +50,34 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
 
-  const baseColor = getThemeColor('--secondary-color') || '#6c757d';
-  const stickColor = getThemeColor('--primary-color') || '#32CD32';
+  // Make joystick colors reactive to theme changes
+  useEffect(() => {
+    const updateJoystickColors = () => {
+      const baseThemeColor = getThemeColor('--secondary-color') || '#6c757d';
+      const stickThemeColor = getThemeColor('--primary-color') || '#32CD32';
+      setBaseColor(baseThemeColor);
+      setStickColor(stickThemeColor);
+    };
+
+    // Update colors initially
+    updateJoystickColors();
+
+    // Watch for theme changes by observing data-theme attribute changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          updateJoystickColors();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Calculate optimal joystick size that fits within the grid cell
   const calculateJoystickSize = () => {

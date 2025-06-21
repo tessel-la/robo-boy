@@ -19,16 +19,47 @@ const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using Ga
   // State to hold axes values - Initialize with zeros
   const [axes, setAxes] = useState<number[]>(Array(NUM_AXES).fill(0.0));
   const lastSentAxes = useRef<number[]>([...axes]);
+  // --- Add state for joystick colors ---
+  const [baseJoystickColor, setBaseJoystickColor] = useState<string>('#6c757d');
+  const [stickJoystickColor, setStickJoystickColor] = useState<string>('#32CD32');
 
   // Get current theme colors dynamically (this assumes theme variables are set on :root or body)
   const getThemeColor = (variableName: string) => {
       return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
 
+  // --- Make joystick colors reactive to theme changes ---
+  useEffect(() => {
+    const updateJoystickColors = () => {
+      const baseColor = getThemeColor('--secondary-color') || '#6c757d';
+      const stickColor = getThemeColor('--primary-color') || '#32CD32';
+      setBaseJoystickColor(baseColor);
+      setStickJoystickColor(stickColor);
+    };
+
+    // Update colors initially
+    updateJoystickColors();
+
+    // Watch for theme changes by observing data-theme attribute changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          updateJoystickColors();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+  // --- End of reactive joystick colors ---
+
   // Note: This might cause a flicker on initial load if CSS isn't fully loaded.
   // Consider passing theme state down or using context for a more robust solution if needed.
-  const baseJoystickColor = getThemeColor('--secondary-color') || '#6c757d'; // Grey fallback
-  const stickJoystickColor = getThemeColor('--primary-color') || '#32CD32'; // Lime fallback
 
   // Function to publish Joy message (define first)
   const publishJoy = useCallback((currentAxes: number[]) => {
