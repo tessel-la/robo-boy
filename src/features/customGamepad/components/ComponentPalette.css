@@ -552,8 +552,7 @@
 
   .component-preview,
   .hint-preview {
-    width: 35px;
-    height: 35px;
+    /* Width and height removed for small screens */
   }
 
   .component-name {
@@ -601,8 +600,7 @@
 
   .component-preview,
   .hint-preview {
-    width: 30px;
-    height: 30px;
+    /* Width and height removed for small screens */
   }
 
   .component-name {
