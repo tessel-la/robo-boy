@@ -131,7 +131,6 @@
   position: absolute;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
   border: 2px solid white;
   font-size: 12px;
   font-weight: bold;
@@ -161,11 +160,25 @@
   background-color: rgba(0, 0, 0, 0.7); /* Dark background by default */
   color: white !important; /* White text by default */
   border: 2px solid var(--error-color, #dc3545); /* Colored border */
+  /* Force perfect circle with aggressive CSS */
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+  aspect-ratio: 1 / 1 !important;
 }
 
 .delete-button:hover:not(:disabled) {
   background-color: var(--error-color, #dc3545); /* Full color on hover */
   color: white !important; /* White text on hover */
+  /* Maintain circular shape on hover */
+  width: 24px !important;
+  height: 24px !important;
 }
 
 .settings-button {
@@ -175,11 +188,26 @@
   color: white !important; /* White text by default */
   border: 2px solid #6f42c1; /* Colored border */
   font-size: 10px;
+  /* Force perfect square with explicit border-radius override */
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  border-radius: 8px !important; /* Override any inherited border-radius */
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+  aspect-ratio: 1 / 1 !important;
 }
 
 .settings-button:hover:not(:disabled) {
   background-color: #6f42c1; /* Full color on hover */
   color: white !important; /* White text on hover */
+  /* Maintain circular shape on hover */
+  width: 24px !important;
+  height: 24px !important;
 }
 
 /* Translation controls */
@@ -381,11 +409,25 @@ button.joystick-disabled {
   background-color: rgba(0, 0, 0, 0.7) !important; /* Dark background by default */
   color: white !important; /* White text by default */
   border: 2px solid var(--error-color, #dc3545) !important; /* Red border */
+  /* Force perfect circle with aggressive CSS */
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+  aspect-ratio: 1 / 1 !important;
 }
 
 .gamepad-component.dpad .delete-button:hover:not(:disabled) {
   background-color: var(--error-color, #dc3545) !important; /* Full red on hover */
   color: white !important; /* White text on hover */
+  /* Maintain circular shape on hover */
+  width: 24px !important;
+  height: 24px !important;
 }
 
 .gamepad-component.dpad .settings-button {
@@ -393,11 +435,26 @@ button.joystick-disabled {
   color: white !important; /* White text by default */
   border: 2px solid #6f42c1 !important; /* Purple border */
   font-size: 10px;
+  /* Force perfect square with explicit border-radius override */
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  border-radius: 8px !important; /* Override any inherited border-radius */
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+  aspect-ratio: 1 / 1 !important;
 }
 
 .gamepad-component.dpad .settings-button:hover:not(:disabled) {
   background-color: #6f42c1 !important; /* Full purple on hover */
   color: white !important; /* White text on hover */
+  /* Maintain circular shape on hover */
+  width: 24px !important;
+  height: 24px !important;
 }
 
 .dpad-component button {
@@ -489,8 +546,8 @@ button.joystick-disabled {
     width: 18px;
     height: 18px;
     font-size: 11px;
-    top: -6px;
-    right: -6px;
+    /* top: -6px; */
+    /* right: -6px; */
   }
   
   .resize-handle.bottom-right {
@@ -511,8 +568,8 @@ button.joystick-disabled {
     width: 16px;
     height: 16px;
     font-size: 10px;
-    top: -5px;
-    right: -5px;
+    /* top: -5px; */
+    /* right: -5px; */
   }
   
   .resize-handle.bottom-right {
