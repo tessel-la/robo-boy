@@ -376,6 +376,30 @@ button.joystick-disabled {
   z-index: 3 !important;
 }
 
+/* Ensure D-pad control buttons have proper colored borders */
+.gamepad-component.dpad .delete-button {
+  background-color: rgba(0, 0, 0, 0.7) !important; /* Dark background by default */
+  color: white !important; /* White text by default */
+  border: 2px solid var(--error-color, #dc3545) !important; /* Red border */
+}
+
+.gamepad-component.dpad .delete-button:hover:not(:disabled) {
+  background-color: var(--error-color, #dc3545) !important; /* Full red on hover */
+  color: white !important; /* White text on hover */
+}
+
+.gamepad-component.dpad .settings-button {
+  background-color: rgba(0, 0, 0, 0.7) !important; /* Dark background by default */
+  color: white !important; /* White text by default */
+  border: 2px solid #6f42c1 !important; /* Purple border */
+  font-size: 10px;
+}
+
+.gamepad-component.dpad .settings-button:hover:not(:disabled) {
+  background-color: #6f42c1 !important; /* Full purple on hover */
+  color: white !important; /* White text on hover */
+}
+
 .dpad-component button {
   border: none;
   outline: none;
