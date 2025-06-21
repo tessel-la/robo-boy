@@ -231,7 +231,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                 disabled={config.position.width >= gridSize.width - config.position.x}
                 title="Increase width"
               >
-                ⟷+
+                +
               </button>
               <button
                 className="control-button resize-button width-minus"
@@ -242,7 +242,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                 disabled={config.position.width <= 1}
                 title="Decrease width"
               >
-                ⟷-
+                −
               </button>
               <button
                 className="control-button resize-button height-plus"
@@ -253,7 +253,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                 disabled={config.position.height >= gridSize.height - config.position.y}
                 title="Increase height"
               >
-                ↕+
+                +
               </button>
               <button
                 className="control-button resize-button height-minus"
@@ -264,7 +264,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
                 disabled={config.position.height <= 1}
                 title="Decrease height"
               >
-                ↕-
+                −
               </button>
             </div>
           )}

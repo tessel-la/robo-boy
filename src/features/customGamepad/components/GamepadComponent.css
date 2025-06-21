@@ -267,33 +267,34 @@
 .resize-controls .control-button {
   background-color: #ffc107;
   color: #212529;
-  width: 28px;
-  height: 20px;
-  border-radius: 10px;
-  font-size: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
+  border: 2px solid #212529;
 }
 
 .resize-controls .resize-button.width-plus {
-  right: -35px;
+  right: -30px;
   top: 50%;
   transform: translateY(-50%);
 }
 
 .resize-controls .resize-button.width-minus {
-  left: -35px;
+  left: -30px;
   top: 50%;
   transform: translateY(-50%);
 }
 
 .resize-controls .resize-button.height-plus {
-  top: -25px;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .resize-controls .resize-button.height-minus {
-  bottom: -25px;
+  bottom: -30px;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -550,6 +551,29 @@ button.joystick-disabled {
     /* right: -6px; */
   }
   
+  /* Resize controls for mobile */
+  .resize-controls .control-button {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  
+  .resize-controls .resize-button.width-plus {
+    right: -25px;
+  }
+  
+  .resize-controls .resize-button.width-minus {
+    left: -25px;
+  }
+  
+  .resize-controls .resize-button.height-plus {
+    top: -25px;
+  }
+  
+  .resize-controls .resize-button.height-minus {
+    bottom: -25px;
+  }
+  
   .resize-handle.bottom-right {
     width: 6px;
     height: 6px;
@@ -572,10 +596,125 @@ button.joystick-disabled {
     /* right: -5px; */
   }
   
+  /* Resize controls for small mobile */
+  .resize-controls .control-button {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
+  
+  .resize-controls .resize-button.width-plus {
+    right: -22px;
+  }
+  
+  .resize-controls .resize-button.width-minus {
+    left: -22px;
+  }
+  
+  .resize-controls .resize-button.height-plus {
+    top: -22px;
+  }
+  
+  .resize-controls .resize-button.height-minus {
+    bottom: -22px;
+  }
+  
   .resize-handle.bottom-right {
     width: 5px;
     height: 5px;
     bottom: -2px;
     right: -2px;
   }
+}
+
+/* Resize controls for mobile */
+.resize-controls .control-button {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+
+.resize-controls .resize-button.width-plus {
+  right: -25px;
+}
+
+.resize-controls .resize-button.width-minus {
+  left: -25px;
+}
+
+.resize-controls .resize-button.height-plus {
+  top: -25px;
+}
+
+.resize-controls .resize-button.height-minus {
+  bottom: -25px;
+}
+
+/* Translation controls for mobile - maintain arrow shape */
+.translate-controls .control-button {
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+}
+
+.translate-controls .translate-button.up {
+  top: -22px;
+}
+
+.translate-controls .translate-button.down {
+  bottom: -22px;
+}
+
+.translate-controls .translate-button.left {
+  left: -22px;
+}
+
+.translate-controls .translate-button.right {
+  right: -22px;
+}
+
+/* Resize controls for small mobile */
+.resize-controls .control-button {
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+
+.resize-controls .resize-button.width-plus {
+  right: -22px;
+}
+
+.resize-controls .resize-button.width-minus {
+  left: -22px;
+}
+
+.resize-controls .resize-button.height-plus {
+  top: -22px;
+}
+
+.resize-controls .resize-button.height-minus {
+  bottom: -22px;
+}
+
+/* Translation controls for small mobile - maintain arrow shape */
+.translate-controls .control-button {
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+.translate-controls .translate-button.up {
+  top: -20px;
+}
+
+.translate-controls .translate-button.down {
+  bottom: -20px;
+}
+
+.translate-controls .translate-button.left {
+  left: -20px;
+}
+
+.translate-controls .translate-button.right {
+  right: -20px;
 } 
