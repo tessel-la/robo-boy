@@ -112,38 +112,28 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     });
   }, [publishThrottled, isEditing]);
 
-  // Calculate optimal D-pad size that maximizes the use of allocated grid space
+  // Calculate optimal D-pad size that maintains square proportions while fitting in allocated space
   const calculateOptimalDPadSize = () => {
     if (containerSize.width === 0 || containerSize.height === 0) {
-      return { width: '100%', height: '100%', maxSize: 100 };
+      return { width: 100, height: 100, maxSize: 100 };
     }
 
-    // The container represents the exact 2x2 grid space allocated to the D-pad
+    // The container represents the exact grid space allocated to the D-pad
     const containerWidth = containerSize.width;
     const containerHeight = containerSize.height;
     
-    // For medium screens (550-770px), be more aggressive about filling space
-    const isTargetScreenSize = window.innerWidth >= 550 && window.innerWidth <= 770;
+    // Always maintain square proportions by using the smaller dimension
+    // This prevents the D-pad from stretching and distorting
+    const availableSize = Math.min(containerWidth, containerHeight);
     
-    let usableWidth, usableHeight;
-    
-    if (isTargetScreenSize) {
-      // Use almost the entire allocated space on problematic screen sizes
-      usableWidth = containerWidth * 0.98;
-      usableHeight = containerHeight * 0.98;
-    } else {
-      // Use most of the space but leave some breathing room on other sizes
-      usableWidth = containerWidth * 0.95;
-      usableHeight = containerHeight * 0.95;
-    }
-    
-    // Calculate the maximum size that fits within the allocated space
-    const maxSize = Math.min(usableWidth, usableHeight);
+    // Reserve small amount of space for padding, but maximize the D-pad size
+    const padding = Math.max(4, availableSize * 0.05); // Minimal padding
+    const dpadSize = Math.max(30, availableSize - padding); // Minimum 30px for usability
     
     return {
-      width: `${usableWidth}px`,
-      height: `${usableHeight}px`,
-      maxSize
+      width: dpadSize,
+      height: dpadSize, // Always square
+      maxSize: dpadSize
     };
   };
 
@@ -162,18 +152,18 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     opacity: isEditing ? 0.7 : 1
   };
 
-  // D-pad style with calculated optimal dimensions
+  // D-pad style with calculated optimal dimensions - always square
   const dpadStyle: React.CSSProperties = {
-    width: optimalSize.width,
-    height: optimalSize.height,
+    width: `${optimalSize.width}px`,
+    height: `${optimalSize.height}px`,
     position: 'relative',
     overflow: 'visible', // Ensure this also allows overflow for control buttons
     boxSizing: 'border-box',
     display: 'grid',
     gridTemplateColumns: '1fr 1fr 1fr',
     gridTemplateRows: '1fr 1fr 1fr',
-    gap: '0.5%',
-    padding: '0.25%'
+    gap: '2px', // Fixed gap in pixels for consistency
+    padding: '2px' // Fixed padding in pixels for consistency
   };
 
   const buttonStyle = (direction: string): React.CSSProperties => {
