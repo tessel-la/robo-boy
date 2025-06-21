@@ -149,20 +149,17 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
 
   const optimalSize = calculateOptimalDPadSize();
 
-  // Container style that ensures the D-pad fills the entire allocated space
+  // Container style that matches the joystick's simple structure for control button compatibility
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
     position: 'relative',
-    overflow: 'visible',
+    overflow: 'visible', // Critical: allows control buttons to show outside bounds
     boxSizing: 'border-box',
-    minWidth: 0,
-    minHeight: 0,
-    margin: 0,
-    padding: 0,
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    opacity: isEditing ? 0.7 : 1
   };
 
   // D-pad style with calculated optimal dimensions
@@ -170,14 +167,13 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     width: optimalSize.width,
     height: optimalSize.height,
     position: 'relative',
-    opacity: isEditing ? 0.7 : 1,
-    maxWidth: '100%',
-    maxHeight: '100%',
-    minWidth: 0,
-    minHeight: 0,
+    overflow: 'visible', // Ensure this also allows overflow for control buttons
     boxSizing: 'border-box',
-    margin: 0,
-    padding: 0
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gridTemplateRows: '1fr 1fr 1fr',
+    gap: '0.5%',
+    padding: '0.25%'
   };
 
   const buttonStyle = (direction: string): React.CSSProperties => {
@@ -199,7 +195,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       baseFontSize = Math.max(16, Math.min(36, effectiveSize * 0.14));
     }
     
-    const scaledFontSize = Math.floor(baseFontSize * scaleFactor);
+    const scaledFontSize = Math.max(12, Math.floor(baseFontSize * scaleFactor)); // Ensure minimum 12px font
 
     // Border radius based on effective size
     const borderRadius = Math.max(3, Math.min(12, Math.floor(effectiveSize * 0.05)));
@@ -297,10 +293,9 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
 
   return (
     <div className="dpad-component" ref={containerRef} style={containerStyle}>
-      <div className="custom-dpad-grid" style={dpadStyle}>
+      <div style={dpadStyle}>
         {/* Up button - top center */}
         <button
-          className="custom-dpad-button custom-dpad-up"
           style={buttonStyle('up')}
           onPointerDown={() => handleDirectionPress('up', true)}
           onPointerUp={() => handleDirectionPress('up', false)}
@@ -312,7 +307,6 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         
         {/* Left button - middle left */}
         <button
-          className="custom-dpad-button custom-dpad-left"
           style={buttonStyle('left')}
           onPointerDown={() => handleDirectionPress('left', true)}
           onPointerUp={() => handleDirectionPress('left', false)}
@@ -323,14 +317,10 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         </button>
         
         {/* Center circle - middle center */}
-        <div 
-          className="custom-dpad-center" 
-          style={centerStyle}
-        />
+        <div style={centerStyle} />
         
         {/* Right button - middle right */}
         <button
-          className="custom-dpad-button custom-dpad-right"
           style={buttonStyle('right')}
           onPointerDown={() => handleDirectionPress('right', true)}
           onPointerUp={() => handleDirectionPress('right', false)}
@@ -342,7 +332,6 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         
         {/* Down button - bottom center */}
         <button
-          className="custom-dpad-button custom-dpad-down"
           style={buttonStyle('down')}
           onPointerDown={() => handleDirectionPress('down', true)}
           onPointerUp={() => handleDirectionPress('down', false)}

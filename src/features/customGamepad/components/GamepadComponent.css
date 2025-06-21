@@ -158,24 +158,28 @@
 .delete-button {
   top: -12px;
   right: -12px;
-  background-color: var(--error-color, #dc3545);
-  color: white;
+  background-color: rgba(0, 0, 0, 0.7); /* Dark background by default */
+  color: white !important; /* White text by default */
+  border: 2px solid var(--error-color, #dc3545); /* Colored border */
 }
 
 .delete-button:hover:not(:disabled) {
-  background-color: var(--error-hover-color, #c82333);
+  background-color: var(--error-color, #dc3545); /* Full color on hover */
+  color: white !important; /* White text on hover */
 }
 
 .settings-button {
   top: -12px;
   left: -12px;
-  background-color: #6f42c1;
-  color: white;
+  background-color: rgba(0, 0, 0, 0.7); /* Dark background by default */
+  color: white !important; /* White text by default */
+  border: 2px solid #6f42c1; /* Colored border */
   font-size: 10px;
 }
 
 .settings-button:hover:not(:disabled) {
-  background-color: #5a32a3;
+  background-color: #6f42c1; /* Full color on hover */
+  color: white !important; /* White text on hover */
 }
 
 /* Translation controls */
@@ -347,6 +351,8 @@ button.joystick-disabled {
   min-width: 0;
   min-height: 0;
   flex-shrink: 0;
+  /* Ensure control buttons are visible */
+  z-index: 1;
 }
 
 /* Ensure D-pad component in editing mode uses full space */
@@ -355,6 +361,19 @@ button.joystick-disabled {
   height: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
+  /* Ensure D-pad doesn't interfere with control buttons */
+  z-index: 1 !important;
+}
+
+/* Ensure D-pad grid doesn't cover control buttons */
+.gamepad-component.dpad.editing .custom-dpad-grid {
+  z-index: 2 !important;
+  position: relative !important;
+}
+
+/* Ensure D-pad buttons don't interfere with control buttons */
+.gamepad-component.dpad.editing .custom-dpad-button {
+  z-index: 3 !important;
 }
 
 .dpad-component button {
