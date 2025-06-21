@@ -345,12 +345,46 @@
 /* Footer */
 .editor-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 12px;
   padding: 12px 16px;
   border-top: 1px solid var(--border-color, #e0e0e0);
   background-color: var(--background-secondary, #f8f9fa);
   flex-shrink: 0;
+}
+
+.pad-name-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pad-name-section label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-color, #333);
+}
+
+.pad-name-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  font-size: 0.9em;
+  background-color: var(--background-color, #fff);
+  color: var(--text-color, #333);
+  transition: border-color 0.2s ease;
+}
+
+.pad-name-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.footer-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .cancel-button,
@@ -454,6 +488,23 @@
   
   .editor-footer {
     padding: 12px 16px;
+  }
+
+  .pad-name-section {
+    gap: 4px;
+  }
+
+  .pad-name-section label {
+    font-size: 0.85em;
+  }
+
+  .pad-name-input {
+    padding: 6px 10px;
+    font-size: 0.85em;
+  }
+
+  .footer-buttons {
+    gap: 8px;
   }
   
   .cancel-button,

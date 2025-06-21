@@ -101,21 +101,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
       {!currentIsInButtonsRow && (
         <>
           <div className="settings-content">
-            {/* Pad Name Settings */}
-            <div className="settings-section">
-              <h4>Pad Configuration</h4>
-              <div className="settings-group">
-                <label>Name:</label>
-                <input
-                  type="text"
-                  value={layoutName}
-                  onChange={(e) => onNameChange(e.target.value)}
-                  placeholder="Enter pad name..."
-                />
-              </div>
-            </div>
-
-            {/* Grid Size Controls - Moved as second setting and made compact */}
+            {/* Grid Size Controls - Now the primary setting */}
             <div className="settings-section">
               <h4>Grid Layout</h4>
               
@@ -173,7 +159,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
               </div>
             </div>
 
-            {/* Description moved to the end for better mobile layout */}
+            {/* Description section */}
             <div className="settings-section">
               <h4>Description</h4>
               <div className="settings-group">

@@ -378,12 +378,25 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         </div>
 
         <div className="editor-footer">
-          <button className="cancel-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="save-button" onClick={handleSave}>
-            Save Gamepad
-          </button>
+          <div className="pad-name-section">
+            <label htmlFor="pad-name-input">Gamepad Name:</label>
+            <input
+              id="pad-name-input"
+              type="text"
+              className="pad-name-input"
+              value={layout.name}
+              onChange={(e) => handleLayoutNameChange(e.target.value)}
+              placeholder="Enter gamepad name..."
+            />
+          </div>
+          <div className="footer-buttons">
+            <button className="cancel-button" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="save-button" onClick={handleSave}>
+              Save Gamepad
+            </button>
+          </div>
         </div>
       </div>
       
