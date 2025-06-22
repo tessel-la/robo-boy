@@ -12,6 +12,7 @@
   --text-color-secondary: #6c757d; /* Alias for text secondary */
   --text-color-faded: rgba(33, 37, 41, 0.7); /* Faded text color */
   --border-color: #dee2e6;
+  --border-color-light: #adb5bd; /* More visible light border for grids */
   --card-bg: #ffffff;
   --card-border: #dee2e6;
   --button-text-color: #ffffff; /* Text on primary button */
@@ -36,6 +37,7 @@
   --text-color-secondary: #adb5bd; /* Alias for text secondary */
   --text-color-faded: rgba(224, 224, 224, 0.7); /* Faded text color */
   --border-color: #444444; /* Dark grey border */
+  --border-color-light: #666666; /* More visible dark border for grids */
   --card-bg: #1e1e1e; /* Slightly lighter card background */
   --card-border: #333333;
   --button-text-color: #121212; /* Dark text on lime button */
@@ -61,6 +63,7 @@
   --text-color-secondary: #93a1a1; /* Alias for text secondary */
   --text-color-faded: rgba(101, 123, 131, 0.7); /* Faded text color */
   --border-color: #93a1a1; /* Base0 */
+  --border-color-light: #657b83; /* More visible solarized border for grids */
   --card-bg: #eee8d5; /* Base2 */
   --card-border: #93a1a1; /* Base0 */
   --button-text-color: #fdf6e3; /* Base3 - Sand text on orange button */

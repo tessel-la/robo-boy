@@ -89,16 +89,16 @@
 }
 
 .grid-cell {
-  border: 1px dashed var(--border-color-light, #e9ecef);
+  border: 1px dashed var(--border-color-light, #adb5bd);
   background-color: transparent;
-  opacity: 0.3;
+  opacity: 0.6;
   transition: opacity 0.2s ease;
   border-radius: 4px;
   box-sizing: border-box;
 }
 
 .custom-gamepad-layout.editing:hover .grid-cell {
-  opacity: 0.5;
+  opacity: 0.8;
 }
 
 .layout-metadata {
@@ -206,9 +206,4 @@
   }
 }
 
-/* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .grid-cell {
-    border-color: var(--border-color-light, #444);
-  }
-} 
+/* Dark theme support is now handled by the --border-color-light CSS variable */ 
