@@ -141,7 +141,7 @@
   font-size: 0.55rem; /* Smaller */
   color: var(--text-color-faded, rgba(232, 234, 237, 0.7));
   margin-top: 1px;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: var(--background-dark-transparent, rgba(0, 0, 0, 0.15));
   padding: 1px 3px;
   border-radius: 3px;
   min-width: 65px; /* Adjusted */

@@ -18,5 +18,6 @@ export enum GamepadType {
   Voice = 'voicelayout',
   GameBoy = 'gameboy',
   Drone = 'dronepad',
-  Manipulator = 'manipulatorpad'
+  Manipulator = 'manipulatorpad',
+  Custom = 'custom'
 } 

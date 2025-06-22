@@ -1,0 +1,145 @@
+/* DPadComponent.css - Responsive CSS Grid Layout for Custom DPad */
+
+.custom-dpad-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr !important;
+  grid-template-rows: 1fr 1fr 1fr !important;
+  gap: 0.5% !important; /* Reduced default gap */
+  padding: 0.25% !important; /* Reduced default padding */
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+.custom-dpad-button {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.custom-dpad-center {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Grid positioning */
+.custom-dpad-up {
+  grid-column: 2 / 3 !important;
+  grid-row: 1 / 2 !important;
+}
+
+.custom-dpad-left {
+  grid-column: 1 / 2 !important;
+  grid-row: 2 / 3 !important;
+}
+
+.custom-dpad-center {
+  grid-column: 2 / 3 !important;
+  grid-row: 2 / 3 !important;
+}
+
+.custom-dpad-right {
+  grid-column: 3 / 4 !important;
+  grid-row: 2 / 3 !important;
+}
+
+.custom-dpad-down {
+  grid-column: 2 / 3 !important;
+  grid-row: 3 / 4 !important;
+}
+
+/* Ensure no external styles can override the responsive behavior */
+.dpad-component .custom-dpad-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr !important;
+  grid-template-rows: 1fr 1fr 1fr !important;
+}
+
+.dpad-component .custom-dpad-button,
+.dpad-component .custom-dpad-center {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+/* Special handling for editing mode to ensure proper scaling */
+.gamepad-component.dpad.editing .dpad-component {
+  /* Force D-pad to use entire allocated grid space in editing mode */
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.gamepad-component.dpad.editing .custom-dpad-grid {
+  /* Ensure the D-pad grid uses full container space in editing mode */
+  width: 100% !important;
+  height: 100% !important;
+  /* Reduce gaps to maximize button space */
+  gap: 0.1% !important;
+  padding: 0.1% !important;
+}
+
+/* Responsive adjustments for medium screens (550-770px) where the issue is most evident */
+@media (min-width: 550px) and (max-width: 770px) {
+  .custom-dpad-grid {
+    gap: 0.1% !important; /* Almost no gap for maximum space utilization */
+    padding: 0.05% !important; /* Almost no padding for maximum space usage */
+  }
+  
+  .dpad-component {
+    /* Ensure the component container uses all available space */
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ensure the grid itself has no unnecessary spacing */
+  .dpad-component .custom-dpad-grid {
+    gap: 0.1% !important;
+    padding: 0.05% !important;
+  }
+}
+
+/* Additional responsive adjustments for larger screens */
+@media (min-width: 771px) {
+  .custom-dpad-grid {
+    gap: 1% !important; /* Slightly larger gap for better visual separation on larger screens */
+    padding: 0.5% !important;
+  }
+}
+
+/* For very wide screens, ensure D-pad doesn't get too spread out */
+@media (min-width: 1200px) {
+  .custom-dpad-grid {
+    gap: 1.5% !important; /* Restore some spacing on very large screens */
+    padding: 0.75% !important;
+  }
+}
+
+/* Ensure consistent sizing across all screen sizes */
+@media (max-width: 549px) {
+  .custom-dpad-grid {
+    gap: 0.25% !important; /* Minimal gap for small screens */
+    padding: 0.1% !important;
+  }
+} 

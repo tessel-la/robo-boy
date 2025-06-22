@@ -1,0 +1,644 @@
+/* Enhanced Component Settings Modal */
+.component-settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.enhanced-component-settings-modal {
+  background-color: var(--background-color, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: var(--border-radius, 8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color, #e8eaed);
+  font-family: inherit;
+}
+
+/* Modal Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-color, #333);
+  background-color: var(--background-secondary, #2a2a2a);
+  border-radius: var(--border-radius, 8px) var(--border-radius, 8px) 0 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-color, #32CD32);
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #aaa);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-button:hover {
+  background-color: var(--background-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-color, #e8eaed);
+}
+
+/* Modal Content */
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  max-height: calc(90vh - 120px);
+}
+
+
+
+/* Settings Sections */
+.settings-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #e8eaed);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-section h4::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background-color: var(--primary-color, #32CD32);
+  border-radius: 2px;
+}
+
+/* Setting Groups */
+.setting-group {
+  margin-bottom: 16px;
+}
+
+.setting-group:last-child {
+  margin-bottom: 0;
+}
+
+.setting-group > label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.875rem;
+}
+
+/* Input Styles */
+.settings-input,
+.setting-select,
+.modal-content input:not([type="range"]),
+.modal-content select {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--background-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+  margin-bottom: 0 !important;
+}
+
+.settings-input:focus,
+.setting-select:focus,
+.modal-content input:not([type="range"]):focus,
+.modal-content select:focus {
+  outline: none;
+  border-color: var(--primary-color, #32CD32);
+  box-shadow: 0 0 0 2px rgba(50, 205, 50, 0.2);
+}
+
+.settings-input.small {
+  width: auto;
+  min-width: 80px;
+}
+
+/* Topic Input Group */
+.topic-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topic-select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.topic-select option {
+  padding: 4px 8px;
+}
+
+.topic-select option:disabled {
+  color: var(--text-secondary, #666);
+  font-style: italic;
+  background-color: var(--background-secondary, #2a2a2a);
+}
+
+.topic-input-separator {
+  color: var(--text-secondary, #aaa);
+  font-weight: 500;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.topic-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.topic-warning {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background-color: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 4px;
+  color: #ffc107;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* Inline Error Message */
+.error-message-inline {
+  margin-top: 6px;
+  padding: 0;
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.error-content-inline {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.error-content-inline .error-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.error-content-inline .error-text {
+  flex: 1;
+  color: #ff6b6b;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* Range Inputs */
+.range-inputs {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.range-input-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.range-input-item label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.range-input-item input {
+  width: 50% !important;
+  text-align: center;
+}
+
+/* Range Controls */
+.range-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+}
+
+.range-controls .range-input-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.range-controls .range-input-item input {
+  width: 60px !important;
+  text-align: center;
+}
+
+/* Value Range Slider */
+.value-range-container {
+  margin: 10px 0;
+}
+
+.value-range-container input[type="range"] {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: transparent !important;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.value-range-container input[type="range"]::-webkit-slider-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: var(--border-color, #444);
+  border-radius: 3px;
+}
+
+.value-range-container input[type="range"]::-webkit-slider-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: var(--primary-color, #32CD32);
+  cursor: pointer;
+  -webkit-appearance: none;
+  border: 2px solid var(--background-color, #1a1a1a);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.value-range-container input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: var(--border-color, #444);
+  border-radius: 3px;
+  border: none;
+}
+
+.value-range-container input[type="range"]::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: var(--primary-color, #32CD32);
+  cursor: pointer;
+  border: 2px solid var(--background-color, #1a1a1a);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Axis Configuration */
+.axis-config {
+  background-color: var(--background-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 6px;
+}
+
+.checkbox-label,
+.radio-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 !important;
+  font-weight: normal !important;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.checkbox-label input[type="checkbox"],
+.radio-label input[type="radio"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--primary-color, #32CD32);
+}
+
+.axis-selection {
+  margin-left: 20px;
+  margin-top: 8px;
+  padding: 8px 0;
+}
+
+.axis-selection h5 {
+  margin: 16px 0 8px 0;
+  color: var(--text-color, #e8eaed);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color, #444);
+}
+
+.axis-selection h5:first-child {
+  margin-top: 8px;
+}
+
+.custom-axes {
+  margin-top: 12px;
+}
+
+.custom-axes label {
+  margin-bottom: 6px;
+}
+
+.axis-help-text {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.axis-config-disabled {
+  background-color: var(--background-tertiary, #3a3a3a);
+  border: 1px solid var(--border-color, #555);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 6px;
+}
+
+.axis-config-disabled p {
+  margin: 4px 0;
+  color: var(--text-secondary, #aaa);
+  font-size: 0.875rem;
+}
+
+.axis-config-disabled strong {
+  color: var(--text-color, #e8eaed);
+}
+
+/* D-Pad Button Mapping */
+.dpad-button-mapping {
+  margin-top: 8px;
+}
+
+.button-mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.button-mapping-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.button-mapping-item label {
+  font-size: 0.8rem;
+  color: var(--text-color, #e8eaed);
+  margin-bottom: 2px;
+}
+
+.button-mapping-item input {
+  width: 60px;
+}
+
+/* Modal Footer */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #333);
+  background-color: var(--background-secondary, #2a2a2a);
+  border-radius: 0 0 var(--border-radius, 8px) var(--border-radius, 8px);
+}
+
+.cancel-btn,
+.save-btn {
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+  min-width: 80px;
+}
+
+.cancel-btn {
+  background-color: transparent;
+  border-color: var(--border-color, #444);
+  color: var(--text-secondary, #aaa);
+}
+
+.cancel-btn:hover {
+  background-color: var(--background-hover, rgba(255, 255, 255, 0.05));
+  border-color: var(--text-secondary, #aaa);
+  color: var(--text-color, #e8eaed);
+}
+
+.save-btn {
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-color, #32CD32);
+  color: var(--background-color, #1a1a1a);
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: var(--primary-hover-color, #28a528);
+  border-color: var(--primary-hover-color, #28a528);
+}
+
+.save-btn:disabled {
+  background-color: var(--background-secondary, #2a2a2a);
+  border-color: var(--border-color, #444);
+  color: var(--text-secondary, #666);
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .component-settings-modal-overlay {
+    padding: 10px;
+  }
+
+  .enhanced-component-settings-modal {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+
+  .modal-header,
+  .modal-footer,
+  .settings-section {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .topic-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topic-input-separator {
+    text-align: center;
+    margin: 4px 0;
+  }
+
+  .range-inputs {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .cancel-btn,
+  .save-btn {
+    width: 100%;
+  }
+}
+
+/* Scrollbar Styling */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: var(--background-secondary, #2a2a2a);
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: var(--border-color, #444);
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary, #666);
+}
+
+.enhanced-component-settings-modal .settings-section {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+}
+
+/* Override for general input/select margins within setting groups */
+.setting-group input[type="text"],
+.setting-group input[type="number"],
+.setting-group select {
+  margin-bottom: 0;
+}
+
+/* Ensure no margin-bottom on inputs within ValueControl used in this modal */
+.value-control input[type="number"] {
+  margin-bottom: 0;
+}
+
+/* Range Slider Override - Ensure RangeSlider component inputs are not affected by general modal styles */
+.modal-content .range-slider-container input[type="range"],
+.modal-content .range-slider input[type="range"],
+.modal-content input[type="range"].thumb {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 5px !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* Fix circular thumb positioning */
+.modal-content .range-slider-container input[type="range"]::-webkit-slider-thumb,
+.modal-content .range-slider input[type="range"]::-webkit-slider-thumb,
+.modal-content input[type="range"].thumb::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  pointer-events: all !important;
+  width: 18px !important;
+  height: 18px !important;
+  background-color: var(--primary-color) !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--background-color) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  top: 0 !important;
+  transform: translateY(0) !important;
+  margin-top: -6.5px !important; /* Center the 18px thumb on 5px track */
+}
+
+.modal-content .range-slider-container input[type="range"]::-moz-range-thumb,
+.modal-content .range-slider input[type="range"]::-moz-range-thumb,
+.modal-content input[type="range"].thumb::-moz-range-thumb {
+  -moz-appearance: none !important;
+  pointer-events: all !important;
+  width: 18px !important;
+  height: 18px !important;
+  background-color: var(--primary-color) !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--background-color) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  top: 0 !important;
+  transform: translateY(0) !important;
+  margin-top: -6.5px !important; /* Center the 18px thumb on 5px track */
+}
+
+.modal-content .range-slider-container input[type="range"]:focus,
+.modal-content .range-slider input[type="range"]:focus,
+.modal-content input[type="range"].thumb:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Ensure slider track and range elements are also properly centered */
+.modal-content .range-slider-container .slider-track,
+.modal-content .range-slider-container .slider-range {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+} 

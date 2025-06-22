@@ -1,0 +1,628 @@
+/* GamepadEditor.css */
+
+.gamepad-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  animation: fadeInOverlay 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInOverlay {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+}
+
+.gamepad-editor-modal {
+  background-color: var(--card-bg, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: 95vw;
+  height: auto;
+  min-height: 60vh;
+  max-height: 95vh;
+  max-width: 1400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideInModal 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+@keyframes slideInModal {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--background-secondary, #f8f9fa);
+  flex-shrink: 0;
+}
+
+.editor-header h2 {
+  margin: 0;
+  color: var(--text-color, #333);
+  font-size: 1.5rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-color-secondary, #666);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.close-button:hover {
+  background-color: var(--background-hover, #e9ecef);
+  color: var(--text-color, #333);
+  transform: scale(1.1);
+}
+
+.editor-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Allow content to shrink if needed */
+}
+
+/* Design Tab */
+.design-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  min-height: 0; /* Allow flex shrinking */
+}
+
+/* Editor Sidebar - Contains ComponentPalette and GridSettingsMenu side by side */
+.editor-sidebar {
+  width: 100%;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--background-secondary, #f8f9fa);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0; /* Don't shrink the sidebar */
+  max-height: 35vh; /* Limit sidebar to 35% of viewport height */
+}
+
+/* Buttons row - always visible at the top */
+.sidebar-buttons-row {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+/* Expanded content area - takes full width when expanded */
+.sidebar-expanded-content {
+  width: 100%;
+  overflow-y: auto;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  flex: 1;
+  min-height: 0;
+  
+  /* Custom Scrollbar Styling */
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #f8f9fa);
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.sidebar-expanded-content::-webkit-scrollbar {
+  width: 8px; /* Width of the vertical scrollbar */
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-track {
+  background: var(--background-secondary, #f8f9fa); /* Track color */
+  border-radius: 4px;
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32); /* Thumb color */
+  border-radius: 4px;
+  border: 2px solid var(--background-secondary, #f8f9fa); /* Border around thumb */
+}
+
+.sidebar-expanded-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
+}
+
+/* When ComponentPalette is expanded */
+.editor-sidebar.component-palette-expanded {
+  max-height: 35vh; /* Constrain to 35% of viewport height */
+}
+
+.editor-sidebar.component-palette-expanded .sidebar-expanded-content {
+  display: block;
+  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.editor-sidebar.component-palette-expanded .sidebar-expanded-content .component-palette {
+  width: 100%;
+  display: block;
+  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.editor-sidebar.component-palette-expanded .sidebar-expanded-content .grid-settings-menu {
+  display: none;
+}
+
+/* When GridSettingsMenu is expanded */
+.editor-sidebar.grid-settings-expanded {
+  max-height: 35vh; /* Constrain to 35% of viewport height */
+}
+
+.editor-sidebar.grid-settings-expanded .sidebar-expanded-content {
+  display: block;
+  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.editor-sidebar.grid-settings-expanded .sidebar-expanded-content .grid-settings-menu {
+  width: 100%;
+  display: block;
+  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.editor-sidebar.grid-settings-expanded .sidebar-expanded-content .component-palette {
+  display: none;
+}
+
+@keyframes expandContent {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Update ComponentPalette to work in new layout */
+.editor-sidebar .component-palette {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Update GridSettingsMenu to work in new layout */
+.editor-sidebar .grid-settings-menu {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When neither is expanded, show buttons side by side */
+.editor-sidebar:not(.component-palette-expanded):not(.grid-settings-expanded) .sidebar-buttons-row {
+  justify-content: space-around;
+}
+
+.editor-sidebar:not(.component-palette-expanded):not(.grid-settings-expanded) .sidebar-expanded-content {
+  display: none;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Component Grid - Similar to 3D Panel */
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.component-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background-secondary, #f8f9fa);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  padding: 12px 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  min-height: 80px;
+  position: relative;
+}
+
+.component-grid-item:hover {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color-light, #e3f2fd);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.component-grid-item.selected {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color-light, #e3f2fd);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.component-grid-item .component-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+  color: var(--primary-color, #007bff);
+}
+
+.component-grid-item .component-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  margin-bottom: 3px;
+}
+
+.component-grid-item .component-description {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary, #666);
+  line-height: 1.1;
+}
+
+.component-hint {
+  background-color: var(--primary-color-light, #e3f2fd);
+  border: 1px solid var(--primary-color, #007bff);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.component-hint p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--primary-color, #007bff);
+  text-align: center;
+  font-weight: 500;
+}
+
+.design-area {
+  flex: 1;
+  padding: 16px;
+  overflow: hidden;
+  background-color: var(--card-bg, #ffffff);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 300px;
+  min-height: 0; /* Allow it to shrink */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure the direct child of design-area (the layout renderer) can grow */
+.design-area > * {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Footer */
+.editor-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--background-secondary, #f8f9fa);
+  flex-shrink: 0;
+}
+
+.pad-name-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.pad-name-section label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  text-align: center;
+}
+
+.pad-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  font-size: 0.9em;
+  background-color: var(--background-color, #fff);
+  color: var(--text-color, #333);
+  transition: border-color 0.2s ease;
+  text-align: center;
+}
+
+.pad-name-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.footer-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.cancel-button,
+.save-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cancel-button {
+  background-color: var(--background-secondary, #6c757d);
+  color: var(--text-color, #333);
+  border: 1px solid var(--border-color, #adb5bd);
+}
+
+.cancel-button:hover {
+  background-color: var(--text-color-secondary, #5a6268);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.save-button {
+  background-color: var(--primary-color, #007bff);
+  color: white;
+}
+
+.save-button:hover {
+  background-color: var(--primary-color-dark, #0056b3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.save-button:disabled {
+  background-color: var(--border-color, #dee2e6);
+  color: var(--text-color-secondary, #666);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mobile responsive design updates */
+@media (max-width: 768px) {
+  .gamepad-editor-modal {
+    min-height: auto; /* Remove fixed min-height for mobile */
+    max-height: 90vh; /* Keep reasonable max height */
+  }
+
+  .design-tab {
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .editor-sidebar {
+    width: 100%;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    padding: 12px;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  .sidebar-buttons-row {
+    flex-direction: row;
+    gap: 12px;
+    margin-bottom: 12px;
+    justify-content: space-around;
+  }
+
+  .sidebar-expanded-content {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .editor-sidebar .component-palette {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .editor-sidebar .grid-settings-menu {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  
+  .design-area {
+    flex: 1;
+    padding: 8px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: unset;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 40vh; /* Reduced from 50vh to 40vh */
+  }
+  
+  .editor-footer {
+    padding: 12px 16px;
+  }
+
+  .pad-name-section {
+    gap: 4px;
+    max-width: 280px;
+  }
+
+  .pad-name-section label {
+    font-size: 0.85em;
+  }
+
+  .pad-name-input {
+    padding: 6px 10px;
+    font-size: 0.85em;
+  }
+
+  .footer-buttons {
+    gap: 8px;
+  }
+  
+  .cancel-button,
+  .save-button {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+  }
+  
+  .cancel-button {
+    background-color: var(--background-secondary, #6c757d);
+    color: var(--text-color, #333);
+  }
+}
+
+@media (max-width: 480px) {
+  .gamepad-editor-modal {
+    width: 100vw;
+    height: auto;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 95vh;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  
+  .editor-sidebar {
+    padding: 8px;
+  }
+
+  .sidebar-buttons-row {
+    gap: 8px;
+  }
+
+  .sidebar-expanded-content {
+    max-height: 250px;
+  }
+
+  .editor-sidebar .component-palette {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .editor-sidebar .grid-settings-menu {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .design-area {
+    flex: 1;
+    padding: 6px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: unset;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 30vh; /* Reduced from 40vh to 30vh */
+  }
+}
+
+/* Very small screens (iPhone SE and similar) */
+@media (max-width: 375px) {
+  .gamepad-editor-modal {
+    width: 100vw;
+    height: auto;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 98vh;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  
+  .design-tab {
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .editor-sidebar {
+    padding: 6px;
+  }
+
+  .sidebar-buttons-row {
+    gap: 6px;
+  }
+
+  .sidebar-expanded-content {
+    max-height: 200px;
+  }
+
+  .editor-sidebar .component-palette {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .editor-sidebar .grid-settings-menu {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  
+  .design-area {
+    flex: 1;
+    padding: 4px;
+    overflow: hidden;
+    min-height: auto; /* Remove fixed min-height */
+    max-height: 25vh; /* Reduced from 35vh to 25vh */
+  }
+} 
