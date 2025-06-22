@@ -17,7 +17,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
     * 🚁 Drone control pad for aerial vehicles
     * 🦾 Manipulator control for robotic arms
     * And many more than you can create! 
-*   🧊 3D visualization support g
+*   🧊 3D visualization support 
 *   🎨 Customizable themes with user-created color palettes
 
 ## 🎥 App Demo
