@@ -922,6 +922,270 @@ class PointCloud2 extends THREE.Object3D {
   }
 }
 
+// LaserScan visualization class
+class LaserScan extends THREE.Object3D {
+  private ros: Ros;
+  private topicName: string;
+  private tfClient: CustomTFProvider;
+  private rootObject: THREE.Object3D;
+  public fixedFrame: string;
+  private pointSize: number;
+  private pointColor: THREE.Color;
+  private maxRange: number;
+  private minRange: number;
+
+  private rosTopicInstance: ROSLIB.Topic | null = null;
+  private pointsNode: THREE.Points | null = null;
+  private messageFrameId: string | null = null;
+  private transformUpdateAnimationId: number | null = null;
+
+  constructor(options: {
+    ros: Ros;
+    topic: string;
+    tfClient: CustomTFProvider;
+    rootObject: THREE.Object3D;
+    fixedFrame?: string;
+    material?: {
+      size?: number;
+      color?: THREE.Color | number | string;
+    };
+    maxRange?: number;
+    minRange?: number;
+  }) {
+    super();
+
+    this.ros = options.ros;
+    this.topicName = options.topic;
+    this.tfClient = options.tfClient;
+    this.rootObject = options.rootObject;
+    this.fixedFrame = options.fixedFrame || 'base_link';
+    this.pointSize = options.material?.size || 0.05;
+    this.pointColor = options.material?.color instanceof THREE.Color
+      ? options.material.color
+      : new THREE.Color(options.material?.color || 0xff0000); // Default red
+    this.maxRange = options.maxRange || Infinity;
+    this.minRange = options.minRange || 0;
+
+    this.rootObject.add(this);
+    this.subscribe();
+    this.setupTfHandling();
+  }
+
+  private subscribe(): void {
+    if (!this.ros) return;
+
+    this.rosTopicInstance = new ROSLIB.Topic({
+      ros: this.ros,
+      name: this.topicName,
+      messageType: 'sensor_msgs/msg/LaserScan', // Ensure this is the correct type for ROS2
+      throttle_rate: 100, // Optional: throttle messages
+      compression: 'cbor' // Optional: use compression if available
+    });
+
+    console.log(`[LaserScan] Subscribing to ${this.topicName}`);
+    this.rosTopicInstance.subscribe(this.processMessage.bind(this));
+  }
+
+  public unsubscribe(): void {
+    if (this.rosTopicInstance) {
+      console.log(`[LaserScan] Unsubscribing from ${this.topicName}`);
+      this.rosTopicInstance.unadvertise(); // For publishers, for subscribers it's unsubscribe
+      this.rosTopicInstance.unsubscribe();
+      this.rosTopicInstance = null;
+    }
+    if (this.transformUpdateAnimationId !== null) {
+      cancelAnimationFrame(this.transformUpdateAnimationId);
+      this.transformUpdateAnimationId = null;
+    }
+    // Remove the points from the scene
+    if (this.pointsNode) {
+      this.remove(this.pointsNode);
+      this.pointsNode.geometry.dispose();
+      (this.pointsNode.material as THREE.Material).dispose();
+      this.pointsNode = null;
+    }
+    // Remove this object from its parent (rootObject)
+    if (this.parent) {
+        this.parent.remove(this);
+    }
+  }
+
+  private processMessage(message: any): void {
+    this.messageFrameId = (message.header.frame_id || '').startsWith('/') 
+        ? message.header.frame_id.substring(1) 
+        : message.header.frame_id;
+
+    // Log the raw message for inspection
+    // console.log('[LaserScan] Received message:', JSON.parse(JSON.stringify(message)));
+
+    if (!this.messageFrameId) {
+        console.warn('[LaserScan] Message received with no frame_id');
+        return;
+    }
+
+    const now = performance.now();
+
+    const vertices: THREE.Vector3[] = [];
+    const numPoints = message.ranges.length;
+
+    for (let i = 0; i < numPoints; i++) {
+      let range = message.ranges[i];
+
+      if (range >= this.minRange && range <= this.maxRange && Number.isFinite(range)) {
+        const angle = message.angle_min + i * message.angle_increment;
+        // Assuming LaserScan is in the XY plane of its frame_id
+        // ROS: X forward, Y left, Z up
+        // THREE: X right, Y up, Z towards camera (if Z-up convention for camera)
+        // If sensor is Z-up, then X is forward, Y is left.
+        // If sensor is X-forward Y-up (common in some robots), then points are in XZ plane relative to sensor.
+        // For now, assume standard ROS REP 103: X forward, Y left, Z up for the sensor frame.
+        // This means points are in the sensor's XY plane.
+        const x = range * Math.cos(angle);
+        const y = range * Math.sin(angle);
+        vertices.push(new THREE.Vector3(x, y, 0)); // Z is 0 for a 2D scan
+      }
+    }
+
+    if (this.pointsNode) {
+      this.remove(this.pointsNode);
+      this.pointsNode.geometry.dispose();
+      (this.pointsNode.material as THREE.Material).dispose();
+      this.pointsNode = null;
+    }
+
+    if (vertices.length > 0) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+      const material = new THREE.PointsMaterial({
+        color: this.pointColor,
+        size: this.pointSize,
+        sizeAttenuation: false // Points remain same size regardless of distance
+      });
+      this.pointsNode = new THREE.Points(geometry, material);
+      this.add(this.pointsNode);
+    }
+    // console.debug(`[LaserScan] Processed ${vertices.length} points from ${this.topicName} in ${performance.now() - now} ms. Frame ID: ${this.messageFrameId}`);
+  }
+
+  private setupTfHandling(): void {
+    let currentFixedFrame = this.fixedFrame;
+    let lastTransformTime = 0;
+    let retryCount = 0;
+    let lastVisibleState = this.visible;
+
+    const updateTransform = () => {
+      this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
+
+      const now = performance.now();
+      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless retrying
+        return;
+      }
+      lastTransformTime = now;
+
+      if (this.messageFrameId) {
+        const targetFixedFrame = this.getFixedFrame(); // Use getter for dynamic updates
+
+        if (currentFixedFrame !== targetFixedFrame) {
+          currentFixedFrame = targetFixedFrame;
+          // console.log(`[LaserScan] Fixed frame changed to: ${targetFixedFrame}`);
+          retryCount = 0; // Reset retry on frame change
+        }
+
+        try {
+          const tf = this.tfClient.lookupTransform(targetFixedFrame, this.messageFrameId);
+
+          if (tf && tf.translation && tf.rotation) {
+            // Log successful transform
+            // console.log(`[LaserScan] TF Success: ${this.messageFrameId} to ${targetFixedFrame}`, JSON.parse(JSON.stringify(tf)));
+            this.position.set(tf.translation.x, tf.translation.y, tf.translation.z);
+            this.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w);
+            
+            if (!lastVisibleState) {
+            //   console.log(`[LaserScan] Transform found for ${this.messageFrameId} in ${targetFixedFrame}, showing scan.`);
+            }
+            this.visible = true;
+            lastVisibleState = true;
+            retryCount = 0;
+
+            this.updateMatrix();
+            this.matrixWorldNeedsUpdate = true;
+          } else {
+            retryCount++;
+            if (retryCount > 30) { // Hide after ~1s of failing to get transform
+              if (lastVisibleState) {
+                console.warn(`[LaserScan] Transform not available from ${this.messageFrameId} to ${targetFixedFrame} after ${retryCount} retries. Hiding scan.`);
+              }
+              this.visible = false;
+              lastVisibleState = false;
+              // Limit further retries to avoid console spam, but still check occasionally
+              if (retryCount > 300) retryCount = 300; 
+            }
+          }
+        } catch (e) {
+          retryCount++;
+          if (retryCount % 30 === 0 || retryCount === 1) { // Log first error and then periodically
+            console.warn(`[LaserScan] TF error transforming ${this.messageFrameId} to ${targetFixedFrame}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+          if (retryCount > 30) {
+            this.visible = false;
+            lastVisibleState = false;
+          }
+        }
+      } else {
+        // No messageFrameId yet, or no messages received, keep hidden or current state
+        // this.visible = false; 
+      }
+    };
+    this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
+  }
+
+  public updateSettings(options: {
+    pointSize?: number;
+    pointColor?: THREE.Color | number | string;
+    maxRange?: number;
+    minRange?: number;
+  }): void {
+    if (options.pointSize !== undefined) {
+      this.pointSize = options.pointSize;
+      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
+        this.pointsNode.material.size = this.pointSize;
+      }
+    }
+    if (options.pointColor !== undefined) {
+      this.pointColor = options.pointColor instanceof THREE.Color
+        ? options.pointColor
+        : new THREE.Color(options.pointColor);
+      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
+        this.pointsNode.material.color = this.pointColor;
+      }
+    }
+    if (options.maxRange !== undefined) {
+      this.maxRange = options.maxRange;
+    }
+    if (options.minRange !== undefined) {
+      this.minRange = options.minRange;
+    }
+     // Re-process last message if ranges changed, or wait for new message
+  }
+  
+  public setFixedFrame(fixedFrame: string): void {
+    // console.log(`[LaserScan] setFixedFrame called: ${fixedFrame}`);
+    this.fixedFrame = fixedFrame;
+    // TF handling loop will pick this up.
+  }
+
+  public forceTransformUpdate(): void {
+    // console.log("[LaserScan] forceTransformUpdate called");
+    // This method is a bit of a no-op here as the animation loop handles updates.
+    // If immediate update was critical, one could call parts of updateTransform() directly,
+    // but that might conflict with the animation loop.
+  }
+
+  // Getter for fixedFrame, primarily for consistency with TF handling
+  private getFixedFrame(): string {
+    return this.fixedFrame;
+  }
+}
+
 // OrbitControls implementation
 class OrbitControls {
   private camera: THREE.PerspectiveCamera;
@@ -1864,9 +2128,10 @@ const ROS3D = {
   Axes,
   TfClient,
   PointCloud2,
+  LaserScan, // Added LaserScan here
   OrbitControls,
   UrdfClient,
 };
 
-export { Viewer, Grid, Axes, TfClient, PointCloud2, OrbitControls, UrdfClient };
+export { Viewer, Grid, Axes, TfClient, PointCloud2, LaserScan, OrbitControls, UrdfClient };
 export default ROS3D; 

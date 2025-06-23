@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube, FaDotCircle } from 'react-icons/fa';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
@@ -15,6 +15,7 @@ const SUPPORTED_VIZ_TYPES: Record<VisualizationConfig['type'], string[]> = {
   pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
   urdf: ['std_msgs/String', 'std_msgs/msg/String'], // URDF is often a string on /robot_description
+  laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan
   // Add more types here, e.g.:
   // marker: ['visualization_msgs/Marker', 'visualization_msgs/msg/Marker'],
   // markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
@@ -25,6 +26,7 @@ const VIZ_TYPE_ICONS: Record<VisualizationConfig['type'], React.ReactNode> = {
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
   urdf: <FaCube />,
+  laserscan: <FaDotCircle />  // Updated LaserScan icon
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
   // markerarray: <FaCubes />,
