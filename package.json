@@ -20,6 +20,7 @@
     "react-joystick-component": "^6.2.1",
     "roslib": "^1.4.1",
     "three": "^0.160.0",
+    "to-ico": "^1.1.5",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -32,6 +33,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
+    "sharp": "^0.34.2",
     "typescript": "^5.2.2",
     "vite": "^6.3.5",
     "vite-plugin-mkcert": "^1.17.8",
