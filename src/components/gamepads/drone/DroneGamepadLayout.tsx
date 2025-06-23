@@ -77,13 +77,43 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   const lastSentAxes = useRef<number[]>([...axes]);
   const lastSentButtons = useRef<number[]>([...buttons]);
   const [currentSpeedMode, setCurrentSpeedMode] = useState<SpeedMode>(SpeedMode.Normal);
+  // --- Add state for joystick colors ---
+  const [baseJoystickColor, setBaseJoystickColor] = useState<string>('#6c757d');
+  const [stickJoystickColor, setStickJoystickColor] = useState<string>('#32CD32');
   
   const getThemeColor = (variableName: string) => {
     return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
 
-  const baseJoystickColor = getThemeColor('--secondary-color') || '#6c757d';
-  const stickJoystickColor = getThemeColor('--primary-color') || '#32CD32';
+  // --- Make joystick colors reactive to theme changes ---
+  useEffect(() => {
+    const updateJoystickColors = () => {
+      const baseColor = getThemeColor('--secondary-color') || '#6c757d';
+      const stickColor = getThemeColor('--primary-color') || '#32CD32';
+      setBaseJoystickColor(baseColor);
+      setStickJoystickColor(stickColor);
+    };
+
+    // Update colors initially
+    updateJoystickColors();
+
+    // Watch for theme changes by observing data-theme attribute changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          updateJoystickColors();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+  // --- End of reactive joystick colors ---
 
   const handleSetSpeedMode = (mode: SpeedMode) => {
     setCurrentSpeedMode(mode);

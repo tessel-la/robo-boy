@@ -36,9 +36,9 @@
 }
 
 .speed-button {
-  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
-  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
-  color: #9aa0a6; /* Hardcoded: var(--text-color-secondary, #9aa0a6) */
+  background-color: var(--background-secondary, #3c4043);
+  border: 1.5px solid var(--border-color, #5f6368);
+  color: var(--text-color-secondary, #9aa0a6);
   border-radius: 8px;
   padding: 6px;
   cursor: pointer;
@@ -61,15 +61,15 @@
 }
 
 .speed-button:hover {
-  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
-  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
+  border-color: var(--text-color, #e8eaed);
+  color: var(--text-color, #e8eaed);
 }
 
 .speed-button.active {
-  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
-  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
-  color: white; /* Hardcoded: var(--button-text-color, white) */
-  box-shadow: 0 0 5px rgba(50, 205, 50, 0.5); /* Hardcoded: var(--primary-color-glow, rgba(50, 205, 50, 0.5)) */
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-dark-color, #28a745);
+  color: var(--button-text-color, white);
+  box-shadow: 0 0 5px var(--primary-color-glow, rgba(50, 205, 50, 0.5));
 }
 
 .manipulator-pad-interactive-area {
@@ -115,7 +115,7 @@
 .joystick-label {
   font-size: 0.55rem;
   font-weight: 500;
-  color: #e8eaed;
+  color: var(--text-color, #e8eaed);
   margin-bottom: 1px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -145,9 +145,9 @@
 
 /* Generic Manipulator Button for Z-axis (Square) */
 .manipulator-button {
-  background-color: #3c4043; /* Hardcoded: var(--background-secondary, #3c4043) */
-  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
-  border: 1.5px solid #5f6368; /* Hardcoded: var(--border-color, #5f6368) */
+  background-color: var(--background-secondary, #3c4043);
+  color: var(--text-color, #e8eaed);
+  border: 1.5px solid var(--border-color, #5f6368);
   width: 50px;  /* Square button */
   height: 50px; /* Square button */
   border-radius: 8px; /* Slightly rounded square */
@@ -167,15 +167,15 @@
 }
 
 .manipulator-button:hover {
-  border-color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
-  color: #e8eaed; /* Hardcoded: var(--text-color, #e8eaed) */
-  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px #5f6368, inset 0 1px 1px rgba(255, 255, 255, 0.15); /* var(--border-color) */
+  border-color: var(--text-color, #e8eaed);
+  color: var(--text-color, #e8eaed);
+  box-shadow: 0 3px 7px rgba(0,0,0,0.25), 0 0 10px var(--border-color, #5f6368), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }
 
 .manipulator-button.active {
-  background-color: #32CD32; /* Hardcoded: var(--primary-color, #32CD32) */
-  border-color: #28a745; /* Hardcoded: var(--primary-dark-color, #28a745) */
-  color: white; /* Hardcoded: var(--button-text-color, white) */
+  background-color: var(--primary-color, #32CD32);
+  border-color: var(--primary-dark-color, #28a745);
+  color: var(--button-text-color, white);
   transform: scale(0.95) translateY(1px); /* Press animation */
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
 }
@@ -191,33 +191,33 @@
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
-  background-color: #3c4043;
+  background-color: var(--background-secondary, #3c4043);
   border-radius: 20px;
 }
 
 .frame-label {
   font-size: 0.7rem;
-  color: #9aa0a6; /* var(--text-color-secondary) */
+  color: var(--text-color-secondary, #9aa0a6);
   font-weight: 500;
   transition: color 0.2s ease;
 }
 
 .frame-label.active {
-  color: #e8eaed; /* var(--text-color) */
+  color: var(--text-color, #e8eaed);
   font-weight: 700;
 }
 
 .frame-toggle-track {
   width: 40px; /* Width of the track */
   height: 20px; /* Height of the track */
-  background-color: #5f6368; /* var(--border-color) */
+  background-color: var(--border-color, #5f6368);
   border-radius: 10px; /* Half of height for pill shape */
   position: relative;
   transition: background-color 0.2s ease;
 }
 
 .frame-toggle-track.toggled-right {
-  background-color: #28a745; /* var(--primary-dark-color) - Active color when toggled right */
+  background-color: var(--primary-dark-color, #28a745); /* Active color when toggled right */
 }
 
 .frame-toggle-thumb {
@@ -238,8 +238,8 @@
 /* Joystick Output Value Display Styling */
 .joystick-output-display {
   font-size: 0.6rem;
-  color: rgba(232, 234, 237, 0.85);
-  background-color: rgba(60, 64, 67, 0.3);
+  color: var(--text-color-faded, rgba(232, 234, 237, 0.85));
+  background-color: var(--background-secondary-transparent, rgba(60, 64, 67, 0.3));
   padding: 2px 4px;
   border-radius: 4px;
   min-width: 100px;
@@ -324,8 +324,8 @@
     font-size: 0.5rem;
     min-width: 80px;
     margin-top: -12px;
-    color: rgba(232, 234, 237, 0.85);
-    background-color: rgba(60, 64, 67, 0.3);
+    color: var(--text-color-faded, rgba(232, 234, 237, 0.85));
+    background-color: var(--background-secondary-transparent, rgba(60, 64, 67, 0.3));
   }
 
   .z-controls-wrapper {

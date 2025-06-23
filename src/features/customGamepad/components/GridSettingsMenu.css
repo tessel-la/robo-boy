@@ -1,0 +1,566 @@
+/* GridSettingsMenu.css */
+
+.grid-settings-menu {
+  width: 100%;
+  background-color: var(--card-bg, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+/* Remove the old expanded/collapsed specific rules since we now handle this conditionally */
+.grid-settings-menu.expanded,
+.grid-settings-menu.collapsed {
+  overflow: visible;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+}
+
+/* Collapsed state styling */
+.settings-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 16px;
+  gap: 12px;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  animation: slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Expanded state styling */
+.settings-content {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  opacity: 1;
+  max-height: none;
+  transform: translateY(0);
+  min-height: 0;
+  animation: expandIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Custom Scrollbar Styling */
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #ffffff);
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.settings-content::-webkit-scrollbar {
+  width: 8px; /* Width of the vertical scrollbar */
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: var(--card-bg, #ffffff); /* Track color */
+  border-radius: 4px;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32); /* Thumb color */
+  border-radius: 4px;
+  border: 2px solid var(--card-bg, #ffffff); /* Border around thumb */
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
+}
+
+@keyframes expandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-15px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.collapsed-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.collapsed-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin: 0;
+  text-transform: capitalize;
+  letter-spacing: 0.5px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grid-icon-button {
+  background: var(--card-bg, #ffffff);
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.grid-icon-button:hover {
+  border-color: var(--success-color, #28a745);
+  background-color: var(--success-color-light, #d4edda);
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+}
+
+.grid-icon-button:active {
+  transform: translateY(-2px) scale(1.05);
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grid-icon-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background-color: var(--success-color-light, #d4edda);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+}
+
+.grid-icon-button:hover::before {
+  width: 120%;
+  height: 120%;
+}
+
+.grid-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--text-color-secondary, #666);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+  position: relative;
+}
+
+.grid-icon-button:hover .grid-icon {
+  color: var(--success-color, #28a745);
+  transform: rotate(15deg) scale(1.15);
+}
+
+/* Expanded state header */
+.expanded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  position: relative;
+  animation: slideInHeader 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInHeader {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expanded-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-color, #333);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color-secondary, #666);
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.close-button:hover {
+  background-color: var(--background-hover, #e9ecef);
+  color: var(--text-color, #333);
+  transform: rotate(90deg) scale(1.1);
+}
+
+.close-button svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-section {
+  margin-bottom: 24px;
+  animation: slideInSection 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInSection {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  padding-bottom: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-group {
+  margin-bottom: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  font-size: 0.95rem;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-group input,
+.settings-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background-color: var(--card-bg, #ffffff);
+  color: var(--text-color, #333);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.settings-group input:focus,
+.settings-group textarea:focus {
+  outline: none;
+  border-color: var(--success-color, #28a745);
+  box-shadow: 0 0 0 3px var(--success-color-light, #d4edda);
+  transform: translateY(-1px);
+}
+
+/* Grid control styling */
+.grid-control {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grid-control:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.grid-control label {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.control-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--card-bg, #ffffff);
+  color: var(--text-color, #333);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.control-btn:hover:not(:disabled) {
+  border-color: var(--success-color, #28a745);
+  background-color: var(--success-color-light, #d4edda);
+  color: var(--success-color, #28a745);
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.control-btn:active:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.control-btn.minus {
+  font-size: 18px;
+}
+
+.control-btn.plus {
+  font-size: 16px;
+}
+
+.control-value {
+  font-weight: 600;
+  color: var(--text-color, #333);
+  font-size: 1rem;
+  min-width: 24px;
+  text-align: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grid-info {
+  text-align: center;
+  margin-top: 12px;
+  animation: slideInInfo 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInInfo {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.grid-info small {
+  color: var(--text-color-secondary, #666);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* New compact grid controls row for side-by-side layout */
+.grid-controls-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.grid-control.compact {
+  flex: 1;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.grid-control.compact label {
+  text-align: center;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.grid-control.compact .control-buttons {
+  justify-content: center;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .grid-settings-menu.collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+  }
+
+  .grid-settings-menu.collapsed .settings-collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    padding: 14px 16px;
+  }
+
+  .collapsed-content {
+    gap: 8px;
+  }
+
+  .collapsed-title {
+    font-size: 0.95rem;
+  }
+
+  .grid-icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+  }
+
+  .grid-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .grid-control {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .grid-controls-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .grid-control.compact {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .grid-control.compact label {
+    font-size: 0.85rem;
+  }
+
+  .control-buttons {
+    justify-content: center;
+  }
+
+  .settings-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-settings-menu.collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+  }
+
+  .grid-settings-menu.collapsed .settings-collapsed {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    padding: 12px 12px;
+  }
+
+  .collapsed-title {
+    font-size: 0.9rem;
+  }
+
+  .grid-icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+  }
+
+  .grid-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .expanded-header {
+    padding: 12px 16px;
+  }
+
+  .settings-content {
+    padding: 12px;
+  }
+
+  .grid-controls-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .grid-control.compact {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .grid-control.compact label {
+    font-size: 0.8rem;
+  }
+
+  .control-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .control-btn.minus {
+    font-size: 16px;
+  }
+} 

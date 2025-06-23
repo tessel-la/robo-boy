@@ -98,6 +98,9 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   const rightJoystickIntervalRef = useRef<number | null>(null);
   const latestLeftJoystickCmd = useRef<{ angularX: number, angularY: number }>({ angularX: 0, angularY: 0 });
   const latestRightJoystickCmd = useRef<{ linearX: number, linearY: number }>({ linearX: 0, linearY: 0 });
+  // --- Add state for joystick colors ---
+  const [baseJoystickColor, setBaseJoystickColor] = useState<string>('#6c757d');
+  const [stickJoystickColor, setStickJoystickColor] = useState<string>('#32CD32');
 
   const getThemeColor = (variableName: string) => {
     if (typeof window !== 'undefined') {
@@ -106,8 +109,35 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
     return ''; // Default or SSR fallback
   };
 
-  const baseJoystickColor = getThemeColor('--secondary-color') || '#6c757d';
-  const stickJoystickColor = getThemeColor('--primary-color') || '#32CD32';
+  // --- Make joystick colors reactive to theme changes ---
+  useEffect(() => {
+    const updateJoystickColors = () => {
+      const baseColor = getThemeColor('--secondary-color') || '#6c757d';
+      const stickColor = getThemeColor('--primary-color') || '#32CD32';
+      setBaseJoystickColor(baseColor);
+      setStickJoystickColor(stickColor);
+    };
+
+    // Update colors initially
+    updateJoystickColors();
+
+    // Watch for theme changes by observing data-theme attribute changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          updateJoystickColors();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+  // --- End of reactive joystick colors ---
 
   const handleSetSpeedMode = (mode: SpeedMode) => {
     setCurrentSpeedMode(mode);

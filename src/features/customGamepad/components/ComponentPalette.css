@@ -1,0 +1,633 @@
+/* ComponentPalette.css */
+
+.component-palette {
+  width: 100%;
+  background-color: var(--card-bg, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+/* Remove the old expanded/collapsed specific rules since we now handle this conditionally */
+.component-palette.expanded,
+.component-palette.collapsed {
+  overflow: visible;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+}
+
+/* Collapsed state styling */
+.palette-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 16px;
+  gap: 12px;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  animation: slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Expanded state styling */
+.palette-content {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+  opacity: 1;
+  max-height: none;
+  transform: translateY(0);
+  animation: expandIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 0;
+  
+  /* Custom Scrollbar Styling */
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--card-bg, #ffffff);
+}
+
+/* Webkit (Chrome, Safari, Edge, etc.) */
+.palette-content::-webkit-scrollbar {
+  width: 8px; /* Width of the vertical scrollbar */
+}
+
+.palette-content::-webkit-scrollbar-track {
+  background: var(--card-bg, #ffffff); /* Track color */
+  border-radius: 4px;
+}
+
+.palette-content::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color, #32CD32); /* Thumb color */
+  border-radius: 4px;
+  border: 2px solid var(--card-bg, #ffffff); /* Border around thumb */
+}
+
+.palette-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
+}
+
+@keyframes expandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-15px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.palette-header {
+  display: none; /* Hide the old header */
+}
+
+.collapsed-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.collapsed-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin: 0;
+  text-transform: capitalize;
+  letter-spacing: 0.5px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tools-icon-button {
+  background: var(--card-bg, #ffffff);
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.tools-icon-button:hover {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color-light, #e3f2fd);
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 8px 25px rgba(0, 123, 255, 0.4);
+}
+
+.tools-icon-button:active {
+  transform: translateY(-2px) scale(1.05);
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tools-icon-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background-color: var(--primary-color-light, #e3f2fd);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+}
+
+.tools-icon-button:hover::before {
+  width: 120%;
+  height: 120%;
+}
+
+.tools-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--text-color-secondary, #666);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+  position: relative;
+}
+
+.tools-icon-button:hover .tools-icon {
+  color: var(--primary-color, #007bff);
+  transform: rotate(15deg) scale(1.15);
+}
+
+/* Expanded state header */
+.expanded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  position: relative;
+  animation: slideInHeader 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInHeader {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expanded-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-color, #333);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color-secondary, #666);
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.close-button:hover {
+  background-color: var(--background-hover, #e9ecef);
+  color: var(--text-color, #333);
+  transform: rotate(90deg) scale(1.1);
+}
+
+.close-button svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.component-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--card-bg, #ffffff);
+  position: relative;
+  overflow: hidden;
+  justify-content: space-between;
+}
+
+.component-card:hover,
+.component-card.hovered {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color-light, #e3f2fd);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.2);
+}
+
+.component-card.selected {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-color-light, #e3f2fd);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  animation: selectedPulse 2s infinite;
+}
+
+@keyframes selectedPulse {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+  50% { 
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.4);
+  }
+}
+
+.component-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  animation: checkmarkAppear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkmarkAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.component-preview {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  background-color: var(--background-secondary, #f8f9fa);
+  border: 1px solid var(--border-color-light, #e9ecef);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.component-card:hover .component-preview {
+  transform: scale(1.1);
+}
+
+.component-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.component-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.component-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+  margin-bottom: 4px;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.component-description {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary, #666);
+  line-height: 1.3;
+  margin-bottom: 4px;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.component-size {
+  font-size: 0.7rem;
+  color: var(--primary-color, #007bff);
+  font-weight: 600;
+  background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
+  padding: 2px 6px;
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.selection-hint {
+  background-color: var(--background-secondary, #f8f9fa);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+  animation: slideInHint 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInHint {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hint-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hint-preview {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color-light, #e9ecef);
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hint-text {
+  flex: 1;
+  color: var(--text-color, #333);
+}
+
+.hint-text strong {
+  color: var(--primary-color, #007bff);
+}
+
+.hint-text small {
+  color: var(--text-color-secondary, #666);
+}
+
+/* Remove the old quick components section */
+.quick-components,
+.quick-component,
+.more-button {
+  display: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .collapsed-content {
+    gap: 8px;
+  }
+
+  .collapsed-title {
+    font-size: 0.95rem;
+  }
+
+  .tools-icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+  }
+
+  .tools-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .component-card {
+    flex-direction: row;
+    text-align: left;
+    gap: 8px;
+    padding: 8px;
+    align-items: center;
+  }
+
+  .component-info {
+    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+  }
+
+  .component-preview {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .component-details {
+    text-align: left;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .component-name {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+  }
+
+  .component-description {
+    display: none; /* Hide description on mobile for compactness */
+  }
+
+  .component-size {
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    flex-shrink: 0;
+  }
+
+  .hint-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .quick-components {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .collapsed-title {
+    font-size: 0.9rem;
+  }
+
+  .tools-icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+  }
+
+  .tools-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .expanded-header {
+    padding: 12px 16px;
+  }
+
+  .palette-content {
+    padding: 12px;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .component-card {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .component-info {
+    gap: 6px;
+  }
+
+  .component-preview,
+  .hint-preview {
+    /* Width and height removed for small screens */
+  }
+
+  .component-name {
+    font-size: 0.75rem;
+  }
+
+  .component-size {
+    font-size: 0.6rem;
+    padding: 1px 3px;
+  }
+
+  .quick-component {
+    width: 40px;
+    height: 40px;
+  }
+
+  .more-button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Very small screens for better component menu visibility */
+@media (max-width: 375px) {
+  .palette-content {
+    padding: 8px;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .component-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .component-card {
+    padding: 4px;
+    gap: 4px;
+    border-width: 1px;
+  }
+
+  .component-info {
+    gap: 4px;
+  }
+
+  .component-preview,
+  .hint-preview {
+    /* Width and height removed for small screens */
+  }
+
+  .component-name {
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  .component-size {
+    font-size: 0.55rem;
+    padding: 1px 2px;
+  }
+
+  .expanded-header {
+    padding: 8px 12px;
+  }
+
+  .expanded-header h3 {
+    font-size: 1rem;
+  }
+
+  .close-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .close-button svg {
+    width: 18px;
+    height: 18px;
+  }
+} 

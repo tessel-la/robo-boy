@@ -10,10 +10,14 @@ import VoiceLayout from './gamepads/voice/VoiceLayout'; // Import the new Voice 
 import GameBoyLayout from './gamepads/gameboy/GameBoyLayout'; // Import the new GameBoy layout
 import DroneGamepadLayout from './gamepads/drone/DroneGamepadLayout'; // Import the new Drone gamepad layout
 import ManipulatorGamepadLayout from './gamepads/manipulator/ManipulatorGamepadLayout'; // Import the new Manipulator gamepad layout
+import CustomGamepadWrapper from './gamepads/custom/CustomGamepadWrapper'; // Import the custom gamepad wrapper
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
+import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
+import { CustomGamepadLayout } from '../features/customGamepad/types';
+import { getGamepadLayout } from '../features/customGamepad/gamepadStorage';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -66,6 +70,7 @@ export interface ActivePanel {
   id: string;
   type: PanelType;
   name: string; // Display name for the tab
+  layoutId?: string; // For custom gamepads
 }
 
 interface MainControlViewProps {
@@ -88,14 +93,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(initialPanelId);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
+  const [isCustomEditorOpen, setIsCustomEditorOpen] = useState(false);
+  const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
   // Counter for naming new panels of the same type
   const panelCounters = useRef<Record<PanelType, number>>({ 
     [GamepadType.Standard]: 0, 
     [GamepadType.Voice]: 0, 
     [GamepadType.GameBoy]: 0,
     [GamepadType.Drone]: 1, // Drone counter starts at 1 as it's the default
-    [GamepadType.Manipulator]: 1
+    [GamepadType.Manipulator]: 0,
+    [GamepadType.Custom]: 0
   }); // Updated counters
+  // State to trigger refresh of custom gamepads in AddPanelMenu
+  const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -182,21 +192,32 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsAddPanelMenuOpen(prev => !prev);
   };
 
-  const handleAddPanelType = (type: PanelType) => {
+  const handleAddPanelType = (type: PanelType, layoutId?: string) => {
     // Define labels based on the new types
     const typeLabels: Record<PanelType, string> = {
         [GamepadType.Standard]: 'Pad',
         [GamepadType.Voice]: 'Voice',
         [GamepadType.GameBoy]: 'GameBoy',
         [GamepadType.Drone]: 'Drone',
-        [GamepadType.Manipulator]: 'Manipulator'
+        [GamepadType.Manipulator]: 'Manipulator',
+        [GamepadType.Custom]: 'Custom'
     };
-    panelCounters.current[type]++;
-    const newName = `${typeLabels[type]} ${panelCounters.current[type]}`; // Use label for name
+    
+    let newName: string;
+    if (type === GamepadType.Custom && layoutId) {
+      // For custom gamepads, try to get the name from the layout
+      const gamepadItem = getGamepadLayout(layoutId);
+      newName = gamepadItem ? gamepadItem.name : 'Custom Gamepad';
+    } else {
+      panelCounters.current[type]++;
+      newName = `${typeLabels[type]} ${panelCounters.current[type]}`;
+    }
+    
     const newPanel: ActivePanel = {
         id: generateUniqueId('panel'),
         type: type,
         name: newName,
+        layoutId: layoutId
     };
     setActivePanels(prev => [...prev, newPanel]);
     setSelectedPanelId(newPanel.id); // Select the newly added panel
@@ -218,6 +239,29 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleCloseMenu = () => {
     setIsAddPanelMenuOpen(false);
   };
+
+  const handleOpenCustomEditor = (layoutId?: string) => {
+    setEditingLayoutId(layoutId || null);
+    setIsCustomEditorOpen(true);
+    setIsAddPanelMenuOpen(false);
+  };
+
+  const handleCloseCustomEditor = () => {
+    setIsCustomEditorOpen(false);
+    setEditingLayoutId(null);
+  };
+
+  const handleSaveCustomGamepad = (layout: CustomGamepadLayout) => {
+    // Add the new custom gamepad as a panel
+    handleAddPanelType(GamepadType.Custom, layout.id);
+    // Trigger refresh of custom gamepad list in AddPanelMenu
+    setCustomGamepadRefreshKey(prev => prev + 1);
+  };
+
+  const handleCustomGamepadDeleted = () => {
+    // Trigger refresh of custom gamepad list in AddPanelMenu
+    setCustomGamepadRefreshKey(prev => prev + 1);
+  };
   // --- End Panel Handlers ---
 
   // Memoize the selected panel component to prevent unnecessary re-renders
@@ -237,6 +281,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         return <DroneGamepadLayout ros={ros} key={panel.id} />;
       case GamepadType.Manipulator:
         return <ManipulatorGamepadLayout ros={ros} key={panel.id} />;
+      case GamepadType.Custom:
+        return panel.layoutId ? (
+          <CustomGamepadWrapper ros={ros} layoutId={panel.layoutId} key={panel.id} />
+        ) : (
+          <div>Custom gamepad layout not found</div>
+        );
       default:
         return <div>Unknown Panel Type</div>;
     }
@@ -387,8 +437,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         isOpen={isAddPanelMenuOpen}
         onSelectType={handleAddPanelType}
         onClose={handleCloseMenu}
+        onOpenCustomEditor={handleOpenCustomEditor}
         addButtonRef={addButtonRef}
+        refreshKey={customGamepadRefreshKey}
+        onCustomGamepadDeleted={handleCustomGamepadDeleted}
       />
+
+      {/* Render GamepadEditor modal */}
+      {isCustomEditorOpen && ros && (
+        <GamepadEditor
+          isOpen={isCustomEditorOpen}
+          onClose={handleCloseCustomEditor}
+          onSave={handleSaveCustomGamepad}
+          initialLayout={editingLayoutId ? getGamepadLayout(editingLayoutId)?.layout || null : null}
+          ros={ros}
+        />
+      )}
     </div>
   );
 };
