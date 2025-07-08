@@ -3,7 +3,7 @@
 [![Docker CI](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
 
 <p align="center">
-  <img src="images/logo_rb.jpg" alt="Robo-Boy Logo" width="200">
+  <img src="images/logo.PNG" alt="Robo-Boy Logo" width="200">
 </p>
 
 A web application for controlling ROS 2 robots, featuring a React frontend, ROS 2 integration via rosbridge, and secure local development setup with Caddy and HTTPS. Inspired by retro handheld consoles.

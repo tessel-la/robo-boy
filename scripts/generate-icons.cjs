@@ -15,7 +15,7 @@ if (!fs.existsSync(imagesPath)) {
 }
 
 // Source logo path
-const logoPath = path.join(__dirname, '../images/logo_rb.jpg');
+const logoPath = path.join(__dirname, '../images/logo.PNG');
 
 // Define comprehensive icon sizes for all platforms and devices
 const sizes = [
