@@ -6,7 +6,7 @@
 }
 
 # Listen on 443, serve both localhost and IP using mkcert files
-:443 {
+:443  {
     # Point to the mounted mkcert certificate and key
     tls /etc/caddy/certs/local-cert.pem /etc/caddy/certs/local-key.pem
 
@@ -47,9 +47,43 @@
     }
 }
 
-# Optional: Redirect HTTP to HTTPS
-# :80 {
-#    redir https://{host}{uri} permanent
-# }
+# HTTP port 80 - serve content directly without redirect
+:80 {
+    log { 
+        output stdout 
+    }
+
+    # Order matters: More specific handlers first
+
+    # Route WebSocket requests to the ros-stack container
+    handle /websocket* {
+       uri strip_prefix /websocket
+       reverse_proxy ros-stack:9090 
+    }
+
+    # Route Foxglove WebSocket requests to the ros-stack container
+    handle /foxglove* {
+       uri strip_prefix /foxglove
+       reverse_proxy ros-stack:8765
+    }
+
+    # Route video stream requests to the ros-stack container
+    handle /video_stream* {
+        uri strip_prefix /video_stream
+        reverse_proxy ros-stack:8080
+    }
+
+    # Route mesh resource requests to the Python server on the host
+    handle /mesh_resources/* {
+        uri strip_prefix /mesh_resources
+        reverse_proxy host.docker.internal:8000
+    }
+
+    # Route other requests to the Vite app container (Default Handler)
+    handle {
+        # Still proxy to HTTP endpoint of Vite container
+        reverse_proxy http://app:5173 
+    }
+}
 
 # Removed the duplicate localhost block

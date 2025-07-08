@@ -9,6 +9,11 @@
   "icons": [
     {
       "src": "/images/ios-mini-touch-icon.png?v=2",
+      "sizes": "57x57",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/ios-apple-touch-icon.png?v=2",
       "sizes": "180x180",
       "type": "image/png"
     }
