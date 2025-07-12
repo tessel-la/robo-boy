@@ -22,7 +22,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
 
 ## 🎥 App Demo
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/68b4192f-49fa-411a-8889-c40ec561d526" width="30%" controls></video>
+  <video src="https://github.com/user-attachments/assets/36b90514-79a6-42c4-9a92-b5231c9d16f3" width="50%" controls></video>
 </div>
 
 ## 🚀 Getting Started
