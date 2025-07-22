@@ -256,6 +256,7 @@
   max-height: 150px; /* Example max height */
   overflow-y: auto;
   font-size: 0.85rem; /* Smaller font for list items */
+  max-width: 70vw;
 }
 
 .tf-checkbox-list li {
