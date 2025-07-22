@@ -195,7 +195,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
              <div className="section-content">
                {/* TF Axes Scale Control */}
                <div className="popup-control-item">
-                 <label htmlFor="tf-axes-scale">TF Axes Size:</label>
+                 <label htmlFor="tf-axes-scale" style={{ color: 'var(--text-color)' }}>TF Axes Size:</label>
                  <div className="range-input-container">
                    <input
                      type="range"
@@ -216,7 +216,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                    <ul className="tf-checkbox-list">
                      {availableFrames.map((frame) => (
                        <li key={frame}>
-                         <label>
+                         <label style={{ color: 'var(--text-color)' }}>
                            <input
                              type="checkbox"
                              value={frame}

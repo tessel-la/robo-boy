@@ -50,7 +50,7 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan'; // Added 'laserscan'
+  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf'; // Added 'laserscan' and 'tf'
   topic: string; // For pointcloud/camerainfo/laserscan. For URDF, this might be robot_description topic
   options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions; // Union of option types
 }
@@ -120,7 +120,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   useEffect(() => {
     const savedState = getVisualizationState();
     if (savedState.visualizations && savedState.visualizations.length > 0) {
-      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan'];
+      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf'];
       const filteredVisualizations = savedState.visualizations.filter(
         (viz: any) => validTypes.includes(viz.type)
       ) as VisualizationConfig[];
@@ -275,6 +275,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
                 robotDescriptionTopic: newTopic,
               },
             };
+          } else if (viz.type === 'tf') {
+            return viz; // TF has no topic to update, so return as is
           } else {
             return { ...viz, topic: newTopic };
           }
@@ -499,6 +501,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'tf') {
+          // TF visualization is handled globally by the useTfVisualizer hook,
+          // so we don't need to render a specific component here.
+          // We keep this entry in the `visualizations` state to represent
+          // that the user has chosen to display TFs.
+          return null;
         }
         return null;
       })}
