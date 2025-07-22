@@ -578,7 +578,7 @@
 @media (max-width: 768px) {
   .settings-popup {
     max-width: 95%;
-    max-height: 90vh; /* More space on mobile */
+    max-height: 90%; /* More space on mobile */
     padding: 12px 15px; /* Slightly less padding on mobile */
   }
   
