@@ -22,8 +22,9 @@
   min-width: 300px;
   max-width: 90%;
   width: min(450px, 95%);
+  max-height: 90%;
   border: 1px solid var(--border-color, #5f6368);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .add-viz-modal h2 {
