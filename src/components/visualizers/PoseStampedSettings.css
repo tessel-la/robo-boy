@@ -1,0 +1,89 @@
+.pose-stamped-settings {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  max-width: 400px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.pose-stamped-settings h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text-color);
+  text-align: center;
+}
+
+.pose-stamped-settings .setting-group {
+  margin-bottom: 15px;
+}
+
+.pose-stamped-settings .setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.pose-stamped-settings .setting-group input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.pose-stamped-settings .setting-group input,
+.pose-stamped-settings .setting-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.pose-stamped-settings .setting-group input:focus,
+.pose-stamped-settings .setting-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(50, 205, 50, 0.2);
+}
+
+.pose-stamped-settings .setting-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.pose-stamped-settings .apply-button {
+  background-color: var(--primary-color);
+  color: var(--button-text-color);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.pose-stamped-settings .apply-button:hover {
+  opacity: 0.9;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .pose-stamped-settings {
+    width: 95vw;
+    padding: 15px;
+  }
+  
+  .pose-stamped-settings h3 {
+    font-size: 1.2em;
+  }
+}

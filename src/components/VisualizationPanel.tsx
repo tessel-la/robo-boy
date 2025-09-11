@@ -21,6 +21,7 @@ import AddVisualizationModal from './AddVisualizationModal';
 // Import the PointCloudSettings component
 import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
 import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
+import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
 import './visualizers/PointCloudSettings.css';
 
 // Import custom hooks
@@ -36,6 +37,8 @@ import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
+import PoseStampedViz from './visualizers/PoseStampedViz'; // Import PoseStampedViz
+import { PoseStampedOptions } from '../hooks/usePoseStampedClient'; // Import PoseStampedOptions
 import { FaPlus, FaCog, FaCube } from 'react-icons/fa'; // Import icons, added FaCube for URDF
 
 import {
@@ -50,9 +53,9 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf'; // Added 'laserscan' and 'tf'
-  topic: string; // For pointcloud/camerainfo/laserscan. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions; // Union of option types
+  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped'; // Added 'laserscan', 'tf', and 'posestamped'
+  topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
+  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -410,6 +413,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
             name: topic,
             type: response.types[index],
           }));
+          
+          // Debug: Log PoseStamped topics specifically
+          const poseStampedTopics = fetchedTopics.filter(topic => 
+            topic.type === 'geometry_msgs/PoseStamped' || topic.type === 'geometry_msgs/msg/PoseStamped'
+          );
+          console.log('[VisualizationPanel] Found PoseStamped topics:', poseStampedTopics);
+          
+          // Debug: Log all topics and types
+          console.log('[VisualizationPanel] All discovered topics:');
+          fetchedTopics.forEach(topic => {
+            console.log(`  - ${topic.name}: ${topic.type}`);
+          });
+          
           setAllTopics(fetchedTopics);
           // REMOVED setting old available state
           // setAvailablePointCloudTopics(...);
@@ -501,6 +517,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'posestamped') {
+          return (
+            <React.Fragment key={viz.id}>
+              <PoseStampedViz
+                ros={ros}
+                isRosConnected={isRosConnected}
+                ros3dViewer={ros3dViewer}
+                customTFProvider={customTFProvider}
+                topic={viz.topic}
+                fixedFrame={fixedFrame}
+                options={viz.options as PoseStampedOptions}
+              />
+            </React.Fragment>
+          );
         } else if (viz.type === 'tf') {
           // TF visualization is handled globally by the useTfVisualizer hook,
           // so we don't need to render a specific component here.
@@ -573,6 +603,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           initialOptions={activeViz.options as LaserScanSettingsOptions}
           onClose={closeVisualizationSettings}
           onSaveSettings={updateVisualizationSettings}
+        />
+      )}
+
+      {/* PoseStamped Settings Popup */}
+      {activeSettingsVizId && activeViz?.type === 'posestamped' && (
+        <PoseStampedSettings
+          options={activeViz.options as PoseStampedSettingsOptions || {}}
+          onOptionsChange={(newOptions) => {
+            updateVisualizationSettings(activeSettingsVizId, newOptions);
+            closeVisualizationSettings();
+          }}
         />
       )}
 

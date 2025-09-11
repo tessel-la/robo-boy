@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube, FaDotCircle } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
@@ -16,6 +16,8 @@ const SUPPORTED_VIZ_TYPES: Record<VisualizationConfig['type'], string[]> = {
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
   urdf: ['std_msgs/String', 'std_msgs/msg/String'], // URDF is often a string on /robot_description
   laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan
+  posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'], // Added PoseStamped
+  tf: [], // TF doesn't use topics directly
   // Add more types here, e.g.:
   // marker: ['visualization_msgs/Marker', 'visualization_msgs/msg/Marker'],
   // markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
@@ -26,7 +28,9 @@ const VIZ_TYPE_ICONS: Record<VisualizationConfig['type'], React.ReactNode> = {
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
   urdf: <FaCube />,
-  laserscan: <FaDotCircle />  // Updated LaserScan icon
+  laserscan: <FaDotCircle />,  // Updated LaserScan icon
+  posestamped: <FaArrowRight />, // PoseStamped icon
+  tf: <FaCubes />, // TF icon
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
   // markerarray: <FaCubes />,
@@ -47,6 +51,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [selectedType, setSelectedType] = useState<VisualizationConfig['type'] | ''>('');
+  const [manualTopicInput, setManualTopicInput] = useState<string>('');
+  const [useManualInput, setUseManualInput] = useState<boolean>(false);
   // Find all available URDF topics (std_msgs/String)
   const availableUrdfTopics = allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
   const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(availableUrdfTopics[0]?.name || '');
@@ -57,8 +63,32 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
       // For URDF, just return all available URDF topics
       return availableUrdfTopics;
     }
+    if (type === 'tf') {
+      // TF doesn't use topics, return empty array but this should be handled differently
+      return [];
+    }
+    
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
-    return allTopics.filter(topic => validRosTypes.includes(topic.type));
+    const filteredTopics = allTopics.filter(topic => validRosTypes.includes(topic.type));
+    
+    // Debug logging for PoseStamped specifically
+    if (type === 'posestamped') {
+      console.log('[AddVisualizationModal] PoseStamped topic filtering:');
+      console.log('  Valid ROS types:', validRosTypes);
+      console.log('  All topics:', allTopics.length);
+      console.log('  All topics sample:', allTopics.slice(0, 3));
+      console.log('  Filtered topics:', filteredTopics);
+      console.log('  Filtered topics length:', filteredTopics.length);
+      console.log('  All topic types:', [...new Set(allTopics.map(t => t.type))]);
+      
+      // Test the filtering manually
+      const manualTest = allTopics.filter(topic => 
+        topic.type === 'geometry_msgs/msg/PoseStamped' || topic.type === 'geometry_msgs/PoseStamped'
+      );
+      console.log('  Manual filter test:', manualTest);
+    }
+    
+    return filteredTopics;
   };
 
   // Add quick visualization (auto-select first available topic)
@@ -91,6 +121,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   // Helper function to capitalize type name for display
   const formatTypeName = (type: string): string => {
     if (type === 'urdf') return 'URDF';
+    if (type === 'posestamped') return 'PoseStamped';
+    if (type === 'tf') return 'TF Frames';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
@@ -123,17 +155,25 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
         } as UrdfOptions,
       };
     } else {
-      if (!selectedTopic) return;
+      // Use manual input if available, otherwise use selected topic
+      const topicToUse = useManualInput ? manualTopicInput : selectedTopic;
+      if (!topicToUse) return;
       config = {
-      type: selectedType,
-      topic: selectedTopic,
-      options: {},
-    };
+        type: selectedType,
+        topic: topicToUse,
+        options: {},
+      };
     }
     onAddVisualization(config);
   };
 
   if (!isOpen) return null;
+
+  // Debug: Log when modal opens
+  console.log('[AddVisualizationModal] Modal opened with topics:', allTopics.length);
+  if (allTopics.length === 0) {
+    console.log('[AddVisualizationModal] WARNING: No topics available when modal opened!');
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -146,8 +186,16 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
             {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
               const vizType = type as VisualizationConfig['type'];
               const availableTopics = getAvailableTopics(vizType);
-              const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
+              const hasTopicsOrIsUrdf = vizType === 'urdf' || vizType === 'tf' || availableTopics.length > 0;
               const icon = VIZ_TYPE_ICONS[vizType];
+              
+              // Debug logging for PoseStamped specifically in grid rendering
+              if (vizType === 'posestamped') {
+                console.log('[AddVisualizationModal] PoseStamped grid rendering:');
+                console.log('  Available topics:', availableTopics);
+                console.log('  Has topics or is URDF:', hasTopicsOrIsUrdf);
+                console.log('  All topics count:', allTopics.length);
+              }
               
               let title = `Add ${formatTypeName(type)}`;
               if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
@@ -207,12 +255,51 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
               {selectedType && selectedType !== 'urdf' && (
                 <div className="form-group">
                   <label htmlFor="viz-topic-select">Topic:</label>
-                  <select id="viz-topic-select" value={selectedTopic} onChange={handleTopicChange}>
-                    <option value="" disabled>-- Select Topic --</option>
-                    {getAvailableTopics(selectedType).map(topic => (
-                      <option key={topic.name} value={topic.name}>{topic.name}</option>
-                    ))}
-                  </select>
+                  {!useManualInput ? (
+                    <div>
+                      <select id="viz-topic-select" value={selectedTopic} onChange={handleTopicChange}>
+                        <option value="" disabled>-- Select Topic --</option>
+                        {getAvailableTopics(selectedType).map(topic => (
+                          <option key={topic.name} value={topic.name}>{topic.name}</option>
+                        ))}
+                      </select>
+                      <div style={{ marginTop: '8px' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => setUseManualInput(true)}
+                          style={{ fontSize: '12px', padding: '4px 8px' }}
+                        >
+                          Enter topic manually
+                        </button>
+                        {getAvailableTopics(selectedType).length === 0 && (
+                          <div style={{ color: 'orange', fontSize: '12px', marginTop: '4px' }}>
+                            No {selectedType} topics found. Try manual input.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        id="manual-topic-input"
+                        placeholder={`Enter ${selectedType} topic (e.g., /drone0/joy_control/target_pose)`}
+                        value={manualTopicInput}
+                        onChange={(e) => setManualTopicInput(e.target.value)}
+                        style={{ width: '100%', marginBottom: '8px' }}
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setUseManualInput(false);
+                          setManualTopicInput('');
+                        }}
+                        style={{ fontSize: '12px', padding: '4px 8px' }}
+                      >
+                        Back to topic list
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -246,7 +333,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 disabled={
                   !selectedType ||
                   (selectedType === 'urdf' && (!urdfRobotDescriptionTopic || availableUrdfTopics.length === 0)) ||
-                  (selectedType !== 'urdf' && !selectedTopic)
+                  (selectedType !== 'urdf' && !useManualInput && !selectedTopic) ||
+                  (selectedType !== 'urdf' && useManualInput && !manualTopicInput)
                 }
               >
                 Add Visualization
