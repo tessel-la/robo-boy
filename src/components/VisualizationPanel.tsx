@@ -123,7 +123,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   useEffect(() => {
     const savedState = getVisualizationState();
     if (savedState.visualizations && savedState.visualizations.length > 0) {
-      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf'];
+      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf', 'posestamped'];
       const filteredVisualizations = savedState.visualizations.filter(
         (viz: any) => validTypes.includes(viz.type)
       ) as VisualizationConfig[];
