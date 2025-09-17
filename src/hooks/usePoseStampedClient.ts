@@ -37,6 +37,11 @@ export interface PoseStampedOptions {
   axesSize?: number;
   showTrail?: boolean;
   maxTrailLength?: number;
+  // Enable/disable flags for individual settings
+  scaleEnabled?: boolean;
+  colorEnabled?: boolean;
+  arrowDimensionsEnabled?: boolean;
+  trailEnabled?: boolean;
 }
 
 interface UsePoseStampedClientProps {
@@ -63,15 +68,15 @@ export function usePoseStampedClient({
   const trailPointsRef = useRef<THREE.Vector3[]>([]);
   const trailLineRef = useRef<THREE.Line | null>(null);
 
-  // Default options
+  // Default options with enabled flag support
   const visualizationType = options.visualizationType || 'arrow';
-  const scale = options.scale || 1.0;
-  const color = options.color || '#00ff00';
-  const arrowLength = options.arrowLength || 1.0;
-  const arrowWidth = options.arrowWidth || 0.1;
-  const axesSize = options.axesSize || 0.5;
-  const showTrail = options.showTrail || false;
-  const maxTrailLength = options.maxTrailLength || 50;
+  const scale = (options.scaleEnabled !== false) ? (options.scale || 1.0) : 1.0;
+  const color = (options.colorEnabled !== false) ? (options.color || '#00ff00') : '#00ff00';
+  const arrowLength = (options.arrowDimensionsEnabled !== false) ? (options.arrowLength || 1.0) : 1.0;
+  const arrowWidth = (options.arrowDimensionsEnabled !== false) ? (options.arrowWidth || 0.1) : 0.1;
+  const axesSize = (options.arrowDimensionsEnabled !== false) ? (options.axesSize || 0.5) : 0.5;
+  const showTrail = (options.trailEnabled === true) && (options.showTrail !== false);
+  const maxTrailLength = (options.trailEnabled === true) ? (options.maxTrailLength || 50) : 50;
 
   // Helper function to create arrow geometry
   const createArrow = useCallback((length: number, width: number, color: string | THREE.Color) => {

@@ -289,7 +289,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                                   </div>
                                   
                                   {/* Only show settings button for supported viz types */}
-                                  {(viz.type === 'pointcloud' || viz.type === 'laserscan') && onEditVisualization && (
+                                  {(viz.type === 'pointcloud' || viz.type === 'laserscan' || viz.type === 'posestamped') && onEditVisualization && (
                                     <button
                                       className="viz-settings-button"
                                       onClick={() => handleEditClick(viz.id)}
