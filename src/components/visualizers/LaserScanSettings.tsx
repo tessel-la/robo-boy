@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent } from 'react';
 import { LaserScanOptions } from './LaserScanViz'; 
 import * as THREE from 'three';
-import './PointCloudSettings.css'; 
+import './TopicSettings.css'; 
 
 export interface LaserScanSettingsOptions extends LaserScanOptions {
 }
@@ -94,7 +94,7 @@ const LaserScanSettings: React.FC<LaserScanSettingsProps> = ({
   const shortTopicName = topic.split('/').pop() || topic;
 
   return (
-    <div className="point-cloud-settings-popup settings-popup-style"> 
+    <div className="topic-settings-popup settings-popup-style"> 
       <div className="settings-popup-header">
         <h3>LaserScan Settings: <span className="topic-name-display">{shortTopicName}</span></h3>
         <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">

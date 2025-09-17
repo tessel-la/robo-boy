@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import * as THREE from 'three';
 import { PoseStampedOptions } from '../../hooks/usePoseStampedClient';
 import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
-import './PointCloudSettings.css';
+import './TopicSettings.css';
 
 export interface PoseStampedSettingsOptions extends PoseStampedOptions {
   // Enable/disable flags for individual settings
@@ -143,7 +143,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
   const shortTopicName = topic.split('/').pop() || topic;
 
   return (
-    <div className="point-cloud-settings-popup">
+    <div className="topic-settings-popup">
       <div className="settings-popup-header">
         <h3>PoseStamped Settings: <span className="topic-name-display">{shortTopicName}</span></h3>
         <button className="close-button" onClick={onClose}>×</button>

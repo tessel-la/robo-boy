@@ -22,7 +22,7 @@ import AddVisualizationModal from './AddVisualizationModal';
 import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
 import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
 import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
-import './visualizers/PointCloudSettings.css';
+import './visualizers/TopicSettings.css';
 
 // Import custom hooks
 import { useRos3dViewer } from '../hooks/useRos3dViewer';

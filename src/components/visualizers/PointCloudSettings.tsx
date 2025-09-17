@@ -1,6 +1,6 @@
 import React, { useState, ChangeEvent } from 'react';
 import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
-import './PointCloudSettings.css';
+import './TopicSettings.css';
 
 // Define the settings structure
 export interface PointCloudSettingsOptions {
@@ -129,7 +129,7 @@ const PointCloudSettings = ({
   const shortTopicName = topic.split('/').pop() || topic;
 
   return (
-    <div className="point-cloud-settings-popup">
+    <div className="topic-settings-popup">
       <div className="settings-popup-header">
         <h3>Point Cloud Settings</h3>
         <button className="close-button" onClick={onClose}>×</button>
