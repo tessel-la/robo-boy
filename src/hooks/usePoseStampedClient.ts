@@ -77,23 +77,25 @@ export function usePoseStampedClient({
   const createArrow = useCallback((length: number, width: number, color: string | THREE.Color) => {
     const group = new THREE.Group();
     
-    // Create arrow shaft (cylinder)
-    const shaftGeometry = new THREE.CylinderGeometry(width * 0.3, width * 0.3, length * 0.8, 8);
     const arrowMaterial = new THREE.MeshLambertMaterial({ 
       color: color instanceof THREE.Color ? color : new THREE.Color(color)
     });
+    
+    // Create arrow shaft (cylinder) - positioned along X axis
+    const shaftGeometry = new THREE.CylinderGeometry(width * 0.3, width * 0.3, length * 0.8, 8);
     const shaft = new THREE.Mesh(shaftGeometry, arrowMaterial);
-    shaft.position.set(0, length * 0.4, 0);
+    // Rotate shaft to lie along X axis and position it
+    shaft.rotateZ(-Math.PI / 2);
+    shaft.position.set(length * 0.4, 0, 0);
     group.add(shaft);
     
-    // Create arrow head (cone)
+    // Create arrow head (cone) - positioned at tip along X axis
     const headGeometry = new THREE.ConeGeometry(width, length * 0.2, 8);
     const head = new THREE.Mesh(headGeometry, arrowMaterial);
-    head.position.set(0, length * 0.9, 0);
+    // Rotate head to point along positive X axis and position it at the tip
+    head.rotateZ(-Math.PI / 2);
+    head.position.set(length * 0.9, 0, 0);
     group.add(head);
-    
-    // Rotate to point along positive X axis (forward)
-    group.rotateZ(-Math.PI / 2);
     
     return group;
   }, []);
