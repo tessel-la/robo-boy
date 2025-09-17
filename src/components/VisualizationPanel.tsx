@@ -609,11 +609,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       {/* PoseStamped Settings Popup */}
       {activeSettingsVizId && activeViz?.type === 'posestamped' && (
         <PoseStampedSettings
-          options={activeViz.options as PoseStampedSettingsOptions || {}}
-          onOptionsChange={(newOptions) => {
-            updateVisualizationSettings(activeSettingsVizId, newOptions);
-            closeVisualizationSettings();
-          }}
+          vizId={activeSettingsVizId}
+          topic={activeViz.topic}
+          initialOptions={activeViz.options as PoseStampedSettingsOptions}
+          onClose={closeVisualizationSettings}
+          onSaveSettings={updateVisualizationSettings}
         />
       )}
 

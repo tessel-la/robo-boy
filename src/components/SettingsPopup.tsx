@@ -147,6 +147,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
       camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
       urdf: ['std_msgs/String', 'std_msgs/msg/String'], // Add URDF support
       laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan support
+      posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'], // Added PoseStamped support
       // Add more mappings as needed
     };
 

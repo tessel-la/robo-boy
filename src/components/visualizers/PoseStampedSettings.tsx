@@ -6,49 +6,72 @@ import './PoseStampedSettings.css';
 export interface PoseStampedSettingsOptions extends PoseStampedOptions {}
 
 interface PoseStampedSettingsProps {
-  options: PoseStampedSettingsOptions;
-  onOptionsChange: (newOptions: PoseStampedSettingsOptions) => void;
+  vizId: string;
+  topic: string;
+  initialOptions?: Partial<PoseStampedSettingsOptions>;
+  onClose: () => void;
+  onSaveSettings: (vizId: string, newOptions: PoseStampedSettingsOptions) => void;
 }
 
 const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
-  options,
-  onOptionsChange,
+  vizId,
+  topic,
+  initialOptions,
+  onClose,
+  onSaveSettings,
 }) => {
+  // Merge initial options with defaults
+  const defaultOptions: PoseStampedSettingsOptions = {
+    visualizationType: 'arrow',
+    scale: 1.0,
+    color: '#00ff00',
+    arrowLength: 1.0,
+    arrowWidth: 0.1,
+    axesSize: 0.5,
+    showTrail: false,
+    maxTrailLength: 50,
+  };
+
+  const [settings, setSettings] = useState<PoseStampedSettingsOptions>({
+    ...defaultOptions,
+    ...initialOptions,
+  });
+
   // Local state for form inputs
   const [visualizationType, setVisualizationType] = useState<'arrow' | 'axes'>(
-    options.visualizationType || 'arrow'
+    settings.visualizationType || 'arrow'
   );
-  const [scale, setScale] = useState<number>(options.scale || 1.0);
+  const [scale, setScale] = useState<number>(settings.scale || 1.0);
   const [color, setColor] = useState<string>(
-    typeof options.color === 'string' 
-      ? options.color 
-      : options.color instanceof THREE.Color 
-        ? `#${options.color.getHexString()}` 
+    typeof settings.color === 'string' 
+      ? settings.color 
+      : settings.color instanceof THREE.Color 
+        ? `#${settings.color.getHexString()}` 
         : '#00ff00'
   );
-  const [arrowLength, setArrowLength] = useState<number>(options.arrowLength || 1.0);
-  const [arrowWidth, setArrowWidth] = useState<number>(options.arrowWidth || 0.1);
-  const [axesSize, setAxesSize] = useState<number>(options.axesSize || 0.5);
-  const [showTrail, setShowTrail] = useState<boolean>(options.showTrail || false);
-  const [maxTrailLength, setMaxTrailLength] = useState<number>(options.maxTrailLength || 50);
+  const [arrowLength, setArrowLength] = useState<number>(settings.arrowLength || 1.0);
+  const [arrowWidth, setArrowWidth] = useState<number>(settings.arrowWidth || 0.1);
+  const [axesSize, setAxesSize] = useState<number>(settings.axesSize || 0.5);
+  const [showTrail, setShowTrail] = useState<boolean>(settings.showTrail || false);
+  const [maxTrailLength, setMaxTrailLength] = useState<number>(settings.maxTrailLength || 50);
 
-  // Update local state when options prop changes
+  // Update local state when settings change
   useEffect(() => {
-    setVisualizationType(options.visualizationType || 'arrow');
-    setScale(options.scale || 1.0);
+    setVisualizationType(settings.visualizationType || 'arrow');
+    setScale(settings.scale || 1.0);
     setColor(
-      typeof options.color === 'string' 
-        ? options.color 
-        : options.color instanceof THREE.Color 
-          ? `#${options.color.getHexString()}` 
+      typeof settings.color === 'string' 
+        ? settings.color 
+        : settings.color instanceof THREE.Color 
+          ? `#${settings.color.getHexString()}` 
           : '#00ff00'
     );
-    setArrowLength(options.arrowLength || 1.0);
-    setArrowWidth(options.arrowWidth || 0.1);
-    setAxesSize(options.axesSize || 0.5);
-    setShowTrail(options.showTrail || false);
-    setMaxTrailLength(options.maxTrailLength || 50);
-  }, [options]);
+    setArrowLength(settings.arrowLength || 1.0);
+    setArrowWidth(settings.arrowWidth || 0.1);
+    setAxesSize(settings.axesSize || 0.5);
+    setShowTrail(settings.showTrail || false);
+    setMaxTrailLength(settings.maxTrailLength || 50);
+  }, [settings]);
 
   // Handle form submission
   const handleApply = () => {
@@ -62,12 +85,22 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
       showTrail,
       maxTrailLength,
     };
-    onOptionsChange(newOptions);
+    onSaveSettings(vizId, newOptions);
+    onClose();
   };
 
+  // Extract topic name for display
+  const shortTopicName = topic.split('/').pop() || topic;
+
   return (
-    <div className="pose-stamped-settings">
-      <h3>PoseStamped Visualization Settings</h3>
+    <div className="point-cloud-settings-popup settings-popup-style">
+      <div className="settings-popup-header">
+        <h3>PoseStamped Settings: <span className="topic-name-display">{shortTopicName}</span></h3>
+        <button onClick={onClose} className="close-button icon-button" aria-label="Close settings">
+          &times;
+        </button>
+      </div>
+      <div className="settings-popup-content">
       
       <div className="setting-group">
         <label htmlFor="visualization-type">Visualization Type:</label>
@@ -176,10 +209,11 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
         </div>
       )}
 
-      <div className="setting-actions">
-        <button onClick={handleApply} className="apply-button">
-          Apply Settings
-        </button>
+        <div className="setting-actions">
+          <button onClick={handleApply} className="apply-button">
+            Apply Settings
+          </button>
+        </div>
       </div>
     </div>
   );
