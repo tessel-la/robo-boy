@@ -255,6 +255,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     const newViz: VisualizationConfig = { ...config, id: uuidv4() };
     setVisualizations((prev: VisualizationConfig[]) => [...prev, newViz]);
     setIsAddVizModalOpen(false); // Close modal after adding
+    setIsSettingsPopupOpen(true); // Reopen settings popup
     console.log("Added visualization:", newViz);
   };
 
@@ -292,7 +293,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // --- UI Handlers ---
   const toggleSettingsPopup = () => setIsSettingsPopupOpen(prev => !prev);
-  const toggleAddVizModal = () => setIsAddVizModalOpen(prev => !prev); // Define toggle for Add modal
+  
+  // Handler to open Add Viz Modal from Settings (close Settings, open Add)
+  const openAddVizModalFromSettings = () => {
+    setIsSettingsPopupOpen(false);
+    setIsAddVizModalOpen(true);
+  };
+  
+  // Handler to close Add Viz Modal and return to Settings
+  const closeAddVizModalAndReturnToSettings = () => {
+    setIsAddVizModalOpen(false);
+    setIsSettingsPopupOpen(true);
+  };
 
   // Function to open settings popup for a specific visualization
   const openVisualizationSettings = (vizId: string) => {
@@ -565,7 +577,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
           activeVisualizations={visualizations}
           onRemoveVisualization={removeVisualization}
-          onAddVisualizationClick={toggleAddVizModal}
+          onAddVisualizationClick={openAddVizModalFromSettings}
           onEditVisualization={openVisualizationSettings}
           onUpdateVisualizationTopic={updateVisualizationTopic}
           allTopics={allTopics}
@@ -580,7 +592,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           isOpen={isAddVizModalOpen} // Pass state down
           allTopics={allTopics}
           onAddVisualization={addVisualization}
-          onClose={toggleAddVizModal} // Use the toggle function to close
+          onClose={closeAddVizModalAndReturnToSettings} // Return to Settings after closing
         />
       )}
 
