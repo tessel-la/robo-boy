@@ -21,7 +21,8 @@ import AddVisualizationModal from './AddVisualizationModal';
 // Import the PointCloudSettings component
 import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
 import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
-import './visualizers/PointCloudSettings.css';
+import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
+import './visualizers/TopicSettings.css';
 
 // Import custom hooks
 import { useRos3dViewer } from '../hooks/useRos3dViewer';
@@ -36,6 +37,8 @@ import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
+import PoseStampedViz from './visualizers/PoseStampedViz'; // Import PoseStampedViz
+import { PoseStampedOptions } from '../hooks/usePoseStampedClient'; // Import PoseStampedOptions
 import { FaPlus, FaCog, FaCube } from 'react-icons/fa'; // Import icons, added FaCube for URDF
 
 import {
@@ -50,9 +53,9 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf'; // Added 'laserscan' and 'tf'
-  topic: string; // For pointcloud/camerainfo/laserscan. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions; // Union of option types
+  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped'; // Added 'laserscan', 'tf', and 'posestamped'
+  topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
+  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -120,7 +123,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   useEffect(() => {
     const savedState = getVisualizationState();
     if (savedState.visualizations && savedState.visualizations.length > 0) {
-      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf'];
+      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf', 'posestamped'];
       const filteredVisualizations = savedState.visualizations.filter(
         (viz: any) => validTypes.includes(viz.type)
       ) as VisualizationConfig[];
@@ -252,6 +255,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     const newViz: VisualizationConfig = { ...config, id: uuidv4() };
     setVisualizations((prev: VisualizationConfig[]) => [...prev, newViz]);
     setIsAddVizModalOpen(false); // Close modal after adding
+    setIsSettingsPopupOpen(true); // Reopen settings popup
     console.log("Added visualization:", newViz);
   };
 
@@ -289,7 +293,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // --- UI Handlers ---
   const toggleSettingsPopup = () => setIsSettingsPopupOpen(prev => !prev);
-  const toggleAddVizModal = () => setIsAddVizModalOpen(prev => !prev); // Define toggle for Add modal
+  
+  // Handler to open Add Viz Modal from Settings (close Settings, open Add)
+  const openAddVizModalFromSettings = () => {
+    setIsSettingsPopupOpen(false);
+    setIsAddVizModalOpen(true);
+  };
+  
+  // Handler to close Add Viz Modal and return to Settings
+  const closeAddVizModalAndReturnToSettings = () => {
+    setIsAddVizModalOpen(false);
+    setIsSettingsPopupOpen(true);
+  };
 
   // Function to open settings popup for a specific visualization
   const openVisualizationSettings = (vizId: string) => {
@@ -410,6 +425,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
             name: topic,
             type: response.types[index],
           }));
+          
+          // Debug: Log PoseStamped topics specifically
+          const poseStampedTopics = fetchedTopics.filter(topic => 
+            topic.type === 'geometry_msgs/PoseStamped' || topic.type === 'geometry_msgs/msg/PoseStamped'
+          );
+          console.log('[VisualizationPanel] Found PoseStamped topics:', poseStampedTopics);
+          
+          // Debug: Log all topics and types
+          console.log('[VisualizationPanel] All discovered topics:');
+          fetchedTopics.forEach(topic => {
+            console.log(`  - ${topic.name}: ${topic.type}`);
+          });
+          
           setAllTopics(fetchedTopics);
           // REMOVED setting old available state
           // setAvailablePointCloudTopics(...);
@@ -501,6 +529,20 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'posestamped') {
+          return (
+            <React.Fragment key={viz.id}>
+              <PoseStampedViz
+                ros={ros}
+                isRosConnected={isRosConnected}
+                ros3dViewer={ros3dViewer}
+                customTFProvider={customTFProvider}
+                topic={viz.topic}
+                fixedFrame={fixedFrame}
+                options={viz.options as PoseStampedOptions}
+              />
+            </React.Fragment>
+          );
         } else if (viz.type === 'tf') {
           // TF visualization is handled globally by the useTfVisualizer hook,
           // so we don't need to render a specific component here.
@@ -535,7 +577,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
           activeVisualizations={visualizations}
           onRemoveVisualization={removeVisualization}
-          onAddVisualizationClick={toggleAddVizModal}
+          onAddVisualizationClick={openAddVizModalFromSettings}
           onEditVisualization={openVisualizationSettings}
           onUpdateVisualizationTopic={updateVisualizationTopic}
           allTopics={allTopics}
@@ -550,7 +592,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           isOpen={isAddVizModalOpen} // Pass state down
           allTopics={allTopics}
           onAddVisualization={addVisualization}
-          onClose={toggleAddVizModal} // Use the toggle function to close
+          onClose={closeAddVizModalAndReturnToSettings} // Return to Settings after closing
         />
       )}
 
@@ -571,6 +613,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           vizId={activeSettingsVizId}
           topic={activeViz.topic}
           initialOptions={activeViz.options as LaserScanSettingsOptions}
+          onClose={closeVisualizationSettings}
+          onSaveSettings={updateVisualizationSettings}
+        />
+      )}
+
+      {/* PoseStamped Settings Popup */}
+      {activeSettingsVizId && activeViz?.type === 'posestamped' && (
+        <PoseStampedSettings
+          vizId={activeSettingsVizId}
+          topic={activeViz.topic}
+          initialOptions={activeViz.options as PoseStampedSettingsOptions}
           onClose={closeVisualizationSettings}
           onSaveSettings={updateVisualizationSettings}
         />
