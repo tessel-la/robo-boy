@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaMapMarker, FaCubes, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaMapMarker, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
@@ -11,26 +11,26 @@ interface TopicInfo {
 }
 
 // Define known visualization types and their corresponding ROS message types
-const SUPPORTED_VIZ_TYPES: Record<VisualizationConfig['type'], string[]> = {
+const SUPPORTED_VIZ_TYPES: Record<Exclude<VisualizationConfig['type'], 'tf'>, string[]> = {
   pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
   urdf: ['std_msgs/String', 'std_msgs/msg/String'], // URDF is often a string on /robot_description
   laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan
   posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'], // Added PoseStamped
-  tf: [], // TF doesn't use topics directly
+  // TF is excluded - controlled via Settings menu "Displayed TF Frames" section
   // Add more types here, e.g.:
   // marker: ['visualization_msgs/Marker', 'visualization_msgs/msg/Marker'],
   // markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
 };
 
 // Define visualization type icons
-const VIZ_TYPE_ICONS: Record<VisualizationConfig['type'], React.ReactNode> = {
+const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.ReactNode> = {
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
   urdf: <FaCube />,
   laserscan: <FaDotCircle />,  // Updated LaserScan icon
   posestamped: <FaArrowRight />, // PoseStamped icon
-  tf: <FaCubes />, // TF icon
+  // TF icon excluded - controlled via Settings menu
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
   // markerarray: <FaCubes />,
@@ -50,7 +50,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   allTopics,
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<VisualizationConfig['type'] | ''>('');
+  const [selectedType, setSelectedType] = useState<Exclude<VisualizationConfig['type'], 'tf'> | ''>('');
   const [manualTopicInput, setManualTopicInput] = useState<string>('');
   const [useManualInput, setUseManualInput] = useState<boolean>(false);
   // Find all available URDF topics (std_msgs/String)
@@ -58,14 +58,10 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(availableUrdfTopics[0]?.name || '');
 
   // Check if a type has available topics
-  const getAvailableTopics = (type: VisualizationConfig['type']): TopicInfo[] => {
+  const getAvailableTopics = (type: Exclude<VisualizationConfig['type'], 'tf'>): TopicInfo[] => {
     if (type === 'urdf') {
       // For URDF, just return all available URDF topics
       return availableUrdfTopics;
-    }
-    if (type === 'tf') {
-      // TF doesn't use topics, return empty array but this should be handled differently
-      return [];
     }
     
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
@@ -92,7 +88,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   };
 
   // Add quick visualization (auto-select first available topic)
-  const addQuickVisualization = (type: VisualizationConfig['type']) => {
+  const addQuickVisualization = (type: Exclude<VisualizationConfig['type'], 'tf'>) => {
     const availableTopics = getAvailableTopics(type);
     let config: Omit<VisualizationConfig, 'id'>;
 
@@ -122,12 +118,12 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   const formatTypeName = (type: string): string => {
     if (type === 'urdf') return 'URDF';
     if (type === 'posestamped') return 'PoseStamped';
-    if (type === 'tf') return 'TF Frames';
+    if (type === 'laserscan') return 'LaserScan';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   // Handle manual topic selection (only used if user wants to select a specific topic)
-  const handleTypeSelect = (type: VisualizationConfig['type']) => {
+  const handleTypeSelect = (type: Exclude<VisualizationConfig['type'], 'tf'> | '') => {
     setSelectedType(type);
     if (type === 'urdf') {
       // Pre-fill topic if a common one exists, or clear if not
@@ -184,9 +180,9 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
           <p className="section-label">Available Visualizations:</p>
           <div className="viz-grid">
             {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
-              const vizType = type as VisualizationConfig['type'];
+              const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
               const availableTopics = getAvailableTopics(vizType);
-              const hasTopicsOrIsUrdf = vizType === 'urdf' || vizType === 'tf' || availableTopics.length > 0;
+              const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
               const icon = VIZ_TYPE_ICONS[vizType];
               
               // Debug logging for PoseStamped specifically in grid rendering
@@ -236,11 +232,11 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 <select
                   id="advanced-viz-type"
                   value={selectedType}
-                  onChange={(e) => handleTypeSelect(e.target.value as VisualizationConfig['type'])}
+                  onChange={(e) => handleTypeSelect(e.target.value as Exclude<VisualizationConfig['type'], 'tf'> | '')}
                 >
                   <option value="" disabled>-- Select Type --</option>
                   {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
-                    const vizType = type as VisualizationConfig['type'];
+                    const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
                     const hasTopics = getAvailableTopics(vizType).length > 0;
                     const canAdd = vizType === 'urdf' || hasTopics;
                     return (
