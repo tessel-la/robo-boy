@@ -2,10 +2,15 @@
     display: flex;
     flex-direction: column;
     height: 100vh; /* Ensure it tries to fill the viewport height */
+    height: 100dvh; /* Use dynamic viewport height for mobile browsers */
     /* Remove padding-top, handled by content area now */
     padding: 0; 
     gap: 0; /* Remove gap, handled by content area padding */
-    position: relative; 
+    position: fixed; /* Fixed positioning to prevent scrolling */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     box-sizing: border-box; 
     overflow: hidden; /* Prevent scrolling on the main view */
 }
@@ -33,14 +38,17 @@
 /* Main Content Area Styles */
 .main-content-area {
     padding: 10px; /* Reduced from 15px */
-    padding-top: calc(40px + 10px); /* Reduced from 15px */
+    padding-top: calc(40px + 10px); /* Top bar height + padding */
+    padding-bottom: 10px;
     display: flex;
     flex-direction: column;
     align-items: stretch; 
-    gap: 10px; /* Reduced from 15px */
     overflow: hidden;
-    height: calc(100vh - 10px); 
+    height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height */
+    width: 100%;
     box-sizing: border-box;
+    position: relative;
 }
 
 /* Remove styles for the old .view-header */
@@ -148,36 +156,90 @@
 
 /* Adjust containers to fit within the new main-content-area */
 .view-panel-container {
-    /* flex: 3 1 auto; */
-    flex: 1 1 auto; /* Let it grow and shrink to fill remaining space */
     display: flex;
     flex-direction: column;
     min-height: 0; 
     width: 100%; 
     box-sizing: border-box;
     overflow: hidden; /* Hide overflow for the view panel */
+    flex-shrink: 0; /* Prevent flex shrinking */
+    /* Height set via inline style calculated by hook */
 }
 
 .control-panel-container {
-    /* flex: 1 1 auto; /* Removed flex sizing */
-    height: 35vh; /* Assign fixed viewport height (adjust as needed) */
-    flex-shrink: 0; /* Prevent shrinking below this height */
     display: flex;
     flex-direction: column;
-    /* min-height: 0; /* Not needed with fixed height */
+    min-height: 0;
     width: 100%; 
     box-sizing: border-box;
-    margin-bottom: 10px; 
+    flex-shrink: 0; /* Prevent flex shrinking */
+    /* Height set via inline style calculated by hook */
+    padding-bottom: 0; /* Remove any extra padding */
+}
+
+/* Resize Handle Styles */
+.resize-handle {
+    height: 16px; /* Increased from 10px for better touch target */
+    min-height: 16px;
+    max-height: 16px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: row-resize;
+    position: relative;
+    z-index: 10;
+    user-select: none;
+    flex-shrink: 0;
+    touch-action: none; /* Prevent default touch behaviors */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    margin: 0; /* Remove any margins */
+    padding: 0; /* Remove padding that adds to height */
+}
+
+.resize-handle:hover .resize-handle-bar,
+.resize-handle.dragging .resize-handle-bar {
+    background-color: var(--primary-color, #4285f4);
+    height: 4px;
+}
+
+.resize-handle-bar {
+    width: 60px;
+    height: 3px;
+    background-color: var(--border-color, #ccc);
+    border-radius: 2px;
+    transition: all 0.2s ease;
+}
+
+.resize-handle.dragging {
+    background-color: rgba(66, 133, 244, 0.1);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .resize-handle {
+        height: 20px; /* Even larger touch target on mobile */
+        min-height: 20px;
+        max-height: 20px;
+    }
+    
+    .resize-handle-bar {
+        width: 80px; /* Wider bar on mobile */
+        height: 4px; /* Thicker bar on mobile */
+    }
 }
 
 /* Ensure panels fill their containers */
 .view-panel,
 .control-panel {
-    flex-grow: 1; 
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column; 
     overflow-y: auto;
+    overflow-x: hidden;
     width: 100%;
+    min-height: 0; /* Important for flex children with overflow */
     box-sizing: border-box;
 }
 
@@ -192,6 +254,7 @@
 
 .control-panel {
     padding: 2px; /* Keep padding for control panel */
+    margin: 0; /* Remove any margin */
 }
 
 /* Center placeholder message */
@@ -243,7 +306,7 @@ body.no-scroll {
     .main-content-area {
         padding: 5px; /* Reduced from 10px */
         padding-top: calc(40px + 5px); /* Reduced from 10px */
-        gap: 5px; /* Reduced from 10px */
+        padding-bottom: 5px; /* Ensure bottom padding is also reduced */
     }
 
     /* Adjust top bar height/padding on mobile if needed */
@@ -261,6 +324,11 @@ body.no-scroll {
     .top-bar .disconnect-button-icon svg {
         /* Adjust icon sizes for mobile if needed */
         /* width: 1.1em; height: 1.1em; */
+    }
+    
+    /* Adjust control panel to ensure it fits */
+    .control-panel {
+        padding: 0px; /* Reduce padding on mobile */
     }
 }
 

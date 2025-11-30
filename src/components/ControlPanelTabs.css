@@ -5,8 +5,9 @@
     flex-shrink: 0; /* Prevent shrinking */
     padding-bottom: 5px; /* Space between tabs and panel content */
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: 10px;
+    margin-bottom: 8px; /* Reduced from 10px */
     overflow-x: auto; /* Allow horizontal scrolling if many tabs */
+    overflow-y: hidden; /* Prevent vertical overflow */
     position: relative; /* Establish stacking context */
     z-index: 1;         /* Ensure it's above default content */
     
