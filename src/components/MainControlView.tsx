@@ -396,7 +396,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className="main-content-area" ref={containerRef}>
-        <div className="view-panel-container" style={{ height: `${topHeight}%` }}>
+        <div className="view-panel-container" style={{ height: `calc(${topHeight}% - 8px)` }}>
           <div className="view-panel card" ref={viewPanelRef}>
             {viewMode === 'camera' ? (
               isConnected && ros && selectedCameraTopic ? (
@@ -430,7 +430,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <div className="resize-handle-bar" />
         </div>
 
-        <div className="control-panel-container" style={{ height: `${bottomHeight}%` }}>
+        <div className="control-panel-container" style={{ height: `calc(${bottomHeight}% - 8px)` }}>
            <ControlPanelTabs 
                panels={activePanels}
                selectedPanelId={selectedPanelId}
