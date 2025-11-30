@@ -75,8 +75,17 @@
   --primary-color-glow: rgba(203, 75, 22, 0.5); /* Primary color glow effect */
 }
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height for mobile browsers */
+  overflow: hidden; /* Prevent scrolling */
+  position: fixed; /* Prevent mobile browser address bar from causing scroll */
+}
+
+body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -90,7 +99,10 @@ body {
 #root {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 main {

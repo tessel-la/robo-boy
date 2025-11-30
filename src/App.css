@@ -1,12 +1,21 @@
 .App {
   /* text-align: center; */ /* Remove if using flex for centering */
-  min-height: 100vh; /* Ensure App fills viewport height */
+  height: 100vh; /* Fixed height for viewport */
+  height: 100dvh; /* Use dynamic viewport height for mobile browsers */
   display: flex;
   flex-direction: column; /* Stack children vertically */
+  overflow: hidden; /* Prevent scrolling at App level */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .App main {
-  flex-grow: 1; /* Allow main content to take up space */
+  flex: 1; /* Allow main content to take up space */
+  overflow: hidden; /* Prevent scrolling in main */
+  position: relative;
   /* display: flex; /* REMOVED */
   /* justify-content: center; /* REMOVED */
   /* align-items: stretch; /* REMOVED */

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ConnectionParams } from '../App'; // Import types
 import { useRos } from '../hooks/useRos'; // Import the hook
+import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
 import './MainControlView.css';
 // Import placeholder components (we'll create these next)
 import CameraView from './CameraView'; // Import the new CameraView
@@ -115,6 +116,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Resizable panels hook
+  const { topHeight, bottomHeight, handleMouseDown, handleTouchStart, containerRef, isDragging } = useResizablePanels({
+    initialTopHeight: 60,
+    minTopHeight: 20,
+    minBottomHeight: 20,
+    storageKey: 'robo-boy-panel-split',
+  });
 
   // Fetch topics when connected
   useEffect(() => {
@@ -386,8 +395,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       </div>
 
       {/* Main Content Area - ensure it starts below the top bar */}
-      <div className="main-content-area">
-        <div className="view-panel-container">
+      <div className="main-content-area" ref={containerRef}>
+        <div className="view-panel-container" style={{ height: `${topHeight}%` }}>
           <div className="view-panel card" ref={viewPanelRef}>
             {viewMode === 'camera' ? (
               isConnected && ros && selectedCameraTopic ? (
@@ -412,7 +421,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </div>
         </div>
 
-        <div className="control-panel-container">
+        {/* Resizable Handle */}
+        <div 
+          className={`resize-handle ${isDragging ? 'dragging' : ''}`}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+        >
+          <div className="resize-handle-bar" />
+        </div>
+
+        <div className="control-panel-container" style={{ height: `${bottomHeight}%` }}>
            <ControlPanelTabs 
                panels={activePanels}
                selectedPanelId={selectedPanelId}
