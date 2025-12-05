@@ -178,14 +178,20 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
   // Determine if we're in the buttons row (parent has sidebar-buttons-row class)
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Check on every render if in buttons row
-  const currentIsInButtonsRow = containerRef.current?.parentElement?.classList.contains('sidebar-buttons-row') || false;
+  
+  // Use state to track if in buttons row - default to true to show collapsed state initially
+  const [isInButtonsRow, setIsInButtonsRow] = useState(true);
+  
+  // Check after mount if we're in the buttons row
+  useEffect(() => {
+    const inButtonsRow = containerRef.current?.parentElement?.classList.contains('sidebar-buttons-row') || false;
+    setIsInButtonsRow(inButtonsRow);
+  }, []);
 
   return (
     <div ref={containerRef} className={`component-palette ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Collapsed State - only shown in buttons row */}
-      {currentIsInButtonsRow && (
+      {isInButtonsRow && (
         <div className="palette-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">component</h3>
@@ -207,7 +213,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       )}
 
       {/* Expanded State - shown when in expanded area */}
-      {!currentIsInButtonsRow && (
+      {!isInButtonsRow && (
         <>
           <div className="palette-content">
             <div className="palette-hint">
