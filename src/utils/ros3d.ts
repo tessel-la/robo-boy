@@ -1258,8 +1258,8 @@ class OrbitControls {
         this.panEnd.set(event.clientX, event.clientY);
         this.panDelta.subVectors(this.panEnd, this.panStart);
         
-        // Invert pan direction for natural feel
-        this.pan(-this.panDelta.x, -this.panDelta.y);
+        // Invert X only, keep Y natural for up/down
+        this.pan(-this.panDelta.x, this.panDelta.y);
         
         this.panStart.copy(this.panEnd);
         
@@ -1294,8 +1294,8 @@ class OrbitControls {
       // Trackpad two-finger pan OR mouse wheel
       // If deltaX is significant, treat as trackpad pan
       if (Math.abs(event.deltaX) > 1 || (Math.abs(event.deltaY) > 1 && event.deltaMode === 0)) {
-        // Trackpad pan - invert direction and scale for comfortable movement
-        this.pan(event.deltaX * 0.5, event.deltaY * 0.5);
+        // Trackpad pan - invert X only, keep Y natural for up/down
+        this.pan(event.deltaX * 0.5, -event.deltaY * 0.5);
         this.update();
       } else {
         // Regular mouse wheel - zoom
@@ -1361,8 +1361,8 @@ class OrbitControls {
           const elementWidth = element.clientWidth;
           const elementHeight = element.clientHeight;
           
-          // Scale factor for rotation (adjust as needed for sensitivity)
-          const rotateSpeed = this.rotateSpeed;
+          // Scale factor for rotation - reduced for touch (0.4x) for smoother control
+          const rotateSpeed = this.rotateSpeed * 0.4;
           
           // Completely separate axis handling for Z-up system
           // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
@@ -1441,8 +1441,8 @@ class OrbitControls {
           else if (midpointMovement > 8 && pinchRatio < 0.03) {
             this.panEnd.set(midX, midY);
             this.panDelta.subVectors(this.panEnd, this.panStart);
-            // Multiply pan delta for faster movement, invert direction
-            this.pan(-this.panDelta.x * 2.5, -this.panDelta.y * 2.5);
+            // Multiply pan delta for faster movement, invert X only (Y inverted for up/down)
+            this.pan(-this.panDelta.x * 2.5, this.panDelta.y * 2.5);
             this.panStart.copy(this.panEnd);
           }
         }
