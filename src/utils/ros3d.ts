@@ -219,7 +219,7 @@ class PointCloud2 extends THREE.Object3D {
     this.maxPoints = options.max_pts || 100000;
     this.pointSize = options.size || 0.05;
     this.compression = options.compression || 'none';
-    this.throttleRate = options.throttle_rate || 100;
+    this.throttleRate = options.throttle_rate || 33; // ~30Hz default for smoother updates
     this.fixedFrame = options.fixedFrame || 'odom'; // Store the fixed frame
     
     // Set scaling factors if provided
@@ -255,9 +255,9 @@ class PointCloud2 extends THREE.Object3D {
     
     // Use requestAnimationFrame to update the transform periodically
     const updateTransform = (timestamp: number) => {
-      // Run at most 30fps to avoid excessive CPU usage
+      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
       const now = performance.now();
-      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless we're retrying
+      if (now - lastTransformTime < 66 && retryCount === 0) {
         this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
         return;
       }
@@ -427,7 +427,7 @@ class PointCloud2 extends THREE.Object3D {
         ros: this.ros,
         name: this.topic,
         messageType: 'sensor_msgs/PointCloud2',
-        compression: this.compression,
+        compression: 'cbor', // Use compression for faster transfer
         throttle_rate: this.throttleRate,
         queue_size: 1 // Keep only the latest message
       });
@@ -871,9 +871,10 @@ class LaserScan extends THREE.Object3D {
     this.rosTopicInstance = new ROSLIB.Topic({
       ros: this.ros,
       name: this.topicName,
-      messageType: 'sensor_msgs/msg/LaserScan', // Ensure this is the correct type for ROS2
-      throttle_rate: 100, // Optional: throttle messages
-      compression: 'cbor' // Optional: use compression if available
+      messageType: 'sensor_msgs/msg/LaserScan',
+      throttle_rate: 33, // ~30Hz for smooth updates
+      queue_size: 1,
+      compression: 'cbor'
     });
 
     console.log(`[LaserScan] Subscribing to ${this.topicName}`);
@@ -965,7 +966,8 @@ class LaserScan extends THREE.Object3D {
       this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
 
       const now = performance.now();
-      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless retrying
+      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
+      if (now - lastTransformTime < 66 && retryCount === 0) {
         return;
       }
       lastTransformTime = now;

@@ -551,12 +551,10 @@ export function usePointCloudClient({
       rootObject: ros3dViewer.current.scene,
       topic: selectedPointCloudTopic,
       max_pts: options.maxPoints ?? (isMobile() ? 100000 : 200000), // Lower point count on mobile
-      // Use custom throttle rate based on platform
-      throttle_rate: isMobile() ? 250 : (options.throttleRate ?? 100),
-      compression: 'none' as const,
-      // Add a delay to give the material time to initialize properly (helps on Chrome)
-      queue_size: isMobile() ? 1 : 2, // Smaller queue for mobile
-      max_delay: isMobile() ? 0.2 : 0.5, // Shorter delay on mobile
+      // Use faster throttle rate for smoother updates
+      throttle_rate: isMobile() ? 100 : (options.throttleRate ?? 33), // ~30Hz on desktop
+      compression: 'cbor' as const, // Use compression for faster transfer
+      queue_size: 1, // Only keep latest message to reduce latency
       
       // ***IMPORTANT: Always explicitly set the fixed frame***
       fixedFrame: fixedFrame,
@@ -605,7 +603,7 @@ export function usePointCloudClient({
         if (isIOS()) {
           console.log("[iOS] Applying additional iOS-specific optimizations");
           clientOptions.max_pts = Math.min(clientOptions.max_pts, 30000);
-          clientOptions.throttle_rate = 300; // Even more throttling for iOS
+          clientOptions.throttle_rate = 150; // Slightly more throttling for iOS
         }
       }
     } else {
