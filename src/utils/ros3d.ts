@@ -191,6 +191,10 @@ class PointCloud2 extends THREE.Object3D {
   // For animation loop tracking
   private transformUpdateAnimationId: number | null = null;
   
+  // Cached field offsets for performance
+  private cachedFieldOffsets: { x: number; y: number; z: number } | null = null;
+  private cachedPointStep: number = 0;
+  
   constructor(options: {
     ros: Ros;
     topic: string;
@@ -255,9 +259,9 @@ class PointCloud2 extends THREE.Object3D {
     
     // Use requestAnimationFrame to update the transform periodically
     const updateTransform = (timestamp: number) => {
-      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
+      // Run at 30fps for TF updates (33ms) - match 3D panel refresh rate
       const now = performance.now();
-      if (now - lastTransformTime < 66 && retryCount === 0) {
+      if (now - lastTransformTime < 33 && retryCount === 0) {
         this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
         return;
       }
@@ -491,158 +495,98 @@ class PointCloud2 extends THREE.Object3D {
     }
   }
   
-  // Process incoming point cloud message
+  // Process incoming point cloud message - OPTIMIZED for performance
   private processMessage(message: any): void {
-    // Skip if points not set up
-    if (!this.points || !this.points.setup || !this.points.object) {
-      console.warn('[PointCloud2] Points not set up, skipping message processing');
+    // Fast path checks
+    if (!this.points?.setup || !this.points?.object) return;
+    
+    const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
+    if (!positions) return;
+    
+    // Quick validation
+    const data = message.data;
+    if (!data || !message.width || !message.height) return;
+    
+    // Store frame_id for TF (TF lookup handled by separate 30Hz loop, not here)
+    if (message.header?.frame_id) {
+      const frameId = message.header.frame_id.startsWith('/') 
+        ? message.header.frame_id.substring(1) 
+        : message.header.frame_id;
+      
+      if (this.messageFrameId !== frameId) {
+        this.messageFrameId = frameId;
+        // Reset cached offsets when frame changes (message format might differ)
+        this.cachedFieldOffsets = null;
+      }
+    }
+    
+    const pointStep = message.point_step || 32;
+    const pointCount = Math.min(message.width * message.height, this.maxPoints);
+    
+    // Cache field offsets on first message (or when point_step changes)
+    if (!this.cachedFieldOffsets || this.cachedPointStep !== pointStep) {
+      this.cachedPointStep = pointStep;
+      
+      if (message.fields && Array.isArray(message.fields)) {
+        const offsets: { [key: string]: number } = {};
+        for (let i = 0; i < message.fields.length; i++) {
+          const field = message.fields[i];
+          if (field.name && field.offset !== undefined) {
+            offsets[field.name] = field.offset;
+          }
+        }
+        
+        this.cachedFieldOffsets = {
+          x: offsets.x ?? 0,
+          y: offsets.y ?? 4,
+          z: offsets.z ?? 8
+        };
+      } else {
+        this.cachedFieldOffsets = { x: 0, y: 4, z: 8 };
+      }
+    }
+    
+    // Create DataView - fast path for common types
+    let dataView: DataView;
+    if (data instanceof Uint8Array) {
+      dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    } else if (data instanceof ArrayBuffer) {
+      dataView = new DataView(data);
+    } else if (typeof data === 'string') {
+      // Base64 decode (rare path)
+      try {
+        const binaryData = atob(data);
+        const bytes = new Uint8Array(binaryData.length);
+        for (let i = 0; i < binaryData.length; i++) {
+          bytes[i] = binaryData.charCodeAt(i);
+        }
+        dataView = new DataView(bytes.buffer);
+      } catch (e) {
+        return;
+      }
+    } else {
       return;
     }
     
-    try {
-      // Store the message frame_id for TF transformation
-      if (message.header && message.header.frame_id) {
-        // Remove any leading '/' from the frame_id to be consistent with TF
-        const frameId = message.header.frame_id.startsWith('/') ? 
-          message.header.frame_id.substring(1) : message.header.frame_id;
-        
-        // Check if frame changed
-        const frameChanged = this.messageFrameId !== frameId;
-        if (frameChanged) {
-          console.log(`[PointCloud2] Message frame_id changed from ${this.messageFrameId} to ${frameId}`);
-          // Hide until we get a transform for the new frame
-          (this as any).visible = false;
-        }
-        
-        this.messageFrameId = frameId;
-        
-        // Immediately trigger a transform lookup to update position
-        // Use stored fixedFrame instead of trying to call getFixedFrame
-        if (this.messageFrameId) {
-          try {
-            const tf = this.tfClient.lookupTransform(this.fixedFrame, this.messageFrameId);
-            if (tf && tf.translation && tf.rotation) {
-              this.position.set(
-                tf.translation.x,
-                tf.translation.y,
-                tf.translation.z
-              );
-              this.quaternion.set(
-                tf.rotation.x,
-                tf.rotation.y,
-                tf.rotation.z,
-                tf.rotation.w
-              );
-              (this as any).visible = true;
-              this.updateMatrix();
-              this.matrixWorldNeedsUpdate = true;
-            }
-          } catch (e) {
-            console.warn(`[PointCloud2] Initial transform lookup failed: ${e}`);
-          }
-        }
-      } else {
-        console.warn('[PointCloud2] Message has no frame_id in header');
-      }
-      
-      // Get the position attribute
-      const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
-      if (!positions) {
-        console.warn('[PointCloud2] No position attribute found');
-        return;
-      }
-      
-      // If we have decoded data, process it
-      if (!message.data || !message.width || !message.height) {
-        console.warn('[PointCloud2] Message data missing width, height, or data');
-        return;
-      }
-      
-      const width = message.width;
-      const height = message.height;
-      const pointCount = Math.min(width * height, this.maxPoints);
-      
-      // Parse the binary data from the point cloud message
-      // PointCloud2 data is typically stored as an ArrayBuffer
-      let data = message.data;
-      let pointStep = message.point_step || 32; // Default step size if not provided
-      let fieldOffsets: { [key: string]: number } = {};
-      
-      // Get field offsets to locate x, y, z in each point
-      if (message.fields && Array.isArray(message.fields)) {
-        message.fields.forEach((field: any) => {
-          if (field.name && field.offset !== undefined) {
-            fieldOffsets[field.name] = field.offset;
-          }
-        });
-      }
-      
-      // Check if we have x, y, z offsets
-      if (!fieldOffsets.x || !fieldOffsets.y || !fieldOffsets.z) {
-        console.warn('[PointCloud2] Cannot find x, y, z field offsets in message');
-        // Use default offsets if not found
-        fieldOffsets = { x: 0, y: 4, z: 8 };
-      }
-      
-      // Create a DataView for accessing binary data
-      let dataView;
-      
-      // Handle different data types
-      if (data instanceof Uint8Array) {
-        dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-      } else if (data instanceof ArrayBuffer) {
-        dataView = new DataView(data);
-      } else if (typeof data === 'string') {
-        // If data is base64 or other string format, convert to array buffer
-        console.warn('[PointCloud2] String data format detected, attempting to parse');
-        try {
-          // Convert to binary array first
-          const binaryData = atob(data);
-          const bytes = new Uint8Array(binaryData.length);
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i);
-          }
-          dataView = new DataView(bytes.buffer);
-        } catch (e) {
-          console.error('[PointCloud2] Failed to parse string data:', e);
-          return;
-        }
-      } else {
-        console.warn('[PointCloud2] Unsupported data type, cannot visualize');
-        return;
-      }
-      
-      // Cache field offsets for performance
-      const xOffset = fieldOffsets.x;
-      const yOffset = fieldOffsets.y;
-      const zOffset = fieldOffsets.z;
-      const scaleX = this.scaleX;
-      const scaleY = this.scaleY;
-      const scaleZ = this.scaleZ;
-      const originX = this.originX;
-      const originY = this.originY;
-      const originZ = this.originZ;
-      
-      // Extract point cloud data (optimized loop - no try-catch per point)
-      for (let i = 0; i < pointCount; i++) {
-        const offset = i * pointStep;
-        
-        // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
-        const x = dataView.getFloat32(offset + xOffset, true) * scaleX + originX;
-        const y = dataView.getFloat32(offset + yOffset, true) * scaleY + originY;
-        const z = dataView.getFloat32(offset + zOffset, true) * scaleZ + originZ;
-        
-        positions.setXYZ(i, x, y, z);
-      }
-      
-      // Update the geometry
-      positions.needsUpdate = true;
-      
-      // Set the draw range to only render valid points
-      this.points.geometry?.setDrawRange(0, pointCount);
-    } catch (e) {
-      console.error('[PointCloud2] Error processing point cloud message:', e);
+    // Cache all values for tight loop
+    const xOff = this.cachedFieldOffsets.x;
+    const yOff = this.cachedFieldOffsets.y;
+    const zOff = this.cachedFieldOffsets.z;
+    const sx = this.scaleX, sy = this.scaleY, sz = this.scaleZ;
+    const ox = this.originX, oy = this.originY, oz = this.originZ;
+    const posArray = positions.array as Float32Array;
+    
+    // Tight loop - direct array access is faster than setXYZ
+    for (let i = 0, idx = 0; i < pointCount; i++, idx += 3) {
+      const off = i * pointStep;
+      posArray[idx] = dataView.getFloat32(off + xOff, true) * sx + ox;
+      posArray[idx + 1] = dataView.getFloat32(off + yOff, true) * sy + oy;
+      posArray[idx + 2] = dataView.getFloat32(off + zOff, true) * sz + oz;
     }
+    
+    // Update geometry
+    positions.needsUpdate = true;
+    this.points.geometry?.setDrawRange(0, pointCount);
   }
 
   // Method to update visualization settings
@@ -1104,10 +1048,15 @@ class OrbitControls {
   private panDelta = new THREE.Vector2();
   
   // Track touch points for multi-touch gestures
-  private touches = { ONE: 0, TWO: 1 };
   private prevTouchDistance = -1;
+  private prevTouchMidpoint = new THREE.Vector2();
   
-  private EPS = 0.000001;
+  // Double-tap detection
+  private lastTapTime = 0;
+  private lastTapX = 0;
+  private lastTapY = 0;
+  private doubleTapDelay = 300; // ms
+  private doubleTapDistance = 30; // px tolerance
   
   constructor(options: {
     scene: THREE.Object3D;
@@ -1158,7 +1107,7 @@ class OrbitControls {
     // Initial update
     this.update();
     
-    console.log('[OrbitControls] Initialized with touch support');
+    console.log('[OrbitControls] Initialized: Left=Rotate, Middle=Pan, Wheel=Zoom, Touch: 1-finger=Rotate, 2-finger=Pan/Zoom');
   }
   
   private updateSpherical(): void {
@@ -1179,12 +1128,14 @@ class OrbitControls {
         this.rotateStart.set(event.clientX, event.clientY);
         break;
       case this.mouseButtons.MIDDLE:
-        this.state = this.STATE.DOLLY;
-        break;
-      case this.mouseButtons.RIGHT:
+        // Middle click (wheel button) for pan/translate
         this.state = this.STATE.PAN;
         this.panStart.set(event.clientX, event.clientY);
         break;
+      case this.mouseButtons.RIGHT:
+        // Right click - no action (allow context menu)
+        this.state = this.STATE.NONE;
+        return; // Don't prevent default to allow context menu
       default:
         this.state = this.STATE.NONE;
     }
@@ -1258,9 +1209,13 @@ class OrbitControls {
         this.panEnd.set(event.clientX, event.clientY);
         this.panDelta.subVectors(this.panEnd, this.panStart);
         
-        this.pan(this.panDelta.x, this.panDelta.y);
+        // Invert X only, keep Y natural for up/down
+        this.pan(-this.panDelta.x, this.panDelta.y);
         
         this.panStart.copy(this.panEnd);
+        
+        // Update camera view after panning
+        this.update();
         break;
     }
   }
@@ -1277,10 +1232,30 @@ class OrbitControls {
     
     event.preventDefault();
     
-    if (event.deltaY < 0) {
-      this.dollyIn();
-    } else {
-      this.dollyOut();
+    // Detect trackpad pinch-zoom (Ctrl + wheel) or regular mouse wheel
+    if (event.ctrlKey) {
+      // Trackpad pinch-to-zoom (Ctrl is automatically added by browser)
+      // Inverted: pinch out = zoom out, pinch in = zoom in
+      if (event.deltaY < 0) {
+        this.dollyOut();
+      } else {
+        this.dollyIn();
+      }
+    } else if (Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0) {
+      // Trackpad two-finger pan OR mouse wheel
+      // If deltaX is significant, treat as trackpad pan
+      if (Math.abs(event.deltaX) > 1 || (Math.abs(event.deltaY) > 1 && event.deltaMode === 0)) {
+        // Trackpad pan - invert X only, keep Y natural for up/down
+        this.pan(event.deltaX * 0.5, -event.deltaY * 0.5);
+        this.update();
+      } else {
+        // Regular mouse wheel - zoom
+        if (event.deltaY < 0) {
+          this.dollyIn();
+        } else {
+          this.dollyOut();
+        }
+      }
     }
     
     this.update();
@@ -1292,24 +1267,43 @@ class OrbitControls {
     event.preventDefault();
     
     switch (event.touches.length) {
-      case 1: // Single touch - handle as rotation
-        this.state = this.STATE.ROTATE;
-        this.rotateStart.set(
-          event.touches[0].clientX,
-          event.touches[0].clientY
+      case 1: // Single touch - check for double-tap or rotation
+        const now = Date.now();
+        const tapX = event.touches[0].clientX;
+        const tapY = event.touches[0].clientY;
+        
+        // Check for double-tap
+        const timeDiff = now - this.lastTapTime;
+        const distDiff = Math.sqrt(
+          Math.pow(tapX - this.lastTapX, 2) + 
+          Math.pow(tapY - this.lastTapY, 2)
         );
+        
+        if (timeDiff < this.doubleTapDelay && distDiff < this.doubleTapDistance) {
+          // Double-tap detected - smooth zoom in
+          this.smoothZoom(0.6, 300); // Zoom to 60% distance over 300ms
+          this.lastTapTime = 0; // Reset to prevent triple-tap
+        } else {
+          // Single tap - start rotation
+          this.state = this.STATE.ROTATE;
+          this.rotateStart.set(tapX, tapY);
+          this.lastTapTime = now;
+          this.lastTapX = tapX;
+          this.lastTapY = tapY;
+        }
         break;
         
-      case 2: // Two touches - handle as pinch zoom or pan
+      case 2: // Two touches - pinch zoom or two-finger pan
         const dx = event.touches[0].clientX - event.touches[1].clientX;
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         this.prevTouchDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // Use the midpoint as the pan starting point
+        // Store the midpoint for tracking pan movement
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        this.prevTouchMidpoint.set(x, y);
         this.panStart.set(x, y);
-        this.state = this.STATE.PAN;
+        this.state = this.STATE.DOLLY; // Two-finger state
         break;
         
       default:
@@ -1336,8 +1330,8 @@ class OrbitControls {
           const elementWidth = element.clientWidth;
           const elementHeight = element.clientHeight;
           
-          // Scale factor for rotation (adjust as needed for sensitivity)
-          const rotateSpeed = this.rotateSpeed;
+          // Scale factor for rotation - reduced for touch (0.4x) for smoother control
+          const rotateSpeed = this.rotateSpeed * 0.4;
           
           // Completely separate axis handling for Z-up system
           // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
@@ -1381,32 +1375,51 @@ class OrbitControls {
         }
         break;
         
-      case 2: // Two touches - handle as pinch zoom and pan
+      case 2: // Two touches - handle zoom and pan separately each frame
         // Calculate current distance between touch points
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        const touchDistance = Math.sqrt(dx * dx + dy * dy);
+        const dx2 = event.touches[0].clientX - event.touches[1].clientX;
+        const dy2 = event.touches[0].clientY - event.touches[1].clientY;
+        const touchDistance = Math.sqrt(dx2 * dx2 + dy2 * dy2);
         
-        // If we have a previous distance, use it for pinch zoom
-        if (this.prevTouchDistance > 0 && touchDistance > 0) {
-          // If new distance is greater, zoom in, otherwise zoom out
-          if (touchDistance > this.prevTouchDistance) {
-            this.dollyIn();
-          } else {
-            this.dollyOut();
+        // Calculate current midpoint
+        const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        
+        if (this.prevTouchDistance > 0) {
+          // Calculate distance change ratio (for pinch detection)
+          const distanceChange = touchDistance - this.prevTouchDistance;
+          const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
+          
+          // Calculate midpoint movement
+          const midpointDeltaX = midX - this.prevTouchMidpoint.x;
+          const midpointDeltaY = midY - this.prevTouchMidpoint.y;
+          const midpointMovement = Math.sqrt(midpointDeltaX * midpointDeltaX + midpointDeltaY * midpointDeltaY);
+          
+          // Pinch zoom: significant change in finger distance (>4% of current spread)
+          // This triggers when fingers move toward/away from each other
+          // Inverted: pinch out (spread fingers) = zoom out, pinch in = zoom in
+          if (pinchRatio > 0.04) {
+            if (distanceChange > 0) {
+              this.dollyOut();
+            } else {
+              this.dollyIn();
+            }
           }
-          this.prevTouchDistance = touchDistance;
+          // Pan: significant midpoint movement with relatively stable finger distance
+          // Threshold of 8px to avoid accidental triggering, pinchRatio < 3% for stability
+          else if (midpointMovement > 8 && pinchRatio < 0.03) {
+            this.panEnd.set(midX, midY);
+            this.panDelta.subVectors(this.panEnd, this.panStart);
+            // Multiply pan delta for faster movement, invert X only (Y inverted for up/down)
+            this.pan(-this.panDelta.x * 2.5, this.panDelta.y * 2.5);
+            this.panStart.copy(this.panEnd);
+          }
         }
         
-        // Use the midpoint for panning
-        const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-        const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        this.panEnd.set(x, y);
-        this.panDelta.subVectors(this.panEnd, this.panStart);
-        
-        this.pan(this.panDelta.x, this.panDelta.y);
-        
-        this.panStart.copy(this.panEnd);
+        // Update tracking values
+        this.prevTouchDistance = touchDistance;
+        this.prevTouchMidpoint.set(midX, midY);
+        this.panStart.set(midX, midY); // Keep pan start updated
         break;
     }
     
@@ -1496,6 +1509,39 @@ class OrbitControls {
     
     // Always maintain Z-up orientation
     this.camera.up.set(0, 0, 1);
+  }
+  
+  // Smooth animated zoom
+  private smoothZoom(targetScale: number, duration: number): void {
+    const startPosition = this.camera.position.clone();
+    const startDistance = startPosition.distanceTo(this.target);
+    const endDistance = startDistance * targetScale;
+    const startTime = performance.now();
+    
+    const animateZoom = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      // Interpolate distance
+      const currentDistance = startDistance + (endDistance - startDistance) * easeProgress;
+      
+      // Calculate new position along the same direction
+      const direction = this.camera.position.clone().sub(this.target).normalize();
+      this.camera.position.copy(this.target).add(direction.multiplyScalar(currentDistance));
+      
+      // Keep looking at target
+      this.camera.lookAt(this.target);
+      this.camera.up.set(0, 0, 1);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateZoom);
+      }
+    };
+    
+    requestAnimationFrame(animateZoom);
   }
   
   public dispose(): void {
