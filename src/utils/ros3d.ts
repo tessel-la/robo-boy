@@ -1107,6 +1107,13 @@ class OrbitControls {
   private prevTouchDistance = -1;
   private prevTouchMidpoint = new THREE.Vector2();
   
+  // Double-tap detection
+  private lastTapTime = 0;
+  private lastTapX = 0;
+  private lastTapY = 0;
+  private doubleTapDelay = 300; // ms
+  private doubleTapDistance = 30; // px tolerance
+  
   constructor(options: {
     scene: THREE.Object3D;
     camera: THREE.PerspectiveCamera;
@@ -1316,12 +1323,30 @@ class OrbitControls {
     event.preventDefault();
     
     switch (event.touches.length) {
-      case 1: // Single touch - handle as rotation
-        this.state = this.STATE.ROTATE;
-        this.rotateStart.set(
-          event.touches[0].clientX,
-          event.touches[0].clientY
+      case 1: // Single touch - check for double-tap or rotation
+        const now = Date.now();
+        const tapX = event.touches[0].clientX;
+        const tapY = event.touches[0].clientY;
+        
+        // Check for double-tap
+        const timeDiff = now - this.lastTapTime;
+        const distDiff = Math.sqrt(
+          Math.pow(tapX - this.lastTapX, 2) + 
+          Math.pow(tapY - this.lastTapY, 2)
         );
+        
+        if (timeDiff < this.doubleTapDelay && distDiff < this.doubleTapDistance) {
+          // Double-tap detected - smooth zoom in
+          this.smoothZoom(0.6, 300); // Zoom to 60% distance over 300ms
+          this.lastTapTime = 0; // Reset to prevent triple-tap
+        } else {
+          // Single tap - start rotation
+          this.state = this.STATE.ROTATE;
+          this.rotateStart.set(tapX, tapY);
+          this.lastTapTime = now;
+          this.lastTapX = tapX;
+          this.lastTapY = tapY;
+        }
         break;
         
       case 2: // Two touches - pinch zoom or two-finger pan
@@ -1540,6 +1565,39 @@ class OrbitControls {
     
     // Always maintain Z-up orientation
     this.camera.up.set(0, 0, 1);
+  }
+  
+  // Smooth animated zoom
+  private smoothZoom(targetScale: number, duration: number): void {
+    const startPosition = this.camera.position.clone();
+    const startDistance = startPosition.distanceTo(this.target);
+    const endDistance = startDistance * targetScale;
+    const startTime = performance.now();
+    
+    const animateZoom = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      // Interpolate distance
+      const currentDistance = startDistance + (endDistance - startDistance) * easeProgress;
+      
+      // Calculate new position along the same direction
+      const direction = this.camera.position.clone().sub(this.target).normalize();
+      this.camera.position.copy(this.target).add(direction.multiplyScalar(currentDistance));
+      
+      // Keep looking at target
+      this.camera.lookAt(this.target);
+      this.camera.up.set(0, 0, 1);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateZoom);
+      }
+    };
+    
+    requestAnimationFrame(animateZoom);
   }
   
   public dispose(): void {
