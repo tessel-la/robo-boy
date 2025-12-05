@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { CustomGamepadLayout as LayoutType, ComponentInteractionMode, DragState, DropPreview } from '../types';
+import { CustomGamepadLayout as LayoutType, DragState, DropPreview } from '../types';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -9,7 +9,6 @@ interface CustomGamepadLayoutProps {
   ros: Ros;
   isEditing?: boolean;
   selectedComponentId?: string | null;
-  interactionMode?: ComponentInteractionMode;
   dropPreview?: DropPreview | null;
   dragState?: DragState | null;
   onComponentSelect?: (id: string) => void;
@@ -25,7 +24,6 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   ros,
   isEditing = false,
   selectedComponentId = null,
-  interactionMode,
   dropPreview,
   dragState,
   onComponentSelect,
@@ -292,7 +290,6 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
               isEditing={isEditing}
               isSelected={selectedComponentId === component.id}
               isBeingDragged={isBeingDragged}
-              interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
               gridSize={layout.gridSize}
               onSelect={handleComponentSelect}
               onUpdate={handleComponentUpdate}

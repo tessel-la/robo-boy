@@ -1,10 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { Ros } from 'roslib';
 import { 
   CustomGamepadLayout, 
   GamepadComponentConfig, 
-  EditorState,
-  ComponentInteractionMode
+  EditorState
 } from '../types';
 import { componentLibrary } from '../defaultLayouts';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
@@ -55,7 +54,6 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
 
   const [editorState, setEditorState] = useState<EditorState>({
     selectedComponentId: null,
-    componentInteractionMode: ComponentInteractionMode.None,
     draggedComponent: null,
     dragState: null,
     dropPreview: null,
@@ -66,6 +64,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   });
 
   const designAreaRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Settings modal state
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -79,7 +78,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   const handleComponentPaletteExpandedChange = useCallback((expanded: boolean) => {
     setComponentPaletteExpanded(expanded);
     if (expanded) {
-      setGridSettingsExpanded(false); // Collapse the other component
+      setGridSettingsExpanded(false);
     }
   }, []);
 
@@ -87,7 +86,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   const handleGridSettingsExpandedChange = useCallback((expanded: boolean) => {
     setGridSettingsExpanded(expanded);
     if (expanded) {
-      setComponentPaletteExpanded(false); // Collapse the other component
+      setComponentPaletteExpanded(false);
     }
   }, []);
 
@@ -114,10 +113,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     const componentDef = componentLibrary.find(c => c.type === componentType);
     if (!componentDef) return;
 
-    // Set default topic and message type based on component type
     let action: { topic: string; messageType: string; field?: string } = {
       topic: `/${componentType}`,
-      messageType: 'sensor_msgs/Joy', // Default fallback
+      messageType: 'sensor_msgs/Joy',
     };
 
     switch (componentType) {
@@ -166,42 +164,13 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
 
   const handleComponentSelect = useCallback((id: string) => {
     setEditorState(prev => {
-      // If clicking the same component, cycle through interaction modes
       if (prev.selectedComponentId === id) {
-        let nextMode: ComponentInteractionMode;
-        switch (prev.componentInteractionMode) {
-          case ComponentInteractionMode.None:
-            nextMode = ComponentInteractionMode.Translate;
-            break;
-          case ComponentInteractionMode.Translate:
-            nextMode = ComponentInteractionMode.Resize;
-            break;
-          case ComponentInteractionMode.Resize:
-            // Cycle back to None instead of Settings
-            nextMode = ComponentInteractionMode.None;
-            return {
-              ...prev,
-              selectedComponentId: null,
-              componentInteractionMode: ComponentInteractionMode.None
-            };
-          default:
-            nextMode = ComponentInteractionMode.Translate;
-        }
-        
-        return {
-          ...prev,
-          componentInteractionMode: nextMode
-        };
+        return { ...prev, selectedComponentId: null };
       } else {
-        // Selecting a different component, start with translate mode
-        return {
-          ...prev,
-          selectedComponentId: id,
-          componentInteractionMode: ComponentInteractionMode.Translate
-        };
+        return { ...prev, selectedComponentId: id };
       }
     });
-  }, [layout.components]);
+  }, []);
 
   const handleComponentUpdate = useCallback((id: string, config: GamepadComponentConfig) => {
     setLayout(prev => ({
@@ -217,8 +186,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     }));
     setEditorState(prev => ({
       ...prev,
-      selectedComponentId: prev.selectedComponentId === id ? null : prev.selectedComponentId,
-      componentInteractionMode: prev.selectedComponentId === id ? ComponentInteractionMode.None : prev.componentInteractionMode
+      selectedComponentId: prev.selectedComponentId === id ? null : prev.selectedComponentId
     }));
   }, []);
 
@@ -227,20 +195,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     if (component) {
       setSettingsComponent(component);
       setSettingsModalOpen(true);
-      setEditorState(prev => ({
-        ...prev,
-        componentInteractionMode: ComponentInteractionMode.Settings
-      }));
     }
   }, [layout.components]);
 
   const handleCloseSettings = useCallback(() => {
     setSettingsModalOpen(false);
     setSettingsComponent(null);
-    setEditorState(prev => ({
-      ...prev,
-      componentInteractionMode: ComponentInteractionMode.None
-    }));
   }, []);
 
   const handleSaveSettings = useCallback((config: GamepadComponentConfig) => {
@@ -269,12 +229,11 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     if (!editorState.draggedComponent) return;
 
     const gridRect = event.currentTarget.getBoundingClientRect();
-    // Calculate grid cell size based on actual container dimensions
-    const cellWidth = (gridRect.width - 32) / layout.gridSize.width; // 32px for padding (16px each side)
-    const cellHeight = (gridRect.height - 32) / layout.gridSize.height; // 32px for padding (16px each side)
+    const cellWidth = (gridRect.width - 32) / layout.gridSize.width;
+    const cellHeight = (gridRect.height - 32) / layout.gridSize.height;
     
-    const x = Math.floor((event.clientX - gridRect.left - 16) / cellWidth); // 16px for left padding
-    const y = Math.floor((event.clientY - gridRect.top - 16) / cellHeight); // 16px for top padding
+    const x = Math.floor((event.clientX - gridRect.left - 16) / cellWidth);
+    const y = Math.floor((event.clientY - gridRect.top - 16) / cellHeight);
 
     if (x >= 0 && x < layout.gridSize.width && y >= 0 && y < layout.gridSize.height) {
       handleAddComponent(editorState.draggedComponent.componentType, x, y);
@@ -312,12 +271,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
 
   // Check if a position is valid for placement (no overlaps)
   const isPositionValid = useCallback((x: number, y: number, width: number, height: number, excludeId?: string) => {
-    // Check bounds
     if (x < 0 || y < 0 || x + width > layout.gridSize.width || y + height > layout.gridSize.height) {
       return false;
     }
     
-    // Check overlaps with existing components
     for (const comp of layout.components) {
       if (excludeId && comp.id === excludeId) continue;
       
@@ -371,111 +328,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     }));
   }, [layout.components]);
 
-  // Handle drag over the design area
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    
-    const dragState = editorState.dragState;
-    if (!dragState) return;
-    
-    const pos = getGridPositionFromEvent(event.clientX, event.clientY);
-    if (!pos) return;
-    
-    const width = dragState.defaultSize?.width || 1;
-    const height = dragState.defaultSize?.height || 1;
-    
-    // Clamp position to grid bounds
-    const clampedX = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
-    const clampedY = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
-    
-    const isValid = isPositionValid(clampedX, clampedY, width, height, dragState.componentId);
-    
-    setEditorState(prev => ({
-      ...prev,
-      dropPreview: {
-        x: clampedX,
-        y: clampedY,
-        width,
-        height,
-        isValid
-      }
-    }));
-  }, [editorState.dragState, getGridPositionFromEvent, isPositionValid, layout.gridSize]);
-
-  // Handle drop on the design area
-  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    
-    const dragState = editorState.dragState;
-    const dropPreview = editorState.dropPreview;
-    
-    if (!dragState || !dropPreview || !dropPreview.isValid) {
-      setEditorState(prev => ({
-        ...prev,
-        dragState: null,
-        dropPreview: null,
-        draggedComponent: null
-      }));
-      return;
-    }
-    
-    if (dragState.source === 'palette' && dragState.componentType) {
-      // Add new component from palette
-      handleAddComponent(dragState.componentType, dropPreview.x, dropPreview.y);
-    } else if (dragState.source === 'grid' && dragState.componentId) {
-      // Move existing component
-      const component = layout.components.find(c => c.id === dragState.componentId);
-      if (component) {
-        handleComponentUpdate(dragState.componentId, {
-          ...component,
-          position: {
-            ...component.position,
-            x: dropPreview.x,
-            y: dropPreview.y
-          }
-        });
-      }
-    }
-    
-    setEditorState(prev => ({
-      ...prev,
-      dragState: null,
-      dropPreview: null,
-      draggedComponent: null
-    }));
-  }, [editorState.dragState, editorState.dropPreview, handleAddComponent, handleComponentUpdate, layout.components]);
-
-  // Handle drag end (cancel)
-  const handleDragEnd = useCallback(() => {
-    setEditorState(prev => ({
-      ...prev,
-      dragState: null,
-      dropPreview: null,
-      draggedComponent: null
-    }));
-  }, []);
-
-  // Handle drag leave
-  const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    // Only clear preview if leaving the design area entirely
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    
-    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
-      setEditorState(prev => ({
-        ...prev,
-        dropPreview: null
-      }));
-    }
-  }, []);
-
-  // ============= TOUCH EVENTS FOR MOBILE =============
-  
-  // Touch move handler for updating drop preview
-  const handleTouchMove = useCallback((clientX: number, clientY: number) => {
-    const dragState = editorState.dragState;
+  // Update drop preview from position
+  const updateDropPreview = useCallback((clientX: number, clientY: number, dragState: EditorState['dragState']) => {
     if (!dragState) return;
     
     const pos = getGridPositionFromEvent(clientX, clientY);
@@ -499,12 +353,93 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         isValid
       }
     }));
-  }, [editorState.dragState, getGridPositionFromEvent, isPositionValid, layout.gridSize]);
+  }, [getGridPositionFromEvent, isPositionValid, layout.gridSize]);
 
-  // Touch end handler for completing the drop
-  const handleTouchEnd = useCallback(() => {
-    const dragState = editorState.dragState;
+  // Handle drag over the design area
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    
+    // Get component type from dataTransfer or state
+    let dragState = editorState.dragState;
+    
+    // If no drag state, try to create one from dataTransfer
+    if (!dragState) {
+      const componentType = event.dataTransfer.types.includes('text/plain') ? 
+        event.dataTransfer.getData('text/plain') : null;
+      
+      if (componentType) {
+        const componentDef = componentLibrary.find(c => c.type === componentType);
+        if (componentDef) {
+          dragState = {
+            isDragging: true,
+            source: 'palette',
+            componentType: componentType as GamepadComponentConfig['type'],
+            defaultSize: componentDef.defaultSize
+          };
+          // Update state for future events
+          setEditorState(prev => ({
+            ...prev,
+            dragState,
+            draggedComponent: {
+              componentType: componentType as GamepadComponentConfig['type'],
+              defaultSize: componentDef.defaultSize
+            }
+          }));
+        }
+      }
+    }
+    
+    if (!dragState) return;
+    
+    updateDropPreview(event.clientX, event.clientY, dragState);
+  }, [editorState.dragState, updateDropPreview]);
+
+  // Handle drop on the design area
+  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    
+    let dragState = editorState.dragState;
     const dropPreview = editorState.dropPreview;
+    
+    // If no drag state, try to get component type from dataTransfer
+    if (!dragState) {
+      const componentType = event.dataTransfer.getData('text/plain');
+      if (componentType) {
+        const componentDef = componentLibrary.find(c => c.type === componentType);
+        if (componentDef) {
+          dragState = {
+            isDragging: true,
+            source: 'palette',
+            componentType: componentType as GamepadComponentConfig['type'],
+            defaultSize: componentDef.defaultSize
+          };
+        }
+      }
+    }
+    
+    // If still no valid state or preview, calculate position from drop event
+    if (dragState && (!dropPreview || !dropPreview.isValid)) {
+      const pos = getGridPositionFromEvent(event.clientX, event.clientY);
+      if (pos && dragState.componentType) {
+        const width = dragState.defaultSize?.width || 1;
+        const height = dragState.defaultSize?.height || 1;
+        const clampedX = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
+        const clampedY = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
+        
+        if (isPositionValid(clampedX, clampedY, width, height)) {
+          handleAddComponent(dragState.componentType, clampedX, clampedY);
+        }
+      }
+      
+      setEditorState(prev => ({
+        ...prev,
+        dragState: null,
+        dropPreview: null,
+        draggedComponent: null
+      }));
+      return;
+    }
     
     if (!dragState || !dropPreview || !dropPreview.isValid) {
       setEditorState(prev => ({
@@ -538,27 +473,99 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       dropPreview: null,
       draggedComponent: null
     }));
-  }, [editorState.dragState, editorState.dropPreview, handleAddComponent, handleComponentUpdate, layout.components]);
+  }, [editorState.dragState, editorState.dropPreview, handleAddComponent, handleComponentUpdate, layout.components, getGridPositionFromEvent, layout.gridSize, isPositionValid]);
 
-  // Design area touch handlers
-  const handleDesignAreaTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (!editorState.dragState) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    handleTouchMove(touch.clientX, touch.clientY);
-  }, [editorState.dragState, handleTouchMove]);
+  // Handle drag end (cancel)
+  const handleDragEnd = useCallback(() => {
+    setEditorState(prev => ({
+      ...prev,
+      dragState: null,
+      dropPreview: null,
+      draggedComponent: null
+    }));
+  }, []);
 
-  const handleDesignAreaTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (!editorState.dragState) return;
-    e.preventDefault();
-    handleTouchEnd();
-  }, [editorState.dragState, handleTouchEnd]);
+  // Handle drag leave
+  const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setEditorState(prev => ({
+        ...prev,
+        dropPreview: null
+      }));
+    }
+  }, []);
+
+  // ============= GLOBAL TOUCH EVENTS FOR MOBILE =============
+  
+  // Global touch move handler - works even when touch started outside design area
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      const dragState = editorState.dragState;
+      if (!dragState) return;
+      
+      e.preventDefault();
+      const touch = e.touches[0];
+      updateDropPreview(touch.clientX, touch.clientY, dragState);
+    };
+    
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      const dragState = editorState.dragState;
+      const dropPreview = editorState.dropPreview;
+      
+      if (!dragState) return;
+      
+      e.preventDefault();
+      
+      // If we have a valid drop position, add/move the component
+      if (dropPreview && dropPreview.isValid) {
+        if (dragState.source === 'palette' && dragState.componentType) {
+          handleAddComponent(dragState.componentType, dropPreview.x, dropPreview.y);
+        } else if (dragState.source === 'grid' && dragState.componentId) {
+          const component = layout.components.find(c => c.id === dragState.componentId);
+          if (component) {
+            handleComponentUpdate(dragState.componentId, {
+              ...component,
+              position: {
+                ...component.position,
+                x: dropPreview.x,
+                y: dropPreview.y
+              }
+            });
+          }
+        }
+      }
+      
+      setEditorState(prev => ({
+        ...prev,
+        dragState: null,
+        dropPreview: null,
+        draggedComponent: null
+      }));
+    };
+    
+    // Only add listeners when dragging
+    if (editorState.dragState) {
+      document.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+      document.addEventListener('touchend', handleGlobalTouchEnd, { passive: false });
+      
+      return () => {
+        document.removeEventListener('touchmove', handleGlobalTouchMove);
+        document.removeEventListener('touchend', handleGlobalTouchEnd);
+      };
+    }
+  }, [isOpen, editorState.dragState, editorState.dropPreview, updateDropPreview, handleAddComponent, handleComponentUpdate, layout.components]);
 
   if (!isOpen) return null;
 
   return (
     <div className="gamepad-editor-overlay">
-      <div className="gamepad-editor-modal">
+      <div className="gamepad-editor-modal" ref={modalRef}>
         <div className="editor-header">
           <h2>Gamepad Editor</h2>
           <button className="close-button" onClick={onClose}>×</button>
@@ -640,15 +647,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onDragLeave={handleDragLeave}
-              onTouchMove={handleDesignAreaTouchMove}
-              onTouchEnd={handleDesignAreaTouchEnd}
             >
               <LayoutRenderer
                 layout={layout}
                 ros={ros}
                 isEditing={true}
                 selectedComponentId={editorState.selectedComponentId}
-                interactionMode={editorState.componentInteractionMode}
                 dropPreview={editorState.dropPreview}
                 dragState={editorState.dragState}
                 onComponentSelect={handleComponentSelect}
@@ -697,4 +701,4 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   );
 };
 
-export default GamepadEditor; 
+export default GamepadEditor;

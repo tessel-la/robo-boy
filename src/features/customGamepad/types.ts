@@ -120,7 +120,6 @@ export interface DropPreview {
 
 export interface EditorState {
   selectedComponentId: string | null;
-  componentInteractionMode: ComponentInteractionMode;
   draggedComponent: DragItem | null;
   dragState: DragState | null;
   dropPreview: DropPreview | null;

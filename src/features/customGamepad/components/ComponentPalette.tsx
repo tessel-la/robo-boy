@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { componentLibrary } from '../defaultLayouts';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
@@ -101,30 +101,31 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   const handleDragStart = (e: React.DragEvent, componentType: string) => {
     setDraggingComponent(componentType);
     onDragStart?.(componentType);
+    onComponentSelect(componentType); // Also set as selected for visual feedback
     
     // Set drag data
     e.dataTransfer.setData('text/plain', componentType);
     e.dataTransfer.effectAllowed = 'copy';
     
-    // Create a custom drag image (simple styling matching app)
+    // Create a custom drag image
     const dragImage = document.createElement('div');
     dragImage.className = 'drag-ghost';
-    dragImage.innerHTML = `<span>${componentLibrary.find(c => c.type === componentType)?.name || componentType}</span>`;
+    dragImage.innerHTML = `<span>📦 ${componentLibrary.find(c => c.type === componentType)?.name || componentType}</span>`;
     dragImage.style.cssText = `
       position: absolute;
       top: -1000px;
-      padding: 8px 12px;
-      background: var(--primary-color, #007bff);
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #007bff, #0056b3);
       color: white;
-      border-radius: 6px;
-      font-weight: 500;
-      font-size: 13px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
       pointer-events: none;
       z-index: 10000;
     `;
     document.body.appendChild(dragImage);
-    e.dataTransfer.setDragImage(dragImage, 40, 20);
+    e.dataTransfer.setDragImage(dragImage, 50, 25);
     
     // Clean up the drag image after a short delay
     setTimeout(() => {
@@ -137,16 +138,43 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     onDragEnd?.();
   };
 
-  // Touch event handlers for mobile
-  const handleTouchStart = (componentType: string) => {
-    setDraggingComponent(componentType);
-    onDragStart?.(componentType);
-  };
+  // Touch handling - for touch devices, start drag on touch move
+  const touchStartRef = useRef<{ x: number; y: number; componentType: string } | null>(null);
+  const isDraggingRef = useRef(false);
+  const DRAG_THRESHOLD = 5; // Lower threshold for easier drag initiation
 
-  const handleTouchEnd = () => {
-    // Don't clear dragging state here - let parent handle the drop
-    // The parent will call onDragEnd when the drop is complete
-  };
+  const handleTouchStart = useCallback((e: React.TouchEvent, componentType: string) => {
+    const touch = e.touches[0];
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      componentType
+    };
+    isDraggingRef.current = false;
+    // Immediately signal selection for visual feedback
+    onComponentSelect(componentType);
+  }, [onComponentSelect]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    
+    // If moved beyond threshold, start dragging
+    if (!isDraggingRef.current && (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD)) {
+      isDraggingRef.current = true;
+      setDraggingComponent(touchStartRef.current.componentType);
+      onDragStart?.(touchStartRef.current.componentType);
+    }
+  }, [onDragStart]);
+
+  const handleTouchEnd = useCallback(() => {
+    // Don't clear selection - let the drag complete or keep selection for tap
+    touchStartRef.current = null;
+    isDraggingRef.current = false;
+  }, []);
 
   // Determine if we're in the buttons row (parent has sidebar-buttons-row class)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -178,10 +206,14 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         </div>
       )}
 
-      {/* Expanded State - shown when in expanded area OR when expanded in buttons row */}
+      {/* Expanded State - shown when in expanded area */}
       {!currentIsInButtonsRow && (
         <>
           <div className="palette-content">
+            <div className="palette-hint">
+              <span className="hint-icon">↕️</span>
+              <span>Drag components to the grid</span>
+            </div>
             <div className="component-grid">
               {componentLibrary.map(component => {
                 const isSelected = selectedComponent === component.type;
@@ -193,14 +225,14 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     key={component.type}
                     className={`component-card ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''}`}
                     draggable
-                    onClick={() => onComponentSelect(component.type)}
                     onDragStart={(e) => handleDragStart(e, component.type)}
                     onDragEnd={handleDragEnd}
-                    onTouchStart={() => handleTouchStart(component.type)}
+                    onTouchStart={(e) => handleTouchStart(e, component.type)}
+                    onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     onMouseEnter={() => setHoveredComponent(component.type)}
                     onMouseLeave={() => setHoveredComponent(null)}
-                    title={`Drag to grid or tap to select - ${component.description}`}
+                    title={`Drag to add ${component.name}`}
                   >
                     <div className="component-info">
                       <div className="component-preview">
@@ -215,34 +247,14 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                       {component.defaultSize.width}×{component.defaultSize.height}
                     </div>
                     <div className="drag-indicator">
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                        <circle cx="9" cy="6" r="1.5"/>
-                        <circle cx="15" cy="6" r="1.5"/>
-                        <circle cx="9" cy="12" r="1.5"/>
-                        <circle cx="15" cy="12" r="1.5"/>
-                        <circle cx="9" cy="18" r="1.5"/>
-                        <circle cx="15" cy="18" r="1.5"/>
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                        <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                       </svg>
                     </div>
                   </div>
                 );
               })}
             </div>
-            
-            {selectedComponent && (
-              <div className="selection-hint">
-                <div className="hint-content">
-                  <div className="hint-preview">
-                    {renderComponentPreview(selectedComponent, 'medium')}
-                  </div>
-                  <div className="hint-text">
-                    <strong>{componentLibrary.find(c => c.type === selectedComponent)?.name}</strong> selected
-                    <br />
-                    <small>Click on the grid to place this component</small>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}
@@ -250,4 +262,4 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   );
 };
 
-export default ComponentPalette; 
+export default ComponentPalette;

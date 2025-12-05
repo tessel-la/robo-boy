@@ -7,16 +7,14 @@
   justify-content: center;
   border: 2px solid transparent;
   border-radius: 8px;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   background-color: var(--card-bg, #ffffff);
-  overflow: visible; /* Allow joystick movement outside component bounds */
+  overflow: visible;
   box-sizing: border-box;
-  /* Remove any min/max constraints that could limit scaling */
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  /* Ensure components scale to fill their grid cell completely */
   max-width: 100%;
   max-height: 100%;
 }
@@ -28,16 +26,13 @@
   justify-content: unset;
 }
 
-/* Ensure D-pad components in editing mode can scale beyond any implicit constraints */
 .gamepad-component.dpad.editing {
-  /* Force D-pad to use full grid cell allocation */
   width: 100% !important;
   height: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
   max-width: none !important;
   max-height: none !important;
-  /* Ensure no artificial size constraints */
   flex-shrink: 0;
   flex-grow: 1;
 }
@@ -47,16 +42,32 @@
   cursor: pointer;
 }
 
-/* Draggable state in translate mode */
-.gamepad-component.editing.translate-mode {
+.gamepad-component.editing:hover {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Selected state - draggable for moving */
+.gamepad-component.selected {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
   cursor: grab;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-.gamepad-component.editing.translate-mode:active {
+.gamepad-component.selected:active {
   cursor: grabbing;
+}
+
+/* Resizing state */
+.gamepad-component.resizing {
+  cursor: default;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.5);
+  border-color: #ffc107;
+  /* Animate size changes */
+  transition: width 0.15s ease, height 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Being dragged state */
@@ -66,7 +77,6 @@
   border-style: dashed !important;
   border-color: var(--border-color, #ddd) !important;
   box-shadow: none !important;
-  animation: none !important;
   transition: all 0.15s ease;
 }
 
@@ -74,57 +84,7 @@
   pointer-events: none;
 }
 
-.gamepad-component.editing:hover {
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.gamepad-component.selected {
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
-  animation: selectedPulse 2s infinite;
-}
-
-@keyframes selectedPulse {
-  0%, 100% { 
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
-  }
-  50% { 
-    box-shadow: 0 0 0 5px rgba(0, 123, 255, 0.5);
-  }
-}
-
-/* Interaction mode specific styling */
-.gamepad-component.translate-mode {
-  border-color: #28a745;
-  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
-  animation: translateModePulse 2s infinite;
-}
-
-@keyframes translateModePulse {
-  0%, 100% { 
-    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
-  }
-  50% { 
-    box-shadow: 0 0 0 5px rgba(40, 167, 69, 0.5);
-  }
-}
-
-.gamepad-component.resize-mode {
-  border-color: #ffc107;
-  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
-  animation: resizeModePulse 2s infinite;
-}
-
-@keyframes resizeModePulse {
-  0%, 100% { 
-    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
-  }
-  50% { 
-    box-shadow: 0 0 0 5px rgba(255, 193, 7, 0.5);
-  }
-}
-
+/* Component label */
 .component-label {
   position: absolute;
   top: 2px;
@@ -144,20 +104,26 @@
   text-overflow: ellipsis;
 }
 
-.interaction-controls {
+/* Control buttons container - centered at top */
+.component-controls {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 12px;
+  z-index: 30;
   pointer-events: none;
-  z-index: 20;
 }
 
+.component-controls .control-button {
+  pointer-events: auto;
+}
+
+/* Control buttons (delete, settings) */
 .control-button {
-  position: absolute;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 2px solid white;
   font-size: 12px;
   font-weight: bold;
@@ -167,184 +133,231 @@
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s ease;
-  z-index: 30;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
 }
 
 .control-button:hover {
-  transform: scale(1.1);
-}
-
-.control-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: scale(1) !important;
+  transform: scale(1.15);
 }
 
 .delete-button {
-  top: -12px;
-  right: -12px;
-  background-color: rgba(0, 0, 0, 0.7); /* Dark background by default */
-  color: white !important; /* White text by default */
-  border: 2px solid var(--error-color, #dc3545); /* Colored border */
-  /* Force perfect circle with aggressive CSS */
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-  box-sizing: border-box !important;
-  aspect-ratio: 1 / 1 !important;
+  background-color: rgba(220, 53, 69, 0.9);
+  color: white !important;
+  border-color: white;
 }
 
-.delete-button:hover:not(:disabled) {
-  background-color: var(--error-color, #dc3545); /* Full color on hover */
-  color: white !important; /* White text on hover */
-  /* Maintain circular shape on hover */
-  width: 24px !important;
-  height: 24px !important;
+.delete-button:hover {
+  background-color: #dc3545;
 }
 
 .settings-button {
-  top: -12px;
-  left: -12px;
-  background-color: rgba(0, 0, 0, 0.7); /* Dark background by default */
-  color: white !important; /* White text by default */
-  border: 2px solid #6f42c1; /* Colored border */
-  font-size: 10px;
-  /* Force perfect square with explicit border-radius override */
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
-  border-radius: 8px !important; /* Override any inherited border-radius */
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-  box-sizing: border-box !important;
-  aspect-ratio: 1 / 1 !important;
+  background-color: rgba(111, 66, 193, 0.9);
+  color: white !important;
+  border-color: white;
+  font-size: 11px;
 }
 
-.settings-button:hover:not(:disabled) {
-  background-color: #6f42c1; /* Full color on hover */
-  color: white !important; /* White text on hover */
-  /* Maintain circular shape on hover */
-  width: 24px !important;
-  height: 24px !important;
+.settings-button:hover {
+  background-color: #6f42c1;
 }
 
-/* Translation controls */
-.translate-controls .control-button {
-  background-color: #28a745;
-  color: white;
-  width: 20px;
-  height: 20px;
+/* ===== COMPONENT RESIZE HANDLES ===== */
+.component-resize-handles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 25;
 }
 
-.translate-controls .translate-button.up {
-  top: -25px;
-  left: 50%;
-  transform: translateX(-50%);
+.component-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
-.translate-controls .translate-button.down {
-  bottom: -25px;
-  left: 50%;
-  transform: translateX(-50%);
+/* Corner handles - with resize arrows */
+.component-resize-handle.corner {
+  width: 16px;
+  height: 16px;
+  background-color: var(--primary-color, #007bff);
+  border: 2px solid white;
+  border-radius: 4px;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.translate-controls .translate-button.left {
-  left: -25px;
-  top: 50%;
-  transform: translateY(-50%);
+.component-resize-handle.corner::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-style: solid;
+  border-color: white;
+  border-width: 0;
+  transform: rotate(45deg);
 }
 
-.translate-controls .translate-button.right {
-  right: -25px;
-  top: 50%;
-  transform: translateY(-50%);
+/* Corner-specific arrow directions */
+.component-resize-handle.corner.nw::before {
+  border-width: 2px 0 0 2px;
+  margin: 2px 0 0 2px;
 }
 
-.translate-controls .control-button:hover:not(:disabled) {
-  background-color: #1e7e34;
+.component-resize-handle.corner.ne::before {
+  border-width: 2px 2px 0 0;
+  margin: 2px 2px 0 0;
 }
 
-/* Ensure disabled translate buttons maintain their positioning */
-.translate-controls .translate-button.up:disabled {
-  transform: translateX(-50%) scale(1) !important;
+.component-resize-handle.corner.sw::before {
+  border-width: 0 0 2px 2px;
+  margin: 0 0 2px 2px;
 }
 
-.translate-controls .translate-button.down:disabled {
-  transform: translateX(-50%) scale(1) !important;
+.component-resize-handle.corner.se::before {
+  border-width: 0 2px 2px 0;
+  margin: 0 2px 2px 0;
 }
 
-.translate-controls .translate-button.left:disabled {
-  transform: translateY(-50%) scale(1) !important;
-}
-
-.translate-controls .translate-button.right:disabled {
-  transform: translateY(-50%) scale(1) !important;
-}
-
-/* Resize controls */
-.resize-controls .control-button {
+.component-resize-handle.corner:hover,
+.component-resize-handle.corner.active {
   background-color: #ffc107;
-  color: #212529;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  border: 2px solid #212529;
+  transform: scale(1.2);
 }
 
-.resize-controls .resize-button.width-plus {
-  right: -30px;
-  top: 50%;
-  transform: translateY(-50%);
+.component-resize-handle.corner.nw {
+  top: -8px;
+  left: -8px;
+  cursor: nw-resize;
 }
 
-.resize-controls .resize-button.width-minus {
-  left: -30px;
-  top: 50%;
-  transform: translateY(-50%);
+.component-resize-handle.corner.ne {
+  top: -8px;
+  right: -8px;
+  cursor: ne-resize;
 }
 
-.resize-controls .resize-button.height-plus {
-  top: -30px;
+.component-resize-handle.corner.sw {
+  bottom: -8px;
+  left: -8px;
+  cursor: sw-resize;
+}
+
+.component-resize-handle.corner.se {
+  bottom: -8px;
+  right: -8px;
+  cursor: se-resize;
+}
+
+/* Edge handles - with direction arrows */
+.component-resize-handle.edge {
+  background-color: rgba(0, 123, 255, 0.6);
+  border-radius: 3px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.component-resize-handle.edge::before {
+  content: '';
+  border-style: solid;
+  border-color: white;
+}
+
+/* Horizontal edges (top/bottom) */
+.component-resize-handle.edge.n,
+.component-resize-handle.edge.s {
   left: 50%;
   transform: translateX(-50%);
+  width: 32px;
+  height: 10px;
 }
 
-.resize-controls .resize-button.height-minus {
-  bottom: -30px;
-  left: 50%;
-  transform: translateX(-50%);
+.component-resize-handle.edge.n::before,
+.component-resize-handle.edge.s::before {
+  width: 0;
+  height: 0;
+  border-width: 4px;
+  border-left-color: transparent;
+  border-right-color: transparent;
 }
 
-.resize-controls .control-button:hover:not(:disabled) {
-  background-color: #e0a800;
+.component-resize-handle.edge.n {
+  top: -5px;
+  cursor: n-resize;
 }
 
-/* Ensure disabled resize buttons maintain their positioning */
-.resize-controls .resize-button.width-plus:disabled {
-  transform: translateY(-50%) scale(1) !important;
+.component-resize-handle.edge.n::before {
+  border-bottom-color: transparent;
 }
 
-.resize-controls .resize-button.width-minus:disabled {
-  transform: translateY(-50%) scale(1) !important;
+.component-resize-handle.edge.s {
+  bottom: -5px;
+  cursor: s-resize;
 }
 
-.resize-controls .resize-button.height-plus:disabled {
-  transform: translateX(-50%) scale(1) !important;
+.component-resize-handle.edge.s::before {
+  border-top-color: transparent;
 }
 
-.resize-controls .resize-button.height-minus:disabled {
-  transform: translateX(-50%) scale(1) !important;
+/* Vertical edges (left/right) */
+.component-resize-handle.edge.w,
+.component-resize-handle.edge.e {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 32px;
+}
+
+.component-resize-handle.edge.w::before,
+.component-resize-handle.edge.e::before {
+  width: 0;
+  height: 0;
+  border-width: 4px;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.component-resize-handle.edge.w {
+  left: -5px;
+  cursor: w-resize;
+}
+
+.component-resize-handle.edge.w::before {
+  border-right-color: transparent;
+}
+
+.component-resize-handle.edge.e {
+  right: -5px;
+  cursor: e-resize;
+}
+
+.component-resize-handle.edge.e::before {
+  border-left-color: transparent;
+}
+
+.component-resize-handle.edge:hover,
+.component-resize-handle.edge.active {
+  background-color: rgba(255, 193, 7, 0.9);
+  transform: translateX(-50%) scale(1.1);
+}
+
+.component-resize-handle.edge.w:hover,
+.component-resize-handle.edge.w.active,
+.component-resize-handle.edge.e:hover,
+.component-resize-handle.edge.e.active {
+  transform: translateY(-50%) scale(1.1);
+}
+
+/* D-pad specific control button overrides */
+.gamepad-component.dpad .delete-button,
+.gamepad-component.dpad .settings-button {
+  z-index: 100 !important;
 }
 
 /* Component-specific styles */
@@ -356,27 +369,23 @@
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: visible; /* Critical: Ensure joystick movement isn't clipped */
+  overflow: visible;
   box-sizing: border-box;
-  /* Use transform instead of padding/margin to avoid layout issues */
   transform: scale(1);
   transform-origin: center;
 }
 
-/* Remove padding from joystick disabled button to prevent layout issues */
 button.joystick-disabled {
   padding: 0 !important;
   border: none !important;
 }
 
-/* Ensure the react-joystick-component maintains circular shape */
 .joystick-component > div {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
 }
 
-/* Force circular aspect ratio for the joystick canvas/svg */
 .joystick-component canvas,
 .joystick-component svg {
   max-width: 100% !important;
@@ -403,86 +412,27 @@ button.joystick-disabled {
   box-sizing: border-box;
   overflow: visible;
   position: relative;
-  /* Ensure D-pad component fills allocated space completely */
   min-width: 0;
   min-height: 0;
   flex-shrink: 0;
-  /* Ensure control buttons are visible */
   z-index: 1;
 }
 
-/* Ensure D-pad component in editing mode uses full space */
 .gamepad-component.dpad.editing .dpad-component {
   width: 100% !important;
   height: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
-  /* Ensure D-pad doesn't interfere with control buttons */
   z-index: 1 !important;
 }
 
-/* Ensure D-pad grid doesn't cover control buttons */
 .gamepad-component.dpad.editing .custom-dpad-grid {
   z-index: 2 !important;
   position: relative !important;
 }
 
-/* Ensure D-pad buttons don't interfere with control buttons */
 .gamepad-component.dpad.editing .custom-dpad-button {
   z-index: 3 !important;
-}
-
-/* Ensure D-pad control buttons have proper colored borders */
-.gamepad-component.dpad .delete-button {
-  background-color: rgba(0, 0, 0, 0.7) !important; /* Dark background by default */
-  color: white !important; /* White text by default */
-  border: 2px solid var(--error-color, #dc3545) !important; /* Red border */
-  /* Force perfect circle with aggressive CSS */
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-  box-sizing: border-box !important;
-  aspect-ratio: 1 / 1 !important;
-}
-
-.gamepad-component.dpad .delete-button:hover:not(:disabled) {
-  background-color: var(--error-color, #dc3545) !important; /* Full red on hover */
-  color: white !important; /* White text on hover */
-  /* Maintain circular shape on hover */
-  width: 24px !important;
-  height: 24px !important;
-}
-
-.gamepad-component.dpad .settings-button {
-  background-color: rgba(0, 0, 0, 0.7) !important; /* Dark background by default */
-  color: white !important; /* White text by default */
-  border: 2px solid #6f42c1 !important; /* Purple border */
-  font-size: 10px;
-  /* Force perfect square with explicit border-radius override */
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
-  border-radius: 8px !important; /* Override any inherited border-radius */
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-  box-sizing: border-box !important;
-  aspect-ratio: 1 / 1 !important;
-}
-
-.gamepad-component.dpad .settings-button:hover:not(:disabled) {
-  background-color: #6f42c1 !important; /* Full purple on hover */
-  color: white !important; /* White text on hover */
-  /* Maintain circular shape on hover */
-  width: 24px !important;
-  height: 24px !important;
 }
 
 .dpad-component button {
@@ -526,7 +476,6 @@ button.joystick-disabled {
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
 }
 
-/* Slider thumb styling */
 .slider-component input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 20px;
@@ -563,49 +512,44 @@ button.joystick-disabled {
   border: 1px dashed var(--error-color, #721c24);
 }
 
-/* Responsive adjustments - simplified to work with unified scaling */
+/* Responsive adjustments */
 @media (max-width: 768px) {
   .component-label {
     font-size: 0.65em;
     padding: 1px 3px;
   }
   
-  .delete-button {
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
-    /* top: -6px; */
-    /* right: -6px; */
+  .control-button {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
   }
   
-  /* Resize controls for mobile */
-  .resize-controls .control-button {
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
+  .component-controls {
+    bottom: -12px;
+    gap: 6px;
   }
   
-  .resize-controls .resize-button.width-plus {
-    right: -25px;
+  .component-resize-handle.corner {
+    width: 14px;
+    height: 14px;
   }
   
-  .resize-controls .resize-button.width-minus {
-    left: -25px;
+  .component-resize-handle.corner.nw { top: -7px; left: -7px; }
+  .component-resize-handle.corner.ne { top: -7px; right: -7px; }
+  .component-resize-handle.corner.sw { bottom: -7px; left: -7px; }
+  .component-resize-handle.corner.se { bottom: -7px; right: -7px; }
+  
+  .component-resize-handle.edge.n,
+  .component-resize-handle.edge.s {
+    width: 28px;
+    height: 8px;
   }
   
-  .resize-controls .resize-button.height-plus {
-    top: -25px;
-  }
-  
-  .resize-controls .resize-button.height-minus {
-    bottom: -25px;
-  }
-  
-  .resize-handle.bottom-right {
-    width: 6px;
-    height: 6px;
-    bottom: -3px;
-    right: -3px;
+  .component-resize-handle.edge.w,
+  .component-resize-handle.edge.e {
+    width: 8px;
+    height: 28px;
   }
 }
 
@@ -615,133 +559,36 @@ button.joystick-disabled {
     padding: 1px 2px;
   }
   
-  .delete-button {
-    width: 16px;
-    height: 16px;
-    font-size: 10px;
-    /* top: -5px; */
-    /* right: -5px; */
+  .control-button {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
   }
   
-  /* Resize controls for small mobile */
-  .resize-controls .control-button {
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
+  .component-controls {
+    bottom: -10px;
+    gap: 4px;
   }
   
-  .resize-controls .resize-button.width-plus {
-    right: -22px;
+  .component-resize-handle.corner {
+    width: 12px;
+    height: 12px;
   }
   
-  .resize-controls .resize-button.width-minus {
-    left: -22px;
+  .component-resize-handle.corner.nw { top: -6px; left: -6px; }
+  .component-resize-handle.corner.ne { top: -6px; right: -6px; }
+  .component-resize-handle.corner.sw { bottom: -6px; left: -6px; }
+  .component-resize-handle.corner.se { bottom: -6px; right: -6px; }
+  
+  .component-resize-handle.edge.n,
+  .component-resize-handle.edge.s {
+    width: 24px;
+    height: 6px;
   }
   
-  .resize-controls .resize-button.height-plus {
-    top: -22px;
-  }
-  
-  .resize-controls .resize-button.height-minus {
-    bottom: -22px;
-  }
-  
-  .resize-handle.bottom-right {
-    width: 5px;
-    height: 5px;
-    bottom: -2px;
-    right: -2px;
+  .component-resize-handle.edge.w,
+  .component-resize-handle.edge.e {
+    width: 6px;
+    height: 24px;
   }
 }
-
-/* Resize controls for mobile */
-.resize-controls .control-button {
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-}
-
-.resize-controls .resize-button.width-plus {
-  right: -25px;
-}
-
-.resize-controls .resize-button.width-minus {
-  left: -25px;
-}
-
-.resize-controls .resize-button.height-plus {
-  top: -25px;
-}
-
-.resize-controls .resize-button.height-minus {
-  bottom: -25px;
-}
-
-/* Translation controls for mobile - maintain arrow shape */
-.translate-controls .control-button {
-  width: 18px;
-  height: 18px;
-  font-size: 12px;
-}
-
-.translate-controls .translate-button.up {
-  top: -22px;
-}
-
-.translate-controls .translate-button.down {
-  bottom: -22px;
-}
-
-.translate-controls .translate-button.left {
-  left: -22px;
-}
-
-.translate-controls .translate-button.right {
-  right: -22px;
-}
-
-/* Resize controls for small mobile */
-.resize-controls .control-button {
-  width: 18px;
-  height: 18px;
-  font-size: 11px;
-}
-
-.resize-controls .resize-button.width-plus {
-  right: -22px;
-}
-
-.resize-controls .resize-button.width-minus {
-  left: -22px;
-}
-
-.resize-controls .resize-button.height-plus {
-  top: -22px;
-}
-
-.resize-controls .resize-button.height-minus {
-  bottom: -22px;
-}
-
-/* Translation controls for small mobile - maintain arrow shape */
-.translate-controls .control-button {
-  width: 16px;
-  height: 16px;
-  font-size: 10px;
-}
-
-.translate-controls .translate-button.up {
-  top: -20px;
-}
-
-.translate-controls .translate-button.down {
-  bottom: -20px;
-}
-
-.translate-controls .translate-button.left {
-  left: -20px;
-}
-
-.translate-controls .translate-button.right {
-  right: -20px;
-} 

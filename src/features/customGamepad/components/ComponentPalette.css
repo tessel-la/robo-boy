@@ -632,6 +632,38 @@
   }
 }
 
+/* Palette Hint */
+.palette-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(0, 123, 255, 0.05));
+  border: 1px dashed var(--primary-color, #007bff);
+  border-radius: 8px;
+  color: var(--primary-color, #007bff);
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: pulseHint 2s infinite;
+}
+
+.palette-hint .hint-icon {
+  font-size: 1.1rem;
+  animation: bounceIcon 1s infinite;
+}
+
+@keyframes pulseHint {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+
+@keyframes bounceIcon {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 /* Drag and Drop Styles */
 .component-card {
   cursor: grab;
@@ -646,24 +678,37 @@
 
 .component-card.dragging {
   opacity: 0.5;
-  transform: scale(0.98);
+  transform: scale(0.95);
   border-style: dashed;
+  border-color: var(--primary-color, #007bff);
 }
 
 .drag-indicator {
   position: absolute;
-  top: 4px;
+  bottom: 4px;
   right: 4px;
-  color: var(--text-color-secondary, #999);
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
+  border-radius: 4px;
+  color: var(--primary-color, #007bff);
+  opacity: 0.6;
+  transition: all 0.2s ease;
   pointer-events: none;
 }
 
 .component-card:hover .drag-indicator {
-  opacity: 0.5;
+  opacity: 1;
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  transform: scale(1.1);
 }
 
 .component-card.selected .drag-indicator {
-  display: none;
+  opacity: 1;
+  background-color: var(--primary-color, #007bff);
+  color: white;
 } 
