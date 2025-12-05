@@ -545,18 +545,6 @@ class PointCloud2 extends THREE.Object3D {
         console.warn('[PointCloud2] Message has no frame_id in header');
       }
       
-      // Log message structure for debugging
-      console.log('[PointCloud2] Message structure:', {
-        height: message.height,
-        width: message.width,
-        point_step: message.point_step,
-        row_step: message.row_step,
-        dataType: message.data ? typeof message.data : 'undefined',
-        dataLength: message.data ? message.data.length || message.data.byteLength : 0,
-        fields: message.fields,
-        is_bigendian: message.is_bigendian
-      });
-      
       // Get the position attribute
       const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
       if (!positions) {
@@ -573,8 +561,6 @@ class PointCloud2 extends THREE.Object3D {
       const width = message.width;
       const height = message.height;
       const pointCount = Math.min(width * height, this.maxPoints);
-      
-      console.log(`[PointCloud2] Visualizing ${pointCount} points from ${width}x${height} point cloud`);
       
       // Parse the binary data from the point cloud message
       // PointCloud2 data is typically stored as an ArrayBuffer
@@ -626,28 +612,27 @@ class PointCloud2 extends THREE.Object3D {
         return;
       }
       
-      // Extract actual point cloud data
+      // Cache field offsets for performance
+      const xOffset = fieldOffsets.x;
+      const yOffset = fieldOffsets.y;
+      const zOffset = fieldOffsets.z;
+      const scaleX = this.scaleX;
+      const scaleY = this.scaleY;
+      const scaleZ = this.scaleZ;
+      const originX = this.originX;
+      const originY = this.originY;
+      const originZ = this.originZ;
+      
+      // Extract point cloud data (optimized loop - no try-catch per point)
       for (let i = 0; i < pointCount; i++) {
-        try {
-          const offset = i * pointStep;
-          
-          // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
-          let x = dataView.getFloat32(offset + fieldOffsets.x, true); // little-endian
-          let y = dataView.getFloat32(offset + fieldOffsets.y, true);
-          let z = dataView.getFloat32(offset + fieldOffsets.z, true);
-          
-          // Apply scaling and origin offset
-          x = x * this.scaleX + this.originX;
-          y = y * this.scaleY + this.originY;
-          z = z * this.scaleZ + this.originZ;
-          
-          // For Z-up coordinate system, we keep the coordinates as is
-          // No need to swap Y and Z - in Z-up system, we keep ROS coordinates directly
-          positions.setXYZ(i, x, y, z);
-        } catch (e) {
-          console.error(`[PointCloud2] Error processing point ${i}:`, e);
-          // Skip this point and continue with the rest
-        }
+        const offset = i * pointStep;
+        
+        // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
+        const x = dataView.getFloat32(offset + xOffset, true) * scaleX + originX;
+        const y = dataView.getFloat32(offset + yOffset, true) * scaleY + originY;
+        const z = dataView.getFloat32(offset + zOffset, true) * scaleZ + originZ;
+        
+        positions.setXYZ(i, x, y, z);
       }
       
       // Update the geometry
@@ -655,8 +640,6 @@ class PointCloud2 extends THREE.Object3D {
       
       // Set the draw range to only render valid points
       this.points.geometry?.setDrawRange(0, pointCount);
-      
-      console.log('[PointCloud2] Point cloud visualization updated');
     } catch (e) {
       console.error('[PointCloud2] Error processing point cloud message:', e);
     }
@@ -824,6 +807,12 @@ class LaserScan extends THREE.Object3D {
   private pointsNode: THREE.Points | null = null;
   private messageFrameId: string | null = null;
   private transformUpdateAnimationId: number | null = null;
+  
+  // Pre-allocated buffer for performance (avoids GC on each message)
+  private maxLaserPoints: number = 2000;
+  private positionBuffer: Float32Array;
+  private geometry: THREE.BufferGeometry | null = null;
+  private material: THREE.PointsMaterial | null = null;
 
   constructor(options: {
     ros: Ros;
@@ -851,10 +840,29 @@ class LaserScan extends THREE.Object3D {
       : new THREE.Color(options.material?.color || 0xff0000); // Default red
     this.maxRange = options.maxRange || Infinity;
     this.minRange = options.minRange || 0;
+    
+    // Pre-allocate position buffer
+    this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
+    this.initializeGeometry();
 
     this.rootObject.add(this);
     this.subscribe();
     this.setupTfHandling();
+  }
+  
+  private initializeGeometry(): void {
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
+    this.geometry.setDrawRange(0, 0);
+    
+    this.material = new THREE.PointsMaterial({
+      color: this.pointColor,
+      size: this.pointSize,
+      sizeAttenuation: false
+    });
+    
+    this.pointsNode = new THREE.Points(this.geometry, this.material);
+    this.add(this.pointsNode);
   }
 
   private subscribe(): void {
@@ -875,7 +883,6 @@ class LaserScan extends THREE.Object3D {
   public unsubscribe(): void {
     if (this.rosTopicInstance) {
       console.log(`[LaserScan] Unsubscribing from ${this.topicName}`);
-      this.rosTopicInstance.unadvertise(); // For publishers, for subscribers it's unsubscribe
       this.rosTopicInstance.unsubscribe();
       this.rosTopicInstance = null;
     }
@@ -883,16 +890,22 @@ class LaserScan extends THREE.Object3D {
       cancelAnimationFrame(this.transformUpdateAnimationId);
       this.transformUpdateAnimationId = null;
     }
-    // Remove the points from the scene
+    // Dispose geometry and material
+    if (this.geometry) {
+      this.geometry.dispose();
+      this.geometry = null;
+    }
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
     if (this.pointsNode) {
       this.remove(this.pointsNode);
-      this.pointsNode.geometry.dispose();
-      (this.pointsNode.material as THREE.Material).dispose();
       this.pointsNode = null;
     }
     // Remove this object from its parent (rootObject)
     if (this.parent) {
-        this.parent.remove(this);
+      this.parent.remove(this);
     }
   }
 
@@ -901,55 +914,45 @@ class LaserScan extends THREE.Object3D {
         ? message.header.frame_id.substring(1) 
         : message.header.frame_id;
 
-    // Log the raw message for inspection
-    // console.log('[LaserScan] Received message:', JSON.parse(JSON.stringify(message)));
-
     if (!this.messageFrameId) {
         console.warn('[LaserScan] Message received with no frame_id');
         return;
     }
 
-    const now = performance.now();
+    if (!this.geometry) return;
 
-    const vertices: THREE.Vector3[] = [];
     const numPoints = message.ranges.length;
-
+    const angleMin = message.angle_min;
+    const angleIncrement = message.angle_increment;
+    const minRange = this.minRange;
+    const maxRange = this.maxRange;
+    
+    // Ensure buffer is large enough
+    if (numPoints > this.maxLaserPoints) {
+      this.maxLaserPoints = numPoints;
+      this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
+      this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
+    }
+    
+    // Fill buffer directly (no object allocations)
+    let validPoints = 0;
     for (let i = 0; i < numPoints; i++) {
-      let range = message.ranges[i];
+      const range = message.ranges[i];
 
-      if (range >= this.minRange && range <= this.maxRange && Number.isFinite(range)) {
-        const angle = message.angle_min + i * message.angle_increment;
-        // Assuming LaserScan is in the XY plane of its frame_id
-        // ROS: X forward, Y left, Z up
-        // THREE: X right, Y up, Z towards camera (if Z-up convention for camera)
-        // If sensor is Z-up, then X is forward, Y is left.
-        // If sensor is X-forward Y-up (common in some robots), then points are in XZ plane relative to sensor.
-        // For now, assume standard ROS REP 103: X forward, Y left, Z up for the sensor frame.
-        // This means points are in the sensor's XY plane.
-        const x = range * Math.cos(angle);
-        const y = range * Math.sin(angle);
-        vertices.push(new THREE.Vector3(x, y, 0)); // Z is 0 for a 2D scan
+      if (range >= minRange && range <= maxRange && Number.isFinite(range)) {
+        const angle = angleMin + i * angleIncrement;
+        const idx = validPoints * 3;
+        this.positionBuffer[idx] = range * Math.cos(angle);
+        this.positionBuffer[idx + 1] = range * Math.sin(angle);
+        this.positionBuffer[idx + 2] = 0;
+        validPoints++;
       }
     }
 
-    if (this.pointsNode) {
-      this.remove(this.pointsNode);
-      this.pointsNode.geometry.dispose();
-      (this.pointsNode.material as THREE.Material).dispose();
-      this.pointsNode = null;
-    }
-
-    if (vertices.length > 0) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-      const material = new THREE.PointsMaterial({
-        color: this.pointColor,
-        size: this.pointSize,
-        sizeAttenuation: false // Points remain same size regardless of distance
-      });
-      this.pointsNode = new THREE.Points(geometry, material);
-      this.add(this.pointsNode);
-    }
-    // console.debug(`[LaserScan] Processed ${vertices.length} points from ${this.topicName} in ${performance.now() - now} ms. Frame ID: ${this.messageFrameId}`);
+    // Update geometry
+    const positionAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+    positionAttr.needsUpdate = true;
+    this.geometry.setDrawRange(0, validPoints);
   }
 
   private setupTfHandling(): void {
@@ -1032,16 +1035,16 @@ class LaserScan extends THREE.Object3D {
   }): void {
     if (options.pointSize !== undefined) {
       this.pointSize = options.pointSize;
-      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
-        this.pointsNode.material.size = this.pointSize;
+      if (this.material) {
+        this.material.size = this.pointSize;
       }
     }
     if (options.pointColor !== undefined) {
       this.pointColor = options.pointColor instanceof THREE.Color
         ? options.pointColor
         : new THREE.Color(options.pointColor);
-      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
-        this.pointsNode.material.color = this.pointColor;
+      if (this.material) {
+        this.material.color = this.pointColor;
       }
     }
     if (options.maxRange !== undefined) {
@@ -1050,7 +1053,6 @@ class LaserScan extends THREE.Object3D {
     if (options.minRange !== undefined) {
       this.minRange = options.minRange;
     }
-     // Re-process last message if ranges changed, or wait for new message
   }
   
   public setFixedFrame(fixedFrame: string): void {
