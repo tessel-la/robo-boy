@@ -1,4 +1,4 @@
-name: Docker CI
+name: Docker Build
 
 on:
   push:
@@ -13,10 +13,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Test Docker build for app
       run: |
@@ -37,4 +37,4 @@ jobs:
         
         # Run docker-compose build to test all services
         docker compose build
-        echo "✅ Docker Compose build successful" 
+        echo "✅ Docker Compose build successful"
