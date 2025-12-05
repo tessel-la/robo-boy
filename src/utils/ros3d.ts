@@ -163,120 +163,6 @@ class Axes extends THREE.Object3D {
   }
 }
 
-// TfClient implementation (simplified)
-class TfClient {
-  private ros: Ros;
-  private frameCallbacks: Map<string, ((transform: any | null) => void)[]> = new Map();
-  private fixedFrame: string;
-  
-  constructor(options: {
-    ros: Ros;
-    fixedFrame: string;
-    angularThres?: number;
-    transThres?: number;
-    rate?: number;
-    topicTimeout?: number;
-    serverName?: string;
-    repubServiceName?: string;
-  }) {
-    this.ros = options.ros;
-    this.fixedFrame = options.fixedFrame || 'base_link';
-    
-    // Subscribe to TF topic
-    this.subscribeTopic();
-  }
-
-  private subscribeTopic(): void {
-    try {
-      const tfTopic = new ROSLIB.Topic({
-        ros: this.ros,
-        name: '/tf',
-        messageType: 'tf2_msgs/TFMessage'
-      });
-      
-      tfTopic.subscribe((message: any) => {
-        this.processTfMessage(message);
-      });
-      
-      console.log(`[TfClient] Subscribed to TF messages with fixed frame: ${this.fixedFrame}`);
-    } catch (error) {
-      console.error('[TfClient] Error subscribing to TF topic:', error);
-    }
-  }
-  
-  private processTfMessage(message: any): void {
-    if (!message || !message.transforms || !Array.isArray(message.transforms)) {
-      return;
-    }
-    
-    // Process each transform
-    message.transforms.forEach((transform: any) => {
-      const frameId = transform.child_frame_id;
-      const parentId = transform.header.frame_id;
-      
-      // Skip if no callbacks for this frame
-      if (!this.frameCallbacks.has(frameId)) {
-        return;
-      }
-      
-      // Create transform object with coordinate system conversion
-      const translation = transform.transform.translation;
-      const rotation = transform.transform.rotation;
-      
-      // Create a transform with ROS-to-THREE coordinate conversion for Z-up
-      const convertedTransform = {
-        translation: new THREE.Vector3(
-          translation.x,
-          translation.y,  // ROS Y stays as THREE.js Y 
-          translation.z   // ROS Z stays as THREE.js Z (up)
-        ),
-        rotation: new THREE.Quaternion(
-          rotation.x,
-          rotation.y,    // ROS Y rotation axis stays as THREE.js Y
-          rotation.z,    // ROS Z rotation axis stays as THREE.js Z
-          rotation.w
-        )
-      };
-      
-      // Call the callbacks with the processed transform
-      const callbacks = this.frameCallbacks.get(frameId);
-      if (callbacks) {
-        callbacks.forEach(callback => {
-          callback({
-            sourceFrameId: parentId,
-            targetFrameId: frameId,
-            transform: convertedTransform
-          });
-        });
-      }
-    });
-  }
-
-  subscribe(frameId: string, callback: (transform: any | null) => void): void {
-    const callbacks = this.frameCallbacks.get(frameId) || [];
-    callbacks.push(callback);
-    this.frameCallbacks.set(frameId, callbacks);
-    console.log(`[TfClient] Subscribed to frame: ${frameId}`);
-  }
-
-  unsubscribe(frameId: string, callback?: (transform: any | null) => void): void {
-    if (!callback) {
-      this.frameCallbacks.delete(frameId);
-      console.log(`[TfClient] Unsubscribed from all callbacks for frame: ${frameId}`);
-    } else {
-      const callbacks = this.frameCallbacks.get(frameId) || [];
-      const filteredCallbacks = callbacks.filter(cb => cb !== callback);
-      this.frameCallbacks.set(frameId, filteredCallbacks);
-      console.log(`[TfClient] Unsubscribed specific callback for frame: ${frameId}`);
-    }
-  }
-  
-  // Getter for fixedFrame
-  getFixedFrame(): string {
-    return this.fixedFrame;
-  }
-}
-
 // PointCloud2 implementation (enhanced)
 class PointCloud2 extends THREE.Object3D {
   private ros: Ros;
@@ -2126,12 +2012,11 @@ const ROS3D = {
   Viewer,
   Grid,
   Axes,
-  TfClient,
   PointCloud2,
-  LaserScan, // Added LaserScan here
+  LaserScan,
   OrbitControls,
   UrdfClient,
 };
 
-export { Viewer, Grid, Axes, TfClient, PointCloud2, LaserScan, OrbitControls, UrdfClient };
+export { Viewer, Grid, Axes, PointCloud2, LaserScan, OrbitControls, UrdfClient };
 export default ROS3D; 
