@@ -126,7 +126,7 @@ export function useCameraInfoVisualizer({
         ros: ros,
         name: selectedCameraInfoTopic,
         messageType: 'sensor_msgs/msg/CameraInfo',
-        throttle_rate: 200,
+        throttle_rate: 100, // 10Hz for camera info updates
       });
       sub.subscribe((message: any) => {
         setLastCameraInfo(message);

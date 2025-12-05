@@ -1,142 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
 
-// Patch the ROS3D.PointCloud2 library to fix the "Cannot read properties of null (reading 'setup')" issue
-// This wraps the problematic methods with safer implementations
-// Use a module-level WeakMap to track patched status instead of modifying the ROS3D object
-const patchedObjects = new WeakMap<any, boolean>();
-
-const patchROS3D = () => {
-  // Check if ROS3D.PointCloud2 exists and hasn't been patched yet
-  if ((ROS3D as any).PointCloud2 && !patchedObjects.get((ROS3D as any).PointCloud2)) {
-    try {
-      console.log("[ROS3D Patch] Applying safer implementations to PointCloud2");
-      
-      // Store the original prototype
-      const originalPrototype = (ROS3D as any).PointCloud2.prototype;
-      
-      // Save reference to original methods
-      const originalProcessMessage = originalPrototype.processMessage;
-      const originalSubscribe = originalPrototype.subscribe || function() {};
-      const originalUnsubscribe = originalPrototype.unsubscribe || function() {};
-      
-      // Patch the processMessage method with safer implementation
-      originalPrototype.processMessage = function(message: any) {
-        try {
-          // Safe check - if points or points.setup is missing, skip processing
-          if (!this.points || !this.points.setup) {
-            // console.warn('[ROS3D Patch] Points object not ready, skipping message processing');
-            return;
-          }
-          
-          // Call original with this context
-          return originalProcessMessage.call(this, message);
-        } catch (error) {
-          console.error('[ROS3D Patch] Error in processMessage:', error);
-        }
-      };
-      
-      // Add a safer subscribe method
-      originalPrototype.subscribe = function() {
-        try {
-          // Make sure we have a points object before subscribing
-          if (!this.points) {
-            console.log('[ROS3D Patch] Initializing points before subscribe');
-            try {
-              this.initializePoints();
-            } catch (e) {
-              console.error('[ROS3D Patch] Failed to initialize points:', e);
-            }
-          }
-          
-          // Call original subscribe
-          return originalSubscribe.call(this);
-        } catch (error) {
-          console.error('[ROS3D Patch] Error in subscribe:', error);
-        }
-      };
-      
-      // Add a safer unsubscribe method
-      originalPrototype.unsubscribe = function() {
-        try {
-          // Call original unsubscribe
-          return originalUnsubscribe.call(this);
-        } catch (error) {
-          console.error('[ROS3D Patch] Error in unsubscribe:', error);
-        }
-      };
-      
-      // Add a method to safely recreate the points setup
-      originalPrototype.safeResetPoints = function() {
-        try {
-          // First try to clean up any existing points resources
-          if (this.points && this.points.object) {
-            const pointsObj = this.points.object;
-            
-            // Clear geometry
-            if (pointsObj.geometry) {
-              try { 
-                pointsObj.geometry.dispose(); 
-                pointsObj.geometry = null;
-              } catch (e) {}
-            }
-            
-            // Clear material
-            if (pointsObj.material) {
-              if (Array.isArray(pointsObj.material)) {
-                pointsObj.material.forEach((mat: any) => {
-                  try { if (mat.dispose) mat.dispose(); } catch (e) {}
-                });
-              } else {
-                try { 
-                  if (pointsObj.material.dispose) pointsObj.material.dispose(); 
-                } catch (e) {}
-              }
-              pointsObj.material = null;
-            }
-          }
-          
-          // Reset points reference
-          this.points = null;
-          
-          // Create a new points object
-          this.initializePoints();
-          
-          // Return success status
-          return !!this.points && !!this.points.setup;
-        } catch (e) {
-          console.error('[ROS3D Patch] Error in safeResetPoints:', e);
-          return false;
-        }
-      };
-      
-      // Mark as patched using WeakMap instead of adding property
-      patchedObjects.set((ROS3D as any).PointCloud2, true);
-      console.log("[ROS3D Patch] Successfully patched PointCloud2");
-    } catch (error) {
-      console.error("[ROS3D Patch] Error applying patch:", error);
-    }
-  }
-};
-
-// Call the patch function immediately
-// But also try again after a delay to handle cases where the library loads asynchronously
-patchROS3D();
-// Try patching again after the page has fully loaded
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    console.log("[ROS3D Patch] Attempting delayed patch...");
-    patchROS3D();
-  }, 1000);
-});
-
-// Add a global function that can be called from debug console if needed
-(window as any).__patchROS3D = patchROS3D;
-
-// Add more comprehensive platform detection
+// Platform detection utilities
 const isIOS = (): boolean => {
   return (
     typeof navigator !== 'undefined' && 
@@ -683,12 +551,10 @@ export function usePointCloudClient({
       rootObject: ros3dViewer.current.scene,
       topic: selectedPointCloudTopic,
       max_pts: options.maxPoints ?? (isMobile() ? 100000 : 200000), // Lower point count on mobile
-      // Use custom throttle rate based on platform
-      throttle_rate: isMobile() ? 250 : (options.throttleRate ?? 100),
-      compression: 'none' as const,
-      // Add a delay to give the material time to initialize properly (helps on Chrome)
-      queue_size: isMobile() ? 1 : 2, // Smaller queue for mobile
-      max_delay: isMobile() ? 0.2 : 0.5, // Shorter delay on mobile
+      // Use faster throttle rate for smoother updates
+      throttle_rate: isMobile() ? 100 : (options.throttleRate ?? 33), // ~30Hz on desktop
+      compression: 'cbor' as const, // Use compression for faster transfer
+      queue_size: 1, // Only keep latest message to reduce latency
       
       // ***IMPORTANT: Always explicitly set the fixed frame***
       fixedFrame: fixedFrame,
@@ -737,7 +603,7 @@ export function usePointCloudClient({
         if (isIOS()) {
           console.log("[iOS] Applying additional iOS-specific optimizations");
           clientOptions.max_pts = Math.min(clientOptions.max_pts, 30000);
-          clientOptions.throttle_rate = 300; // Even more throttling for iOS
+          clientOptions.throttle_rate = 150; // Slightly more throttling for iOS
         }
       }
     } else {

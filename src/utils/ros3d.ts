@@ -163,120 +163,6 @@ class Axes extends THREE.Object3D {
   }
 }
 
-// TfClient implementation (simplified)
-class TfClient {
-  private ros: Ros;
-  private frameCallbacks: Map<string, ((transform: any | null) => void)[]> = new Map();
-  private fixedFrame: string;
-  
-  constructor(options: {
-    ros: Ros;
-    fixedFrame: string;
-    angularThres?: number;
-    transThres?: number;
-    rate?: number;
-    topicTimeout?: number;
-    serverName?: string;
-    repubServiceName?: string;
-  }) {
-    this.ros = options.ros;
-    this.fixedFrame = options.fixedFrame || 'base_link';
-    
-    // Subscribe to TF topic
-    this.subscribeTopic();
-  }
-
-  private subscribeTopic(): void {
-    try {
-      const tfTopic = new ROSLIB.Topic({
-        ros: this.ros,
-        name: '/tf',
-        messageType: 'tf2_msgs/TFMessage'
-      });
-      
-      tfTopic.subscribe((message: any) => {
-        this.processTfMessage(message);
-      });
-      
-      console.log(`[TfClient] Subscribed to TF messages with fixed frame: ${this.fixedFrame}`);
-    } catch (error) {
-      console.error('[TfClient] Error subscribing to TF topic:', error);
-    }
-  }
-  
-  private processTfMessage(message: any): void {
-    if (!message || !message.transforms || !Array.isArray(message.transforms)) {
-      return;
-    }
-    
-    // Process each transform
-    message.transforms.forEach((transform: any) => {
-      const frameId = transform.child_frame_id;
-      const parentId = transform.header.frame_id;
-      
-      // Skip if no callbacks for this frame
-      if (!this.frameCallbacks.has(frameId)) {
-        return;
-      }
-      
-      // Create transform object with coordinate system conversion
-      const translation = transform.transform.translation;
-      const rotation = transform.transform.rotation;
-      
-      // Create a transform with ROS-to-THREE coordinate conversion for Z-up
-      const convertedTransform = {
-        translation: new THREE.Vector3(
-          translation.x,
-          translation.y,  // ROS Y stays as THREE.js Y 
-          translation.z   // ROS Z stays as THREE.js Z (up)
-        ),
-        rotation: new THREE.Quaternion(
-          rotation.x,
-          rotation.y,    // ROS Y rotation axis stays as THREE.js Y
-          rotation.z,    // ROS Z rotation axis stays as THREE.js Z
-          rotation.w
-        )
-      };
-      
-      // Call the callbacks with the processed transform
-      const callbacks = this.frameCallbacks.get(frameId);
-      if (callbacks) {
-        callbacks.forEach(callback => {
-          callback({
-            sourceFrameId: parentId,
-            targetFrameId: frameId,
-            transform: convertedTransform
-          });
-        });
-      }
-    });
-  }
-
-  subscribe(frameId: string, callback: (transform: any | null) => void): void {
-    const callbacks = this.frameCallbacks.get(frameId) || [];
-    callbacks.push(callback);
-    this.frameCallbacks.set(frameId, callbacks);
-    console.log(`[TfClient] Subscribed to frame: ${frameId}`);
-  }
-
-  unsubscribe(frameId: string, callback?: (transform: any | null) => void): void {
-    if (!callback) {
-      this.frameCallbacks.delete(frameId);
-      console.log(`[TfClient] Unsubscribed from all callbacks for frame: ${frameId}`);
-    } else {
-      const callbacks = this.frameCallbacks.get(frameId) || [];
-      const filteredCallbacks = callbacks.filter(cb => cb !== callback);
-      this.frameCallbacks.set(frameId, filteredCallbacks);
-      console.log(`[TfClient] Unsubscribed specific callback for frame: ${frameId}`);
-    }
-  }
-  
-  // Getter for fixedFrame
-  getFixedFrame(): string {
-    return this.fixedFrame;
-  }
-}
-
 // PointCloud2 implementation (enhanced)
 class PointCloud2 extends THREE.Object3D {
   private ros: Ros;
@@ -333,7 +219,7 @@ class PointCloud2 extends THREE.Object3D {
     this.maxPoints = options.max_pts || 100000;
     this.pointSize = options.size || 0.05;
     this.compression = options.compression || 'none';
-    this.throttleRate = options.throttle_rate || 100;
+    this.throttleRate = options.throttle_rate || 33; // ~30Hz default for smoother updates
     this.fixedFrame = options.fixedFrame || 'odom'; // Store the fixed frame
     
     // Set scaling factors if provided
@@ -369,9 +255,9 @@ class PointCloud2 extends THREE.Object3D {
     
     // Use requestAnimationFrame to update the transform periodically
     const updateTransform = (timestamp: number) => {
-      // Run at most 30fps to avoid excessive CPU usage
+      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
       const now = performance.now();
-      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless we're retrying
+      if (now - lastTransformTime < 66 && retryCount === 0) {
         this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
         return;
       }
@@ -541,7 +427,7 @@ class PointCloud2 extends THREE.Object3D {
         ros: this.ros,
         name: this.topic,
         messageType: 'sensor_msgs/PointCloud2',
-        compression: this.compression,
+        compression: 'cbor', // Use compression for faster transfer
         throttle_rate: this.throttleRate,
         queue_size: 1 // Keep only the latest message
       });
@@ -659,18 +545,6 @@ class PointCloud2 extends THREE.Object3D {
         console.warn('[PointCloud2] Message has no frame_id in header');
       }
       
-      // Log message structure for debugging
-      console.log('[PointCloud2] Message structure:', {
-        height: message.height,
-        width: message.width,
-        point_step: message.point_step,
-        row_step: message.row_step,
-        dataType: message.data ? typeof message.data : 'undefined',
-        dataLength: message.data ? message.data.length || message.data.byteLength : 0,
-        fields: message.fields,
-        is_bigendian: message.is_bigendian
-      });
-      
       // Get the position attribute
       const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
       if (!positions) {
@@ -687,8 +561,6 @@ class PointCloud2 extends THREE.Object3D {
       const width = message.width;
       const height = message.height;
       const pointCount = Math.min(width * height, this.maxPoints);
-      
-      console.log(`[PointCloud2] Visualizing ${pointCount} points from ${width}x${height} point cloud`);
       
       // Parse the binary data from the point cloud message
       // PointCloud2 data is typically stored as an ArrayBuffer
@@ -740,28 +612,27 @@ class PointCloud2 extends THREE.Object3D {
         return;
       }
       
-      // Extract actual point cloud data
+      // Cache field offsets for performance
+      const xOffset = fieldOffsets.x;
+      const yOffset = fieldOffsets.y;
+      const zOffset = fieldOffsets.z;
+      const scaleX = this.scaleX;
+      const scaleY = this.scaleY;
+      const scaleZ = this.scaleZ;
+      const originX = this.originX;
+      const originY = this.originY;
+      const originZ = this.originZ;
+      
+      // Extract point cloud data (optimized loop - no try-catch per point)
       for (let i = 0; i < pointCount; i++) {
-        try {
-          const offset = i * pointStep;
-          
-          // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
-          let x = dataView.getFloat32(offset + fieldOffsets.x, true); // little-endian
-          let y = dataView.getFloat32(offset + fieldOffsets.y, true);
-          let z = dataView.getFloat32(offset + fieldOffsets.z, true);
-          
-          // Apply scaling and origin offset
-          x = x * this.scaleX + this.originX;
-          y = y * this.scaleY + this.originY;
-          z = z * this.scaleZ + this.originZ;
-          
-          // For Z-up coordinate system, we keep the coordinates as is
-          // No need to swap Y and Z - in Z-up system, we keep ROS coordinates directly
-          positions.setXYZ(i, x, y, z);
-        } catch (e) {
-          console.error(`[PointCloud2] Error processing point ${i}:`, e);
-          // Skip this point and continue with the rest
-        }
+        const offset = i * pointStep;
+        
+        // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
+        const x = dataView.getFloat32(offset + xOffset, true) * scaleX + originX;
+        const y = dataView.getFloat32(offset + yOffset, true) * scaleY + originY;
+        const z = dataView.getFloat32(offset + zOffset, true) * scaleZ + originZ;
+        
+        positions.setXYZ(i, x, y, z);
       }
       
       // Update the geometry
@@ -769,8 +640,6 @@ class PointCloud2 extends THREE.Object3D {
       
       // Set the draw range to only render valid points
       this.points.geometry?.setDrawRange(0, pointCount);
-      
-      console.log('[PointCloud2] Point cloud visualization updated');
     } catch (e) {
       console.error('[PointCloud2] Error processing point cloud message:', e);
     }
@@ -938,6 +807,12 @@ class LaserScan extends THREE.Object3D {
   private pointsNode: THREE.Points | null = null;
   private messageFrameId: string | null = null;
   private transformUpdateAnimationId: number | null = null;
+  
+  // Pre-allocated buffer for performance (avoids GC on each message)
+  private maxLaserPoints: number = 2000;
+  private positionBuffer: Float32Array;
+  private geometry: THREE.BufferGeometry | null = null;
+  private material: THREE.PointsMaterial | null = null;
 
   constructor(options: {
     ros: Ros;
@@ -965,10 +840,29 @@ class LaserScan extends THREE.Object3D {
       : new THREE.Color(options.material?.color || 0xff0000); // Default red
     this.maxRange = options.maxRange || Infinity;
     this.minRange = options.minRange || 0;
+    
+    // Pre-allocate position buffer
+    this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
+    this.initializeGeometry();
 
     this.rootObject.add(this);
     this.subscribe();
     this.setupTfHandling();
+  }
+  
+  private initializeGeometry(): void {
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
+    this.geometry.setDrawRange(0, 0);
+    
+    this.material = new THREE.PointsMaterial({
+      color: this.pointColor,
+      size: this.pointSize,
+      sizeAttenuation: false
+    });
+    
+    this.pointsNode = new THREE.Points(this.geometry, this.material);
+    this.add(this.pointsNode);
   }
 
   private subscribe(): void {
@@ -977,9 +871,10 @@ class LaserScan extends THREE.Object3D {
     this.rosTopicInstance = new ROSLIB.Topic({
       ros: this.ros,
       name: this.topicName,
-      messageType: 'sensor_msgs/msg/LaserScan', // Ensure this is the correct type for ROS2
-      throttle_rate: 100, // Optional: throttle messages
-      compression: 'cbor' // Optional: use compression if available
+      messageType: 'sensor_msgs/msg/LaserScan',
+      throttle_rate: 33, // ~30Hz for smooth updates
+      queue_size: 1,
+      compression: 'cbor'
     });
 
     console.log(`[LaserScan] Subscribing to ${this.topicName}`);
@@ -989,7 +884,6 @@ class LaserScan extends THREE.Object3D {
   public unsubscribe(): void {
     if (this.rosTopicInstance) {
       console.log(`[LaserScan] Unsubscribing from ${this.topicName}`);
-      this.rosTopicInstance.unadvertise(); // For publishers, for subscribers it's unsubscribe
       this.rosTopicInstance.unsubscribe();
       this.rosTopicInstance = null;
     }
@@ -997,16 +891,22 @@ class LaserScan extends THREE.Object3D {
       cancelAnimationFrame(this.transformUpdateAnimationId);
       this.transformUpdateAnimationId = null;
     }
-    // Remove the points from the scene
+    // Dispose geometry and material
+    if (this.geometry) {
+      this.geometry.dispose();
+      this.geometry = null;
+    }
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
     if (this.pointsNode) {
       this.remove(this.pointsNode);
-      this.pointsNode.geometry.dispose();
-      (this.pointsNode.material as THREE.Material).dispose();
       this.pointsNode = null;
     }
     // Remove this object from its parent (rootObject)
     if (this.parent) {
-        this.parent.remove(this);
+      this.parent.remove(this);
     }
   }
 
@@ -1015,55 +915,45 @@ class LaserScan extends THREE.Object3D {
         ? message.header.frame_id.substring(1) 
         : message.header.frame_id;
 
-    // Log the raw message for inspection
-    // console.log('[LaserScan] Received message:', JSON.parse(JSON.stringify(message)));
-
     if (!this.messageFrameId) {
         console.warn('[LaserScan] Message received with no frame_id');
         return;
     }
 
-    const now = performance.now();
+    if (!this.geometry) return;
 
-    const vertices: THREE.Vector3[] = [];
     const numPoints = message.ranges.length;
-
+    const angleMin = message.angle_min;
+    const angleIncrement = message.angle_increment;
+    const minRange = this.minRange;
+    const maxRange = this.maxRange;
+    
+    // Ensure buffer is large enough
+    if (numPoints > this.maxLaserPoints) {
+      this.maxLaserPoints = numPoints;
+      this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
+      this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
+    }
+    
+    // Fill buffer directly (no object allocations)
+    let validPoints = 0;
     for (let i = 0; i < numPoints; i++) {
-      let range = message.ranges[i];
+      const range = message.ranges[i];
 
-      if (range >= this.minRange && range <= this.maxRange && Number.isFinite(range)) {
-        const angle = message.angle_min + i * message.angle_increment;
-        // Assuming LaserScan is in the XY plane of its frame_id
-        // ROS: X forward, Y left, Z up
-        // THREE: X right, Y up, Z towards camera (if Z-up convention for camera)
-        // If sensor is Z-up, then X is forward, Y is left.
-        // If sensor is X-forward Y-up (common in some robots), then points are in XZ plane relative to sensor.
-        // For now, assume standard ROS REP 103: X forward, Y left, Z up for the sensor frame.
-        // This means points are in the sensor's XY plane.
-        const x = range * Math.cos(angle);
-        const y = range * Math.sin(angle);
-        vertices.push(new THREE.Vector3(x, y, 0)); // Z is 0 for a 2D scan
+      if (range >= minRange && range <= maxRange && Number.isFinite(range)) {
+        const angle = angleMin + i * angleIncrement;
+        const idx = validPoints * 3;
+        this.positionBuffer[idx] = range * Math.cos(angle);
+        this.positionBuffer[idx + 1] = range * Math.sin(angle);
+        this.positionBuffer[idx + 2] = 0;
+        validPoints++;
       }
     }
 
-    if (this.pointsNode) {
-      this.remove(this.pointsNode);
-      this.pointsNode.geometry.dispose();
-      (this.pointsNode.material as THREE.Material).dispose();
-      this.pointsNode = null;
-    }
-
-    if (vertices.length > 0) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-      const material = new THREE.PointsMaterial({
-        color: this.pointColor,
-        size: this.pointSize,
-        sizeAttenuation: false // Points remain same size regardless of distance
-      });
-      this.pointsNode = new THREE.Points(geometry, material);
-      this.add(this.pointsNode);
-    }
-    // console.debug(`[LaserScan] Processed ${vertices.length} points from ${this.topicName} in ${performance.now() - now} ms. Frame ID: ${this.messageFrameId}`);
+    // Update geometry
+    const positionAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+    positionAttr.needsUpdate = true;
+    this.geometry.setDrawRange(0, validPoints);
   }
 
   private setupTfHandling(): void {
@@ -1076,7 +966,8 @@ class LaserScan extends THREE.Object3D {
       this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
 
       const now = performance.now();
-      if (now - lastTransformTime < 33 && retryCount === 0) { // ~30fps, unless retrying
+      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
+      if (now - lastTransformTime < 66 && retryCount === 0) {
         return;
       }
       lastTransformTime = now;
@@ -1146,16 +1037,16 @@ class LaserScan extends THREE.Object3D {
   }): void {
     if (options.pointSize !== undefined) {
       this.pointSize = options.pointSize;
-      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
-        this.pointsNode.material.size = this.pointSize;
+      if (this.material) {
+        this.material.size = this.pointSize;
       }
     }
     if (options.pointColor !== undefined) {
       this.pointColor = options.pointColor instanceof THREE.Color
         ? options.pointColor
         : new THREE.Color(options.pointColor);
-      if (this.pointsNode && this.pointsNode.material instanceof THREE.PointsMaterial) {
-        this.pointsNode.material.color = this.pointColor;
+      if (this.material) {
+        this.material.color = this.pointColor;
       }
     }
     if (options.maxRange !== undefined) {
@@ -1164,7 +1055,6 @@ class LaserScan extends THREE.Object3D {
     if (options.minRange !== undefined) {
       this.minRange = options.minRange;
     }
-     // Re-process last message if ranges changed, or wait for new message
   }
   
   public setFixedFrame(fixedFrame: string): void {
@@ -2126,12 +2016,11 @@ const ROS3D = {
   Viewer,
   Grid,
   Axes,
-  TfClient,
   PointCloud2,
-  LaserScan, // Added LaserScan here
+  LaserScan,
   OrbitControls,
   UrdfClient,
 };
 
-export { Viewer, Grid, Axes, TfClient, PointCloud2, LaserScan, OrbitControls, UrdfClient };
+export { Viewer, Grid, Axes, PointCloud2, LaserScan, OrbitControls, UrdfClient };
 export default ROS3D; 
