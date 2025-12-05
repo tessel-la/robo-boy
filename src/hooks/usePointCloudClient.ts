@@ -551,8 +551,8 @@ export function usePointCloudClient({
       rootObject: ros3dViewer.current.scene,
       topic: selectedPointCloudTopic,
       max_pts: options.maxPoints ?? (isMobile() ? 100000 : 200000), // Lower point count on mobile
-      // Use faster throttle rate for smoother updates
-      throttle_rate: isMobile() ? 100 : (options.throttleRate ?? 33), // ~30Hz on desktop
+      // Use faster throttle rate for smoother updates - 30Hz across all platforms
+      throttle_rate: options.throttleRate ?? 33, // ~30Hz on all platforms
       compression: 'cbor' as const, // Use compression for faster transfer
       queue_size: 1, // Only keep latest message to reduce latency
       
@@ -603,7 +603,7 @@ export function usePointCloudClient({
         if (isIOS()) {
           console.log("[iOS] Applying additional iOS-specific optimizations");
           clientOptions.max_pts = Math.min(clientOptions.max_pts, 30000);
-          clientOptions.throttle_rate = 150; // Slightly more throttling for iOS
+          // Keep 30Hz for iOS too - throttle_rate already set above
         }
       }
     } else {

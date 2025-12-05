@@ -191,6 +191,10 @@ class PointCloud2 extends THREE.Object3D {
   // For animation loop tracking
   private transformUpdateAnimationId: number | null = null;
   
+  // Cached field offsets for performance
+  private cachedFieldOffsets: { x: number; y: number; z: number } | null = null;
+  private cachedPointStep: number = 0;
+  
   constructor(options: {
     ros: Ros;
     topic: string;
@@ -491,158 +495,98 @@ class PointCloud2 extends THREE.Object3D {
     }
   }
   
-  // Process incoming point cloud message
+  // Process incoming point cloud message - OPTIMIZED for performance
   private processMessage(message: any): void {
-    // Skip if points not set up
-    if (!this.points || !this.points.setup || !this.points.object) {
-      console.warn('[PointCloud2] Points not set up, skipping message processing');
+    // Fast path checks
+    if (!this.points?.setup || !this.points?.object) return;
+    
+    const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
+    if (!positions) return;
+    
+    // Quick validation
+    const data = message.data;
+    if (!data || !message.width || !message.height) return;
+    
+    // Store frame_id for TF (TF lookup handled by separate 30Hz loop, not here)
+    if (message.header?.frame_id) {
+      const frameId = message.header.frame_id.startsWith('/') 
+        ? message.header.frame_id.substring(1) 
+        : message.header.frame_id;
+      
+      if (this.messageFrameId !== frameId) {
+        this.messageFrameId = frameId;
+        // Reset cached offsets when frame changes (message format might differ)
+        this.cachedFieldOffsets = null;
+      }
+    }
+    
+    const pointStep = message.point_step || 32;
+    const pointCount = Math.min(message.width * message.height, this.maxPoints);
+    
+    // Cache field offsets on first message (or when point_step changes)
+    if (!this.cachedFieldOffsets || this.cachedPointStep !== pointStep) {
+      this.cachedPointStep = pointStep;
+      
+      if (message.fields && Array.isArray(message.fields)) {
+        const offsets: { [key: string]: number } = {};
+        for (let i = 0; i < message.fields.length; i++) {
+          const field = message.fields[i];
+          if (field.name && field.offset !== undefined) {
+            offsets[field.name] = field.offset;
+          }
+        }
+        
+        this.cachedFieldOffsets = {
+          x: offsets.x ?? 0,
+          y: offsets.y ?? 4,
+          z: offsets.z ?? 8
+        };
+      } else {
+        this.cachedFieldOffsets = { x: 0, y: 4, z: 8 };
+      }
+    }
+    
+    // Create DataView - fast path for common types
+    let dataView: DataView;
+    if (data instanceof Uint8Array) {
+      dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    } else if (data instanceof ArrayBuffer) {
+      dataView = new DataView(data);
+    } else if (typeof data === 'string') {
+      // Base64 decode (rare path)
+      try {
+        const binaryData = atob(data);
+        const bytes = new Uint8Array(binaryData.length);
+        for (let i = 0; i < binaryData.length; i++) {
+          bytes[i] = binaryData.charCodeAt(i);
+        }
+        dataView = new DataView(bytes.buffer);
+      } catch (e) {
+        return;
+      }
+    } else {
       return;
     }
     
-    try {
-      // Store the message frame_id for TF transformation
-      if (message.header && message.header.frame_id) {
-        // Remove any leading '/' from the frame_id to be consistent with TF
-        const frameId = message.header.frame_id.startsWith('/') ? 
-          message.header.frame_id.substring(1) : message.header.frame_id;
-        
-        // Check if frame changed
-        const frameChanged = this.messageFrameId !== frameId;
-        if (frameChanged) {
-          console.log(`[PointCloud2] Message frame_id changed from ${this.messageFrameId} to ${frameId}`);
-          // Hide until we get a transform for the new frame
-          (this as any).visible = false;
-        }
-        
-        this.messageFrameId = frameId;
-        
-        // Immediately trigger a transform lookup to update position
-        // Use stored fixedFrame instead of trying to call getFixedFrame
-        if (this.messageFrameId) {
-          try {
-            const tf = this.tfClient.lookupTransform(this.fixedFrame, this.messageFrameId);
-            if (tf && tf.translation && tf.rotation) {
-              this.position.set(
-                tf.translation.x,
-                tf.translation.y,
-                tf.translation.z
-              );
-              this.quaternion.set(
-                tf.rotation.x,
-                tf.rotation.y,
-                tf.rotation.z,
-                tf.rotation.w
-              );
-              (this as any).visible = true;
-              this.updateMatrix();
-              this.matrixWorldNeedsUpdate = true;
-            }
-          } catch (e) {
-            console.warn(`[PointCloud2] Initial transform lookup failed: ${e}`);
-          }
-        }
-      } else {
-        console.warn('[PointCloud2] Message has no frame_id in header');
-      }
-      
-      // Get the position attribute
-      const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
-      if (!positions) {
-        console.warn('[PointCloud2] No position attribute found');
-        return;
-      }
-      
-      // If we have decoded data, process it
-      if (!message.data || !message.width || !message.height) {
-        console.warn('[PointCloud2] Message data missing width, height, or data');
-        return;
-      }
-      
-      const width = message.width;
-      const height = message.height;
-      const pointCount = Math.min(width * height, this.maxPoints);
-      
-      // Parse the binary data from the point cloud message
-      // PointCloud2 data is typically stored as an ArrayBuffer
-      let data = message.data;
-      let pointStep = message.point_step || 32; // Default step size if not provided
-      let fieldOffsets: { [key: string]: number } = {};
-      
-      // Get field offsets to locate x, y, z in each point
-      if (message.fields && Array.isArray(message.fields)) {
-        message.fields.forEach((field: any) => {
-          if (field.name && field.offset !== undefined) {
-            fieldOffsets[field.name] = field.offset;
-          }
-        });
-      }
-      
-      // Check if we have x, y, z offsets
-      if (!fieldOffsets.x || !fieldOffsets.y || !fieldOffsets.z) {
-        console.warn('[PointCloud2] Cannot find x, y, z field offsets in message');
-        // Use default offsets if not found
-        fieldOffsets = { x: 0, y: 4, z: 8 };
-      }
-      
-      // Create a DataView for accessing binary data
-      let dataView;
-      
-      // Handle different data types
-      if (data instanceof Uint8Array) {
-        dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-      } else if (data instanceof ArrayBuffer) {
-        dataView = new DataView(data);
-      } else if (typeof data === 'string') {
-        // If data is base64 or other string format, convert to array buffer
-        console.warn('[PointCloud2] String data format detected, attempting to parse');
-        try {
-          // Convert to binary array first
-          const binaryData = atob(data);
-          const bytes = new Uint8Array(binaryData.length);
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i);
-          }
-          dataView = new DataView(bytes.buffer);
-        } catch (e) {
-          console.error('[PointCloud2] Failed to parse string data:', e);
-          return;
-        }
-      } else {
-        console.warn('[PointCloud2] Unsupported data type, cannot visualize');
-        return;
-      }
-      
-      // Cache field offsets for performance
-      const xOffset = fieldOffsets.x;
-      const yOffset = fieldOffsets.y;
-      const zOffset = fieldOffsets.z;
-      const scaleX = this.scaleX;
-      const scaleY = this.scaleY;
-      const scaleZ = this.scaleZ;
-      const originX = this.originX;
-      const originY = this.originY;
-      const originZ = this.originZ;
-      
-      // Extract point cloud data (optimized loop - no try-catch per point)
-      for (let i = 0; i < pointCount; i++) {
-        const offset = i * pointStep;
-        
-        // Extract x, y, z as 32-bit floats (standard for ROS point clouds)
-        const x = dataView.getFloat32(offset + xOffset, true) * scaleX + originX;
-        const y = dataView.getFloat32(offset + yOffset, true) * scaleY + originY;
-        const z = dataView.getFloat32(offset + zOffset, true) * scaleZ + originZ;
-        
-        positions.setXYZ(i, x, y, z);
-      }
-      
-      // Update the geometry
-      positions.needsUpdate = true;
-      
-      // Set the draw range to only render valid points
-      this.points.geometry?.setDrawRange(0, pointCount);
-    } catch (e) {
-      console.error('[PointCloud2] Error processing point cloud message:', e);
+    // Cache all values for tight loop
+    const xOff = this.cachedFieldOffsets.x;
+    const yOff = this.cachedFieldOffsets.y;
+    const zOff = this.cachedFieldOffsets.z;
+    const sx = this.scaleX, sy = this.scaleY, sz = this.scaleZ;
+    const ox = this.originX, oy = this.originY, oz = this.originZ;
+    const posArray = positions.array as Float32Array;
+    
+    // Tight loop - direct array access is faster than setXYZ
+    for (let i = 0, idx = 0; i < pointCount; i++, idx += 3) {
+      const off = i * pointStep;
+      posArray[idx] = dataView.getFloat32(off + xOff, true) * sx + ox;
+      posArray[idx + 1] = dataView.getFloat32(off + yOff, true) * sy + oy;
+      posArray[idx + 2] = dataView.getFloat32(off + zOff, true) * sz + oz;
     }
+    
+    // Update geometry
+    positions.needsUpdate = true;
+    this.points.geometry?.setDrawRange(0, pointCount);
   }
 
   // Method to update visualization settings
