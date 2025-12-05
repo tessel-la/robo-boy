@@ -255,9 +255,9 @@ class PointCloud2 extends THREE.Object3D {
     
     // Use requestAnimationFrame to update the transform periodically
     const updateTransform = (timestamp: number) => {
-      // Run at 15fps for TF updates (66ms) - transforms don't need 30fps
+      // Run at 30fps for TF updates (33ms) - match 3D panel refresh rate
       const now = performance.now();
-      if (now - lastTransformTime < 66 && retryCount === 0) {
+      if (now - lastTransformTime < 33 && retryCount === 0) {
         this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
         return;
       }
