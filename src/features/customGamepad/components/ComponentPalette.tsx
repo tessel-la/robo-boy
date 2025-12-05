@@ -105,7 +105,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     
     // Set drag data
     e.dataTransfer.setData('text/plain', componentType);
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'move';
     
     // Create a custom drag image
     const dragImage = document.createElement('div');

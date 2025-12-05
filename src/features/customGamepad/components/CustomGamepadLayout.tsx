@@ -17,6 +17,8 @@ interface CustomGamepadLayoutProps {
   onOpenSettings?: (id: string) => void;
   onComponentDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
@@ -31,7 +33,9 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   onComponentDelete,
   onOpenSettings,
   onComponentDragStart,
-  onDragEnd
+  onDragEnd,
+  onDragOver,
+  onDrop
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
@@ -218,14 +222,39 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     }
   };
 
+  // Handle drag over on the grid
+  const handleGridDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onDragOver) {
+      onDragOver(e);
+    }
+  };
+
+  // Handle drop on the grid
+  const handleGridDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onDrop) {
+      onDrop(e);
+    }
+  };
+
   return (
     <div 
       className={`custom-gamepad-layout ${isEditing ? 'editing' : ''}`}
       ref={containerRef}
       style={containerStyle}
+      onDragOver={isEditing ? handleGridDragOver : undefined}
+      onDrop={isEditing ? handleGridDrop : undefined}
     >
       {/* Grid container */}
-      <div className="gamepad-grid" style={gridStyle}>
+      <div 
+        className="gamepad-grid" 
+        style={gridStyle}
+        onDragOver={isEditing ? handleGridDragOver : undefined}
+        onDrop={isEditing ? handleGridDrop : undefined}
+      >
         {/* Grid background (visible only in editing mode) - positioned to exactly match main grid */}
         {isEditing && (
           <div 
