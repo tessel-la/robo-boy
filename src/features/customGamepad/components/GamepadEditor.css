@@ -332,6 +332,16 @@
   min-width: 300px;
   min-height: 0; /* Allow it to shrink */
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+/* Drag active state */
+.design-area.drag-active {
+  background-color: var(--card-bg, #ffffff);
+  border: 2px dashed var(--border-color, #ddd);
+  border-radius: 8px;
+  margin: 8px;
+  padding: 8px;
 }
 
 /* Ensure the direct child of design-area (the layout renderer) can grow */

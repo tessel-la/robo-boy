@@ -47,6 +47,33 @@
   cursor: pointer;
 }
 
+/* Draggable state in translate mode */
+.gamepad-component.editing.translate-mode {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.gamepad-component.editing.translate-mode:active {
+  cursor: grabbing;
+}
+
+/* Being dragged state */
+.gamepad-component.being-dragged {
+  opacity: 0.4;
+  transform: scale(0.98);
+  border-style: dashed !important;
+  border-color: var(--border-color, #ddd) !important;
+  box-shadow: none !important;
+  animation: none !important;
+  transition: all 0.15s ease;
+}
+
+.gamepad-component.being-dragged * {
+  pointer-events: none;
+}
+
 .gamepad-component.editing:hover {
   border-color: var(--primary-color, #007bff);
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);

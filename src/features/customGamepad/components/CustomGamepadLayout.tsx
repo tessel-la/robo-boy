@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { CustomGamepadLayout as LayoutType, ComponentInteractionMode } from '../types';
+import { CustomGamepadLayout as LayoutType, ComponentInteractionMode, DragState, DropPreview } from '../types';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -10,10 +10,14 @@ interface CustomGamepadLayoutProps {
   isEditing?: boolean;
   selectedComponentId?: string | null;
   interactionMode?: ComponentInteractionMode;
+  dropPreview?: DropPreview | null;
+  dragState?: DragState | null;
   onComponentSelect?: (id: string) => void;
   onComponentUpdate?: (id: string, config: any) => void;
   onComponentDelete?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
+  onComponentDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
 }
 
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
@@ -22,10 +26,14 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   isEditing = false,
   selectedComponentId = null,
   interactionMode,
+  dropPreview,
+  dragState,
   onComponentSelect,
   onComponentUpdate,
   onComponentDelete,
-  onOpenSettings
+  onOpenSettings,
+  onComponentDragStart,
+  onDragEnd
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
@@ -257,23 +265,45 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
           </div>
         )}
 
+        {/* Drop preview indicator */}
+        {isEditing && dropPreview && (
+          <div 
+            className={`drop-preview ${dropPreview.isValid ? 'valid' : 'invalid'}`}
+            style={{
+              gridColumn: `${dropPreview.x + 1} / span ${dropPreview.width}`,
+              gridRow: `${dropPreview.y + 1} / span ${dropPreview.height}`,
+            }}
+          >
+            <div className="drop-preview-inner">
+              {dropPreview.isValid ? '✓' : '✕'}
+            </div>
+          </div>
+        )}
+
         {/* Gamepad components */}
-        {layout.components.map(component => (
-          <GamepadComponent
-            key={component.id}
-            config={component}
-            ros={ros}
-            isEditing={isEditing}
-            isSelected={selectedComponentId === component.id}
-            interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
-            gridSize={layout.gridSize}
-            onSelect={handleComponentSelect}
-            onUpdate={handleComponentUpdate}
-            onDelete={handleComponentDelete}
-            onOpenSettings={onOpenSettings}
-            scaleFactor={scaling.scaleFactor}
-          />
-        ))}
+        {layout.components.map(component => {
+          const isBeingDragged = dragState?.source === 'grid' && dragState?.componentId === component.id;
+          
+          return (
+            <GamepadComponent
+              key={component.id}
+              config={component}
+              ros={ros}
+              isEditing={isEditing}
+              isSelected={selectedComponentId === component.id}
+              isBeingDragged={isBeingDragged}
+              interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
+              gridSize={layout.gridSize}
+              onSelect={handleComponentSelect}
+              onUpdate={handleComponentUpdate}
+              onDelete={handleComponentDelete}
+              onOpenSettings={onOpenSettings}
+              onDragStart={onComponentDragStart}
+              onDragEnd={onDragEnd}
+              scaleFactor={scaling.scaleFactor}
+            />
+          );
+        })}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ interface GamepadComponentProps {
   ros: Ros;
   isEditing?: boolean;
   isSelected?: boolean;
+  isBeingDragged?: boolean;
   interactionMode?: ComponentInteractionMode;
   scaleFactor?: number;
   gridSize?: { width: number; height: number };
@@ -20,6 +21,8 @@ interface GamepadComponentProps {
   onUpdate?: (config: GamepadComponentConfig) => void;
   onDelete?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
 }
 
 const GamepadComponent: React.FC<GamepadComponentProps> = ({
@@ -27,13 +30,16 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   ros,
   isEditing = false,
   isSelected = false,
+  isBeingDragged = false,
   interactionMode = ComponentInteractionMode.None,
   scaleFactor = 1,
   gridSize = { width: 8, height: 4 },
   onSelect,
   onUpdate,
   onDelete,
-  onOpenSettings
+  onOpenSettings,
+  onDragStart,
+  onDragEnd
 }) => {
   const handleClick = (e: React.MouseEvent) => {
     if (isEditing && onSelect) {
@@ -53,6 +59,57 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     e.stopPropagation();
     if (onOpenSettings) {
       onOpenSettings(config.id);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!isEditing) return;
+    
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', config.id);
+    e.dataTransfer.effectAllowed = 'move';
+    
+    // Create simple drag image
+    const dragImage = document.createElement('div');
+    dragImage.innerHTML = `<span>${config.label || config.type}</span>`;
+    dragImage.style.cssText = `
+      position: absolute;
+      top: -1000px;
+      padding: 8px 12px;
+      background: var(--primary-color, #007bff);
+      color: white;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      pointer-events: none;
+      z-index: 10000;
+    `;
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 40, 20);
+    
+    setTimeout(() => {
+      document.body.removeChild(dragImage);
+    }, 0);
+    
+    if (onDragStart) {
+      onDragStart(config.id);
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  };
+
+  // Touch event handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isEditing || interactionMode !== ComponentInteractionMode.Translate) return;
+    
+    e.stopPropagation();
+    if (onDragStart) {
+      onDragStart(config.id);
     }
   };
 
@@ -121,6 +178,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const getComponentClass = () => {
     let className = `gamepad-component ${config.type}`;
     if (isEditing) className += ' editing';
+    if (isBeingDragged) className += ' being-dragged';
     if (isSelected) {
       className += ' selected';
       if (interactionMode === ComponentInteractionMode.Translate) {
@@ -137,6 +195,10 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       className={getComponentClass()}
       style={style}
       onClick={handleClick}
+      draggable={isEditing && interactionMode === ComponentInteractionMode.Translate}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onTouchStart={handleTouchStart}
       data-component-id={config.id}
     >
       {renderComponent()}

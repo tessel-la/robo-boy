@@ -630,4 +630,40 @@
     width: 18px;
     height: 18px;
   }
+}
+
+/* Drag and Drop Styles */
+.component-card {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.component-card:active {
+  cursor: grabbing;
+}
+
+.component-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+  border-style: dashed;
+}
+
+.drag-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--text-color-secondary, #999);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.component-card:hover .drag-indicator {
+  opacity: 0.5;
+}
+
+.component-card.selected .drag-indicator {
+  display: none;
 } 
