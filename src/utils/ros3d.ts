@@ -1104,10 +1104,8 @@ class OrbitControls {
   private panDelta = new THREE.Vector2();
   
   // Track touch points for multi-touch gestures
-  private touches = { ONE: 0, TWO: 1 };
   private prevTouchDistance = -1;
-  
-  private EPS = 0.000001;
+  private prevTouchMidpoint = new THREE.Vector2();
   
   constructor(options: {
     scene: THREE.Object3D;
@@ -1158,7 +1156,7 @@ class OrbitControls {
     // Initial update
     this.update();
     
-    console.log('[OrbitControls] Initialized with touch support');
+    console.log('[OrbitControls] Initialized: Left=Rotate, Middle=Pan, Wheel=Zoom, Touch: 1-finger=Rotate, 2-finger=Pan/Zoom');
   }
   
   private updateSpherical(): void {
@@ -1179,12 +1177,14 @@ class OrbitControls {
         this.rotateStart.set(event.clientX, event.clientY);
         break;
       case this.mouseButtons.MIDDLE:
-        this.state = this.STATE.DOLLY;
-        break;
-      case this.mouseButtons.RIGHT:
+        // Middle click (wheel button) for pan/translate
         this.state = this.STATE.PAN;
         this.panStart.set(event.clientX, event.clientY);
         break;
+      case this.mouseButtons.RIGHT:
+        // Right click - no action (allow context menu)
+        this.state = this.STATE.NONE;
+        return; // Don't prevent default to allow context menu
       default:
         this.state = this.STATE.NONE;
     }
@@ -1258,9 +1258,13 @@ class OrbitControls {
         this.panEnd.set(event.clientX, event.clientY);
         this.panDelta.subVectors(this.panEnd, this.panStart);
         
-        this.pan(this.panDelta.x, this.panDelta.y);
+        // Invert pan direction for natural feel
+        this.pan(-this.panDelta.x, -this.panDelta.y);
         
         this.panStart.copy(this.panEnd);
+        
+        // Update camera view after panning
+        this.update();
         break;
     }
   }
@@ -1277,10 +1281,30 @@ class OrbitControls {
     
     event.preventDefault();
     
-    if (event.deltaY < 0) {
-      this.dollyIn();
-    } else {
-      this.dollyOut();
+    // Detect trackpad pinch-zoom (Ctrl + wheel) or regular mouse wheel
+    if (event.ctrlKey) {
+      // Trackpad pinch-to-zoom (Ctrl is automatically added by browser)
+      // Inverted: pinch out = zoom out, pinch in = zoom in
+      if (event.deltaY < 0) {
+        this.dollyOut();
+      } else {
+        this.dollyIn();
+      }
+    } else if (Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0) {
+      // Trackpad two-finger pan OR mouse wheel
+      // If deltaX is significant, treat as trackpad pan
+      if (Math.abs(event.deltaX) > 1 || (Math.abs(event.deltaY) > 1 && event.deltaMode === 0)) {
+        // Trackpad pan - invert direction and scale for comfortable movement
+        this.pan(event.deltaX * 0.5, event.deltaY * 0.5);
+        this.update();
+      } else {
+        // Regular mouse wheel - zoom
+        if (event.deltaY < 0) {
+          this.dollyIn();
+        } else {
+          this.dollyOut();
+        }
+      }
     }
     
     this.update();
@@ -1300,16 +1324,17 @@ class OrbitControls {
         );
         break;
         
-      case 2: // Two touches - handle as pinch zoom or pan
+      case 2: // Two touches - pinch zoom or two-finger pan
         const dx = event.touches[0].clientX - event.touches[1].clientX;
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         this.prevTouchDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // Use the midpoint as the pan starting point
+        // Store the midpoint for tracking pan movement
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        this.prevTouchMidpoint.set(x, y);
         this.panStart.set(x, y);
-        this.state = this.STATE.PAN;
+        this.state = this.STATE.DOLLY; // Two-finger state
         break;
         
       default:
@@ -1381,32 +1406,51 @@ class OrbitControls {
         }
         break;
         
-      case 2: // Two touches - handle as pinch zoom and pan
+      case 2: // Two touches - handle zoom and pan separately each frame
         // Calculate current distance between touch points
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        const touchDistance = Math.sqrt(dx * dx + dy * dy);
+        const dx2 = event.touches[0].clientX - event.touches[1].clientX;
+        const dy2 = event.touches[0].clientY - event.touches[1].clientY;
+        const touchDistance = Math.sqrt(dx2 * dx2 + dy2 * dy2);
         
-        // If we have a previous distance, use it for pinch zoom
-        if (this.prevTouchDistance > 0 && touchDistance > 0) {
-          // If new distance is greater, zoom in, otherwise zoom out
-          if (touchDistance > this.prevTouchDistance) {
-            this.dollyIn();
-          } else {
-            this.dollyOut();
+        // Calculate current midpoint
+        const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        
+        if (this.prevTouchDistance > 0) {
+          // Calculate distance change ratio (for pinch detection)
+          const distanceChange = touchDistance - this.prevTouchDistance;
+          const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
+          
+          // Calculate midpoint movement
+          const midpointDeltaX = midX - this.prevTouchMidpoint.x;
+          const midpointDeltaY = midY - this.prevTouchMidpoint.y;
+          const midpointMovement = Math.sqrt(midpointDeltaX * midpointDeltaX + midpointDeltaY * midpointDeltaY);
+          
+          // Pinch zoom: significant change in finger distance (>4% of current spread)
+          // This triggers when fingers move toward/away from each other
+          // Inverted: pinch out (spread fingers) = zoom out, pinch in = zoom in
+          if (pinchRatio > 0.04) {
+            if (distanceChange > 0) {
+              this.dollyOut();
+            } else {
+              this.dollyIn();
+            }
           }
-          this.prevTouchDistance = touchDistance;
+          // Pan: significant midpoint movement with relatively stable finger distance
+          // Threshold of 8px to avoid accidental triggering, pinchRatio < 3% for stability
+          else if (midpointMovement > 8 && pinchRatio < 0.03) {
+            this.panEnd.set(midX, midY);
+            this.panDelta.subVectors(this.panEnd, this.panStart);
+            // Multiply pan delta for faster movement, invert direction
+            this.pan(-this.panDelta.x * 2.5, -this.panDelta.y * 2.5);
+            this.panStart.copy(this.panEnd);
+          }
         }
         
-        // Use the midpoint for panning
-        const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-        const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        this.panEnd.set(x, y);
-        this.panDelta.subVectors(this.panEnd, this.panStart);
-        
-        this.pan(this.panDelta.x, this.panDelta.y);
-        
-        this.panStart.copy(this.panEnd);
+        // Update tracking values
+        this.prevTouchDistance = touchDistance;
+        this.prevTouchMidpoint.set(midX, midY);
+        this.panStart.set(midX, midY); // Keep pan start updated
         break;
     }
     
