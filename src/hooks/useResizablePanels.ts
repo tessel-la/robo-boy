@@ -27,7 +27,7 @@ export const useResizablePanels = ({
     return initialTopHeight;
   });
 
-  const isDragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Save to localStorage when topHeight changes
@@ -39,20 +39,20 @@ export const useResizablePanels = ({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    isDragging.current = true;
+    setIsDragging(true);
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
   }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    isDragging.current = true;
+    setIsDragging(true);
     document.body.style.userSelect = 'none';
   }, []);
 
   const handleMove = useCallback(
     (clientY: number) => {
-      if (!isDragging.current || !containerRef.current) return;
+      if (!isDragging || !containerRef.current) return;
 
       const container = containerRef.current;
       const rect = container.getBoundingClientRect();
@@ -67,7 +67,7 @@ export const useResizablePanels = ({
 
       setTopHeight(constrainedHeight);
     },
-    [minTopHeight, minBottomHeight]
+    [isDragging, minTopHeight, minBottomHeight]
   );
 
   const handleMouseMove = useCallback(
@@ -87,11 +87,9 @@ export const useResizablePanels = ({
   );
 
   const handleEnd = useCallback(() => {
-    if (isDragging.current) {
-      isDragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
+    setIsDragging(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
   }, []);
 
   // Add event listeners
@@ -119,7 +117,7 @@ export const useResizablePanels = ({
     handleMouseDown,
     handleTouchStart,
     containerRef,
-    isDragging: isDragging.current,
+    isDragging,
   };
 };
 
