@@ -2,13 +2,13 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: ['*']  # Run on all branches
   pull_request:
-    branches: [ main ]
+    branches: ['*']  # Run on PRs to all branches
 
 jobs:
   test:
-    name: Run Tests
+    name: Run Tests with Coverage
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +24,96 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run tests
-      run: npm run test:run
+    - name: Run linter
+      run: npm run lint
+      continue-on-error: true
 
+    - name: Build application
+      run: npm run build
+
+    - name: Run tests with coverage
+      run: npm run test:coverage
+
+    - name: Generate coverage summary
+      run: |
+        if [ -f coverage/coverage-summary.json ]; then
+          LINES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)")
+          STATEMENTS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.statements.pct)")
+          BRANCHES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.branches.pct)")
+          FUNCTIONS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.functions.pct)")
+          
+          echo "### 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lines | ${LINES}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Statements | ${STATEMENTS}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branches | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | ${FUNCTIONS}% |" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
+    - name: Coverage comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          if (fs.existsSync('coverage/coverage-summary.json')) {
+            const coverage = require('./coverage/coverage-summary.json');
+            const body = `## 📊 Test Coverage Report
+            
+            | Metric | Coverage |
+            |--------|----------|
+            | Lines | ${coverage.total.lines.pct}% |
+            | Statements | ${coverage.total.statements.pct}% |
+            | Branches | ${coverage.total.branches.pct}% |
+            | Functions | ${coverage.total.functions.pct}% |
+            
+            [View full report](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+          }
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: test  # Run after unit tests pass
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps chromium
+
+    - name: Run E2E tests
+      run: npm run e2e
+
+    - name: Upload Playwright report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
