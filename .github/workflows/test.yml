@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Run Tests
+    name: Run Tests with Coverage
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +24,31 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run tests
-      run: npm run test:run
+    - name: Run linter
+      run: npm run lint
+      continue-on-error: true
 
+    - name: Run tests with coverage
+      run: npm run test:coverage
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
+    - name: Build application
+      run: npm run build
+
+    - name: Report coverage summary
+      run: |
+        echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f coverage/coverage-summary.json ]; then
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat coverage/coverage-summary.json | head -20 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Coverage report generated in artifacts" >> $GITHUB_STEP_SUMMARY
+        fi
