@@ -275,9 +275,11 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!isEditing) return;
     
-    // Don't start drag if touching a resize handle
+    // Don't start drag if touching a resize handle or control button
     const target = e.target as HTMLElement;
     if (target.classList.contains('component-resize-handle')) return;
+    if (target.classList.contains('control-button') || target.closest('.control-button')) return;
+    if (target.closest('.component-controls-popup')) return;
     
     const touch = e.touches[0];
     touchStartRef.current = {
@@ -322,7 +324,12 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     isDraggingRef.current = false;
   }, [isEditing, isSelected, onSelect, config.id]);
 
-  // Touch handlers for control buttons
+  // Touch handlers for control buttons - prevent component toggle
+  const handleButtonTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    // Prevent component touch handler from recording this touch
+  }, []);
+
   const handleButtonTouchEnd = useCallback((e: React.TouchEvent, action: () => void) => {
     e.stopPropagation();
     e.preventDefault();
@@ -399,6 +406,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
           <button
             className="control-button settings-button"
             onClick={handleOpenSettings}
+            onTouchStart={handleButtonTouchStart}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onOpenSettings?.(config.id))}
             title="Settings"
           >
@@ -407,6 +415,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
           <button
             className="control-button delete-button"
             onClick={handleDelete}
+            onTouchStart={handleButtonTouchStart}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onDelete?.(config.id))}
             title="Delete"
           >

@@ -154,10 +154,10 @@
 /* Control buttons (delete, settings) */
 .control-button {
   position: relative;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
   flex-shrink: 0;
   border: none;
@@ -171,6 +171,8 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 6px;
   margin: 0;
+  /* Increase touch target size */
+  touch-action: manipulation;
 }
 
 .control-button:hover {
@@ -219,94 +221,95 @@
   transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
-/* Corner handles - with resize arrows */
+/* Corner handles - with diagonal arrows */
 .component-resize-handle.corner {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   background-color: var(--primary-color, #007bff);
-  border: 2px solid white;
-  border-radius: 4px;
+  border: none;
+  border-radius: 6px;
   z-index: 26;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.component-resize-handle.corner::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-style: solid;
-  border-color: white;
-  border-width: 0;
+.component-resize-handle.corner::after {
+  content: '⇔';
+  font-size: 12px;
+  color: white;
+  line-height: 1;
+  font-weight: bold;
+}
+
+/* Corner-specific diagonal arrow rotations */
+.component-resize-handle.corner.nw::after {
   transform: rotate(45deg);
 }
 
-/* Corner-specific arrow directions */
-.component-resize-handle.corner.nw::before {
-  border-width: 2px 0 0 2px;
-  margin: 2px 0 0 2px;
+.component-resize-handle.corner.ne::after {
+  transform: rotate(135deg);
 }
 
-.component-resize-handle.corner.ne::before {
-  border-width: 2px 2px 0 0;
-  margin: 2px 2px 0 0;
+.component-resize-handle.corner.sw::after {
+  transform: rotate(-45deg);
 }
 
-.component-resize-handle.corner.sw::before {
-  border-width: 0 0 2px 2px;
-  margin: 0 0 2px 2px;
-}
-
-.component-resize-handle.corner.se::before {
-  border-width: 0 2px 2px 0;
-  margin: 0 2px 2px 0;
+.component-resize-handle.corner.se::after {
+  transform: rotate(-135deg);
 }
 
 .component-resize-handle.corner:hover,
 .component-resize-handle.corner.active {
-  background-color: #ffc107;
-  transform: scale(1.2);
+  background-color: var(--primary-color-dark, #0056b3);
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
 }
 
 .component-resize-handle.corner.nw {
-  top: -8px;
-  left: -8px;
+  top: -10px;
+  left: -10px;
   cursor: nw-resize;
 }
 
 .component-resize-handle.corner.ne {
-  top: -8px;
-  right: -8px;
+  top: -10px;
+  right: -10px;
   cursor: ne-resize;
 }
 
 .component-resize-handle.corner.sw {
-  bottom: -8px;
-  left: -8px;
+  bottom: -10px;
+  left: -10px;
   cursor: sw-resize;
 }
 
 .component-resize-handle.corner.se {
-  bottom: -8px;
-  right: -8px;
+  bottom: -10px;
+  right: -10px;
   cursor: se-resize;
 }
 
 /* Edge handles - with direction arrows */
 .component-resize-handle.edge {
-  background-color: rgba(0, 123, 255, 0.6);
-  border-radius: 3px;
+  background-color: var(--primary-color, #007bff);
+  border-radius: 4px;
   z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.component-resize-handle.edge::before {
-  content: '';
-  border-style: solid;
-  border-color: white;
+.component-resize-handle.edge::after {
+  content: '⇔';
+  font-size: 10px;
+  color: white;
+  line-height: 1;
+  font-weight: bold;
 }
 
 /* Horizontal edges (top/bottom) */
@@ -314,35 +317,23 @@
 .component-resize-handle.edge.s {
   left: 50%;
   transform: translateX(-50%);
-  width: 32px;
-  height: 10px;
+  width: 36px;
+  height: 12px;
 }
 
-.component-resize-handle.edge.n::before,
-.component-resize-handle.edge.s::before {
-  width: 0;
-  height: 0;
-  border-width: 4px;
-  border-left-color: transparent;
-  border-right-color: transparent;
+.component-resize-handle.edge.n::after,
+.component-resize-handle.edge.s::after {
+  transform: rotate(90deg);
 }
 
 .component-resize-handle.edge.n {
-  top: -5px;
+  top: -6px;
   cursor: n-resize;
 }
 
-.component-resize-handle.edge.n::before {
-  border-bottom-color: transparent;
-}
-
 .component-resize-handle.edge.s {
-  bottom: -5px;
+  bottom: -6px;
   cursor: s-resize;
-}
-
-.component-resize-handle.edge.s::before {
-  border-top-color: transparent;
 }
 
 /* Vertical edges (left/right) */
@@ -350,40 +341,30 @@
 .component-resize-handle.edge.e {
   top: 50%;
   transform: translateY(-50%);
-  width: 10px;
-  height: 32px;
-}
-
-.component-resize-handle.edge.w::before,
-.component-resize-handle.edge.e::before {
-  width: 0;
-  height: 0;
-  border-width: 4px;
-  border-top-color: transparent;
-  border-bottom-color: transparent;
+  width: 12px;
+  height: 36px;
 }
 
 .component-resize-handle.edge.w {
-  left: -5px;
+  left: -6px;
   cursor: w-resize;
 }
 
-.component-resize-handle.edge.w::before {
-  border-right-color: transparent;
-}
-
 .component-resize-handle.edge.e {
-  right: -5px;
+  right: -6px;
   cursor: e-resize;
-}
-
-.component-resize-handle.edge.e::before {
-  border-left-color: transparent;
 }
 
 .component-resize-handle.edge:hover,
 .component-resize-handle.edge.active {
-  background-color: rgba(255, 193, 7, 0.9);
+  background-color: var(--primary-color-dark, #0056b3);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+}
+
+.component-resize-handle.edge.n:hover,
+.component-resize-handle.edge.n.active,
+.component-resize-handle.edge.s:hover,
+.component-resize-handle.edge.s.active {
   transform: translateX(-50%) scale(1.1);
 }
 
@@ -560,10 +541,10 @@ button.joystick-disabled {
   }
   
   .control-button {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
     font-size: 14px;
   }
   
@@ -573,14 +554,68 @@ button.joystick-disabled {
   }
   
   .component-resize-handle.corner {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
   }
   
-  .component-resize-handle.corner.nw { top: -7px; left: -7px; }
-  .component-resize-handle.corner.ne { top: -7px; right: -7px; }
-  .component-resize-handle.corner.sw { bottom: -7px; left: -7px; }
-  .component-resize-handle.corner.se { bottom: -7px; right: -7px; }
+  .component-resize-handle.corner::after {
+    font-size: 11px;
+  }
+  
+  .component-resize-handle.corner.nw { top: -9px; left: -9px; }
+  .component-resize-handle.corner.ne { top: -9px; right: -9px; }
+  .component-resize-handle.corner.sw { bottom: -9px; left: -9px; }
+  .component-resize-handle.corner.se { bottom: -9px; right: -9px; }
+  
+  .component-resize-handle.edge.n,
+  .component-resize-handle.edge.s {
+    width: 32px;
+    height: 10px;
+  }
+  
+  .component-resize-handle.edge.w,
+  .component-resize-handle.edge.e {
+    width: 10px;
+    height: 32px;
+  }
+  
+  .component-resize-handle.edge::after {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .component-label {
+    font-size: 0.6em;
+    padding: 1px 2px;
+  }
+  
+  .control-button {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    font-size: 13px;
+  }
+  
+  .component-controls-popup {
+    padding: 5px;
+    gap: 5px;
+  }
+  
+  .component-resize-handle.corner {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .component-resize-handle.corner::after {
+    font-size: 10px;
+  }
+  
+  .component-resize-handle.corner.nw { top: -8px; left: -8px; }
+  .component-resize-handle.corner.ne { top: -8px; right: -8px; }
+  .component-resize-handle.corner.sw { bottom: -8px; left: -8px; }
+  .component-resize-handle.corner.se { bottom: -8px; right: -8px; }
   
   .component-resize-handle.edge.n,
   .component-resize-handle.edge.s {
@@ -593,46 +628,8 @@ button.joystick-disabled {
     width: 8px;
     height: 28px;
   }
-}
-
-@media (max-width: 480px) {
-  .component-label {
-    font-size: 0.6em;
-    padding: 1px 2px;
-  }
   
-  .control-button {
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
-    min-height: 26px;
-    font-size: 13px;
-  }
-  
-  .component-controls-popup {
-    padding: 5px;
-    gap: 5px;
-  }
-  
-  .component-resize-handle.corner {
-    width: 12px;
-    height: 12px;
-  }
-  
-  .component-resize-handle.corner.nw { top: -6px; left: -6px; }
-  .component-resize-handle.corner.ne { top: -6px; right: -6px; }
-  .component-resize-handle.corner.sw { bottom: -6px; left: -6px; }
-  .component-resize-handle.corner.se { bottom: -6px; right: -6px; }
-  
-  .component-resize-handle.edge.n,
-  .component-resize-handle.edge.s {
-    width: 24px;
-    height: 6px;
-  }
-  
-  .component-resize-handle.edge.w,
-  .component-resize-handle.edge.e {
-    width: 6px;
-    height: 24px;
+  .component-resize-handle.edge::after {
+    font-size: 8px;
   }
 }
