@@ -1,5 +1,4 @@
-/// <reference types="vitest" />
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -9,9 +8,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'lcov', 'html'],
+      provider: 'istanbul',
+      reporter: ['text', 'text-summary', 'json', 'lcov', 'html'],
       reportsDirectory: './coverage',
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
@@ -22,7 +22,18 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
       ],
+      // Coverage thresholds - current levels
+      // Higher coverage for WebGL/ROS components requires E2E tests
+      thresholds: {
+        statements: 20,
+        branches: 20,
+        functions: 20,
+        lines: 20,
+      },
     },
+    // Better test output for CI
+    reporters: ['verbose'],
   },
 })
+
 
