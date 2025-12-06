@@ -111,14 +111,23 @@
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
   gap: 8px;
   z-index: 100;
-  background: rgba(30, 30, 30, 0.95);
-  padding: 6px 10px;
+  background: rgba(20, 20, 20, 0.96);
+  padding: 8px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   animation: popupFadeIn 0.15s ease-out;
+  white-space: nowrap;
+  overflow: visible;
+  width: auto;
+  min-width: max-content;
+  backdrop-filter: blur(4px);
 }
 
 @keyframes popupFadeIn {
@@ -138,50 +147,59 @@
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(30, 30, 30, 0.95);
+  border: 5px solid transparent;
+  border-top-color: rgba(20, 20, 20, 0.96);
 }
 
 /* Control buttons (delete, settings) */
 .control-button {
-  width: 26px;
-  height: 26px;
-  border: 2px solid white;
-  font-size: 12px;
-  font-weight: bold;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  border-radius: 50%;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  margin: 0;
 }
 
 .control-button:hover {
-  transform: scale(1.15);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.delete-button {
-  background-color: rgba(220, 53, 69, 0.9);
-  color: white !important;
-  border-color: white;
-}
-
-.delete-button:hover {
-  background-color: #dc3545;
+.control-button:active {
+  transform: translateY(0);
 }
 
 .settings-button {
-  background-color: rgba(111, 66, 193, 0.9);
+  background-color: var(--primary-color, #007bff);
   color: white !important;
-  border-color: white;
-  font-size: 11px;
 }
 
 .settings-button:hover {
-  background-color: #6f42c1;
+  background-color: var(--primary-color-dark, #0056b3);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white !important;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
 }
 
 /* ===== COMPONENT RESIZE HANDLES ===== */
@@ -542,13 +560,15 @@ button.joystick-disabled {
   }
   
   .control-button {
-    width: 22px;
-    height: 22px;
-    font-size: 10px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 14px;
   }
   
   .component-controls-popup {
-    padding: 4px 8px;
+    padding: 6px;
     gap: 6px;
   }
   
@@ -582,14 +602,16 @@ button.joystick-disabled {
   }
   
   .control-button {
-    width: 20px;
-    height: 20px;
-    font-size: 9px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    font-size: 13px;
   }
   
   .component-controls-popup {
-    padding: 3px 6px;
-    gap: 4px;
+    padding: 5px;
+    gap: 5px;
   }
   
   .component-resize-handle.corner {

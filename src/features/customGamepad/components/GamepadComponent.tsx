@@ -400,17 +400,17 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
             className="control-button settings-button"
             onClick={handleOpenSettings}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onOpenSettings?.(config.id))}
-            title="Component settings"
+            title="Settings"
           >
-            ⚙️
+            ⚙
           </button>
           <button
             className="control-button delete-button"
             onClick={handleDelete}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onDelete?.(config.id))}
-            title="Delete component"
+            title="Delete"
           >
-            ×
+            🗑
           </button>
         </div>
       )}
