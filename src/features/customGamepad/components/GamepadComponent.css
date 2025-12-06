@@ -141,6 +141,17 @@
   }
 }
 
+@keyframes popupFadeInBelow {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .component-controls-popup::after {
   content: '';
   position: absolute;
@@ -149,6 +160,20 @@
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-top-color: rgba(20, 20, 20, 0.96);
+}
+
+/* Popup positioned below (when component is at top of grid) */
+.component-controls-popup.popup-below {
+  bottom: auto;
+  top: calc(100% + 8px);
+  animation: popupFadeInBelow 0.15s ease-out;
+}
+
+.component-controls-popup.popup-below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgba(20, 20, 20, 0.96);
 }
 
 /* Control buttons (delete, settings) */

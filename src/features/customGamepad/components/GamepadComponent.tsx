@@ -402,7 +402,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       
       {/* Editing controls - only when selected AND controls toggled on */}
       {isEditing && isSelected && showControls && (
-        <div className="component-controls-popup">
+        <div className={`component-controls-popup ${config.position.y === 0 ? 'popup-below' : ''}`}>
           <button
             className="control-button settings-button"
             onClick={handleOpenSettings}
