@@ -3,11 +3,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React, { createRef } from 'react';
 import ControlPanelTabs from './ControlPanelTabs';
 import type { ActivePanel } from './MainControlView';
+import { GamepadType } from './gamepads/GamepadInterface';
 
 describe('ControlPanelTabs', () => {
     const createMockPanels = (): ActivePanel[] => [
-        { id: 'panel-1', type: 'camera', name: 'Camera 1' },
-        { id: 'panel-2', type: 'gamepad', name: 'Gamepad' },
+        { id: 'panel-1', type: GamepadType.Voice, name: 'Voice Control' },
+        { id: 'panel-2', type: GamepadType.Standard, name: 'Gamepad' },
     ];
 
     const mockOnSelectPanel = vi.fn();
@@ -38,7 +39,7 @@ describe('ControlPanelTabs', () => {
         it('should render all panel tabs', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByText('Camera 1')).toBeInTheDocument();
+            expect(screen.getByText('Voice Control')).toBeInTheDocument();
             expect(screen.getByText('Gamepad')).toBeInTheDocument();
         });
 
@@ -51,15 +52,15 @@ describe('ControlPanelTabs', () => {
         it('should render remove buttons for each panel when multiple panels', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByLabelText('Remove Camera 1')).toBeInTheDocument();
+            expect(screen.getByLabelText('Remove Voice Control')).toBeInTheDocument();
             expect(screen.getByLabelText('Remove Gamepad')).toBeInTheDocument();
         });
 
         it('should not render remove button when only one panel', () => {
-            const singlePanel = [{ id: 'panel-1', type: 'camera' as const, name: 'Camera' }];
+            const singlePanel = [{ id: 'panel-1', type: GamepadType.Voice, name: 'Voice' }];
             render(<ControlPanelTabs {...defaultProps} panels={singlePanel} />);
 
-            expect(screen.queryByLabelText('Remove Camera')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Remove Voice')).not.toBeInTheDocument();
         });
     });
 
@@ -67,14 +68,14 @@ describe('ControlPanelTabs', () => {
         it('should mark selected panel as active', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const activeTab = screen.getByText('Camera 1').closest('.tab-button');
+            const activeTab = screen.getByText('Voice Control').closest('.tab-button');
             expect(activeTab).toHaveClass('active');
         });
 
         it('should set correct aria-selected', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Camera 1').closest('[role="tab"]');
+            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
             const gamepadTab = screen.getByText('Gamepad').closest('[role="tab"]');
 
             expect(camera1Tab).toHaveAttribute('aria-selected', 'true');
@@ -84,7 +85,7 @@ describe('ControlPanelTabs', () => {
         it('should set correct tabIndex', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Camera 1').closest('[role="tab"]');
+            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
             const gamepadTab = screen.getByText('Gamepad').closest('[role="tab"]');
 
             expect(camera1Tab).toHaveAttribute('tabIndex', '0');
@@ -149,8 +150,8 @@ describe('ControlPanelTabs', () => {
         it('should have title attribute on tabs', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Camera 1').closest('[role="tab"]');
-            expect(camera1Tab).toHaveAttribute('title', 'Camera 1');
+            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
+            expect(camera1Tab).toHaveAttribute('title', 'Voice Control');
         });
 
         it('should have title on add button', () => {
@@ -162,7 +163,7 @@ describe('ControlPanelTabs', () => {
         it('should have title on remove buttons', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByLabelText('Remove Camera 1')).toHaveAttribute('title', 'Remove Panel');
+            expect(screen.getByLabelText('Remove Voice Control')).toHaveAttribute('title', 'Remove Panel');
         });
     });
 });

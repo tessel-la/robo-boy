@@ -12,7 +12,10 @@
     "preview": "vite preview --host",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@types/lodash-es": "^4.17.12",
@@ -29,6 +32,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.2.66",
@@ -37,6 +41,7 @@
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^7.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-istanbul": "^4.0.15",
     "@vitest/coverage-v8": "^4.0.15",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
