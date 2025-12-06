@@ -637,31 +637,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
-  margin-bottom: 12px;
-  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(0, 123, 255, 0.05));
-  border: 1px dashed var(--primary-color, #007bff);
-  border-radius: 8px;
-  color: var(--primary-color, #007bff);
-  font-size: 0.85rem;
-  font-weight: 500;
-  animation: pulseHint 2s infinite;
-}
-
-.palette-hint .hint-icon {
-  font-size: 1.1rem;
-  animation: bounceIcon 1s infinite;
-}
-
-@keyframes pulseHint {
-  0%, 100% { opacity: 0.9; }
-  50% { opacity: 1; }
-}
-
-@keyframes bounceIcon {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  color: var(--text-color-secondary, #666);
+  font-size: 0.8rem;
+  font-weight: 400;
 }
 
 /* Drag and Drop Styles */

@@ -217,8 +217,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         <>
           <div className="palette-content">
             <div className="palette-hint">
-              <span className="hint-icon">↕️</span>
-              <span>Drag components to the grid</span>
+              <span>Drag & drop to add components</span>
             </div>
             <div className="component-grid">
               {componentLibrary.map(component => {
