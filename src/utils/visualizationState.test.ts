@@ -30,7 +30,7 @@ describe('visualizationState', () => {
     mockLocalStorage.removeItem.mockClear()
 
     // Replace global localStorage
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
     })

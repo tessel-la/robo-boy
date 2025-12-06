@@ -35,7 +35,7 @@ describe('gamepadStorage', () => {
   beforeEach(() => {
     store = {}
     mockLocalStorage = createMockLocalStorage()
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
       configurable: true,
@@ -102,7 +102,7 @@ describe('gamepadStorage', () => {
         lastModified: new Date().toISOString(),
       }
       store[STORAGE_KEY] = JSON.stringify(storageData)
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { })
 
       const library = loadGamepadLibrary()
 
@@ -114,7 +114,7 @@ describe('gamepadStorage', () => {
 
     it('should return defaults on parse error', () => {
       store[STORAGE_KEY] = 'invalid json'
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
 
       const library = loadGamepadLibrary()
 
@@ -151,7 +151,7 @@ describe('gamepadStorage', () => {
     })
 
     it('should return false on storage error', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
       mockLocalStorage.setItem.mockImplementation(() => {
         throw new Error('Storage error')
       })
@@ -187,7 +187,7 @@ describe('gamepadStorage', () => {
     })
 
     it('should return false on storage error', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
       mockLocalStorage.setItem.mockImplementation(() => {
         throw new Error('Storage error')
       })
@@ -322,7 +322,7 @@ describe('gamepadStorage', () => {
       const library = loadGamepadLibrary()
       const original = library.find((item) => item.id === 'custom-conflict')
       expect(original).toBeDefined()
-      
+
       // Imported layout gets ID from its name "Imported" -> "custom-imported"
       const imported = library.find((item) => item.id === 'custom-imported')
       expect(imported).toBeDefined()
@@ -377,7 +377,7 @@ describe('gamepadStorage', () => {
       mockLocalStorage.removeItem.mockImplementation(() => {
         throw new Error('Remove error')
       })
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
 
       const result = clearCustomGamepads()
 
