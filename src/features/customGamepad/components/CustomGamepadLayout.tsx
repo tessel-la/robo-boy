@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { CustomGamepadLayout as LayoutType, ComponentInteractionMode } from '../types';
+import { CustomGamepadLayout as LayoutType, DragState, DropPreview } from '../types';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -9,11 +9,16 @@ interface CustomGamepadLayoutProps {
   ros: Ros;
   isEditing?: boolean;
   selectedComponentId?: string | null;
-  interactionMode?: ComponentInteractionMode;
+  dropPreview?: DropPreview | null;
+  dragState?: DragState | null;
   onComponentSelect?: (id: string) => void;
   onComponentUpdate?: (id: string, config: any) => void;
   onComponentDelete?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
+  onComponentDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
@@ -21,11 +26,16 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   ros,
   isEditing = false,
   selectedComponentId = null,
-  interactionMode,
+  dropPreview,
+  dragState,
   onComponentSelect,
   onComponentUpdate,
   onComponentDelete,
-  onOpenSettings
+  onOpenSettings,
+  onComponentDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
@@ -212,14 +222,39 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     }
   };
 
+  // Handle drag over on the grid
+  const handleGridDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onDragOver) {
+      onDragOver(e);
+    }
+  };
+
+  // Handle drop on the grid
+  const handleGridDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onDrop) {
+      onDrop(e);
+    }
+  };
+
   return (
     <div 
       className={`custom-gamepad-layout ${isEditing ? 'editing' : ''}`}
       ref={containerRef}
       style={containerStyle}
+      onDragOver={isEditing ? handleGridDragOver : undefined}
+      onDrop={isEditing ? handleGridDrop : undefined}
     >
       {/* Grid container */}
-      <div className="gamepad-grid" style={gridStyle}>
+      <div 
+        className="gamepad-grid" 
+        style={gridStyle}
+        onDragOver={isEditing ? handleGridDragOver : undefined}
+        onDrop={isEditing ? handleGridDrop : undefined}
+      >
         {/* Grid background (visible only in editing mode) - positioned to exactly match main grid */}
         {isEditing && (
           <div 
@@ -257,23 +292,44 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
           </div>
         )}
 
+        {/* Drop preview indicator */}
+        {isEditing && dropPreview && (
+          <div 
+            className={`drop-preview ${dropPreview.isValid ? 'valid' : 'invalid'}`}
+            style={{
+              gridColumn: `${dropPreview.x + 1} / span ${dropPreview.width}`,
+              gridRow: `${dropPreview.y + 1} / span ${dropPreview.height}`,
+            }}
+          >
+            <div className="drop-preview-inner">
+              {dropPreview.isValid ? '✓' : '✕'}
+            </div>
+          </div>
+        )}
+
         {/* Gamepad components */}
-        {layout.components.map(component => (
-          <GamepadComponent
-            key={component.id}
-            config={component}
-            ros={ros}
-            isEditing={isEditing}
-            isSelected={selectedComponentId === component.id}
-            interactionMode={selectedComponentId === component.id ? interactionMode : ComponentInteractionMode.None}
-            gridSize={layout.gridSize}
-            onSelect={handleComponentSelect}
-            onUpdate={handleComponentUpdate}
-            onDelete={handleComponentDelete}
-            onOpenSettings={onOpenSettings}
-            scaleFactor={scaling.scaleFactor}
-          />
-        ))}
+        {layout.components.map(component => {
+          const isBeingDragged = dragState?.source === 'grid' && dragState?.componentId === component.id;
+          
+          return (
+            <GamepadComponent
+              key={component.id}
+              config={component}
+              ros={ros}
+              isEditing={isEditing}
+              isSelected={selectedComponentId === component.id}
+              isBeingDragged={isBeingDragged}
+              gridSize={layout.gridSize}
+              onSelect={handleComponentSelect}
+              onUpdate={handleComponentUpdate}
+              onDelete={handleComponentDelete}
+              onOpenSettings={onOpenSettings}
+              onDragStart={onComponentDragStart}
+              onDragEnd={onDragEnd}
+              scaleFactor={scaling.scaleFactor}
+            />
+          );
+        })}
       </div>
     </div>
   );

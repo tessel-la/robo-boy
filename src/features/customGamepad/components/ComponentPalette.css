@@ -630,4 +630,65 @@
     width: 18px;
     height: 18px;
   }
+}
+
+/* Palette Hint */
+.palette-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  color: var(--text-color-secondary, #666);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+/* Drag and Drop Styles */
+.component-card {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.component-card:active {
+  cursor: grabbing;
+}
+
+.component-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  border-style: dashed;
+  border-color: var(--primary-color, #007bff);
+}
+
+.drag-indicator {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
+  border-radius: 4px;
+  color: var(--primary-color, #007bff);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.component-card:hover .drag-indicator {
+  opacity: 1;
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  transform: scale(1.1);
+}
+
+.component-card.selected .drag-indicator {
+  opacity: 1;
+  background-color: var(--primary-color, #007bff);
+  color: white;
 } 

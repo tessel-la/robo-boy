@@ -98,10 +98,31 @@ export interface DragItem {
   defaultSize: { width: number; height: number };
 }
 
+// Drag source types for distinguishing between palette drags and component moves
+export type DragSource = 'palette' | 'grid';
+
+export interface DragState {
+  isDragging: boolean;
+  source: DragSource;
+  componentType?: GamepadComponentConfig['type'];
+  componentId?: string;  // For moving existing components
+  defaultSize?: { width: number; height: number };
+  startPosition?: { x: number; y: number };
+}
+
+export interface DropPreview {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isValid: boolean;
+}
+
 export interface EditorState {
   selectedComponentId: string | null;
-  componentInteractionMode: ComponentInteractionMode;
   draggedComponent: DragItem | null;
+  dragState: DragState | null;
+  dropPreview: DropPreview | null;
   gridSize: { width: number; height: number };
   cellSize: number;
   showGrid: boolean;

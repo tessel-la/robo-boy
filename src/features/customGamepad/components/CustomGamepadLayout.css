@@ -206,4 +206,69 @@
   }
 }
 
-/* Dark theme support is now handled by the --border-color-light CSS variable */ 
+/* Dark theme support is now handled by the --border-color-light CSS variable */
+
+/* Drop Preview Styles */
+.drop-preview {
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  transition: all 0.15s ease;
+}
+
+.drop-preview.valid {
+  background-color: rgba(40, 167, 69, 0.15);
+  border: 2px dashed #28a745;
+}
+
+.drop-preview.invalid {
+  background-color: rgba(220, 53, 69, 0.15);
+  border: 2px dashed #dc3545;
+}
+
+.drop-preview-inner {
+  font-size: 20px;
+  font-weight: bold;
+  opacity: 0.7;
+}
+
+.drop-preview.valid .drop-preview-inner {
+  color: #28a745;
+}
+
+.drop-preview.invalid .drop-preview-inner {
+  color: #dc3545;
+}
+
+/* Component drop animation */
+@keyframes componentDropped {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.gamepad-component.just-dropped {
+  animation: componentDropped 0.25s ease-out;
+}
+
+/* Component move animation */
+@keyframes componentMoved {
+  0% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.gamepad-component.just-moved {
+  animation: componentMoved 0.2s ease-out;
+} 
