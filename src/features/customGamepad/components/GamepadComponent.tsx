@@ -44,6 +44,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const componentRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [activeHandle, setActiveHandle] = useState<ResizeHandle>(null);
+  const [showControls, setShowControls] = useState(false);
   const resizeStartRef = useRef<{
     x: number;
     y: number;
@@ -52,10 +53,23 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     cellHeight: number;
   } | null>(null);
 
+  // Hide controls when deselected
+  useEffect(() => {
+    if (!isSelected) {
+      setShowControls(false);
+    }
+  }, [isSelected]);
+
   const handleClick = (e: React.MouseEvent) => {
-    if (isEditing && onSelect && !isResizing) {
+    if (isEditing && !isResizing) {
       e.stopPropagation();
-      onSelect(config.id);
+      if (isSelected) {
+        // Toggle controls visibility when already selected
+        setShowControls(prev => !prev);
+      } else if (onSelect) {
+        // Select the component (controls hidden by default)
+        onSelect(config.id);
+      }
     }
   };
 
@@ -295,14 +309,18 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     
     if (!isDraggingRef.current) {
       e.stopPropagation();
-      if (onSelect) {
+      if (isSelected) {
+        // Toggle controls visibility when already selected
+        setShowControls(prev => !prev);
+      } else if (onSelect) {
+        // Select the component (controls hidden by default)
         onSelect(config.id);
       }
     }
     
     touchStartRef.current = null;
     isDraggingRef.current = false;
-  }, [isEditing, onSelect, config.id]);
+  }, [isEditing, isSelected, onSelect, config.id]);
 
   // Touch handlers for control buttons
   const handleButtonTouchEnd = useCallback((e: React.TouchEvent, action: () => void) => {
@@ -375,31 +393,31 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         </div>
       )}
       
-      {/* Editing controls - only when selected */}
-      {isEditing && isSelected && (
-        <>
-          {/* Control buttons container - centered at bottom */}
-          <div className="component-controls">
-            <button
-              className="control-button settings-button"
-              onClick={handleOpenSettings}
-              onTouchEnd={(e) => handleButtonTouchEnd(e, () => onOpenSettings?.(config.id))}
-              title="Component settings"
-            >
-              ⚙️
-            </button>
-            <button
-              className="control-button delete-button"
-              onClick={handleDelete}
-              onTouchEnd={(e) => handleButtonTouchEnd(e, () => onDelete?.(config.id))}
-              title="Delete component"
-            >
-              ×
-            </button>
-          </div>
+      {/* Editing controls - only when selected AND controls toggled on */}
+      {isEditing && isSelected && showControls && (
+        <div className="component-controls-popup">
+          <button
+            className="control-button settings-button"
+            onClick={handleOpenSettings}
+            onTouchEnd={(e) => handleButtonTouchEnd(e, () => onOpenSettings?.(config.id))}
+            title="Component settings"
+          >
+            ⚙️
+          </button>
+          <button
+            className="control-button delete-button"
+            onClick={handleDelete}
+            onTouchEnd={(e) => handleButtonTouchEnd(e, () => onDelete?.(config.id))}
+            title="Delete component"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-          {/* Resize handles */}
-          <div className="component-resize-handles">
+      {/* Resize handles - only when selected */}
+      {isEditing && isSelected && (
+        <div className="component-resize-handles">
             {/* Corner handles */}
             <div 
               className={`component-resize-handle corner nw ${activeHandle === 'nw' ? 'active' : ''}`}
@@ -443,8 +461,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
               onMouseDown={(e) => handleResizeStart(e, 'e')}
               onTouchStart={(e) => handleResizeStart(e, 'e')}
             />
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
