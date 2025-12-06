@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
-import type { IJoystickUpdateEvent } from 'react-joystick-component';
+import type { IJoystickUpdateEvent } from '../../../types/joystick';
 import { throttle } from 'lodash-es';
 import './DroneGamepadLayout.css';
 import { GamepadProps } from '../GamepadInterface';
@@ -15,7 +15,7 @@ enum SpeedMode { Slow, Normal, Fast }
 const SPEED_FACTORS = {
   [SpeedMode.Slow]: 0.5,
   [SpeedMode.Normal]: 1.0,
-  [SpeedMode.Fast]: 1.5, 
+  [SpeedMode.Fast]: 1.5,
 };
 
 // --- SVG Icons for Speed Controls ---
@@ -32,7 +32,7 @@ const IconTurtle = () => (
 
 const IconNormalSpeed = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="5"/>
+    <circle cx="12" cy="12" r="5" />
   </svg>
 );
 
@@ -51,7 +51,7 @@ const JOY_MSG_TYPE = 'sensor_msgs/Joy';
 const THROTTLE_INTERVAL = 100; // Milliseconds 
 const MAX_JOYSTICK_VALUE = 255.0; // Max output value (0-255 range)
 const NUM_AXES = 4; // Number of axes
-const NUM_BUTTONS = 2; // Two buttons: takeoff and landing
+const _NUM_BUTTONS = 2; // Two buttons: takeoff and landing
 const JOYSTICK_DEADZONE = 0.01; // Small deadzone to filter noise
 
 // --- SVG Icons for Takeoff/Land Buttons ---
@@ -80,7 +80,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   // --- Add state for joystick colors ---
   const [baseJoystickColor, setBaseJoystickColor] = useState<string>('#6c757d');
   const [stickJoystickColor, setStickJoystickColor] = useState<string>('#32CD32');
-  
+
   const getThemeColor = (variableName: string) => {
     return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
@@ -163,7 +163,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
 
   const handleMoveLeft = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null) return;
-    const rawX = (event.x / 50); 
+    const rawX = (event.x / 50);
     const rawY = (event.y / 50);
     const newAxes = [...lastSentAxes.current];
     newAxes[0] = mapJoystickToOutput(rawX);
@@ -212,7 +212,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
     setButtons(newButtons);
     publishJoy(lastSentAxes.current, newButtons);
   }, [publishJoy]);
-  
+
   const handleButtonRelease = useCallback(() => {
     const newButtons = [0, 0];
     setButtons(newButtons);
@@ -226,24 +226,24 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
   return (
     <div className="drone-pad-layout">
       <div className="speed-controls-container">
-        <button 
-          onClick={() => handleSetSpeedMode(SpeedMode.Slow)} 
+        <button
+          onClick={() => handleSetSpeedMode(SpeedMode.Slow)}
           className={`speed-button ${currentSpeedMode === SpeedMode.Slow ? 'active' : ''}`}
           title="Slow Mode"
           aria-label="Slow Mode"
         >
           <IconTurtle />
         </button>
-        <button 
-          onClick={() => handleSetSpeedMode(SpeedMode.Normal)} 
+        <button
+          onClick={() => handleSetSpeedMode(SpeedMode.Normal)}
           className={`speed-button ${currentSpeedMode === SpeedMode.Normal ? 'active' : ''}`}
           title="Normal Mode"
           aria-label="Normal Mode"
         >
           <IconNormalSpeed />
         </button>
-        <button 
-          onClick={() => handleSetSpeedMode(SpeedMode.Fast)} 
+        <button
+          onClick={() => handleSetSpeedMode(SpeedMode.Fast)}
           className={`speed-button ${currentSpeedMode === SpeedMode.Fast ? 'active' : ''}`}
           title="Fast Mode"
           aria-label="Fast Mode"
@@ -253,7 +253,7 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
       </div>
 
       <div className="drone-pad-interactive-area">
-        <button 
+        <button
           title="Take Off"
           aria-label="Take Off"
           className={`drone-button takeoff-button ${buttons[0] === 1 ? 'active' : ''}`}
@@ -294,12 +294,12 @@ const DroneGamepadLayout: React.FC<GamepadProps> = ({ ros }) => {
               throttle={THROTTLE_INTERVAL / 2}
             />
             <div className="joystick-values">
-               Yaw: {getAxisDisplay(2)} / Thr: {getAxisDisplay(3)}
+              Yaw: {getAxisDisplay(2)} / Thr: {getAxisDisplay(3)}
             </div>
           </div>
         </div>
 
-        <button 
+        <button
           title="Land"
           aria-label="Land"
           className={`drone-button land-button ${buttons[1] === 1 ? 'active' : ''}`}

@@ -92,7 +92,7 @@ const SettingGroup = ({
  */
 const PointCloudSettings = ({
   vizId,
-  topic,
+  topic: _topic,
   initialOptions,
   onClose,
   onSaveSettings,

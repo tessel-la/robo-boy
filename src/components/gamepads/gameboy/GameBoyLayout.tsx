@@ -30,10 +30,10 @@ const NUM_AXES = 0; // Our implementation doesn't use axes, only buttons
 const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
   // Topic reference
   const joyTopic = useRef<Topic | null>(null);
-  
+
   // Track button states - Array of 0/1 for released/pressed
   const [buttonStates, setButtonStates] = useState<number[]>(Array(NUM_BUTTONS).fill(0));
-  
+
   // Keep track of last sent state to avoid unnecessary messages
   const lastSentState = useRef<number[]>([...buttonStates]);
 
@@ -49,7 +49,7 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
       axes: Array(NUM_AXES).fill(0.0), // No axes used
       buttons: buttons
     });
-    
+
     // console.log('Publishing GameBoy Joy:', joyMsg);
     joyTopic.current.publish(joyMsg);
     lastSentState.current = [...buttons]; // Update last sent state
@@ -77,7 +77,7 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
         publishJoyThrottled.cancel(); // Cancel any pending throttled calls
         publishJoy(Array(NUM_BUTTONS).fill(0)); // Send immediate "all released" message
       }
-      
+
       joyTopic.current?.unadvertise();
       console.log(`Unadvertised ${JOY_TOPIC} for GameBoyLayout`);
       joyTopic.current = null;
@@ -105,9 +105,9 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
   const handleA = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.A, isPressed);
   const handleB = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.B, isPressed);
 
-  // Add handlers for START and SELECT
-  const handleSelect = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.SELECT, isPressed);
-  const handleStart = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.START, isPressed);
+  // Add handlers for START and SELECT (kept for potential future use)
+  const _handleSelect = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.SELECT, isPressed);
+  const _handleStart = (isPressed: boolean) => handleButtonAction(BUTTON_MAP.START, isPressed);
 
   return (
     <div className="gameboy-layout">
@@ -115,25 +115,25 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
         <div className="gameboy-controls">
           {/* D-pad */}
           <div className="dpad">
-            <button 
+            <button
               className={`dpad-up ${buttonStates[BUTTON_MAP.UP] ? 'active' : ''}`}
               onPointerDown={() => handleUp(true)}
               onPointerUp={() => handleUp(false)}
               onPointerLeave={() => handleUp(false)}
             />
-            <button 
+            <button
               className={`dpad-right ${buttonStates[BUTTON_MAP.RIGHT] ? 'active' : ''}`}
               onPointerDown={() => handleRight(true)}
               onPointerUp={() => handleRight(false)}
               onPointerLeave={() => handleRight(false)}
             />
-            <button 
+            <button
               className={`dpad-down ${buttonStates[BUTTON_MAP.DOWN] ? 'active' : ''}`}
               onPointerDown={() => handleDown(true)}
               onPointerUp={() => handleDown(false)}
               onPointerLeave={() => handleDown(false)}
             />
-            <button 
+            <button
               className={`dpad-left ${buttonStates[BUTTON_MAP.LEFT] ? 'active' : ''}`}
               onPointerDown={() => handleLeft(true)}
               onPointerUp={() => handleLeft(false)}
@@ -141,10 +141,10 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
             />
             <div className="dpad-center" />
           </div>
-          
+
           {/* A/B buttons */}
           <div className="action-buttons">
-            <button 
+            <button
               className={`button b ${buttonStates[BUTTON_MAP.B] ? 'active' : ''}`}
               onPointerDown={() => handleB(true)}
               onPointerUp={() => handleB(false)}
@@ -152,7 +152,7 @@ const GameBoyLayout: React.FC<GamepadProps> = ({ ros }) => {
             >
               B
             </button>
-            <button 
+            <button
               className={`button a ${buttonStates[BUTTON_MAP.A] ? 'active' : ''}`}
               onPointerDown={() => handleA(true)}
               onPointerUp={() => handleA(false)}

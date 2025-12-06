@@ -772,8 +772,8 @@ export function usePointCloudClient({
                   shader.uniforms.maxAxisValue.value = safeMax;
 
                   // For Chrome, force the uniforms to update by explicitly assigning new objects
-                  shader.uniforms.minAxisValue = { value: safeMin, type: 'f' };
-                  shader.uniforms.maxAxisValue = { value: safeMax, type: 'f' };
+                  shader.uniforms.minAxisValue = { value: safeMin };
+                  shader.uniforms.maxAxisValue = { value: safeMax };
 
                   // Now we have good values, make points fully visible
                   if (!rangeCalculated) {
@@ -788,8 +788,8 @@ export function usePointCloudClient({
                         material.opacity = 1.0;
                         material.needsUpdate = true; // Important! Force material update
 
-                        // Make sure shader is ready
-                        if (material.program) {
+                        // Make sure shader is ready - use type assertion as 'program' is a WebGLProgram internal property
+                        if ((material as unknown as { program?: unknown }).program) {
                           // Program is ready - no need for special handling
                         } else {
                           // Force shader program compilation

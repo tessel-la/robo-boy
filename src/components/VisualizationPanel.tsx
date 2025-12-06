@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
 // Revert to using namespace for roslib types
-import { Ros } from 'roslib'; 
-import * as ROSLIB from 'roslib';
-import * as ROS3D from '../utils/ros3d';
+import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
 import './VisualizationPanel.css';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys
@@ -11,7 +9,6 @@ import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys
 import {
   TransformStore,
   StoredTransform,
-  CustomTFProvider, // Import provider CLASS now
 } from '../utils/tfUtils';
 
 // Import the new SettingsPopup component
@@ -39,7 +36,6 @@ import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
 import PoseStampedViz from './visualizers/PoseStampedViz'; // Import PoseStampedViz
 import { PoseStampedOptions } from '../hooks/usePoseStampedClient'; // Import PoseStampedOptions
-import { FaPlus, FaCog, FaCube } from 'react-icons/fa'; // Import icons, added FaCube for URDF
 
 import {
   saveVisualizationState,
@@ -59,7 +55,7 @@ export interface VisualizationConfig {
 }
 
 // Define more specific option types
-export interface PointCloudOptions extends PointCloudSettingsOptions {}
+export interface PointCloudOptions extends PointCloudSettingsOptions { }
 export interface CameraInfoOptions {
   lineColor?: THREE.Color | number | string;
   lineScale?: number;
@@ -74,8 +70,8 @@ export interface UrdfOptions {
 
 // Define structure for storing fetched topics
 interface TopicInfo {
-    name: string;
-    type: string;
+  name: string;
+  type: string;
 }
 
 const DEFAULT_FIXED_FRAME = 'odom'; // Or your preferred default, e.g., 'map', 'base_link'
@@ -108,14 +104,14 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false);
   const [isAddVizModalOpen, setIsAddVizModalOpen] = useState(false); // Add modal state
-  
+
   // Add state for point cloud settings popup
   const [activeSettingsVizId, setActiveSettingsVizId] = useState<string | null>(null);
 
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>([]);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
-  
+
   // Add a ref to track TF provider initialization to prevent repeated logging
   const tfProviderInitialized = useRef<boolean>(false);
 
@@ -127,7 +123,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       const filteredVisualizations = savedState.visualizations.filter(
         (viz: any) => validTypes.includes(viz.type)
       ) as VisualizationConfig[];
-      
+
       setVisualizations(filteredVisualizations);
       setFixedFrame(savedState.fixedFrame || DEFAULT_FIXED_FRAME);
       setDisplayedTfFrames(savedState.displayedTfFrames || []);
@@ -155,7 +151,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
-    let newFramesFound = false;
+    let _newFramesFound = false;
     setTransforms((prevTransforms: TransformStore) => {
       let currentFrames = new Set<string>();
       const newTransforms = { ...prevTransforms };
@@ -169,11 +165,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         const transform: StoredTransform = { translation: new THREE.Vector3(tStamped.transform.translation.x, tStamped.transform.translation.y, tStamped.transform.translation.z), rotation: new THREE.Quaternion(tStamped.transform.rotation.x, tStamped.transform.rotation.y, tStamped.transform.rotation.z, tStamped.transform.rotation.w) };
         const existingEntry = newTransforms[childFrame];
         if (!existingEntry || !isStatic ||
-            !existingEntry.transform.translation.equals(transform.translation) ||
-            !existingEntry.transform.rotation.equals(transform.rotation))
-        {
-           newTransforms[childFrame] = { parentFrame, transform, isStatic };
-           changed = true;
+          !existingEntry.transform.translation.equals(transform.translation) ||
+          !existingEntry.transform.rotation.equals(transform.rotation)) {
+          newTransforms[childFrame] = { parentFrame, transform, isStatic };
+          changed = true;
         }
       });
       if (changed) {
@@ -187,21 +182,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       const currentFramesSet = new Set(prevAvailableFrames);
       let newFramesAdded = false;
       message.transforms.forEach((tStamped: any) => {
-          const parentFrame = (tStamped.header.frame_id || '').startsWith('/') ? tStamped.header.frame_id.substring(1) : (tStamped.header.frame_id || '');
-          const childFrame = (tStamped.child_frame_id || '').startsWith('/') ? tStamped.child_frame_id.substring(1) : (tStamped.child_frame_id || '');
-          if(parentFrame && !currentFramesSet.has(parentFrame)) {
-              currentFramesSet.add(parentFrame);
-              newFramesAdded = true;
-          }
-          if(childFrame && !currentFramesSet.has(childFrame)) {
-              currentFramesSet.add(childFrame);
-              newFramesAdded = true;
-          }
+        const parentFrame = (tStamped.header.frame_id || '').startsWith('/') ? tStamped.header.frame_id.substring(1) : (tStamped.header.frame_id || '');
+        const childFrame = (tStamped.child_frame_id || '').startsWith('/') ? tStamped.child_frame_id.substring(1) : (tStamped.child_frame_id || '');
+        if (parentFrame && !currentFramesSet.has(parentFrame)) {
+          currentFramesSet.add(parentFrame);
+          newFramesAdded = true;
+        }
+        if (childFrame && !currentFramesSet.has(childFrame)) {
+          currentFramesSet.add(childFrame);
+          newFramesAdded = true;
+        }
       });
       if (newFramesAdded) {
-          return Array.from(currentFramesSet).sort();
+        return Array.from(currentFramesSet).sort();
       } else {
-          return prevAvailableFrames;
+        return prevAvailableFrames;
       }
     });
   }, []);
@@ -215,7 +210,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     initialTransforms: transforms, // Pass current transforms state for initial setup
     handleTFMessage, // Pass the callback
   });
-  
+
   // Add an effect to ensure TF provider is properly initialized
   useEffect(() => {
     if (isRosConnected && customTFProvider.current && !tfProviderInitialized.current) {
@@ -228,7 +223,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         console.error("[VisualizationPanel] TF provider initialization failed");
       }
     }
-    
+
     // Reset the flag when ROS disconnects
     if (!isRosConnected) {
       tfProviderInitialized.current = false;
@@ -266,7 +261,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // Add function to update topic for an existing visualization
   const updateVisualizationTopic = (vizId: string, newTopic: string) => {
-    setVisualizations(prev => 
+    setVisualizations(prev =>
       prev.map(viz => {
         if (viz.id === vizId) {
           if (viz.type === 'urdf') {
@@ -293,13 +288,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // --- UI Handlers ---
   const toggleSettingsPopup = () => setIsSettingsPopupOpen(prev => !prev);
-  
+
   // Handler to open Add Viz Modal from Settings (close Settings, open Add)
   const openAddVizModalFromSettings = () => {
     setIsSettingsPopupOpen(false);
     setIsAddVizModalOpen(true);
   };
-  
+
   // Handler to close Add Viz Modal and return to Settings
   const closeAddVizModalAndReturnToSettings = () => {
     setIsAddVizModalOpen(false);
@@ -310,7 +305,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const openVisualizationSettings = (vizId: string) => {
     setActiveSettingsVizId(vizId);
   };
-  
+
   // Function to close visualization settings popup
   const closeVisualizationSettings = () => {
     setActiveSettingsVizId(null);
@@ -318,10 +313,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
 
   // Function to update visualization settings
   const updateVisualizationSettings = (vizId: string, newOptions: any) => {
-    setVisualizations(prev => 
-      prev.map(viz => 
-        viz.id === vizId 
-          ? { ...viz, options: { ...viz.options, ...newOptions } } 
+    setVisualizations(prev =>
+      prev.map(viz =>
+        viz.id === vizId
+          ? { ...viz, options: { ...viz.options, ...newOptions } }
           : viz
       )
     );
@@ -335,13 +330,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newFixedFrame = event.target.value;
     console.log(`[VisualizationPanel] Changing fixed frame from ${fixedFrame} to: ${newFixedFrame}`);
-    
+
     // Update state first
     setFixedFrame(newFixedFrame);
-    
+
     // Keep a count of updated components for diagnostic purposes
     let updatedComponentCount = 0;
-    
+
     try {
       // If we have a viewer, update its fixed frame 
       if (ros3dViewer.current) {
@@ -349,7 +344,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         updatedComponentCount++;
         console.log(`[VisualizationPanel] Updated viewer fixed frame to: ${newFixedFrame}`);
       }
-      
+
       // If we have a custom TF provider, update its fixed frame
       if (customTFProvider.current) {
         // This will trigger callbacks to all subscribers
@@ -357,7 +352,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         updatedComponentCount++;
         console.log(`[VisualizationPanel] Updated TF provider fixed frame to: ${newFixedFrame}`);
       }
-      
+
       // Force a viewer render if possible
       if (ros3dViewer.current && typeof (ros3dViewer.current as any).render === 'function') {
         try {
@@ -367,7 +362,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           console.warn(`[VisualizationPanel] Error forcing viewer render:`, e);
         }
       }
-      
+
       console.log(`[VisualizationPanel] Successfully changed fixed frame to: ${newFixedFrame} (${updatedComponentCount} components updated)`);
     } catch (error) {
       console.error(`[VisualizationPanel] Error updating fixed frame:`, error);
@@ -379,27 +374,27 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     console.log("Displayed TF frames changed to:", selectedFrames);
   };
 
-   // Effect to handle clicks outside the popups
-   useEffect(() => {
+  // Effect to handle clicks outside the popups
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const settingsPopupElement = document.querySelector('.settings-popup');
       const settingsButton = document.getElementById('viz-settings-button');
       if (isSettingsPopupOpen && settingsPopupElement && !settingsPopupElement.contains(event.target as Node) &&
-          (!settingsButton || !settingsButton.contains(event.target as Node))) {
+        (!settingsButton || !settingsButton.contains(event.target as Node))) {
         setIsSettingsPopupOpen(false);
       }
       const addVizModalElement = document.querySelector('.add-viz-modal');
       const addVizButton = document.getElementById('add-viz-button');
-       if (isAddVizModalOpen && addVizModalElement && !addVizModalElement.contains(event.target as Node) &&
-           (!addVizButton || !addVizButton.contains(event.target as Node))) {
-         setIsAddVizModalOpen(false);
-       }
-       
-       // Handle clicks outside the pointcloud settings popup
-       const pcSettingsElement = document.querySelector('.point-cloud-settings-popup');
-       if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
-         setActiveSettingsVizId(null);
-       }
+      if (isAddVizModalOpen && addVizModalElement && !addVizModalElement.contains(event.target as Node) &&
+        (!addVizButton || !addVizButton.contains(event.target as Node))) {
+        setIsAddVizModalOpen(false);
+      }
+
+      // Handle clicks outside the pointcloud settings popup
+      const pcSettingsElement = document.querySelector('.point-cloud-settings-popup');
+      if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
+        setActiveSettingsVizId(null);
+      }
     };
     if (isSettingsPopupOpen || isAddVizModalOpen || activeSettingsVizId !== null) {
       const timerId = setTimeout(() => {
@@ -410,7 +405,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-    return () => {};
+    return () => { };
   }, [isSettingsPopupOpen, isAddVizModalOpen, activeSettingsVizId]);
 
   // --- Effect to fetch ALL topics ONCE ---
@@ -425,19 +420,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
             name: topic,
             type: response.types[index],
           }));
-          
+
           // Debug: Log PoseStamped topics specifically
-          const poseStampedTopics = fetchedTopics.filter(topic => 
+          const poseStampedTopics = fetchedTopics.filter(topic =>
             topic.type === 'geometry_msgs/PoseStamped' || topic.type === 'geometry_msgs/msg/PoseStamped'
           );
           console.log('[VisualizationPanel] Found PoseStamped topics:', poseStampedTopics);
-          
+
           // Debug: Log all topics and types
           console.log('[VisualizationPanel] All discovered topics:');
           fetchedTopics.forEach(topic => {
             console.log(`  - ${topic.name}: ${topic.type}`);
           });
-          
+
           setAllTopics(fetchedTopics);
           // REMOVED setting old available state
           // setAvailablePointCloudTopics(...);
@@ -465,8 +460,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   }, [ros, isRosConnected]);
 
   // Get active visualization data for settings popup if needed
-  const activeViz = activeSettingsVizId 
-    ? visualizations.find(viz => viz.id === activeSettingsVizId) 
+  const activeViz = activeSettingsVizId
+    ? visualizations.find(viz => viz.id === activeSettingsVizId)
     : null;
 
   // console.log(`--- VisualizationPanel Render End ---`);
@@ -511,7 +506,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
                 customTFProvider={customTFProvider}
                 robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
                 urdfPath={(viz.options as UrdfOptions)?.urdfPath}
-                // Pass other URDF options as needed
+              // Pass other URDF options as needed
               />
             </React.Fragment>
           );

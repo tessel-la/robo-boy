@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   saveVisualizationState,
   getVisualizationState,
@@ -56,7 +56,7 @@ describe('visualizationState', () => {
     })
 
     it('should handle localStorage errors gracefully', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
       mockLocalStorage.setItem.mockImplementation(() => {
         throw new Error('Storage full')
       })
@@ -117,7 +117,7 @@ describe('visualizationState', () => {
     })
 
     it('should handle localStorage parse errors gracefully', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
       mockLocalStorage.getItem.mockReturnValue('invalid json')
 
       const state = getVisualizationState()
@@ -161,7 +161,7 @@ describe('visualizationState', () => {
     })
 
     it('should handle localStorage errors gracefully', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
       mockLocalStorage.removeItem.mockImplementation(() => {
         throw new Error('Remove failed')
       })

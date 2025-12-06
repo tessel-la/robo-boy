@@ -97,9 +97,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isCustomEditorOpen, setIsCustomEditorOpen] = useState(false);
   const [editingLayoutId, setEditingLayoutId] = useState<string | null>(null);
   // Counter for naming new panels of the same type
-  const panelCounters = useRef<Record<PanelType, number>>({ 
-    [GamepadType.Standard]: 0, 
-    [GamepadType.Voice]: 0, 
+  const panelCounters = useRef<Record<PanelType, number>>({
+    [GamepadType.Standard]: 0,
+    [GamepadType.Voice]: 0,
     [GamepadType.GameBoy]: 0,
     [GamepadType.Drone]: 1, // Drone counter starts at 1 as it's the default
     [GamepadType.Manipulator]: 0,
@@ -111,8 +111,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
 
-  // Ref to prevent multiple connection attempts
-  const isConnecting = useRef(false);
+  // Ref to prevent multiple connection attempts (kept for potential future use)
+  const _isConnecting = useRef(false);
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -140,7 +140,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           const potentialTopics = response.topics.filter((topic, index) => {
             const type = response.types[index];
             if (imageTypes.includes(type)) {
-                return true;
+              return true;
             }
             // Fallback: Check for common naming patterns if type information is missing/incomplete
             return topic.includes('image_raw') || topic.includes('image_color') || topic.includes('image_compressed');
@@ -151,13 +151,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
           // Set default selection if available
           if (potentialTopics.length > 0 && !selectedCameraTopic) {
-              // Try to find a common default or just take the first one
-              const defaultTopic = potentialTopics.find(t => t.includes('/image_raw')) || potentialTopics[0];
-              setSelectedCameraTopic(defaultTopic);
-              console.log(`Default camera topic set to: ${defaultTopic}`);
+            // Try to find a common default or just take the first one
+            const defaultTopic = potentialTopics.find(t => t.includes('/image_raw')) || potentialTopics[0];
+            setSelectedCameraTopic(defaultTopic);
+            console.log(`Default camera topic set to: ${defaultTopic}`);
           } else if (potentialTopics.length === 0) {
-              console.warn('No potential camera topics found.');
-              setSelectedCameraTopic(''); // Reset if no topics found
+            console.warn('No potential camera topics found.');
+            setSelectedCameraTopic(''); // Reset if no topics found
           }
         },
         (error) => {
@@ -204,14 +204,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleAddPanelType = (type: PanelType, layoutId?: string) => {
     // Define labels based on the new types
     const typeLabels: Record<PanelType, string> = {
-        [GamepadType.Standard]: 'Pad',
-        [GamepadType.Voice]: 'Voice',
-        [GamepadType.GameBoy]: 'GameBoy',
-        [GamepadType.Drone]: 'Drone',
-        [GamepadType.Manipulator]: 'Manipulator',
-        [GamepadType.Custom]: 'Custom'
+      [GamepadType.Standard]: 'Pad',
+      [GamepadType.Voice]: 'Voice',
+      [GamepadType.GameBoy]: 'GameBoy',
+      [GamepadType.Drone]: 'Drone',
+      [GamepadType.Manipulator]: 'Manipulator',
+      [GamepadType.Custom]: 'Custom'
     };
-    
+
     let newName: string;
     if (type === GamepadType.Custom && layoutId) {
       // For custom gamepads, try to get the name from the layout
@@ -221,12 +221,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       panelCounters.current[type]++;
       newName = `${typeLabels[type]} ${panelCounters.current[type]}`;
     }
-    
+
     const newPanel: ActivePanel = {
-        id: generateUniqueId('panel'),
-        type: type,
-        name: newName,
-        layoutId: layoutId
+      id: generateUniqueId('panel'),
+      type: type,
+      name: newName,
+      layoutId: layoutId
     };
     setActivePanels(prev => [...prev, newPanel]);
     setSelectedPanelId(newPanel.id); // Select the newly added panel
@@ -305,9 +305,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleViewToggle = () => {
     if (isTransitioning) return;
     setIsTransitioning(true);
-    
+
     const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
-    
+
     const currentView = viewPanelRef.current;
     if (!currentView) return;
 
@@ -332,14 +332,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     // Position the new view further off-screen
     currentView.style.transform = `translateX(${newViewMode === '3d' ? '150%' : '-150%'})`;
-    
+
     // Update view mode immediately to show the new content
     setViewMode(newViewMode);
 
     // Animate both views simultaneously
     timeline.add({
       targets: [currentViewClone, currentView],
-      translateX: (el, i) => {
+      translateX: (_el: HTMLElement, i: number) => {
         // First element (clone) moves out, second element (new view) moves in
         return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
       },
@@ -357,16 +357,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       {/* Unified Top Bar */}
       <div className="top-bar">
         <div className="view-toggle">
-          <button 
-            onClick={handleViewToggle} 
+          <button
+            onClick={handleViewToggle}
             className={viewMode === 'camera' ? 'active' : ''}
             title="Camera View"
             aria-label="Switch to Camera View"
           >
             {icons.camera}
           </button>
-          <button 
-            onClick={handleViewToggle} 
+          <button
+            onClick={handleViewToggle}
             className={viewMode === '3d' ? 'active' : ''}
             title="3D View"
             aria-label="Switch to 3D View"
@@ -375,7 +375,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </button>
         </div>
         <div className="status-controls">
-          <div 
+          <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
             title={isConnected ? 'Status: Connected' : 'Status: Disconnected'}
             aria-label={isConnected ? 'Status: Connected' : 'Status: Disconnected'}
@@ -383,8 +383,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           >
             {isConnected ? icons.connected : icons.disconnected}
           </div>
-          <button 
-            onClick={handleInternalDisconnect} 
+          <button
+            onClick={handleInternalDisconnect}
             className="disconnect-button-icon"
             title="Disconnect"
             aria-label="Disconnect"
@@ -400,11 +400,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <div className="view-panel card" ref={viewPanelRef}>
             {viewMode === 'camera' ? (
               isConnected && ros && selectedCameraTopic ? (
-                <CameraView 
-                  ros={ros} 
-                  cameraTopic={selectedCameraTopic} 
+                <CameraView
+                  ros={ros}
+                  cameraTopic={selectedCameraTopic}
                   availableTopics={availableCameraTopics}
-                  onTopicChange={setSelectedCameraTopic} 
+                  onTopicChange={setSelectedCameraTopic}
                 />
               ) : (
                 <div className="placeholder">
@@ -422,7 +422,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         </div>
 
         {/* Resizable Handle */}
-        <div 
+        <div
           className={`resize-handle ${isDragging ? 'dragging' : ''}`}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
@@ -431,22 +431,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         </div>
 
         <div className="control-panel-container" style={{ height: `calc(${bottomHeight}% - 8px)` }}>
-           <ControlPanelTabs 
-               panels={activePanels}
-               selectedPanelId={selectedPanelId}
-               onSelectPanel={handleSelectPanel}
-               onAddPanelToggle={handleAddPanelToggle}
-               onRemovePanel={handleRemovePanel}
-               addButtonRef={addButtonRef}
-           /> 
-           <div className="control-panel card">
-               {/* Render the selected panel component */}
-               {isConnected && ros ? (
-                   SelectedPanelComponent ?? <div>Select a control panel</div>
-               ) : (
-                   <div>Connecting to ROS...</div>
-               )}
-           </div>
+          <ControlPanelTabs
+            panels={activePanels}
+            selectedPanelId={selectedPanelId}
+            onSelectPanel={handleSelectPanel}
+            onAddPanelToggle={handleAddPanelToggle}
+            onRemovePanel={handleRemovePanel}
+            addButtonRef={addButtonRef}
+          />
+          <div className="control-panel card">
+            {/* Render the selected panel component */}
+            {isConnected && ros ? (
+              SelectedPanelComponent ?? <div>Select a control panel</div>
+            ) : (
+              <div>Connecting to ROS...</div>
+            )}
+          </div>
         </div>
       </div>
 

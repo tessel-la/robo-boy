@@ -42,7 +42,7 @@ export function useCameraInfoVisualizer({
   // Effect 1: Manage Frustum Container and LineSegments Object
   useEffect(() => {
     const viewer = ros3dViewer.current;
-    let containerCreated = false;
+    let _containerCreated = false;
     // let linesCreated = false; // Not strictly needed for cleanup logic
 
     // Only create if connected and topic selected (TF handled separately)
@@ -52,11 +52,11 @@ export function useCameraInfoVisualizer({
         frustumContainerRef.current = new THREE.Group();
         frustumContainerRef.current.visible = false; // Initially hidden until TF is applied
         viewer.scene.add(frustumContainerRef.current);
-        containerCreated = true;
+        _containerCreated = true;
 
         // Create the LineSegments object ONCE
         if (!frustumLinesRef.current) {
-           // console.log('[CameraInfoViz E1] Creating LineSegments');
+          // console.log('[CameraInfoViz E1] Creating LineSegments');
           const vertices = new Float32Array(15);
           const initialGeometry = new THREE.BufferGeometry();
           // Use setAttribute for newer THREE versions
@@ -71,7 +71,7 @@ export function useCameraInfoVisualizer({
       }
       // Update line color if container already exists and color changed
       else if (frustumLinesRef.current && (frustumLinesRef.current.material as THREE.LineBasicMaterial).color.getHex() !== new THREE.Color(lineColor).getHex()) {
-           (frustumLinesRef.current.material as THREE.LineBasicMaterial).color.set(lineColor);
+        (frustumLinesRef.current.material as THREE.LineBasicMaterial).color.set(lineColor);
       }
 
     } else {
@@ -91,17 +91,17 @@ export function useCameraInfoVisualizer({
       // If container was created in this run, or if prerequisites changed
       // Simplified cleanup: always attempt removal if viewer exists
       if (frustumContainerRef.current && viewer) {
-         // console.log('[CameraInfoViz E1 Cleanup] Attempting container removal');
-         try {
-            viewer.scene.remove(frustumContainerRef.current);
-            frustumLinesRef.current?.geometry?.dispose();
-            (frustumLinesRef.current?.material as THREE.Material)?.dispose();
-         } catch (e) {
-            console.error("[CameraInfoViz E1 Cleanup] Error removing/disposing objects:", e);
-         }
-         // Nullify refs even if removal failed
-         frustumContainerRef.current = null;
-         frustumLinesRef.current = null;
+        // console.log('[CameraInfoViz E1 Cleanup] Attempting container removal');
+        try {
+          viewer.scene.remove(frustumContainerRef.current);
+          frustumLinesRef.current?.geometry?.dispose();
+          (frustumLinesRef.current?.material as THREE.Material)?.dispose();
+        } catch (e) {
+          console.error("[CameraInfoViz E1 Cleanup] Error removing/disposing objects:", e);
+        }
+        // Nullify refs even if removal failed
+        frustumContainerRef.current = null;
+        frustumLinesRef.current = null;
       }
     };
     // Dependencies include viewer existence implicitly via ros3dViewer ref
@@ -205,114 +205,114 @@ export function useCameraInfoVisualizer({
 
     // Make the lines visible *only if* geometry is valid
     lines.visible = true;
-     // console.log('[CameraInfoViz E3] Updated frustum geometry and made visible');
+    // console.log('[CameraInfoViz E3] Updated frustum geometry and made visible');
 
   }, [lastCameraInfo, lineScale]); // Only depends on info and scale, color handled in E1
 
   // Effect 4: Animation loop to update frustum pose using TF lookup
   useEffect(() => {
     const updatePose = () => {
-        const viewer = ros3dViewer.current;
-        const provider = customTFProvider.current;
-        const container = frustumContainerRef.current;
+      const viewer = ros3dViewer.current;
+      const provider = customTFProvider.current;
+      const container = frustumContainerRef.current;
 
-        // Ensure all prerequisites are met
-        if (!isRosConnected || !viewer || !provider || !container || !cameraFrameId) {
-            if (container) container.visible = false; // Hide if prerequisites fail
-            animationFrameId.current = requestAnimationFrame(updatePose); // Continue loop
-            return;
+      // Ensure all prerequisites are met
+      if (!isRosConnected || !viewer || !provider || !container || !cameraFrameId) {
+        if (container) container.visible = false; // Hide if prerequisites fail
+        animationFrameId.current = requestAnimationFrame(updatePose); // Continue loop
+        return;
+      }
+
+      const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
+
+      try {
+        // Look up the transform from fixedFrame -> cameraFrameId
+        const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
+
+        if (transform && transform.translation && transform.rotation) {
+          // Apply position directly (x, y, z)
+          container.position.set(
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z
+          );
+
+          // Apply raw TF rotation combined with static camera adjustment
+          try {
+            // Create a fresh quaternion to avoid modifying the original transform
+            const tfQuaternion = new THREE.Quaternion(
+              transform.rotation.x,
+              transform.rotation.y,
+              transform.rotation.z,
+              transform.rotation.w
+            );
+
+            // Apply TF rotation first, then the static camera adjustment
+            // Use a safer approach for quaternion multiplication
+            container.quaternion.copy(tfQuaternion);
+            if (CAMERA_FRAME_ROTATION) {
+              container.quaternion.multiply(CAMERA_FRAME_ROTATION);
+            }
+
+            container.visible = true; // Make container visible if transform is valid
+          } catch (rotationError) {
+            console.warn(`[CameraInfoViz] Quaternion operation failed:`, rotationError);
+            // Even if rotation fails, we can still show at the right position with default orientation
+            container.quaternion.set(0, 0, 0, 1); // Identity quaternion as fallback
+            container.visible = true;
+          }
+        } else {
+          // console.warn(`[CameraInfoViz] TF lookup returned incomplete transform for ${cameraFrameId} relative to ${fixedFrame}`);
+          container.visible = false; // Hide if transform data is incomplete
+        }
+      } catch (tfError) {
+        console.warn(`[CameraInfoViz] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}:`,
+          tfError instanceof Error ? tfError.message : tfError);
+
+        // Log more details on first error
+        if (container.visible) {
+          console.debug(`[CameraInfoViz] TF lookup error details:`, tfError);
+
+          // Try to show available frames for debugging
+          try {
+            if (provider && (provider as any).transforms) {
+              const frames = Object.keys((provider as any).transforms);
+              console.debug(`[CameraInfoViz] Available frames:`,
+                frames.includes(cameraFrameId) ? `${cameraFrameId} (found)` : `${cameraFrameId} (not found)`,
+                frames.includes(fixedFrame) ? `${fixedFrame} (found)` : `${fixedFrame} (not found)`
+              );
+            }
+          } catch (e) {
+            // Ignore errors in debug code
+          }
         }
 
-        const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
+        container.visible = false; // Hide if transform fails
+      }
 
-        try {
-            // Look up the transform from fixedFrame -> cameraFrameId
-            const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
-
-            if (transform && transform.translation && transform.rotation) {
-                // Apply position directly (x, y, z)
-                container.position.set(
-                    transform.translation.x,
-                    transform.translation.y,
-                    transform.translation.z
-                );
-
-                // Apply raw TF rotation combined with static camera adjustment
-                try {
-                    // Create a fresh quaternion to avoid modifying the original transform
-                    const tfQuaternion = new THREE.Quaternion(
-                        transform.rotation.x,
-                        transform.rotation.y,
-                        transform.rotation.z,
-                        transform.rotation.w
-                    );
-
-                    // Apply TF rotation first, then the static camera adjustment
-                    // Use a safer approach for quaternion multiplication
-                    container.quaternion.copy(tfQuaternion);
-                    if (CAMERA_FRAME_ROTATION) {
-                        container.quaternion.multiply(CAMERA_FRAME_ROTATION);
-                    }
-
-                    container.visible = true; // Make container visible if transform is valid
-                } catch (rotationError) {
-                    console.warn(`[CameraInfoViz] Quaternion operation failed:`, rotationError);
-                    // Even if rotation fails, we can still show at the right position with default orientation
-                    container.quaternion.set(0, 0, 0, 1); // Identity quaternion as fallback
-                    container.visible = true;
-                }
-            } else {
-                // console.warn(`[CameraInfoViz] TF lookup returned incomplete transform for ${cameraFrameId} relative to ${fixedFrame}`);
-                container.visible = false; // Hide if transform data is incomplete
-            }
-        } catch (tfError) {
-            console.warn(`[CameraInfoViz] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}:`, 
-                tfError instanceof Error ? tfError.message : tfError);
-            
-            // Log more details on first error
-            if (container.visible) {
-                console.debug(`[CameraInfoViz] TF lookup error details:`, tfError);
-                
-                // Try to show available frames for debugging
-                try {
-                    if (provider && (provider as any).transforms) {
-                        const frames = Object.keys((provider as any).transforms);
-                        console.debug(`[CameraInfoViz] Available frames:`, 
-                            frames.includes(cameraFrameId) ? `${cameraFrameId} (found)` : `${cameraFrameId} (not found)`,
-                            frames.includes(fixedFrame) ? `${fixedFrame} (found)` : `${fixedFrame} (not found)`
-                        );
-                    }
-                } catch (e) {
-                    // Ignore errors in debug code
-                }
-            }
-            
-            container.visible = false; // Hide if transform fails
-        }
-
-        // Continue the loop
-        animationFrameId.current = requestAnimationFrame(updatePose);
+      // Continue the loop
+      animationFrameId.current = requestAnimationFrame(updatePose);
     };
 
     // Start the loop if connected and container exists
     if (isRosConnected && frustumContainerRef.current) {
-        // console.log('[CameraInfoViz E4] Starting animation loop');
-        animationFrameId.current = requestAnimationFrame(updatePose);
+      // console.log('[CameraInfoViz E4] Starting animation loop');
+      animationFrameId.current = requestAnimationFrame(updatePose);
     } else {
-        // console.log('[CameraInfoViz E4] Not starting animation loop (prerequisites not met)');
+      // console.log('[CameraInfoViz E4] Not starting animation loop (prerequisites not met)');
     }
 
     // Cleanup function for Effect 4: Cancel animation frame
     return () => {
-        // console.log('[CameraInfoViz E4] Cleanup: Cancelling animation frame');
-        if (animationFrameId.current) {
-            cancelAnimationFrame(animationFrameId.current);
-            animationFrameId.current = null;
-        }
-        // Ensure container is hidden on cleanup if it still exists
-        if(frustumContainerRef.current) {
-             frustumContainerRef.current.visible = false;
-        }
+      // console.log('[CameraInfoViz E4] Cleanup: Cancelling animation frame');
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+      // Ensure container is hidden on cleanup if it still exists
+      if (frustumContainerRef.current) {
+        frustumContainerRef.current.visible = false;
+      }
     };
   }, [isRosConnected, ros3dViewer, customTFProvider, cameraFrameId]); // Dependencies that trigger restart of the loop
 

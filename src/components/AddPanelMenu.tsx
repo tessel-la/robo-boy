@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, RefObject, useCallback } from 'react';
+import React, { useEffect, useRef, useState, RefObject } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
 import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
@@ -50,53 +50,53 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
       const buttonRect = addButtonRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
+
       // Adjust margins based on screen size
       const margin = viewportWidth < 480 ? 8 : viewportWidth < 768 ? 12 : 16;
-      
+
       // Calculate menu width - more conservative to fit content
       const menuWidth = Math.min(280, viewportWidth - (2 * margin));
-      
+
       // Calculate available space more conservatively
       const spaceBelow = viewportHeight - buttonRect.bottom - margin - 20; // Extra buffer
       const spaceAbove = buttonRect.top - margin - 20; // Extra buffer
-      
+
       // Determine if menu should open upward or downward
       const openUpward = spaceBelow < 150 && spaceAbove > spaceBelow;
-      
+
       // Calculate max height based on chosen direction, with conservative limits
       const maxHeight = Math.min(
         openUpward ? spaceAbove : spaceBelow,
         300 // Cap at 300px to ensure manageability
       );
-      
+
       // Calculate horizontal position - align with button
       let left = buttonRect.right - menuWidth;
-      
+
       // Ensure menu stays within horizontal bounds
       if (left < margin) {
         left = margin;
       } else if (left + menuWidth > viewportWidth - margin) {
         left = viewportWidth - menuWidth - margin;
       }
-      
+
       // Calculate vertical position
       let top;
       const gap = 8;
-      
+
       if (openUpward) {
         top = buttonRect.top - gap; // Position from here, will expand upward with transform
       } else {
         top = buttonRect.bottom + gap;
       }
-      
+
       // Ensure top position doesn't go negative or exceed viewport
       if (openUpward) {
         top = Math.max(margin, top);
       } else {
         top = Math.min(top, viewportHeight - maxHeight - margin);
       }
-      
+
       // Apply positioning with content-based sizing
       setMenuStyle({
         position: 'fixed',
@@ -105,7 +105,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         width: `${menuWidth}px`,
         maxHeight: `${maxHeight}px`,
         transform: openUpward ? 'translateY(-100%)' : 'none',
-        opacity: 1, 
+        opacity: 1,
         zIndex: 9999,
         overflowY: 'auto',
         overflowX: 'hidden',
@@ -146,14 +146,6 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
     return null;
   }
 
-  const handleMenuItemClick = (panelInfo: any) => {
-    if (panelInfo.type === GamepadType.Custom) {
-      onOpenCustomEditor();
-    } else {
-      onSelectType(panelInfo.type);
-    }
-  };
-
   const handleCustomGamepadSelect = (layoutId: string) => {
     onSelectType(GamepadType.Custom, layoutId);
   };
@@ -176,76 +168,76 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
 
   // Render into the portal
   return ReactDOM.createPortal(
-      <div 
-        className="add-panel-menu" // Keep class for styling (colors, padding etc.)
-        ref={menuRef} 
-        style={menuStyle} // Apply dynamic style
+    <div
+      className="add-panel-menu" // Keep class for styling (colors, padding etc.)
+      ref={menuRef}
+      style={menuStyle} // Apply dynamic style
+    >
+      <div
+        className="add-panel-menu-content"
+        style={{
+          height: '100%',
+          overflowY: 'auto',
+          overflowX: 'hidden'
+        }}
       >
-        <div 
-          className="add-panel-menu-content"
-          style={{ 
-            height: '100%', 
-            overflowY: 'auto',
-            overflowX: 'hidden'
-          }}
-        >
+        <div className="menu-section">
+          <h4>Default Layouts</h4>
+          <ul>
+            {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
+              <li key={panelInfo.type}>
+                <button onClick={() => onSelectType(panelInfo.type)}>
+                  {panelInfo.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {customGamepads.length > 0 && (
           <div className="menu-section">
-            <h4>Default Layouts</h4>
+            <h4>Custom Layouts</h4>
             <ul>
-              {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
-                <li key={panelInfo.type}>
-                  <button onClick={() => onSelectType(panelInfo.type)}>
-                    {panelInfo.label}
+              {customGamepads.map(gamepad => (
+                <li key={gamepad.id} className="custom-gamepad-item">
+                  <button
+                    className="custom-gamepad-button"
+                    onClick={() => handleCustomGamepadSelect(gamepad.id)}
+                  >
+                    {gamepad.name}
+                  </button>
+                  <button
+                    className="edit-gamepad-button"
+                    onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
+                    title="Edit custom gamepad"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="delete-gamepad-button"
+                    onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
+                    title="Delete custom gamepad"
+                  >
+                    ×
                   </button>
                 </li>
               ))}
             </ul>
           </div>
+        )}
 
-          {customGamepads.length > 0 && (
-            <div className="menu-section">
-              <h4>Custom Layouts</h4>
-              <ul>
-                {customGamepads.map(gamepad => (
-                  <li key={gamepad.id} className="custom-gamepad-item">
-                    <button 
-                      className="custom-gamepad-button"
-                      onClick={() => handleCustomGamepadSelect(gamepad.id)}
-                    >
-                      {gamepad.name}
-                    </button>
-                    <button 
-                      className="edit-gamepad-button"
-                      onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
-                      title="Edit custom gamepad"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      className="delete-gamepad-button"
-                      onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
-                      title="Delete custom gamepad"
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="menu-section">
-            <button 
-              className="create-custom-button"
-              onClick={() => onOpenCustomEditor()}
-            >
-              <span className="icon">✏️</span>
-              Create Custom Gamepad
-            </button>
-          </div>
+        <div className="menu-section">
+          <button
+            className="create-custom-button"
+            onClick={() => onOpenCustomEditor()}
+          >
+            <span className="icon">✏️</span>
+            Create Custom Gamepad
+          </button>
         </div>
-      </div>,
-      portalRoot // Target element for the portal
+      </div>
+    </div>,
+    portalRoot // Target element for the portal
   );
 };
 

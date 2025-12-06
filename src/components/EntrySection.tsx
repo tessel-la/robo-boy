@@ -16,17 +16,17 @@ const GearIcon = () => (
   </svg>
 );
 
-// Dropdown caret icon component
-const CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="12" 
-    height="12" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+// Dropdown caret icon component (kept for potential future use)
+const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
     style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.3s ease' }}
   >
@@ -60,7 +60,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
       const style = getComputedStyle(document.documentElement);
       const primary = style.getPropertyValue('--primary-color').trim();
       const hover = style.getPropertyValue('--primary-hover-color').trim();
-      
+
       if (primary !== themeColors.primary || hover !== themeColors.hover) {
         setThemeColors({
           primary,
@@ -74,9 +74,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
     // Set up observer to watch for theme changes (attribute changes)
     const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, { 
+    observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme'] 
+      attributeFilter: ['data-theme']
     });
 
     return () => observer.disconnect();
@@ -91,12 +91,12 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   // Handle advanced form animation when its visibility changes
   useEffect(() => {
     animateAdvancedForm(formRef.current, showAdvanced);
-    
+
     // Animate gear icon rotation
-    const gearIcon = document.querySelector('.advanced-toggle-content svg');
+    const gearIcon = document.querySelector('.advanced-toggle-content svg') as HTMLElement | null;
     if (gearIcon) {
       anime({
-        targets: gearIcon,
+        targets: gearIcon as HTMLElement,
         rotate: showAdvanced ? 180 : 0,
         duration: 500,
         easing: 'easeInOutQuad'
@@ -104,21 +104,21 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
     }
   }, [showAdvanced]);
 
-  // Helper function to convert hex to rgb
-  const hexToRgb = (hex: string): string => {
+  // Helper function to convert hex to rgb (kept for potential future use)
+  const _hexToRgb = (hex: string): string => {
     // Default fallback in case of parsing issues
     if (!hex || !hex.startsWith('#')) return '50, 205, 50';
 
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-    
+    const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
+
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
     if (!result) return '50, 205, 50';
-    
+
     const r = parseInt(result[1], 16);
     const g = parseInt(result[2], 16);
     const b = parseInt(result[3], 16);
-    
+
     return `${r}, ${g}, ${b}`;
   };
 
@@ -128,8 +128,8 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
     // Get theme colors for animation
     const style = getComputedStyle(document.documentElement);
-    const primaryColor = style.getPropertyValue('--primary-color').trim();
-    const hoverColor = style.getPropertyValue('--primary-hover-color').trim();
+    const _primaryColor = style.getPropertyValue('--primary-color').trim();
+    const _hoverColor = style.getPropertyValue('--primary-hover-color').trim();
 
     // Clear any inline styles
     dashRef.current.style.removeProperty('color');
@@ -175,7 +175,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Animate the submit button on press
     if (e.currentTarget && e.currentTarget instanceof HTMLFormElement) {
       const submitButton = e.currentTarget.querySelector('button[type="submit"]');
@@ -193,7 +193,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
   const handleQuickConnect = () => {
     if (isTransitioning) return;
-    
+
     setIsTransitioning(true);
     const button = quickConnectRef.current;
     if (!button) return;
@@ -239,21 +239,21 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
       borderRadius: '50%',
       duration: 300
     })
-    // Then drop to bottom of screen
-    .add({
-      targets: overlay,
-      top: `${window.innerHeight - 10}px`,
-      duration: 500,
-      easing: 'easeInQuad'
-    })
-    // Finally expand to fill screen
-    .add({
-      targets: overlay,
-      width: '200vmax',
-      height: '200vmax',
-      duration: 600,
-      easing: 'easeOutQuad'
-    });
+      // Then drop to bottom of screen
+      .add({
+        targets: overlay,
+        top: `${window.innerHeight - 10}px`,
+        duration: 500,
+        easing: 'easeInQuad'
+      })
+      // Finally expand to fill screen
+      .add({
+        targets: overlay,
+        width: '200vmax',
+        height: '200vmax',
+        duration: 600,
+        easing: 'easeOutQuad'
+      });
   };
 
   const toggleAdvanced = () => {
@@ -272,12 +272,12 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
         </div>
 
         <div className="connection-options">
-          <button 
-            className="quick-connect-btn" 
+          <button
+            className="quick-connect-btn"
             onClick={handleQuickConnect}
             title={`Connect to ${currentHostname}`}
             ref={quickConnectRef}
-            style={{ 
+            style={{
               position: 'relative',
               transition: 'opacity 0.1s ease'
             }}
@@ -287,12 +287,12 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
             <span className="quick-connect-ip">{currentHostname}</span>
           </button>
 
-          <button 
-            type="button" 
-            className="advanced-toggle" 
+          <button
+            type="button"
+            className="advanced-toggle"
             onClick={toggleAdvanced}
             title="Advanced Options"
-            style={{ 
+            style={{
               padding: '12px 16px',
               minWidth: '48px',
               display: 'flex',
@@ -304,10 +304,10 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
               <GearIcon />
             </span>
           </button>
-          
-          <form 
-            onSubmit={handleSubmit} 
-            ref={formRef} 
+
+          <form
+            onSubmit={handleSubmit}
+            ref={formRef}
             className={`advanced-form ${showAdvanced ? 'visible' : ''}`}
           >
             <div className="form-group">
@@ -350,7 +350,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
           </form>
         </div>
       </div>
-      <div 
+      <div
         ref={transitionOverlayRef}
         style={{
           position: 'fixed',
