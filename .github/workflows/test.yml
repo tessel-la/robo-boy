@@ -31,28 +31,8 @@ jobs:
     - name: Run tests with coverage
       run: npm run test:coverage
 
-    - name: Upload coverage report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage/
-        retention-days: 30
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        files: ./coverage/lcov.info
-        fail_ci_if_error: false
-        verbose: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: Build application
-      run: npm run build
-
-    - name: Generate coverage badges
+    - name: Generate coverage summary
       run: |
-        # Extract coverage percentages from JSON
         if [ -f coverage/coverage-summary.json ]; then
           LINES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)")
           STATEMENTS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.statements.pct)")
@@ -68,6 +48,16 @@ jobs:
           echo "| Branches | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
           echo "| Functions | ${FUNCTIONS}% |" >> $GITHUB_STEP_SUMMARY
         fi
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
+    - name: Build application
+      run: npm run build
 
     - name: Coverage comment on PR
       if: github.event_name == 'pull_request'
