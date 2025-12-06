@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
+[![codecov](https://codecov.io/gh/tessel-la/robo-boy/graph/badge.svg)](https://codecov.io/gh/tessel-la/robo-boy)
 
 <p align="center">
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
