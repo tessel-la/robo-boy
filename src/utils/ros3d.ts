@@ -40,13 +40,13 @@ class Viewer {
     // Add ambient light for overall illumination
     const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // soft white light
     this.scene.add(ambientLight);
-    
+
     // Add directional light for shading
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(5, 5, 5);
     directionalLight.castShadow = false; // Disable shadows for performance
     this.scene.add(directionalLight);
-    
+
     // Add another directional light from opposite direction for better illumination
     const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
     directionalLight2.position.set(-5, -5, 5);
@@ -59,7 +59,7 @@ class Viewer {
       0.1,
       1000
     );
-    
+
     // Set camera position
     if (options.cameraPose) {
       this.camera.position.set(
@@ -71,7 +71,7 @@ class Viewer {
       this.camera.position.set(3, 3, 3);
     }
     this.camera.lookAt(0, 0, 0);
-    
+
     // Set camera up vector to Z-up
     this.camera.up = new THREE.Vector3(0, 0, 1);
 
@@ -82,10 +82,10 @@ class Viewer {
     this.renderer.setSize(options.width, options.height);
     // Enable shadows if needed
     this.renderer.shadowMap.enabled = false; // Keep disabled for performance
-    
+
     // Append renderer to container
     container.appendChild(this.renderer.domElement);
-    
+
     // Start animation loop
     this.animate();
   }
@@ -121,19 +121,19 @@ class Viewer {
 class Grid extends THREE.Object3D {
   constructor(options: any = {}) {
     super();
-    
+
     const size = options.size || 10;
     const divisions = options.divisions || 10;
-    const colorCenterLine = options.colorCenterLine !== undefined ? 
+    const colorCenterLine = options.colorCenterLine !== undefined ?
       options.colorCenterLine : 0x444444;
-    const colorGrid = options.colorGrid !== undefined ? 
+    const colorGrid = options.colorGrid !== undefined ?
       options.colorGrid : 0x888888;
-    
+
     const gridHelper = new THREE.GridHelper(size, divisions, colorCenterLine, colorGrid);
-    
+
     // Rotate grid to be flat on XY plane with Z up
     gridHelper.rotation.x = Math.PI / 2;
-    
+
     this.add(gridHelper);
   }
 }
@@ -150,11 +150,11 @@ class Axes extends THREE.Object3D {
     headLength?: number;
   } = {}) {
     super();
-    
+
     const size = options.lineSize || 1;
     const axesHelper = new THREE.AxesHelper(size);
     this.add(axesHelper);
-    
+
     // Store for disposal if needed
     this.lineSegments = {
       geometry: axesHelper.geometry,
@@ -168,33 +168,33 @@ class PointCloud2 extends THREE.Object3D {
   private ros: Ros;
   private topic: string;
   private tfClient: CustomTFProvider;
-  private rootObject: THREE.Object3D;
+  private _rootObject: THREE.Object3D;
   private maxPoints: number;
   private pointSize: number;
-  private compression: string;
+  private _compression: string;
   private throttleRate: number;
-  private points: any;
+  public points: any;  // Made public for external access from hooks
   private messageFrameId: string | null = null;
   private fixedFrame: string;
   private rosTopicInstance: ROSLIB.Topic | null = null; // Added for managing subscription
-  
+
   // Scaling factors for points
   private scaleX: number = 1.0;
   private scaleY: number = 1.0;
   private scaleZ: number = 1.0;
-  
+
   // Origin offset
   private originX: number = 0.0;
   private originY: number = 0.0;
   private originZ: number = 0.0;
-  
+
   // For animation loop tracking
   private transformUpdateAnimationId: number | null = null;
-  
+
   // Cached field offsets for performance
   private cachedFieldOffsets: { x: number; y: number; z: number } | null = null;
   private cachedPointStep: number = 0;
-  
+
   constructor(options: {
     ros: Ros;
     topic: string;
@@ -215,40 +215,40 @@ class PointCloud2 extends THREE.Object3D {
     fixedFrame?: string; // Add option to pass fixed frame
   }) {
     super();
-    
+
     this.ros = options.ros;
     this.topic = options.topic;
     this.tfClient = options.tfClient;
-    this.rootObject = options.rootObject;
+    this._rootObject = options.rootObject;
     this.maxPoints = options.max_pts || 100000;
     this.pointSize = options.size || 0.05;
-    this.compression = options.compression || 'none';
+    this._compression = options.compression || 'none';
     this.throttleRate = options.throttle_rate || 33; // ~30Hz default for smoother updates
     this.fixedFrame = options.fixedFrame || 'odom'; // Store the fixed frame
-    
+
     // Set scaling factors if provided
     if (options.scaleX !== undefined) this.scaleX = options.scaleX;
     if (options.scaleY !== undefined) this.scaleY = options.scaleY;
     if (options.scaleZ !== undefined) this.scaleZ = options.scaleZ;
-    
+
     // Set origin offset if provided
     if (options.originX !== undefined) this.originX = options.originX;
     if (options.originY !== undefined) this.originY = options.originY;
     if (options.originZ !== undefined) this.originZ = options.originZ;
-    
+
     // Initialize the points object
     this.initializePoints(options.material);
-    
+
     // Add to the root object
     options.rootObject.add(this);
-    
+
     // Setup subscription
     this.subscribe();
-    
+
     // Setup TF frame handling - subscribe to transformation updates
     this.setupTfHandling();
   }
-  
+
   // Set up TF frame handling
   private setupTfHandling(): void {
     // Track the current fixed frame to detect changes
@@ -256,9 +256,9 @@ class PointCloud2 extends THREE.Object3D {
     let lastTransformTime = 0;
     let retryCount = 0;
     let lastVisibleState = false;
-    
+
     // Use requestAnimationFrame to update the transform periodically
-    const updateTransform = (timestamp: number) => {
+    const updateTransform = (_timestamp: number) => {
       // Run at 30fps for TF updates (33ms) - match 3D panel refresh rate
       const now = performance.now();
       if (now - lastTransformTime < 33 && retryCount === 0) {
@@ -266,10 +266,10 @@ class PointCloud2 extends THREE.Object3D {
         return;
       }
       lastTransformTime = now;
-      
+
       if (this.messageFrameId) {
         const fixedFrame = this.getFixedFrame();
-        
+
         // Check if fixed frame has changed
         const frameChanged = currentFixedFrame !== fixedFrame;
         if (frameChanged) {
@@ -281,13 +281,13 @@ class PointCloud2 extends THREE.Object3D {
           retryCount = 0;
           // Don't immediately hide - try to get the transform first
         }
-        
+
         try {
           let tf: StoredTransform | null = null;
           if (this.messageFrameId) {
             tf = this.tfClient.lookupTransform(fixedFrame, this.messageFrameId);
           }
-          
+
           if (tf && tf.translation && tf.rotation) {
             // Apply transformation to the whole point cloud object
             this.position.set(
@@ -301,21 +301,21 @@ class PointCloud2 extends THREE.Object3D {
               tf.rotation.z,
               tf.rotation.w
             );
-            
+
             if (!lastVisibleState) {
               console.log(`[PointCloud2] Transform found for ${this.messageFrameId} in ${fixedFrame}, showing point cloud`);
             }
-            
+
             (this as any).visible = true;
             lastVisibleState = true;
-            
+
             // Reset retry counter since we succeeded
             retryCount = 0;
-            
+
             // Force position and quaternion update
             this.updateMatrix();
             this.matrixWorldNeedsUpdate = true;
-            
+
             // Also update children (the points object)
             if (this.points.object) {
               this.points.object.matrixWorldNeedsUpdate = true;
@@ -323,7 +323,7 @@ class PointCloud2 extends THREE.Object3D {
           } else {
             // If transformation not immediately available, increment retry count
             retryCount++;
-            
+
             // Only hide after a few retries to avoid flickering
             if (retryCount > 30) { // About 1 second of retries
               if (lastVisibleState) {
@@ -331,7 +331,7 @@ class PointCloud2 extends THREE.Object3D {
               }
               (this as any).visible = false;
               lastVisibleState = false;
-              
+
               // Limit retry count to avoid overflow
               if (retryCount > 300) { // About 10 seconds
                 retryCount = 300;
@@ -340,25 +340,25 @@ class PointCloud2 extends THREE.Object3D {
           }
         } catch (e) {
           retryCount++;
-          
+
           // Only log errors after several retries to reduce spam
           if (retryCount % 30 === 0) {
             console.warn(`[PointCloud2] Could not transform from ${this.messageFrameId} to ${fixedFrame}: ${e instanceof Error ? e.message : e}`);
-            
+
             // Log more detailed info for troubleshooting
             if (retryCount === 30) {
               console.debug(`[PointCloud2] Error details:`, e);
-              
+
               // Log available methods on tfClient for debugging
               if (this.tfClient) {
-                console.debug(`[PointCloud2] TF client methods:`, 
+                console.debug(`[PointCloud2] TF client methods:`,
                   Object.getOwnPropertyNames(Object.getPrototypeOf(this.tfClient))
                     .filter(prop => typeof (this.tfClient as any)[prop] === 'function')
                 );
               }
             }
           }
-          
+
           // Only hide after a few retries
           if (retryCount > 30) {
             (this as any).visible = false;
@@ -366,15 +366,15 @@ class PointCloud2 extends THREE.Object3D {
           }
         }
       }
-      
+
       // Continue the update loop
       this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
     };
-    
+
     // Start the update loop
     this.transformUpdateAnimationId = requestAnimationFrame(updateTransform);
   }
-  
+
   // Initialize point cloud geometry and material
   private initializePoints(material?: THREE.Material | { [key: string]: any }): void {
     try {
@@ -389,10 +389,10 @@ class PointCloud2 extends THREE.Object3D {
         'color',
         new THREE.Float32BufferAttribute(new Float32Array(this.maxPoints * 3), 3)
       );
-      
+
       // Create material - either use provided one or default
       let pointMaterial: THREE.Material;
-      
+
       if (material instanceof THREE.Material) {
         pointMaterial = material;
       } else {
@@ -403,11 +403,11 @@ class PointCloud2 extends THREE.Object3D {
           sizeAttenuation: true
         });
       }
-      
+
       // Create the points object
       const pointsObject = new THREE.Points(geometry, pointMaterial);
       pointsObject.frustumCulled = false; // Disable frustum culling
-      
+
       // Store in the points object
       this.points = {
         object: pointsObject,
@@ -415,14 +415,14 @@ class PointCloud2 extends THREE.Object3D {
         geometry: geometry, // Assign the local geometry
         setup: true
       };
-      
+
       // Add points to this object
       super.add(pointsObject);
     } catch (error) {
       console.error('Error initializing points:', error);
     }
   }
-  
+
   // Subscribe to the point cloud topic
   private subscribe(): void {
     try {
@@ -442,7 +442,7 @@ class PointCloud2 extends THREE.Object3D {
       console.error(`[PointCloud2] Error subscribing to topic ${this.topic}:`, error);
     }
   }
-  
+
   // Unsubscribe from the topic
   public unsubscribe(): void {
     try {
@@ -456,37 +456,37 @@ class PointCloud2 extends THREE.Object3D {
     } catch (error) {
       console.error(`[PointCloud2] Error unsubscribing from topic ${this.topic}:`, error);
     }
-    
+
     // Stop transform update loop if it's running
     if (this.transformUpdateAnimationId !== null) {
       cancelAnimationFrame(this.transformUpdateAnimationId);
       this.transformUpdateAnimationId = null;
     }
-    
+
     // Clear the message frame ID
     this.messageFrameId = null;
-    
+
     // Optionally, hide the points
     // (this as any).visible = false; // Uncomment if desired behavior
   }
-  
+
   // Safe method to reset/reinitialize points 
   public safeResetPoints(material?: THREE.Material | { [key: string]: any }): boolean {
     try {
       // Unsubscribe from the current topic before re-initializing
       if (this.rosTopicInstance) {
         this.rosTopicInstance.unsubscribe();
-        this.rosTopicInstance = null; 
+        this.rosTopicInstance = null;
         console.log(`[PointCloud2] Unsubscribed from ${this.topic} before resetting points.`);
       }
-      
+
       // Re-initialize points
       this.initializePoints(material);
-      
+
       // Re-subscribe to the topic
       // This ensures that if the topic name or other parameters changed, they are reapplied
-      this.subscribe(); 
-      
+      this.subscribe();
+
       console.log('[PointCloud2] Points reset and re-subscribed successfully.');
       return true;
     } catch (e) {
@@ -494,39 +494,39 @@ class PointCloud2 extends THREE.Object3D {
       return false;
     }
   }
-  
+
   // Process incoming point cloud message - OPTIMIZED for performance
   private processMessage(message: any): void {
     // Fast path checks
     if (!this.points?.setup || !this.points?.object) return;
-    
+
     const positions = this.points.geometry?.getAttribute('position') as THREE.BufferAttribute;
     if (!positions) return;
-    
+
     // Quick validation
     const data = message.data;
     if (!data || !message.width || !message.height) return;
-    
+
     // Store frame_id for TF (TF lookup handled by separate 30Hz loop, not here)
     if (message.header?.frame_id) {
-      const frameId = message.header.frame_id.startsWith('/') 
-        ? message.header.frame_id.substring(1) 
+      const frameId = message.header.frame_id.startsWith('/')
+        ? message.header.frame_id.substring(1)
         : message.header.frame_id;
-      
+
       if (this.messageFrameId !== frameId) {
         this.messageFrameId = frameId;
         // Reset cached offsets when frame changes (message format might differ)
         this.cachedFieldOffsets = null;
       }
     }
-    
+
     const pointStep = message.point_step || 32;
     const pointCount = Math.min(message.width * message.height, this.maxPoints);
-    
+
     // Cache field offsets on first message (or when point_step changes)
     if (!this.cachedFieldOffsets || this.cachedPointStep !== pointStep) {
       this.cachedPointStep = pointStep;
-      
+
       if (message.fields && Array.isArray(message.fields)) {
         const offsets: { [key: string]: number } = {};
         for (let i = 0; i < message.fields.length; i++) {
@@ -535,7 +535,7 @@ class PointCloud2 extends THREE.Object3D {
             offsets[field.name] = field.offset;
           }
         }
-        
+
         this.cachedFieldOffsets = {
           x: offsets.x ?? 0,
           y: offsets.y ?? 4,
@@ -545,7 +545,7 @@ class PointCloud2 extends THREE.Object3D {
         this.cachedFieldOffsets = { x: 0, y: 4, z: 8 };
       }
     }
-    
+
     // Create DataView - fast path for common types
     let dataView: DataView;
     if (data instanceof Uint8Array) {
@@ -567,7 +567,7 @@ class PointCloud2 extends THREE.Object3D {
     } else {
       return;
     }
-    
+
     // Cache all values for tight loop
     const xOff = this.cachedFieldOffsets.x;
     const yOff = this.cachedFieldOffsets.y;
@@ -575,7 +575,7 @@ class PointCloud2 extends THREE.Object3D {
     const sx = this.scaleX, sy = this.scaleY, sz = this.scaleZ;
     const ox = this.originX, oy = this.originY, oz = this.originZ;
     const posArray = positions.array as Float32Array;
-    
+
     // Tight loop - direct array access is faster than setXYZ
     for (let i = 0, idx = 0; i < pointCount; i++, idx += 3) {
       const off = i * pointStep;
@@ -583,7 +583,7 @@ class PointCloud2 extends THREE.Object3D {
       posArray[idx + 1] = dataView.getFloat32(off + yOff, true) * sy + oy;
       posArray[idx + 2] = dataView.getFloat32(off + zOff, true) * sz + oz;
     }
-    
+
     // Update geometry
     positions.needsUpdate = true;
     this.points.geometry?.setDrawRange(0, pointCount);
@@ -609,26 +609,26 @@ class PointCloud2 extends THREE.Object3D {
     if (options.scaleX !== undefined) this.scaleX = options.scaleX;
     if (options.scaleY !== undefined) this.scaleY = options.scaleY;
     if (options.scaleZ !== undefined) this.scaleZ = options.scaleZ;
-    
+
     // Update origin offset if provided
     if (options.originX !== undefined) this.originX = options.originX;
     if (options.originY !== undefined) this.originY = options.originY;
     if (options.originZ !== undefined) this.originZ = options.originZ;
-    
+
     // Update material properties if points object exists
     if (this.points?.material) {
       const material = this.points.material;
-      
+
       // Update point size if provided
       if (options.pointSize !== undefined) {
         this.pointSize = options.pointSize;
-        
+
         // Update point size in material if it's a PointsMaterial
         if (material instanceof THREE.PointsMaterial) {
           material.size = this.pointSize;
         }
       }
-      
+
       // Update color if provided
       if (options.color !== undefined && material instanceof THREE.PointsMaterial) {
         if (options.color instanceof THREE.Color) {
@@ -637,34 +637,34 @@ class PointCloud2 extends THREE.Object3D {
           material.color = new THREE.Color(options.color);
         }
       }
-      
+
       // Force material update
       if (material) {
         material.needsUpdate = true;
       }
-      
+
       // If we need to rebuild the point cloud with new settings (for complex changes)
-      if (options.colorMode !== undefined || 
-          options.minColor !== undefined || 
-          options.maxColor !== undefined ||
-          options.minAxisValue !== undefined ||
-          options.maxAxisValue !== undefined) {
-        
+      if (options.colorMode !== undefined ||
+        options.minColor !== undefined ||
+        options.maxColor !== undefined ||
+        options.minAxisValue !== undefined ||
+        options.maxAxisValue !== undefined) {
+
         // Create a new material with updated settings
         const newMaterial = new THREE.PointsMaterial({
           size: this.pointSize,
           sizeAttenuation: true,
           color: material instanceof THREE.PointsMaterial ? material.color : new THREE.Color(0x00ff00)
         });
-        
+
         // Apply color mode settings if needed
         // This would be expanded based on how you want to handle color gradients
-        
+
         // Recreate points with new material
         this.safeResetPoints(newMaterial);
       }
     }
-    
+
     // Log updated settings
     console.log('[PointCloud2] Updated visualization settings:', {
       scaleX: this.scaleX,
@@ -684,16 +684,16 @@ class PointCloud2 extends THREE.Object3D {
       console.warn('[PointCloud2] Cannot force transform update - no message frame ID set yet');
       return;
     }
-    
+
     const fixedFrame = this.getFixedFrame();
     console.log(`[PointCloud2] Forcing transform update from ${this.messageFrameId} to ${fixedFrame}`);
-    
+
     try {
       let tf: StoredTransform | null = null;
       if (this.messageFrameId) {
         tf = this.tfClient.lookupTransform(fixedFrame, this.messageFrameId);
       }
-      
+
       if (tf && tf.translation && tf.rotation) {
         // Apply transformation to the whole point cloud object
         this.position.set(
@@ -708,16 +708,16 @@ class PointCloud2 extends THREE.Object3D {
           tf.rotation.w
         );
         (this as any).visible = true;
-        
+
         // Force position and quaternion update
         this.updateMatrix();
         this.matrixWorldNeedsUpdate = true;
-        
+
         // Also update children (the points object)
         if (this.points.object) {
           this.points.object.matrixWorldNeedsUpdate = true;
         }
-        
+
         console.log(`[PointCloud2] Transform update successful`);
       } else {
         console.warn(`[PointCloud2] No transform available for force update`);
@@ -727,7 +727,7 @@ class PointCloud2 extends THREE.Object3D {
       console.debug(`[PointCloud2] Error details:`, e);
     }
   }
-  
+
   // Helper method to get the fixed frame
   private getFixedFrame(): string {
     // CustomTFProvider does not have getFixedFrame(), so PointCloud2 uses its own this.fixedFrame.
@@ -751,7 +751,7 @@ class LaserScan extends THREE.Object3D {
   private pointsNode: THREE.Points | null = null;
   private messageFrameId: string | null = null;
   private transformUpdateAnimationId: number | null = null;
-  
+
   // Pre-allocated buffer for performance (avoids GC on each message)
   private maxLaserPoints: number = 2000;
   private positionBuffer: Float32Array;
@@ -784,7 +784,7 @@ class LaserScan extends THREE.Object3D {
       : new THREE.Color(options.material?.color || 0xff0000); // Default red
     this.maxRange = options.maxRange || Infinity;
     this.minRange = options.minRange || 0;
-    
+
     // Pre-allocate position buffer
     this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
     this.initializeGeometry();
@@ -793,18 +793,18 @@ class LaserScan extends THREE.Object3D {
     this.subscribe();
     this.setupTfHandling();
   }
-  
+
   private initializeGeometry(): void {
     this.geometry = new THREE.BufferGeometry();
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
     this.geometry.setDrawRange(0, 0);
-    
+
     this.material = new THREE.PointsMaterial({
       color: this.pointColor,
       size: this.pointSize,
       sizeAttenuation: false
     });
-    
+
     this.pointsNode = new THREE.Points(this.geometry, this.material);
     this.add(this.pointsNode);
   }
@@ -855,13 +855,13 @@ class LaserScan extends THREE.Object3D {
   }
 
   private processMessage(message: any): void {
-    this.messageFrameId = (message.header.frame_id || '').startsWith('/') 
-        ? message.header.frame_id.substring(1) 
-        : message.header.frame_id;
+    this.messageFrameId = (message.header.frame_id || '').startsWith('/')
+      ? message.header.frame_id.substring(1)
+      : message.header.frame_id;
 
     if (!this.messageFrameId) {
-        console.warn('[LaserScan] Message received with no frame_id');
-        return;
+      console.warn('[LaserScan] Message received with no frame_id');
+      return;
     }
 
     if (!this.geometry) return;
@@ -871,14 +871,14 @@ class LaserScan extends THREE.Object3D {
     const angleIncrement = message.angle_increment;
     const minRange = this.minRange;
     const maxRange = this.maxRange;
-    
+
     // Ensure buffer is large enough
     if (numPoints > this.maxLaserPoints) {
       this.maxLaserPoints = numPoints;
       this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
       this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positionBuffer, 3));
     }
-    
+
     // Fill buffer directly (no object allocations)
     let validPoints = 0;
     for (let i = 0; i < numPoints; i++) {
@@ -933,9 +933,9 @@ class LaserScan extends THREE.Object3D {
             // console.log(`[LaserScan] TF Success: ${this.messageFrameId} to ${targetFixedFrame}`, JSON.parse(JSON.stringify(tf)));
             this.position.set(tf.translation.x, tf.translation.y, tf.translation.z);
             this.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w);
-            
+
             if (!lastVisibleState) {
-            //   console.log(`[LaserScan] Transform found for ${this.messageFrameId} in ${targetFixedFrame}, showing scan.`);
+              //   console.log(`[LaserScan] Transform found for ${this.messageFrameId} in ${targetFixedFrame}, showing scan.`);
             }
             this.visible = true;
             lastVisibleState = true;
@@ -952,7 +952,7 @@ class LaserScan extends THREE.Object3D {
               this.visible = false;
               lastVisibleState = false;
               // Limit further retries to avoid console spam, but still check occasionally
-              if (retryCount > 300) retryCount = 300; 
+              if (retryCount > 300) retryCount = 300;
             }
           }
         } catch (e) {
@@ -1000,7 +1000,7 @@ class LaserScan extends THREE.Object3D {
       this.minRange = options.minRange;
     }
   }
-  
+
   public setFixedFrame(fixedFrame: string): void {
     // console.log(`[LaserScan] setFixedFrame called: ${fixedFrame}`);
     this.fixedFrame = fixedFrame;
@@ -1029,35 +1029,35 @@ class OrbitControls {
   public zoomSpeed = 0.1;
   public panSpeed = 0.1;
   public rotateSpeed = 1.0;
-  
+
   private mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
   private STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2 };
   private state = this.STATE.NONE;
-  
+
   private spherical = new THREE.Spherical();
-  private sphericalDelta = new THREE.Spherical();
+  private _sphericalDelta = new THREE.Spherical();
   private scale = 1;
   private panOffset = new THREE.Vector3();
-  
+
   private rotateStart = new THREE.Vector2();
   private rotateEnd = new THREE.Vector2();
   private rotateDelta = new THREE.Vector2();
-  
+
   private panStart = new THREE.Vector2();
   private panEnd = new THREE.Vector2();
   private panDelta = new THREE.Vector2();
-  
+
   // Track touch points for multi-touch gestures
   private prevTouchDistance = -1;
   private prevTouchMidpoint = new THREE.Vector2();
-  
+
   // Double-tap detection
   private lastTapTime = 0;
   private lastTapX = 0;
   private lastTapY = 0;
   private doubleTapDelay = 300; // ms
   private doubleTapDistance = 30; // px tolerance
-  
+
   constructor(options: {
     scene: THREE.Object3D;
     camera: THREE.PerspectiveCamera;
@@ -1068,60 +1068,60 @@ class OrbitControls {
   }) {
     this.camera = options.camera;
     this.element = options.element || document.body;
-    
+
     if (options.userZoomSpeed) {
       this.zoomSpeed = options.userZoomSpeed;
     }
-    
+
     if (options.userPanSpeed) {
       this.panSpeed = options.userPanSpeed;
     }
-    
+
     if (options.userRotateSpeed) {
       this.rotateSpeed = options.userRotateSpeed;
     }
-    
+
     // Set up initial spherical coordinates
     this.updateSpherical();
-    
+
     // Bind methods
     this.onMouseDown = this.onMouseDown.bind(this);
     this.onMouseMove = this.onMouseMove.bind(this);
     this.onMouseUp = this.onMouseUp.bind(this);
     this.onMouseWheel = this.onMouseWheel.bind(this);
-    
+
     // Bind touch methods
     this.onTouchStart = this.onTouchStart.bind(this);
     this.onTouchMove = this.onTouchMove.bind(this);
     this.onTouchEnd = this.onTouchEnd.bind(this);
-    
+
     // Add event listeners
     this.element.addEventListener('mousedown', this.onMouseDown, false);
     this.element.addEventListener('wheel', this.onMouseWheel, false);
-    
+
     // Add touch event listeners
     this.element.addEventListener('touchstart', this.onTouchStart, false);
     this.element.addEventListener('touchmove', this.onTouchMove, false);
     this.element.addEventListener('touchend', this.onTouchEnd, false);
-    
+
     // Initial update
     this.update();
-    
+
     console.log('[OrbitControls] Initialized: Left=Rotate, Middle=Pan, Wheel=Zoom, Touch: 1-finger=Rotate, 2-finger=Pan/Zoom');
   }
-  
+
   private updateSpherical(): void {
     const offset = new THREE.Vector3().subVectors(this.camera.position, this.target);
-    
+
     // Convert from cartesian to spherical coordinates
     this.spherical.setFromVector3(offset);
   }
-  
+
   private onMouseDown(event: MouseEvent): void {
     if (!this.enabled) return;
-    
+
     event.preventDefault();
-    
+
     switch (event.button) {
       case this.mouseButtons.LEFT:
         this.state = this.STATE.ROTATE;
@@ -1139,99 +1139,99 @@ class OrbitControls {
       default:
         this.state = this.STATE.NONE;
     }
-    
+
     if (this.state !== this.STATE.NONE) {
       document.addEventListener('mousemove', this.onMouseMove, false);
       document.addEventListener('mouseup', this.onMouseUp, false);
     }
   }
-  
+
   private onMouseMove(event: MouseEvent): void {
     if (!this.enabled) return;
-    
+
     event.preventDefault();
-    
+
     switch (this.state) {
       case this.STATE.ROTATE:
         this.rotateEnd.set(event.clientX, event.clientY);
         this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-        
+
         // Get element dimensions for rotation calculations
         const element = this.element === document.body ? document.body : this.element;
         const elementWidth = element.clientWidth;
         const elementHeight = element.clientHeight;
-        
+
         // Scale factor for rotation (adjust as needed for sensitivity)
         const rotateSpeed = this.rotateSpeed;
-        
+
         // Completely separate axis handling for Z-up system
         // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
         const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-        
+
         // Apply rotation around world Z axis (phi in spherical coordinates)
         const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1), 
+          new THREE.Vector3(0, 0, 1),
           -horizontalRotationAngle
         );
-        
+
         // Apply Z-axis rotation to current camera position
         const cameraPosition = new THREE.Vector3().subVectors(
           this.camera.position,
           this.target
         );
         cameraPosition.applyQuaternion(rotationZ);
-        
+
         // Vertical movement (Y) - rotate around local X axis (polar angle)
         // First get the right vector (perpendicular to camera direction and Z-up)
         const forward = cameraPosition.clone().normalize();
         const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-        
+
         // Calculate vertical rotation angle
         const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-        
+
         // Apply rotation around right vector
         const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
         cameraPosition.applyQuaternion(rotationX);
-        
+
         // Update camera position based on rotated vector
         this.camera.position.copy(this.target).add(cameraPosition);
-        
+
         // Ensure camera up vector stays aligned with world Z
         this.camera.up.set(0, 0, 1);
-        
+
         // Look at target
         this.camera.lookAt(this.target);
-        
+
         this.rotateStart.copy(this.rotateEnd);
         break;
-        
+
       case this.STATE.PAN:
         this.panEnd.set(event.clientX, event.clientY);
         this.panDelta.subVectors(this.panEnd, this.panStart);
-        
+
         // Invert X only, keep Y natural for up/down
         this.pan(-this.panDelta.x, this.panDelta.y);
-        
+
         this.panStart.copy(this.panEnd);
-        
+
         // Update camera view after panning
         this.update();
         break;
     }
   }
-  
-  private onMouseUp(event: MouseEvent): void {
+
+  private onMouseUp(_event: MouseEvent): void {
     document.removeEventListener('mousemove', this.onMouseMove, false);
     document.removeEventListener('mouseup', this.onMouseUp, false);
-    
+
     this.state = this.STATE.NONE;
   }
-  
+
   private onMouseWheel(event: WheelEvent): void {
     if (!this.enabled) return;
-    
+
     event.preventDefault();
-    
+
     // Detect trackpad pinch-zoom (Ctrl + wheel) or regular mouse wheel
     if (event.ctrlKey) {
       // Trackpad pinch-to-zoom (Ctrl is automatically added by browser)
@@ -1257,28 +1257,28 @@ class OrbitControls {
         }
       }
     }
-    
+
     this.update();
   }
-  
+
   private onTouchStart(event: TouchEvent): void {
     if (!this.enabled) return;
-    
+
     event.preventDefault();
-    
+
     switch (event.touches.length) {
       case 1: // Single touch - check for double-tap or rotation
         const now = Date.now();
         const tapX = event.touches[0].clientX;
         const tapY = event.touches[0].clientY;
-        
+
         // Check for double-tap
         const timeDiff = now - this.lastTapTime;
         const distDiff = Math.sqrt(
-          Math.pow(tapX - this.lastTapX, 2) + 
+          Math.pow(tapX - this.lastTapX, 2) +
           Math.pow(tapY - this.lastTapY, 2)
         );
-        
+
         if (timeDiff < this.doubleTapDelay && distDiff < this.doubleTapDistance) {
           // Double-tap detected - smooth zoom in
           this.smoothZoom(0.6, 300); // Zoom to 60% distance over 300ms
@@ -1292,12 +1292,12 @@ class OrbitControls {
           this.lastTapY = tapY;
         }
         break;
-        
+
       case 2: // Two touches - pinch zoom or two-finger pan
         const dx = event.touches[0].clientX - event.touches[1].clientX;
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         this.prevTouchDistance = Math.sqrt(dx * dx + dy * dy);
-        
+
         // Store the midpoint for tracking pan movement
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
@@ -1305,17 +1305,17 @@ class OrbitControls {
         this.panStart.set(x, y);
         this.state = this.STATE.DOLLY; // Two-finger state
         break;
-        
+
       default:
         this.state = this.STATE.NONE;
     }
   }
-  
+
   private onTouchMove(event: TouchEvent): void {
     if (!this.enabled) return;
-    
+
     event.preventDefault();
-    
+
     switch (event.touches.length) {
       case 1: // Single touch - handle as rotation
         if (this.state === this.STATE.ROTATE) {
@@ -1324,77 +1324,77 @@ class OrbitControls {
             event.touches[0].clientY
           );
           this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-          
+
           // Get element dimensions for rotation calculations
           const element = this.element === document.body ? document.body : this.element;
           const elementWidth = element.clientWidth;
           const elementHeight = element.clientHeight;
-          
+
           // Scale factor for rotation - reduced for touch (0.4x) for smoother control
           const rotateSpeed = this.rotateSpeed * 0.4;
-          
+
           // Completely separate axis handling for Z-up system
           // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
           const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-          
+
           // Apply rotation around world Z axis (phi in spherical coordinates)
           const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(0, 0, 1), 
+            new THREE.Vector3(0, 0, 1),
             -horizontalRotationAngle
           );
-          
+
           // Apply Z-axis rotation to current camera position
           const cameraPosition = new THREE.Vector3().subVectors(
             this.camera.position,
             this.target
           );
           cameraPosition.applyQuaternion(rotationZ);
-          
+
           // Vertical movement (Y) - rotate around local X axis (polar angle)
           // First get the right vector (perpendicular to camera direction and Z-up)
           const forward = cameraPosition.clone().normalize();
           const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-          
+
           // Calculate vertical rotation angle
           const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-          
+
           // Apply rotation around right vector
           const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
           cameraPosition.applyQuaternion(rotationX);
-          
+
           // Update camera position based on rotated vector
           this.camera.position.copy(this.target).add(cameraPosition);
-          
+
           // Ensure camera up vector stays aligned with world Z
           this.camera.up.set(0, 0, 1);
-          
+
           // Look at target
           this.camera.lookAt(this.target);
-          
+
           this.rotateStart.copy(this.rotateEnd);
         }
         break;
-        
+
       case 2: // Two touches - handle zoom and pan separately each frame
         // Calculate current distance between touch points
         const dx2 = event.touches[0].clientX - event.touches[1].clientX;
         const dy2 = event.touches[0].clientY - event.touches[1].clientY;
         const touchDistance = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-        
+
         // Calculate current midpoint
         const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        
+
         if (this.prevTouchDistance > 0) {
           // Calculate distance change ratio (for pinch detection)
           const distanceChange = touchDistance - this.prevTouchDistance;
           const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
-          
+
           // Calculate midpoint movement
           const midpointDeltaX = midX - this.prevTouchMidpoint.x;
           const midpointDeltaY = midY - this.prevTouchMidpoint.y;
           const midpointMovement = Math.sqrt(midpointDeltaX * midpointDeltaX + midpointDeltaY * midpointDeltaY);
-          
+
           // Pinch zoom: significant change in finger distance (>4% of current spread)
           // This triggers when fingers move toward/away from each other
           // Inverted: pinch out (spread fingers) = zoom out, pinch in = zoom in
@@ -1415,141 +1415,141 @@ class OrbitControls {
             this.panStart.copy(this.panEnd);
           }
         }
-        
+
         // Update tracking values
         this.prevTouchDistance = touchDistance;
         this.prevTouchMidpoint.set(midX, midY);
         this.panStart.set(midX, midY); // Keep pan start updated
         break;
     }
-    
+
     this.update();
   }
-  
-  private onTouchEnd(event: TouchEvent): void {
+
+  private onTouchEnd(_event: TouchEvent): void {
     this.state = this.STATE.NONE;
     this.prevTouchDistance = -1;
   }
-  
+
   private pan(deltaX: number, deltaY: number): void {
-    const element = this.element === document.body ? 
+    const element = this.element === document.body ?
       document.body : this.element;
-    
+
     // Adjust pan speed based on camera position
     const position = this.camera.position;
     const targetDistance = position.distanceTo(this.target);
-    
+
     // Scale panning based on distance
     deltaX *= targetDistance * this.panSpeed / element.clientWidth;
     deltaY *= targetDistance * this.panSpeed / element.clientHeight;
-    
+
     // For Z-up system:
     // Create precise panning vectors that align with the screen
     const worldUp = new THREE.Vector3(0, 0, 1);
-    
+
     // Get the vector from target to camera (camera direction reversed)
     const offset = new THREE.Vector3().subVectors(position, this.target);
-    
+
     // Get right vector (screen X direction)
     // Cross product of camera direction and world up
     const panX = new THREE.Vector3().crossVectors(offset, worldUp).normalize();
-    
+
     // Get the screen's Y axis vector (perpendicular to both)
     // This ensures correct panning in the screen plane
     const forward = offset.clone().normalize();
     const panY = new THREE.Vector3().crossVectors(panX, forward).normalize();
-    
+
     // Move along right vector for X movement 
     const moveX = panX.clone().multiplyScalar(-deltaX);
-    
+
     // Move along screen Y vector for Y movement
     const moveY = panY.clone().multiplyScalar(deltaY);
-    
+
     // Apply the combined movement
     position.add(moveX).add(moveY);
     this.target.add(moveX).add(moveY);
   }
-  
+
   private dollyIn(): void {
     this.scale /= 0.95;
   }
-  
+
   private dollyOut(): void {
     this.scale *= 0.95;
   }
-  
+
   public update(): void {
     // This method is now simplified since most rotation handling 
     // is done directly in onMouseMove and onTouchMove
-    
+
     // Apply scale (zooming) if needed
     if (this.scale !== 1) {
       const position = this.camera.position;
       const offset = position.clone().sub(this.target);
-      
+
       // Scale distance from target
       offset.multiplyScalar(this.scale);
-      
+
       // Update position based on scaled offset
       position.copy(this.target).add(offset);
-      
+
       // Reset scale
       this.scale = 1;
     }
-    
+
     // Apply pan offset if needed
     if (!this.panOffset.equals(new THREE.Vector3(0, 0, 0))) {
       this.target.add(this.panOffset);
       this.camera.position.add(this.panOffset);
       this.panOffset.set(0, 0, 0);
     }
-    
+
     // Ensure camera is looking at target
     this.camera.lookAt(this.target);
-    
+
     // Always maintain Z-up orientation
     this.camera.up.set(0, 0, 1);
   }
-  
+
   // Smooth animated zoom
   private smoothZoom(targetScale: number, duration: number): void {
     const startPosition = this.camera.position.clone();
     const startDistance = startPosition.distanceTo(this.target);
     const endDistance = startDistance * targetScale;
     const startTime = performance.now();
-    
+
     const animateZoom = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
+
       // Ease out cubic for smooth deceleration
       const easeProgress = 1 - Math.pow(1 - progress, 3);
-      
+
       // Interpolate distance
       const currentDistance = startDistance + (endDistance - startDistance) * easeProgress;
-      
+
       // Calculate new position along the same direction
       const direction = this.camera.position.clone().sub(this.target).normalize();
       this.camera.position.copy(this.target).add(direction.multiplyScalar(currentDistance));
-      
+
       // Keep looking at target
       this.camera.lookAt(this.target);
       this.camera.up.set(0, 0, 1);
-      
+
       if (progress < 1) {
         requestAnimationFrame(animateZoom);
       }
     };
-    
+
     requestAnimationFrame(animateZoom);
   }
-  
+
   public dispose(): void {
     this.element.removeEventListener('mousedown', this.onMouseDown, false);
     this.element.removeEventListener('wheel', this.onMouseWheel, false);
     document.removeEventListener('mousemove', this.onMouseMove, false);
     document.removeEventListener('mouseup', this.onMouseUp, false);
-    
+
     // Remove touch event listeners
     this.element.removeEventListener('touchstart', this.onTouchStart, false);
     this.element.removeEventListener('touchmove', this.onTouchMove, false);
@@ -1661,7 +1661,7 @@ class UrdfClient extends THREE.Object3D {
     // Process joints to establish hierarchy and add visuals/collisions to parent links
     joints.forEach(jointElement => {
       const jointName = jointElement.getAttribute('name');
-      const jointType = jointElement.getAttribute('type');
+      const _jointType = jointElement.getAttribute('type');
       const parentLinkName = jointElement.getElementsByTagName('parent')[0]?.getAttribute('link');
       const childLinkName = jointElement.getElementsByTagName('child')[0]?.getAttribute('link');
 
@@ -1672,13 +1672,13 @@ class UrdfClient extends THREE.Object3D {
         if (parentObject && childObject) {
           parentObject.add(childObject); // Add child link to parent link
           childLinks.add(childLinkName); // Mark this link as a child
-          
+
           console.log(`[UrdfClient] Joint ${jointName}: ${parentLinkName} -> ${childLinkName}`);
 
           const originElement = jointElement.getElementsByTagName('origin')[0];
           if (originElement) {
-            const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0,0,0];
-            const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
+            const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0, 0, 0];
+            const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0, 0, 0];
             childObject.position.set(xyz[0], xyz[1], xyz[2]);
             // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
             // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
@@ -1686,17 +1686,17 @@ class UrdfClient extends THREE.Object3D {
             // For Z-up coordinate system, we need to be careful about axis mapping
             const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
             childObject.rotation.copy(euler);
-            
+
             console.log(`[UrdfClient] Joint ${jointName} origin: pos(${xyz.join(',')}) rot(${rpy.join(',')})`);
           }
         } else {
           console.warn(`[UrdfClient] Parent or child link not found for joint ${jointName}`);
         }
-      }      
+      }
     });
 
     // Identify root links (not children of any joint)
-    this.linkNameMap.forEach((linkObject, linkName) => {
+    this.linkNameMap.forEach((_linkObject, linkName) => {
       if (!childLinks.has(linkName)) {
         rootLinks.push(linkName);
       }
@@ -1749,56 +1749,56 @@ class UrdfClient extends THREE.Object3D {
       const filename = meshElement.getAttribute('filename');
       if (filename) {
         const fullPath = this.resolvePackagePath(filename);
-        const scaleAttr = meshElement.getAttribute('scale')?.split(' ').map(Number) || [1,1,1];
+        const scaleAttr = meshElement.getAttribute('scale')?.split(' ').map(Number) || [1, 1, 1];
         const scaleVec = new THREE.Vector3(scaleAttr[0], scaleAttr[1], scaleAttr[2]);
 
         if (filename.toLowerCase().endsWith('.dae') || filename.toLowerCase().endsWith('.collada')) {
           this.colladaLoader.load(fullPath, (collada) => {
             const daeMesh = collada.scene;
             daeMesh.scale.copy(scaleVec);
-            
+
             // Counter-rotate to undo ColladaLoader's automatic Y-up conversion
             // ColladaLoader rotates Z-up assets to Y-up, but we want Z-up
             // The automatic rotation is usually -90 degrees around X-axis
             daeMesh.rotateX(Math.PI / 2); // Rotate +90 degrees around X to restore Z-up
-            
+
             this.applyOrigin(visualElement, daeMesh);
-            
+
             // Only override materials if URDF explicitly specifies a material
             if (urdfMaterial) {
-              daeMesh.traverse(child => { 
+              daeMesh.traverse(child => {
                 if (child instanceof THREE.Mesh) {
-                  child.material = urdfMaterial; 
+                  child.material = urdfMaterial;
                 }
               });
             } else {
               // Improve the existing materials for better visibility
-              daeMesh.traverse(child => { 
+              daeMesh.traverse(child => {
                 if (child instanceof THREE.Mesh) {
                   if (child.material) {
                     // If material exists, ensure it works with lighting
-                    if (child.material instanceof THREE.MeshLambertMaterial || 
-                        child.material instanceof THREE.MeshPhongMaterial) {
+                    if (child.material instanceof THREE.MeshLambertMaterial ||
+                      child.material instanceof THREE.MeshPhongMaterial) {
                       // Keep existing material but ensure it's visible
                     } else {
                       // Convert basic materials to lit materials
                       const existingColor = (child.material as any).color || new THREE.Color(0xcccccc);
-                      child.material = new THREE.MeshLambertMaterial({ 
+                      child.material = new THREE.MeshLambertMaterial({
                         color: existingColor,
-                        transparent: false 
+                        transparent: false
                       });
                     }
                   } else {
                     // No material, use default
-                    child.material = new THREE.MeshLambertMaterial({ 
+                    child.material = new THREE.MeshLambertMaterial({
                       color: 0xcccccc,
-                      transparent: false 
+                      transparent: false
                     });
                   }
                 }
               });
             }
-            
+
             linkObject.add(daeMesh);
             console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
           }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
@@ -1839,20 +1839,20 @@ class UrdfClient extends THREE.Object3D {
       linkObject.add(mesh);
     }
   }
-  
+
   private applyOrigin(visualOrCollisionElement: Element, object: THREE.Object3D): void {
     const originElement = visualOrCollisionElement.getElementsByTagName('origin')[0];
     if (originElement) {
-        const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0,0,0];
-        const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
-        object.position.set(xyz[0], xyz[1], xyz[2]);
-        
-        // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
-        // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
-        // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
-        // For Z-up coordinate system, we need to be careful about axis mapping
-        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
-        object.rotation.copy(euler);
+      const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0, 0, 0];
+      const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0, 0, 0];
+      object.position.set(xyz[0], xyz[1], xyz[2]);
+
+      // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
+      // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
+      // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
+      // For Z-up coordinate system, we need to be careful about axis mapping
+      const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+      object.rotation.copy(euler);
     }
   }
 
@@ -1860,7 +1860,7 @@ class UrdfClient extends THREE.Object3D {
     // First handle package:// URLs
     if (filePath.startsWith('package://')) {
       // Replace package://<package_name>/ with the base path + <package_name>/
-      const resolved = filePath.replace(/package:\/\/([^\/]*)\//, (match, packageName) => {
+      const resolved = filePath.replace(/package:\/\/([^\/]*)\//, (_match, packageName) => {
         const basePath = this.path.endsWith('/') ? this.path : this.path + '/';
         return `${basePath}${packageName}/`;
       });
@@ -1884,38 +1884,38 @@ class UrdfClient extends THREE.Object3D {
 
     return filePath;
   }
-  
+
   private loadMaterial(materialElement?: Element): THREE.Material {
     let color = new THREE.Color(0xcccccc); // Default light grey instead of darker grey
     let texture = null;
 
     if (materialElement) {
-        const colorElement = materialElement.getElementsByTagName('color')[0];
-        if (colorElement) {
-            const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
-            if (rgba && rgba.length === 4) {
-                color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
-            }
+      const colorElement = materialElement.getElementsByTagName('color')[0];
+      if (colorElement) {
+        const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
+        if (rgba && rgba.length === 4) {
+          color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
         }
-        const textureElement = materialElement.getElementsByTagName('texture')[0];
-        if (textureElement) {
-            const filename = textureElement.getAttribute('filename');
-            if (filename) {
-                // Basic texture loading, assuming PNG or JPG
-                // Proper path resolution for textures is also needed here
-                const texturePath = this.resolvePackagePath(filename);
-                try {
-                    texture = new THREE.TextureLoader().load(texturePath);
-                    console.log(`[UrdfClient] Loading texture: ${texturePath}`);
-                } catch (e) {
-                    console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
-                }
-            }
+      }
+      const textureElement = materialElement.getElementsByTagName('texture')[0];
+      if (textureElement) {
+        const filename = textureElement.getAttribute('filename');
+        if (filename) {
+          // Basic texture loading, assuming PNG or JPG
+          // Proper path resolution for textures is also needed here
+          const texturePath = this.resolvePackagePath(filename);
+          try {
+            texture = new THREE.TextureLoader().load(texturePath);
+            console.log(`[UrdfClient] Loading texture: ${texturePath}`);
+          } catch (e) {
+            console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
+          }
         }
+      }
     }
     // Use MeshLambertMaterial for better performance and compatibility with our lighting setup
-    return new THREE.MeshLambertMaterial({ 
-      color: color, 
+    return new THREE.MeshLambertMaterial({
+      color: color,
       map: texture,
       transparent: false,
       side: THREE.FrontSide
@@ -1924,107 +1924,107 @@ class UrdfClient extends THREE.Object3D {
 
   private setupTfUpdates(rootLinks: string[]): void {
     if (this.urdfModel) {
-        console.log(`[UrdfClient] Setting up TF updates for ${this.linkNameMap.size} links.`);
-        
-        const robotModelName = this.urdfModel.name || ''; // e.g., "drone0" or "my_robot"
-        let topicNamespace = '';
-        if (this.robotDescriptionTopic?.name) {
-            const parts = this.robotDescriptionTopic.name.split('/').filter(p => p.length > 0);
-            // A common pattern for robot_description is /namespace/robot_description or /robot_description
-            // If namespaced, parts[0] would be the namespace.
-            if (parts.length > 1 && parts[0] !== 'robot_description') { 
-                topicNamespace = parts[0]; 
-            }
+      console.log(`[UrdfClient] Setting up TF updates for ${this.linkNameMap.size} links.`);
+
+      const robotModelName = this.urdfModel.name || ''; // e.g., "drone0" or "my_robot"
+      let topicNamespace = '';
+      if (this.robotDescriptionTopic?.name) {
+        const parts = this.robotDescriptionTopic.name.split('/').filter(p => p.length > 0);
+        // A common pattern for robot_description is /namespace/robot_description or /robot_description
+        // If namespaced, parts[0] would be the namespace.
+        if (parts.length > 1 && parts[0] !== 'robot_description') {
+          topicNamespace = parts[0];
+        }
+      }
+
+      this.linkNameMap.forEach((linkObject, urdfLinkName) => {
+        const framesToTry: string[] = [];
+        // 1. Direct URDF link name
+        framesToTry.push(urdfLinkName);
+
+        // 2. Namespace from topic + URDF link name
+        if (topicNamespace) {
+          framesToTry.push(`${topicNamespace}/${urdfLinkName}`);
         }
 
-        this.linkNameMap.forEach((linkObject, urdfLinkName) => {
-            const framesToTry: string[] = [];
-            // 1. Direct URDF link name
-            framesToTry.push(urdfLinkName);
+        // 3. Robot model name from URDF + URDF link name (if different from topic namespace)
+        if (robotModelName && robotModelName !== topicNamespace) {
+          framesToTry.push(`${robotModelName}/${urdfLinkName}`);
+        }
 
-            // 2. Namespace from topic + URDF link name
-            if (topicNamespace) {
-                framesToTry.push(`${topicNamespace}/${urdfLinkName}`);
+        const uniqueFramesToTry = [...new Set(framesToTry)];
+        let activeSubscriptionFrame: string | null = null;
+
+        console.log(`[UrdfClient] For URDF link "${urdfLinkName}", trying TF frames: ${uniqueFramesToTry.join(', ')}`);
+
+        const subscriptionCallback = (tfFrameName: string, transform: StoredTransform | null) => {
+          if (transform) {
+            if (!activeSubscriptionFrame) {
+              activeSubscriptionFrame = tfFrameName;
+              console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
+              // If other subscriptions were made for this link, they should be cancelled here if possible
+              // For now, this logic means the first to provide data 'wins'.
+            } else if (activeSubscriptionFrame !== tfFrameName) {
+              // Already have an active subscription for this link from a different TF frame name.
+              // This callback is from an alternative name that also got data; we ignore it.
+              return;
             }
 
-            // 3. Robot model name from URDF + URDF link name (if different from topic namespace)
-            if (robotModelName && robotModelName !== topicNamespace) {
-                framesToTry.push(`${robotModelName}/${urdfLinkName}`);
+            const currentParent = linkObject.parent;
+            if (currentParent && currentParent !== this.urdfModel && this.urdfModel) {
+              currentParent.remove(linkObject);
+              if (linkObject.parent !== this.urdfModel) {
+                this.urdfModel.add(linkObject);
+              }
+            } else if (!currentParent && this.urdfModel) {
+              this.urdfModel.add(linkObject);
             }
-            
-            const uniqueFramesToTry = [...new Set(framesToTry)];
-            let activeSubscriptionFrame: string | null = null;
 
-            console.log(`[UrdfClient] For URDF link "${urdfLinkName}", trying TF frames: ${uniqueFramesToTry.join(', ')}`);
+            linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+            linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+            linkObject.updateMatrix();
+            linkObject.matrixWorldNeedsUpdate = true;
+          }
+        };
 
-            const subscriptionCallback = (tfFrameName: string, transform: StoredTransform | null) => {
-                if (transform) {
-                    if (!activeSubscriptionFrame) {
-                        activeSubscriptionFrame = tfFrameName;
-                        console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
-                        // If other subscriptions were made for this link, they should be cancelled here if possible
-                        // For now, this logic means the first to provide data 'wins'.
-                    } else if (activeSubscriptionFrame !== tfFrameName) {
-                        // Already have an active subscription for this link from a different TF frame name.
-                        // This callback is from an alternative name that also got data; we ignore it.
-                        return; 
-                    }
-
-                    const currentParent = linkObject.parent;
-                    if (currentParent && currentParent !== this.urdfModel && this.urdfModel) {
-                        currentParent.remove(linkObject);
-                        if (linkObject.parent !== this.urdfModel) { 
-                           this.urdfModel.add(linkObject);
-                        }
-                    } else if (!currentParent && this.urdfModel) {
-                        this.urdfModel.add(linkObject);
-                    }
-
-                    linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                    linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    linkObject.updateMatrix();
-                    linkObject.matrixWorldNeedsUpdate = true;
-                }
-            };
-
-            uniqueFramesToTry.forEach(frameName => {
-                this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
-                    subscriptionCallback(frameName, transform);
-                });
-            });
-
-            // Optional: Initial check for immediate availability (for faster first render)
-            let initialFrameFound = false;
-            for (const frameName of uniqueFramesToTry) {
-                try {
-                    // Use a common fixed frame like 'odom' for the lookup check
-                    const initialTransform = this.tfClient.lookupTransform('odom', frameName); // Default to 'odom'
-                    if (initialTransform) {
-                        console.log(`[UrdfClient] URDF link "${urdfLinkName}" initially found active TF frame "${frameName}"`);
-                        // Trigger the callback manually with this initial transform to potentially render faster
-                        // subscriptionCallback(frameName, initialTransform);
-                        initialFrameFound = true;
-                        break; 
-                    }
-                } catch (e) { /* lookup failed, try next */ }
-            }
-            if (!initialFrameFound) {
-                 console.warn(`[UrdfClient] URDF link "${urdfLinkName}": No TF frame immediately found among [${uniqueFramesToTry.join(', ')}]. Waiting for subscription data.`);
-            }
+        uniqueFramesToTry.forEach(frameName => {
+          this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
+            subscriptionCallback(frameName, transform);
+          });
         });
-        
-        if (this.linkNameMap.size === 0 && this.urdfModel && rootLinks.length > 0) {
-            const baseFrameToTry = rootLinks[0]; 
-            console.warn(`[UrdfClient] Fallback: No links in URDF. Subscribing to ${baseFrameToTry} for the whole model.`);
-            this.tfClient.subscribe(baseFrameToTry, (transform: StoredTransform | null) => {
-                if (transform && this.urdfModel) {
-                    this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                    this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    this.urdfModel.updateMatrix();
-                    this.urdfModel.matrixWorldNeedsUpdate = true;
-                }
-            });
+
+        // Optional: Initial check for immediate availability (for faster first render)
+        let initialFrameFound = false;
+        for (const frameName of uniqueFramesToTry) {
+          try {
+            // Use a common fixed frame like 'odom' for the lookup check
+            const initialTransform = this.tfClient.lookupTransform('odom', frameName); // Default to 'odom'
+            if (initialTransform) {
+              console.log(`[UrdfClient] URDF link "${urdfLinkName}" initially found active TF frame "${frameName}"`);
+              // Trigger the callback manually with this initial transform to potentially render faster
+              // subscriptionCallback(frameName, initialTransform);
+              initialFrameFound = true;
+              break;
+            }
+          } catch (e) { /* lookup failed, try next */ }
         }
+        if (!initialFrameFound) {
+          console.warn(`[UrdfClient] URDF link "${urdfLinkName}": No TF frame immediately found among [${uniqueFramesToTry.join(', ')}]. Waiting for subscription data.`);
+        }
+      });
+
+      if (this.linkNameMap.size === 0 && this.urdfModel && rootLinks.length > 0) {
+        const baseFrameToTry = rootLinks[0];
+        console.warn(`[UrdfClient] Fallback: No links in URDF. Subscribing to ${baseFrameToTry} for the whole model.`);
+        this.tfClient.subscribe(baseFrameToTry, (transform: StoredTransform | null) => {
+          if (transform && this.urdfModel) {
+            this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
+            this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+            this.urdfModel.updateMatrix();
+            this.urdfModel.matrixWorldNeedsUpdate = true;
+          }
+        });
+      }
     }
     console.log(`[UrdfClient] TF update subscriptions configured.`);
   }

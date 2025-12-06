@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, TransformStore } from '../utils/tfUtils';
@@ -31,8 +31,6 @@ export function useTfProvider({
 
   // Effect 1: Manage TF Provider instance and Fixed Frame updates
   useEffect(() => {
-    let didCreateProvider = false; // Flag to track if *this* effect run created the provider
-
     // Check prerequisites
     if (ros && isRosConnected && ros3dViewer.current) {
       if (!customTFProvider.current) {
@@ -40,38 +38,37 @@ export function useTfProvider({
         customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransforms);
         ros3dViewer.current.fixedFrame = fixedFrame; // Set viewer frame on creation
         setIsProviderReady(true);
-        didCreateProvider = true;
       } else {
         // Provider exists, update fixed frame if it changed
         const currentProviderFixedFrame = customTFProvider.current.fixedFrame;
         const normalizedNewFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
 
-        if(currentProviderFixedFrame !== normalizedNewFixedFrame) {
-            console.log(`[TF Provider Effect] Fixed frame changed from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
-            
-            // First update the viewer to ensure consistent state
-            if (ros3dViewer.current) {
-                ros3dViewer.current.fixedFrame = normalizedNewFixedFrame;
-                console.log(`[TF Provider Effect] Updated viewer fixed frame to: ${normalizedNewFixedFrame}`);
+        if (currentProviderFixedFrame !== normalizedNewFixedFrame) {
+          console.log(`[TF Provider Effect] Fixed frame changed from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
+
+          // First update the viewer to ensure consistent state
+          if (ros3dViewer.current) {
+            ros3dViewer.current.fixedFrame = normalizedNewFixedFrame;
+            console.log(`[TF Provider Effect] Updated viewer fixed frame to: ${normalizedNewFixedFrame}`);
+          }
+
+          // Then update the provider - this will trigger callbacks to visualizations
+          customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame);
+
+          // Force a render update on the viewer if needed
+          if (ros3dViewer.current?.renderer) {
+            try {
+              ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
+              console.log(`[TF Provider Effect] Forced viewer render after frame change`);
+            } catch (e) {
+              console.warn(`[TF Provider Effect] Error forcing viewer render:`, e);
             }
-            
-            // Then update the provider - this will trigger callbacks to visualizations
-            customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame);
-            
-            // Force a render update on the viewer if needed
-            if (ros3dViewer.current && typeof ros3dViewer.current.render === 'function') {
-                try {
-                    ros3dViewer.current.render();
-                    console.log(`[TF Provider Effect] Forced viewer render after frame change`);
-                } catch (e) {
-                    console.warn(`[TF Provider Effect] Error forcing viewer render:`, e);
-                }
-            }
+          }
         }
 
         // Ensure readiness state is true if prerequisites re-established
         if (!isProviderReady) {
-           setIsProviderReady(true);
+          setIsProviderReady(true);
         }
       }
     } else {
@@ -94,7 +91,7 @@ export function useTfProvider({
       // console.log('[TF Provider Effect] Component unmounting? No explicit disposal here.')
     };
 
-  // Depend on prerequisites and fixedFrame for updates
+    // Depend on prerequisites and fixedFrame for updates
   }, [ros, isRosConnected, ros3dViewer, fixedFrame, initialTransforms]);
 
   // Effect 2: Manage TF Subscriptions based on provider readiness
@@ -141,11 +138,11 @@ export function useTfProvider({
 
     // Cleanup function for subscriptions
     return () => {
-       cleanupSubscriptions();
+      cleanupSubscriptions();
     };
 
-  // Depend on provider readiness, ROS connection, and the stable message handler
-  // customTFProvider ref shouldn't be a dependency itself, readiness flag handles it.
+    // Depend on provider readiness, ROS connection, and the stable message handler
+    // customTFProvider ref shouldn't be a dependency itself, readiness flag handles it.
   }, [isProviderReady, ros, handleTFMessage]);
 
   // Function to check if the provider is properly initialized with all required methods
@@ -154,7 +151,7 @@ export function useTfProvider({
       console.error("[TF Provider] Provider not initialized yet");
       return false;
     }
-    
+
     // Check for required methods
     const requiredMethods = ['lookupTransform', 'updateFixedFrame', 'subscribe', 'unsubscribe'];
     for (const method of requiredMethods) {
@@ -163,18 +160,18 @@ export function useTfProvider({
         return false;
       }
     }
-    
+
     // Add a getFixedFrame method if it doesn't exist (needed by some components)
     if (typeof (customTFProvider.current as any).getFixedFrame !== 'function') {
       console.log("[TF Provider] Adding getFixedFrame method to provider");
-      (customTFProvider.current as any).getFixedFrame = function() {
+      (customTFProvider.current as any).getFixedFrame = function () {
         return this.fixedFrame;
       };
     }
-    
+
     return true;
   };
-  
+
   // Call this function each time the provider is created or updated
   useEffect(() => {
     if (customTFProvider.current) {
@@ -183,7 +180,7 @@ export function useTfProvider({
   }, [isProviderReady]);
 
   // Return the TF provider instance ref, needed by the PointCloud client
-  return { 
+  return {
     customTFProvider,
     ensureProviderFunctionality // Export the function for external use
   };

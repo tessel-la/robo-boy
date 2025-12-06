@@ -77,7 +77,7 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
 
   const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (isEditing) return;
-    
+
     const newValue = parseFloat(event.target.value);
     setValue(newValue);
     publishThrottled(newValue);
@@ -108,7 +108,7 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     borderRadius: `${Math.floor(4 * scaleFactor)}px`,
     outline: 'none',
     cursor: isEditing ? 'default' : 'pointer',
-    writingMode: orientation === 'vertical' ? 'bt-lr' : undefined,
+    writingMode: orientation === 'vertical' ? 'vertical-rl' : undefined,
     transform: orientation === 'vertical' ? 'rotate(-90deg)' : undefined,
     pointerEvents: isEditing ? 'none' : 'auto'
   };

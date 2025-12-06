@@ -1,5 +1,4 @@
-import React, { useEffect, useRef } from 'react';
-import { Ros } from 'roslib';
+import { useEffect, useRef } from 'react';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { Material } from 'three';
@@ -52,11 +51,11 @@ export function useTfVisualizer({
         // Disposal of children happens in Effect 2's cleanup
         tfAxesContainerRef.current = null;
       } else if (!isRosConnected && tfAxesContainerRef.current) {
-         // If ROS disconnected, ensure container is removed if it exists
-         // console.log('[useTfVisualizer] ROS disconnected, removing TF Axes container');
-         viewer?.scene.remove(tfAxesContainerRef.current);
-         tfAxesContainerRef.current = null;
-         // Children disposal is handled by Effect 2 cleanup triggered by dependency change
+        // If ROS disconnected, ensure container is removed if it exists
+        // console.log('[useTfVisualizer] ROS disconnected, removing TF Axes container');
+        viewer?.scene.remove(tfAxesContainerRef.current);
+        tfAxesContainerRef.current = null;
+        // Children disposal is handled by Effect 2 cleanup triggered by dependency change
       }
     };
   }, [isRosConnected, ros3dViewer]);
@@ -93,12 +92,12 @@ export function useTfVisualizer({
         container.remove(entry.group);
         // Dispose geometry and material of the axes
         if (entry.axes.lineSegments) {
-            entry.axes.lineSegments.geometry?.dispose();
-            if (Array.isArray(entry.axes.lineSegments.material)) {
-                entry.axes.lineSegments.material.forEach((m: Material) => m.dispose());
-            } else {
-                entry.axes.lineSegments.material?.dispose();
-            }
+          entry.axes.lineSegments.geometry?.dispose();
+          if (Array.isArray(entry.axes.lineSegments.material)) {
+            entry.axes.lineSegments.material.forEach((m: Material) => m.dispose());
+          } else {
+            entry.axes.lineSegments.material?.dispose();
+          }
         }
         currentMap.delete(frameName);
       }
@@ -109,7 +108,7 @@ export function useTfVisualizer({
       // console.log(`[useTfVisualizer] Adding Axes for ${frameName}`);
       const group = new THREE.Group();
       const axes = new ROS3D.Axes({
-          lineSize: axesScale, // Rely on lineSize for scaling
+        lineSize: axesScale, // Rely on lineSize for scaling
       });
       group.add(axes);
       container.add(group);
@@ -118,25 +117,25 @@ export function useTfVisualizer({
 
     // Cleanup function for Effect 2
     return () => {
-       // console.log('[useTfVisualizer] Cleanup Effect 2: Individual Axes');
-       // When dependencies change (e.g., displayedTfFrames) or component unmounts,
-       // clean up *all* axes managed by this hook instance.
-       const mapToClear = tfAxesMapRef.current; // Use the ref's current value at cleanup time
-       const containerAtCleanup = tfAxesContainerRef.current;
+      // console.log('[useTfVisualizer] Cleanup Effect 2: Individual Axes');
+      // When dependencies change (e.g., displayedTfFrames) or component unmounts,
+      // clean up *all* axes managed by this hook instance.
+      const mapToClear = tfAxesMapRef.current; // Use the ref's current value at cleanup time
+      const containerAtCleanup = tfAxesContainerRef.current;
 
-       mapToClear.forEach((entry: { group: THREE.Group; axes: ROS3D.Axes }, frameName: string) => {
-         // console.log(`[useTfVisualizer Cleanup] Removing/Disposing Axes for ${frameName}`);
-         containerAtCleanup?.remove(entry.group);
-         if (entry.axes.lineSegments) {
-             entry.axes.lineSegments.geometry?.dispose();
-             if (Array.isArray(entry.axes.lineSegments.material)) {
-                 entry.axes.lineSegments.material.forEach((m: Material) => m.dispose());
-             } else {
-                 entry.axes.lineSegments.material?.dispose();
-             }
-         }
-       });
-       mapToClear.clear(); // Clear the map itself
+      mapToClear.forEach((entry: { group: THREE.Group; axes: ROS3D.Axes }, _frameName: string) => {
+        // console.log(`[useTfVisualizer Cleanup] Removing/Disposing Axes for ${frameName}`);
+        containerAtCleanup?.remove(entry.group);
+        if (entry.axes.lineSegments) {
+          entry.axes.lineSegments.geometry?.dispose();
+          if (Array.isArray(entry.axes.lineSegments.material)) {
+            entry.axes.lineSegments.material.forEach((m: Material) => m.dispose());
+          } else {
+            entry.axes.lineSegments.material?.dispose();
+          }
+        }
+      });
+      mapToClear.clear(); // Clear the map itself
     };
 
   }, [displayedTfFrames, axesScale]); // Re-run when the list or scale changes
@@ -146,11 +145,11 @@ export function useTfVisualizer({
     // Set refresh rate to 30 fps (33ms between frames)
     const VISUALIZATION_REFRESH_RATE_MS = 33; // 30 fps
     let lastUpdateTime = 0;
-    
+
     // Reuse these objects to avoid garbage collection
     const newPos = new THREE.Vector3();
     const newQuat = new THREE.Quaternion();
-    
+
     const updateAxesPoses = (timestamp: number) => {
       const viewer = ros3dViewer.current;
       const provider = customTFProvider.current;
@@ -162,13 +161,13 @@ export function useTfVisualizer({
         animationFrameId.current = requestAnimationFrame(updateAxesPoses);
         return;
       }
-      
+
       // Throttle updates to target 30 fps
       if (timestamp - lastUpdateTime < VISUALIZATION_REFRESH_RATE_MS) {
         animationFrameId.current = requestAnimationFrame(updateAxesPoses);
         return;
       }
-      
+
       lastUpdateTime = timestamp;
       const fixedFrame = viewer.fixedFrame || 'odom';
 
@@ -191,19 +190,19 @@ export function useTfVisualizer({
             transform.rotation.z,
             transform.rotation.w
           );
-          
+
           // Only update if the change is significant
           const positionChanged = !entry.group.position.equals(newPos) &&
             entry.group.position.distanceToSquared(newPos) > POSITION_THRESHOLD;
-          
+
           const rotationChanged = !entry.group.quaternion.equals(newQuat) &&
             Math.abs(entry.group.quaternion.dot(newQuat) - 1.0) > ROTATION_THRESHOLD;
-            
+
           if (positionChanged || rotationChanged) {
             entry.group.position.copy(newPos);
             entry.group.quaternion.copy(newQuat);
           }
-          
+
           if (!entry.group.visible) {
             entry.group.visible = true;
           }

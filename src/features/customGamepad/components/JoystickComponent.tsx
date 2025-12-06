@@ -2,9 +2,17 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
-import type { IJoystickUpdateEvent } from 'react-joystick-component';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+
+// Define the joystick update event interface locally since it's not exported from the library
+interface IJoystickUpdateEvent {
+  type: 'move' | 'stop' | 'start';
+  x: number | null;
+  y: number | null;
+  direction: string | null;
+  distance: number | null;
+}
 
 interface JoystickComponentProps {
   config: GamepadComponentConfig;
@@ -15,7 +23,7 @@ interface JoystickComponentProps {
 
 const THROTTLE_INTERVAL = 100;
 
-const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
+const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing, scaleFactor: _scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,7 +42,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     };
 
     updateSize();
-    
+
     const resizeObserver = new ResizeObserver(updateSize);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
@@ -89,15 +97,15 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       // The container represents the exact grid cell size allocated to this component
       // Use the smaller dimension to ensure the joystick stays circular and fits
       const availableSize = Math.min(containerSize.width, containerSize.height);
-      
+
       // Reserve minimal space for padding
       const padding = Math.max(8, availableSize * 0.08);
       const maxSize = availableSize - padding;
-      
+
       // Set minimum size for usability, but scale it down for editing mode
       const minSize = isEditing ? Math.min(30, maxSize) : Math.min(50, maxSize);
       size = Math.max(minSize, maxSize);
-      
+
       // Calculate stick size as a proportion of the base size
       const stickRatio = 0.4;
       const minStickSize = isEditing ? 4 : 12;
@@ -118,16 +126,16 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     // Get range settings - use default joystick range if not configured
     const minValue = config.config?.min;
     const maxValue = config.config?.max ?? config.config?.maxValue;
-    
+
     // Only apply range mapping if custom range is explicitly set
-    const mappedValues = (minValue !== undefined && maxValue !== undefined) ? 
+    const mappedValues = (minValue !== undefined && maxValue !== undefined) ?
       values.map(value => {
         // Clamp to [-1, 1] first (joystick natural range)
         const clampedValue = Math.max(-1, Math.min(1, value));
         // Map to configured range. Rounding is now handled based on the message type,
         // not the range configuration, allowing for float outputs.
         return ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
-      }) : 
+      }) :
       values; // Use raw joystick values [-1, 1] when no custom range is set
 
     // Debug logging
@@ -144,7 +152,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       const maxAxisIndex = Math.max(...axesConfig.map(a => parseInt(a)).filter(n => !isNaN(n)));
       const axesCount = Math.max(4, maxAxisIndex + 1); // Ensure enough axes
       const axes = Array(axesCount).fill(0.0);
-      
+
       axesConfig.forEach((axisStr, index) => {
         const axisIndex = parseInt(axisStr);
         if (!isNaN(axisIndex) && index < mappedValues.length && axisIndex < axes.length) {
@@ -164,7 +172,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       // For Twist messages
       const linear = { x: 0, y: 0, z: 0 };
       const angular = { x: 0, y: 0, z: 0 };
-      
+
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
       axesConfig.forEach((axis, index) => {
         if (index < mappedValues.length) {
@@ -234,15 +242,15 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
 
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null || event.distance === null || isEditing) return;
-    
+
     // Debug: Log raw joystick component values
-    console.log('Raw joystick event:', { 
-      x: event.x, 
-      y: event.y, 
+    console.log('Raw joystick event:', {
+      x: event.x,
+      y: event.y,
       distance: event.distance,
-      direction: event.direction 
+      direction: event.direction
     });
-    
+
     // Use distance (0-100) from the event to ensure correct scaling.
     const magnitude = event.distance / 100; // Normalize distance to 0-1.
 
@@ -258,14 +266,14 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     // Reconstruct the normalized x and y from the magnitude and angle.
     const x = magnitude * Math.cos(angleRad);
     const y = magnitude * Math.sin(angleRad);
-    
-    console.log('Calculated normalized values:', { 
+
+    console.log('Calculated normalized values:', {
       magnitude,
       angleRad,
-      normalizedX: x, 
-      normalizedY: y 
+      normalizedX: x,
+      normalizedY: y
     });
-    
+
     publishThrottled([x, y]);
   }, [publishThrottled, isEditing]);
 

@@ -7,17 +7,17 @@ import { CustomTFProvider } from '../utils/tfUtils';
 // Platform detection utilities
 const isIOS = (): boolean => {
   return (
-    typeof navigator !== 'undefined' && 
-    /iPad|iPhone|iPod/.test(navigator.userAgent) && 
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
     !(window as any).MSStream
   );
 };
 
 const isMobile = (): boolean => {
   return (
-    typeof navigator !== 'undefined' && 
-    (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-    (typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 2))
+    typeof navigator !== 'undefined' &&
+    (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      (typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 2))
   );
 };
 
@@ -64,18 +64,18 @@ export function usePointCloudClient({
   clientRef,
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
-  
+
   // Add refs to track detected axis ranges
   const axisRanges = useRef<{
-    x: {min: number, max: number},
-    y: {min: number, max: number},
-    z: {min: number, max: number}
+    x: { min: number, max: number },
+    y: { min: number, max: number },
+    z: { min: number, max: number }
   }>({
-    x: {min: 0, max: 0},
-    y: {min: 0, max: 0},
-    z: {min: 0, max: 0}
+    x: { min: 0, max: 0 },
+    y: { min: 0, max: 0 },
+    z: { min: 0, max: 0 }
   });
-  
+
   // Track intervals at the hook level (outside the effect) so they can be accessed in the material update code
   const intervalsRef = useRef<{
     checkSceneInterval: ReturnType<typeof setInterval> | null,
@@ -88,11 +88,11 @@ export function usePointCloudClient({
   });
 
   useEffect(() => {
-    console.log('[usePointCloudClient] Running effect. Deps:', { 
-      isRosConnected, 
-      selectedPointCloudTopic, 
+    console.log('[usePointCloudClient] Running effect. Deps:', {
+      isRosConnected,
+      selectedPointCloudTopic,
       fixedFrame,  // Log fixedFrame to show changes
-      materialChanged: !!material 
+      materialChanged: !!material
     });
 
     // Keep track of the client created *specifically* in this effect run for targeted cleanup
@@ -102,13 +102,13 @@ export function usePointCloudClient({
     const cleanupPointCloudClient = () => {
       // Get the instance to clean and verify it exists
       const clientToClean = createdClientInstance;
-      if (!clientToClean) { 
+      if (!clientToClean) {
         console.log("[PC Cleanup] No client to clean");
-        return; 
+        return;
       }
-      
+
       console.log("[PC Cleanup] Starting cleanup for point cloud");
-      
+
       try {
         // Try to unsubscribe from the topic first to stop incoming data
         if (typeof (clientToClean as any).unsubscribe === 'function') {
@@ -118,24 +118,24 @@ export function usePointCloudClient({
       } catch (e) {
         console.warn("[PC Cleanup] Error unsubscribing from topic:", e);
       }
-      
+
       try {
         // Remove from scene if possible
         if (ros3dViewer.current?.scene) {
           // Get the point wrapper parent (should be the object directly in the scene)
           let objectInScene = null;
-          
+
           // First approach - via points.object.parent
           const pointsObj = (clientToClean as any)?.points?.object;
           if (pointsObj && pointsObj.parent) {
             objectInScene = pointsObj.parent;
           }
-          
+
           // Second approach - try to find the object directly
           if (!objectInScene && (clientToClean as any).rootObject) {
             objectInScene = (clientToClean as any).rootObject;
           }
-          
+
           // Remove the object if found
           if (objectInScene && ros3dViewer.current.scene.children.includes(objectInScene)) {
             ros3dViewer.current.scene.remove(objectInScene);
@@ -145,14 +145,14 @@ export function usePointCloudClient({
       } catch (e) {
         console.warn("[PC Cleanup] Error removing from scene:", e);
       }
-      
+
       try {
         // Clean up any THREE.js objects (less aggressively)
         const pointsObj = (clientToClean as any)?.points?.object;
         if (pointsObj) {
           // Set to invisible first
           pointsObj.visible = false;
-            
+
           // Clear material references
           if (pointsObj.material) {
             // Simpler material disposal - avoid trying to dispose internal properties
@@ -165,11 +165,11 @@ export function usePointCloudClient({
             } else if (typeof pointsObj.material.dispose === 'function') {
               pointsObj.material.dispose();
             }
-            
+
             // Explicitly null the material
             pointsObj.material = null;
           }
-            
+
           // Clean up the geometry 
           if (pointsObj.geometry && typeof pointsObj.geometry.dispose === 'function') {
             // Simple dispose without trying to clear internal arrays
@@ -180,12 +180,12 @@ export function usePointCloudClient({
       } catch (e) {
         console.warn("[PC Cleanup] Error cleaning up THREE.js objects:", e);
       }
-      
+
       // Clear any client references
       if ((clientToClean as any).points) {
         (clientToClean as any).points = null;
       }
-      
+
       // Final cleanup
       createdClientInstance = null;
       console.log("[PC Cleanup] Cleanup complete");
@@ -214,8 +214,19 @@ export function usePointCloudClient({
           if (pointsObject.geometry) { try { pointsObject.geometry.dispose(); } catch (e) { } }
           if (pointsObject.material) {
             const material = pointsObject.material;
-            if (Array.isArray(material)) { material.forEach((mat: any) => { try { if (mat.map) mat.map.dispose(); mat.dispose(); } catch (e) { } }); }
-            else { try { if (material.map) material.map.dispose(); material.dispose(); } catch (e) { } }
+            if (Array.isArray(material)) {
+              material.forEach((mat: THREE.Material) => {
+                try {
+                  if ('map' in mat && mat.map) (mat as THREE.PointsMaterial).map!.dispose();
+                  mat.dispose();
+                } catch (e) { }
+              });
+            } else {
+              try {
+                if ('map' in material && material.map) (material as THREE.PointsMaterial).map!.dispose();
+                material.dispose();
+              } catch (e) { }
+            }
           }
         }
         pointsClient.current = null; // Nullify the main ref
@@ -236,48 +247,48 @@ export function usePointCloudClient({
 
     // Check if we're just changing color scheme - the previous approach doesn't work properly
     // because pointsClient.current.topicName is undefined in the ROS3D type definitions
-    const currentTopic = pointsClient.current ? ((pointsClient.current as any).topicName || 
-                                                (pointsClient.current as any).topic || '') : '';
-                                                
-    const isJustColorChange = pointsClient.current && 
-                           ros && isRosConnected &&
-                           // Use the safely accessed topic name
-                           selectedPointCloudTopic === currentTopic;
-    
+    const currentTopic = pointsClient.current ? ((pointsClient.current as any).topicName ||
+      (pointsClient.current as any).topic || '') : '';
+
+    const isJustColorChange = pointsClient.current &&
+      ros && isRosConnected &&
+      // Use the safely accessed topic name
+      selectedPointCloudTopic === currentTopic;
+
     console.log(`[usePointCloudClient] Change type check: selectedTopic=${selectedPointCloudTopic}, 
         currentTopic=${currentTopic}, 
         isJustColorChange=${isJustColorChange}`);
-    
+
     // If we're just changing color settings on the same topic, handle it differently
     if (isJustColorChange) {
       console.log(`[usePointCloudClient] Detected color scheme change on same topic. Using direct update.`);
-      
+
       try {
         // Get the existing point cloud object
         const pointsObj = (pointsClient.current as any)?.points?.object;
-        
+
         // Check for points and material - proceed only if both exist
         if (pointsObj && pointsObj.material) {
           console.log("[Color Change] Updating shader material without recreating client");
-          
+
           // Store its visibility state
           const wasVisible = pointsObj.visible;
-          
+
           // Create the updated shader parameters
           const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
           const minColor = material.minColor || new THREE.Color(0x0000ff);
           const maxColor = material.maxColor || new THREE.Color(0xff0000);
-          
+
           // Get safe initial values for the shader uniforms
           const safeInitialMin = (material.minAxisValue !== undefined) ? material.minAxisValue : -10;
           const safeInitialMax = (material.maxAxisValue !== undefined) ? material.maxAxisValue : 10;
-          
+
           // Ensure the range is valid
           const safeMin = Math.min(safeInitialMin, safeInitialMax - 0.001);
           const safeMax = Math.max(safeInitialMax, safeInitialMin + 0.001);
-          
+
           console.log(`[PointCloudClient] Updating color scheme to ${material.colorMode} axis`);
-          
+
           // Create a new shader material - more reliable than updating the existing one
           const newMaterial = new THREE.ShaderMaterial({
             vertexShader: `
@@ -338,7 +349,7 @@ export function usePointCloudClient({
               maxAxisValue: { value: safeMax }
             }
           });
-          
+
           // Dispose of the old material to prevent memory leaks
           if (pointsObj.material) {
             try {
@@ -349,18 +360,18 @@ export function usePointCloudClient({
               console.warn("[Color Change] Error disposing old material:", e);
             }
           }
-          
+
           // Apply the new material
           pointsObj.material = newMaterial;
           pointsObj.material.needsUpdate = true;
-          
+
           // Keep visibility state
           pointsObj.visible = wasVisible;
-          
+
           // Force render update to show changes
           if (ros3dViewer.current?.renderer) {
             ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-            
+
             // Schedule another render for next frame to ensure changes are applied
             requestAnimationFrame(() => {
               if (ros3dViewer.current?.renderer) {
@@ -368,7 +379,7 @@ export function usePointCloudClient({
               }
             });
           }
-          
+
           // Skip creating a new client by returning a cleanup function
           return () => {
             if (intervalsRef.current.updateRangesInterval) {
@@ -382,7 +393,7 @@ export function usePointCloudClient({
         // If color change fails, fall through to the regular creation process
       }
     }
-    
+
     // --- Only clean up previous client if we're actually changing topics ---
     if (pointsClient.current && !isJustColorChange) {
       console.log(`[usePointCloudClient] Topic changed. Cleaning up previous client.`);
@@ -394,14 +405,14 @@ export function usePointCloudClient({
     }
 
     // Check if we're changing fixed frame - force recreation in this case
-    const isFixedFrameChange = pointsClient.current && 
-                        ros && isRosConnected &&
-                        // If the client already exists but the fixed frame changed
-                        fixedFrame !== ((pointsClient.current as any)._fixedFrame || '');
-                                                
+    const isFixedFrameChange = pointsClient.current &&
+      ros && isRosConnected &&
+      // If the client already exists but the fixed frame changed
+      fixedFrame !== ((pointsClient.current as any)._fixedFrame || '');
+
     if (isFixedFrameChange) {
       console.log(`[usePointCloudClient] Fixed frame changed from ${(pointsClient.current as any)._fixedFrame} to ${fixedFrame}. Recreating client.`);
-      
+
       // Temporarily assign the main ref to createdClientInstance for cleanup
       createdClientInstance = pointsClient.current;
       cleanupPointCloudClient(); // Run the standard cleanup for the *previous* instance
@@ -411,37 +422,33 @@ export function usePointCloudClient({
 
     // --- Create New Client --- (Moved from VisualizationPanel)
     console.log(`[usePointCloudClient] Creating new client for topic: ${selectedPointCloudTopic}`);
-    
+
     // Create custom material with shader modifications for axis coloring
     let customMaterial: THREE.Material | undefined = undefined;
-    
+
     // Check if we need to use axis-based coloring
     if (material.colorMode) {
       const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
       const minColor = material.minColor || new THREE.Color(0x0000ff); // Default blue
       const maxColor = material.maxColor || new THREE.Color(0xff0000); // Default red
 
-      // Use default ranges initially, they will be updated dynamically
-      const initialMinValue = material.minAxisValue !== undefined ? material.minAxisValue : -10;
-      const initialMaxValue = material.maxAxisValue !== undefined ? material.maxAxisValue : 10;
-      
       // Create a custom shader material with cross-browser compatibility
       const isIOSDevice = isIOS();
       const isMobileDevice = isMobile();
-      
+
       // Get safe initial values for the shader uniforms
       const safeInitialMin = (material.minAxisValue !== undefined) ? material.minAxisValue : -10;
       const safeInitialMax = (material.maxAxisValue !== undefined) ? material.maxAxisValue : 10;
-      
+
       // Ensure the range is valid (Chrome is especially sensitive to this)
       const safeMin = Math.min(safeInitialMin, safeInitialMax - 0.001);
       const safeMax = Math.max(safeInitialMax, safeInitialMin + 0.001);
-      
+
       console.log(`[PointCloudClient] Creating shader for ${material.colorMode} axis with range: [${safeMin}, ${safeMax}]`);
-      
+
       // Set up different shaders for mobile vs desktop
       let fragmentShaderCode;
-      
+
       if (isMobileDevice) {
         // Improved mobile shader that eliminates square artifacts
         fragmentShaderCode = `
@@ -498,10 +505,10 @@ export function usePointCloudClient({
           }
         `;
       }
-      
+
       // Adjust point size based on platform
       const pointSizeMultiplier = isMobileDevice ? 8.0 : 10.0;
-      
+
       customMaterial = new THREE.ShaderMaterial({
         vertexShader: `
           // Custom shader for point cloud coloring by axis position
@@ -555,22 +562,22 @@ export function usePointCloudClient({
       throttle_rate: options.throttleRate ?? 33, // ~30Hz on all platforms
       compression: 'cbor' as const, // Use compression for faster transfer
       queue_size: 1, // Only keep latest message to reduce latency
-      
+
       // ***IMPORTANT: Always explicitly set the fixed frame***
       fixedFrame: fixedFrame,
-      
+
       // Add a custom message handler wrapper to catch errors
-      messageHandler: function(message: any) {
+      messageHandler: function (message: any) {
         try {
           // Store the fixed frame in a property for easy access
           this.fixedFrame = fixedFrame;
-          
+
           // SAFETY CHECK: Ensure lookupTransform is available
           if (!this.tfClient || typeof this.tfClient.lookupTransform !== 'function') {
             console.warn('[PointCloud2] TF Client missing or lookupTransform not available');
             return;
           }
-          
+
           // Process the message if all checks pass
           if (message.header && message.header.frame_id) {
             // Safe call to process message
@@ -592,13 +599,13 @@ export function usePointCloudClient({
     if (customMaterial) {
       clientOptions.material = customMaterial;
       clientOptions.customShader = true;
-      
+
       // Platform-specific optimizations
       if (isMobile()) {
         console.log("[Mobile] Applying mobile-specific optimizations for point cloud");
         // Use simpler rendering on mobile
         clientOptions.max_pts = Math.min(options.maxPoints ?? 100000, 50000);
-        
+
         // iOS-specific additional optimizations
         if (isIOS()) {
           console.log("[iOS] Applying additional iOS-specific optimizations");
@@ -612,14 +619,14 @@ export function usePointCloudClient({
 
     try {
       const newClient = new ROS3D.PointCloud2(clientOptions);
-      
+
       // Store the fixed frame in a private property for change detection
       (newClient as any)._fixedFrame = fixedFrame;
-      
+
       // Verify the client was created properly - this helps catch potential issues
       if (!(newClient as any).points || !(newClient as any).points.setup) {
         console.warn("[usePointCloudClient] WARNING: Points object not properly initialized, will attempt recovery");
-        
+
         // Try to safely reset points using our patched method
         if (typeof (newClient as any).safeResetPoints === 'function') {
           console.log("[usePointCloudClient] Using patched safeResetPoints for recovery");
@@ -642,15 +649,15 @@ export function usePointCloudClient({
       } else {
         console.log("[usePointCloudClient] Points object properly initialized");
       }
-      
+
       pointsClient.current = newClient; // Update the main ref for this hook
       createdClientInstance = newClient; // Capture instance for this effect run's cleanup
-      
+
       // If an external ref was provided, update it too
       if (clientRef) {
         clientRef.current = newClient;
       }
-      
+
       // Add a short delay before allowing message processing
       // This gives the points object time to be fully set up
       setTimeout(() => {
@@ -681,15 +688,15 @@ export function usePointCloudClient({
       // Check for scene addition
       intervalsRef.current.checkSceneInterval = setInterval(() => {
         if (ros3dViewer.current?.scene && createdClientInstance) { // Check captured instance too
-            const internalPointsObject = (createdClientInstance as any)?.points?.object;
-            const wrapperObject = internalPointsObject?.parent;
-            if (wrapperObject && ros3dViewer.current.scene.children.includes(wrapperObject)) {
-                // console.log(`[usePointCloudClient] New client wrapper object found in scene.`);
-                if(intervalsRef.current.checkSceneInterval) clearInterval(intervalsRef.current.checkSceneInterval);
-            } 
+          const internalPointsObject = (createdClientInstance as any)?.points?.object;
+          const wrapperObject = internalPointsObject?.parent;
+          if (wrapperObject && ros3dViewer.current.scene.children.includes(wrapperObject)) {
+            // console.log(`[usePointCloudClient] New client wrapper object found in scene.`);
+            if (intervalsRef.current.checkSceneInterval) clearInterval(intervalsRef.current.checkSceneInterval);
+          }
         } else {
-           // console.warn('[usePointCloudClient] Viewer scene not available or client gone during scene check.');
-           if(intervalsRef.current.checkSceneInterval) clearInterval(intervalsRef.current.checkSceneInterval);
+          // console.warn('[usePointCloudClient] Viewer scene not available or client gone during scene check.');
+          if (intervalsRef.current.checkSceneInterval) clearInterval(intervalsRef.current.checkSceneInterval);
         }
       }, 100);
 
@@ -699,7 +706,7 @@ export function usePointCloudClient({
         if (pointsClient.current?.points?.object) {
           pointsClient.current.points.object.frustumCulled = false;
           // console.log('[usePointCloudClient Debug] Set frustumCulled = false.');
-          if(intervalsRef.current.checkPointsObjectInterval) clearInterval(intervalsRef.current.checkPointsObjectInterval);
+          if (intervalsRef.current.checkPointsObjectInterval) clearInterval(intervalsRef.current.checkPointsObjectInterval);
         }
       }, 100);
 
@@ -725,30 +732,30 @@ export function usePointCloudClient({
             const pointsObj = pointsClient.current.points.object as THREE.Points;
             const geometry = pointsObj.geometry as THREE.BufferGeometry;
             const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
-            
+
             if (positions && positions.count > 0) {
               const axisIndex = material.colorMode === 'x' ? 0 : (material.colorMode === 'y' ? 1 : 2);
               let min = Infinity;
               let max = -Infinity;
-              
+
               // More comprehensive sampling strategy - check more points initially
               // to get a better initial range
               const sampleCount = Math.min(positions.count, 1000); // Check up to 1000 points
               const sampleStep = Math.max(1, Math.floor(positions.count / sampleCount));
-              
+
               for (let i = 0; i < positions.count; i += sampleStep) {
                 // Use proper position access based on axis
                 let val;
                 if (axisIndex === 0) val = positions.getX(i);
                 else if (axisIndex === 1) val = positions.getY(i);
                 else val = positions.getZ(i);
-                
+
                 if (isFinite(val)) {
                   if (val < min) min = val;
                   if (val > max) max = val;
                 }
               }
-              
+
               // Only update if we found valid values and they're different from current ones
               if (isFinite(min) && isFinite(max) && max > min) {
                 const shader = (pointsObj.material as THREE.ShaderMaterial);
@@ -756,31 +763,31 @@ export function usePointCloudClient({
                   // Add small padding to range (5%)
                   const range = max - min;
                   const padding = range * 0.05;
-                  
+
                   // Apply the changes - ensure we modify them properly and avoid invalid values
                   const safeMin = min - padding;
                   const safeMax = Math.max(max + padding, safeMin + 0.001); // Ensure range is non-zero
-                  
+
                   shader.uniforms.minAxisValue.value = safeMin;
                   shader.uniforms.maxAxisValue.value = safeMax;
-                  
+
                   // For Chrome, force the uniforms to update by explicitly assigning new objects
                   shader.uniforms.minAxisValue = { value: safeMin, type: 'f' };
                   shader.uniforms.maxAxisValue = { value: safeMax, type: 'f' };
-                  
+
                   // Now we have good values, make points fully visible
                   if (!rangeCalculated) {
                     if (pointsClient.current?.points?.object) {
                       const pointsObj = pointsClient.current.points.object as THREE.Points;
-                      
+
                       // Safely update the material
                       if (pointsObj.material) {
                         const material = pointsObj.material as THREE.ShaderMaterial;
-                        
+
                         // Increase opacity to full
                         material.opacity = 1.0;
                         material.needsUpdate = true; // Important! Force material update
-                        
+
                         // Make sure shader is ready
                         if (material.program) {
                           // Program is ready - no need for special handling
@@ -791,12 +798,12 @@ export function usePointCloudClient({
                             renderer.compile(ros3dViewer.current.scene, ros3dViewer.current.camera);
                           }
                         }
-                        
+
                         // Force a render update with 2 frames to ensure it's visible
                         if (ros3dViewer.current?.renderer) {
                           // Render immediately
                           ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-                          
+
                           // Schedule another render for next frame
                           requestAnimationFrame(() => {
                             if (ros3dViewer.current?.renderer) {
@@ -808,16 +815,16 @@ export function usePointCloudClient({
                     }
                     rangeCalculated = true;
                   }
-                  
+
                   // Update our stored ranges for future reference
                   if (material.colorMode === 'x') {
-                    axisRanges.current.x = {min, max};
+                    axisRanges.current.x = { min, max };
                   } else if (material.colorMode === 'y') {
-                    axisRanges.current.y = {min, max};
+                    axisRanges.current.y = { min, max };
                   } else if (material.colorMode === 'z') {
-                    axisRanges.current.z = {min, max};
+                    axisRanges.current.z = { min, max };
                   }
-                  
+
                   // Once we have good values, stop checking
                   clearInterval(intervalsRef.current.updateRangesInterval!);
                   intervalsRef.current.updateRangesInterval = null;
@@ -829,23 +836,26 @@ export function usePointCloudClient({
                   if (pointsClient.current?.points?.object) {
                     const pointsObj = pointsClient.current.points.object as THREE.Points;
                     const shader = (pointsObj.material as THREE.ShaderMaterial);
-                    
+
                     // Use safe default values for the axis
                     if (shader && shader.uniforms) {
                       shader.uniforms.minAxisValue.value = -10;
                       shader.uniforms.maxAxisValue.value = 10;
                     }
-                    
+
                     // Make visible with high opacity and force update
-                    pointsObj.material.opacity = 1.0;
-                    pointsObj.material.needsUpdate = true;
+                    const mat = pointsObj.material;
+                    if (!Array.isArray(mat)) {
+                      mat.opacity = 1.0;
+                      mat.needsUpdate = true;
+                    }
                     pointsObj.visible = true;
-                    
+
                     // Force a render update with two frames
                     if (ros3dViewer.current?.renderer) {
                       // First render
                       ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-                      
+
                       // Schedule another render
                       requestAnimationFrame(() => {
                         if (ros3dViewer.current?.renderer) {
@@ -865,15 +875,15 @@ export function usePointCloudClient({
 
       // Cleanup function for intervals specific to THIS client instance
       const cleanupIntervals = () => {
-        if(intervalsRef.current.checkSceneInterval) {
+        if (intervalsRef.current.checkSceneInterval) {
           clearInterval(intervalsRef.current.checkSceneInterval);
           intervalsRef.current.checkSceneInterval = null;
         }
-        if(intervalsRef.current.checkPointsObjectInterval) {
+        if (intervalsRef.current.checkPointsObjectInterval) {
           clearInterval(intervalsRef.current.checkPointsObjectInterval);
           intervalsRef.current.checkPointsObjectInterval = null;
         }
-        if(intervalsRef.current.updateRangesInterval) {
+        if (intervalsRef.current.updateRangesInterval) {
           clearInterval(intervalsRef.current.updateRangesInterval);
           intervalsRef.current.updateRangesInterval = null;
         }
@@ -895,16 +905,16 @@ export function usePointCloudClient({
 
     // Fallback cleanup (shouldn't be needed if try/catch returns correctly)
     return () => {
-       // console.log('[usePointCloudClient] Running fallback cleanup.');
-       cleanupPointCloudClient(); // Ensure cleanup if try block failed before returning
+      // console.log('[usePointCloudClient] Running fallback cleanup.');
+      cleanupPointCloudClient(); // Ensure cleanup if try block failed before returning
     };
 
     // Dependencies: Trigger effect if ROS/Viewer/TFProvider/Topic changes or if material/options change or fixedFrame changes
   }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame]);
 
   // Update return value to include the client
-  return { 
+  return {
     axisRanges: axisRanges.current,
-    pointCloudClient: pointsClient.current 
-  }; 
+    pointCloudClient: pointsClient.current
+  };
 } 
