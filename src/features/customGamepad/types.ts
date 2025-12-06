@@ -46,19 +46,21 @@ export interface GamepadComponentConfig {
     // Joystick specific
     maxValue?: number;
     axes?: string[]; // Which axes to map to
-    
+
     // Button specific
     buttonIndex?: number;
     momentary?: boolean; // true for momentary, false for toggle
-    
+
     // D-pad specific
     buttonMapping?: Record<string, number>; // direction -> button index
-    
+
     // Slider specific
     min?: number;
     max?: number;
     step?: number;
     orientation?: 'horizontal' | 'vertical';
+    sliderMin?: number;  // Alias for min used by settings modal
+    sliderMax?: number;  // Alias for max used by settings modal
   };
 }
 

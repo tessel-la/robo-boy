@@ -25,25 +25,24 @@ describe('types', () => {
     })
 
     it('should be usable in switch statements', () => {
-      const mode = ComponentInteractionMode.Translate
-      let result = ''
-
-      switch (mode) {
-        case ComponentInteractionMode.None:
-          result = 'none'
-          break
-        case ComponentInteractionMode.Translate:
-          result = 'translate'
-          break
-        case ComponentInteractionMode.Resize:
-          result = 'resize'
-          break
-        case ComponentInteractionMode.Settings:
-          result = 'settings'
-          break
+      // Use a function to test switch behavior without literal type narrowing
+      const getModeResult = (mode: ComponentInteractionMode): string => {
+        switch (mode) {
+          case ComponentInteractionMode.None:
+            return 'none'
+          case ComponentInteractionMode.Translate:
+            return 'translate'
+          case ComponentInteractionMode.Resize:
+            return 'resize'
+          case ComponentInteractionMode.Settings:
+            return 'settings'
+        }
       }
 
-      expect(result).toBe('translate')
+      expect(getModeResult(ComponentInteractionMode.Translate)).toBe('translate')
+      expect(getModeResult(ComponentInteractionMode.None)).toBe('none')
+      expect(getModeResult(ComponentInteractionMode.Resize)).toBe('resize')
+      expect(getModeResult(ComponentInteractionMode.Settings)).toBe('settings')
     })
   })
 })

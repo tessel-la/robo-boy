@@ -14,11 +14,11 @@ interface GridSettingsMenuProps {
 }
 
 const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
-  layoutName,
+  layoutName: _layoutName,
   layoutDescription,
   gridWidth,
   gridHeight,
-  onNameChange,
+  onNameChange: _onNameChange,
   onDescriptionChange,
   onGridSizeChange,
   onExpandedChange,
@@ -51,7 +51,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
 
   // Determine if we're in the buttons row (parent has sidebar-buttons-row class)
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isInButtonsRow, setIsInButtonsRow] = useState(false);
+  const [_isInButtonsRow, setIsInButtonsRow] = useState(false);
 
   useEffect(() => {
     const checkParent = () => {
@@ -61,11 +61,11 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
         setIsInButtonsRow(inButtonsRow);
       }
     };
-    
+
     checkParent();
     // Check again on next tick to ensure DOM is ready
     const timeoutId = setTimeout(checkParent, 0);
-    
+
     return () => clearTimeout(timeoutId);
   }, []);
 
@@ -79,18 +79,18 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
         <div className="settings-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">Settings</h3>
-            <button 
+            <button
               className="grid-icon-button"
               onClick={toggleExpanded}
               aria-label="Open grid settings"
               title="Configure grid layout and pad name"
             >
-              <svg 
-                className="grid-icon" 
-                viewBox="0 0 24 24" 
+              <svg
+                className="grid-icon"
+                viewBox="0 0 24 24"
                 fill="currentColor"
               >
-                <path d="M10 2v2H8V2H10m6 0v2h-2V2H16m-6 4v2H8V6H10m6 0v2h-2V6H16M4 6v2H2V6H4m0 6v2H2v-2H4M2 2v2h2V2H2m0 6v2h2V8H2m0 6v2h2v-2H2m8 6v2H8v-2H10m6 0v2h-2v-2H16m-6-4v2H8v-2H10m6 0v2h-2v-2H16M4 18v2H2v-2H4m16-16v2h-2V2H20m0 6v2h-2V8H20m0 6v2h-2v-2H20m0 6v2h-2v-2H20M10 10v2H8v-2H10m6 0v2h-2v-2H16"/>
+                <path d="M10 2v2H8V2H10m6 0v2h-2V2H16m-6 4v2H8V6H10m6 0v2h-2V6H16M4 6v2H2V6H4m0 6v2H2v-2H4M2 2v2h2V2H2m0 6v2h2V8H2m0 6v2h2v-2H2m8 6v2H8v-2H10m6 0v2h-2v-2H16m-6-4v2H8v-2H10m6 0v2h-2v-2H16M4 18v2H2v-2H4m16-16v2h-2V2H20m0 6v2h-2V8H20m0 6v2h-2v-2H20m0 6v2h-2v-2H20M10 10v2H8v-2H10m6 0v2h-2v-2H16" />
               </svg>
             </button>
           </div>
@@ -104,7 +104,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
             {/* Grid Size Controls - Now the primary setting */}
             <div className="settings-section">
               <h4>Grid Layout</h4>
-              
+
               {/* Row and Column controls on same row with 50/50 split */}
               <div className="grid-controls-row">
                 <div className="grid-control compact">

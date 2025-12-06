@@ -1,5 +1,4 @@
-import React, { useState, useEffect, ChangeEvent } from 'react';
-import * as THREE from 'three';
+import React, { useState, ChangeEvent } from 'react';
 import { PoseStampedOptions } from '../../hooks/usePoseStampedClient';
 import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import './TopicSettings.css';
@@ -31,10 +30,10 @@ interface SettingGroupProps {
 /**
  * SettingGroup - A component that renders a collapsible settings group with a toggle switch
  */
-const SettingGroup = ({ 
-  title, 
-  enabled, 
-  onToggle, 
+const SettingGroup = ({
+  title,
+  enabled,
+  onToggle,
   children
 }: SettingGroupProps): JSX.Element => {
   const [expanded, setExpanded] = useState(true);
@@ -42,9 +41,9 @@ const SettingGroup = ({
   return (
     <div className="setting-group">
       <div className="setting-header">
-        <button 
-          type="button" 
-          className="expand-toggle" 
+        <button
+          type="button"
+          className="expand-toggle"
           onClick={() => setExpanded(!expanded)}
           aria-label={expanded ? "Collapse section" : "Expand section"}
         >
@@ -53,10 +52,10 @@ const SettingGroup = ({
         <label>{title}</label>
         <div className="toggle-switch-container">
           <label className="toggle-switch">
-            <input 
-              type="checkbox" 
-              checked={enabled} 
-              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)} 
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)}
             />
             <span className="toggle-slider"></span>
           </label>
@@ -102,7 +101,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
 
   // Update specific setting
   const updateSetting = <K extends keyof PoseStampedSettingsOptions>(
-    key: K, 
+    key: K,
     value: PoseStampedSettingsOptions[K]
   ) => {
     setSettings((prev: PoseStampedSettingsOptions) => ({
@@ -113,7 +112,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
 
   // Handle number input changes
   const handleNumberChange = (
-    e: ChangeEvent<HTMLInputElement>, 
+    e: ChangeEvent<HTMLInputElement>,
     key: keyof PoseStampedSettingsOptions
   ) => {
     const value = parseFloat(e.target.value);
@@ -124,7 +123,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
 
   // Handle integer input changes
   const handleIntegerChange = (
-    e: ChangeEvent<HTMLInputElement>, 
+    e: ChangeEvent<HTMLInputElement>,
     key: keyof PoseStampedSettingsOptions
   ) => {
     const value = parseInt(e.target.value);
@@ -150,7 +149,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
       </div>
       <div className="settings-popup-content">
         <div className="settings-grid">
-          
+
           {/* Visualization Type Setting */}
           <div className="setting-group basic-setting">
             <div className="setting-header">
@@ -171,15 +170,15 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
           </div>
 
           {/* Scale Setting Group */}
-          <SettingGroup 
-            title="Scale" 
+          <SettingGroup
+            title="Scale"
             enabled={settings.scaleEnabled || false}
             onToggle={(enabled) => updateSetting('scaleEnabled', enabled)}
           >
             <div className="setting-control">
               <input
                 type="range"
-                min="0.1" 
+                min="0.1"
                 max="5.0"
                 step="0.1"
                 value={settings.scale || 1.0}
@@ -198,8 +197,8 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
           </SettingGroup>
 
           {/* Color Setting Group */}
-          <SettingGroup 
-            title="Color Settings" 
+          <SettingGroup
+            title="Color Settings"
             enabled={settings.colorEnabled || false}
             onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
           >
@@ -218,8 +217,8 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
 
           {/* Arrow Dimensions Setting Group */}
           {settings.visualizationType === 'arrow' && (
-            <SettingGroup 
-              title="Arrow Dimensions" 
+            <SettingGroup
+              title="Arrow Dimensions"
               enabled={settings.arrowDimensionsEnabled || false}
               onToggle={(enabled) => updateSetting('arrowDimensionsEnabled', enabled)}
             >
@@ -227,7 +226,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
                 <label>Length</label>
                 <input
                   type="range"
-                  min="0.1" 
+                  min="0.1"
                   max="3.0"
                   step="0.1"
                   value={settings.arrowLength || 1.0}
@@ -247,7 +246,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
                 <label>Width</label>
                 <input
                   type="range"
-                  min="0.01" 
+                  min="0.01"
                   max="0.5"
                   step="0.01"
                   value={settings.arrowWidth || 0.1}
@@ -268,15 +267,15 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
 
           {/* Axes Size Setting Group */}
           {settings.visualizationType === 'axes' && (
-            <SettingGroup 
-              title="Axes Size" 
+            <SettingGroup
+              title="Axes Size"
               enabled={settings.arrowDimensionsEnabled || false}
               onToggle={(enabled) => updateSetting('arrowDimensionsEnabled', enabled)}
             >
               <div className="setting-control">
                 <input
                   type="range"
-                  min="0.1" 
+                  min="0.1"
                   max="2.0"
                   step="0.1"
                   value={settings.axesSize || 0.5}
@@ -296,8 +295,8 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
           )}
 
           {/* Trail Setting Group */}
-          <SettingGroup 
-            title="Trail Visualization" 
+          <SettingGroup
+            title="Trail Visualization"
             enabled={settings.trailEnabled || false}
             onToggle={(enabled) => {
               updateSetting('trailEnabled', enabled);
@@ -308,7 +307,7 @@ const PoseStampedSettings: React.FC<PoseStampedSettingsProps> = ({
               <label>Max Trail Length</label>
               <input
                 type="range"
-                min="5" 
+                min="5"
                 max="200"
                 step="5"
                 value={settings.maxTrailLength || 50}

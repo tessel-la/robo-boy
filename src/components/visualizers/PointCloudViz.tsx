@@ -47,7 +47,7 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   };
 
   // Use the hook and capture the client reference
-  const { pointCloudClient } = usePointCloudClient({
+  usePointCloudClient({
     ros,
     isRosConnected,
     ros3dViewer,
@@ -63,20 +63,20 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   useEffect(() => {
     if (clientRef.current && isRosConnected && options) {
       console.log('[PointCloudViz] Updating settings for point cloud:', topic);
-      
+
       // Only apply settings that are enabled in the UI
       const updateOptions: any = {};
-      
+
       // Update point size if enabled
       if (options.pointSizeEnabled && options.pointSize !== undefined) {
         updateOptions.pointSize = options.pointSize;
       }
-      
+
       // Update color if enabled
       if (options.colorEnabled && options.color) {
         updateOptions.color = options.color;
       }
-      
+
       // Apply the settings to the client
       clientRef.current.updateSettings(updateOptions);
     }
@@ -85,28 +85,28 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   // Effect to handle fixed frame changes
   useEffect(() => {
     if (!clientRef.current || !isRosConnected) return;
-    
+
     // Check if the fixed frame has changed
     if (previousFixedFrameRef.current !== fixedFrame) {
       console.log(`[PointCloudViz] Fixed frame changed from ${previousFixedFrameRef.current} to ${fixedFrame}`);
-      
+
       // Update the client's fixed frame
       if (clientRef.current) {
         try {
           // Directly set the fixedFrame on the client
           (clientRef.current as any).fixedFrame = fixedFrame;
-          
+
           // Force an immediate transform update if possible
           if (typeof (clientRef.current as any).forceTransformUpdate === 'function') {
             (clientRef.current as any).forceTransformUpdate();
           }
-          
+
           console.log(`[PointCloudViz] Updated point cloud fixed frame to ${fixedFrame}`);
         } catch (e) {
           console.error(`[PointCloudViz] Error updating point cloud fixed frame:`, e);
         }
       }
-      
+
       // Store the new frame
       previousFixedFrameRef.current = fixedFrame;
     }

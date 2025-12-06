@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Needed for type hints during disposal
 
@@ -11,7 +11,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
 
   useEffect(() => {
     const currentViewerRef = viewerRef.current;
-    let viewerInitializedThisEffect = false;
 
     // --- Viewer Teardown Logic --- (Copied and adapted from VisualizationPanel)
     const cleanupViewer = () => {
@@ -40,10 +39,16 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
           const material = (obj as THREE.Mesh).material;
           if (Array.isArray(material)) {
             material.forEach((mat: THREE.Material) => {
-              try { if (mat.map) mat.map.dispose(); mat.dispose(); } catch (e) { console.warn('[Viewer Cleanup] Error disposing material in array:', e); }
+              try {
+                if ('map' in mat && mat.map) (mat as THREE.MeshStandardMaterial).map!.dispose();
+                mat.dispose();
+              } catch (e) { console.warn('[Viewer Cleanup] Error disposing material in array:', e); }
             });
           } else {
-            try { if (material.map) material.map.dispose(); material.dispose(); } catch (e) { console.warn('[Viewer Cleanup] Error disposing single material:', e); }
+            try {
+              if ('map' in material && material.map) (material as THREE.MeshStandardMaterial).map!.dispose();
+              material.dispose();
+            } catch (e) { console.warn('[Viewer Cleanup] Error disposing single material:', e); }
           }
         }
         if ((obj as any).texture) {
@@ -86,7 +91,7 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
           // Generate a unique ID if one doesn't exist
           currentViewerRef.id = `viewer-container-${Date.now()}`;
         }
-        
+
         console.log(`[useRos3dViewer Setup] Initializing ROS3D Viewer for div#${currentViewerRef.id}...`);
         if (currentViewerRef.clientWidth > 0 && currentViewerRef.clientHeight > 0) {
           try {
@@ -99,7 +104,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
               cameraPose: { x: 3, y: 3, z: 3 }
             });
             ros3dViewer.current = viewer;
-            viewerInitializedThisEffect = true;
             console.log('[useRos3dViewer Setup] ROS3D.Viewer created.');
 
             const grid = new ROS3D.Grid();
