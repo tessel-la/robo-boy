@@ -25,8 +25,8 @@ test.describe('Entry Page', () => {
     test('should have form elements', async ({ page }) => {
         await page.goto('/');
 
-        // Check that forms exist
-        await expect(page.locator('form').first()).toBeVisible();
+        // Check that forms exist in the DOM (advanced form is hidden by default)
+        await expect(page.locator('form')).toHaveCount(1);
     });
 
     test('should have buttons for interaction', async ({ page }) => {

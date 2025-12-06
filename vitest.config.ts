@@ -22,13 +22,13 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
       ],
-      // Coverage thresholds - set to current levels, increase as more tests are added
-      // Current: ~8-9% | Goal: 20%+
+      // Coverage thresholds - current levels
+      // Higher coverage for WebGL/ROS components requires E2E tests
       thresholds: {
-        lines: 8,
-        functions: 6,
-        branches: 7,
-        statements: 8
+        lines: 10,
+        functions: 9,
+        branches: 9,
+        statements: 10
       }
     },
     // Better test output for CI
