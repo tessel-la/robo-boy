@@ -43,6 +43,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     }
   }, [forceCollapsed, isExpanded]);
 
+  // Clear dragging state when selection is cleared from parent
+  useEffect(() => {
+    if (selectedComponent === null || selectedComponent === '') {
+      setDraggingComponent(null);
+    }
+  }, [selectedComponent]);
+
   const renderComponentPreview = (componentType: string, size: 'small' | 'medium' = 'small') => {
     const mockConfig = {
       id: `preview-${componentType}`,
@@ -171,7 +178,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   }, [onDragStart]);
 
   const handleTouchEnd = useCallback(() => {
-    // Don't clear selection - let the drag complete or keep selection for tap
+    // Just clear local refs - parent will handle state clearing via global touch handler
     touchStartRef.current = null;
     isDraggingRef.current = false;
   }, []);
