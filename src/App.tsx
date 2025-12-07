@@ -6,11 +6,11 @@ import MainControlView from './components/MainControlView';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import ThemeCreator from './features/theme/components/ThemeCreator';
 import {
-    CustomTheme, 
-    DEFAULT_THEMES, 
-    THEME_STORAGE_KEY, 
-    CUSTOM_THEMES_STORAGE_KEY, 
-    generateThemeCss 
+  CustomTheme,
+  DEFAULT_THEMES,
+  THEME_STORAGE_KEY,
+  CUSTOM_THEMES_STORAGE_KEY,
+  generateThemeCss
 } from './features/theme/themeUtils';
 
 export interface ConnectionParams {
@@ -45,15 +45,15 @@ function App() {
   // --- Theme Application Effect ---
   useEffect(() => {
     // Remove previous dynamic styles if they exist
-    themeStyleTagRef.current?.remove();
-    themeStyleTagRef.current = null;
+    if (themeStyleTagRef.current) {
+      themeStyleTagRef.current.remove();
+      themeStyleTagRef.current = null;
+    }
 
     // Check if it's a default theme
     if (DEFAULT_THEMES.includes(selectedThemeId)) {
       document.documentElement.setAttribute('data-theme', selectedThemeId);
-      // Remove dynamic style tag if switching back to default
-      themeStyleTagRef.current?.remove();
-      themeStyleTagRef.current = null;
+      // Style tag already removed at effect start
       console.log(`Applied default theme: ${selectedThemeId}`);
     } else {
       // It's a custom theme
@@ -61,8 +61,7 @@ function App() {
       if (customTheme) {
         // Generate and apply dynamic CSS
         const css = generateThemeCss(customTheme);
-        // Remove previous tag before adding new one
-        themeStyleTagRef.current?.remove(); 
+        // Previous tag already removed at effect start
         const styleTag = document.createElement('style');
         styleTag.id = `custom-theme-styles-${customTheme.id}`;
         styleTag.innerHTML = css;
@@ -75,8 +74,7 @@ function App() {
         // Fallback if custom theme not found (e.g., deleted)
         console.warn(`Custom theme with ID ${selectedThemeId} not found. Falling back to dark.`);
         document.documentElement.setAttribute('data-theme', 'dark');
-        themeStyleTagRef.current?.remove(); // Remove potential old tag
-        themeStyleTagRef.current = null;
+        // Style tag already removed at effect start
         setSelectedThemeId('dark'); // Reset state
       }
     }
@@ -91,9 +89,9 @@ function App() {
     const isValidDefault = DEFAULT_THEMES.includes(themeId);
     const isValidCustom = customThemes.some((t: CustomTheme) => t.id === themeId);
     if (isValidDefault || isValidCustom) {
-        setSelectedThemeId(themeId);
+      setSelectedThemeId(themeId);
     } else {
-        console.warn(`Attempted to set invalid theme ID: ${themeId}`);
+      console.warn(`Attempted to set invalid theme ID: ${themeId}`);
     }
   };
 
@@ -111,7 +109,7 @@ function App() {
     const updatedThemes = [...customThemes, newTheme];
     setCustomThemes(updatedThemes);
     localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
-    selectTheme(newTheme.id); 
+    selectTheme(newTheme.id);
   };
 
   const updateCustomTheme = (updatedTheme: CustomTheme) => {
@@ -127,35 +125,35 @@ function App() {
     localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
     // If the deleted theme was selected, fall back to default
     if (selectedThemeId === themeIdToDelete) {
-      selectTheme('dark'); 
+      selectTheme('dark');
     }
   };
 
   // --- Theme Creator Control ---
   const openThemeCreator = (themeToEditId: string | null = null) => {
-      if (themeToEditId) {
-          const foundTheme = customThemes.find(t => t.id === themeToEditId);
-          setThemeToEdit(foundTheme || null);
-      } else {
-          setThemeToEdit(null); // Ensure it's null for creating new
-      }
-      setIsThemeCreatorOpen(true);
+    if (themeToEditId) {
+      const foundTheme = customThemes.find(t => t.id === themeToEditId);
+      setThemeToEdit(foundTheme || null);
+    } else {
+      setThemeToEdit(null); // Ensure it's null for creating new
+    }
+    setIsThemeCreatorOpen(true);
   };
 
   const closeThemeCreator = () => {
-      setIsThemeCreatorOpen(false);
-      setThemeToEdit(null); // Clear theme being edited
+    setIsThemeCreatorOpen(false);
+    setThemeToEdit(null); // Clear theme being edited
   };
 
   const handleSaveTheme = (theme: CustomTheme) => {
-      if (customThemes.some(t => t.id === theme.id)) {
-          // ID exists, so update
-          updateCustomTheme(theme);
-      } else {
-          // New theme, add it
-          addCustomTheme(theme);
-      }
-      // closeThemeCreator(); // Closed by ThemeCreator itself
+    if (customThemes.some(t => t.id === theme.id)) {
+      // ID exists, so update
+      updateCustomTheme(theme);
+    } else {
+      // New theme, add it
+      addCustomTheme(theme);
+    }
+    // closeThemeCreator(); // Closed by ThemeCreator itself
   };
 
   // --- Connection Handlers ---
@@ -171,8 +169,8 @@ function App() {
 
   // Combine default and custom themes for the selector
   const allThemesForSelector = [
-      ...DEFAULT_THEMES.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), isDefault: true })),
-      ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false }))
+    ...DEFAULT_THEMES.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), isDefault: true })),
+    ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false }))
   ];
 
   return (
@@ -184,22 +182,22 @@ function App() {
           <MainControlView
             connectionParams={connectionParams}
             onDisconnect={handleDisconnect}
-            // Potentially pass theme management functions down if needed
+          // Potentially pass theme management functions down if needed
           />
         )}
       </main>
-      <ThemeSelector 
-          currentThemeId={selectedThemeId}
-          selectTheme={selectTheme} 
-          themes={allThemesForSelector}
-          openThemeCreator={openThemeCreator}
-          deleteTheme={deleteCustomTheme}
+      <ThemeSelector
+        currentThemeId={selectedThemeId}
+        selectTheme={selectTheme}
+        themes={allThemesForSelector}
+        openThemeCreator={openThemeCreator}
+        deleteTheme={deleteCustomTheme}
       />
-      <ThemeCreator 
-          isOpen={isThemeCreatorOpen}
-          onClose={closeThemeCreator}
-          onSave={handleSaveTheme}
-          existingTheme={themeToEdit}
+      <ThemeCreator
+        isOpen={isThemeCreatorOpen}
+        onClose={closeThemeCreator}
+        onSave={handleSaveTheme}
+        existingTheme={themeToEdit}
       />
     </div>
   );

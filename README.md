@@ -3,6 +3,7 @@
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
 
+
 <p align="center">
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
 </p>
@@ -167,6 +168,44 @@ The application supports multiple themes, including user-created custom themes. 
 *   ROS stack logs can be viewed with `docker compose logs ros-stack`.
 </details>
 
+## 🧪 Testing
+
+The project is enforcing high code quality standards with strict coverage thresholds (>20% for Statements, Branches, Functions, and Lines).
+
+<details>
+<summary><strong>✅ Unit Tests</strong></summary>
+
+Unit tests are built with **Vitest**. They are co-located with source files (e.g., `src/hooks/useRos.ts` -> `src/hooks/useRos.test.ts`).
+
+```bash
+# Run unit tests in watch mode (for development)
+npm run test
+
+# Run unit tests once (for CI/CD)
+npm run test:run
+
+# Generate coverage report
+npm run test:coverage
+```
+</details>
+
+<details>
+<summary><strong>🎭 End-to-End (E2E) Tests</strong></summary>
+
+End-to-End tests are built with **Playwright**. They verify the full application flow in a real browser environment.
+
+```bash
+# Run all E2E tests (headless)
+npm run e2e
+
+# Run E2E tests with UI runner (interactive debugging)
+npm run e2e:ui
+
+# View the last E2E test report
+npm run e2e:report
+```
+</details>
+
 ## 🧩 Codebase Organization
 
 <details>
@@ -174,8 +213,11 @@ The application supports multiple themes, including user-created custom themes. 
 
 The codebase follows a component-based architecture:
 
+- `/e2e` - End-to-End tests (Playwright)
+  - `app-navigation.spec.ts` - Navigation and routing tests
+  - `entry-page.spec.ts` - Entry page interaction tests
 - `/src/components` - Main UI components and layouts
-  - Core UI components: `MainControlView`, `Navbar`, `SettingsPopup`, etc.
+  - Core UI components: `MainControlView`, `VisualizationPanel`, `Navbar`, `SettingsPopup`, etc.
   - `/gamepads` - Pre-built gamepad control interfaces
     - `/standard` - Standard dual joystick layout
     - `/gameboy` - GameBoy-style control layout  
@@ -183,9 +225,11 @@ The codebase follows a component-based architecture:
     - `/drone` - Drone control interface
     - `/manipulator` - Robotic arm control interface
     - `/custom` - Custom gamepad wrapper component
-  - `/visualizers` - 3D visualization components
-    - `PointCloudViz.tsx` - Point cloud visualization
-    - `UrdfViz.tsx` - URDF model visualization
+  - `/visualizers` - React wrappers for 3D visualization
+    - `PointCloudViz.tsx` - Point cloud visualization component
+    - `LaserScanViz.tsx` - Laser scan visualization component
+    - `PoseStampedViz.tsx` - Pose/Odometry visualization component
+    - `UrdfViz.tsx` - URDF model visualization component
     - `CameraInfoViz.tsx` - Camera information display
 - `/src/features` - Feature-specific code organized by functionality
   - `/theme` - Theme system with custom color palette creation
@@ -199,10 +243,13 @@ The codebase follows a component-based architecture:
       - `GamepadComponent.tsx` - Generic component wrapper
       - `JoystickComponent.tsx`, `ButtonComponent.tsx`, `DPadComponent.tsx`
       - `ToggleComponent.tsx`, `SliderComponent.tsx` - Input components
-      - Various UI components for editor functionality
-- `/src/hooks` - Custom React hooks including ROS connection and visualization
+- `/src/hooks` - Custom React hooks (`useRos.ts`, `useRos3d.ts`, etc.)
 - `/src/utils` - Utility functions and helpers
+  - `/ros3d` - Core ROS 3D logic and primitive definitions
+    - `/visualizers` - Pure logic for PointCloud, LaserScan, etc.
 - `/src/types` - TypeScript type definitions
+- `vitest.config.ts` - Unit test configuration
+- `playwright.config.ts` - E2E test configuration
 </details>
 
 <details>

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
-import type { IJoystickUpdateEvent } from 'react-joystick-component';
+import type { IJoystickUpdateEvent } from '../../../types/joystick';
 import { throttle } from 'lodash-es';
 import './ManipulatorGamepadLayout.css';
 import { GamepadProps } from '../GamepadInterface';
@@ -32,7 +32,7 @@ const IconTurtle = () => (
 
 const IconNormalSpeed = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="5"/>
+    <circle cx="12" cy="12" r="5" />
   </svg>
 );
 
@@ -48,7 +48,7 @@ const IconTurbo = () => (
 // Constants for geometry_msgs/TwistStamped
 const TWIST_TOPIC = '/servo_node/delta_twist_cmds'; // Changed
 const TWIST_MSG_TYPE = 'geometry_msgs/TwistStamped'; // Changed
-const FRAME_ID = 'panda_link0'; // Added
+const _FRAME_ID = 'panda_link0'; // Added
 const THROTTLE_INTERVAL = 33; // Milliseconds (approx 30Hz)
 const JOYSTICK_MAX_OUTPUT_NORMALIZED = 1.0; // Joystick output will be normalized to this
 const JOYSTICK_DEADZONE = 0.001; // Set to a very small value
@@ -91,11 +91,11 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   const lastSentTwist = useRef<TwistState & { _frame_id_internal?: string } | null>(null); // Store internal frame id with last sent twist
   const [currentSpeedMode, setCurrentSpeedMode] = useState<SpeedMode>(SpeedMode.Normal);
   const [currentFrameId, setCurrentFrameId] = useState<string>(WORLD_FRAME); // New state for Frame ID
-  const zIntervalRef = useRef<number | null>(null); // Changed NodeJS.Timeout to number
+  const zIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Refs for joystick intervals for continuous publishing
-  const leftJoystickIntervalRef = useRef<number | null>(null);
-  const rightJoystickIntervalRef = useRef<number | null>(null);
+  const leftJoystickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rightJoystickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestLeftJoystickCmd = useRef<{ angularX: number, angularY: number }>({ angularX: 0, angularY: 0 });
   const latestRightJoystickCmd = useRef<{ linearX: number, linearY: number }>({ linearX: 0, linearY: 0 });
   // --- Add state for joystick colors ---
@@ -154,7 +154,7 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
     if (rawValue === null) return 0;
     // Normalize rawValue assuming it's in range -JOYSTICK_EVENT_MAX_VAL to +JOYSTICK_EVENT_MAX_VAL
     let normalizedValue = rawValue / JOYSTICK_EVENT_MAX_VAL;
-    
+
     // Apply deadzone minimally, effectively only for true zero crossing
     if (Math.abs(normalizedValue) < JOYSTICK_DEADZONE) return 0;
 
@@ -170,13 +170,13 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
       return;
     }
 
-    const isTwistNonZero = 
-        twist.linear.x !== 0 || twist.linear.y !== 0 || twist.linear.z !== 0 ||
-        twist.angular.x !== 0 || twist.angular.y !== 0 || twist.angular.z !== 0;
+    const isTwistNonZero =
+      twist.linear.x !== 0 || twist.linear.y !== 0 || twist.linear.z !== 0 ||
+      twist.angular.x !== 0 || twist.angular.y !== 0 || twist.angular.z !== 0;
 
-    const hasTwistDataChanged = !lastSentTwist.current || 
-        JSON.stringify(twist) !== JSON.stringify({linear: lastSentTwist.current.linear, angular: lastSentTwist.current.angular });
-    
+    const hasTwistDataChanged = !lastSentTwist.current ||
+      JSON.stringify(twist) !== JSON.stringify({ linear: lastSentTwist.current.linear, angular: lastSentTwist.current.angular });
+
     // Also consider frame ID change as a reason to publish, even if twist is zero (to update frame)
     const hasFrameChanged = !lastSentTwist.current || lastSentTwist.current._frame_id_internal !== currentFrameId;
 
@@ -203,7 +203,7 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
 
   const publishTwistThrottled = useCallback(
     throttle(publishTwist, THROTTLE_INTERVAL, { leading: true, trailing: true }),
-    [publishTwist] 
+    [publishTwist]
   );
 
   // Helper to clear Z interval
@@ -214,7 +214,7 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
     }
   }, []);
 
-  const stopJoystickInterval = (intervalRef: React.MutableRefObject<number | null>) => {
+  const stopJoystickInterval = (intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -222,7 +222,7 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   };
 
   const startJoystickInterval = (
-    intervalRef: React.MutableRefObject<number | null>,
+    intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
     updateFunction: () => void // Function to get and publish the latest joystick command
   ) => {
     stopJoystickInterval(intervalRef); // Clear existing interval first
@@ -239,17 +239,17 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
       publishTwistThrottled.cancel(); // Cancel any pending throttled calls
       // Send a final zero twist message upon unmount to stop movement
       if (lastSentTwist.current && (
-          lastSentTwist.current.linear.x !== 0 || lastSentTwist.current.linear.y !== 0 || lastSentTwist.current.linear.z !== 0 ||
-          lastSentTwist.current.angular.x !== 0 || lastSentTwist.current.angular.y !== 0 || lastSentTwist.current.angular.z !== 0)
+        lastSentTwist.current.linear.x !== 0 || lastSentTwist.current.linear.y !== 0 || lastSentTwist.current.linear.z !== 0 ||
+        lastSentTwist.current.angular.x !== 0 || lastSentTwist.current.angular.y !== 0 || lastSentTwist.current.angular.z !== 0)
       ) {
-        const finalTwist = {...initialTwistState};
+        const finalTwist = { ...initialTwistState };
         // Ensure final zero twist uses the last active frame to properly stop motion relative to that frame
         const lastFrame = (lastSentTwist.current as any)?._frame_id_internal || currentFrameId;
         const now = new Date();
         const secs = Math.floor(now.getTime() / 1000);
         const nsecs = (now.getTime() % 1000) * 1000000;
         const twistMsg = new ROSLIB.Message({ header: { stamp: { sec: secs, nsec: nsecs }, frame_id: lastFrame }, twist: finalTwist });
-        twistTopic.current?.publish(twistMsg); 
+        twistTopic.current?.publish(twistMsg);
       }
       twistTopic.current?.unadvertise();
       // console.log(`Unadvertised ${TWIST_TOPIC} for ManipulatorGamepadLayout`);
@@ -264,22 +264,22 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   useEffect(() => {
     if (zButtonsState[0] === 1 || zButtonsState[1] === 1) { // A Z button is active
       clearZInterval(); // Clear previous interval if speed mode or button changed rapidly
-      
+
       zIntervalRef.current = setInterval(() => {
-        const zValue = zButtonsState[0] === 1 
+        const zValue = zButtonsState[0] === 1
           ? JOYSTICK_MAX_OUTPUT_NORMALIZED * SPEED_FACTORS[currentSpeedMode as SpeedMode]
-          : (zButtonsState[1] === 1 
-              ? -JOYSTICK_MAX_OUTPUT_NORMALIZED * SPEED_FACTORS[currentSpeedMode as SpeedMode]
-              : 0);
-        
+          : (zButtonsState[1] === 1
+            ? -JOYSTICK_MAX_OUTPUT_NORMALIZED * SPEED_FACTORS[currentSpeedMode as SpeedMode]
+            : 0);
+
         if (zValue !== 0) {
           setCurrentTwist((prevJoystickTwist: TwistState) => {
             const newTwist = {
               ...prevJoystickTwist,
               linear: { ...prevJoystickTwist.linear, z: zValue }
             };
-            publishTwistThrottled(newTwist); 
-            return newTwist; 
+            publishTwistThrottled(newTwist);
+            return newTwist;
           });
         }
       }, THROTTLE_INTERVAL);
@@ -380,11 +380,11 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
     });
     setZButtonsState([0, 1]); // This will trigger the useEffect for continuous publishing
   }, [currentSpeedMode, publishTwist, setCurrentTwist]);
-  
+
   const handleLinearZRelease = useCallback(() => {
     // useEffect watching zButtonsState will clear the interval when state changes to [0,0]
     setZButtonsState([0, 0]);
-     // Update currentTwist to Z=0 and publish immediately
+    // Update currentTwist to Z=0 and publish immediately
     setCurrentTwist((prev: TwistState) => {
       const updatedTwist = { ...prev, linear: { ...prev.linear, z: 0 } };
       publishTwist(updatedTwist);
@@ -423,11 +423,11 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
         </div>
 
         {/* Frame ID Toggle Switch */}
-        <div 
-          className="frame-toggle-switch-container" 
-          onClick={toggleFrameId} 
-          role="switch" 
-          aria-checked={currentFrameId === GRIPPER_FRAME} 
+        <div
+          className="frame-toggle-switch-container"
+          onClick={toggleFrameId}
+          role="switch"
+          aria-checked={currentFrameId === GRIPPER_FRAME}
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {

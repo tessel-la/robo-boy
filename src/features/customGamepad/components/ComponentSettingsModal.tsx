@@ -73,7 +73,7 @@ const MESSAGE_TYPES = {
 // Define allowed message types for each component type
 const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
   'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
-  'button': [ 'std_msgs/Bool', 'std_msgs/Int32'],
+  'button': ['std_msgs/Bool', 'std_msgs/Int32'],
   'dpad': ['sensor_msgs/Joy'], // D-pad only supports Joy
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
   'slider': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32']
@@ -98,10 +98,10 @@ const getInferredDataType = (messageType: string, field: string): 'float' | 'int
 
 // Helper function to check if axis configuration should be enabled
 const isAxisConfigurationEnabled = (messageType: string): boolean => {
-  return messageType === 'sensor_msgs/Joy' || 
-         messageType === 'sensor_msgs/msg/Joy' ||
-         messageType === 'geometry_msgs/Twist' || 
-         messageType === 'geometry_msgs/msg/Twist';
+  return messageType === 'sensor_msgs/Joy' ||
+    messageType === 'sensor_msgs/msg/Joy' ||
+    messageType === 'geometry_msgs/Twist' ||
+    messageType === 'geometry_msgs/msg/Twist';
 };
 
 // Helper function to check if this is a twist message type
@@ -121,7 +121,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [messageType, setMessageType] = useState('');
   const [field, setField] = useState('');
   const [availableTopics, setAvailableTopics] = useState<TopicInfo[]>([]);
-  
+
   // Joystick-specific settings
   const [valueRange, setValueRange] = useState({ min: -1, max: 1 });
   const [sliderMin, setSliderMin] = useState(-1);
@@ -129,23 +129,23 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [axisSelection, setAxisSelection] = useState<'xy' | 'zw'>('xy'); // First 2 or second 2 axes
   const [customAxes, setCustomAxes] = useState<string[]>(['0', '1']);
   const [useCustomAxes, setUseCustomAxes] = useState(false);
-  
+
   // New twist-specific settings
   const [twistAxes, setTwistAxes] = useState<string[]>(['linear.x', 'linear.y']);
   const [useTwistCustomAxes, setUseTwistCustomAxes] = useState(false);
-  
+
   // D-pad-specific settings
   const [dpadButtonMapping, setDpadButtonMapping] = useState<Record<string, number>>({
     up: 0, right: 1, down: 2, left: 3
   });
-  
+
   // Button-specific settings
   const [buttonIndex, setButtonIndex] = useState(0);
   const [momentary, setMomentary] = useState(true);
-  
+
   // Loading state
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
-  
+
   // Error state
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -164,10 +164,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     if (existingTopic) {
       // Get the message type configuration to check for alternative formats
       const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
-      const acceptableTypes = messageConfig 
+      const acceptableTypes = messageConfig
         ? [messageType, ...(messageConfig.alternativeTypes || [])]
         : [messageType];
-      
+
       // Check if the existing topic type matches any acceptable format
       if (!acceptableTypes.includes(existingTopic.type)) {
         setErrorMessage(`Topic name "${topic}" is already in use by an existing topic with message type "${existingTopic.type}". Please choose a different topic name or select the correct message type.`);
@@ -211,9 +211,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   useEffect(() => {
     if (component) {
       setLabel(component.label || '');
-      
+
       const action = component.action as ROSTopicConfig;
-      
+
       // Set defaults for new components first
       let defaultTopic = `/${component.type}`;
       let defaultMessageType = 'sensor_msgs/Joy';
@@ -258,20 +258,20 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           setMessageType(action.messageType || 'sensor_msgs/Joy');
           setField('buttons');
         } else if (component.type === 'toggle') {
-          const validToggleType = ['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(action.messageType || '') 
-            ? action.messageType 
+          const validToggleType = ['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(action.messageType || '')
+            ? action.messageType
             : 'std_msgs/Bool';
           setMessageType(validToggleType);
           setField('data');
         }
       }
-      
+
       // Initialize component-specific settings
       if (component.config) {
         if (component.type === 'joystick') {
           const min = component.config.min ?? -1;
           const max = component.config.max ?? 1;
-          
+
           const inferredStep = getInferredDataType(action.messageType || 'sensor_msgs/Joy', action.field || 'axes') === 'float' ? 0.1 : 1;
           const minPrecision = getPrecision(inferredStep);
 
@@ -281,10 +281,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           });
           setSliderMin(parseFloat((component.config.sliderMin ?? min).toFixed(minPrecision)));
           setSliderMax(parseFloat((component.config.sliderMax ?? max).toFixed(minPrecision)));
-          
+
           if (component.config.axes) {
             const axes = component.config.axes;
-            
+
             // Check if this is a twist message type
             if (isTwistMessageType(action.messageType || '')) {
               setTwistAxes(axes);
@@ -335,24 +335,24 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // Get available topics filtered by message type
   const filteredTopics = useMemo(() => {
     if (!messageType) return availableTopics;
-    
+
     // Get the message type configuration
     const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
     if (!messageConfig) return [];
-    
+
     // Create a list of all possible type formats to match against
     const typesToMatch = [messageType, ...(messageConfig.alternativeTypes || [])];
-    
-    const filtered = availableTopics.filter(topic => 
+
+    const filtered = availableTopics.filter(topic =>
       typesToMatch.some(typeToMatch => topic.type === typeToMatch)
     );
-    
+
     // Debug logging to help troubleshoot
     console.log('Filtering topics for message type:', messageType);
     console.log('Types to match:', typesToMatch);
     console.log('Available topics:', availableTopics.map(t => `${t.name} (${t.type})`));
     console.log('Filtered topics:', filtered.map(t => `${t.name} (${t.type})`));
-    
+
     return filtered;
   }, [availableTopics, messageType]);
 
@@ -412,13 +412,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     // Add component-specific configuration
     if (component.type === 'joystick') {
       let axesToUse: string[];
-      
+
       if (isTwistMessageType(messageType)) {
         axesToUse = useTwistCustomAxes ? twistAxes : twistAxes;
       } else {
         axesToUse = useCustomAxes ? customAxes : (axisSelection === 'xy' ? ['0', '1'] : ['2', '3']);
       }
-      
+
       updatedConfig = {
         ...updatedConfig,
         min: parseFloat(valueRange.min.toFixed(precision)),
@@ -473,12 +473,12 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           <h3>Configure {component.type.charAt(0).toUpperCase() + component.type.slice(1)}</h3>
           <button className="close-button" onClick={onClose}>×</button>
         </div>
-        
+
         <div className="modal-content">
           {/* Basic Settings */}
           <div className="settings-section">
             <h4>Basic Settings</h4>
-            
+
             <div className="setting-group">
               <label htmlFor="component-label">Display Label:</label>
               <input
@@ -495,7 +495,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           {/* Topic Configuration */}
           <div className="settings-section">
             <h4>ROS Topic Configuration</h4>
-            
+
             <div className="setting-group">
               <label htmlFor="message-type">Message Type:</label>
               <select
@@ -629,7 +629,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     // Show all available fields for other components
                     Object.entries(availableFields).map(([fieldName, fieldInfo]) => (
                       <option key={fieldName} value={fieldName}>
-                        {fieldInfo.label} ({fieldName})
+                        {(fieldInfo as { label: string }).label} ({fieldName})
                       </option>
                     ))
                   )}
@@ -652,7 +652,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           {component.type === 'joystick' && (
             <div className="settings-section">
               <h4>Joystick Settings</h4>
-              
+
               <div className="setting-group range-controls">
                 <ValueControl
                   label="Slider Min"
@@ -703,7 +703,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                           />
                           Use custom axis mapping
                         </label>
-                        
+
                         {!useTwistCustomAxes && (
                           <div className="axis-selection">
                             <h5>Linear Movement:</h5>
@@ -734,7 +734,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                               />
                               Linear X and Z
                             </label>
-                            
+
                             <h5>Angular Movement:</h5>
                             <label className="radio-label">
                               <input
@@ -763,7 +763,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                               />
                               Angular X and Z
                             </label>
-                            
+
                             <h5>Mixed Linear/Angular:</h5>
                             <label className="radio-label">
                               <input
@@ -814,7 +814,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                           />
                           Use custom axis mapping
                         </label>
-                        
+
                         {!useCustomAxes && (
                           <div className="axis-selection">
                             <label className="radio-label">
@@ -872,7 +872,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           {component.type === 'button' && (
             <div className="settings-section">
               <h4>Button Settings</h4>
-              
+
               <div className="setting-group">
                 <label htmlFor="button-index">Button Index:</label>
                 <input
@@ -901,7 +901,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           {component.type === 'dpad' && (
             <div className="settings-section">
               <h4>D-Pad Settings</h4>
-              
+
               {/* Force Joy message type for D-pad */}
               {messageType && messageType !== 'sensor_msgs/Joy' && messageType !== 'sensor_msgs/msg/Joy' && (
                 <div className="setting-group">
@@ -924,9 +924,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             id="dpad-up"
                             type="number"
                             value={dpadButtonMapping.up}
-                            onChange={(e) => setDpadButtonMapping(prev => ({ 
-                              ...prev, 
-                              up: parseInt(e.target.value) || 0 
+                            onChange={(e) => setDpadButtonMapping(prev => ({
+                              ...prev,
+                              up: parseInt(e.target.value) || 0
                             }))}
                             min="0"
                             className="setting-input small"
@@ -938,9 +938,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             id="dpad-right"
                             type="number"
                             value={dpadButtonMapping.right}
-                            onChange={(e) => setDpadButtonMapping(prev => ({ 
-                              ...prev, 
-                              right: parseInt(e.target.value) || 0 
+                            onChange={(e) => setDpadButtonMapping(prev => ({
+                              ...prev,
+                              right: parseInt(e.target.value) || 0
                             }))}
                             min="0"
                             className="setting-input small"
@@ -952,9 +952,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             id="dpad-down"
                             type="number"
                             value={dpadButtonMapping.down}
-                            onChange={(e) => setDpadButtonMapping(prev => ({ 
-                              ...prev, 
-                              down: parseInt(e.target.value) || 0 
+                            onChange={(e) => setDpadButtonMapping(prev => ({
+                              ...prev,
+                              down: parseInt(e.target.value) || 0
                             }))}
                             min="0"
                             className="setting-input small"
@@ -966,9 +966,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             id="dpad-left"
                             type="number"
                             value={dpadButtonMapping.left}
-                            onChange={(e) => setDpadButtonMapping(prev => ({ 
-                              ...prev, 
-                              left: parseInt(e.target.value) || 0 
+                            onChange={(e) => setDpadButtonMapping(prev => ({
+                              ...prev,
+                              left: parseInt(e.target.value) || 0
                             }))}
                             min="0"
                             className="setting-input small"
@@ -976,7 +976,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                         </div>
                       </div>
                       <small className="axis-help-text">
-                        Each direction maps to a button index in the Joy message buttons array. 
+                        Each direction maps to a button index in the Joy message buttons array.
                         Default mapping: Up=0, Right=1, Down=2, Left=3
                       </small>
                     </div>
@@ -990,7 +990,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           {component.type === 'toggle' && (
             <div className="settings-section">
               <h4>Toggle Settings</h4>
-              
+
               <div className="setting-group">
                 <div className="axis-config-disabled">
                   <p><strong>Toggle Component Configuration:</strong></p>
@@ -1001,7 +1001,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     <li>Published Values: <strong>true</strong> when ON, <strong>false</strong> when OFF</li>
                   </ul>
                   <p style={{ fontStyle: 'italic', fontSize: '0.9em', color: 'var(--text-color-secondary)' }}>
-                    Toggle components are designed for simple boolean control. They publish true/false values 
+                    Toggle components are designed for simple boolean control. They publish true/false values
                     to the specified topic when toggled on or off.
                   </p>
                 </div>
@@ -1009,13 +1009,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             </div>
           )}
         </div>
-        
+
         <div className="modal-footer">
           <button className="cancel-btn" onClick={handleCancel}>
             Cancel
           </button>
-          <button 
-            className="save-btn" 
+          <button
+            className="save-btn"
             onClick={handleSave}
             disabled={!topic || !messageType || !!errorMessage}
           >

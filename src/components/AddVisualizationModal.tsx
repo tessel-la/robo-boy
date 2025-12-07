@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaMapMarker, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
-    name: string;
-    type: string;
+  name: string;
+  type: string;
 }
 
 // Define known visualization types and their corresponding ROS message types
@@ -63,10 +63,10 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
       // For URDF, just return all available URDF topics
       return availableUrdfTopics;
     }
-    
+
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
     const filteredTopics = allTopics.filter(topic => validRosTypes.includes(topic.type));
-    
+
     // Debug logging for PoseStamped specifically
     if (type === 'posestamped') {
       console.log('[AddVisualizationModal] PoseStamped topic filtering:');
@@ -76,14 +76,14 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
       console.log('  Filtered topics:', filteredTopics);
       console.log('  Filtered topics length:', filteredTopics.length);
       console.log('  All topic types:', [...new Set(allTopics.map(t => t.type))]);
-      
+
       // Test the filtering manually
-      const manualTest = allTopics.filter(topic => 
+      const manualTest = allTopics.filter(topic =>
         topic.type === 'geometry_msgs/msg/PoseStamped' || topic.type === 'geometry_msgs/PoseStamped'
       );
       console.log('  Manual filter test:', manualTest);
     }
-    
+
     return filteredTopics;
   };
 
@@ -130,7 +130,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
       const defaultUrdfTopic = getAvailableTopics('urdf').find(t => t.name.includes('robot_description'))?.name;
       setSelectedTopic(defaultUrdfTopic || '');
     } else {
-    setSelectedTopic('');
+      setSelectedTopic('');
     }
   };
 
@@ -184,7 +184,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
               const availableTopics = getAvailableTopics(vizType);
               const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
               const icon = VIZ_TYPE_ICONS[vizType];
-              
+
               // Debug logging for PoseStamped specifically in grid rendering
               if (vizType === 'posestamped') {
                 console.log('[AddVisualizationModal] PoseStamped grid rendering:');
@@ -192,7 +192,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 console.log('  Has topics or is URDF:', hasTopicsOrIsUrdf);
                 console.log('  All topics count:', allTopics.length);
               }
-              
+
               let title = `Add ${formatTypeName(type)}`;
               if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
                 title += ` (${availableTopics[0]?.name || 'first available'})`;
@@ -201,9 +201,9 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
               } else {
                 title = 'No compatible topics available';
               }
-              
+
               return (
-                <button 
+                <button
                   key={type}
                   className={`viz-grid-item ${!hasTopicsOrIsUrdf ? 'disabled' : ''}`}
                   onClick={() => hasTopicsOrIsUrdf && addQuickVisualization(vizType)}
@@ -260,8 +260,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                         ))}
                       </select>
                       <div style={{ marginTop: '8px' }}>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => setUseManualInput(true)}
                           style={{ fontSize: '12px', padding: '4px 8px' }}
                         >
@@ -284,8 +284,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                         onChange={(e) => setManualTopicInput(e.target.value)}
                         style={{ width: '100%', marginBottom: '8px' }}
                       />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => {
                           setUseManualInput(false);
                           setManualTopicInput('');
@@ -322,7 +322,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                   </div>
                 </>
               )}
-              
+
               <button
                 className="manual-add-button"
                 onClick={handleManualAddClick}

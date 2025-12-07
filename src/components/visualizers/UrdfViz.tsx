@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from '../../utils/ros3d';
 import { useUrdfClient } from '../../hooks/useUrdfClient';

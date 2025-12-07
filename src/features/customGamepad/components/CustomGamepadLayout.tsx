@@ -50,7 +50,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     };
 
     updateDimensions();
-    
+
     const resizeObserver = new ResizeObserver(updateDimensions);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
@@ -82,10 +82,10 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     // Use minimal margins to maximize grid size, especially horizontally
     const isSmallScreen = Math.min(containerDimensions.width, containerDimensions.height) < 500;
     const isTinyScreen = Math.min(containerDimensions.width, containerDimensions.height) < 350;
-    
+
     let marginFactor: number;
     let extraPadding: number;
-    
+
     if (isTinyScreen) {
       marginFactor = 0.02; // Minimal margin for tiny screens
       extraPadding = 6; // Minimal padding
@@ -96,19 +96,19 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       marginFactor = 0.005; // Almost no margin for normal screens
       extraPadding = 2; // Almost no padding
     }
-    
+
     // Maximize available space - use nearly the entire container
     const availableWidth = Math.max(180, containerDimensions.width * (1 - marginFactor) - extraPadding);
     const availableHeight = Math.max(120, containerDimensions.height * (1 - marginFactor) - extraPadding);
-    
+
     // Calculate scale factor to fit within available space
     const scaleX = availableWidth / idealGridWidth;
     const scaleY = availableHeight / idealGridHeight;
     let scaleFactor = Math.min(scaleX, scaleY);
-    
+
     // Remove artificial maximum scale limits to allow components to truly fill grid space
     // Allow scale factors greater than 1 to maximize space utilization
-    
+
     // Set very minimal minimum scale factors to allow maximum expansion
     let minScale: number;
     if (isTinyScreen) {
@@ -118,13 +118,13 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
     } else {
       minScale = 0.25; // Reasonable minimum for normal screens
     }
-    
+
     scaleFactor = Math.max(minScale, scaleFactor);
 
     // Calculate final dimensions ensuring they fit within container
     const finalGridWidth = idealGridWidth * scaleFactor;
     const finalGridHeight = idealGridHeight * scaleFactor;
-    
+
     // Minimal container padding to maximize grid space
     const containerPadding = Math.max(1, extraPadding / 6);
 
@@ -139,26 +139,26 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const scaling = calculateScaling();
 
   // Calculate fixed cell dimensions that fit within the scaled grid
-  const cellWidth = isEditing 
+  const cellWidth = isEditing
     ? Math.floor(layout.cellSize * scaling.scaleFactor)
     : `minmax(${Math.floor(layout.cellSize * 0.5)}px, 1fr)`;
-  const cellHeight = isEditing 
+  const cellHeight = isEditing
     ? Math.floor(layout.cellSize * scaling.scaleFactor)
     : `minmax(${Math.floor(layout.cellSize * 0.5)}px, 1fr)`;
   const gap = Math.max(1, Math.floor(4 * scaling.scaleFactor));
   const padding = isEditing ? Math.max(2, Math.floor(8 * scaling.scaleFactor)) : 8;
 
   // Use the pre-calculated grid dimensions from scaling to ensure proper fit
-  const actualGridWidth = scaling.gridWidth;
-  const actualGridHeight = scaling.gridHeight;
+  const _actualGridWidth = scaling.gridWidth;
+  const _actualGridHeight = scaling.gridHeight;
 
   // Grid style with adaptive cell dimensions that maintain proper aspect ratios
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isEditing 
+    gridTemplateColumns: isEditing
       ? `repeat(${layout.gridSize.width}, 1fr)` // Use fractional units for flexible horizontal scaling
       : `repeat(${layout.gridSize.width}, ${cellWidth})`,
-    gridTemplateRows: isEditing 
+    gridTemplateRows: isEditing
       ? `repeat(${layout.gridSize.height}, ${Math.floor(layout.cellSize * scaling.scaleFactor)}px)` // Use calculated size to maintain proportions
       : `repeat(${layout.gridSize.height}, ${cellHeight})`,
     gap: `${gap}px`,
@@ -241,7 +241,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   };
 
   return (
-    <div 
+    <div
       className={`custom-gamepad-layout ${isEditing ? 'editing' : ''}`}
       ref={containerRef}
       style={containerStyle}
@@ -249,15 +249,15 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       onDrop={isEditing ? handleGridDrop : undefined}
     >
       {/* Grid container */}
-      <div 
-        className="gamepad-grid" 
+      <div
+        className="gamepad-grid"
         style={gridStyle}
         onDragOver={isEditing ? handleGridDragOver : undefined}
         onDrop={isEditing ? handleGridDrop : undefined}
       >
         {/* Grid background (visible only in editing mode) - positioned to exactly match main grid */}
         {isEditing && (
-          <div 
+          <div
             className="grid-background"
             style={{
               // Make the background grid exactly mirror the main grid layout
@@ -294,7 +294,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
 
         {/* Drop preview indicator */}
         {isEditing && dropPreview && (
-          <div 
+          <div
             className={`drop-preview ${dropPreview.isValid ? 'valid' : 'invalid'}`}
             style={{
               gridColumn: `${dropPreview.x + 1} / span ${dropPreview.width}`,
@@ -310,7 +310,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
         {/* Gamepad components */}
         {layout.components.map(component => {
           const isBeingDragged = dragState?.source === 'grid' && dragState?.componentId === component.id;
-          
+
           return (
             <GamepadComponent
               key={component.id}

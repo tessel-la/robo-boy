@@ -7,6 +7,12 @@ export interface PointCloudSettingsOptions {
   pointSize: number;
   color: string;
   maxPoints?: number;
+  // Axis-based coloring options
+  colorAxis?: 'x' | 'y' | 'z' | 'none';
+  minAxisValue?: number;
+  maxAxisValue?: number;
+  minColor?: string;
+  maxColor?: string;
   // New toggle properties for enabling/disabling settings
   pointSizeEnabled: boolean;
   colorEnabled: boolean;
@@ -41,10 +47,10 @@ interface SettingGroupProps {
 /**
  * SettingGroup - A component that renders a collapsible settings group with a toggle switch
  */
-const SettingGroup = ({ 
-  title, 
-  enabled, 
-  onToggle, 
+const SettingGroup = ({
+  title,
+  enabled,
+  onToggle,
   children
 }: SettingGroupProps): JSX.Element => {
   const [expanded, setExpanded] = useState(true);
@@ -52,9 +58,9 @@ const SettingGroup = ({
   return (
     <div className="setting-group">
       <div className="setting-header">
-        <button 
-          type="button" 
-          className="expand-toggle" 
+        <button
+          type="button"
+          className="expand-toggle"
           onClick={() => setExpanded(!expanded)}
           aria-label={expanded ? "Collapse section" : "Expand section"}
         >
@@ -63,10 +69,10 @@ const SettingGroup = ({
         <label>{title}</label>
         <div className="toggle-switch-container">
           <label className="toggle-switch">
-            <input 
-              type="checkbox" 
-              checked={enabled} 
-              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)} 
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)}
             />
             <span className="toggle-slider"></span>
           </label>
@@ -86,7 +92,7 @@ const SettingGroup = ({
  */
 const PointCloudSettings = ({
   vizId,
-  topic,
+  topic: _topic,
   initialOptions,
   onClose,
   onSaveSettings,
@@ -99,7 +105,7 @@ const PointCloudSettings = ({
 
   // Update specific setting
   const updateSetting = <K extends keyof PointCloudSettingsOptions>(
-    key: K, 
+    key: K,
     value: PointCloudSettingsOptions[K]
   ) => {
     setSettings((prev: PointCloudSettingsOptions) => ({
@@ -110,7 +116,7 @@ const PointCloudSettings = ({
 
   // Handle number input changes
   const handleNumberChange = (
-    e: ChangeEvent<HTMLInputElement>, 
+    e: ChangeEvent<HTMLInputElement>,
     key: keyof PointCloudSettingsOptions
   ) => {
     const value = parseFloat(e.target.value);
@@ -125,9 +131,6 @@ const PointCloudSettings = ({
     onClose();
   };
 
-  // Extract topic name for display
-  const shortTopicName = topic.split('/').pop() || topic;
-
   return (
     <div className="topic-settings-popup">
       <div className="settings-popup-header">
@@ -137,8 +140,8 @@ const PointCloudSettings = ({
       <div className="settings-popup-content">
         <div className="settings-grid">
           {/* Point Size Setting Group */}
-          <SettingGroup 
-            title="Point Size" 
+          <SettingGroup
+            title="Point Size"
             enabled={settings.pointSizeEnabled}
             onToggle={(enabled) => updateSetting('pointSizeEnabled', enabled)}
           >
@@ -146,7 +149,7 @@ const PointCloudSettings = ({
               <input
                 id="point-size"
                 type="range"
-                min="0.01" 
+                min="0.01"
                 max="0.5"
                 step="0.01"
                 value={settings.pointSize}
@@ -165,8 +168,8 @@ const PointCloudSettings = ({
           </SettingGroup>
 
           {/* Max Points Setting Group */}
-          <SettingGroup 
-            title="Max Points" 
+          <SettingGroup
+            title="Max Points"
             enabled={settings.maxPointsEnabled}
             onToggle={(enabled) => updateSetting('maxPointsEnabled', enabled)}
           >
@@ -174,7 +177,7 @@ const PointCloudSettings = ({
               <input
                 id="max-points"
                 type="range"
-                min="1000" 
+                min="1000"
                 max="1000000"
                 step="1000"
                 value={settings.maxPoints}
@@ -193,8 +196,8 @@ const PointCloudSettings = ({
           </SettingGroup>
 
           {/* Color Setting Group */}
-          <SettingGroup 
-            title="Color Settings" 
+          <SettingGroup
+            title="Color Settings"
             enabled={settings.colorEnabled}
             onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
           >

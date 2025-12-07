@@ -48,7 +48,7 @@ const VoiceLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using GamepadP
     // This is complex and depends on how you want to represent the audio.
     // You might use Web Audio API to decode, resample, and get Float32Array data.
     // For now, we'll send a dummy array.
-    const dummyData = [0.1, 0.2, 0.3]; 
+    const dummyData = [0.1, 0.2, 0.3];
     console.warn('Audio processing not implemented. Sending dummy data.');
     // --- End Placeholder ---
 
@@ -76,7 +76,7 @@ const VoiceLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using GamepadP
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const _audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         // Process and publish the audio data
         publishVoiceData(/* audioBlob */);
         // Clean up stream tracks
@@ -113,15 +113,15 @@ const VoiceLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using GamepadP
             <div className="sound-bar"></div>
             <div className="sound-bar"></div>
           </div>
-          {/* <span>Recording...</span> Maybe remove text if wave is clear */} 
+          {/* <span>Recording...</span> Maybe remove text if wave is clear */}
         </div>
       )}
       <p className="status-message">{statusMessage}</p>
-      <button 
+      <button
         className={`record-button ${isRecording ? 'recording' : ''}`}
-        onClick={isRecording ? stopRecording : startRecording} 
+        onClick={isRecording ? stopRecording : startRecording}
         disabled={!ros}
-      > 
+      >
         {isRecording ? 'Stop' : 'Record'}
       </button>
     </div>

@@ -1,17 +1,6 @@
 /* src/components/AddPanelMenu.css */
 
-.add-panel-menu-overlay {
-    /* Optional: dimmed background */
-    /* 
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.1);
-    z-index: 9; 
-    */
-}
+
 
 .add-panel-menu {
     /* Keep visual styles */
@@ -21,23 +10,23 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     min-width: 200px;
     max-width: 300px;
-    
+
     /* Add high z-index to ensure it appears above other elements */
     z-index: 9999 !important;
 
     /* Ensure the menu is contained and scrollable */
     display: flex;
     flex-direction: column;
-    
+
     /* Enhanced scrollbar styling */
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--primary-color, #007bff) var(--background-secondary, #f8f9fa);
-    
+
     /* Smooth scrolling */
     scroll-behavior: smooth;
-    
+
     /* Ensure proper box-sizing for precise positioning */
     box-sizing: border-box;
 }
@@ -55,9 +44,9 @@
 }
 
 .add-panel-menu::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, 
-        var(--primary-color, #007bff) 0%, 
-        var(--primary-color-dark, #0056b3) 100%);
+    background: linear-gradient(180deg,
+            var(--primary-color, #007bff) 0%,
+            var(--primary-color-dark, #0056b3) 100%);
     border-radius: 6px;
     border: 1px solid var(--card-bg, #ffffff);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -65,9 +54,9 @@
 }
 
 .add-panel-menu::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, 
-        var(--primary-color-dark, #0056b3) 0%, 
-        var(--primary-color, #007bff) 100%);
+    background: linear-gradient(180deg,
+            var(--primary-color-dark, #0056b3) 0%,
+            var(--primary-color, #007bff) 100%);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
     transform: scaleY(1.1);
 }
@@ -80,7 +69,8 @@
 .add-panel-menu-content {
     padding: 8px;
     flex: 1;
-    min-height: 0; /* Allow content to shrink */
+    min-height: 0;
+    /* Allow content to shrink */
 }
 
 .add-panel-menu ul {
@@ -89,9 +79,7 @@
     margin: 0;
 }
 
-.add-panel-menu li {
-    /* No bullets */
-}
+
 
 .add-panel-menu button {
     display: block;
@@ -180,7 +168,8 @@
 .add-panel-menu .custom-gamepad-button {
     flex: 1;
     margin-right: 6px;
-    min-width: 0; /* Allow text truncation */
+    min-width: 0;
+    /* Allow text truncation */
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
@@ -235,23 +224,23 @@
         min-width: 180px;
         /* Remove fixed max-width and max-height since JS handles it */
     }
-    
+
     .add-panel-menu button {
         padding: 12px 10px;
         font-size: 0.85rem;
     }
-    
+
     .add-panel-menu .custom-gamepad-item {
         gap: 4px;
     }
-    
+
     .add-panel-menu .edit-gamepad-button,
     .add-panel-menu .delete-gamepad-button {
         width: 24px;
         height: 24px;
         font-size: 11px;
     }
-    
+
     /* Slightly thinner scrollbar on medium screens */
     .add-panel-menu::-webkit-scrollbar {
         width: 8px;
@@ -263,31 +252,31 @@
         min-width: 160px;
         /* Remove fixed dimensions - JS handles it */
     }
-    
+
     .add-panel-menu-content {
         padding: 6px;
     }
-    
+
     .add-panel-menu button {
         padding: 10px 8px;
         font-size: 0.8rem;
     }
-    
+
     .add-panel-menu .menu-section h4 {
         padding: 4px 8px;
         font-size: 0.7rem;
     }
-    
+
     .add-panel-menu .create-custom-button {
         padding: 10px 12px;
         margin-top: 6px;
     }
-    
+
     /* Even thinner scrollbar on small screens */
     .add-panel-menu::-webkit-scrollbar {
         width: 6px;
     }
-    
+
     .add-panel-menu::-webkit-scrollbar-track {
         margin: 2px 0;
     }
@@ -298,39 +287,39 @@
         min-width: 140px;
         /* Remove fixed dimensions - JS handles it */
     }
-    
+
     .add-panel-menu-content {
         padding: 4px;
     }
-    
+
     .add-panel-menu button {
         padding: 8px 6px;
         font-size: 0.75rem;
     }
-    
+
     .add-panel-menu .menu-section {
         margin-bottom: 8px;
     }
-    
+
     .add-panel-menu .menu-section h4 {
         padding: 3px 6px;
         font-size: 0.65rem;
     }
-    
+
     .add-panel-menu .create-custom-button {
         padding: 8px 10px;
         font-size: 0.75rem;
         gap: 6px;
     }
-    
+
     .add-panel-menu .custom-gamepad-item {
         gap: 2px;
     }
-    
+
     .add-panel-menu .edit-gamepad-button,
     .add-panel-menu .delete-gamepad-button {
         width: 20px;
         height: 20px;
         font-size: 10px;
     }
-} 
+}

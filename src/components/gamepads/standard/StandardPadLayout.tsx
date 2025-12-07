@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
-import type { IJoystickUpdateEvent } from 'react-joystick-component'; // Use the correct type import
+import type { IJoystickUpdateEvent } from '../../../types/joystick'; // Use the correct type import
 import { throttle } from 'lodash-es'; // Import throttle
 import './StandardPadLayout.css'; // Renamed CSS import
 import { GamepadProps } from '../GamepadInterface';
@@ -25,7 +25,7 @@ const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using Ga
 
   // Get current theme colors dynamically (this assumes theme variables are set on :root or body)
   const getThemeColor = (variableName: string) => {
-      return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   };
 
   // --- Make joystick colors reactive to theme changes ---
@@ -163,7 +163,7 @@ const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using Ga
   return (
     <div className="standard-pad-layout"> {/* Renamed class */}
       <div className="joysticks-container">
-         {/* Left Joystick */}
+        {/* Left Joystick */}
         <div className="joystick-wrapper">
           <Joystick
             size={100}
@@ -178,7 +178,7 @@ const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using Ga
         </div>
 
         {/* Right Joystick */}
-         <div className="joystick-wrapper">
+        <div className="joystick-wrapper">
           <Joystick
             size={100}
             stickSize={60}
@@ -189,7 +189,7 @@ const StandardPadLayout: React.FC<GamepadProps> = ({ ros }) => { // Now using Ga
             throttle={THROTTLE_INTERVAL / 2}
           />
           {/* <p className="joystick-label">Axes 2 (X) / 3 (Y)</p> Optional label */}
-         </div>
+        </div>
       </div>
       {/* Speed info removed */}
     </div>

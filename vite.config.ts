@@ -5,9 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  server: { 
+  server: {
     host: '0.0.0.0', // Listen on all interfaces within the container
-    port: 5173      
+    port: 5173
     // https: false, // Ensure HTTPS is disabled (default is false anyway)
     // hmr: { // Optional: Specify host for Hot Module Replacement if needed
     //   host: 'localhost', // Browser connects to Caddy on localhost
@@ -29,4 +29,7 @@ export default defineConfig({
     }),
     // mkcert() // Ensure mkcert is commented out/removed
   ],
+  build: {
+    chunkSizeWarningLimit: 1600,
+  },
 }) 
