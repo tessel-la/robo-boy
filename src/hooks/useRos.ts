@@ -34,6 +34,7 @@ export const useRos = (): UseRosReturn => {
     console.log('[disconnect] Resetting state.');
     setIsConnected(false);
     setRos(null);
+    (window as any).ros = null;
     isConnectingRef.current = false;
   }, []);
 
@@ -85,6 +86,8 @@ export const useRos = (): UseRosReturn => {
           console.log('[on.connection] Current instance matched. Setting connected state.');
           setRos(newRos); 
           setIsConnected(true); 
+          // Expose for console debugging
+          (window as any).ros = newRos;
           isConnectingRef.current = false; 
       } else {
           console.warn('[on.connection] Ignoring event from stale ROS instance.');

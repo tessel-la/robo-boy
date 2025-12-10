@@ -1,4 +1,5 @@
 import type { Ros } from 'roslib';
+import * as ROSLIB from 'roslib';
 import {
   ROSDiscoveryResult,
   ROSActionInfo,
@@ -7,66 +8,117 @@ import {
 } from '../types';
 
 /**
- * Discover available ROS actions by looking for action server topics.
- * Action servers typically have topics with suffixes: /goal, /result, /feedback, /status, /cancel
+ * Discover available ROS actions by inspecting both services and topics.
+ * ROS 2 action servers expose services (send_goal/get_result/cancel_goal)
+ * and topics (feedback/status) with the "_action" infix.
  */
 export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => {
   return new Promise((resolve) => {
-    ros.getTopics(
-      (result) => {
-        const actionMap = new Map<string, Set<string>>();
+    const rosApi = ros as any;
+    const actionBases = new Set<string>();
+    const actionSuffixes = [
+      '/_action/send_goal',
+      '/_action/get_result',
+      '/_action/cancel_goal',
+      '/_action/feedback',
+      '/_action/status',
+      '/_action/goal', // ROS1-style bridge safety net
+      '/_action/result',
+    ];
 
-        // Look for action-related topics
-        result.topics.forEach((topic: string, index: number) => {
-          const type = result.types[index];
-          
-          // Check for action server topic patterns
-          const actionSuffixes = ['/_action/status', '/_action/feedback', '/_action/result'];
-          const goalSuffix = '/_action/send_goal';
-          
-          for (const suffix of actionSuffixes) {
-            if (topic.endsWith(suffix)) {
-              const baseName = topic.substring(0, topic.indexOf('/_action'));
-              if (!actionMap.has(baseName)) {
-                actionMap.set(baseName, new Set());
-              }
-              actionMap.get(baseName)!.add(suffix);
+    const registerBase = (path: string) => {
+      const idx = path.indexOf('/_action');
+      if (idx > 0) {
+        actionBases.add(path.substring(0, idx));
+        return;
+      }
+      // Fallback: accept bare action names (no _action infix) when provided directly
+      actionBases.add(path);
+    };
+
+    const discoverViaRosApi = () =>
+      new Promise<void>((done) => {
+        try {
+          const srv = new (ROSLIB as any).Service({
+            ros,
+            name: '/rosapi/action_servers',
+            serviceType: 'rosapi_msgs/srv/ActionServers',
+          });
+          srv.callService(
+            {},
+            (res: any) => {
+              const servers: string[] = res?.action_servers || [];
+              servers.forEach((name: string) => registerBase(name));
+              done();
+            },
+            (err: any) => {
+              console.error('[BT] rosapi action_servers failed:', err);
+              done();
             }
-          }
-          
-          // Also check for goal topics to identify action type
-          if (topic.endsWith(goalSuffix)) {
-            const baseName = topic.substring(0, topic.indexOf('/_action'));
-            if (!actionMap.has(baseName)) {
-              actionMap.set(baseName, new Set());
-            }
-            actionMap.get(baseName)!.add('goal');
-          }
+          );
+        } catch (e) {
+          console.error('[BT] rosapi action_servers call error:', e);
+          done();
+        }
+      });
+
+    let pending = 3;
+    const finish = () => {
+      pending -= 1;
+      if (pending > 0) return;
+
+      const actions: ROSActionInfo[] = Array.from(actionBases.values())
+        .filter((n) => n && n.startsWith('/'))
+        .map((name) => {
+          const parts = name.split('/').filter(Boolean);
+          const namespace = parts.slice(0, -1).join('/');
+          return {
+            name,
+            type: 'action',
+            namespace: namespace || '/',
+          };
         });
 
-        // Convert to action info array
-        const actions: ROSActionInfo[] = Array.from(actionMap.entries())
-          .filter(([_, suffixes]) => suffixes.size >= 2) // At least 2 related topics
-          .map(([name, _]) => {
-            // Extract namespace and action name
-            const parts = name.split('/').filter(p => p);
-            const actionName = parts[parts.length - 1];
-            const namespace = parts.slice(0, -1).join('/');
-            
-            return {
-              name,
-              type: 'action', // Type will be determined at execution time
-              namespace: namespace || '/',
-            };
-          });
+      console.log('[BT] Total actions discovered:', actions.length);
+      resolve(actions);
+    };
 
-        resolve(actions);
+    rosApi.getServices(
+      (services: string[]) => {
+        console.log('[BT] Discovering actions from services:', services.length);
+        services.forEach((service) => {
+          if (actionSuffixes.some((suffix) => service.includes(suffix))) {
+            registerBase(service);
+            console.log('[BT] Found action service:', service);
+          }
+        });
+        finish();
       },
-      (error) => {
-        console.error('Failed to discover ROS actions:', error);
-        resolve([]);
+      (error: any) => {
+        console.error('[BT] Failed to discover ROS actions via services:', error);
+        finish();
       }
     );
+
+    rosApi.getTopics(
+      (result: any) => {
+        const topics: string[] = result?.topics || [];
+        console.log('[BT] Discovering actions from topics:', topics.length);
+        topics.forEach((topic: string) => {
+          if (actionSuffixes.some((suffix) => topic.includes(suffix))) {
+            registerBase(topic);
+            console.log('[BT] Found action topic:', topic);
+          }
+        });
+        finish();
+      },
+      (error: any) => {
+        console.error('[BT] Failed to discover ROS actions via topics:', error);
+        finish();
+      }
+    );
+
+    discoverViaRosApi().then(finish);
   });
 };
 
@@ -75,7 +127,8 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
  */
 export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> => {
   return new Promise((resolve) => {
-    ros.getServices(
+    const rosApi = ros as any;
+    rosApi.getServices(
       (services: string[]) => {
         // Filter out system services that users typically don't need
         const filteredServices = services.filter(
@@ -96,7 +149,7 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
 
         resolve(serviceInfos);
       },
-      (error) => {
+      (error: any) => {
         console.error('Failed to discover ROS services:', error);
         resolve([]);
       }
@@ -109,8 +162,9 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
  */
 export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
   return new Promise((resolve) => {
-    ros.getTopics(
-      (result) => {
+    const rosApi = ros as any;
+    rosApi.getTopics(
+      (result: any) => {
         // Filter out system topics and action-related topics
         const filteredTopics = result.topics
           .map((topic: string, index: number) => ({
@@ -118,7 +172,7 @@ export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
             type: result.types[index],
           }))
           .filter(
-            (topic) =>
+            (topic: { name: string; type: string }) =>
               !topic.name.startsWith('/rosout') &&
               !topic.name.includes('/_action/') &&
               !topic.name.startsWith('/_') &&
@@ -126,14 +180,14 @@ export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
               topic.type !== '' // Filter out topics without type info
           );
 
-        const topicInfos: ROSTopicInfo[] = filteredTopics.map((topic) => ({
+        const topicInfos: ROSTopicInfo[] = filteredTopics.map((topic: { name: string; type: string }) => ({
           name: topic.name,
           type: topic.type,
         }));
 
         resolve(topicInfos);
       },
-      (error) => {
+      (error: any) => {
         console.error('Failed to discover ROS topics:', error);
         resolve([]);
       }
@@ -177,12 +231,13 @@ export const getServiceType = async (
   serviceName: string
 ): Promise<string | null> => {
   return new Promise((resolve) => {
-    ros.getServiceType(
+    const rosApi = ros as any;
+    rosApi.getServiceType(
       serviceName,
       (type: string) => {
         resolve(type);
       },
-      (error) => {
+      (error: any) => {
         console.error(`Failed to get service type for ${serviceName}:`, error);
         resolve(null);
       }
@@ -198,12 +253,13 @@ export const getTopicType = async (
   topicName: string
 ): Promise<string | null> => {
   return new Promise((resolve) => {
-    ros.getTopicType(
+    const rosApi = ros as any;
+    rosApi.getTopicType(
       topicName,
       (type: string) => {
         resolve(type);
       },
-      (error) => {
+      (error: any) => {
         console.error(`Failed to get topic type for ${topicName}:`, error);
         resolve(null);
       }
