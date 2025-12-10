@@ -355,21 +355,6 @@ body.no-scroll {
 
 /* Delete all transition-rope and rope-dot styles from here */
 
-/* Center placeholder message */
-.view-panel .placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    width: 100%;
-    text-align: center;
-    color: var(--text-color, #666);
-    font-size: 1.1em;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
 /* Remove the previous loading animation styles */
 .loading-animation-overlay {
     position: absolute;

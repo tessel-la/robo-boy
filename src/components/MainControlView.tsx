@@ -19,6 +19,7 @@ import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
 import { getGamepadLayout } from '../features/customGamepad/gamepadStorage';
+import BehaviorTreePanel from '../features/behaviorTree/components/BehaviorTreePanel';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -79,7 +80,7 @@ interface MainControlViewProps {
   onDisconnect: () => void;
 }
 
-type ViewMode = 'camera' | '3d';
+type ViewMode = 'camera' | '3d' | 'behaviorTree';
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
@@ -302,11 +303,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [selectedPanelId, activePanels, ros]);
 
   // View state management with animation
-  const handleViewToggle = () => {
-    if (isTransitioning) return;
+  const handleViewToggle = (mode: ViewMode) => {
+    if (isTransitioning || viewMode === mode) return;
     setIsTransitioning(true);
 
-    const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
+    const newViewMode = mode;
 
     const currentView = viewPanelRef.current;
     if (!currentView) return;
@@ -330,8 +331,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     currentViewClone.style.height = '100%';
     currentView.parentElement?.appendChild(currentViewClone);
 
-    // Position the new view further off-screen
-    currentView.style.transform = `translateX(${newViewMode === '3d' ? '150%' : '-150%'})`;
+    // Determine animation direction based on view order
+    const viewOrder = ['camera', '3d', 'behaviorTree'];
+    const currentIndex = viewOrder.indexOf(viewMode);
+    const newIndex = viewOrder.indexOf(newViewMode);
+    const direction = newIndex > currentIndex ? 1 : -1;
+
+    // Position the new view off-screen
+    currentView.style.transform = `translateX(${direction * 150}%)`;
 
     // Update view mode immediately to show the new content
     setViewMode(newViewMode);
@@ -341,10 +348,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       targets: [currentViewClone, currentView],
       translateX: (_el: HTMLElement, i: number) => {
         // First element (clone) moves out, second element (new view) moves in
-        return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
+        return i === 0 ? `${-direction * 150}%` : '0%';
       },
-      duration: 800, // Reduced from 1500ms to 800ms for a quicker transition
-      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
+      duration: 800,
+      easing: 'easeOutQuad',
       complete: () => {
         // Clean up the clone after animation
         currentViewClone.remove();
@@ -358,7 +365,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       <div className="top-bar">
         <div className="view-toggle">
           <button
-            onClick={handleViewToggle}
+            onClick={() => handleViewToggle('camera')}
             className={viewMode === 'camera' ? 'active' : ''}
             title="Camera View"
             aria-label="Switch to Camera View"
@@ -366,12 +373,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {icons.camera}
           </button>
           <button
-            onClick={handleViewToggle}
+            onClick={() => handleViewToggle('3d')}
             className={viewMode === '3d' ? 'active' : ''}
             title="3D View"
             aria-label="Switch to 3D View"
           >
             {icons.view3d}
+          </button>
+          <button
+            onClick={() => handleViewToggle('behaviorTree')}
+            className={viewMode === 'behaviorTree' ? 'active' : ''}
+            title="Behavior Tree"
+            aria-label="Switch to Behavior Tree"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="6" height="6" rx="1" />
+              <rect x="9" y="15" width="6" height="6" rx="1" />
+              <rect x="15" y="15" width="6" height="6" rx="1" />
+              <path d="M6 9v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" />
+              <path d="M12 13v2" />
+            </svg>
           </button>
         </div>
         <div className="status-controls">
@@ -411,11 +432,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   {isConnected ? (availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found') : 'Connecting to ROS...'}
                 </div>
               )
-            ) : (
+            ) : viewMode === '3d' ? (
               isConnected && ros ? (
                 <VisualizationPanel ros={ros} key="visualization-panel" />
               ) : (
                 <div className="placeholder">Connecting to ROS...</div>
+              )
+            ) : (
+              isConnected && ros ? (
+                <BehaviorTreePanel ros={ros} isConnected={isConnected} />
+              ) : (
+                <div className="placeholder">Connect to ROS to use Behavior Trees</div>
               )
             )}
           </div>

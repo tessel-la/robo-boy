@@ -1,0 +1,202 @@
+.behavior-tree-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--background-color, #fafafa);
+  overflow: hidden;
+}
+
+.bt-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.bt-canvas {
+  flex: 1;
+  position: relative;
+  background: var(--background-color, #fafafa);
+}
+
+/* React Flow overrides to match theme */
+.react-flow {
+  background: var(--background-color, #fafafa);
+}
+
+.react-flow__node {
+  font-family: inherit;
+}
+
+.react-flow__edge-path {
+  stroke: var(--primary-color, #4285f4);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary-color, #4285f4);
+  stroke-width: 3;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--primary-color, #4285f4);
+  border: 2px solid var(--card-bg, #ffffff);
+}
+
+.react-flow__handle-connecting {
+  background: var(--success-color, #4caf50);
+}
+
+.react-flow__handle-valid {
+  background: var(--success-color, #4caf50);
+}
+
+/* Controls styling */
+.react-flow__controls {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__controls-button {
+  background: var(--card-bg, #ffffff);
+  border: none;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color, #333333);
+  transition: background 0.2s;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--background-color, #f5f5f5);
+}
+
+.react-flow__controls-button svg {
+  fill: var(--text-color, #333333);
+}
+
+/* MiniMap styling */
+.react-flow__minimap {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(66, 133, 244, 0.1);
+}
+
+.react-flow__minimap-node {
+  fill: var(--border-color, #cccccc);
+  stroke: var(--border-color, #cccccc);
+}
+
+/* Background styling */
+.react-flow__background {
+  background: var(--background-color, #fafafa);
+}
+
+.react-flow__background circle {
+  fill: var(--border-color, #d0d0d0);
+}
+
+/* Selection box */
+.react-flow__selection {
+  background: rgba(66, 133, 244, 0.08);
+  border: 1px solid var(--primary-color, #4285f4);
+}
+
+/* Panel placeholder when empty */
+.bt-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--text-color-secondary, #666666);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bt-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.bt-empty-text {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.bt-empty-hint {
+  font-size: 12px;
+  color: var(--text-color-tertiary, #999999);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .react-flow__controls {
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .react-flow__minimap {
+    display: none; /* Hide minimap on mobile to save space */
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .behavior-tree-panel {
+    background: var(--background-color, #1e1e1e);
+  }
+
+  .bt-canvas {
+    background: var(--background-color, #1e1e1e);
+  }
+
+  .react-flow {
+    background: var(--background-color, #1e1e1e);
+  }
+
+  .react-flow__background {
+    background: var(--background-color, #1e1e1e);
+  }
+
+  .react-flow__background circle {
+    fill: var(--border-color, #404040);
+  }
+
+  .react-flow__controls {
+    background: var(--card-bg, #2d2d2d);
+    border-color: var(--border-color, #404040);
+  }
+
+  .react-flow__controls-button {
+    background: var(--card-bg, #2d2d2d);
+    border-color: var(--border-color, #404040);
+    color: var(--text-color, #ffffff);
+  }
+
+  .react-flow__controls-button:hover {
+    background: var(--background-color, #3d3d3d);
+  }
+
+  .react-flow__controls-button svg {
+    fill: var(--text-color, #ffffff);
+  }
+
+  .react-flow__minimap {
+    background: var(--card-bg, #2d2d2d);
+    border-color: var(--border-color, #404040);
+  }
+}
+

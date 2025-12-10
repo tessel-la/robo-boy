@@ -1,0 +1,187 @@
+/* Base node styles */
+.bt-node {
+  background: var(--card-bg, #ffffff);
+  border: 2px solid var(--border-color, #cccccc);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 150px;
+  max-width: 200px;
+  font-family: inherit;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.bt-node.selected {
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3);
+}
+
+.bt-node:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Node header */
+.bt-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-color-secondary, #666666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bt-node-icon {
+  font-size: 14px;
+}
+
+/* Node content */
+.bt-node-content {
+  margin-bottom: 4px;
+}
+
+.bt-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color, #333333);
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.bt-node-detail {
+  font-size: 11px;
+  color: var(--text-color-secondary, #666666);
+  word-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bt-node-subdetail {
+  font-size: 10px;
+  color: var(--text-color-tertiary, #999999);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Node status indicator */
+.bt-node-status {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.bt-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Status colors */
+.bt-node.status-idle {
+  border-color: var(--border-color, #cccccc);
+}
+
+.bt-node.status-running {
+  border-color: #ffc107;
+  animation: runningPulse 1s ease-in-out infinite;
+}
+
+.bt-node.status-success {
+  border-color: #4caf50;
+}
+
+.bt-node.status-failure {
+  border-color: #f44336;
+}
+
+.bt-status-indicator.status-idle {
+  background-color: #cccccc;
+}
+
+.bt-status-indicator.status-running {
+  background-color: #ffc107;
+}
+
+.bt-status-indicator.status-success {
+  background-color: #4caf50;
+}
+
+.bt-status-indicator.status-failure {
+  background-color: #f44336;
+}
+
+@keyframes runningPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 193, 7, 0); }
+}
+
+/* Node type specific colors */
+.bt-action-node .bt-node-header {
+  color: #9c27b0;
+}
+
+.bt-service-node .bt-node-header {
+  color: #2196f3;
+}
+
+.bt-topic-node .bt-node-header {
+  color: #ff9800;
+}
+
+.bt-sequence-node .bt-node-header {
+  color: #009688;
+}
+
+.bt-selector-node .bt-node-header {
+  color: #e91e63;
+}
+
+.bt-parallel-node .bt-node-header {
+  color: #3f51b5;
+}
+
+/* React Flow handles */
+.bt-handle {
+  width: 10px;
+  height: 10px;
+  background: var(--primary-color, #4285f4);
+  border: 2px solid var(--card-bg, #ffffff);
+}
+
+.bt-handle:hover {
+  width: 12px;
+  height: 12px;
+}
+
+.bt-handle-multi {
+  opacity: 0.7;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .bt-node {
+    background: var(--card-bg, #2d2d2d);
+    border-color: var(--border-color, #444444);
+  }
+  
+  .bt-node-label {
+    color: var(--text-color, #ffffff);
+  }
+  
+  .bt-node-detail {
+    color: var(--text-color-secondary, #aaaaaa);
+  }
+  
+  .bt-node-subdetail {
+    color: var(--text-color-tertiary, #888888);
+  }
+}
+

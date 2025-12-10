@@ -27,6 +27,7 @@
     "react-dom": "^18.2.0",
     "react-icons": "^5.2.1",
     "react-joystick-component": "^6.2.1",
+    "reactflow": "^11.11.4",
     "roslib": "^1.4.1",
     "three": "^0.160.0",
     "uuid": "^9.0.1"
