@@ -12,6 +12,7 @@ import ReactFlow, {
   ReactFlowProvider,
   BackgroundVariant,
   ConnectionMode,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import type { Ros } from 'roslib';
@@ -20,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
 import BehaviorTreeToolbar from './BehaviorTreeToolbar';
+import ActionParameterEditor from './ActionParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { saveBehaviorTree, exportBehaviorTree } from '../storage/treeStorage';
 import {
@@ -32,6 +34,9 @@ import {
   ControlFlowNodeData,
   ExecutionEvent,
   ExecutionStatus,
+  ROSActionInfo,
+  ROSServiceInfo,
+  ROSTopicInfo,
 } from '../types';
 import './BehaviorTreePanel.css';
 
@@ -49,6 +54,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
+  // Action node currently being edited via the parameter editor modal.
+  // Holds the node id + a snapshot of the action data so the editor stays
+  // stable even if React Flow re-renders the node.
+  const [editingAction, setEditingAction] = useState<
+    { nodeId: string; data: ROSActionNodeData } | null
+  >(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const nodeIdCounter = useRef(0);
@@ -168,6 +179,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       console.log('Nodes deleted:', deleted);
     },
     []
+  );
+
+  // Open the parameter editor when an action node is double-clicked.
+  // Other node types are ignored — they don't carry user-editable parameters
+  // (yet).
+  const onNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (node.type !== BehaviorNodeType.Action) return;
+      setEditingAction({
+        nodeId: node.id,
+        data: node.data as ROSActionNodeData,
+      });
+    },
+    []
+  );
+
+  // Save edited action parameters back into the React Flow node so they're
+  // included the next time the executor reads the tree.
+  const handleSaveActionParameters = useCallback(
+    (parameters: Record<string, any>) => {
+      if (!editingAction) return;
+      const { nodeId } = editingAction;
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id !== nodeId) return node;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              parameters,
+            },
+          };
+        })
+      );
+    },
+    [editingAction, setNodes]
   );
 
   // Save current tree
@@ -311,6 +358,75 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setIsExecuting(false);
   }, []);
 
+  const { screenToFlowPosition } = useReactFlow();
+
+  // Add a node at the centre of the visible canvas — used for mobile tap-to-add.
+  const handleAddNode = useCallback(
+    (nodeType: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => {
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      if (!bounds) return;
+
+      const position = screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+
+      const id = `node-${nodeIdCounter.current++}`;
+      let nodeData: any;
+      let label = '';
+
+      switch (nodeType) {
+        case BehaviorNodeType.Sequence:
+          label = 'Sequence';
+          nodeData = { label, type: 'sequence' };
+          break;
+        case BehaviorNodeType.Selector:
+          label = 'Selector';
+          nodeData = { label, type: 'selector' };
+          break;
+        case BehaviorNodeType.Parallel:
+          label = 'Parallel';
+          nodeData = { label, type: 'parallel' };
+          break;
+        case BehaviorNodeType.Action:
+          label = rosInfo?.name || 'Action';
+          nodeData = {
+            label,
+            actionName: rosInfo?.name || '',
+            actionType: rosInfo?.type || '',
+          };
+          break;
+        case BehaviorNodeType.Service:
+          label = rosInfo?.name || 'Service';
+          nodeData = {
+            label,
+            serviceName: rosInfo?.name || '',
+            serviceType: rosInfo?.type || '',
+          };
+          break;
+        case BehaviorNodeType.Topic:
+          label = rosInfo?.name || 'Topic';
+          nodeData = {
+            label,
+            topicName: rosInfo?.name || '',
+            messageType: rosInfo?.type || '',
+          };
+          break;
+        default:
+          return;
+      }
+
+      const newNode: Node = { id, type: nodeType, position, data: nodeData };
+      setNodes((nds) => nds.concat(newNode));
+
+      // Close palette on mobile after adding
+      if (window.matchMedia('(max-width: 768px)').matches) {
+        setIsPaletteCollapsed(true);
+      }
+    },
+    [screenToFlowPosition, setNodes]
+  );
+
   return (
     <div className="behavior-tree-panel">
       <BehaviorTreeToolbar
@@ -330,6 +446,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           isConnected={isConnected}
           isCollapsed={isPaletteCollapsed}
           onToggleCollapse={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+          onAddNode={handleAddNode}
         />
 
         <div className="bt-canvas" ref={reactFlowWrapper}>
@@ -342,6 +459,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onDrop={onDrop}
             onDragOver={onDragOver}
             onNodesDelete={onNodesDelete}
+            onNodeDoubleClick={onNodeDoubleClick}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
             fitView
@@ -366,6 +484,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           </ReactFlow>
         </div>
       </div>
+
+      {editingAction && (
+        <ActionParameterEditor
+          nodeData={editingAction.data}
+          onSave={handleSaveActionParameters}
+          onClose={() => setEditingAction(null)}
+        />
+      )}
     </div>
   );
 };
