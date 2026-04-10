@@ -372,7 +372,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       });
 
       const id = `node-${nodeIdCounter.current++}`;
-      let nodeData: any;
+      let nodeData: ControlFlowNodeData | ROSActionNodeData | ROSServiceNodeData | ROSTopicNodeData;
       let label = '';
 
       switch (nodeType) {
@@ -424,7 +424,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         setIsPaletteCollapsed(true);
       }
     },
-    [screenToFlowPosition, setNodes]
+    [screenToFlowPosition, setNodes, setIsPaletteCollapsed]
   );
 
   return (
