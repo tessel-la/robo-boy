@@ -5,6 +5,9 @@ import {
   ROSDiscoveryResult,
   BehaviorNodeType,
   NodePaletteItem,
+  ROSActionInfo,
+  ROSServiceInfo,
+  ROSTopicInfo,
 } from '../types';
 import './NodePalette.css';
 
@@ -13,7 +16,7 @@ interface NodePaletteProps {
   isConnected: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onAddNode?: (type: BehaviorNodeType, rosInfo?: any) => void;
+  onAddNode?: (type: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => void;
 }
 
 const NodePalette: React.FC<NodePaletteProps> = ({
@@ -96,7 +99,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const handleDragStart = (
     e: React.DragEvent,
     nodeType: BehaviorNodeType,
-    rosInfo?: any
+    rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo
   ) => {
     const data = {
       nodeType,
