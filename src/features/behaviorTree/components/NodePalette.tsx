@@ -40,6 +40,17 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     topics: false,
   });
 
+  const [isMobile, setIsMobile] = React.useState(
+    () => window.matchMedia('(max-width: 768px)').matches
+  );
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // Control flow nodes (always available)
   const controlNodes: NodePaletteItem[] = [
     {
@@ -110,7 +121,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   };
 
   if (isCollapsed) {
-    return (
+    return isMobile ? null : (
       <div className="node-palette collapsed">
         <button className="palette-toggle" onClick={onToggleCollapse} title="Expand Palette">
           ▶
@@ -120,7 +131,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   }
 
   return (
-    <div className="node-palette">
+    <div className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}>
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
         <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette">

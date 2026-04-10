@@ -125,6 +125,7 @@
   cursor: grab;
   transition: all 0.2s;
   user-select: none;
+  touch-action: manipulation;
 }
 
 .palette-node:hover {
@@ -185,33 +186,80 @@
   background: var(--text-color-tertiary, #999999);
 }
 
-/* Mobile responsiveness */
+/* ── Mobile: bottom sheet ──────────────────────────────────── */
 @media (max-width: 768px) {
-  .node-palette {
-    width: 200px;
+  /* Side palette hidden on mobile — bottom sheet takes over */
+  .node-palette:not(.mobile-sheet) {
+    display: none;
   }
 
-  .node-palette.collapsed {
-    width: 36px;
+  .node-palette.mobile-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 55vh;
+    border-right: none;
+    border-top: 2px solid var(--border-color, #e0e0e0);
+    border-radius: 16px 16px 0 0;
+    z-index: 200;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+    overflow-y: auto;
+    animation: bt-sheet-slide-up 0.22s ease-out;
+  }
+
+  @keyframes bt-sheet-slide-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
   }
 
   .palette-header {
-    padding: 8px;
+    padding: 10px 16px;
+    position: sticky;
+    top: 0;
+    background: var(--card-bg, #ffffff);
+    z-index: 1;
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* drag handle pill */
+  .palette-header::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-color, #cccccc);
+    border-radius: 2px;
+    margin: 0 auto 10px;
   }
 
   .palette-title {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .palette-discover-btn {
-    margin: 8px;
-    padding: 6px 10px;
-    font-size: 11px;
+    margin: 8px 16px;
+    padding: 8px 12px;
+    font-size: 13px;
   }
 
   .palette-node {
-    padding: 6px 10px;
-    margin: 2px 6px;
+    padding: 10px 16px;
+    margin: 3px 10px;
+    min-height: 44px;
+  }
+
+  .palette-node-icon {
+    font-size: 18px;
+  }
+
+  .palette-node-label {
+    font-size: 14px;
+  }
+
+  .palette-section-content {
+    max-height: none;
   }
 }
 
