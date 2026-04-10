@@ -13,6 +13,7 @@ interface NodePaletteProps {
   isConnected: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  onAddNode?: (type: BehaviorNodeType, rosInfo?: any) => void;
 }
 
 const NodePalette: React.FC<NodePaletteProps> = ({
@@ -20,6 +21,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   isConnected,
   isCollapsed,
   onToggleCollapse,
+  onAddNode,
 }) => {
   const [rosResources, setRosResources] = useState<ROSDiscoveryResult>({
     actions: [],
@@ -27,6 +29,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     topics: [],
   });
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const hasDiscovered = React.useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     control: true,
     actions: false,
@@ -56,10 +59,16 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     },
   ];
 
-  // Discover ROS resources when connected
+  // Discover ROS resources once when first connected.
+  // We guard with a ref so switching tabs back and forth doesn't re-trigger
+  // discovery (which would flood rosbridge with service calls).
   useEffect(() => {
-    if (isConnected && ros) {
+    if (isConnected && ros && !hasDiscovered.current) {
+      hasDiscovered.current = true;
       handleDiscover();
+    }
+    if (!isConnected) {
+      hasDiscovered.current = false;
     }
   }, [isConnected, ros]);
 
@@ -147,6 +156,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 className="palette-node"
                 draggable
                 onDragStart={(e) => handleDragStart(e, node.type)}
+                onClick={() => onAddNode?.(node.type, undefined)}
               >
                 <span className="palette-node-icon">{node.icon}</span>
                 <span className="palette-node-label">{node.label}</span>
@@ -186,6 +196,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onDragStart={(e) =>
                     handleDragStart(e, BehaviorNodeType.Action, action)
                   }
+                  onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
                   title={action.name}
                 >
                   <span className="palette-node-icon">⚡</span>
@@ -227,6 +238,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onDragStart={(e) =>
                     handleDragStart(e, BehaviorNodeType.Service, service)
                   }
+                  onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
                   title={service.name}
                 >
                   <span className="palette-node-icon">🔧</span>
@@ -268,6 +280,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onDragStart={(e) =>
                     handleDragStart(e, BehaviorNodeType.Topic, topic)
                   }
+                  onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
                   title={topic.name}
                 >
                   <span className="palette-node-icon">📡</span>
