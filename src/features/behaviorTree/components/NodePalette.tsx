@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
@@ -47,7 +46,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   React.useEffect(() => {
     const mq = window.matchMedia(MOBILE_BREAKPOINT);
-    setIsMobile(mq.matches); // sync initial value
+    setIsMobile(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -55,24 +54,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   // Control flow nodes (always available)
   const controlNodes: NodePaletteItem[] = [
-    {
-      type: BehaviorNodeType.Sequence,
-      label: 'Sequence',
-      icon: '→',
-      category: 'control',
-    },
-    {
-      type: BehaviorNodeType.Selector,
-      label: 'Selector',
-      icon: '?',
-      category: 'control',
-    },
-    {
-      type: BehaviorNodeType.Parallel,
-      label: 'Parallel',
-      icon: '∥',
-      category: 'control',
-    },
+    { type: BehaviorNodeType.Sequence, label: 'Sequence', icon: '→', category: 'control' },
+    { type: BehaviorNodeType.Selector, label: 'Selector', icon: '?', category: 'control' },
+    { type: BehaviorNodeType.Parallel, label: 'Parallel', icon: '∥', category: 'control' },
   ];
 
   // Discover ROS resources once when first connected.
@@ -90,7 +74,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   const handleDiscover = async () => {
     if (!ros) return;
-
     setIsDiscovering(true);
     try {
       const resources = await discoverAllROSResources(ros);
@@ -103,10 +86,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleDragStart = (
@@ -114,15 +94,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     nodeType: BehaviorNodeType,
     rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo
   ) => {
-    const data = {
-      nodeType,
-      rosInfo,
-    };
-    e.dataTransfer.setData('application/reactflow', JSON.stringify(data));
+    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, rosInfo }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  // ---- desktop collapsed strip ----
+  // Desktop collapsed strip
   if (isCollapsed && !isMobile) {
     return (
       <div className="node-palette collapsed">
@@ -133,9 +109,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     );
   }
 
-  // ---- shared palette JSX (used for both mobile portal and desktop) ----
-  const paletteJSX = (
-    <div className={`node-palette${isMobile ? ` mobile-sheet${isCollapsed ? ' mobile-sheet--hidden' : ''}` : ''}`}>
+  // Mobile collapsed — render nothing (toolbar toggle button controls open/close)
+  if (isCollapsed && isMobile) {
+    return null;
+  }
+
+  return (
+    <div className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}>
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
         <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette">
@@ -155,17 +135,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
       {/* Control Flow Section */}
       <div className="palette-section">
-        <div
-          className="palette-section-header"
-          onClick={() => toggleSection('control')}
-        >
-          <span className="palette-section-icon">
-            {expandedSections.control ? '▼' : '▶'}
-          </span>
+        <div className="palette-section-header" onClick={() => toggleSection('control')}>
+          <span className="palette-section-icon">{expandedSections.control ? '▼' : '▶'}</span>
           <span className="palette-section-title">Control Flow</span>
           <span className="palette-section-count">{controlNodes.length}</span>
         </div>
-
         {expandedSections.control && (
           <div className="palette-section-content">
             {controlNodes.map((node) => (
@@ -186,19 +160,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
       {/* ROS Actions Section */}
       <div className="palette-section">
-        <div
-          className="palette-section-header"
-          onClick={() => toggleSection('actions')}
-        >
-          <span className="palette-section-icon">
-            {expandedSections.actions ? '▼' : '▶'}
-          </span>
+        <div className="palette-section-header" onClick={() => toggleSection('actions')}>
+          <span className="palette-section-icon">{expandedSections.actions ? '▼' : '▶'}</span>
           <span className="palette-section-title">ROS Actions</span>
-          <span className="palette-section-count">
-            {rosResources.actions.length}
-          </span>
+          <span className="palette-section-count">{rosResources.actions.length}</span>
         </div>
-
         {expandedSections.actions && (
           <div className="palette-section-content">
             {rosResources.actions.length === 0 ? (
@@ -211,9 +177,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   key={`${action.name}-${index}`}
                   className="palette-node palette-node-ros"
                   draggable
-                  onDragStart={(e) =>
-                    handleDragStart(e, BehaviorNodeType.Action, action)
-                  }
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, action)}
                   onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
                   title={action.name}
                 >
@@ -228,19 +192,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
       {/* ROS Services Section */}
       <div className="palette-section">
-        <div
-          className="palette-section-header"
-          onClick={() => toggleSection('services')}
-        >
-          <span className="palette-section-icon">
-            {expandedSections.services ? '▼' : '▶'}
-          </span>
+        <div className="palette-section-header" onClick={() => toggleSection('services')}>
+          <span className="palette-section-icon">{expandedSections.services ? '▼' : '▶'}</span>
           <span className="palette-section-title">ROS Services</span>
-          <span className="palette-section-count">
-            {rosResources.services.length}
-          </span>
+          <span className="palette-section-count">{rosResources.services.length}</span>
         </div>
-
         {expandedSections.services && (
           <div className="palette-section-content">
             {rosResources.services.length === 0 ? (
@@ -253,9 +209,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   key={`${service.name}-${index}`}
                   className="palette-node palette-node-ros"
                   draggable
-                  onDragStart={(e) =>
-                    handleDragStart(e, BehaviorNodeType.Service, service)
-                  }
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Service, service)}
                   onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
                   title={service.name}
                 >
@@ -270,19 +224,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
       {/* ROS Topics Section */}
       <div className="palette-section">
-        <div
-          className="palette-section-header"
-          onClick={() => toggleSection('topics')}
-        >
-          <span className="palette-section-icon">
-            {expandedSections.topics ? '▼' : '▶'}
-          </span>
+        <div className="palette-section-header" onClick={() => toggleSection('topics')}>
+          <span className="palette-section-icon">{expandedSections.topics ? '▼' : '▶'}</span>
           <span className="palette-section-title">ROS Topics</span>
-          <span className="palette-section-count">
-            {rosResources.topics.length}
-          </span>
+          <span className="palette-section-count">{rosResources.topics.length}</span>
         </div>
-
         {expandedSections.topics && (
           <div className="palette-section-content">
             {rosResources.topics.length === 0 ? (
@@ -295,9 +241,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   key={`${topic.name}-${index}`}
                   className="palette-node palette-node-ros"
                   draggable
-                  onDragStart={(e) =>
-                    handleDragStart(e, BehaviorNodeType.Topic, topic)
-                  }
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Topic, topic)}
                   onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
                   title={topic.name}
                 >
@@ -311,27 +255,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
     </div>
   );
-
-  // ---- mobile: portal to body so position:fixed escapes any transform ancestor ----
-  if (isMobile) {
-    return ReactDOM.createPortal(
-      <>
-        {!isCollapsed && (
-          <div
-            className="node-palette-backdrop"
-            onClick={onToggleCollapse}
-            aria-hidden="true"
-          />
-        )}
-        {paletteJSX}
-      </>,
-      document.body
-    );
-  }
-
-  // ---- desktop expanded ----
-  return paletteJSX;
 };
 
 export default NodePalette;
-

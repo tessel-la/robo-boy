@@ -14,23 +14,31 @@ import './BehaviorTreeToolbar.css';
 interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
+  isPaletteCollapsed: boolean;
+  selectedNodeCount: number;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
   onExecute: () => void;
   onStop: () => void;
   onExport: () => void;
+  onTogglePalette: () => void;
+  onDeleteSelected: () => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
+  isPaletteCollapsed,
+  selectedNodeCount,
   onSave,
   onLoad,
   onNew,
   onExecute,
   onStop,
   onExport,
+  onTogglePalette,
+  onDeleteSelected,
 }) => {
   const [showLoadMenu, setShowLoadMenu] = useState(false);
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
@@ -39,7 +47,6 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   const handleSave = () => {
     onSave();
-    // Refresh saved trees list
     setSavedTrees(listBehaviorTrees());
   };
 
@@ -67,13 +74,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       const tree = await importBehaviorTree(file);
-      if (tree) {
-        onLoad(tree);
-      }
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (tree) onLoad(tree);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -84,16 +86,25 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   return (
     <div className="bt-toolbar">
       <div className="bt-toolbar-section">
+        {/* Mobile-only: palette toggle */}
+        <button
+          className={`bt-toolbar-btn bt-toolbar-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
+          onClick={onTogglePalette}
+          title={isPaletteCollapsed ? 'Open Node Palette' : 'Close Node Palette'}
+        >
+          <span className="bt-toolbar-icon">{isPaletteCollapsed ? '☰' : '✕'}</span>
+        </button>
+
         <button className="bt-toolbar-btn" onClick={onNew} title="New Tree">
           <span className="bt-toolbar-icon">📄</span>
           <span className="bt-toolbar-label">New</span>
         </button>
-        
+
         <button className="bt-toolbar-btn" onClick={handleSave} title="Save Tree">
           <span className="bt-toolbar-icon">💾</span>
           <span className="bt-toolbar-label">Save</span>
         </button>
-        
+
         <div className="bt-toolbar-dropdown">
           <button
             className="bt-toolbar-btn"
@@ -104,7 +115,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <span className="bt-toolbar-label">Load</span>
             <span className="bt-toolbar-caret">▼</span>
           </button>
-          
+
           {showLoadMenu && (
             <div className="bt-toolbar-menu">
               {savedTrees.length === 0 ? (
@@ -133,17 +144,17 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             </div>
           )}
         </div>
-        
+
         <button className="bt-toolbar-btn" onClick={onExport} title="Export Tree">
           <span className="bt-toolbar-icon">📤</span>
           <span className="bt-toolbar-label">Export</span>
         </button>
-        
+
         <button className="bt-toolbar-btn" onClick={handleImport} title="Import Tree">
           <span className="bt-toolbar-icon">📥</span>
           <span className="bt-toolbar-label">Import</span>
         </button>
-        
+
         <input
           ref={fileInputRef}
           type="file"
@@ -160,14 +171,26 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       </div>
 
       <div className="bt-toolbar-section">
+        {/* Delete selected nodes — shown when selection is active */}
+        {selectedNodeCount > 0 && (
+          <button
+            className="bt-toolbar-btn bt-toolbar-delete"
+            onClick={onDeleteSelected}
+            title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
+          >
+            <span className="bt-toolbar-icon">🗑</span>
+            <span className="bt-toolbar-label">Delete ({selectedNodeCount})</span>
+          </button>
+        )}
+
         <button
           className="bt-toolbar-btn bt-toolbar-zoom"
-          onClick={zoomOut}
+          onClick={() => zoomOut()}
           title="Zoom Out"
         >
           <span className="bt-toolbar-icon">−</span>
         </button>
-        
+
         <button
           className="bt-toolbar-btn bt-toolbar-zoom"
           onClick={handleFitView}
@@ -175,10 +198,10 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         >
           <span className="bt-toolbar-icon">⊡</span>
         </button>
-        
+
         <button
           className="bt-toolbar-btn bt-toolbar-zoom"
-          onClick={zoomIn}
+          onClick={() => zoomIn()}
           title="Zoom In"
         >
           <span className="bt-toolbar-icon">+</span>
@@ -209,4 +232,3 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 };
 
 export default BehaviorTreeToolbar;
-

@@ -44,8 +44,8 @@
 
 /* Discover button */
 .palette-discover-btn {
-  margin: 12px;
-  padding: 8px 12px;
+  margin: 8px 12px;
+  padding: 6px 10px;
   background: var(--primary-color, #4285f4);
   color: white;
   border: none;
@@ -74,7 +74,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   cursor: pointer;
   background: var(--background-color, #fafafa);
   transition: background 0.2s;
@@ -108,7 +108,7 @@
 }
 
 .palette-section-content {
-  max-height: 300px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -117,8 +117,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  margin: 2px 8px;
+  padding: 6px 10px;
+  margin: 2px 6px;
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 6px;
@@ -131,7 +131,7 @@
 .palette-node:hover {
   background: var(--primary-color-light, #e3f2fd);
   border-color: var(--primary-color, #4285f4);
-  transform: translateX(4px);
+  transform: translateX(2px);
 }
 
 .palette-node:active {
@@ -140,8 +140,8 @@
 }
 
 .palette-node-icon {
-  font-size: 16px;
-  width: 20px;
+  font-size: 14px;
+  width: 18px;
   text-align: center;
 }
 
@@ -161,7 +161,7 @@
 
 /* Empty state */
 .palette-empty {
-  padding: 16px 12px;
+  padding: 12px;
   text-align: center;
   font-size: 11px;
   color: var(--text-color-tertiary, #999999);
@@ -170,7 +170,7 @@
 
 /* Scrollbar styling */
 .palette-section-content::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .palette-section-content::-webkit-scrollbar-track {
@@ -179,47 +179,33 @@
 
 .palette-section-content::-webkit-scrollbar-thumb {
   background: var(--border-color, #cccccc);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
-.palette-section-content::-webkit-scrollbar-thumb:hover {
-  background: var(--text-color-tertiary, #999999);
-}
-
-/* Backdrop for mobile bottom sheet — tap to close */
-.node-palette-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 199; /* just below the sheet (200) */
-  background: transparent;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* ── Mobile: bottom sheet ──────────────────────────────────── */
+/* ── Mobile: bottom sheet contained within the BT panel ─── */
 @media (max-width: 768px) {
-  /* Side palette hidden on mobile — bottom sheet takes over */
+  /* Desktop sidebar hidden on mobile */
   .node-palette:not(.mobile-sheet) {
     display: none;
   }
 
-  .node-palette.mobile-sheet.mobile-sheet--hidden {
-    display: none;
-  }
-
+  /* Mobile sheet: absolute within .bt-content (position: relative) */
   .node-palette.mobile-sheet {
-    position: fixed;
+    position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
     width: 100%;
-    height: 55vh;
+    /* compact height — shows nodes without eating too much canvas */
+    height: auto;
+    max-height: 52%;
     border-right: none;
     border-top: 2px solid var(--border-color, #e0e0e0);
-    border-radius: 16px 16px 0 0;
-    z-index: 200;
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+    border-radius: 12px 12px 0 0;
+    z-index: 10;
+    box-shadow: 0 -3px 16px rgba(0, 0, 0, 0.2);
     overflow-y: auto;
-    animation: bt-sheet-slide-up 0.22s ease-out;
+    animation: bt-sheet-slide-up 0.2s ease-out;
   }
 
   @keyframes bt-sheet-slide-up {
@@ -228,51 +214,55 @@
   }
 
   .palette-header {
-    padding: 10px 16px;
+    padding: 8px 12px;
     position: sticky;
     top: 0;
     background: var(--card-bg, #ffffff);
     z-index: 1;
-    border-radius: 16px 16px 0 0;
+    border-radius: 12px 12px 0 0;
   }
 
-  /* drag handle pill */
+  /* compact drag handle pill */
   .palette-header::before {
     content: '';
     display: block;
-    width: 40px;
-    height: 4px;
+    width: 32px;
+    height: 3px;
     background: var(--border-color, #cccccc);
     border-radius: 2px;
-    margin: 0 auto 10px;
+    margin: 0 auto 6px;
   }
 
   .palette-title {
-    font-size: 14px;
-  }
-
-  .palette-discover-btn {
-    margin: 8px 16px;
-    padding: 8px 12px;
     font-size: 13px;
   }
 
+  .palette-discover-btn {
+    margin: 6px 10px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .palette-section-header {
+    padding: 6px 10px;
+  }
+
+  /* compact touch-friendly nodes */
   .palette-node {
-    padding: 10px 16px;
-    margin: 3px 10px;
-    min-height: 44px;
+    padding: 8px 10px;
+    margin: 2px 6px;
+    min-height: 36px;
   }
 
   .palette-node-icon {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   .palette-node-label {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .palette-section-content {
     max-height: none;
   }
 }
-

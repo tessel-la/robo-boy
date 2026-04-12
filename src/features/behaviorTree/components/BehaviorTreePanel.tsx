@@ -58,15 +58,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(
     () => window.matchMedia(MOBILE_BREAKPOINT).matches
   );
+  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   // Action node currently being edited via the parameter editor modal.
-  // Holds the node id + a snapshot of the action data so the editor stays
-  // stable even if React Flow re-renders the node.
   const [editingAction, setEditingAction] = useState<
     { nodeId: string; data: ROSActionNodeData } | null
   >(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const nodeIdCounter = useRef(0);
+
+  const { screenToFlowPosition, deleteElements } = useReactFlow();
 
   // Initialize with empty tree
   useEffect(() => {
@@ -83,7 +84,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     }
   }, [currentTree]);
 
-  // Handle connections between nodes
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => addEdge(connection, eds));
@@ -91,13 +91,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [setEdges]
   );
 
-  // Handle drag over (for node drop)
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // Handle node drop from palette
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -111,16 +109,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const data = JSON.parse(dataStr);
       const { nodeType, rosInfo } = data;
 
-      // Calculate position
       const position = {
         x: event.clientX - reactFlowBounds.left - 75,
         y: event.clientY - reactFlowBounds.top - 40,
       };
 
-      // Generate unique node ID
       const id = `node-${nodeIdCounter.current++}`;
-
-      // Create node data based on type
       let nodeData: any;
       let label = '';
 
@@ -165,29 +159,33 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           return;
       }
 
-      const newNode: Node = {
-        id,
-        type: nodeType,
-        position,
-        data: nodeData,
-      };
-
+      const newNode: Node = { id, type: nodeType, position, data: nodeData };
       setNodes((nds) => nds.concat(newNode));
     },
     [setNodes]
   );
 
-  // Handle node deletion
   const onNodesDelete = useCallback(
-    (deleted: Node[]) => {
-      console.log('Nodes deleted:', deleted);
+    (_deleted: Node[]) => {
+      // React Flow handles cleanup internally; keep for logging if needed
     },
     []
   );
 
-  // Open the parameter editor when an action node is double-clicked.
-  // Other node types are ignored — they don't carry user-editable parameters
-  // (yet).
+  // Track selected nodes for the delete button
+  const onSelectionChange = useCallback(
+    ({ nodes: sel }: { nodes: Node[] }) => {
+      setSelectedNodes(sel);
+    },
+    []
+  );
+
+  // Delete selected nodes (and their connected edges)
+  const handleDeleteSelected = useCallback(() => {
+    deleteElements({ nodes: selectedNodes });
+    setSelectedNodes([]);
+  }, [deleteElements, selectedNodes]);
+
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (node.type !== BehaviorNodeType.Action) return;
@@ -199,8 +197,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     []
   );
 
-  // Save edited action parameters back into the React Flow node so they're
-  // included the next time the executor reads the tree.
   const handleSaveActionParameters = useCallback(
     (parameters: Record<string, any>) => {
       if (!editingAction) return;
@@ -208,30 +204,21 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id !== nodeId) return node;
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              parameters,
-            },
-          };
+          return { ...node, data: { ...node.data, parameters } };
         })
       );
     },
     [editingAction, setNodes]
   );
 
-  // Save current tree
   const handleSave = useCallback(() => {
     if (!currentTree) return;
-
     const updatedTree: BehaviorTree = {
       ...currentTree,
       nodes: nodes as BehaviorTreeNode[],
       edges,
       updatedAt: Date.now(),
     };
-
     const success = saveBehaviorTree(updatedTree);
     if (success) {
       setCurrentTree(updatedTree);
@@ -241,21 +228,18 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     }
   }, [currentTree, nodes, edges]);
 
-  // Load a tree
   const handleLoad = useCallback((tree: BehaviorTree) => {
     setCurrentTree(tree);
     setNodes(tree.nodes);
     setEdges(tree.edges);
   }, [setNodes, setEdges]);
 
-  // Create new tree
   const handleNew = useCallback(() => {
     if (nodes.length > 0 || edges.length > 0) {
       if (!window.confirm('Create new tree? Unsaved changes will be lost.')) {
         return;
       }
     }
-
     const newTree: BehaviorTree = {
       id: uuidv4(),
       name: 'Untitled Behavior Tree',
@@ -264,60 +248,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-
     setCurrentTree(newTree);
     setNodes([]);
     setEdges([]);
     nodeIdCounter.current = 0;
   }, [nodes, edges, setNodes, setEdges]);
 
-  // Export tree
   const handleExport = useCallback(() => {
     if (!currentTree) return;
-
-    const treeToExport: BehaviorTree = {
-      ...currentTree,
-      nodes: nodes as BehaviorTreeNode[],
-      edges,
-    };
-
-    exportBehaviorTree(treeToExport);
+    exportBehaviorTree({ ...currentTree, nodes: nodes as BehaviorTreeNode[], edges });
   }, [currentTree, nodes, edges]);
 
-  // Execution callbacks
   const handleExecutionEvent = useCallback(
     (event: ExecutionEvent) => {
-      console.log('Execution event:', event);
-
       if (event.nodeId && event.data?.status) {
-        // Update node status in UI
         setNodes((nds) =>
           nds.map((node) => {
             if (node.id === event.nodeId) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  status: event.data.status,
-                },
-              };
+              return { ...node, data: { ...node.data, status: event.data.status } };
             }
             return node;
           })
         );
       }
-
       if (event.type === 'completed' || event.type === 'stopped') {
         setIsExecuting(false);
-        // Reset all node statuses after a delay
         setTimeout(() => {
           setNodes((nds) =>
             nds.map((node) => ({
               ...node,
-              data: {
-                ...node.data,
-                status: ExecutionStatus.Idle,
-              },
+              data: { ...node.data, status: ExecutionStatus.Idle },
             }))
           );
         }, 2000);
@@ -326,43 +286,29 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [setNodes]
   );
 
-  // Execute tree
   const handleExecute = useCallback(() => {
     if (!ros || !isConnected) {
       alert('Please connect to ROS first');
       return;
     }
-
     if (!currentTree || nodes.length === 0) {
       alert('Please create a behavior tree first');
       return;
     }
-
     const treeToExecute: BehaviorTree = {
       ...currentTree,
       nodes: nodes as BehaviorTreeNode[],
       edges,
     };
-
-    executorRef.current = new BehaviorTreeExecutor(
-      treeToExecute,
-      ros,
-      handleExecutionEvent
-    );
-
+    executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     setIsExecuting(true);
     executorRef.current.start();
   }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
 
-  // Stop execution
   const handleStop = useCallback(() => {
-    if (executorRef.current) {
-      executorRef.current.stop();
-    }
+    if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
   }, []);
-
-  const { screenToFlowPosition } = useReactFlow();
 
   // Add a node at the centre of the visible canvas — used for mobile tap-to-add.
   const handleAddNode = useCallback(
@@ -394,27 +340,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           break;
         case BehaviorNodeType.Action:
           label = rosInfo?.name || 'Action';
-          nodeData = {
-            label,
-            actionName: rosInfo?.name || '',
-            actionType: rosInfo?.type || '',
-          };
+          nodeData = { label, actionName: rosInfo?.name || '', actionType: rosInfo?.type || '' };
           break;
         case BehaviorNodeType.Service:
           label = rosInfo?.name || 'Service';
-          nodeData = {
-            label,
-            serviceName: rosInfo?.name || '',
-            serviceType: rosInfo?.type || '',
-          };
+          nodeData = { label, serviceName: rosInfo?.name || '', serviceType: rosInfo?.type || '' };
           break;
         case BehaviorNodeType.Topic:
           label = rosInfo?.name || 'Topic';
-          nodeData = {
-            label,
-            topicName: rosInfo?.name || '',
-            messageType: rosInfo?.type || '',
-          };
+          nodeData = { label, topicName: rosInfo?.name || '', messageType: rosInfo?.type || '' };
           break;
         default:
           return;
@@ -436,12 +370,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       <BehaviorTreeToolbar
         currentTree={currentTree}
         isExecuting={isExecuting}
+        isPaletteCollapsed={isPaletteCollapsed}
+        selectedNodeCount={selectedNodes.length}
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
         onExecute={handleExecute}
         onStop={handleStop}
         onExport={handleExport}
+        onTogglePalette={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+        onDeleteSelected={handleDeleteSelected}
       />
 
       <div className="bt-content">
@@ -464,11 +402,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onDragOver={onDragOver}
             onNodesDelete={onNodesDelete}
             onNodeDoubleClick={onNodeDoubleClick}
+            onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
             fitView
             minZoom={0.1}
             maxZoom={2}
+            deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
               animated: true,
               style: { stroke: 'var(--primary-color, #4285f4)', strokeWidth: 2 },
@@ -486,15 +426,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
-
-          {/* Mobile-only palette toggle — hidden on desktop via CSS */}
-          <button
-            className="bt-palette-fab"
-            onClick={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
-            title={isPaletteCollapsed ? 'Open Node Palette' : 'Close Node Palette'}
-          >
-            {isPaletteCollapsed ? '＋' : '✕'}
-          </button>
         </div>
       </div>
 
@@ -509,7 +440,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 };
 
-// Wrap with ReactFlowProvider
 const BehaviorTreePanel: React.FC<BehaviorTreePanelProps> = (props) => (
   <ReactFlowProvider>
     <BehaviorTreePanelInner {...props} />
@@ -517,4 +447,3 @@ const BehaviorTreePanel: React.FC<BehaviorTreePanelProps> = (props) => (
 );
 
 export default BehaviorTreePanel;
-

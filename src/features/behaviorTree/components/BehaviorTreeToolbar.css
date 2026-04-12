@@ -33,6 +33,7 @@
   color: var(--text-color, #333333);
   transition: all 0.2s ease;
   white-space: nowrap;
+  touch-action: manipulation;
 }
 
 .bt-toolbar-btn:hover {
@@ -41,7 +42,7 @@
 }
 
 .bt-toolbar-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .bt-toolbar-icon {
@@ -83,11 +84,34 @@
   border-color: #da190b;
 }
 
+/* Delete selected nodes button */
+.bt-toolbar-delete {
+  background: var(--error-color, #f44336);
+  color: white;
+  border-color: var(--error-color, #f44336);
+}
+
+.bt-toolbar-delete:hover {
+  background: #da190b;
+  border-color: #da190b;
+}
+
 /* Zoom buttons */
 .bt-toolbar-zoom {
   min-width: 36px;
   justify-content: center;
   padding: 6px;
+}
+
+/* Palette toggle — only visible on mobile */
+.bt-toolbar-palette-toggle {
+  display: none;
+}
+
+.bt-toolbar-palette-toggle.active {
+  background: var(--primary-color-light, #e3f2fd);
+  border-color: var(--primary-color, #4285f4);
+  color: var(--primary-color, #4285f4);
 }
 
 /* Dropdown */
@@ -174,19 +198,21 @@
   color: var(--text-color, #333333);
 }
 
-/* Mobile responsiveness */
+/* ── Mobile ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .bt-toolbar {
     padding: 6px 8px;
     gap: 4px;
+    flex-wrap: nowrap; /* single row on mobile */
   }
 
   .bt-toolbar-section {
-    gap: 4px;
+    gap: 3px;
   }
 
   .bt-toolbar-btn {
     padding: 6px 8px;
+    min-height: 36px;
   }
 
   .bt-toolbar-label {
@@ -200,6 +226,17 @@
   .bt-tree-title {
     font-size: 12px;
   }
+
+  /* Show palette toggle on mobile */
+  .bt-toolbar-palette-toggle {
+    display: flex;
+  }
+
+  /* Keep delete label visible so users know what the button does */
+  .bt-toolbar-delete .bt-toolbar-label {
+    display: inline;
+    font-size: 11px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -210,5 +247,9 @@
   .bt-toolbar-center {
     display: none;
   }
-}
 
+  /* On very small screens hide delete count label to save space */
+  .bt-toolbar-delete .bt-toolbar-label {
+    display: none;
+  }
+}
