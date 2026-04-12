@@ -53,7 +53,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
+  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(
+    () => window.matchMedia('(max-width: 768px)').matches
+  );
   // Action node currently being edited via the parameter editor modal.
   // Holds the node id + a snapshot of the action data so the editor stays
   // stable even if React Flow re-renders the node.
@@ -482,6 +484,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
+
+          {/* Mobile-only palette toggle — hidden on desktop via CSS */}
+          <button
+            className="bt-palette-fab"
+            onClick={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+            title={isPaletteCollapsed ? 'Open Node Palette' : 'Close Node Palette'}
+          >
+            {isPaletteCollapsed ? '＋' : '✕'}
+          </button>
         </div>
       </div>
 

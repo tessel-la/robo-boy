@@ -153,6 +153,56 @@
   }
 }
 
+/* ── Mobile: full-width canvas + floating palette button ─── */
+@media (max-width: 768px) {
+  .bt-content {
+    flex-direction: column;
+  }
+
+  .bt-canvas {
+    flex: 1;
+    width: 100%;
+  }
+
+  /* floating action button to open/close the bottom-sheet palette */
+  .bt-palette-fab {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-color, #4285f4);
+    color: white;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: background 0.2s, transform 0.15s;
+    touch-action: manipulation;
+  }
+
+  .bt-palette-fab:active {
+    transform: scale(0.92);
+  }
+
+  .react-flow__controls {
+    bottom: 72px; /* keep above FAB */
+    left: 16px;
+  }
+}
+
+/* Hide FAB on desktop */
+@media (min-width: 769px) {
+  .bt-palette-fab {
+    display: none;
+  }
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .behavior-tree-panel {
