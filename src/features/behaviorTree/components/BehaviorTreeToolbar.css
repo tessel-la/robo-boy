@@ -202,3 +202,13 @@
   }
 }
 
+@media (max-width: 480px) {
+  .bt-tree-title {
+    display: none;
+  }
+
+  .bt-toolbar-center {
+    display: none;
+  }
+}
+
