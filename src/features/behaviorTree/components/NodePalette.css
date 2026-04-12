@@ -193,6 +193,10 @@
     display: none;
   }
 
+  .node-palette.mobile-sheet--hidden {
+    display: none;
+  }
+
   .node-palette.mobile-sheet {
     position: fixed;
     bottom: 0;

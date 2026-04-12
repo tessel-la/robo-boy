@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
@@ -40,12 +41,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     topics: false,
   });
 
-  const [isMobile, setIsMobile] = React.useState(
-    () => window.matchMedia('(max-width: 768px)').matches
-  );
+  const [isMobile, setIsMobile] = React.useState(false);
 
   React.useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)');
+    setIsMobile(mq.matches); // sync initial value
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -120,8 +120,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  if (isCollapsed) {
-    return isMobile ? null : (
+  // ---- desktop collapsed strip ----
+  if (isCollapsed && !isMobile) {
+    return (
       <div className="node-palette collapsed">
         <button className="palette-toggle" onClick={onToggleCollapse} title="Expand Palette">
           ▶
@@ -130,8 +131,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     );
   }
 
-  return (
-    <div className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}>
+  // ---- shared palette JSX (used for both mobile portal and desktop) ----
+  const paletteJSX = (
+    <div className={`node-palette${isMobile ? ` mobile-sheet${isCollapsed ? ' mobile-sheet--hidden' : ''}` : ''}`}>
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
         <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette">
@@ -307,6 +309,14 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
     </div>
   );
+
+  // ---- mobile: portal to body so position:fixed escapes any transform ancestor ----
+  if (isMobile) {
+    return ReactDOM.createPortal(paletteJSX, document.body);
+  }
+
+  // ---- desktop expanded ----
+  return paletteJSX;
 };
 
 export default NodePalette;
