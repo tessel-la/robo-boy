@@ -193,7 +193,7 @@
     display: none;
   }
 
-  .node-palette.mobile-sheet--hidden {
+  .node-palette.mobile-sheet.mobile-sheet--hidden {
     display: none;
   }
 
