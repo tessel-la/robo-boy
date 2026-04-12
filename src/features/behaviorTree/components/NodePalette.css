@@ -186,6 +186,15 @@
   background: var(--text-color-tertiary, #999999);
 }
 
+/* Backdrop for mobile bottom sheet — tap to close */
+.node-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199; /* just below the sheet (200) */
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ── Mobile: bottom sheet ──────────────────────────────────── */
 @media (max-width: 768px) {
   /* Side palette hidden on mobile — bottom sheet takes over */
