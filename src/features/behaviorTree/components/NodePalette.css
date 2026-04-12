@@ -189,13 +189,14 @@
     display: none;
   }
 
-  /* Mobile sheet: absolute within .bt-content (position: relative) */
+  /* Mobile sheet: absolute within .bt-content (position: relative).
+     Side gaps give the "floating card" look the user wants. */
   .node-palette.mobile-sheet {
     position: absolute;
     bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
+    left: 8px;
+    right: 8px;
+    width: auto;
     /* compact height — shows nodes without eating too much canvas */
     height: auto;
     max-height: 52%;
@@ -203,7 +204,7 @@
     border-top: 2px solid var(--border-color, #e0e0e0);
     border-radius: 12px 12px 0 0;
     z-index: 10;
-    box-shadow: 0 -3px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
     overflow-y: auto;
     animation: bt-sheet-slide-up 0.2s ease-out;
   }
@@ -213,24 +214,25 @@
     to   { transform: translateY(0); }
   }
 
+  /* Centered drag handle pill — on the sheet container, not inside the header flex row */
+  .node-palette.mobile-sheet::before {
+    content: '';
+    display: block;
+    width: 32px;
+    height: 3px;
+    background: var(--border-color, #aaaaaa);
+    border-radius: 2px;
+    margin: 8px auto 4px;
+    flex-shrink: 0;
+  }
+
   .palette-header {
-    padding: 8px 12px;
+    padding: 6px 12px 8px;
     position: sticky;
     top: 0;
     background: var(--card-bg, #ffffff);
     z-index: 1;
     border-radius: 12px 12px 0 0;
-  }
-
-  /* compact drag handle pill */
-  .palette-header::before {
-    content: '';
-    display: block;
-    width: 32px;
-    height: 3px;
-    background: var(--border-color, #cccccc);
-    border-radius: 2px;
-    margin: 0 auto 6px;
   }
 
   .palette-title {

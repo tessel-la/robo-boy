@@ -201,18 +201,35 @@
 /* ── Mobile ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .bt-toolbar {
-    padding: 6px 8px;
-    gap: 4px;
-    flex-wrap: nowrap; /* single row on mobile */
+    padding: 5px 6px;
+    gap: 3px;
+    flex-wrap: nowrap; /* single row */
+    overflow: hidden;
   }
 
   .bt-toolbar-section {
-    gap: 3px;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Centre section (title) can shrink */
+  .bt-toolbar-center {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .bt-tree-title {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .bt-toolbar-btn {
-    padding: 6px 8px;
-    min-height: 36px;
+    padding: 5px 7px;
+    min-height: 34px;
+    min-width: 34px;
   }
 
   .bt-toolbar-label {
@@ -220,11 +237,7 @@
   }
 
   .bt-toolbar-icon {
-    font-size: 18px;
-  }
-
-  .bt-tree-title {
-    font-size: 12px;
+    font-size: 17px;
   }
 
   /* Show palette toggle on mobile */
@@ -250,6 +263,14 @@
 
   /* On very small screens hide delete count label to save space */
   .bt-toolbar-delete .bt-toolbar-label {
+    display: none;
+  }
+}
+
+/* On very small screens hide Export and Import to keep toolbar in one row */
+@media (max-width: 420px) {
+  .bt-toolbar-btn-export,
+  .bt-toolbar-btn-import {
     display: none;
   }
 }

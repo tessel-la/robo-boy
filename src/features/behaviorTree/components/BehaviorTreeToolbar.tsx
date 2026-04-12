@@ -145,12 +145,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           )}
         </div>
 
-        <button className="bt-toolbar-btn" onClick={onExport} title="Export Tree">
+        <button className="bt-toolbar-btn bt-toolbar-btn-export" onClick={onExport} title="Export Tree">
           <span className="bt-toolbar-icon">📤</span>
           <span className="bt-toolbar-label">Export</span>
         </button>
 
-        <button className="bt-toolbar-btn" onClick={handleImport} title="Import Tree">
+        <button className="bt-toolbar-btn bt-toolbar-btn-import" onClick={handleImport} title="Import Tree">
           <span className="bt-toolbar-icon">📥</span>
           <span className="bt-toolbar-label">Import</span>
         </button>
