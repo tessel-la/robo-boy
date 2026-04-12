@@ -45,6 +45,8 @@ interface BehaviorTreePanelProps {
   isConnected: boolean;
 }
 
+const MOBILE_BREAKPOINT = '(max-width: 768px)';
+
 const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
@@ -54,7 +56,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(
-    () => window.matchMedia('(max-width: 768px)').matches
+    () => window.matchMedia(MOBILE_BREAKPOINT).matches
   );
   // Action node currently being edited via the parameter editor modal.
   // Holds the node id + a snapshot of the action data so the editor stays
@@ -422,11 +424,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setNodes((nds) => nds.concat(newNode));
 
       // Close palette on mobile after adding
-      if (window.matchMedia('(max-width: 768px)').matches) {
+      if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
         setIsPaletteCollapsed(true);
       }
     },
-    [screenToFlowPosition, setNodes, setIsPaletteCollapsed]
+    [screenToFlowPosition, setNodes]
   );
 
   return (

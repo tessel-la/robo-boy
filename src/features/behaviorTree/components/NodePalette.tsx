@@ -20,6 +20,8 @@ interface NodePaletteProps {
   onAddNode?: (type: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => void;
 }
 
+const MOBILE_BREAKPOINT = '(max-width: 768px)';
+
 const NodePalette: React.FC<NodePaletteProps> = ({
   ros,
   isConnected,
@@ -44,7 +46,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const [isMobile, setIsMobile] = React.useState(false);
 
   React.useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
+    const mq = window.matchMedia(MOBILE_BREAKPOINT);
     setIsMobile(mq.matches); // sync initial value
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
@@ -312,7 +314,19 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   // ---- mobile: portal to body so position:fixed escapes any transform ancestor ----
   if (isMobile) {
-    return ReactDOM.createPortal(paletteJSX, document.body);
+    return ReactDOM.createPortal(
+      <>
+        {!isCollapsed && (
+          <div
+            className="node-palette-backdrop"
+            onClick={onToggleCollapse}
+            aria-hidden="true"
+          />
+        )}
+        {paletteJSX}
+      </>,
+      document.body
+    );
   }
 
   // ---- desktop expanded ----
