@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
@@ -43,6 +43,15 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   });
 
   const [isMobile, setIsMobile] = React.useState(false);
+  // Height controlled by drag; null = CSS default
+  const [sheetHeight, setSheetHeight] = useState<number | null>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
+  // Use a ref for drag state — avoids the async gap where state update +
+  // re-render would delay adding document listeners past the first touchmove.
+  const isDraggingRef = useRef(false);
+  const onToggleCollapseRef = useRef(onToggleCollapse);
+  useEffect(() => { onToggleCollapseRef.current = onToggleCollapse; }, [onToggleCollapse]);
 
   React.useEffect(() => {
     const mq = window.matchMedia(MOBILE_BREAKPOINT);
@@ -51,6 +60,93 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
+
+  // Shared move logic — used by both mouse and touch handlers.
+  const applyDrag = useCallback((clientY: number) => {
+    const parent = paletteRef.current?.parentElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    const newHeight = rect.bottom - clientY;
+    setSheetHeight(Math.min(Math.max(80, newHeight), rect.height * 0.9));
+  }, []);
+
+  const endDrag = useCallback((clientY: number) => {
+    isDraggingRef.current = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    const parent = paletteRef.current?.parentElement;
+    if (parent) {
+      const remaining = parent.getBoundingClientRect().bottom - clientY;
+      if (remaining < 80) {
+        setSheetHeight(null);
+        onToggleCollapseRef.current();
+      }
+    }
+  }, []);
+
+  // Document-level listeners — same pattern as useResizablePanels.
+  // Always attached when mobile so no events are lost between pointerdown and move.
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      applyDrag(e.clientY);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      endDrag(e.clientY);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isDraggingRef.current) return;
+      e.preventDefault();
+      applyDrag(e.touches[0].clientY);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!isDraggingRef.current) return;
+      endDrag(e.changedTouches[0].clientY);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isMobile, isCollapsed, applyDrag, endDrag]);
+
+  // Pointer-start listeners on the handle element.
+  // isCollapsed is in deps: the early return unmounts the handle on close,
+  // so we must re-attach after each open.
+  useEffect(() => {
+    const handle = handleRef.current;
+    if (!handle || !isMobile) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ns-resize';
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      document.body.style.userSelect = 'none';
+    };
+
+    handle.addEventListener('mousedown', onMouseDown);
+    handle.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => {
+      handle.removeEventListener('mousedown', onMouseDown);
+      handle.removeEventListener('touchstart', onTouchStart);
+    };
+  }, [isMobile, isCollapsed]);
 
   // Control flow nodes (always available)
   const controlNodes: NodePaletteItem[] = [
@@ -115,7 +211,19 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   }
 
   return (
-    <div className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}>
+    <div
+      className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}
+      ref={paletteRef}
+      style={isMobile && sheetHeight !== null ? { height: sheetHeight } : undefined}
+    >
+      {isMobile && (
+        <div
+          className="palette-drag-handle"
+          ref={handleRef}
+        />
+      )}
+      {/* palette-body scrolls independently — drag handle stays outside overflow */}
+      <div className={isMobile ? 'palette-body' : undefined}>
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
         <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette">
@@ -253,6 +361,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
           </div>
         )}
       </div>
+      </div>{/* end palette-body */}
     </div>
   );
 };

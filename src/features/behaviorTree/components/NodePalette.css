@@ -170,16 +170,22 @@
 
 /* Scrollbar styling */
 .palette-section-content::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .palette-section-content::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--card-bg, #ffffff);
+  border-radius: 3px;
 }
 
 .palette-section-content::-webkit-scrollbar-thumb {
-  background: var(--border-color, #cccccc);
-  border-radius: 2px;
+  background-color: var(--primary-color, #4285f4);
+  border-radius: 3px;
+  border: 1px solid var(--card-bg, #ffffff);
+}
+
+.palette-section-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color, #3367d6);
 }
 
 /* ── Mobile: bottom sheet contained within the BT panel ─── */
@@ -197,16 +203,25 @@
     left: 8px;
     right: 8px;
     width: auto;
-    /* compact height — shows nodes without eating too much canvas */
-    height: auto;
-    max-height: 52%;
+    /* JS overrides height via inline style when the user drags; otherwise CSS controls */
+    max-height: 90%;
     border-right: none;
     border-top: 2px solid var(--border-color, #e0e0e0);
     border-radius: 12px 12px 0 0;
     z-index: 10;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
-    overflow-y: auto;
+    /* No overflow here — handle must stay outside any scroll container */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     animation: bt-sheet-slide-up 0.2s ease-out;
+  }
+
+  /* Scrollable body — sits below the drag handle */
+  .palette-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   @keyframes bt-sheet-slide-up {
@@ -214,16 +229,45 @@
     to   { transform: translateY(0); }
   }
 
-  /* Centered drag handle pill — on the sheet container, not inside the header flex row */
-  .node-palette.mobile-sheet::before {
+  /* Drag handle — wider tap zone, pill centred inside */
+  .palette-drag-handle {
+    width: 100%;
+    padding: 8px 0 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: ns-resize;
+    touch-action: none; /* must be none so touchmove preventDefault works */
+    flex-shrink: 0;
+  }
+
+  .palette-drag-handle::after {
     content: '';
     display: block;
-    width: 32px;
-    height: 3px;
+    width: 36px;
+    height: 4px;
     background: var(--border-color, #aaaaaa);
     border-radius: 2px;
-    margin: 8px auto 4px;
-    flex-shrink: 0;
+  }
+
+  /* Themed scrollbar on the scrollable body */
+  .palette-body::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .palette-body::-webkit-scrollbar-track {
+    background: var(--card-bg, #ffffff);
+    border-radius: 3px;
+  }
+
+  .palette-body::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color, #4285f4);
+    border-radius: 3px;
+    border: 1px solid var(--card-bg, #ffffff);
+  }
+
+  .palette-body::-webkit-scrollbar-thumb:hover {
+    background-color: var(--primary-hover-color, #3367d6);
   }
 
   .palette-header {
