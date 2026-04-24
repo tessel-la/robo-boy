@@ -361,13 +361,43 @@ async function queryMessageDetails(
         { type },
         (res: any) => {
           const typedefs: FieldTypedef[] = res?.typedefs ?? [];
-          if (!typedefs.length || !typedefs[0]?.fieldnames?.length) {
+
+          // Always log the raw response so future issues are diagnosable.
+          console.log(
+            `[BT] /rosapi/message_details("${type}") → ${typedefs.length} typedef(s):`,
+            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',')}]`).join(' | ')
+          );
+
+          if (!typedefs.length) {
             resolve(null);
             return;
           }
-          resolve(buildDefaultsFromTypedef(typedefs[0], typedefs));
+
+          // The response often contains multiple typedefs (the root type plus
+          // all nested message types). The one we want is the Goal message,
+          // identified by the suffix of the requested type name.
+          const goalSuffix = type.split('/').pop() ?? ''; // e.g. "Takeoff_Goal"
+          const targetTypedef =
+            // 1. Exact suffix match (most reliable)
+            typedefs.find((t) => t.type.endsWith(goalSuffix) && t.fieldnames?.length) ??
+            // 2. First typedef with actual fields
+            typedefs.find((t) => t.fieldnames?.length) ??
+            null;
+
+          if (!targetTypedef) {
+            resolve(null);
+            return;
+          }
+
+          const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
+          // Return null if we ended up with an empty object — the caller will
+          // try the next candidate or fall back to a hardcoded template.
+          resolve(Object.keys(defaults).length > 0 ? defaults : null);
         },
-        () => resolve(null)
+        (err: any) => {
+          console.warn(`[BT] /rosapi/message_details("${type}") failed:`, err);
+          resolve(null);
+        }
       );
     } catch {
       resolve(null);

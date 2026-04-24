@@ -1,4 +1,4 @@
-import ROSLIB, { Ros, Topic, Service, ActionClient, Goal } from 'roslib';
+import ROSLIB, { Ros } from 'roslib';
 import {
   BehaviorTree,
   BehaviorTreeNode,
@@ -9,9 +9,27 @@ import {
   ROSActionNodeData,
   ROSServiceNodeData,
   ROSTopicNodeData,
-  ControlFlowNodeData,
 } from '../types';
-import { Edge } from 'reactflow';
+import { ACTION_TEMPLATES } from '../actionTemplates';
+
+// Tracks an in-flight ROS2 action goal so stop()/timeout can cancel it via
+// the action's underlying cancel_goal service.
+interface ActiveAction {
+  actionName: string;
+  uuid: number[];
+}
+
+// action_msgs/msg/GoalStatus values – we treat anything other than SUCCEEDED
+// as a failure for the BT step.
+const GOAL_STATUS_SUCCEEDED = 4;
+
+// ROS 2 action goal_id is a unique_identifier_msgs/UUID, which is a 16-byte
+// array. rosbridge accepts it as a plain JS number array.
+function generateGoalUuid(): number[] {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  return Array.from(buf);
+}
 
 /**
  * Behavior Tree Executor - Hybrid execution model
@@ -24,7 +42,7 @@ export class BehaviorTreeExecutor {
   private isRunning: boolean;
   private callback: ExecutionCallback;
   private abortController: AbortController | null;
-  private activeGoals: Map<string, Goal>;
+  private activeActions: Map<string, ActiveAction>;
 
   constructor(tree: BehaviorTree, ros: Ros, callback: ExecutionCallback) {
     this.tree = tree;
@@ -33,7 +51,7 @@ export class BehaviorTreeExecutor {
     this.nodeStatuses = new Map();
     this.isRunning = false;
     this.abortController = null;
-    this.activeGoals = new Map();
+    this.activeActions = new Map();
 
     // Initialize all nodes to idle status
     tree.nodes.forEach((node) => {
@@ -91,11 +109,11 @@ export class BehaviorTreeExecutor {
   public stop(): void {
     if (!this.isRunning) return;
 
-    // Cancel all active ROS goals
-    this.activeGoals.forEach((goal) => {
-      goal.cancel();
+    // Cancel any in-flight ROS2 action goals via their cancel_goal service.
+    this.activeActions.forEach(({ actionName, uuid }) => {
+      this.cancelActionGoal(actionName, uuid);
     });
-    this.activeGoals.clear();
+    this.activeActions.clear();
 
     if (this.abortController) {
       this.abortController.abort();
@@ -246,60 +264,161 @@ export class BehaviorTreeExecutor {
   }
 
   /**
-   * Execute ROS action node
+   * Execute a ROS 2 action node.
+   *
+   * roslib 1.4.x ships only the ROS 1 actionlib client (`ROSLIB.ActionClient` /
+   * `ROSLIB.Goal`), which talks to topics like `<server>/goal`, `<server>/result`,
+   * etc. ROS 2 action servers don't expose those — they expose three services
+   * (`send_goal`, `get_result`, `cancel_goal`) and two topics (`feedback`,
+   * `status`) under the `_action/` namespace. So we drive them by hand:
+   *
+   *   1. send_goal service -> get back {accepted, stamp}
+   *   2. get_result service -> blocks until the action completes, returns
+   *      {status, result}; status == 4 (SUCCEEDED) means BT success.
+   *   3. on stop()/timeout, cancel_goal service with the same goal_id.
+   *
+   * The action interface type (e.g. "as2_msgs/action/Takeoff") must come from
+   * discovery — without it we cannot construct the auto-generated service types
+   * (`<Action>_SendGoal`, `<Action>_GetResult`).
    */
   private async executeActionNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const data = node.data as ROSActionNodeData;
-    
+
     return new Promise((resolve) => {
-      try {
-        const actionClient = new ROSLIB.ActionClient({
-          ros: this.ros,
-          serverName: data.actionName,
-          actionName: data.actionType || data.actionName.split('/').pop() || 'Action',
-        });
-
-        const goal = new ROSLIB.Goal({
-          actionClient,
-          goalMessage: data.parameters || {},
-        });
-
-        this.activeGoals.set(node.id, goal);
-
-        goal.on('feedback', () => {
-          // Action is running
-          this.setNodeStatus(node.id, ExecutionStatus.Running);
-        });
-
-        goal.on('result', (result) => {
-          this.activeGoals.delete(node.id);
-          // Assume success if we got a result
-          resolve(ExecutionStatus.Success);
-        });
-
-        goal.on('timeout', () => {
-          this.activeGoals.delete(node.id);
-          resolve(ExecutionStatus.Failure);
-        });
-
-        // Set timeout if specified
-        const timeout = data.timeout || 30000; // Default 30 seconds
-        const timeoutId = setTimeout(() => {
-          goal.cancel();
-          this.activeGoals.delete(node.id);
-          resolve(ExecutionStatus.Failure);
-        }, timeout);
-
-        goal.send();
-
-        // Clear timeout on completion
-        goal.on('result', () => clearTimeout(timeoutId));
-        goal.on('timeout', () => clearTimeout(timeoutId));
-      } catch (error) {
-        console.error('Error executing action node:', error);
+      if (!data.actionType) {
+        console.error(
+          `[BT] Action node "${data.actionName}" has no actionType. ` +
+            `Re-run ROS discovery so the feedback topic type can be captured.`
+        );
         resolve(ExecutionStatus.Failure);
+        return;
+      }
+
+      const uuid = generateGoalUuid();
+      let settled = false;
+      const settle = (status: ExecutionStatus) => {
+        if (settled) return;
+        settled = true;
+        this.activeActions.delete(node.id);
+        clearTimeout(timeoutId);
+        resolve(status);
+      };
+
+      // Default 30 s — same as before. Caller can override per-node via
+      // `data.timeout`.
+      const timeout = data.timeout || 30000;
+      const timeoutId = setTimeout(() => {
+        console.warn(`[BT] Action "${data.actionName}" timed out after ${timeout}ms`);
+        this.cancelActionGoal(data.actionName, uuid);
+        settle(ExecutionStatus.Failure);
+      }, timeout);
+
+      try {
+        const sendGoal = new (ROSLIB as any).Service({
+          ros: this.ros,
+          name: `${data.actionName}/_action/send_goal`,
+          serviceType: `${data.actionType}_SendGoal`,
+        });
+
+        // Use saved parameters; fall back to the hardcoded template for this
+        // action type so nodes without saved params still send a valid goal.
+        const hasParams = data.parameters && Object.keys(data.parameters).length > 0;
+        const goal = hasParams
+          ? data.parameters
+          : (ACTION_TEMPLATES[data.actionType] ?? {});
+
+        if (!hasParams) {
+          console.warn(
+            `[BT] Action "${data.actionName}" has no saved parameters — ` +
+            `using ${ACTION_TEMPLATES[data.actionType] ? 'template' : 'empty {}'} for "${data.actionType}". ` +
+            `Double-click the node to set parameters.`
+          );
+        }
+
+        const sendGoalReq = new (ROSLIB as any).ServiceRequest({
+          goal_id: { uuid },
+          goal,
+        });
+
+        this.activeActions.set(node.id, { actionName: data.actionName, uuid });
+
+        sendGoal.callService(
+          sendGoalReq,
+          (resp: any) => {
+            if (!this.isRunning) {
+              settle(ExecutionStatus.Failure);
+              return;
+            }
+            if (!resp || resp.accepted === false) {
+              console.warn(`[BT] Action "${data.actionName}" rejected goal`);
+              settle(ExecutionStatus.Failure);
+              return;
+            }
+
+            // Goal accepted — block on get_result. This service call only
+            // returns once the action server has finished, so it doubles as
+            // our "wait for completion" primitive.
+            const getResult = new (ROSLIB as any).Service({
+              ros: this.ros,
+              name: `${data.actionName}/_action/get_result`,
+              serviceType: `${data.actionType}_GetResult`,
+            });
+            const getResultReq = new (ROSLIB as any).ServiceRequest({
+              goal_id: { uuid },
+            });
+
+            getResult.callService(
+              getResultReq,
+              (res: any) => {
+                const status = res?.status;
+                if (status === GOAL_STATUS_SUCCEEDED) {
+                  settle(ExecutionStatus.Success);
+                } else {
+                  console.warn(
+                    `[BT] Action "${data.actionName}" finished with status ${status}`
+                  );
+                  settle(ExecutionStatus.Failure);
+                }
+              },
+              (err: any) => {
+                console.error(`[BT] get_result failed for "${data.actionName}":`, err);
+                settle(ExecutionStatus.Failure);
+              }
+            );
+          },
+          (err: any) => {
+            console.error(`[BT] send_goal failed for "${data.actionName}":`, err);
+            settle(ExecutionStatus.Failure);
+          }
+        );
+      } catch (error) {
+        console.error('[BT] Error executing action node:', error);
+        settle(ExecutionStatus.Failure);
       }
     });
+  }
+
+  /**
+   * Cancel an in-flight ROS 2 action goal via its cancel_goal service.
+   * Best-effort: we don't wait for the response.
+   */
+  private cancelActionGoal(actionName: string, uuid: number[]): void {
+    try {
+      const cancel = new (ROSLIB as any).Service({
+        ros: this.ros,
+        name: `${actionName}/_action/cancel_goal`,
+        serviceType: 'action_msgs/srv/CancelGoal',
+      });
+      const req = new (ROSLIB as any).ServiceRequest({
+        goal_info: {
+          goal_id: { uuid },
+          stamp: { sec: 0, nanosec: 0 },
+        },
+      });
+      cancel.callService(req, () => {}, () => {});
+    } catch (error) {
+      console.error(`[BT] Failed to cancel action "${actionName}":`, error);
+    }
   }
 
   /**

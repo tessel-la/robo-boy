@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
 import { ROSActionNodeData } from '../types';
 import { fetchActionGoalSchema } from '../services/rosDiscovery';
+import { ACTION_TEMPLATES } from '../actionTemplates';
 import './ActionParameterEditor.css';
 
 interface ActionParameterEditorProps {
@@ -10,41 +11,6 @@ interface ActionParameterEditorProps {
   onSave: (parameters: Record<string, any>) => void;
   onClose: () => void;
 }
-
-// Hardcoded templates for well-known as2 types — used as instant fallback
-// when rosapi is unavailable or before the fetch completes.
-const ACTION_TEMPLATES: Record<string, Record<string, any>> = {
-  'as2_msgs/action/GoToWaypoint': {
-    yaw: { mode: 0, angle: 0.0 },
-    target_pose: {
-      header: { frame_id: 'earth' },
-      point: { x: 0.0, y: 0.0, z: 1.0 },
-    },
-    max_speed: 1.0,
-  },
-  'as2_msgs/action/Takeoff': {
-    takeoff_height: 1.0,
-    takeoff_speed: 0.5,
-  },
-  'as2_msgs/action/TakeoffBehavior': {
-    takeoff_height: 1.0,
-    takeoff_speed: 0.5,
-  },
-  'as2_msgs/action/Land': {
-    land_speed: 0.5,
-  },
-  'as2_msgs/action/LandBehavior': {
-    land_speed: 0.5,
-  },
-  'as2_msgs/action/FollowPath': {
-    path: {
-      header: { frame_id: 'earth' },
-      poses: [],
-    },
-    max_speed: 1.0,
-    yaw_mode: { mode: 1, angle: 0.0 },
-  },
-};
 
 const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   nodeData,
@@ -56,7 +22,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
 
-  // On mount: populate from existing params → hardcoded template → live schema fetch
+  // On mount: existing params → hardcoded template → live schema fetch
   useEffect(() => {
     const existing = nodeData.parameters ?? {};
 
@@ -90,17 +56,21 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
       if (schema && Object.keys(schema).length > 0) {
         setParameterJson(JSON.stringify(schema, null, 2));
       } else {
-        setError('Could not fetch schema — check ROS connection and action type.');
+        setError(
+          'rosapi could not return field definitions for this type. ' +
+          'Check the browser console for the raw response, then fill in parameters manually.'
+        );
       }
     });
   };
 
   const handleLoadTemplate = () => {
-    if (nodeData.actionType && ACTION_TEMPLATES[nodeData.actionType]) {
-      setParameterJson(JSON.stringify(ACTION_TEMPLATES[nodeData.actionType], null, 2));
+    const template = nodeData.actionType ? ACTION_TEMPLATES[nodeData.actionType] : null;
+    if (template) {
+      setParameterJson(JSON.stringify(template, null, 2));
       setError(null);
     } else {
-      setError('No built-in template for this action type. Use "Fetch Schema" instead.');
+      setError('No built-in template for this action type. Use "Fetch Schema" or fill in manually.');
     }
   };
 
