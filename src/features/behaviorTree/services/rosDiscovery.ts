@@ -299,6 +299,7 @@ interface FieldTypedef {
   fieldtypes: string[];
   fieldarraylen: number[];
   constnames: string[];
+  constvalues: string[];
 }
 
 /** Build a default value for one field from its ROS type. */
@@ -339,10 +340,32 @@ function buildDefaultsFromTypedef(
   allTypedefs: FieldTypedef[]
 ): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
-  typedef.fieldnames.forEach((name, i) => {
-    if (typedef.constnames?.includes(name)) return; // skip constants
-    obj[name] = rosDefaultValue(typedef.fieldtypes[i], typedef.fieldarraylen[i], allTypedefs);
+  const names: string[] = typedef.fieldnames ?? [];
+  const types: string[] = typedef.fieldtypes ?? [];
+  const lens: number[] = typedef.fieldarraylen ?? [];
+  const consts: string[] = typedef.constnames ?? [];
+
+  // Build defaults, skipping only genuine constants (those that also have a
+  // constvalue). Some rosapi versions incorrectly list all field names in
+  // constnames — so we only skip a name that has a paired constvalue entry.
+  names.forEach((name, i) => {
+    const constIdx = consts.indexOf(name);
+    const hasConstValue = constIdx >= 0 && typedef.constvalues?.[constIdx] !== undefined;
+    if (hasConstValue) return; // genuine constant — not a settable field
+    const al = lens[i] !== undefined ? lens[i] : -1;
+    obj[name] = rosDefaultValue(types[i] ?? 'float64', al, allTypedefs);
   });
+
+  // Safety net: if constnames filtering removed everything despite fieldnames
+  // being non-empty, rebuild without any filtering (rosapi bug workaround).
+  if (Object.keys(obj).length === 0 && names.length > 0) {
+    console.warn('[BT] buildDefaults: constnames filter ate all fields — retrying without filter');
+    names.forEach((name, i) => {
+      const al = lens[i] !== undefined ? lens[i] : -1;
+      obj[name] = rosDefaultValue(types[i] ?? 'float64', al, allTypedefs);
+    });
+  }
+
   return obj;
 }
 
@@ -362,10 +385,15 @@ async function queryMessageDetails(
         (res: any) => {
           const typedefs: FieldTypedef[] = res?.typedefs ?? [];
 
-          // Always log the raw response so future issues are diagnosable.
+          // Full raw log so future type-introspection issues are diagnosable.
           console.log(
             `[BT] /rosapi/message_details("${type}") → ${typedefs.length} typedef(s):`,
-            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',')}]`).join(' | ')
+            typedefs.map((t) =>
+              `${t.type} fields:[${t.fieldnames?.join(',')}] ` +
+              `types:[${t.fieldtypes?.join(',')}] ` +
+              `lens:[${t.fieldarraylen?.join(',')}] ` +
+              `consts:[${t.constnames?.join(',')}]`
+            ).join('\n')
           );
 
           if (!typedefs.length) {

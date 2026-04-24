@@ -345,12 +345,17 @@ export class BehaviorTreeExecutor {
         sendGoal.callService(
           sendGoalReq,
           (resp: any) => {
+            console.log(`[BT] send_goal response for "${data.actionName}":`, JSON.stringify(resp));
             if (!this.isRunning) {
               settle(ExecutionStatus.Failure);
               return;
             }
             if (!resp || resp.accepted === false) {
-              console.warn(`[BT] Action "${data.actionName}" rejected goal`);
+              console.warn(
+                `[BT] Action "${data.actionName}" rejected goal. ` +
+                `Goal sent: ${JSON.stringify(goal)}. ` +
+                `Full response: ${JSON.stringify(resp)}`
+              );
               settle(ExecutionStatus.Failure);
               return;
             }
