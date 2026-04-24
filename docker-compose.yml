@@ -40,21 +40,26 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ROS 2 Stack (Rosbridge + Image Publisher)
+  # network_mode: host so ROS 2 DDS multicast discovery works with other
+  # host-networked containers (e.g. aerial_sim_cont). Port mappings are
+  # incompatible with host networking; Caddy reaches services via
+  # host.docker.internal instead of the ros-stack hostname.
   ros-stack:
     restart: unless-stopped
+    network_mode: host
     ipc: host
     build:
       context: .
       dockerfile: Dockerfile.ros # Use the ROS Dockerfile
-    ports: # Expose web_video_server port
-      - "127.0.0.1:8080:8080" # Map container 8080 to host's localhost:8080
-      - "0.0.0.0:8765:8765" # Expose Foxglove WebSocket server
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw 
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Mount your robot's ROS 2 workspace install directory here to make
+      # custom message types (e.g. as2_msgs) available to rosbridge.
+      # For aerostack2: first run `docker cp aerial_sim_cont:/root/aerostack2_ws/install ~/.aerostack2_install`
+      # then uncomment the line below:
+      - ~/.aerostack2_install:/overlay_ws:ro
     environment:
       - DISPLAY=${DISPLAY}
-    networks: # Assign to custom network
-      - app-net
 
 volumes:
   caddy-data:

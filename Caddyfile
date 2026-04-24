@@ -19,19 +19,19 @@
     # Route WebSocket requests to the ros-stack container
     handle /websocket* {
        uri strip_prefix /websocket
-       reverse_proxy ros-stack:9090 
+       reverse_proxy host.docker.internal:9090
     }
 
     # Route Foxglove WebSocket requests to the ros-stack container
     handle /foxglove* {
        uri strip_prefix /foxglove
-       reverse_proxy ros-stack:8765
+       reverse_proxy host.docker.internal:8765
     }
 
     # Route video stream requests to the ros-stack container
     handle /video_stream* {
         uri strip_prefix /video_stream
-        reverse_proxy ros-stack:8080
+        reverse_proxy host.docker.internal:8080
     }
 
     # Route mesh resource requests to the Python server on the host
@@ -58,19 +58,19 @@
     # Route WebSocket requests to the ros-stack container
     handle /websocket* {
        uri strip_prefix /websocket
-       reverse_proxy ros-stack:9090 
+       reverse_proxy host.docker.internal:9090
     }
 
     # Route Foxglove WebSocket requests to the ros-stack container
     handle /foxglove* {
        uri strip_prefix /foxglove
-       reverse_proxy ros-stack:8765
+       reverse_proxy host.docker.internal:8765
     }
 
     # Route video stream requests to the ros-stack container
     handle /video_stream* {
         uri strip_prefix /video_stream
-        reverse_proxy ros-stack:8080
+        reverse_proxy host.docker.internal:8080
     }
 
     # Route mesh resource requests to the Python server on the host
