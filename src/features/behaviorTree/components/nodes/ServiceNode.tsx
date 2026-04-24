@@ -29,7 +29,7 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
         </div>
       )}
       
-      <Handle type="source" position={Position.Bottom} className="bt-handle" />
+      {/* Service nodes are leaves — no outgoing connections */}
     </div>
   );
 };

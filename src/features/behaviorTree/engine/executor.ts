@@ -19,9 +19,10 @@ interface ActiveAction {
   uuid: number[];
 }
 
-// action_msgs/msg/GoalStatus values – we treat anything other than SUCCEEDED
-// as a failure for the BT step.
+// action_msgs/msg/GoalStatus values
 const GOAL_STATUS_SUCCEEDED = 4;
+const GOAL_STATUS_CANCELED  = 5;
+const GOAL_STATUS_ABORTED   = 6;
 
 // ROS 2 action goal_id is a unique_identifier_msgs/UUID, which is a 16-byte
 // array. rosbridge accepts it as a plain JS number array.
@@ -29,6 +30,11 @@ function generateGoalUuid(): number[] {
   const buf = new Uint8Array(16);
   crypto.getRandomValues(buf);
   return Array.from(buf);
+}
+
+/** Compare two 16-byte UUID arrays for equality. */
+function uuidMatches(a: number[], b: number[]): boolean {
+  return a.length === 16 && b.length === 16 && a.every((v, i) => v === b[i]);
 }
 
 /**
@@ -150,14 +156,17 @@ export class BehaviorTreeExecutor {
   }
 
   /**
-   * Get child nodes of a given node
+   * Get child nodes of a given node, in edge-insertion order.
    */
   private getChildNodes(nodeId: string): BehaviorTreeNode[] {
     const childIds = this.tree.edges
       .filter((edge) => edge.source === nodeId)
       .map((edge) => edge.target);
 
-    return this.tree.nodes.filter((node) => childIds.includes(node.id));
+    // Preserve the order edges were added (not the nodes-array order).
+    return childIds
+      .map((id) => this.tree.nodes.find((n) => n.id === id))
+      .filter((n): n is BehaviorTreeNode => n !== undefined);
   }
 
   /**
@@ -266,20 +275,15 @@ export class BehaviorTreeExecutor {
   /**
    * Execute a ROS 2 action node.
    *
-   * roslib 1.4.x ships only the ROS 1 actionlib client (`ROSLIB.ActionClient` /
-   * `ROSLIB.Goal`), which talks to topics like `<server>/goal`, `<server>/result`,
-   * etc. ROS 2 action servers don't expose those — they expose three services
-   * (`send_goal`, `get_result`, `cancel_goal`) and two topics (`feedback`,
-   * `status`) under the `_action/` namespace. So we drive them by hand:
+   * roslib 1.4.x ships only the ROS 1 actionlib client, which is incompatible
+   * with ROS 2 action servers. We drive ROS 2 actions by hand:
    *
-   *   1. send_goal service -> get back {accepted, stamp}
-   *   2. get_result service -> blocks until the action completes, returns
-   *      {status, result}; status == 4 (SUCCEEDED) means BT success.
-   *   3. on stop()/timeout, cancel_goal service with the same goal_id.
-   *
-   * The action interface type (e.g. "as2_msgs/action/Takeoff") must come from
-   * discovery — without it we cannot construct the auto-generated service types
-   * (`<Action>_SendGoal`, `<Action>_GetResult`).
+   *   1. send_goal service → get back {accepted, stamp}
+   *   2. Subscribe to <action>/_action/status topic and watch for our goal_id
+   *      reaching a terminal state (SUCCEEDED=4, CANCELED=5, ABORTED=6).
+   *      We use the topic instead of get_result because get_result is a
+   *      long-blocking service call that rosbridge times out.
+   *   3. On stop()/timeout → cancel_goal service + unsubscribe.
    */
   private async executeActionNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const data = node.data as ROSActionNodeData;
@@ -296,17 +300,22 @@ export class BehaviorTreeExecutor {
 
       const uuid = generateGoalUuid();
       let settled = false;
+      let statusTopic: any = null;
+
       const settle = (status: ExecutionStatus) => {
         if (settled) return;
         settled = true;
         this.activeActions.delete(node.id);
         clearTimeout(timeoutId);
+        if (statusTopic) {
+          try { statusTopic.unsubscribe(); } catch { /* best effort */ }
+          statusTopic = null;
+        }
         resolve(status);
       };
 
-      // Default 30 s — same as before. Caller can override per-node via
-      // `data.timeout`.
-      const timeout = data.timeout || 30000;
+      // Default 60 s timeout — drone behaviors can take a while.
+      const timeout = data.timeout || 60000;
       const timeoutId = setTimeout(() => {
         console.warn(`[BT] Action "${data.actionName}" timed out after ${timeout}ms`);
         this.cancelActionGoal(data.actionName, uuid);
@@ -320,8 +329,7 @@ export class BehaviorTreeExecutor {
           serviceType: `${data.actionType}_SendGoal`,
         });
 
-        // Use saved parameters; fall back to the hardcoded template for this
-        // action type so nodes without saved params still send a valid goal.
+        // Use saved parameters; fall back to the hardcoded template.
         const hasParams = data.parameters && Object.keys(data.parameters).length > 0;
         const goal = hasParams
           ? data.parameters
@@ -346,10 +354,7 @@ export class BehaviorTreeExecutor {
           sendGoalReq,
           (resp: any) => {
             console.log(`[BT] send_goal response for "${data.actionName}":`, JSON.stringify(resp));
-            if (!this.isRunning) {
-              settle(ExecutionStatus.Failure);
-              return;
-            }
+            if (!this.isRunning) { settle(ExecutionStatus.Failure); return; }
             if (!resp || resp.accepted === false) {
               console.warn(
                 `[BT] Action "${data.actionName}" rejected goal. ` +
@@ -360,36 +365,32 @@ export class BehaviorTreeExecutor {
               return;
             }
 
-            // Goal accepted — block on get_result. This service call only
-            // returns once the action server has finished, so it doubles as
-            // our "wait for completion" primitive.
-            const getResult = new (ROSLIB as any).Service({
+            // Goal accepted — subscribe to _action/status to detect completion.
+            // We avoid the blocking get_result service because rosbridge times
+            // out long-running service calls (typically after ~5-10 s).
+            statusTopic = new (ROSLIB as any).Topic({
               ros: this.ros,
-              name: `${data.actionName}/_action/get_result`,
-              serviceType: `${data.actionType}_GetResult`,
-            });
-            const getResultReq = new (ROSLIB as any).ServiceRequest({
-              goal_id: { uuid },
+              name: `${data.actionName}/_action/status`,
+              messageType: 'action_msgs/msg/GoalStatusArray',
             });
 
-            getResult.callService(
-              getResultReq,
-              (res: any) => {
-                const status = res?.status;
+            statusTopic.subscribe((msg: any) => {
+              const list: any[] = msg?.status_list ?? [];
+              for (const entry of list) {
+                const entryUuid: number[] = entry?.goal_info?.goal_id?.uuid ?? [];
+                if (!uuidMatches(entryUuid, uuid)) continue;
+
+                const status: number = entry?.status ?? 0;
                 if (status === GOAL_STATUS_SUCCEEDED) {
+                  console.log(`[BT] Action "${data.actionName}" succeeded`);
                   settle(ExecutionStatus.Success);
-                } else {
-                  console.warn(
-                    `[BT] Action "${data.actionName}" finished with status ${status}`
-                  );
+                } else if (status === GOAL_STATUS_CANCELED || status === GOAL_STATUS_ABORTED) {
+                  console.warn(`[BT] Action "${data.actionName}" ended with status ${status}`);
                   settle(ExecutionStatus.Failure);
                 }
-              },
-              (err: any) => {
-                console.error(`[BT] get_result failed for "${data.actionName}":`, err);
-                settle(ExecutionStatus.Failure);
+                // ACCEPTED(1) / EXECUTING(2) / CANCELING(3) → keep waiting
               }
-            );
+            });
           },
           (err: any) => {
             console.error(`[BT] send_goal failed for "${data.actionName}":`, err);
@@ -536,4 +537,5 @@ export class BehaviorTreeExecutor {
     this.callback(event);
   }
 }
+
 

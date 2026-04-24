@@ -29,7 +29,7 @@ const TopicNode: React.FC<NodeProps<ROSTopicNodeData>> = ({ data, selected }) =>
         </div>
       )}
       
-      <Handle type="source" position={Position.Bottom} className="bt-handle" />
+      {/* Topic nodes are leaves — no outgoing connections */}
     </div>
   );
 };

@@ -29,7 +29,7 @@ const ActionNode: React.FC<NodeProps<ROSActionNodeData>> = ({ data, selected }) 
         </div>
       )}
       
-      <Handle type="source" position={Position.Bottom} className="bt-handle" />
+      {/* Action nodes are leaves — no outgoing connections */}
     </div>
   );
 };
