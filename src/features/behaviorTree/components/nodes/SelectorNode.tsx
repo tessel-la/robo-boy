@@ -28,7 +28,7 @@ const SelectorNode: React.FC<NodeProps<ControlFlowNodeData>> = ({ data, selected
         </div>
       )}
       
-      <Handle type="source" position={Position.Bottom} className="bt-handle" id="out" />
+      <Handle type="source" position={Position.Bottom} className="bt-handle" />
     </div>
   );
 };

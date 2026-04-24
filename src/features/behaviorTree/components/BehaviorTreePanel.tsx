@@ -84,9 +84,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     }
   }, [currentTree]);
 
+  // Strip sourceHandle so edges always bind to the node's default (null-id)
+  // handle. This keeps saved trees compatible after the handle-ID refactor.
+  const normalizeEdge = (e: Edge | Connection): Connection => ({
+    ...e,
+    sourceHandle: null,
+    targetHandle: null,
+  });
+
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(connection, eds));
+      setEdges((eds) => addEdge(normalizeEdge(connection), eds));
     },
     [setEdges]
   );
@@ -231,7 +239,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleLoad = useCallback((tree: BehaviorTree) => {
     setCurrentTree(tree);
     setNodes(tree.nodes);
-    setEdges(tree.edges);
+    // Strip legacy sourceHandle values (out-1, out-2, out-3) from saved trees.
+    setEdges(tree.edges.map((e) => ({ ...e, sourceHandle: null, targetHandle: null })));
   }, [setNodes, setEdges]);
 
   const handleNew = useCallback(() => {
