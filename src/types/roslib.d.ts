@@ -35,6 +35,30 @@ declare module 'roslib' {
         [key: string]: any;
     }
 
+    // ROS Service client. We talk directly to ROS 2 action servers via their
+    // underlying _action/{send_goal,get_result,cancel_goal} services, so this
+    // needs real declarations rather than `any`.
+    export class Service {
+        constructor(options: { ros: Ros; name: string; serviceType: string });
+        callService(
+            request: any,
+            callback: (response: any) => void,
+            failedCallback?: (error: any) => void
+        ): void;
+        advertise(callback: (request: any, response: any) => boolean | void): void;
+        unadvertise(): void;
+    }
+
+    export class ServiceRequest {
+        constructor(values?: any);
+        [key: string]: any;
+    }
+
+    export class ServiceResponse {
+        constructor(values?: any);
+        [key: string]: any;
+    }
+
     // Add TFClient declaration
     export class TFClient {
         constructor(options: {
@@ -63,8 +87,9 @@ declare module 'roslib' {
         Topic: typeof Topic;
         Message: typeof Message;
         TFClient: typeof TFClient; // Export TFClient
-        // Service: typeof Service;
-        // ... other exports
+        Service: typeof Service;
+        ServiceRequest: typeof ServiceRequest;
+        ServiceResponse: typeof ServiceResponse;
     };
 
     export default ROSLIB;
