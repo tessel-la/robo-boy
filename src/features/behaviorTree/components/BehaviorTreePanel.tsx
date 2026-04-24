@@ -432,6 +432,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       {editingAction && (
         <ActionParameterEditor
           nodeData={editingAction.data}
+          ros={ros}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
         />
