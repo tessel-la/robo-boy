@@ -24,12 +24,31 @@ const GOAL_STATUS_SUCCEEDED = 4;
 const GOAL_STATUS_CANCELED  = 5;
 const GOAL_STATUS_ABORTED   = 6;
 
-// ROS 2 action goal_id is a unique_identifier_msgs/UUID, which is a 16-byte
-// array. rosbridge accepts it as a plain JS number array.
+// ROS 2 action goal_id is a unique_identifier_msgs/UUID (16-byte array).
+// rosbridge accepts a plain JS number[] when sending, but encodes uint8[16]
+// as a base64 string when delivering topic messages.
 function generateGoalUuid(): number[] {
   const buf = new Uint8Array(16);
   crypto.getRandomValues(buf);
   return Array.from(buf);
+}
+
+/**
+ * Normalise a UUID value received from rosbridge.
+ * Outgoing (sent by us): number[16] — rosbridge encodes to ROS bytes.
+ * Incoming (from topic): base64 string OR number[] depending on rosbridge ver.
+ * We accept either form and return a number[].
+ */
+function decodeRosbridgeUuid(raw: number[] | string | undefined): number[] | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw as number[];
+  if (typeof raw === 'string') {
+    try {
+      const bin = atob(raw);
+      return Array.from({ length: bin.length }, (_, i) => bin.charCodeAt(i));
+    } catch { return null; }
+  }
+  return null;
 }
 
 /** Compare two 16-byte UUID arrays for equality. */
@@ -148,11 +167,22 @@ export class BehaviorTreeExecutor {
   }
 
   /**
-   * Find the root node (no incoming edges)
+   * Find the root node (no incoming edges).
+   * Prefers control-flow nodes over leaf nodes in case of ambiguity.
    */
   private findRootNode(): BehaviorTreeNode | null {
     const nodesWithIncoming = new Set(this.tree.edges.map((e) => e.target));
-    return this.tree.nodes.find((node) => !nodesWithIncoming.has(node.id)) || null;
+    const roots = this.tree.nodes.filter((node) => !nodesWithIncoming.has(node.id));
+    console.log(`[BT] findRootNode: ${roots.length} root candidate(s):`,
+      roots.map((n) => `${n.id}(${n.type})`).join(', '));
+    // Prefer a control-flow node as root — avoids picking a lone action when
+    // edges were drawn in the wrong direction (action→sequence instead of seq→action).
+    const controlRoot = roots.find((n) =>
+      n.type === BehaviorNodeType.Sequence ||
+      n.type === BehaviorNodeType.Selector ||
+      n.type === BehaviorNodeType.Parallel
+    );
+    return controlRoot ?? roots[0] ?? null;
   }
 
   /**
@@ -162,6 +192,9 @@ export class BehaviorTreeExecutor {
     const childIds = this.tree.edges
       .filter((edge) => edge.source === nodeId)
       .map((edge) => edge.target);
+
+    console.log(`[BT] getChildNodes(${nodeId}): ${childIds.length} child(ren) — edges:`,
+      this.tree.edges.filter((e) => e.source === nodeId).map((e) => `${e.source}→${e.target}`).join(', '));
 
     // Preserve the order edges were added (not the nodes-array order).
     return childIds
@@ -376,9 +409,15 @@ export class BehaviorTreeExecutor {
 
             statusTopic.subscribe((msg: any) => {
               const list: any[] = msg?.status_list ?? [];
+              // Log raw UUID format on first message so we can diagnose encoding issues.
+              if (list.length > 0) {
+                const rawUuid = list[0]?.goal_info?.goal_id?.uuid;
+                console.log(`[BT] status tick for "${data.actionName}": ` +
+                  `${list.length} goal(s), uuid[0] type=${typeof rawUuid}`, rawUuid);
+              }
               for (const entry of list) {
-                const entryUuid: number[] = entry?.goal_info?.goal_id?.uuid ?? [];
-                if (!uuidMatches(entryUuid, uuid)) continue;
+                const entryUuid = decodeRosbridgeUuid(entry?.goal_info?.goal_id?.uuid);
+                if (!entryUuid || !uuidMatches(entryUuid, uuid)) continue;
 
                 const status: number = entry?.status ?? 0;
                 if (status === GOAL_STATUS_SUCCEEDED) {
