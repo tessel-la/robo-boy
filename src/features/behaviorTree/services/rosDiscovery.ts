@@ -556,7 +556,11 @@ function buildSchemaFields(
 
 async function queryMessageDetailsFull(
   ros: Ros,
-  type: string
+  type: string,
+  /** If set, search typedefs for a type ending with this suffix instead of
+   *  the last path component of `type`.  Use to find _Request inside a bare
+   *  service-type response. */
+  targetSuffix?: string
 ): Promise<ActionGoalDetails | null> {
   return new Promise((resolve) => {
     try {
@@ -569,24 +573,38 @@ async function queryMessageDetailsFull(
         { type },
         (res: any) => {
           const typedefs: FieldTypedef[] = res?.typedefs ?? [];
+
+          console.log(
+            `[BT] message_details("${type}") → ${typedefs.length} typedef(s):`,
+            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+          );
+
           if (!typedefs.length) { resolve(null); return; }
 
-          const goalSuffix = type.split('/').pop() ?? '';
+          const suffix = targetSuffix ?? (type.split('/').pop() ?? '');
           const targetTypedef =
-            typedefs.find((t) => t.type.endsWith(goalSuffix) && t.fieldnames?.length) ??
+            typedefs.find((t) => t.type.endsWith(suffix) && t.fieldnames?.length) ??
             typedefs.find((t) => t.fieldnames?.length) ??
             null;
 
-          if (!targetTypedef) { resolve(null); return; }
+          if (!targetTypedef) {
+            console.warn(`[BT] message_details("${type}"): no typedef with suffix "${suffix}" or with fields`);
+            resolve(null);
+            return;
+          }
 
           const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
           const fields = buildSchemaFields(targetTypedef, typedefs, true);
 
           resolve(fields.length > 0 ? { fields, defaults } : null);
         },
-        () => resolve(null)
+        (err: any) => {
+          console.warn(`[BT] message_details("${type}") call failed:`, err);
+          resolve(null);
+        }
       );
-    } catch {
+    } catch (e) {
+      console.warn(`[BT] message_details("${type}") exception:`, e);
       resolve(null);
     }
   });
@@ -623,34 +641,113 @@ export const fetchActionGoalDetails = async (
 };
 
 /**
+ * Primary strategy for service request schema: calls the dedicated
+ * /rosapi/service_request_details endpoint which takes the service type
+ * directly and reliably returns the request message typedefs.
+ */
+async function queryServiceRequestDetails(
+  ros: Ros,
+  serviceType: string
+): Promise<ActionGoalDetails | null> {
+  return new Promise((resolve) => {
+    try {
+      const srv = new (ROSLIB as any).Service({
+        ros,
+        name: '/rosapi/service_request_details',
+        serviceType: 'rosapi_msgs/srv/ServiceRequestDetails',
+      });
+      srv.callService(
+        { type: serviceType },
+        (res: any) => {
+          const typedefs: FieldTypedef[] = res?.typedefs ?? [];
+          console.log(
+            `[BT] service_request_details("${serviceType}") → ${typedefs.length} typedef(s):`,
+            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+          );
+
+          if (!typedefs.length) { resolve(null); return; }
+
+          // Prefer typedef ending in _Request; fall back to first with fields
+          const targetTypedef =
+            typedefs.find((t) => t.type.endsWith('_Request') && t.fieldnames?.length) ??
+            typedefs.find((t) => t.fieldnames?.length) ??
+            null;
+
+          if (!targetTypedef) { resolve(null); return; }
+
+          const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
+          const fields = buildSchemaFields(targetTypedef, typedefs, true);
+          resolve(fields.length > 0 ? { fields, defaults } : null);
+        },
+        (err: any) => {
+          console.warn(`[BT] service_request_details("${serviceType}") failed:`, err);
+          resolve(null);
+        }
+      );
+    } catch (e) {
+      console.warn(`[BT] service_request_details("${serviceType}") exception:`, e);
+      resolve(null);
+    }
+  });
+}
+
+/**
  * Fetch the request message schema for a ROS 2 service, returning both
  * per-field type information and default values.
  *
- * Tries two type-string formats to handle different rosapi versions:
- *   1. std_srvs/srv/SetBool_Request
- *   2. std_srvs/SetBool_Request
+ * Strategy order:
+ *   0. /rosapi/service_request_details  (dedicated endpoint, most reliable)
+ *   1. message_details with std_srvs/srv/SetBool_Request
+ *   2. message_details with std_srvs/SetBool_Request
+ *   3. message_details with std_srvs/srv/SetBool (scan typedefs for _Request)
+ *   4. message_details with std_srvs/SetBool     (scan typedefs for _Request)
  */
 export const fetchServiceRequestSchema = async (
   ros: Ros,
   serviceType: string
 ): Promise<ActionGoalDetails | null> => {
+  if (!serviceType || serviceType === 'unknown') return null;
+
+  // Strategy 0: dedicated rosapi endpoint (most reliable)
+  const primary = await queryServiceRequestDetails(ros, serviceType);
+  if (primary !== null) {
+    console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via service_request_details:`, primary);
+    return primary;
+  }
+
   const parts = serviceType.split('/');
   const pkg = parts[0];
   const name = parts[parts.length - 1];
 
-  const candidates = [
-    `${serviceType}_Request`,
-    `${pkg}/${name}_Request`,
+  // Strategy 1 & 2: explicit _Request suffix (full path or short path)
+  const explicitCandidates = [
+    `${serviceType}_Request`,   // e.g. std_srvs/srv/SetBool_Request
+    `${pkg}/${name}_Request`,   // e.g. std_srvs/SetBool_Request
   ];
 
-  for (const candidate of candidates) {
+  for (const candidate of explicitCandidates) {
     const result = await queryMessageDetailsFull(ros, candidate);
     if (result !== null) {
       console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via "${candidate}":`, result);
       return result;
     }
   }
-  console.warn(`[BT] fetchServiceRequestSchema: no schema for "${serviceType}"`);
+
+  // Strategy 3 & 4: bare service type, scan typedefs for _Request entry
+  const bareCandidates = [
+    serviceType,          // e.g. std_srvs/srv/SetBool
+    `${pkg}/${name}`,     // e.g. std_srvs/SetBool
+  ];
+
+  for (const candidate of bareCandidates) {
+    const result = await queryMessageDetailsFull(ros, candidate, '_Request');
+    if (result !== null) {
+      console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via bare "${candidate}" (_Request scan):`, result);
+      return result;
+    }
+  }
+
+  console.warn(`[BT] fetchServiceRequestSchema: no schema found for "${serviceType}"`);
   return null;
 };
 
