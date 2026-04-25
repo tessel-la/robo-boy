@@ -127,7 +127,6 @@ const FieldListRow: React.FC<{
           type="button"
         >
           <span className="ape-toggle-track"><span className="ape-toggle-thumb" /></span>
-          <span className="ape-toggle-text">{value ? 'TRUE' : 'FALSE'}</span>
         </button>
       </div>
     );
