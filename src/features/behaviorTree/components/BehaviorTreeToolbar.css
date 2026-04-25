@@ -9,7 +9,7 @@
   border-bottom: 1px solid var(--border-color, #e0e0e0);
   gap: 8px;
   flex-shrink: 0;
-  height: 48px;
+  height: 52px;
   box-sizing: border-box;
 }
 
@@ -43,10 +43,13 @@
 
 .bt-icon-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  gap: 2px;
+  min-width: 44px;
+  height: 42px;
+  padding: 0 6px;
   border: none;
   background: transparent;
   color: var(--text-color, #333333);
@@ -58,7 +61,20 @@
 }
 
 .bt-icon-btn:hover  { background: var(--background-color, #f0f0f0); }
-.bt-icon-btn:active { transform: scale(0.92); }
+.bt-icon-btn:active { transform: scale(0.93); }
+
+/* Micro label below icon */
+.bt-icon-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  line-height: 1;
+}
+
+/* Menu button — slightly accent on hover */
+.bt-menu-btn:hover .bt-icon-label { opacity: 0.8; }
 
 /* Palette toggle — desktop hidden, mobile visible */
 .bt-palette-toggle { display: none; }
@@ -68,7 +84,41 @@
   background: rgba(66, 133, 244, 0.1);
 }
 
-.bt-delete-btn { color: var(--error-color, #f44336); }
+.bt-palette-toggle.active .bt-icon-label {
+  opacity: 0.9;
+}
+
+/* Delete icon button */
+.bt-delete-btn {
+  color: var(--error-color, #f44336);
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+/* ── Menu panel close button ──────────────────────────────────────────────── */
+
+.bt-menu-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-color-secondary, #666666);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-menu-close-btn:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
 
 /* ── Execute / Stop pill ──────────────────────────────────────────────────── */
 
@@ -142,8 +192,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  height: 48px;
+  padding: 0 16px 0 20px;
+  height: 52px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
   flex-shrink: 0;
 }
@@ -357,22 +407,28 @@
 
 @media (max-width: 768px) {
   .bt-palette-toggle { display: flex; }
-
-  .bt-toolbar-name { max-width: 160px; }
+  .bt-toolbar-name   { max-width: 160px; }
 }
 
 @media (max-width: 480px) {
-  .bt-toolbar-name { max-width: 110px; font-size: 13px; }
+  .bt-toolbar-name { max-width: 90px; font-size: 13px; }
 
-  /* Collapse label on very small screens — icon-only Run/Stop */
+  /* Collapse run/stop to icon-only */
   .bt-btn-label { display: none; }
 
   .bt-action-btn {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     padding: 0;
     justify-content: center;
     border-radius: 8px;
+  }
+
+  /* Tighten icon buttons on tiny screens */
+  .bt-icon-btn {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 4px;
   }
 }
 

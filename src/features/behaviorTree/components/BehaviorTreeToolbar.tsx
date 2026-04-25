@@ -99,39 +99,37 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       {/* ── Compact toolbar ─────────────────────────────────────── */}
       <div className="bt-toolbar">
         <div className="bt-toolbar-start">
+          {/* Menu — three bars + label */}
           <button
-            className="bt-icon-btn"
+            className="bt-icon-btn bt-menu-btn"
             onClick={openMenu}
-            title="Menu"
+            title="Menu: save, load, rename"
             aria-label="Open menu"
           >
-            <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor">
-              <rect y="0"  width="18" height="2" rx="1"/>
-              <rect y="6"  width="18" height="2" rx="1"/>
-              <rect y="12" width="18" height="2" rx="1"/>
+            <svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true">
+              <rect y="0"  width="22" height="2.5" rx="1.25"/>
+              <rect y="7"  width="22" height="2.5" rx="1.25"/>
+              <rect y="14" width="22" height="2.5" rx="1.25"/>
             </svg>
+            <span className="bt-icon-label">MENU</span>
           </button>
 
-          {/* Mobile-only palette toggle */}
+          {/* Palette toggle (mobile only) — node-graph icon, clearly distinct */}
           <button
             className={`bt-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
             onClick={onTogglePalette}
-            title={isPaletteCollapsed ? 'Open palette' : 'Close palette'}
-            aria-label="Toggle palette"
+            title={isPaletteCollapsed ? 'Open node palette' : 'Close node palette'}
+            aria-label="Toggle node palette"
           >
-            {isPaletteCollapsed ? (
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-                <rect x="0" y="0" width="7" height="18" rx="2" opacity=".4"/>
-                <rect x="9" y="0" width="9" height="4"  rx="1"/>
-                <rect x="9" y="7" width="9" height="4"  rx="1"/>
-                <rect x="9" y="14" width="9" height="4" rx="1"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                <line x1="1" y1="1" x2="13" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="13" y1="1" x2="1"  y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            )}
+            {/* Node-graph icon: three circles connected by lines */}
+            <svg width="22" height="20" viewBox="0 0 22 20" fill="currentColor" aria-hidden="true">
+              <circle cx="11" cy="3"  r="2.5" fill="currentColor"/>
+              <circle cx="3"  cy="17" r="2.5" fill="currentColor"/>
+              <circle cx="19" cy="17" r="2.5" fill="currentColor"/>
+              <line x1="11" y1="5.5"  x2="3.8"  y2="14.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <line x1="11" y1="5.5"  x2="18.2" y2="14.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            <span className="bt-icon-label">NODES</span>
           </button>
         </div>
 
@@ -179,11 +177,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             {/* Header */}
             <div className="bt-menu-header">
               <span className="bt-menu-title">Behavior Tree</span>
-              <button className="bt-icon-btn" onClick={closeMenu} title="Close">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                  <line x1="1" y1="1" x2="13" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="13" y1="1" x2="1"  y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <button className="bt-menu-close-btn" onClick={closeMenu} title="Close menu" aria-label="Close menu">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="8,2 2,8 8,14"/>
                 </svg>
+                <span>Close</span>
               </button>
             </div>
 
