@@ -178,6 +178,7 @@
 
 .ape-body {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -215,6 +216,7 @@
   border-bottom: 1px solid var(--border-color, #2e2e2e);
   background: transparent;
   width: 100%;
+  box-sizing: border-box;
   gap: 12px;
 }
 
