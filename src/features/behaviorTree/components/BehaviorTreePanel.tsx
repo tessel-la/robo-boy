@@ -286,6 +286,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     exportBehaviorTree({ ...currentTree, nodes: nodes as BehaviorTreeNode[], edges });
   }, [currentTree, nodes, edges]);
 
+  const handleRename = useCallback((name: string) => {
+    setCurrentTree((prev) => (prev ? { ...prev, name } : null));
+  }, []);
+
   const handleExecutionEvent = useCallback(
     (event: ExecutionEvent) => {
       if (event.nodeId && event.data?.status) {
@@ -407,6 +411,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onExport={handleExport}
         onTogglePalette={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
         onDeleteSelected={handleDeleteSelected}
+        onRename={handleRename}
       />
 
       <div className="bt-content">
