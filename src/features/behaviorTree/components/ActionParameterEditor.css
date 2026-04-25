@@ -1,4 +1,4 @@
-/* ─── Overlay ──────────────────────────────────────────────────────────────── */
+/* ─── Overlay ────────────────────────────────────────────────────────────────── */
 
 .ape-overlay {
   position: absolute;
@@ -11,7 +11,7 @@
   backdrop-filter: blur(4px);
 }
 
-/* ─── Panel ─────────────────────────────────────────────────────────────────── */
+/* ─── Panel ──────────────────────────────────────────────────────────────────── */
 
 .ape-panel {
   background: var(--background-elevated, #1a1a1a);
@@ -19,7 +19,6 @@
   border-radius: 16px 16px 0 0;
   width: 100%;
   max-width: 520px;
-  /* 80% of parent (BT panel area) — fits within the canvas, not full viewport */
   max-height: 80%;
   display: flex;
   flex-direction: column;
@@ -27,34 +26,43 @@
   overflow: hidden;
 }
 
-/* Drag handle — visual cue for bottom sheet */
-.ape-panel::before {
+@media (min-width: 600px) {
+  .ape-overlay { align-items: center; }
+  .ape-panel   { border-radius: 12px; max-height: 80%; }
+}
+
+/* ─── Drag handle ────────────────────────────────────────────────────────────── */
+
+.ape-drag-handle {
+  width: 100%;
+  padding: 10px 0 4px;
+  display: flex;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.ape-drag-handle::after {
   content: '';
-  display: block;
   width: 36px;
   height: 4px;
   background: var(--border-color, #444);
   border-radius: 2px;
-  margin: 10px auto 0;
-  flex-shrink: 0;
 }
 
 @media (min-width: 600px) {
-  .ape-overlay { align-items: center; }
-  .ape-panel {
-    border-radius: 12px;
-    max-height: 80%;
-  }
-  .ape-panel::before { display: none; }
+  .ape-drag-handle { display: none; }
 }
 
-/* ─── Header ────────────────────────────────────────────────────────────────── */
+/* ─── Header ─────────────────────────────────────────────────────────────────── */
 
 .ape-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px 10px;
+  padding: 10px 16px 10px;
   border-bottom: 1px solid var(--border-color, #2e2e2e);
   flex-shrink: 0;
   gap: 10px;
@@ -63,8 +71,9 @@
 .ape-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  flex: 1;
 }
 
 .ape-title {
@@ -95,6 +104,20 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* Back button */
+.ape-back-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color, #4285f4);
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .ape-view-toggle {
@@ -140,7 +163,7 @@
 /* ─── Subtitle ───────────────────────────────────────────────────────────────── */
 
 .ape-subtitle {
-  padding: 6px 18px;
+  padding: 5px 18px;
   font-size: 10px;
   color: var(--text-secondary, #666);
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
@@ -162,52 +185,8 @@
   min-height: 0;
 }
 
-/* ─── Tile grid ──────────────────────────────────────────────────────────────── */
+/* ─── Type badge ─────────────────────────────────────────────────────────────── */
 
-/*
- * Fields render as a CSS auto-fill grid of tiles.
- * The 1px background + gap trick creates thin hairline dividers between tiles.
- */
-.ape-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  align-content: start;
-  gap: 1px;
-  background: var(--border-color, #222);
-}
-
-@media (max-width: 379px) {
-  .ape-fields,
-  .ape-section-body {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  }
-}
-
-/* ─── Base tile ──────────────────────────────────────────────────────────────── */
-
-.ape-row {
-  background: var(--background-elevated, #1a1a1a);
-  padding: 11px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;   /* prevent grid blowout */
-}
-
-/* Shared label for field name */
-.ape-fname {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-secondary, #888);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Small type badge */
 .ape-type-badge {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 9px;
@@ -220,90 +199,87 @@
   white-space: nowrap;
 }
 
-/* ─── Number tile ────────────────────────────────────────────────────────────── */
+/* ─── Field list (layer 1) ───────────────────────────────────────────────────── */
 
-/* header: name left, value right */
-.ape-row-number .ape-row-header {
+.ape-field-list {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
+  flex-direction: column;
 }
 
-.ape-num-input {
+.ape-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  min-height: 58px;
+  border-bottom: 1px solid var(--border-color, #2e2e2e);
   background: transparent;
+  width: 100%;
+  gap: 12px;
+}
+
+.ape-list-row:last-child { border-bottom: none; }
+
+/* Tappable (non-bool) rows */
+.ape-list-row-tap {
+  cursor: pointer;
   border: none;
-  color: var(--text-primary, #f0f0f0);
-  font-size: 17px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  width: 70px;
-  text-align: right;
-  padding: 0;
-  -moz-appearance: textfield;
+  color: inherit;
+  text-align: left;
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-list-row-tap:active,
+.ape-list-row-tap:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.ape-list-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.ape-num-input::-webkit-inner-spin-button,
-.ape-num-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-
-.ape-num-input:focus { outline: none; }
-
-/* Slider — compact, fills tile width */
-.ape-slider {
-  width: 100%;
-  height: 3px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--border-color, #3a3a3a);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-  display: block;
-}
-
-.ape-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--primary-color, #4285f4);
-  cursor: pointer;
-  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
-  transition: transform 0.1s;
-}
-
-.ape-slider::-webkit-slider-thumb:active { transform: scale(1.2); }
-
-.ape-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--primary-color, #4285f4);
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
-}
-
-.ape-slider-labels {
+.ape-list-right {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 1px;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
 }
 
-.ape-slider-labels > span {
-  font-size: 9px;
-  color: var(--text-secondary, #555);
+.ape-list-name {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-primary, #f0f0f0);
+  white-space: nowrap;
 }
 
-/* ─── Bool tile ──────────────────────────────────────────────────────────────── */
-
-.ape-row-bool {
-  /* inherits column flex from .ape-row */
+.ape-list-preview {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  text-align: right;
 }
+
+.ape-chevron {
+  color: var(--text-secondary, #555);
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ─── Bool toggle (inline in list) ──────────────────────────────────────────── */
 
 .ape-toggle {
   display: flex;
@@ -313,13 +289,13 @@
   border: none;
   cursor: pointer;
   padding: 0;
-  align-self: flex-start;
+  flex-shrink: 0;
 }
 
 .ape-toggle-track {
-  width: 44px;
-  height: 26px;
-  border-radius: 13px;
+  width: 46px;
+  height: 27px;
+  border-radius: 14px;
   background: var(--background-secondary, #2e2e2e);
   border: 1px solid var(--border-color, #444);
   position: relative;
@@ -334,8 +310,8 @@
 
 .ape-toggle-thumb {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: #fff;
   top: 2px;
@@ -344,7 +320,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-.ape-toggle.on .ape-toggle-thumb { transform: translateX(18px); }
+.ape-toggle.on .ape-toggle-thumb { transform: translateX(19px); }
 
 .ape-toggle-text {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
@@ -353,24 +329,125 @@
   letter-spacing: 0.05em;
   color: var(--text-secondary, #888);
   transition: color 0.2s;
+  min-width: 36px;
 }
 
 .ape-toggle.on .ape-toggle-text { color: var(--primary-color, #4285f4); }
 
-/* ─── String tile — full width ───────────────────────────────────────────────── */
+/* ─── Focused field editor (layer 2) ─────────────────────────────────────────── */
 
-.ape-row-string {
-  grid-column: 1 / -1;
+.ape-edit-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 36px 24px 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/* Large number display + type badge */
+.ape-edit-big-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ape-edit-number-input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary, #f0f0f0);
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  width: 220px;
+  padding: 0;
+  -moz-appearance: textfield;
+  line-height: 1;
+}
+
+.ape-edit-number-input::-webkit-inner-spin-button,
+.ape-edit-number-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.ape-edit-number-input:focus { outline: none; }
+
+/* Slider section in edit view */
+.ape-edit-slider-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Base slider */
+.ape-slider {
+  width: 100%;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color, #3a3a3a);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+
+.ape-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
+  transition: transform 0.1s;
+}
+
+.ape-slider::-webkit-slider-thumb:active { transform: scale(1.15); }
+
+.ape-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
+}
+
+/* Larger thumb for focused edit view */
+.ape-slider-large::-webkit-slider-thumb {
+  width: 32px;
+  height: 32px;
+}
+
+.ape-slider-large::-moz-range-thumb {
+  width: 32px;
+  height: 32px;
+}
+
+.ape-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ape-slider-labels > span {
+  font-size: 10px;
+  color: var(--text-secondary, #555);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* String input in edit view */
 .ape-text-input {
   width: 100%;
   background: var(--background-secondary, #252525);
   border: 1px solid var(--border-color, #333);
   color: var(--text-primary, #f0f0f0);
-  font-size: 14px;
-  padding: 8px 10px;
-  border-radius: 5px;
+  font-size: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
   box-sizing: border-box;
   transition: border-color 0.15s;
 }
@@ -380,29 +457,17 @@
   border-color: var(--primary-color, #4285f4);
 }
 
-/* ─── Complex (array/opaque object) tile — full width ────────────────────────── */
-
-.ape-row-complex {
-  grid-column: 1 / -1;
-}
-
-.ape-row-complex .ape-row-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
+/* Complex / JSON textarea in edit view */
 .ape-complex-ta {
   width: 100%;
   background: var(--background-secondary, #252525);
   border: 1px solid var(--border-color, #333);
   color: var(--text-primary, #f0f0f0);
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
-  padding: 8px 10px;
-  border-radius: 5px;
+  padding: 10px 12px;
+  border-radius: 6px;
   resize: vertical;
   box-sizing: border-box;
   transition: border-color 0.15s;
@@ -419,49 +484,7 @@
   font-size: 10px;
   color: #ff7070;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-}
-
-/* ─── Nested message section — full width, inner tile grid ───────────────────── */
-
-.ape-section {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-}
-
-.ape-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 13px;
-  background: rgba(0, 0, 0, 0.3);
-  border-bottom: 1px solid var(--border-color, #222);
-  gap: 8px;
-}
-
-/* Inner tile grid for sub-fields */
-.ape-section-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 1px;
-  background: var(--border-color, #1e1e1e);
-  border-left: 2px solid rgba(66, 133, 244, 0.3);
-}
-
-/* Sub-tiles are slightly darker to show nesting depth */
-.ape-section-body > .ape-row {
-  background: #161616;
-}
-
-.ape-section-body > .ape-section > .ape-section-body > .ape-row {
-  background: #111;
-}
-
-/* Full-width overrides inside section bodies */
-.ape-section-body .ape-row-string,
-.ape-section-body .ape-row-complex,
-.ape-section-body .ape-section {
-  grid-column: 1 / -1;
+  align-self: flex-start;
 }
 
 /* ─── JSON raw view ──────────────────────────────────────────────────────────── */
@@ -512,12 +535,11 @@
 
 .ape-empty strong { color: var(--primary-color, #4285f4); }
 
-.ape-skeleton { padding: 6px 0; }
+.ape-skeleton { padding: 0; }
 
 .ape-skeleton-row {
-  height: 62px;
-  margin: 5px;
-  border-radius: 6px;
+  height: 58px;
+  border-bottom: 1px solid var(--border-color, #2e2e2e);
   background: linear-gradient(
     90deg,
     var(--background-secondary, #252525) 25%,

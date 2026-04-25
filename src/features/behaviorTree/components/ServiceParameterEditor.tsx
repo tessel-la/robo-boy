@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
 import { ROSServiceNodeData } from '../types';
 import {
@@ -15,33 +15,29 @@ interface ServiceParameterEditorProps {
   onClose: () => void;
 }
 
-// ─── Type helpers ─────────────────────────────────────────────────────────────
+// ─── Type helpers (shared with ActionParameterEditor) ─────────────────────────
 
-const SCALAR_TYPES = new Set([
-  'bool', 'string',
+const BOOL_TYPES  = new Set(['bool', 'boolean']);
+const FLOAT_TYPES = new Set(['float32', 'float64', 'float', 'double']);
+const INT_TYPES   = new Set([
   'int8', 'int16', 'int32', 'int64',
   'uint8', 'uint16', 'uint32', 'uint64',
-  'float32', 'float64', 'byte', 'char',
-  // Aliases rosapi sometimes returns instead of the standard names
-  'float', 'double', 'int', 'uint',
+  'int', 'uint', 'byte', 'char',
 ]);
 
-function isScalar(rosType: string): boolean {
-  return SCALAR_TYPES.has(rosType);
-}
+function isBoolType(t: string)   { return BOOL_TYPES.has(t); }
+function isFloatType(t: string)  { return FLOAT_TYPES.has(t); }
+function isNumberType(t: string) { return FLOAT_TYPES.has(t) || INT_TYPES.has(t); }
 
-function getSliderProps(rosType: string): { min: number; max: number; step: number } {
-  switch (rosType) {
-    case 'float32': case 'float64': case 'float': case 'double':
-      return { min: -100, max: 100, step: 0.01 };
-    case 'int8':    return { min: -128,   max: 127,   step: 1 };
-    case 'uint8':   return { min: 0,      max: 255,   step: 1 };
-    case 'int16':   return { min: -32768, max: 32767, step: 1 };
-    case 'uint16':  return { min: 0,      max: 65535, step: 1 };
-    case 'int32': case 'int64': case 'int':  return { min: -1000, max: 1000, step: 1 };
-    case 'uint32': case 'uint64': case 'uint': return { min: 0,   max: 1000, step: 1 };
-    default: return { min: -100, max: 100, step: 0.1 };
-  }
+function getSliderProps(t: string): { min: number; max: number; step: number } {
+  if (FLOAT_TYPES.has(t))                              return { min: -100, max: 100,   step: 0.01 };
+  if (t === 'int8')                                    return { min: -128, max: 127,   step: 1 };
+  if (t === 'uint8')                                   return { min: 0,    max: 255,   step: 1 };
+  if (t === 'int16')                                   return { min: -32768, max: 32767, step: 1 };
+  if (t === 'uint16')                                  return { min: 0,    max: 65535, step: 1 };
+  if (t === 'int32' || t === 'int64' || t === 'int')   return { min: -1000, max: 1000, step: 1 };
+  if (t === 'uint32' || t === 'uint64' || t === 'uint') return { min: 0,   max: 1000,  step: 1 };
+  return { min: -100, max: 100, step: 0.1 };
 }
 
 function getDeep(obj: any, path: string[]): any {
@@ -56,140 +52,209 @@ function setDeep(obj: any, path: string[], value: any): any {
 
 function inferRosType(value: unknown): string {
   if (typeof value === 'boolean') return 'bool';
-  if (typeof value === 'string') return 'string';
-  if (typeof value === 'number') return Number.isInteger(value) ? 'int32' : 'float64';
-  if (Array.isArray(value)) return 'float64[]';
+  if (typeof value === 'string')  return 'string';
+  if (typeof value === 'number')  return Number.isInteger(value) ? 'int32' : 'float64';
+  if (Array.isArray(value))       return 'float64[]';
   return 'object';
 }
 
 function fieldsFromValues(vals: Record<string, any>): ActionFieldSchema[] {
   return Object.keys(vals).map((name) => ({
     name,
-    rosType: inferRosType(vals[name]),
+    rosType:  inferRosType(vals[name]),
     arrayLen: Array.isArray(vals[name]) ? vals[name].length : -1,
   }));
 }
 
-// ─── Field sub-components ─────────────────────────────────────────────────────
+function formatPreview(
+  rosType: string,
+  val: unknown,
+  subfields?: ActionFieldSchema[]
+): string {
+  if (val === undefined || val === null) return '—';
+  if (isBoolType(rosType))   return val ? 'TRUE' : 'FALSE';
+  if (isNumberType(rosType)) {
+    const n = typeof val === 'number' ? val : 0;
+    return isFloatType(rosType) ? n.toFixed(2) : String(n);
+  }
+  if (rosType === 'string') {
+    const s = String(val);
+    return s.length > 18 ? `${s.slice(0, 16)}…` : (s || '""');
+  }
+  if (subfields?.length) {
+    return subfields.slice(0, 3).map((sf) => {
+      const sv = (val as any)?.[sf.name];
+      if (sv === undefined || sv === null) return `${sf.name}:—`;
+      if (typeof sv === 'number')
+        return `${sf.name}:${isFloatType(sf.rosType) ? sv.toFixed(1) : sv}`;
+      return `${sf.name}:${sv}`;
+    }).join('  ');
+  }
+  if (Array.isArray(val)) return `[${val.length}]`;
+  if (typeof val === 'object') {
+    const keys = Object.keys(val as object).slice(0, 2);
+    return keys.map((k) => `${k}:${(val as any)[k]}`).join('  ') || '{}';
+  }
+  return String(val);
+}
 
-const NumberRow: React.FC<{
-  name: string;
-  type: string;
-  value: number;
-  onChange: (v: number) => void;
-}> = ({ name, type, value, onChange }) => {
-  const { min, max, step } = getSliderProps(type);
-  const isFloat = type === 'float' || type === 'double' || type.startsWith('float');
-  const sliderVal = Math.max(min, Math.min(max, value));
+// ─── Navigation ───────────────────────────────────────────────────────────────
+
+type NavFrame =
+  | { kind: 'list'; path: string[] }
+  | { kind: 'edit'; path: string[]; field: ActionFieldSchema };
+
+// ─── Field list row ───────────────────────────────────────────────────────────
+
+const FieldListRow: React.FC<{
+  field: ActionFieldSchema;
+  value: unknown;
+  basePath: string[];
+  onPush: (frame: NavFrame) => void;
+  onInlineChange: (path: string[], val: unknown) => void;
+}> = ({ field, value, basePath, onPush, onInlineChange }) => {
+  const fieldPath    = [...basePath, field.name];
+  const hasSubfields = (field.subfields?.length ?? 0) > 0;
+
+  if (isBoolType(field.rosType)) {
+    return (
+      <div className="ape-list-row">
+        <span className="ape-list-name">{field.name.toUpperCase()}</span>
+        <button
+          className={`ape-toggle${value ? ' on' : ''}`}
+          onClick={() => onInlineChange(fieldPath, !value)}
+          aria-pressed={!!value}
+          type="button"
+        >
+          <span className="ape-toggle-track"><span className="ape-toggle-thumb" /></span>
+          <span className="ape-toggle-text">{value ? 'TRUE' : 'FALSE'}</span>
+        </button>
+      </div>
+    );
+  }
+
+  const shortType = field.rosType.split('/').pop() ?? field.rosType;
+  const preview   = formatPreview(field.rosType, value, field.subfields);
 
   return (
-    <div className="ape-row ape-row-number">
-      <div className="ape-row-header">
-        <span className="ape-fname">{name}</span>
-        <input
-          type="number"
-          className="ape-num-input"
-          value={value}
-          step={isFloat ? 'any' : '1'}
-          onChange={(e) => {
-            const v = isFloat
-              ? parseFloat(e.target.value)
-              : parseInt(e.target.value, 10);
-            if (!isNaN(v)) onChange(v);
-          }}
-        />
+    <button
+      className="ape-list-row ape-list-row-tap"
+      type="button"
+      onClick={() =>
+        onPush(
+          hasSubfields
+            ? { kind: 'list', path: fieldPath }
+            : { kind: 'edit', path: basePath, field }
+        )
+      }
+    >
+      <div className="ape-list-left">
+        <span className="ape-list-name">{field.name.toUpperCase()}</span>
+        {hasSubfields && <span className="ape-type-badge">{shortType}</span>}
       </div>
-      <input
-        type="range"
-        className="ape-slider"
-        min={min}
-        max={max}
-        step={step}
-        value={sliderVal}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-      <div className="ape-slider-labels">
-        <span>{min}</span>
-        <span className="ape-type-badge">{type}</span>
-        <span>{max}</span>
+      <div className="ape-list-right">
+        <span className="ape-list-preview">{preview}</span>
+        <span className="ape-chevron">›</span>
       </div>
-    </div>
+    </button>
   );
 };
 
-const BoolRow: React.FC<{
-  name: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}> = ({ name, value, onChange }) => (
-  <div className="ape-row ape-row-bool">
-    <span className="ape-fname">{name}</span>
-    <button
-      className={`ape-toggle${value ? ' on' : ''}`}
-      onClick={() => onChange(!value)}
-      aria-pressed={value}
-      type="button"
-    >
-      <span className="ape-toggle-track">
-        <span className="ape-toggle-thumb" />
-      </span>
-      <span className="ape-toggle-text">{value ? 'TRUE' : 'FALSE'}</span>
-    </button>
-  </div>
-);
+// ─── Complex JSON textarea (arrays / opaque objects) ──────────────────────────
 
-const StringRow: React.FC<{
-  name: string;
-  value: string;
-  onChange: (v: string) => void;
-}> = ({ name, value, onChange }) => (
-  <div className="ape-row ape-row-string">
-    <span className="ape-fname">{name}</span>
-    <input
-      type="text"
-      className="ape-text-input"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Enter value…"
-    />
-  </div>
-);
-
-const ComplexRow: React.FC<{
-  name: string;
-  type: string;
-  arrayLen: number;
+const ComplexEditView: React.FC<{
+  field: ActionFieldSchema;
   value: unknown;
   onChange: (v: unknown) => void;
-}> = ({ name, type, arrayLen, value, onChange }) => {
+}> = ({ field, value, onChange }) => {
   const [text, setText] = useState(() => JSON.stringify(value, null, 2));
-  const [err, setErr] = useState<string | null>(null);
-  const typeLabel = arrayLen >= 0 ? `${type}[${arrayLen || '…'}]` : type;
+  const [err, setErr]   = useState<string | null>(null);
+  const typeLabel = field.arrayLen >= 0
+    ? `${field.rosType}[${field.arrayLen || '…'}]`
+    : field.rosType;
 
   return (
-    <div className="ape-row ape-row-complex">
-      <div className="ape-row-header">
-        <span className="ape-fname">{name}</span>
-        <span className="ape-type-badge">{typeLabel}</span>
-      </div>
+    <div className="ape-edit-view">
+      <span className="ape-type-badge" style={{ alignSelf: 'flex-start' }}>{typeLabel}</span>
       <textarea
         className={`ape-complex-ta${err ? ' has-error' : ''}`}
         value={text}
-        rows={3}
+        rows={6}
         spellCheck={false}
         onChange={(e) => {
           setText(e.target.value);
-          try {
-            onChange(JSON.parse(e.target.value));
-            setErr(null);
-          } catch {
-            setErr('JSON error');
-          }
+          try { onChange(JSON.parse(e.target.value)); setErr(null); }
+          catch { setErr('JSON error'); }
         }}
       />
       {err && <span className="ape-field-err">{err}</span>}
     </div>
   );
+};
+
+// ─── Focused field editor (layer 2) ──────────────────────────────────────────
+
+const FieldEditView: React.FC<{
+  field: ActionFieldSchema;
+  value: unknown;
+  onChange: (val: unknown) => void;
+}> = ({ field, value, onChange }) => {
+  const { min, max, step } = getSliderProps(field.rosType);
+  const isFloat   = isFloatType(field.rosType);
+  const numVal    = typeof value === 'number' ? value : 0;
+  const sliderVal = Math.max(min, Math.min(max, numVal));
+
+  if (isNumberType(field.rosType) && field.arrayLen === -1) {
+    return (
+      <div className="ape-edit-view">
+        <div className="ape-edit-big-value">
+          <input
+            type="number"
+            className="ape-edit-number-input"
+            value={numVal}
+            step={isFloat ? 'any' : '1'}
+            onChange={(e) => {
+              const v = isFloat
+                ? parseFloat(e.target.value)
+                : parseInt(e.target.value, 10);
+              if (!isNaN(v)) onChange(v);
+            }}
+          />
+          <span className="ape-type-badge">{field.rosType}</span>
+        </div>
+        <div className="ape-edit-slider-wrap">
+          <input
+            type="range"
+            className="ape-slider ape-slider-large"
+            min={min} max={max} step={step}
+            value={sliderVal}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+          />
+          <div className="ape-slider-labels">
+            <span>{min}</span>
+            <span>{max}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (field.rosType === 'string') {
+    return (
+      <div className="ape-edit-view">
+        <input
+          type="text"
+          className="ape-text-input"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter value…"
+          autoFocus
+        />
+      </div>
+    );
+  }
+
+  return <ComplexEditView field={field} value={value} onChange={onChange} />;
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -200,43 +265,47 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
   onSave,
   onClose,
 }) => {
-  const [fields, setFields] = useState<ActionFieldSchema[]>([]);
-  const [values, setValues] = useState<Record<string, any>>({});
-  const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
-  const [jsonText, setJsonText] = useState('{}');
-  const [jsonError, setJsonError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [fields, setFields]           = useState<ActionFieldSchema[]>([]);
+  const [values, setValues]           = useState<Record<string, any>>({});
+  const [viewMode, setViewMode]       = useState<'form' | 'json'>('form');
+  const [jsonText, setJsonText]       = useState('{}');
+  const [jsonError, setJsonError]     = useState<string | null>(null);
+  const [isLoading, setIsLoading]     = useState(false);
+  const [navStack, setNavStack]       = useState<NavFrame[]>([{ kind: 'list', path: [] }]);
+  const [panelHeight, setPanelHeight] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
+  const currentFrame = navStack[navStack.length - 1];
+  const canGoBack    = navStack.length > 1;
+  const pushFrame    = (f: NavFrame) => setNavStack((s) => [...s, f]);
+  const popFrame     = ()            => setNavStack((s) => s.length > 1 ? s.slice(0, -1) : s);
+
+  // ── Schema loading ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const existing = nodeData.request ?? {};
+    const existing    = nodeData.request ?? {};
     const hasExisting = Object.keys(existing).length > 0;
-    const template = nodeData.serviceType ? SERVICE_TEMPLATES[nodeData.serviceType] : null;
+    const template    = nodeData.serviceType ? SERVICE_TEMPLATES[nodeData.serviceType] : null;
     const initialVals: Record<string, any> = hasExisting
       ? existing
       : (template as Record<string, any> ?? {});
 
     setValues(initialVals);
     setJsonText(JSON.stringify(initialVals, null, 2));
+    setNavStack([{ kind: 'list', path: [] }]);
 
     if (!ros || !nodeData.serviceType) {
-      if (Object.keys(initialVals).length > 0) {
-        setFields(fieldsFromValues(initialVals));
-      }
+      if (Object.keys(initialVals).length > 0) setFields(fieldsFromValues(initialVals));
       return;
     }
 
-    // Show template fields immediately while waiting for schema
-    if (!hasExisting && template) {
-      setFields(fieldsFromValues(template));
-    }
+    // Show template fields immediately while schema loads
+    if (!hasExisting && template) setFields(fieldsFromValues(template));
 
     setIsLoading(true);
     fetchServiceRequestSchema(ros, nodeData.serviceType).then((details) => {
       setIsLoading(false);
       if (!details) {
-        if (Object.keys(initialVals).length > 0) {
-          setFields(fieldsFromValues(initialVals));
-        }
+        if (Object.keys(initialVals).length > 0) setFields(fieldsFromValues(initialVals));
         return;
       }
       setFields(details.fields);
@@ -248,22 +317,18 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
     });
   }, [nodeData, ros]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setValueAtPath = (path: string[], val: unknown) => {
+  // ── Value manipulation ──────────────────────────────────────────────────────
+  const setValueAtPath = (path: string[], val: unknown) =>
     setValues((prev) => {
       const next = setDeep(prev, path, val);
       setJsonText(JSON.stringify(next, null, 2));
       return next;
     });
-  };
 
   const handleJsonChange = (text: string) => {
     setJsonText(text);
-    try {
-      setValues(JSON.parse(text));
-      setJsonError(null);
-    } catch {
-      setJsonError('Invalid JSON');
-    }
+    try { setValues(JSON.parse(text)); setJsonError(null); }
+    catch { setJsonError('Invalid JSON'); }
   };
 
   const toggleView = () => {
@@ -271,128 +336,98 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
       setJsonText(JSON.stringify(values, null, 2));
       setViewMode('json');
     } else {
-      try {
-        const parsed = JSON.parse(jsonText);
-        setValues(parsed);
-        setJsonError(null);
-        setViewMode('form');
-      } catch {
-        setJsonError('Fix JSON errors before switching to form view');
-      }
+      try { setValues(JSON.parse(jsonText)); setJsonError(null); setViewMode('form'); }
+      catch { setJsonError('Fix JSON errors before switching to form view'); }
     }
   };
 
   const handleSave = () => {
     if (viewMode === 'json') {
-      try {
-        onSave(JSON.parse(jsonText));
-        onClose();
-      } catch {
-        setJsonError('Invalid JSON — fix before saving');
-      }
+      try { onSave(JSON.parse(jsonText)); onClose(); }
+      catch { setJsonError('Invalid JSON — fix before saving'); }
     } else {
       onSave(values);
       onClose();
     }
   };
 
-  const renderField = (field: ActionFieldSchema, path: string[] = []): React.ReactNode => {
-    const fullPath = [...path, field.name];
-    const key = fullPath.join('.');
-    const val = getDeep(values, fullPath);
-    const set = (v: unknown) => setValueAtPath(fullPath, v);
-
-    // Expanded nested message type — labelled section with sub-rows
-    if (field.subfields && field.subfields.length > 0) {
-      const shortType = field.rosType.split('/').pop() ?? field.rosType;
-      return (
-        <div key={key} className="ape-section">
-          <div className="ape-section-header">
-            <span className="ape-fname">{field.name}</span>
-            <span className="ape-type-badge">{shortType}</span>
-          </div>
-          <div className="ape-section-body">
-            {field.subfields.map((sf) => renderField(sf, fullPath))}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.rosType === 'bool') {
-      return <BoolRow key={key} name={field.name} value={!!val} onChange={(v) => set(v)} />;
-    }
-    if (field.rosType === 'string') {
-      return <StringRow key={key} name={field.name} value={String(val ?? '')} onChange={(v) => set(v)} />;
-    }
-    if (field.arrayLen === -1 && isScalar(field.rosType)) {
-      return (
-        <NumberRow
-          key={key}
-          name={field.name}
-          type={field.rosType}
-          value={typeof val === 'number' ? val : 0}
-          onChange={(v) => set(v)}
-        />
-      );
-    }
-    return (
-      <ComplexRow
-        key={key}
-        name={field.name}
-        type={field.rosType}
-        arrayLen={field.arrayLen}
-        value={val}
-        onChange={(v) => set(v)}
-      />
-    );
+  // ── Drag-to-resize ──────────────────────────────────────────────────────────
+  const handleDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = panelRef.current?.getBoundingClientRect().height ?? 400;
+    const onMove = (ev: PointerEvent) =>
+      setPanelHeight(Math.max(180, startH + (startY - ev.clientY)));
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
-  const shortName =
-    nodeData.serviceName.split('/').filter(Boolean).pop() ?? nodeData.serviceName;
+  // ── Field resolution at current nav level ───────────────────────────────────
+  const getCurrentFields = (): ActionFieldSchema[] => {
+    if (currentFrame.kind !== 'list') return [];
+    let cur = fields;
+    for (const seg of currentFrame.path) {
+      cur = cur.find((f) => f.name === seg)?.subfields ?? [];
+    }
+    return cur;
+  };
+
+  // ── Header label ────────────────────────────────────────────────────────────
+  const shortName   = nodeData.serviceName.split('/').filter(Boolean).pop() ?? nodeData.serviceName;
+  const headerLabel = !canGoBack
+    ? shortName
+    : currentFrame.kind === 'edit'
+      ? currentFrame.field.name.toUpperCase()
+      : currentFrame.path.length > 0
+        ? currentFrame.path[currentFrame.path.length - 1].toUpperCase()
+        : shortName;
+
+  const panelStyle: React.CSSProperties = panelHeight
+    ? { height: panelHeight, maxHeight: 'none' }
+    : {};
 
   return (
     <div className="ape-overlay" onClick={onClose}>
-      <div className="ape-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="ape-panel"
+        ref={panelRef}
+        style={panelStyle}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="ape-drag-handle" onPointerDown={handleDragStart} />
+
         {/* Header */}
         <div className="ape-header">
           <div className="ape-header-left">
-            <span className="ape-title">{shortName}</span>
-            {isLoading && <span className="ape-loading-dot" />}
+            {canGoBack ? (
+              <button className="ape-back-btn" onClick={popFrame} type="button">‹</button>
+            ) : (
+              isLoading && <span className="ape-loading-dot" />
+            )}
+            <span className="ape-title">{headerLabel}</span>
+            {isLoading && canGoBack && <span className="ape-loading-dot" />}
           </div>
           <div className="ape-header-right">
             <button className="ape-view-toggle" onClick={toggleView} type="button">
               {viewMode === 'form' ? 'JSON' : 'FORM'}
             </button>
-            <button className="ape-close-btn" onClick={onClose} type="button">
-              ✕
-            </button>
+            <button className="ape-close-btn" onClick={onClose} type="button">✕</button>
           </div>
         </div>
 
-        {/* Subtitle: service type */}
-        <div className="ape-subtitle">{nodeData.serviceType || 'Unknown type'}</div>
+        {/* Subtitle — only at root */}
+        {!canGoBack && (
+          <div className="ape-subtitle">{nodeData.serviceType || 'Unknown type'}</div>
+        )}
 
         {/* Body */}
         <div className="ape-body">
-          {viewMode === 'form' ? (
-            <div className="ape-fields">
-              {isLoading && fields.length === 0 ? (
-                <div className="ape-skeleton">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="ape-skeleton-row" />
-                  ))}
-                </div>
-              ) : fields.length === 0 ? (
-                <div className="ape-empty">
-                  No schema available.
-                  <br />
-                  Switch to <strong>JSON</strong> to enter request manually.
-                </div>
-              ) : (
-                fields.map((f) => renderField(f))
-              )}
-            </div>
-          ) : (
+          {viewMode === 'json' ? (
             <div className="ape-json-view">
               <textarea
                 className="ape-json-ta"
@@ -403,7 +438,37 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
               />
               {jsonError && <div className="ape-json-error">{jsonError}</div>}
             </div>
-          )}
+          ) : isLoading && fields.length === 0 ? (
+            <div className="ape-skeleton">
+              {[0, 1, 2].map((i) => <div key={i} className="ape-skeleton-row" />)}
+            </div>
+          ) : fields.length === 0 ? (
+            <div className="ape-empty">
+              No schema available.<br />
+              Switch to <strong>JSON</strong> to enter request manually.
+            </div>
+          ) : currentFrame.kind === 'list' ? (
+            <div className="ape-field-list">
+              {getCurrentFields().map((f) => (
+                <FieldListRow
+                  key={f.name}
+                  field={f}
+                  value={getDeep(values, [...currentFrame.path, f.name])}
+                  basePath={currentFrame.path}
+                  onPush={pushFrame}
+                  onInlineChange={setValueAtPath}
+                />
+              ))}
+            </div>
+          ) : currentFrame.kind === 'edit' ? (
+            <FieldEditView
+              field={currentFrame.field}
+              value={getDeep(values, [...currentFrame.path, currentFrame.field.name])}
+              onChange={(val) =>
+                setValueAtPath([...currentFrame.path, currentFrame.field.name], val)
+              }
+            />
+          ) : null}
         </div>
 
         {/* Footer */}
