@@ -5,6 +5,7 @@ import {
   fetchServiceRequestSchema,
   ActionFieldSchema,
 } from '../services/rosDiscovery';
+import { SERVICE_TEMPLATES } from '../serviceTemplates';
 import './ActionParameterEditor.css';
 
 interface ServiceParameterEditorProps {
@@ -209,7 +210,10 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
   useEffect(() => {
     const existing = nodeData.request ?? {};
     const hasExisting = Object.keys(existing).length > 0;
-    const initialVals: Record<string, any> = hasExisting ? existing : {};
+    const template = nodeData.serviceType ? SERVICE_TEMPLATES[nodeData.serviceType] : null;
+    const initialVals: Record<string, any> = hasExisting
+      ? existing
+      : (template as Record<string, any> ?? {});
 
     setValues(initialVals);
     setJsonText(JSON.stringify(initialVals, null, 2));
@@ -219,6 +223,11 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
         setFields(fieldsFromValues(initialVals));
       }
       return;
+    }
+
+    // Show template fields immediately while waiting for schema
+    if (!hasExisting && template) {
+      setFields(fieldsFromValues(template));
     }
 
     setIsLoading(true);
@@ -231,7 +240,7 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
         return;
       }
       setFields(details.fields);
-      if (!hasExisting) {
+      if (!hasExisting && !template) {
         const defaults = details.defaults as Record<string, any>;
         setValues(defaults);
         setJsonText(JSON.stringify(defaults, null, 2));

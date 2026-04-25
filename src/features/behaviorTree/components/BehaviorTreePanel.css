@@ -5,6 +5,7 @@
   width: 100%;
   background: var(--background-color, #fafafa);
   overflow: hidden;
+  position: relative; /* anchor for parameter editor overlay */
 }
 
 .bt-content {
