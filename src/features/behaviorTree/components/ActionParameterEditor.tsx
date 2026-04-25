@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
 import { ROSActionNodeData } from '../types';
-import { fetchActionGoalSchema } from '../services/rosDiscovery';
+import {
+  fetchActionGoalDetails,
+  ActionFieldSchema,
+} from '../services/rosDiscovery';
 import { ACTION_TEMPLATES } from '../actionTemplates';
 import './ActionParameterEditor.css';
 
@@ -12,132 +15,389 @@ interface ActionParameterEditorProps {
   onClose: () => void;
 }
 
+// ─── Type helpers ─────────────────────────────────────────────────────────────
+
+const SCALAR_TYPES = new Set([
+  'bool', 'string',
+  'int8', 'int16', 'int32', 'int64',
+  'uint8', 'uint16', 'uint32', 'uint64',
+  'float32', 'float64', 'byte', 'char',
+]);
+
+function isScalar(rosType: string): boolean {
+  return SCALAR_TYPES.has(rosType);
+}
+
+function getSliderProps(rosType: string): { min: number; max: number; step: number } {
+  switch (rosType) {
+    case 'float32': case 'float64': return { min: -100, max: 100, step: 0.01 };
+    case 'int8':    return { min: -128,   max: 127,   step: 1 };
+    case 'uint8':   return { min: 0,      max: 255,   step: 1 };
+    case 'int16':   return { min: -32768, max: 32767, step: 1 };
+    case 'uint16':  return { min: 0,      max: 65535, step: 1 };
+    case 'int32': case 'int64':  return { min: -1000, max: 1000, step: 1 };
+    case 'uint32': case 'uint64': return { min: 0,   max: 1000, step: 1 };
+    default: return { min: -100, max: 100, step: 0.1 };
+  }
+}
+
+function inferRosType(value: unknown): string {
+  if (typeof value === 'boolean') return 'bool';
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'int32' : 'float64';
+  if (Array.isArray(value)) return 'float64[]';
+  return 'object';
+}
+
+function fieldsFromValues(vals: Record<string, any>): ActionFieldSchema[] {
+  return Object.keys(vals).map((name) => ({
+    name,
+    rosType: inferRosType(vals[name]),
+    arrayLen: Array.isArray(vals[name]) ? vals[name].length : -1,
+  }));
+}
+
+// ─── Field sub-components ─────────────────────────────────────────────────────
+
+const NumberRow: React.FC<{
+  name: string;
+  type: string;
+  value: number;
+  onChange: (v: number) => void;
+}> = ({ name, type, value, onChange }) => {
+  const { min, max, step } = getSliderProps(type);
+  const isFloat = type.includes('float');
+  const sliderVal = Math.max(min, Math.min(max, value));
+
+  return (
+    <div className="ape-row ape-row-number">
+      <div className="ape-row-header">
+        <span className="ape-fname">{name}</span>
+        <input
+          type="number"
+          className="ape-num-input"
+          value={value}
+          step={isFloat ? 'any' : '1'}
+          onChange={(e) => {
+            const v = isFloat
+              ? parseFloat(e.target.value)
+              : parseInt(e.target.value, 10);
+            if (!isNaN(v)) onChange(v);
+          }}
+        />
+      </div>
+      <input
+        type="range"
+        className="ape-slider"
+        min={min}
+        max={max}
+        step={step}
+        value={sliderVal}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+      <div className="ape-slider-labels">
+        <span>{min}</span>
+        <span className="ape-type-badge">{type}</span>
+        <span>{max}</span>
+      </div>
+    </div>
+  );
+};
+
+const BoolRow: React.FC<{
+  name: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}> = ({ name, value, onChange }) => (
+  <div className="ape-row ape-row-bool">
+    <span className="ape-fname">{name}</span>
+    <button
+      className={`ape-toggle${value ? ' on' : ''}`}
+      onClick={() => onChange(!value)}
+      aria-pressed={value}
+      type="button"
+    >
+      <span className="ape-toggle-track">
+        <span className="ape-toggle-thumb" />
+      </span>
+      <span className="ape-toggle-text">{value ? 'TRUE' : 'FALSE'}</span>
+    </button>
+  </div>
+);
+
+const StringRow: React.FC<{
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ name, value, onChange }) => (
+  <div className="ape-row ape-row-string">
+    <span className="ape-fname">{name}</span>
+    <input
+      type="text"
+      className="ape-text-input"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Enter value…"
+    />
+  </div>
+);
+
+const ComplexRow: React.FC<{
+  name: string;
+  type: string;
+  arrayLen: number;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}> = ({ name, type, arrayLen, value, onChange }) => {
+  const [text, setText] = useState(() => JSON.stringify(value, null, 2));
+  const [err, setErr] = useState<string | null>(null);
+  const typeLabel = arrayLen >= 0 ? `${type}[${arrayLen || '…'}]` : type;
+
+  return (
+    <div className="ape-row ape-row-complex">
+      <div className="ape-row-header">
+        <span className="ape-fname">{name}</span>
+        <span className="ape-type-badge">{typeLabel}</span>
+      </div>
+      <textarea
+        className={`ape-complex-ta${err ? ' has-error' : ''}`}
+        value={text}
+        rows={3}
+        spellCheck={false}
+        onChange={(e) => {
+          setText(e.target.value);
+          try {
+            onChange(JSON.parse(e.target.value));
+            setErr(null);
+          } catch {
+            setErr('JSON error');
+          }
+        }}
+      />
+      {err && <span className="ape-field-err">{err}</span>}
+    </div>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   nodeData,
   ros,
   onSave,
   onClose,
 }) => {
-  const [parameterJson, setParameterJson] = useState('{}');
-  const [error, setError] = useState<string | null>(null);
-  const [isFetching, setIsFetching] = useState(false);
+  const [fields, setFields] = useState<ActionFieldSchema[]>([]);
+  const [values, setValues] = useState<Record<string, any>>({});
+  const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
+  const [jsonText, setJsonText] = useState('{}');
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // On mount: existing params → hardcoded template → live schema fetch
+  // Initialise: existing params → template → live schema fetch.
+  // Always fetch schema for field type metadata even if we have values.
   useEffect(() => {
     const existing = nodeData.parameters ?? {};
-
-    if (Object.keys(existing).length > 0) {
-      setParameterJson(JSON.stringify(existing, null, 2));
-      return;
-    }
-
+    const hasExisting = Object.keys(existing).length > 0;
     const template = nodeData.actionType ? ACTION_TEMPLATES[nodeData.actionType] : null;
-    if (template) {
-      setParameterJson(JSON.stringify(template, null, 2));
+    const initialVals: Record<string, any> = hasExisting
+      ? existing
+      : (template as Record<string, any> ?? {});
+
+    setValues(initialVals);
+    setJsonText(JSON.stringify(initialVals, null, 2));
+
+    if (!ros || !nodeData.actionType) {
+      if (Object.keys(initialVals).length > 0) {
+        setFields(fieldsFromValues(initialVals));
+      }
       return;
     }
 
-    // Unknown type — try to introspect via rosapi
-    if (ros && nodeData.actionType) {
-      setIsFetching(true);
-      fetchActionGoalSchema(ros, nodeData.actionType).then((schema) => {
-        setIsFetching(false);
-        setParameterJson(JSON.stringify(schema ?? {}, null, 2));
-      });
-    }
-  }, [nodeData, ros]);
-
-  const handleFetchSchema = () => {
-    if (!ros || !nodeData.actionType) return;
-    setIsFetching(true);
-    setError(null);
-    fetchActionGoalSchema(ros, nodeData.actionType).then((schema) => {
-      setIsFetching(false);
-      if (schema && Object.keys(schema).length > 0) {
-        setParameterJson(JSON.stringify(schema, null, 2));
-      } else {
-        setError(
-          'rosapi could not return field definitions for this type. ' +
-          'Check the browser console for the raw response, then fill in parameters manually.'
-        );
+    setIsLoading(true);
+    fetchActionGoalDetails(ros, nodeData.actionType).then((details) => {
+      setIsLoading(false);
+      if (!details) {
+        if (Object.keys(initialVals).length > 0) {
+          setFields(fieldsFromValues(initialVals));
+        }
+        return;
       }
+      setFields(details.fields);
+      if (!hasExisting && !template) {
+        const defaults = details.defaults as Record<string, any>;
+        setValues(defaults);
+        setJsonText(JSON.stringify(defaults, null, 2));
+      }
+    });
+  }, [nodeData, ros]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setFieldValue = (name: string, val: unknown) => {
+    setValues((prev) => {
+      const next = { ...prev, [name]: val };
+      setJsonText(JSON.stringify(next, null, 2));
+      return next;
     });
   };
 
-  const handleLoadTemplate = () => {
-    const template = nodeData.actionType ? ACTION_TEMPLATES[nodeData.actionType] : null;
-    if (template) {
-      setParameterJson(JSON.stringify(template, null, 2));
-      setError(null);
+  const handleJsonChange = (text: string) => {
+    setJsonText(text);
+    try {
+      setValues(JSON.parse(text));
+      setJsonError(null);
+    } catch {
+      setJsonError('Invalid JSON');
+    }
+  };
+
+  const toggleView = () => {
+    if (viewMode === 'form') {
+      setJsonText(JSON.stringify(values, null, 2));
+      setViewMode('json');
     } else {
-      setError('No built-in template for this action type. Use "Fetch Schema" or fill in manually.');
+      try {
+        const parsed = JSON.parse(jsonText);
+        setValues(parsed);
+        setJsonError(null);
+        setViewMode('form');
+      } catch {
+        setJsonError('Fix JSON errors before switching to form view');
+      }
     }
   };
 
   const handleSave = () => {
-    try {
-      const parsed = JSON.parse(parameterJson);
-      setError(null);
-      onSave(parsed);
+    if (viewMode === 'json') {
+      try {
+        onSave(JSON.parse(jsonText));
+        onClose();
+      } catch {
+        setJsonError('Invalid JSON — fix before saving');
+      }
+    } else {
+      onSave(values);
       onClose();
-    } catch (e) {
-      setError('Invalid JSON: ' + (e as Error).message);
     }
   };
 
+  const renderField = (field: ActionFieldSchema) => {
+    const val = values[field.name];
+
+    if (field.rosType === 'bool') {
+      return (
+        <BoolRow
+          key={field.name}
+          name={field.name}
+          value={!!val}
+          onChange={(v) => setFieldValue(field.name, v)}
+        />
+      );
+    }
+    if (field.rosType === 'string') {
+      return (
+        <StringRow
+          key={field.name}
+          name={field.name}
+          value={String(val ?? '')}
+          onChange={(v) => setFieldValue(field.name, v)}
+        />
+      );
+    }
+    if (field.arrayLen === -1 && isScalar(field.rosType)) {
+      return (
+        <NumberRow
+          key={field.name}
+          name={field.name}
+          type={field.rosType}
+          value={typeof val === 'number' ? val : 0}
+          onChange={(v) => setFieldValue(field.name, v)}
+        />
+      );
+    }
+    // Complex: nested object or array
+    return (
+      <ComplexRow
+        key={field.name}
+        name={field.name}
+        type={field.rosType}
+        arrayLen={field.arrayLen}
+        value={val}
+        onChange={(v) => setFieldValue(field.name, v)}
+      />
+    );
+  };
+
+  const shortName =
+    nodeData.actionName.split('/').filter(Boolean).pop() ?? nodeData.actionName;
+
   return (
-    <div className="action-param-editor-overlay" onClick={onClose}>
-      <div className="action-param-editor" onClick={(e) => e.stopPropagation()}>
-        <div className="action-param-header">
-          <h3>Edit Action Parameters</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+    <div className="ape-overlay" onClick={onClose}>
+      <div className="ape-panel" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="ape-header">
+          <div className="ape-header-left">
+            <span className="ape-title">{shortName}</span>
+            {isLoading && <span className="ape-loading-dot" />}
+          </div>
+          <div className="ape-header-right">
+            <button className="ape-view-toggle" onClick={toggleView} type="button">
+              {viewMode === 'form' ? 'JSON' : 'FORM'}
+            </button>
+            <button className="ape-close-btn" onClick={onClose} type="button">
+              ✕
+            </button>
+          </div>
         </div>
 
-        <div className="action-param-info">
-          <div><strong>Action:</strong> {nodeData.actionName}</div>
-          <div><strong>Type:</strong> {nodeData.actionType || 'Unknown'}</div>
+        {/* Subtitle: action type */}
+        <div className="ape-subtitle">{nodeData.actionType || 'Unknown type'}</div>
+
+        {/* Body */}
+        <div className="ape-body">
+          {viewMode === 'form' ? (
+            <div className="ape-fields">
+              {isLoading && fields.length === 0 ? (
+                <div className="ape-skeleton">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="ape-skeleton-row" />
+                  ))}
+                </div>
+              ) : fields.length === 0 ? (
+                <div className="ape-empty">
+                  No schema available.
+                  <br />
+                  Switch to <strong>JSON</strong> to enter parameters manually.
+                </div>
+              ) : (
+                fields.map(renderField)
+              )}
+            </div>
+          ) : (
+            <div className="ape-json-view">
+              <textarea
+                className="ape-json-ta"
+                value={jsonText}
+                onChange={(e) => handleJsonChange(e.target.value)}
+                spellCheck={false}
+                placeholder="{}"
+              />
+              {jsonError && <div className="ape-json-error">{jsonError}</div>}
+            </div>
+          )}
         </div>
 
-        <div className="action-param-controls">
-          <button
-            className="template-btn"
-            onClick={handleLoadTemplate}
-            disabled={isFetching || !ACTION_TEMPLATES[nodeData.actionType]}
-            title="Load built-in parameter template"
-          >
-            📋 Template
+        {/* Footer */}
+        <div className="ape-footer">
+          <button className="ape-btn ape-btn-cancel" onClick={onClose} type="button">
+            Cancel
           </button>
           <button
-            className="template-btn"
-            onClick={handleFetchSchema}
-            disabled={isFetching || !ros || !nodeData.actionType}
-            title="Introspect goal message fields live from ROS"
+            className="ape-btn ape-btn-save"
+            onClick={handleSave}
+            disabled={isLoading}
+            type="button"
           >
-            {isFetching ? '⏳ Fetching…' : '🔍 Fetch Schema'}
-          </button>
-        </div>
-
-        {isFetching && (
-          <div className="param-loading">Fetching goal schema from ROS…</div>
-        )}
-
-        <div className="action-param-editor-container">
-          <textarea
-            className="param-json-editor"
-            value={parameterJson}
-            onChange={(e) => setParameterJson(e.target.value)}
-            placeholder="Enter JSON parameters…"
-            spellCheck={false}
-            disabled={isFetching}
-          />
-        </div>
-
-        {error && <div className="param-error">{error}</div>}
-
-        <div className="action-param-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSave} disabled={isFetching}>
-            Save Parameters
+            Save
           </button>
         </div>
       </div>

@@ -169,38 +169,47 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
 };
 
 /**
- * Discover available ROS services
+ * Discover available ROS services.
+ *
+ * Types are resolved sequentially (never in parallel) to avoid concurrent
+ * rosbridge service client contention that drops the WebSocket connection.
  */
 export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> => {
-  return new Promise((resolve) => {
-    const rosApi = ros as any;
+  const rosApi = ros as any;
+
+  const allServices: string[] = await new Promise((resolve) => {
     rosApi.getServices(
-      (services: string[]) => {
-        // Filter out system services that users typically don't need
-        const filteredServices = services.filter(
-          (service) =>
-            !service.startsWith('/rosout') &&
-            !service.startsWith('/_') &&
-            !service.includes('/get_loggers') &&
-            !service.includes('/set_logger_level') &&
-            !service.includes('/describe_parameters') &&
-            !service.includes('/get_parameter') &&
-            !service.includes('/list_parameters')
-        );
-
-        const serviceInfos: ROSServiceInfo[] = filteredServices.map((service) => ({
-          name: service,
-          type: 'unknown', // Service type needs separate query
-        }));
-
-        resolve(serviceInfos);
-      },
+      (services: string[]) => resolve(services),
       (error: any) => {
-        console.error('Failed to discover ROS services:', error);
+        console.error('[BT] Failed to list ROS services:', error);
         resolve([]);
       }
     );
   });
+
+  const filtered = allServices.filter(
+    (service) =>
+      !service.startsWith('/rosout') &&
+      !service.startsWith('/_') &&
+      !service.startsWith('/rosapi/') &&
+      !service.includes('/_action/') &&
+      !service.includes('/get_loggers') &&
+      !service.includes('/set_logger_level') &&
+      !service.includes('/describe_parameters') &&
+      !service.includes('/get_parameter') &&
+      !service.includes('/set_parameter') &&
+      !service.includes('/get_parameters') &&
+      !service.includes('/set_parameters') &&
+      !service.includes('/list_parameters')
+  );
+
+  console.log(`[BT] Resolving types for ${filtered.length} service(s) sequentially…`);
+  const serviceInfos: ROSServiceInfo[] = [];
+  for (const service of filtered) {
+    const type = await getServiceType(ros, service);
+    serviceInfos.push({ name: service, type: type ?? 'unknown' });
+  }
+  return serviceInfos;
 };
 
 /**
@@ -462,6 +471,114 @@ export const fetchActionGoalSchema = async (
     }
   }
   console.warn(`[BT] Could not fetch goal schema for "${actionType}" — tried: ${candidates.join(', ')}`);
+  return null;
+};
+
+// ── Structured goal schema with per-field type info ──────────────────────────
+
+/** Metadata about a single field in a ROS goal message. */
+export interface ActionFieldSchema {
+  /** Field name, e.g. "takeoff_height" */
+  name: string;
+  /** ROS primitive or package type, e.g. "float32", "geometry_msgs/Point" */
+  rosType: string;
+  /** -1 = scalar, 0 = dynamic array, N = fixed-size array */
+  arrayLen: number;
+}
+
+export interface ActionGoalDetails {
+  fields: ActionFieldSchema[];
+  defaults: Record<string, unknown>;
+}
+
+async function queryMessageDetailsFull(
+  ros: Ros,
+  type: string
+): Promise<ActionGoalDetails | null> {
+  return new Promise((resolve) => {
+    try {
+      const srv = new (ROSLIB as any).Service({
+        ros,
+        name: '/rosapi/message_details',
+        serviceType: 'rosapi_msgs/srv/MessageDetails',
+      });
+      srv.callService(
+        { type },
+        (res: any) => {
+          const typedefs: FieldTypedef[] = res?.typedefs ?? [];
+          if (!typedefs.length) { resolve(null); return; }
+
+          const goalSuffix = type.split('/').pop() ?? '';
+          const targetTypedef =
+            typedefs.find((t) => t.type.endsWith(goalSuffix) && t.fieldnames?.length) ??
+            typedefs.find((t) => t.fieldnames?.length) ??
+            null;
+
+          if (!targetTypedef) { resolve(null); return; }
+
+          const names: string[] = targetTypedef.fieldnames ?? [];
+          const types: string[] = targetTypedef.fieldtypes ?? [];
+          const lens: number[] = targetTypedef.fieldarraylen ?? [];
+          const consts: string[] = targetTypedef.constnames ?? [];
+          const constvals: string[] = targetTypedef.constvalues ?? [];
+
+          const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
+
+          const buildFields = (skipConsts: boolean): ActionFieldSchema[] =>
+            names.flatMap((name, i) => {
+              if (skipConsts) {
+                const ci = consts.indexOf(name);
+                if (ci >= 0 && constvals[ci] !== undefined) return [];
+              }
+              return [{
+                name,
+                rosType: types[i] ?? 'float64',
+                arrayLen: lens[i] !== undefined ? lens[i] : -1,
+              }];
+            });
+
+          let fields = buildFields(true);
+          if (fields.length === 0 && names.length > 0) {
+            fields = buildFields(false); // rosapi bug workaround
+          }
+
+          resolve(fields.length > 0 ? { fields, defaults } : null);
+        },
+        () => resolve(null)
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Fetch the goal message schema for a ROS 2 action, returning both per-field
+ * type information and default values.  Useful for building typed form UIs.
+ *
+ * Tries the same two type-string formats as fetchActionGoalSchema.
+ */
+export const fetchActionGoalDetails = async (
+  ros: Ros,
+  actionType: string
+): Promise<ActionGoalDetails | null> => {
+  const parts = actionType.split('/');
+  const pkg = parts[0];
+  const name = parts[parts.length - 1];
+
+  const candidates = [
+    `${actionType}_Goal`,
+    `${pkg}/${name}_Goal`,
+  ];
+
+  for (const candidate of candidates) {
+    const result = await queryMessageDetailsFull(ros, candidate);
+    if (result !== null) {
+      console.log(`[BT] fetchActionGoalDetails "${actionType}" via "${candidate}":`, result);
+      return result;
+    }
+  }
+  console.warn(`[BT] fetchActionGoalDetails: no schema for "${actionType}"`);
   return null;
 };
 
