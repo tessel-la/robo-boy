@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
-import { ROSActionNodeData } from '../types';
+import { ROSServiceNodeData } from '../types';
 import {
-  fetchActionGoalDetails,
+  fetchServiceRequestSchema,
   ActionFieldSchema,
 } from '../services/rosDiscovery';
-import { ACTION_TEMPLATES } from '../actionTemplates';
 import './ActionParameterEditor.css';
 
-interface ActionParameterEditorProps {
-  nodeData: ROSActionNodeData;
+interface ServiceParameterEditorProps {
+  nodeData: ROSServiceNodeData;
   ros: Ros | null;
-  onSave: (parameters: Record<string, any>) => void;
+  onSave: (request: Record<string, any>) => void;
   onClose: () => void;
 }
 
@@ -44,12 +43,10 @@ function getSliderProps(rosType: string): { min: number; max: number; step: numb
   }
 }
 
-/** Deep-read a value from a nested object by path. */
 function getDeep(obj: any, path: string[]): any {
   return path.reduce((v, k) => (v != null ? v[k] : undefined), obj);
 }
 
-/** Immutably set a value in a nested object by path. */
 function setDeep(obj: any, path: string[], value: any): any {
   if (path.length === 0) return value;
   const [head, ...rest] = path;
@@ -196,7 +193,7 @@ const ComplexRow: React.FC<{
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
+const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
   nodeData,
   ros,
   onSave,
@@ -209,20 +206,15 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Initialise: existing params → template → live schema fetch.
-  // Always fetch schema for field type metadata even if we have values.
   useEffect(() => {
-    const existing = nodeData.parameters ?? {};
+    const existing = nodeData.request ?? {};
     const hasExisting = Object.keys(existing).length > 0;
-    const template = nodeData.actionType ? ACTION_TEMPLATES[nodeData.actionType] : null;
-    const initialVals: Record<string, any> = hasExisting
-      ? existing
-      : (template as Record<string, any> ?? {});
+    const initialVals: Record<string, any> = hasExisting ? existing : {};
 
     setValues(initialVals);
     setJsonText(JSON.stringify(initialVals, null, 2));
 
-    if (!ros || !nodeData.actionType) {
+    if (!ros || !nodeData.serviceType) {
       if (Object.keys(initialVals).length > 0) {
         setFields(fieldsFromValues(initialVals));
       }
@@ -230,7 +222,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
     }
 
     setIsLoading(true);
-    fetchActionGoalDetails(ros, nodeData.actionType).then((details) => {
+    fetchServiceRequestSchema(ros, nodeData.serviceType).then((details) => {
       setIsLoading(false);
       if (!details) {
         if (Object.keys(initialVals).length > 0) {
@@ -239,7 +231,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
         return;
       }
       setFields(details.fields);
-      if (!hasExisting && !template) {
+      if (!hasExisting) {
         const defaults = details.defaults as Record<string, any>;
         setValues(defaults);
         setJsonText(JSON.stringify(defaults, null, 2));
@@ -301,7 +293,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
     const val = getDeep(values, fullPath);
     const set = (v: unknown) => setValueAtPath(fullPath, v);
 
-    // Expanded nested message type — render a labelled section with sub-rows
+    // Expanded nested message type — labelled section with sub-rows
     if (field.subfields && field.subfields.length > 0) {
       const shortType = field.rosType.split('/').pop() ?? field.rosType;
       return (
@@ -334,7 +326,6 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
         />
       );
     }
-    // Array or truly unknown complex type — JSON textarea
     return (
       <ComplexRow
         key={key}
@@ -348,7 +339,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   };
 
   const shortName =
-    nodeData.actionName.split('/').filter(Boolean).pop() ?? nodeData.actionName;
+    nodeData.serviceName.split('/').filter(Boolean).pop() ?? nodeData.serviceName;
 
   return (
     <div className="ape-overlay" onClick={onClose}>
@@ -369,8 +360,8 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
           </div>
         </div>
 
-        {/* Subtitle: action type */}
-        <div className="ape-subtitle">{nodeData.actionType || 'Unknown type'}</div>
+        {/* Subtitle: service type */}
+        <div className="ape-subtitle">{nodeData.serviceType || 'Unknown type'}</div>
 
         {/* Body */}
         <div className="ape-body">
@@ -386,7 +377,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
                 <div className="ape-empty">
                   No schema available.
                   <br />
-                  Switch to <strong>JSON</strong> to enter parameters manually.
+                  Switch to <strong>JSON</strong> to enter request manually.
                 </div>
               ) : (
                 fields.map((f) => renderField(f))
@@ -425,4 +416,4 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   );
 };
 
-export default ActionParameterEditor;
+export default ServiceParameterEditor;

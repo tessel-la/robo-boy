@@ -408,6 +408,40 @@
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
+/* ─── Nested message section ─────────────────────────────────────────────────── */
+
+.ape-section {
+  border-bottom: 1px solid var(--border-color, #222);
+}
+
+.ape-section:last-child {
+  border-bottom: none;
+}
+
+.ape-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.ape-section-body {
+  border-left: 2px solid rgba(66, 133, 244, 0.35);
+  margin-left: 20px;
+}
+
+/* Override row padding for nested rows */
+.ape-section-body .ape-row {
+  padding-left: 10px;
+  padding-right: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ape-section-body .ape-row:last-child {
+  border-bottom: none;
+}
+
 /* ─── JSON raw view ──────────────────────────────────────────────────────────── */
 
 .ape-json-view {

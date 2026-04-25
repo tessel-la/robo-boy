@@ -22,6 +22,7 @@ import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
 import BehaviorTreeToolbar from './BehaviorTreeToolbar';
 import ActionParameterEditor from './ActionParameterEditor';
+import ServiceParameterEditor from './ServiceParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { saveBehaviorTree, exportBehaviorTree } from '../storage/treeStorage';
 import {
@@ -62,6 +63,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   // Action node currently being edited via the parameter editor modal.
   const [editingAction, setEditingAction] = useState<
     { nodeId: string; data: ROSActionNodeData } | null
+  >(null);
+  const [editingService, setEditingService] = useState<
+    { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
@@ -196,11 +200,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      if (node.type !== BehaviorNodeType.Action) return;
-      setEditingAction({
-        nodeId: node.id,
-        data: node.data as ROSActionNodeData,
-      });
+      if (node.type === BehaviorNodeType.Action) {
+        setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
+      } else if (node.type === BehaviorNodeType.Service) {
+        setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
+      }
     },
     []
   );
@@ -217,6 +221,20 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       );
     },
     [editingAction, setNodes]
+  );
+
+  const handleSaveServiceRequest = useCallback(
+    (request: Record<string, any>) => {
+      if (!editingService) return;
+      const { nodeId } = editingService;
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id !== nodeId) return node;
+          return { ...node, data: { ...node.data, request } };
+        })
+      );
+    },
+    [editingService, setNodes]
   );
 
   const handleSave = useCallback(() => {
@@ -444,6 +462,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
+        />
+      )}
+      {editingService && (
+        <ServiceParameterEditor
+          nodeData={editingService.data}
+          ros={ros}
+          onSave={handleSaveServiceRequest}
+          onClose={() => setEditingService(null)}
         />
       )}
     </div>

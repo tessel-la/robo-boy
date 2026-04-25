@@ -476,7 +476,7 @@ export const fetchActionGoalSchema = async (
 
 // ── Structured goal schema with per-field type info ──────────────────────────
 
-/** Metadata about a single field in a ROS goal message. */
+/** Metadata about a single field in a ROS goal/request message. */
 export interface ActionFieldSchema {
   /** Field name, e.g. "takeoff_height" */
   name: string;
@@ -484,11 +484,74 @@ export interface ActionFieldSchema {
   rosType: string;
   /** -1 = scalar, 0 = dynamic array, N = fixed-size array */
   arrayLen: number;
+  /**
+   * Present when `rosType` is a non-primitive message type and its typedef was
+   * available in the rosapi response.  Allows the UI to expand nested fields
+   * into individual inputs instead of showing a raw JSON textarea.
+   */
+  subfields?: ActionFieldSchema[];
 }
 
 export interface ActionGoalDetails {
   fields: ActionFieldSchema[];
   defaults: Record<string, unknown>;
+}
+
+// ROS primitive types that should never be expanded into sub-fields.
+const SCHEMA_PRIMITIVES = new Set([
+  'bool', 'string',
+  'int8', 'int16', 'int32', 'int64',
+  'uint8', 'uint16', 'uint32', 'uint64',
+  'float32', 'float64', 'float', 'double',
+  'int', 'uint', 'byte', 'char',
+]);
+
+/**
+ * Recursively build ActionFieldSchema[] from a typedef, expanding nested
+ * message types up to `depth` levels deep.
+ */
+function buildSchemaFields(
+  typedef: FieldTypedef,
+  allTypedefs: FieldTypedef[],
+  skipConsts: boolean,
+  depth = 0
+): ActionFieldSchema[] {
+  const names: string[] = typedef.fieldnames ?? [];
+  const types: string[] = typedef.fieldtypes ?? [];
+  const lens: number[] = typedef.fieldarraylen ?? [];
+  const consts: string[] = typedef.constnames ?? [];
+  const constvals: string[] = typedef.constvalues ?? [];
+
+  const fields: ActionFieldSchema[] = names.flatMap((name, i) => {
+    if (skipConsts) {
+      const ci = consts.indexOf(name);
+      if (ci >= 0 && constvals[ci] !== undefined) return [];
+    }
+    const rosType = types[i] ?? 'float64';
+    const arrayLen = lens[i] !== undefined ? lens[i] : -1;
+
+    // Attempt to expand nested message types (not arrays, not primitives)
+    let subfields: ActionFieldSchema[] | undefined;
+    if (depth < 3 && arrayLen === -1 && !SCHEMA_PRIMITIVES.has(rosType)) {
+      const nested = allTypedefs.find(
+        (t) =>
+          t.type === rosType ||
+          t.type.split('/').pop() === rosType.split('/').pop()
+      );
+      if (nested?.fieldnames?.length) {
+        const sub = buildSchemaFields(nested, allTypedefs, true, depth + 1);
+        if (sub.length > 0) subfields = sub;
+      }
+    }
+
+    return [{ name, rosType, arrayLen, ...(subfields ? { subfields } : {}) }];
+  });
+
+  // rosapi bug: constnames filter removed everything — retry without it
+  if (fields.length === 0 && names.length > 0 && skipConsts) {
+    return buildSchemaFields(typedef, allTypedefs, false, depth);
+  }
+  return fields;
 }
 
 async function queryMessageDetailsFull(
@@ -516,31 +579,8 @@ async function queryMessageDetailsFull(
 
           if (!targetTypedef) { resolve(null); return; }
 
-          const names: string[] = targetTypedef.fieldnames ?? [];
-          const types: string[] = targetTypedef.fieldtypes ?? [];
-          const lens: number[] = targetTypedef.fieldarraylen ?? [];
-          const consts: string[] = targetTypedef.constnames ?? [];
-          const constvals: string[] = targetTypedef.constvalues ?? [];
-
           const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
-
-          const buildFields = (skipConsts: boolean): ActionFieldSchema[] =>
-            names.flatMap((name, i) => {
-              if (skipConsts) {
-                const ci = consts.indexOf(name);
-                if (ci >= 0 && constvals[ci] !== undefined) return [];
-              }
-              return [{
-                name,
-                rosType: types[i] ?? 'float64',
-                arrayLen: lens[i] !== undefined ? lens[i] : -1,
-              }];
-            });
-
-          let fields = buildFields(true);
-          if (fields.length === 0 && names.length > 0) {
-            fields = buildFields(false); // rosapi bug workaround
-          }
+          const fields = buildSchemaFields(targetTypedef, typedefs, true);
 
           resolve(fields.length > 0 ? { fields, defaults } : null);
         },
@@ -579,6 +619,38 @@ export const fetchActionGoalDetails = async (
     }
   }
   console.warn(`[BT] fetchActionGoalDetails: no schema for "${actionType}"`);
+  return null;
+};
+
+/**
+ * Fetch the request message schema for a ROS 2 service, returning both
+ * per-field type information and default values.
+ *
+ * Tries two type-string formats to handle different rosapi versions:
+ *   1. std_srvs/srv/SetBool_Request
+ *   2. std_srvs/SetBool_Request
+ */
+export const fetchServiceRequestSchema = async (
+  ros: Ros,
+  serviceType: string
+): Promise<ActionGoalDetails | null> => {
+  const parts = serviceType.split('/');
+  const pkg = parts[0];
+  const name = parts[parts.length - 1];
+
+  const candidates = [
+    `${serviceType}_Request`,
+    `${pkg}/${name}_Request`,
+  ];
+
+  for (const candidate of candidates) {
+    const result = await queryMessageDetailsFull(ros, candidate);
+    if (result !== null) {
+      console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via "${candidate}":`, result);
+      return result;
+    }
+  }
+  console.warn(`[BT] fetchServiceRequestSchema: no schema for "${serviceType}"`);
   return null;
 };
 
