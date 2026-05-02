@@ -247,6 +247,15 @@
     padding: 0 !important; /* Force remove all padding */
 }
 
+/* BT panel keep-alive wrapper */
+.view-slot {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .view-panel .card {
     padding: 0 !important; /* Force remove padding from card class */
     margin: 0 !important; /* Remove any margin */

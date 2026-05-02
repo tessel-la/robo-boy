@@ -84,6 +84,8 @@ type ViewMode = 'camera' | '3d' | 'behaviorTree';
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
+  // Once BT panel mounts, keep it alive (preserves nodes/executor state)
+  const [btEverMounted, setBtEverMounted] = useState(false);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
@@ -186,6 +188,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     };
     // Only re-run effect if connect/disconnect functions or connectionParams change
   }, [connect, disconnect, connectionParams]);
+
+  // Lazy-mount BT panel on first visit; trigger 3D resize on switch
+  useEffect(() => {
+    if (viewMode === 'behaviorTree') setBtEverMounted(true);
+    if (viewMode === '3d') {
+      // ResizeObserver needs a tick after display change to read correct dimensions
+      const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+      return () => clearTimeout(id);
+    }
+  }, [viewMode]);
 
   const handleInternalDisconnect = () => {
     disconnect(); // Disconnect ROS
@@ -438,12 +450,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               ) : (
                 <div className="placeholder">Connecting to ROS...</div>
               )
-            ) : (
-              isConnected && ros ? (
-                <BehaviorTreePanel ros={ros} isConnected={isConnected} />
-              ) : (
-                <div className="placeholder">Connect to ROS to use Behavior Trees</div>
-              )
+            ) : null}
+            {/* BT: lazy-mount once, kept alive with display:none to preserve nodes/executor */}
+            {btEverMounted && (
+              <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
+                {isConnected && ros ? (
+                  <BehaviorTreePanel ros={ros} isConnected={isConnected} />
+                ) : (
+                  <div className="placeholder">Connect to ROS to use Behavior Trees</div>
+                )}
+              </div>
+            )}
+            {viewMode === 'behaviorTree' && !btEverMounted && (
+              <div className="placeholder">Loading…</div>
             )}
           </div>
         </div>
