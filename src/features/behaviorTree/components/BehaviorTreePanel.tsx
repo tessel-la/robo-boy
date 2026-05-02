@@ -44,6 +44,7 @@ import './BehaviorTreePanel.css';
 interface BehaviorTreePanelProps {
   ros: Ros | null;
   isConnected: boolean;
+  isActive: boolean;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
@@ -51,6 +52,7 @@ const MOBILE_BREAKPOINT = '(max-width: 768px)';
 const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
+  isActive,
 }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -340,6 +342,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
   }, []);
+
+  // Stop executor when user navigates away so it doesn't block gamepad control
+  useEffect(() => {
+    if (!isActive && isExecuting) {
+      handleStop();
+    }
+  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Add a node at the centre of the visible canvas — used for mobile tap-to-add.
   const handleAddNode = useCallback(

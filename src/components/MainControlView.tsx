@@ -455,7 +455,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {btEverMounted && (
               <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
                 {isConnected && ros ? (
-                  <BehaviorTreePanel ros={ros} isConnected={isConnected} />
+                  <BehaviorTreePanel ros={ros} isConnected={isConnected} isActive={viewMode === 'behaviorTree'} />
                 ) : (
                   <div className="placeholder">Connect to ROS to use Behavior Trees</div>
                 )}
