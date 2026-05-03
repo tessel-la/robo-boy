@@ -1,5 +1,85 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Ros } from 'roslib';
+
+// ─── Palette icons ────────────────────────────────────────────────────────────
+
+const IconChevronDown = () => (
+  <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="1,1 5,5 9,1"/>
+  </svg>
+);
+
+const IconChevronRight = () => (
+  <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="1,1 5,5 1,9"/>
+  </svg>
+);
+
+const IconChevronLeft = () => (
+  <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="5,1 1,5 5,9"/>
+  </svg>
+);
+
+const IconDiscover = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="5.5" cy="5.5" r="4"/>
+    <line x1="8.5" y1="8.5" x2="12" y2="12"/>
+  </svg>
+);
+
+const IconDiscovering = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <circle cx="6.5" cy="6.5" r="5" strokeDasharray="8 6" strokeLinecap="round">
+      <animateTransform attributeName="transform" type="rotate" from="0 6.5 6.5" to="360 6.5 6.5" dur="0.9s" repeatCount="indefinite"/>
+    </circle>
+  </svg>
+);
+
+const IconAction = () => (
+  <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
+    <path d="M6.5 1L1 7.5h4.5L4 12l6.5-7H6z"/>
+  </svg>
+);
+
+const IconService = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+    <circle cx="7" cy="7" r="2.5"/>
+    <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.6 2.6l1.1 1.1M10.3 10.3l1.1 1.1M11.4 2.6l-1.1 1.1M3.7 10.3l-1.1 1.1"/>
+  </svg>
+);
+
+const IconTopic = () => (
+  <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <circle cx="7" cy="9.5" r="1.5" fill="currentColor" stroke="none"/>
+    <path d="M4 7a4.2 4.2 0 016 0"/>
+    <path d="M1 4.5a8.5 8.5 0 0112 0"/>
+  </svg>
+);
+
+const IconSequence = () => (
+  <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="1" y="2" width="4" height="6" rx="1"/>
+    <rect x="9" y="2" width="4" height="6" rx="1"/>
+    <line x1="5" y1="5" x2="9" y2="5"/>
+    <polyline points="7.2,3.5 9,5 7.2,6.5"/>
+  </svg>
+);
+
+const IconSelector = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polygon points="6,1 11,6 6,11 1,6"/>
+  </svg>
+);
+
+const IconParallel = () => (
+  <svg width="10" height="12" viewBox="0 0 10 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="2.5" y1="1" x2="2.5" y2="9"/>
+    <polyline points="1,7 2.5,9 4,7"/>
+    <line x1="7.5" y1="1" x2="7.5" y2="9"/>
+    <polyline points="6,7 7.5,9 9,7"/>
+  </svg>
+);
 import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
   ROSDiscoveryResult,
@@ -148,6 +228,12 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     };
   }, [isMobile, isCollapsed]);
 
+  const CONTROL_ICONS: Record<string, React.ReactNode> = {
+    Sequence: <IconSequence />,
+    Selector: <IconSelector />,
+    Parallel: <IconParallel />,
+  };
+
   // Control flow nodes (always available)
   const controlNodes: NodePaletteItem[] = [
     { type: BehaviorNodeType.Sequence, label: 'Sequence', icon: '→', category: 'control' },
@@ -198,8 +284,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   if (isCollapsed && !isMobile) {
     return (
       <div className="node-palette collapsed">
-        <button className="palette-toggle" onClick={onToggleCollapse} title="Expand Palette">
-          ▶
+        <button className="palette-toggle" onClick={onToggleCollapse} title="Expand Palette" aria-label="Expand palette">
+          <IconChevronRight />
         </button>
       </div>
     );
@@ -226,8 +312,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       <div className={isMobile ? 'palette-body' : undefined}>
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
-        <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette">
-          ◀
+        <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette" aria-label="Collapse palette">
+          <IconChevronLeft />
+          <span>Close</span>
         </button>
       </div>
 
@@ -237,14 +324,17 @@ const NodePalette: React.FC<NodePaletteProps> = ({
           onClick={handleDiscover}
           disabled={isDiscovering}
         >
-          {isDiscovering ? '🔄 Discovering...' : '🔍 Discover ROS'}
+          {isDiscovering ? <IconDiscovering /> : <IconDiscover />}
+          {isDiscovering ? 'Discovering…' : 'Discover ROS'}
         </button>
       )}
 
       {/* Control Flow Section */}
       <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('control')}>
-          <span className="palette-section-icon">{expandedSections.control ? '▼' : '▶'}</span>
+          <span className="palette-section-icon">
+            {expandedSections.control ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
           <span className="palette-section-title">Control Flow</span>
           <span className="palette-section-count">{controlNodes.length}</span>
         </div>
@@ -258,7 +348,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 onDragStart={(e) => handleDragStart(e, node.type)}
                 onClick={() => onAddNode?.(node.type, undefined)}
               >
-                <span className="palette-node-icon">{node.icon}</span>
+                <span className="palette-node-icon">{CONTROL_ICONS[node.label]}</span>
                 <span className="palette-node-label">{node.label}</span>
               </div>
             ))}
@@ -269,9 +359,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       {/* ROS Actions Section */}
       <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('actions')}>
-          <span className="palette-section-icon">{expandedSections.actions ? '▼' : '▶'}</span>
+          <span className="palette-section-icon">
+            {expandedSections.actions ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
           <span className="palette-section-title">ROS Actions</span>
-          <span className="palette-section-count">{rosResources.actions.length}</span>
+          {rosResources.actions.length > 0 && (
+            <span className="palette-section-count">{rosResources.actions.length}</span>
+          )}
         </div>
         {expandedSections.actions && (
           <div className="palette-section-content">
@@ -289,7 +383,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
                   title={action.name}
                 >
-                  <span className="palette-node-icon">⚡</span>
+                  <span className="palette-node-icon"><IconAction /></span>
                   <span className="palette-node-label">{action.name}</span>
                 </div>
               ))
@@ -301,9 +395,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       {/* ROS Services Section */}
       <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('services')}>
-          <span className="palette-section-icon">{expandedSections.services ? '▼' : '▶'}</span>
+          <span className="palette-section-icon">
+            {expandedSections.services ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
           <span className="palette-section-title">ROS Services</span>
-          <span className="palette-section-count">{rosResources.services.length}</span>
+          {rosResources.services.length > 0 && (
+            <span className="palette-section-count">{rosResources.services.length}</span>
+          )}
         </div>
         {expandedSections.services && (
           <div className="palette-section-content">
@@ -321,7 +419,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
                   title={service.name}
                 >
-                  <span className="palette-node-icon">🔧</span>
+                  <span className="palette-node-icon"><IconService /></span>
                   <span className="palette-node-label">{service.name}</span>
                 </div>
               ))
@@ -333,9 +431,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       {/* ROS Topics Section */}
       <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('topics')}>
-          <span className="palette-section-icon">{expandedSections.topics ? '▼' : '▶'}</span>
+          <span className="palette-section-icon">
+            {expandedSections.topics ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
           <span className="palette-section-title">ROS Topics</span>
-          <span className="palette-section-count">{rosResources.topics.length}</span>
+          {rosResources.topics.length > 0 && (
+            <span className="palette-section-count">{rosResources.topics.length}</span>
+          )}
         </div>
         {expandedSections.topics && (
           <div className="palette-section-content">
@@ -353,7 +455,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
                   title={topic.name}
                 >
-                  <span className="palette-node-icon">📡</span>
+                  <span className="palette-node-icon"><IconTopic /></span>
                   <span className="palette-node-label">{topic.name}</span>
                 </div>
               ))

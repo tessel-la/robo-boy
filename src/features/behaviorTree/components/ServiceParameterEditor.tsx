@@ -404,7 +404,11 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
         <div className="ape-header">
           <div className="ape-header-left">
             {canGoBack ? (
-              <button className="ape-back-btn" onClick={popFrame} type="button">‹</button>
+              <button className="ape-back-btn" onClick={popFrame} type="button" aria-label="Back">
+                <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="6,2 2,7 6,12"/>
+                </svg>
+              </button>
             ) : (
               isLoading && <span className="ape-loading-dot" />
             )}
@@ -415,7 +419,12 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
             <button className="ape-view-toggle" onClick={toggleView} type="button">
               {viewMode === 'form' ? 'JSON' : 'FORM'}
             </button>
-            <button className="ape-close-btn" onClick={onClose} type="button">✕</button>
+            <button className="ape-close-btn" onClick={onClose} type="button" aria-label="Close">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <line x1="2" y1="2" x2="10" y2="10"/>
+                <line x1="10" y1="2" x2="2" y2="10"/>
+              </svg>
+            </button>
           </div>
         </div>
 

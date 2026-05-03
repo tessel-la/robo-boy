@@ -1,159 +1,157 @@
-/* ── Compact toolbar ──────────────────────────────────────────────────────── */
+/* ── Floating bar — top-left ──────────────────────────────────────────────── */
 
-.bt-toolbar {
+.bt-float-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.bt-float-bar > * { pointer-events: auto; }
+
+/* Menu pill: ☰ + tree name */
+.bt-float-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 14px 0 11px;
   background: var(--card-bg, #ffffff);
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  gap: 8px;
-  flex-shrink: 0;
-  height: 52px;
-  box-sizing: border-box;
-}
-
-.bt-toolbar-start,
-.bt-toolbar-end {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.bt-toolbar-center {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  justify-content: center;
-  padding: 0 8px;
-}
-
-.bt-toolbar-name {
-  font-size: 14px;
-  font-weight: 600;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   color: var(--text-color, #333333);
-  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  transition: box-shadow 0.15s ease;
+  max-width: 240px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-float-menu-btn:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+
+.bt-float-menu-btn:active { transform: scale(0.97); }
+
+.bt-float-menu-btn svg {
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.bt-float-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  white-space: nowrap;
 }
 
-/* ── Icon button (shared: menu, palette toggle, delete) ───────────────────── */
-
-.bt-icon-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 44px;
-  height: 42px;
-  padding: 0 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-color, #333333);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-  flex-shrink: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.bt-icon-btn:hover  { background: var(--background-color, #f0f0f0); }
-.bt-icon-btn:active { transform: scale(0.93); }
-
-/* Micro label below icon */
-.bt-icon-label {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  opacity: 0.55;
-  line-height: 1;
-}
-
-/* Menu button — slightly accent on hover */
-.bt-menu-btn:hover .bt-icon-label { opacity: 0.8; }
-
-/* Palette toggle — desktop hidden, mobile visible */
+/* Palette toggle — hidden on desktop, shown on mobile */
 .bt-palette-toggle { display: none; }
 
-.bt-palette-toggle.active {
-  color: var(--primary-color, #4285f4);
-  background: rgba(66, 133, 244, 0.1);
-}
-
-.bt-palette-toggle.active .bt-icon-label {
-  opacity: 0.9;
-}
-
-/* Delete icon button */
-.bt-delete-btn {
-  color: var(--error-color, #f44336);
-  min-width: 36px;
+.bt-float-icon-btn {
+  width: 36px;
   height: 36px;
-  padding: 0;
-}
-
-/* ── Menu panel close button ──────────────────────────────────────────────── */
-
-.bt-menu-close-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  color: var(--text-color-secondary, #666666);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
+  justify-content: center;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 50%;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--text-color, #333333);
+  transition: box-shadow 0.15s ease, background 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.bt-menu-close-btn:hover {
-  background: var(--background-color, #f5f5f5);
-  color: var(--text-color, #333333);
+.bt-float-icon-btn:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
-/* ── Execute / Stop pill ──────────────────────────────────────────────────── */
+.bt-palette-toggle.active {
+  background: var(--primary-color, #4285f4);
+  border-color: var(--primary-color, #4285f4);
+  color: #fff;
+}
 
-.bt-action-btn {
+/* ── Floating actions — top-right ─────────────────────────────────────────── */
+
+.bt-float-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.bt-float-actions > * { pointer-events: auto; }
+
+.bt-float-run-btn,
+.bt-float-stop-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
   padding: 0 16px;
-  height: 34px;
   border: none;
-  border-radius: 8px;
+  border-radius: 18px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: filter 0.15s;
   white-space: nowrap;
-  flex-shrink: 0;
+  transition: filter 0.15s ease, transform 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.bt-execute-btn {
+.bt-float-run-btn {
   background: var(--success-color, #4caf50);
   color: #fff;
+  box-shadow: 0 3px 12px rgba(76, 175, 80, 0.4);
 }
 
-.bt-execute-btn:hover { filter: brightness(1.08); }
+.bt-float-run-btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
+.bt-float-run-btn:active { transform: scale(0.96); }
 
-.bt-stop-btn {
+.bt-float-stop-btn {
   background: var(--error-color, #f44336);
   color: #fff;
+  box-shadow: 0 3px 12px rgba(244, 67, 54, 0.35);
 }
 
-.bt-stop-btn:hover { filter: brightness(1.08); }
+.bt-float-stop-btn:hover  { filter: brightness(1.08); }
+.bt-float-stop-btn:active { transform: scale(0.96); }
 
-.bt-btn-label { font-size: 13px; }
+.bt-float-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 18px;
+  color: var(--error-color, #f44336);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-float-delete-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
+.bt-float-delete-btn:active { transform: scale(0.97); }
+
+.bt-float-btn-label { font-size: 13px; }
+.bt-float-count     { font-size: 13px; }
 
 /* ── Menu overlay (anchored to .behavior-tree-panel) ─────────────────────── */
 
@@ -183,7 +181,7 @@
 
 @keyframes bt-panel-slide-in {
   from { transform: translateX(-100%); opacity: 0.6; }
-  to   { transform: translateX(0);    opacity: 1;   }
+  to   { transform: translateX(0);     opacity: 1;   }
 }
 
 /* ── Panel header ─────────────────────────────────────────────────────────── */
@@ -204,6 +202,28 @@
   color: var(--text-color, #333333);
 }
 
+.bt-menu-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-color-secondary, #666666);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-menu-close-btn:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
+
 /* ── Sections ─────────────────────────────────────────────────────────────── */
 
 .bt-menu-section {
@@ -221,7 +241,6 @@
   border-bottom: none;
 }
 
-/* Label row inside the list section needs its own padding */
 .bt-menu-section-list > .bt-menu-label {
   padding: 12px 16px 4px;
   margin-bottom: 0;
@@ -315,14 +334,6 @@
 
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
-.bt-menu-tree-list-header {
-  display: flex;
-  align-items: center;
-  padding: 10px 16px 8px;
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  flex-shrink: 0;
-}
-
 .bt-menu-tree-list {
   flex: 1;
   overflow-y: auto;
@@ -407,29 +418,28 @@
 
 @media (max-width: 768px) {
   .bt-palette-toggle { display: flex; }
-  .bt-toolbar-name   { max-width: 160px; }
+  .bt-float-name     { max-width: 120px; }
 }
 
 @media (max-width: 480px) {
-  .bt-toolbar-name { max-width: 90px; font-size: 13px; }
+  .bt-float-name { max-width: 80px; font-size: 12px; }
 
-  /* Collapse run/stop to icon-only */
-  .bt-btn-label { display: none; }
+  .bt-float-btn-label { display: none; }
 
-  .bt-action-btn {
-    width: 38px;
-    height: 38px;
+  .bt-float-run-btn,
+  .bt-float-stop-btn {
+    width: 36px;
     padding: 0;
     justify-content: center;
-    border-radius: 8px;
   }
 
-  /* Tighten icon buttons on tiny screens */
-  .bt-icon-btn {
-    min-width: 38px;
-    height: 38px;
-    padding: 0 4px;
+  .bt-float-delete-btn {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
+
+  .bt-float-count { display: none; }
 }
 
 /* ── Dark mode ────────────────────────────────────────────────────────────── */

@@ -96,77 +96,71 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   return (
     <>
-      {/* ── Compact toolbar ─────────────────────────────────────── */}
-      <div className="bt-toolbar">
-        <div className="bt-toolbar-start">
-          {/* Menu — three bars + label */}
+      {/* ── Floating top-left: menu pill ──────────────────────── */}
+      <div className="bt-float-bar">
+        <button
+          className="bt-float-menu-btn"
+          onClick={openMenu}
+          title="Menu: save, load, rename"
+          aria-label="Open menu"
+        >
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="currentColor" aria-hidden="true">
+            <rect y="0"   width="14" height="1.8" rx="0.9"/>
+            <rect y="4.6" width="14" height="1.8" rx="0.9"/>
+            <rect y="9.2" width="14" height="1.8" rx="0.9"/>
+          </svg>
+          <span className="bt-float-name" title={displayName}>{displayName}</span>
+        </button>
+
+        {/* Palette toggle — mobile only */}
+        <button
+          className={`bt-float-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
+          onClick={onTogglePalette}
+          title={isPaletteCollapsed ? 'Show node palette' : 'Hide node palette'}
+          aria-label="Toggle node palette"
+        >
+          <svg width="18" height="16" viewBox="0 0 18 16" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="2.5" r="2"/>
+            <circle cx="2.5" cy="13.5" r="2"/>
+            <circle cx="15.5" cy="13.5" r="2"/>
+            <line x1="9" y1="4.5" x2="3.2" y2="11.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="9" y1="4.5" x2="14.8" y2="11.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* ── Floating top-right: delete + run/stop ─────────────── */}
+      <div className="bt-float-actions">
+        {selectedNodeCount > 0 && (
           <button
-            className="bt-icon-btn bt-menu-btn"
-            onClick={openMenu}
-            title="Menu: save, load, rename"
-            aria-label="Open menu"
+            className="bt-float-delete-btn"
+            onClick={onDeleteSelected}
+            title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
           >
-            <svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true">
-              <rect y="0"  width="22" height="2.5" rx="1.25"/>
-              <rect y="7"  width="22" height="2.5" rx="1.25"/>
-              <rect y="14" width="22" height="2.5" rx="1.25"/>
+            <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="0.5,3.5 12.5,3.5"/>
+              <path d="M4 3.5V2a0.8 0.8 0 0 1 0.8-0.8h3.4a0.8 0.8 0 0 1 0.8 0.8v1.5"/>
+              <path d="M2 3.5l0.8 9a0.8 0.8 0 0 0 0.8 0.8h5.8a0.8 0.8 0 0 0 0.8-0.8l0.8-9"/>
             </svg>
-            <span className="bt-icon-label">MENU</span>
+            <span className="bt-float-count">{selectedNodeCount}</span>
           </button>
+        )}
 
-          {/* Palette toggle (mobile only) — node-graph icon, clearly distinct */}
-          <button
-            className={`bt-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
-            onClick={onTogglePalette}
-            title={isPaletteCollapsed ? 'Open node palette' : 'Close node palette'}
-            aria-label="Toggle node palette"
-          >
-            {/* Node-graph icon: three circles connected by lines */}
-            <svg width="22" height="20" viewBox="0 0 22 20" fill="currentColor" aria-hidden="true">
-              <circle cx="11" cy="3"  r="2.5" fill="currentColor"/>
-              <circle cx="3"  cy="17" r="2.5" fill="currentColor"/>
-              <circle cx="19" cy="17" r="2.5" fill="currentColor"/>
-              <line x1="11" y1="5.5"  x2="3.8"  y2="14.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              <line x1="11" y1="5.5"  x2="18.2" y2="14.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        {isExecuting ? (
+          <button className="bt-float-stop-btn" onClick={onStop} title="Stop execution">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
+              <rect x="0" y="0" width="11" height="11" rx="2"/>
             </svg>
-            <span className="bt-icon-label">NODES</span>
+            <span className="bt-float-btn-label">Stop</span>
           </button>
-        </div>
-
-        {/* Tree name — centre */}
-        <div className="bt-toolbar-center">
-          <span className="bt-toolbar-name" title={displayName}>{displayName}</span>
-        </div>
-
-        <div className="bt-toolbar-end">
-          {selectedNodeCount > 0 && (
-            <button
-              className="bt-icon-btn bt-delete-btn"
-              onClick={onDeleteSelected}
-              title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-            >
-              <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor">
-                <path d="M1 4h14M6 4V2h4v2M2 4l1 12a1 1 0 001 1h8a1 1 0 001-1l1-12" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              </svg>
-            </button>
-          )}
-
-          {isExecuting ? (
-            <button className="bt-action-btn bt-stop-btn" onClick={onStop} title="Stop execution">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                <rect x="0" y="0" width="12" height="12" rx="2"/>
-              </svg>
-              <span className="bt-btn-label">Stop</span>
-            </button>
-          ) : (
-            <button className="bt-action-btn bt-execute-btn" onClick={onExecute} title="Execute tree">
-              <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
-                <path d="M1 1l10 6L1 13V1z"/>
-              </svg>
-              <span className="bt-btn-label">Run</span>
-            </button>
-          )}
-        </div>
+        ) : (
+          <button className="bt-float-run-btn" onClick={onExecute} title="Execute tree">
+            <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
+              <path d="M1 1l9 5.5L1 12V1z"/>
+            </svg>
+            <span className="bt-float-btn-label">Run</span>
+          </button>
+        )}
       </div>
 
       {/* ── Slide-in menu panel ──────────────────────────────────── */}
