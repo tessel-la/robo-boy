@@ -153,75 +153,40 @@
 .bt-float-btn-label { font-size: 13px; }
 .bt-float-count     { font-size: 13px; }
 
-/* ── Menu overlay (anchored to .behavior-tree-panel) ─────────────────────── */
+/* ── Popover — click-dismiss zone (transparent) ──────────────────────────── */
 
 .bt-menu-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: transparent;
   z-index: 300;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   justify-content: flex-start;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  /* 12px left + 36px button height + 8px gap */
+  padding: 56px 0 0 12px;
 }
 
+/* Popover card — springs from button origin */
 .bt-menu-panel {
-  width: 300px;
-  max-width: 88vw;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: min(520px, 72vh);
   display: flex;
   flex-direction: column;
   background: var(--card-bg, #ffffff);
-  border-right: 1px solid var(--border-color, #e0e0e0);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
-  animation: bt-panel-slide-in 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  pointer-events: auto;
+  animation: bt-popover-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top left;
 }
 
-@keyframes bt-panel-slide-in {
-  from { transform: translateX(-100%); opacity: 0.6; }
-  to   { transform: translateX(0);     opacity: 1;   }
-}
-
-/* ── Panel header ─────────────────────────────────────────────────────────── */
-
-.bt-menu-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px 0 20px;
-  height: 52px;
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  flex-shrink: 0;
-}
-
-.bt-menu-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-color, #333333);
-}
-
-.bt-menu-close-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  color: var(--text-color-secondary, #666666);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.bt-menu-close-btn:hover {
-  background: var(--background-color, #f5f5f5);
-  color: var(--text-color, #333333);
+@keyframes bt-popover-in {
+  from { opacity: 0; transform: scale(0.84) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
 }
 
 /* ── Sections ─────────────────────────────────────────────────────────────── */
@@ -233,11 +198,9 @@
 }
 
 .bt-menu-section-list {
-  flex: 1;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
   border-bottom: none;
 }
 
@@ -335,7 +298,7 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  flex: 1;
+  max-height: min(240px, 38vh);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -421,6 +384,22 @@
   .bt-float-name     { max-width: 120px; }
 }
 
+/* Small screens: center the popover instead of anchoring to button */
+@media (max-width: 600px) {
+  .bt-menu-overlay {
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .bt-menu-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(520px, 82vh);
+    transform-origin: center;
+  }
+}
+
 @media (max-width: 480px) {
   .bt-float-name { max-width: 80px; font-size: 12px; }
 
@@ -446,6 +425,6 @@
 
 @media (prefers-color-scheme: dark) {
   .bt-menu-panel {
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }

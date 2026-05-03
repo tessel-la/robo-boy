@@ -168,17 +168,6 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <div className="bt-menu-overlay" onClick={closeMenu}>
           <div className="bt-menu-panel" onClick={(e) => e.stopPropagation()}>
 
-            {/* Header */}
-            <div className="bt-menu-header">
-              <span className="bt-menu-title">Behavior Tree</span>
-              <button className="bt-menu-close-btn" onClick={closeMenu} title="Close menu" aria-label="Close menu">
-                <svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="8,2 2,8 8,14"/>
-                </svg>
-                <span>Close</span>
-              </button>
-            </div>
-
             {/* Name editor */}
             <div className="bt-menu-section">
               <label className="bt-menu-label">Name</label>
