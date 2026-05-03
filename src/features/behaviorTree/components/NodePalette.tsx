@@ -280,15 +280,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  // Desktop collapsed strip
+  // Desktop collapsed — nothing rendered; floating toolbar toggle handles show/hide
   if (isCollapsed && !isMobile) {
-    return (
-      <div className="node-palette collapsed">
-        <button className="palette-toggle" onClick={onToggleCollapse} title="Expand Palette" aria-label="Expand palette">
-          <IconChevronRight />
-        </button>
-      </div>
-    );
+    return null;
   }
 
   // Mobile collapsed — render nothing (toolbar toggle button controls open/close)

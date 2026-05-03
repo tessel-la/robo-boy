@@ -8,12 +8,6 @@
   overflow: hidden;
 }
 
-.node-palette.collapsed {
-  width: 40px;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: 12px;
-}
 
 /* Header */
 .palette-header {
@@ -55,10 +49,6 @@
   color: var(--text-color, #333333);
 }
 
-.node-palette.collapsed .palette-toggle {
-  padding: 8px;
-  gap: 0;
-}
 
 /* Discover button */
 .palette-discover-btn {

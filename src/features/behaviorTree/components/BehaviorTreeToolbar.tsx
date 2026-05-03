@@ -168,9 +168,17 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <div className="bt-menu-overlay" onClick={closeMenu}>
           <div className="bt-menu-panel" onClick={(e) => e.stopPropagation()}>
 
-            {/* Name editor */}
+            {/* Name editor + close */}
             <div className="bt-menu-section">
-              <label className="bt-menu-label">Name</label>
+              <div className="bt-menu-section-top">
+                <label className="bt-menu-label">Name</label>
+                <button className="bt-popover-close" onClick={closeMenu} aria-label="Close menu">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <line x1="2" y1="2" x2="10" y2="10"/>
+                    <line x1="10" y1="2" x2="2" y2="10"/>
+                  </svg>
+                </button>
+              </div>
               <input
                 className="bt-menu-name-input"
                 value={nameValue}
@@ -224,7 +232,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             </div>
 
             {/* Saved trees */}
-            <div className="bt-menu-section bt-menu-section-list">
+            <div className="bt-menu-tree-section">
               <label className="bt-menu-label">
                 Saved Trees
                 {savedTrees.length > 0 && (

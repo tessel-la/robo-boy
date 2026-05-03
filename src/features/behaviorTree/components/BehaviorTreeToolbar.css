@@ -50,8 +50,8 @@
   white-space: nowrap;
 }
 
-/* Palette toggle — hidden on desktop, shown on mobile */
-.bt-palette-toggle { display: none; }
+/* Palette toggle — always visible */
+.bt-palette-toggle { display: flex; }
 
 .bt-float-icon-btn {
   width: 36px;
@@ -169,9 +169,11 @@
 
 /* Popover card — springs from button origin */
 .bt-menu-panel {
+  position: relative;
   width: 280px;
   max-width: calc(100vw - 24px);
-  max-height: min(520px, 72vh);
+  /* 100% here resolves against overlay height (position:absolute inset:0 = definite) */
+  max-height: calc(100% - 80px);
   display: flex;
   flex-direction: column;
   background: var(--card-bg, #ffffff);
@@ -189,6 +191,40 @@
   to   { opacity: 1; transform: scale(1)    translateY(0);    }
 }
 
+/* Close button — inline in section header row */
+.bt-popover-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-color-secondary, #888888);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-popover-close:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
+
+/* Header row inside first section: label left, close button right */
+.bt-menu-section-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.bt-menu-section-top > .bt-menu-label {
+  margin-bottom: 0;
+}
+
 /* ── Sections ─────────────────────────────────────────────────────────────── */
 
 .bt-menu-section {
@@ -197,15 +233,18 @@
   flex-shrink: 0;
 }
 
-.bt-menu-section-list {
-  flex-shrink: 0;
+/* Tree section — takes remaining space in panel, tree list scrolls inside */
+.bt-menu-tree-section {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  border-bottom: none;
+  padding: 10px 0 0;
 }
 
-.bt-menu-section-list > .bt-menu-label {
-  padding: 12px 16px 4px;
+.bt-menu-tree-section > .bt-menu-label {
+  flex-shrink: 0;
+  padding: 0 16px 6px;
   margin-bottom: 0;
 }
 
@@ -298,10 +337,12 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  max-height: min(240px, 38vh);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .bt-menu-empty {
@@ -380,8 +421,7 @@
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .bt-palette-toggle { display: flex; }
-  .bt-float-name     { max-width: 120px; }
+  .bt-float-name { max-width: 120px; }
 }
 
 /* Small screens: center the popover instead of anchoring to button */
@@ -395,7 +435,7 @@
   .bt-menu-panel {
     width: 100%;
     max-width: 100%;
-    max-height: min(520px, 82vh);
+    max-height: calc(100% - 32px);
     transform-origin: center;
   }
 }
