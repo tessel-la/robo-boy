@@ -30,7 +30,11 @@
     "reactflow": "^11.11.4",
     "roslib": "^1.4.1",
     "three": "^0.160.0",
-    "uuid": "^9.0.1"
+    "uuid": "^14.0.0"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.9.10",
+    "@rollup/plugin-terser": "^1.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
