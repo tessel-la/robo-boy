@@ -68,89 +68,95 @@
 /* Adjustments for elements within the top bar */
 .top-bar .view-toggle {
     display: flex;
-    gap: 8px;
-    margin: 0; /* Remove default margin */
+    gap: 2px;
+    margin: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    padding: 3px;
 }
 
 .top-bar .view-toggle button {
-    background-color: transparent;
-    border: 1px solid var(--navbar-text, white);
-    color: var(--navbar-text, white);
-    padding: 5px; /* Adjust padding for icons */
-    border-radius: 5px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 4px 8px;
+    border-radius: 6px;
     cursor: pointer;
-    /* font-size: 1.2em; /* Remove font-size */
     line-height: 1;
-    opacity: 0.8;
-    /* Add flex centering for SVG */
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .top-bar .view-toggle button svg {
-    width: 1.2em; /* Reduced icon size */
-    height: 1.2em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .view-toggle button.active {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    opacity: 1;
+    background: var(--primary-color, #4285f4);
+    color: #fff;
 }
 
-.top-bar .view-toggle button:hover {
-    opacity: 1;
+.top-bar .view-toggle button:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
 }
 
 .top-bar .status-controls {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    padding: 3px;
 }
 
-/* Use icon class names from TSX */
 .top-bar .connection-status-icon {
-    /* font-size: 1.4em; Remove font-size */
-    line-height: 1;
-    /* Add flex centering for SVG */
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 4px 6px;
+    border-radius: 6px;
+    line-height: 1;
 }
+
 .top-bar .connection-status-icon svg {
-    width: 1.4em; /* Reduced icon size */
-    height: 1.4em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .connection-status-icon.connected {
-    color: #4caf50; /* Green for connected */
+    color: var(--success-color, #4caf50);
 }
 
 .top-bar .connection-status-icon.disconnected {
-    color: #ffc107; /* Yellow/Amber for disconnected */
+    color: var(--warning-color, #ffc107);
 }
 
 .top-bar .disconnect-button-icon {
-    background: none;
+    background: transparent;
     border: none;
-    color: var(--error-color, #dc3545); /* Use error color or default red */
-    /* font-size: 1.4em; Remove font-size */
-    line-height: 1;
+    color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
-    padding: 0;
-    /* Add flex centering for SVG */
+    padding: 4px 6px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
 }
+
 .top-bar .disconnect-button-icon svg {
-    width: 1.4em; /* Reduced icon size */
-    height: 1.4em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .disconnect-button-icon:hover {
-    color: var(--error-hover-color, #a71d2a); /* Darker red on hover */
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--error-color, #dc3545);
 }
 
 

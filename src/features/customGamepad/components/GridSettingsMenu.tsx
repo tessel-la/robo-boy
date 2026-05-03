@@ -88,9 +88,16 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
               <svg
                 className="grid-icon"
                 viewBox="0 0 24 24"
-                fill="currentColor"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <path d="M10 2v2H8V2H10m6 0v2h-2V2H16m-6 4v2H8V6H10m6 0v2h-2V6H16M4 6v2H2V6H4m0 6v2H2v-2H4M2 2v2h2V2H2m0 6v2h2V8H2m0 6v2h2v-2H2m8 6v2H8v-2H10m6 0v2h-2v-2H16m-6-4v2H8v-2H10m6 0v2h-2v-2H16M4 18v2H2v-2H4m16-16v2h-2V2H20m0 6v2h-2V8H20m0 6v2h-2v-2H20m0 6v2h-2v-2H20M10 10v2H8v-2H10m6 0v2h-2v-2H16" />
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
               </svg>
             </button>
           </div>

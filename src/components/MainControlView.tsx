@@ -24,35 +24,45 @@ import anime from 'animejs';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-    <circle cx="12" cy="13" r="4" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+    <circle cx="12" cy="13" r="3.5"/>
+    <circle cx="18.5" cy="10.5" r="1" fill="currentColor" stroke="none"/>
   </svg>
 );
 const IconMCV3d = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+    <path d="M2 7v10l10 5V12"/>
+    <path d="M22 7v10l-10 5"/>
+  </svg>
+);
+const IconMCVBT = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="4.5" rx="1.2"/>
+    <line x1="12" y1="6.5" x2="12" y2="10"/>
+    <line x1="4" y1="10" x2="20" y2="10"/>
+    <line x1="4" y1="10" x2="4" y2="14"/>
+    <line x1="20" y1="10" x2="20" y2="14"/>
+    <rect x="1" y="14" width="6" height="4.5" rx="1.2"/>
+    <rect x="17" y="14" width="6" height="4.5" rx="1.2"/>
   </svg>
 );
 const IconMCVLink = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M16.9 16.9l1.4 1.4M5.6 18.4l1.4-1.4M16.9 7.1l1.4-1.4"/>
   </svg>
 );
 const IconMCVUnlink = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    <line x1="2" y1="2" x2="22" y2="22" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" strokeDasharray="4 2"/>
+    <path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>
   </svg>
 );
-const IconMCVClose = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
+const IconMCVDisconnect = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12"/>
   </svg>
 );
 // --- End Top Bar Icons ---
@@ -61,9 +71,10 @@ const IconMCVClose = () => (
 const icons = {
   camera: <IconMCVCamera />,
   view3d: <IconMCV3d />,
+  bt: <IconMCVBT />,
   connected: <IconMCVLink />,
   disconnected: <IconMCVUnlink />,
-  disconnect: <IconMCVClose />,
+  disconnect: <IconMCVDisconnect />,
 };
 
 // Define Panel Types
@@ -398,13 +409,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             title="Behavior Tree"
             aria-label="Switch to Behavior Tree"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="6" height="6" rx="1" />
-              <rect x="9" y="15" width="6" height="6" rx="1" />
-              <rect x="15" y="15" width="6" height="6" rx="1" />
-              <path d="M6 9v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" />
-              <path d="M12 13v2" />
-            </svg>
+            {icons.bt}
           </button>
         </div>
         <div className="status-controls">

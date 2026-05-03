@@ -132,28 +132,30 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 12px 16px;
-    border: 2px dashed var(--primary-color, #007bff);
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #e0e0e0);
     background-color: transparent;
-    color: var(--primary-color, #007bff);
+    color: var(--text-color);
     text-align: left;
     cursor: pointer;
     border-radius: 6px;
-    transition: all 0.3s ease;
+    transition: background 0.15s ease, color 0.15s ease;
     font-weight: 500;
     margin-top: 8px;
 }
 
-.add-panel-menu .create-custom-button:hover {
-    background-color: var(--primary-color, #007bff);
-    color: white;
-    border-style: solid;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+.add-panel-menu .create-custom-button svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
 }
 
-.add-panel-menu .create-custom-button .icon {
-    font-size: 1.1em;
+.add-panel-menu .create-custom-button:hover {
+    background-color: var(--background-secondary);
+    color: var(--primary-color);
+    transform: none;
+    box-shadow: none;
 }
 
 /* Custom gamepad item with edit and delete buttons */
@@ -178,44 +180,36 @@
 .add-panel-menu .edit-gamepad-button,
 .add-panel-menu .delete-gamepad-button {
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     padding: 0;
-    border: 1px solid;
+    border: none;
     background-color: transparent;
-    border-radius: 50%;
-    font-size: 12px;
+    border-radius: 5px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
-    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
+    color: var(--text-color-secondary, #888);
 }
 
-.add-panel-menu .edit-gamepad-button {
-    border-color: var(--primary-color, #007bff);
-    color: var(--primary-color, #007bff);
-    margin-right: 4px;
+.add-panel-menu .edit-gamepad-button svg,
+.add-panel-menu .delete-gamepad-button svg {
+    width: 13px;
+    height: 13px;
 }
 
 .add-panel-menu .edit-gamepad-button:hover {
-    background-color: var(--primary-color, #007bff);
-    color: white;
-    transform: scale(1.1);
-}
-
-.add-panel-menu .delete-gamepad-button {
-    border-color: var(--error-color, #dc3545);
-    color: var(--error-color, #dc3545);
-    font-size: 14px;
-    font-weight: bold;
+    background-color: var(--background-secondary);
+    color: var(--primary-color);
+    transform: none;
 }
 
 .add-panel-menu .delete-gamepad-button:hover {
-    background-color: var(--error-color, #dc3545);
-    color: white;
-    transform: scale(1.1);
+    background-color: var(--background-secondary);
+    color: var(--error-color, #dc3545);
+    transform: none;
 }
 
 /* Responsive design for small screens */
