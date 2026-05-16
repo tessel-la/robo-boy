@@ -1,4 +1,4 @@
-# 🤖 Robo-Boy
+# Robo-Boy
 
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
@@ -10,34 +10,34 @@
 
 A web application for controlling ROS 2 robots, featuring a React frontend, ROS 2 integration via rosbridge, and secure local development setup with Caddy and HTTPS. Inspired by retro handheld consoles.
 
-## ✨ Features
+## Features
 
-*   📱 Responsive design for desktop and mobile
-*   🔗 ROS 2 connection (via rosbridge)
-*   📷 Camera stream display (via web_video_server)
-*   🕹️ Interchangeable control interfaces:
-    * 🚁 Drone control pad for aerial vehicles
-    * 🦾 Manipulator control for robotic arms
-    * And many more than you can create! 
-*   🧊 3D visualization support 
-*   🎨 Customizable themes with user-created color palettes
+*   Responsive design for desktop and mobile
+*   ROS 2 connection (via rosbridge)
+*   Camera stream display (via web_video_server)
+*   Interchangeable control interfaces:
+    * Drone control pad for aerial vehicles
+    * Manipulator control for robotic arms
+    * And many more that you can create!
+*   3D visualization support
+*   Customizable themes with user-created color palettes
 
-## 🎥 App Demo
+## App Demo
 <div align="center">
   <video src="https://github.com/user-attachments/assets/36b90514-79a6-42c4-9a92-b5231c9d16f3" width="50%" controls></video>
 </div>
 
-## 🚀 Getting Started
+## Getting Started
 
 <details>
-<summary><strong>📋 Prerequisites</strong></summary>
+<summary><strong>Prerequisites</strong></summary>
 
 *   [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed.
 *   [mkcert](https://github.com/FiloSottile/mkcert#installation) for local HTTPS setup.
 </details>
 
 <details>
-<summary><strong>⚙️ Local Development Setup</strong></summary>
+<summary><strong>Local Development Setup</strong></summary>
 
 1.  **Clone the Repository:**
     ```bash
@@ -71,7 +71,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
 </details>
 
 <details>
-<summary><strong>🛑 Stopping the Services</strong></summary>
+<summary><strong>Stopping the Services</strong></summary>
 
 ```bash
 # Stop and remove containers
@@ -82,12 +82,12 @@ docker compose down -v
 ```
 </details>
 
-## 🎮 Control Interfaces & Gamepad Creation
+## Control Interfaces & Gamepad Creation
 
 The application provides multiple control interfaces that can be swapped during runtime:
 
 <details>
-<summary><strong>🕹️ Pre-built Control Pads</strong></summary>
+<summary><strong>Pre-built Control Pads</strong></summary>
 
 #### Drone Control Pad
 Specialized control interface for aerial vehicles. For testing, use in conjunction with [aerial-sim](https://github.com/tessel-la/aerial-sim) repository.
@@ -100,7 +100,7 @@ Additional pre-built interfaces including standard dual-joystick, retro GameBoy-
 </details>
 
 <details>
-<summary><strong>🛠️ Custom Gamepad Creator</strong></summary>
+<summary><strong>Custom Gamepad Creator</strong></summary>
 
 **Create your own control interfaces directly in the app!** The Custom Gamepad Creator allows you to design personalized control layouts using a drag-and-drop interface.
 
@@ -122,15 +122,15 @@ Perfect for creating specialized control interfaces tailored to your specific ro
 </details>
 
 <details>
-<summary><strong>📑 Tab Management</strong></summary>
+<summary><strong>Tab Management</strong></summary>
 
 You can open multiple control panels and switch between them with tabs. Mix and match pre-built pads with your custom creations for maximum flexibility.
 </details>
 
-## 🎨 Theme Customization
+## Theme Customization
 
 <details>
-<summary><strong>🎭 Custom Theme Creator</strong></summary>
+<summary><strong>Custom Theme Creator</strong></summary>
 
 <div align="center">
   <video src="https://github.com/user-attachments/assets/3f28cc2b-b9e9-46fa-b36c-69324dec5664" width="30%" controls></video>
@@ -149,7 +149,7 @@ The application supports multiple themes, including user-created custom themes. 
 </details>
 
 <details>
-<summary><strong>⚙️ How Theme System Works</strong></summary>
+<summary><strong>How Theme System Works</strong></summary>
 
 *   Default themes (`light`, `dark`, `solarized`) have their CSS variables defined directly in `src/index.css` using `[data-theme="themename"]` selectors.
 *   Custom themes are stored in the browser's `localStorage`.
@@ -157,10 +157,10 @@ The application supports multiple themes, including user-created custom themes. 
 *   UI components should primarily use the defined CSS variables (e.g., `var(--primary-color)`, `var(--background-color)`) for styling to ensure they adapt correctly to the selected theme.
 </details>
 
-## 🛠️ Development Notes
+## Development Notes
 
 <details>
-<summary><strong>💻 Development Tips</strong></summary>
+<summary><strong>Development Tips</strong></summary>
 
 *   Changes to frontend code (in `/src`) should trigger hot-reloading in the browser.
 *   If you modify `Dockerfile`, `docker-compose.yml`, or `Caddyfile`, you'll need to rebuild and restart the services (`docker compose up -d --build --force-recreate`).
@@ -168,12 +168,12 @@ The application supports multiple themes, including user-created custom themes. 
 *   ROS stack logs can be viewed with `docker compose logs ros-stack`.
 </details>
 
-## 🧪 Testing
+## Testing
 
 The project is enforcing high code quality standards with strict coverage thresholds (>20% for Statements, Branches, Functions, and Lines).
 
 <details>
-<summary><strong>✅ Unit Tests</strong></summary>
+<summary><strong>Unit Tests</strong></summary>
 
 Unit tests are built with **Vitest**. They are co-located with source files (e.g., `src/hooks/useRos.ts` -> `src/hooks/useRos.test.ts`).
 
@@ -190,7 +190,7 @@ npm run test:coverage
 </details>
 
 <details>
-<summary><strong>🎭 End-to-End (E2E) Tests</strong></summary>
+<summary><strong>End-to-End (E2E) Tests</strong></summary>
 
 End-to-End tests are built with **Playwright**. They verify the full application flow in a real browser environment.
 
@@ -206,10 +206,10 @@ npm run e2e:report
 ```
 </details>
 
-## 🧩 Codebase Organization
+## Codebase Organization
 
 <details>
-<summary><strong>📁 Project Structure</strong></summary>
+<summary><strong>Project Structure</strong></summary>
 
 The codebase follows a component-based architecture:
 
@@ -253,16 +253,16 @@ The codebase follows a component-based architecture:
 </details>
 
 <details>
-<summary><strong>🎨 Adding Custom Gamepad Layouts</strong></summary>
+<summary><strong>Adding Custom Gamepad Layouts</strong></summary>
 
-#### 🎨 For End Users (In-App Creator)
+#### For End Users (In-App Creator)
 Use the built-in Custom Gamepad Creator accessible through the "+" button in control panel tabs. **No coding required!**
 - Drag-and-drop interface with pre-built components
 - Perfect for most use cases and quick prototyping
 - Supports joysticks, buttons, D-pads, toggles, and sliders
 - Real-time preview and easy ROS topic configuration
 
-#### 💻 For Developers (Code-Based Implementation)
+#### For Developers (Code-Based Implementation)
 **When the in-app system isn't enough** for your specific needs, you can implement custom gamepads via code:
 
 - **Advanced Components**: Create custom component types not available in the drag-and-drop editor

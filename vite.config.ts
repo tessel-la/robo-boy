@@ -19,7 +19,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate', // Automatically update service worker
       devOptions: {
-        enabled: true // Enable PWA in development for testing
+        enabled: process.env.VITE_PWA_DEV !== 'false' // Enable PWA in development for testing
       },
       // Use our external manifest file instead of inline configuration
       manifest: false, // Disable inline manifest

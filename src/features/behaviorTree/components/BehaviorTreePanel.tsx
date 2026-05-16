@@ -406,7 +406,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   return (
-    <div className="behavior-tree-panel">
+    <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
         currentTree={currentTree}
         isExecuting={isExecuting}
@@ -432,7 +432,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           onAddNode={handleAddNode}
         />
 
-        <div className="bt-canvas" ref={reactFlowWrapper}>
+        <div className="bt-canvas" ref={reactFlowWrapper} data-testid="bt-canvas">
           <ReactFlow
             nodes={nodes}
             edges={edges}

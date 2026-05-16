@@ -201,6 +201,8 @@
   background: none;
   border: none;
   color: var(--text-color-secondary, #888888);
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
   border-radius: 6px;
   transition: background 0.15s, color 0.15s;

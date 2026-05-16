@@ -103,6 +103,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           onClick={openMenu}
           title="Menu: save, load, rename"
           aria-label="Open menu"
+          data-testid="bt-menu-button"
         >
           <svg width="14" height="11" viewBox="0 0 14 11" fill="currentColor" aria-hidden="true">
             <rect y="0"   width="14" height="1.8" rx="0.9"/>
@@ -118,6 +119,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           onClick={onTogglePalette}
           title={isPaletteCollapsed ? 'Show node palette' : 'Hide node palette'}
           aria-label="Toggle node palette"
+          data-testid="bt-palette-toggle"
         >
           <svg width="18" height="16" viewBox="0 0 18 16" fill="currentColor" aria-hidden="true">
             <circle cx="9" cy="2.5" r="2"/>
@@ -166,17 +168,14 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       {/* ── Slide-in menu panel ──────────────────────────────────── */}
       {menuOpen && (
         <div className="bt-menu-overlay" onClick={closeMenu}>
-          <div className="bt-menu-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="bt-menu-panel" onClick={(e) => e.stopPropagation()} data-testid="bt-menu-panel">
 
             {/* Name editor + close */}
             <div className="bt-menu-section">
               <div className="bt-menu-section-top">
                 <label className="bt-menu-label">Name</label>
                 <button className="bt-popover-close" onClick={closeMenu} aria-label="Close menu">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                    <line x1="2" y1="2" x2="10" y2="10"/>
-                    <line x1="10" y1="2" x2="2" y2="10"/>
-                  </svg>
+                  ×
                 </button>
               </div>
               <input

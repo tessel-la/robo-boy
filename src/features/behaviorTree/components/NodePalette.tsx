@@ -294,6 +294,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     <div
       className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}
       ref={paletteRef}
+      data-testid="bt-node-palette"
       style={isMobile && sheetHeight !== null ? { height: sheetHeight } : undefined}
     >
       {isMobile && (
