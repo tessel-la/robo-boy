@@ -47,6 +47,13 @@ interface BehaviorTreePanelProps {
   isActive: boolean;
 }
 
+interface SaveNotice {
+  id: number;
+  type: 'success' | 'error';
+  title: string;
+  message: string;
+}
+
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 
 const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
@@ -69,11 +76,33 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [editingService, setEditingService] = useState<
     { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
+  const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const nodeIdCounter = useRef(0);
+  const saveNoticeTimer = useRef<number | null>(null);
 
   const { screenToFlowPosition, deleteElements } = useReactFlow();
+
+  const showSaveNotice = useCallback((notice: Omit<SaveNotice, 'id'>) => {
+    if (saveNoticeTimer.current !== null) {
+      window.clearTimeout(saveNoticeTimer.current);
+    }
+
+    setSaveNotice({ ...notice, id: Date.now() });
+    saveNoticeTimer.current = window.setTimeout(() => {
+      setSaveNotice(null);
+      saveNoticeTimer.current = null;
+    }, 3200);
+  }, []);
+
+  const dismissSaveNotice = useCallback(() => {
+    if (saveNoticeTimer.current !== null) {
+      window.clearTimeout(saveNoticeTimer.current);
+      saveNoticeTimer.current = null;
+    }
+    setSaveNotice(null);
+  }, []);
 
   // Initialize with empty tree
   useEffect(() => {
@@ -89,6 +118,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setCurrentTree(newTree);
     }
   }, [currentTree]);
+
+  useEffect(() => {
+    return () => {
+      if (saveNoticeTimer.current !== null) {
+        window.clearTimeout(saveNoticeTimer.current);
+      }
+    };
+  }, []);
 
   // Strip sourceHandle so edges always bind to the node's default (null-id)
   // handle. This keeps saved trees compatible after the handle-ID refactor.
@@ -250,11 +287,19 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const success = saveBehaviorTree(updatedTree);
     if (success) {
       setCurrentTree(updatedTree);
-      alert(`Tree "${updatedTree.name}" saved successfully!`);
+      showSaveNotice({
+        type: 'success',
+        title: 'Tree saved',
+        message: `"${updatedTree.name}" is stored locally.`,
+      });
     } else {
-      alert('Failed to save tree');
+      showSaveNotice({
+        type: 'error',
+        title: 'Save failed',
+        message: 'The tree could not be saved. Please try again.',
+      });
     }
-  }, [currentTree, nodes, edges]);
+  }, [currentTree, nodes, edges, showSaveNotice]);
 
   const handleLoad = useCallback((tree: BehaviorTree) => {
     setCurrentTree(tree);
@@ -422,6 +467,49 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onDeleteSelected={handleDeleteSelected}
         onRename={handleRename}
       />
+
+      {saveNotice && (
+        <div
+          key={saveNotice.id}
+          className={`bt-save-toast ${saveNotice.type}`}
+          role={saveNotice.type === 'error' ? 'alert' : 'status'}
+          aria-live={saveNotice.type === 'error' ? 'assertive' : 'polite'}
+        >
+          <div className="bt-save-toast-icon" aria-hidden="true">
+            {saveNotice.type === 'success' ? (
+              <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
+                <path
+                  d="M1 6.4l3.8 3.8L14 1"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path
+                  d="M1.5 1.5l10 10M11.5 1.5l-10 10"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
+          </div>
+          <div className="bt-save-toast-copy">
+            <div className="bt-save-toast-title">{saveNotice.title}</div>
+            <div className="bt-save-toast-message">{saveNotice.message}</div>
+          </div>
+          <button
+            className="bt-save-toast-close"
+            onClick={dismissSaveNotice}
+            aria-label="Dismiss notification"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="bt-content">
         <NodePalette

@@ -21,6 +21,108 @@
   background: var(--background-color, #fafafa);
 }
 
+.bt-save-toast {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  z-index: 360;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(340px, 80%);
+  padding: 10px 12px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: var(--text-color, #333333);
+  pointer-events: auto;
+  animation: bt-save-toast-in 0.22s ease-out;
+}
+
+.bt-save-toast.success {
+  border-color: color-mix(in srgb, var(--success-color, #4caf50) 40%, var(--border-color, #e0e0e0));
+}
+
+.bt-save-toast.error {
+  border-color: color-mix(in srgb, var(--error-color, #f44336) 42%, var(--border-color, #e0e0e0));
+}
+
+.bt-save-toast-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bt-save-toast.success .bt-save-toast-icon {
+  background: color-mix(in srgb, var(--success-color, #4caf50) 14%, transparent);
+  color: var(--success-color, #4caf50);
+}
+
+.bt-save-toast.error .bt-save-toast-icon {
+  background: color-mix(in srgb, var(--error-color, #f44336) 12%, transparent);
+  color: var(--error-color, #f44336);
+}
+
+.bt-save-toast-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.bt-save-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.bt-save-toast-message {
+  margin-top: 2px;
+  color: var(--text-color-secondary, #666666);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-save-toast-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-color-secondary, #888888);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bt-save-toast-close:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
+
+@keyframes bt-save-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 /* React Flow overrides to match theme */
 .react-flow {
   background: var(--background-color, #fafafa);
@@ -130,6 +232,11 @@
 @media (max-width: 768px) {
   .bt-content {
     flex-direction: column;
+  }
+
+  .bt-save-toast {
+    top: 56px;
+    width: min(340px, 80%);
   }
 
   .bt-canvas {
