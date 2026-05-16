@@ -304,7 +304,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         />
       )}
       {/* palette-body scrolls independently — drag handle stays outside overflow */}
-      <div className={isMobile ? 'palette-body' : undefined}>
+      <div className="palette-body">
       <div className="palette-header">
         <h3 className="palette-title">Node Palette</h3>
         <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette" aria-label="Collapse palette">
