@@ -55,6 +55,10 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
       - DISPLAY=${DISPLAY}
+      # FastDDS shared-memory transport can deadlock action calls across
+      # host-networked containers running as different users. Use UDP for
+      # cross-container ROS traffic while keeping DDS discovery intact.
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
 
 volumes:
   caddy-data:

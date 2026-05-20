@@ -132,14 +132,15 @@ function unwrapParameterValue(value: unknown): unknown {
 
 function normalizeNumber(value: unknown, fallback: number, integer: boolean): number {
   const unwrapped = unwrapParameterValue(value);
+  const safeFallback = Number.isFinite(fallback) ? fallback : 0;
   const parsed =
     typeof unwrapped === 'number'
       ? unwrapped
       : typeof unwrapped === 'string' && unwrapped.trim() !== ''
         ? Number(unwrapped)
-        : fallback;
+        : safeFallback;
 
-  if (!Number.isFinite(parsed)) return fallback;
+  if (!Number.isFinite(parsed)) return safeFallback;
   return integer ? Math.trunc(parsed) : parsed;
 }
 

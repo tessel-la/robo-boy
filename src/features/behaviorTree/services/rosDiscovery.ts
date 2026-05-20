@@ -304,11 +304,14 @@ function rosDefaultValue(fieldtype: string, arraylen: number, allTypedefs: Field
   const scalar = (): unknown => {
     switch (fieldtype) {
       case 'bool':
+      case 'boolean':
         return false;
       case 'string':
         return '';
       case 'byte':
       case 'char':
+      case 'int':
+      case 'uint':
       case 'int8':
       case 'int16':
       case 'int32':
@@ -317,6 +320,8 @@ function rosDefaultValue(fieldtype: string, arraylen: number, allTypedefs: Field
       case 'uint16':
       case 'uint32':
       case 'uint64':
+      case 'float':
+      case 'double':
       case 'float32':
       case 'float64':
         return 0;
@@ -536,6 +541,7 @@ export interface ActionGoalDetails {
 // ROS primitive types that should never be expanded into sub-fields.
 const SCHEMA_PRIMITIVES = new Set([
   'bool',
+  'boolean',
   'string',
   'int8',
   'int16',
