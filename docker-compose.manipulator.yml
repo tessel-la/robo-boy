@@ -1,0 +1,19 @@
+services:
+  ros-stack:
+    volumes:
+      - manipulator-sim_colcon_install:/overlay_ws/manipulator:ro
+      # manipulator-sim uses colcon --symlink-install, so files inside the
+      # install volume point back to its build and source workspace paths. The
+      # /overlay_ws/build mount satisfies relative hooks generated from the
+      # /overlay_ws/manipulator install prefix; the moveit_ws mount satisfies
+      # absolute symlinks from the original simulation container.
+      - manipulator-sim_colcon_build:/overlay_ws/build:ro
+      - manipulator-sim_colcon_build:/home/rosuser/moveit_ws/build:ro
+      - ${MANIPULATOR_SIM_DIR:-../manipulator-sim}/manipulator_action_interfaces:/home/rosuser/moveit_ws/src/manipulator_action_interfaces:ro
+      - ${MANIPULATOR_SIM_DIR:-../manipulator-sim}/manipulator_actions:/home/rosuser/moveit_ws/src/manipulator_actions:ro
+
+volumes:
+  manipulator-sim_colcon_install:
+    external: true
+  manipulator-sim_colcon_build:
+    external: true

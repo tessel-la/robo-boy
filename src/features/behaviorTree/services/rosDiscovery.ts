@@ -1,11 +1,6 @@
 import type { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
-import {
-  ROSDiscoveryResult,
-  ROSActionInfo,
-  ROSServiceInfo,
-  ROSTopicInfo,
-} from '../types';
+import { ROSDiscoveryResult, ROSActionInfo, ROSServiceInfo, ROSTopicInfo } from '../types';
 
 /**
  * Discover available ROS actions.
@@ -20,7 +15,7 @@ import {
  *    contend on rclpy's node handle lock and drop the WebSocket connection.
  */
 export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const rosApi = ros as any;
     // Confirmed action bases and their interface types.
     const actionTypes = new Map<string, string>();
@@ -29,7 +24,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
     // sequentially, never with Promise.all, to avoid concurrent rosbridge
     // service client creation crashing the WebSocket connection.
     const probeActionType = (candidate: string) =>
-      new Promise<void>((done) => {
+      new Promise<void>(done => {
         try {
           const srv = new (ROSLIB as any).Service({
             ros,
@@ -46,7 +41,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
               }
               done();
             },
-            () => done(), // not an action server — ignore silently
+            () => done() // not an action server — ignore silently
           );
         } catch {
           done();
@@ -56,7 +51,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
     // Fetch action server names from /rosapi/action_servers (single call,
     // uses hidden topics internally — reliable on ROS 2 Humble).
     const fetchActionServers = (): Promise<string[]> =>
-      new Promise<string[]>((done) => {
+      new Promise<string[]>(done => {
         try {
           const srv = new (ROSLIB as any).Service({
             ros,
@@ -73,7 +68,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
             () => {
               console.warn('[BT] /rosapi/action_servers failed, skipping Phase 2');
               done([]);
-            },
+            }
           );
         } catch {
           done([]);
@@ -111,13 +106,11 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
       }
 
       // Build the final list from all confirmed action servers.
-      const actions: ROSActionInfo[] = Array.from(actionTypes.entries()).map(
-        ([name, type]) => {
-          const parts = name.split('/').filter(Boolean);
-          const namespace = parts.slice(0, -1).join('/');
-          return { name, type, namespace: namespace || '/' };
-        }
-      );
+      const actions: ROSActionInfo[] = Array.from(actionTypes.entries()).map(([name, type]) => {
+        const parts = name.split('/').filter(Boolean);
+        const namespace = parts.slice(0, -1).join('/');
+        return { name, type, namespace: namespace || '/' };
+      });
 
       console.log('[BT] Total actions discovered:', actions.length);
       resolve(actions);
@@ -126,7 +119,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
     rosApi.getServices(
       (services: string[]) => {
         console.log('[BT] Discovering actions from services:', services.length);
-        services.forEach((service) => {
+        services.forEach(service => {
           const idx = service.indexOf('/_action');
           if (idx > 0) {
             actionBases.add(service.substring(0, idx));
@@ -177,7 +170,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
 export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> => {
   const rosApi = ros as any;
 
-  const allServices: string[] = await new Promise((resolve) => {
+  const allServices: string[] = await new Promise(resolve => {
     rosApi.getServices(
       (services: string[]) => resolve(services),
       (error: any) => {
@@ -188,7 +181,7 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
   });
 
   const filtered = allServices.filter(
-    (service) =>
+    service =>
       !service.startsWith('/rosout') &&
       !service.startsWith('/_') &&
       !service.startsWith('/rosapi/') &&
@@ -216,7 +209,7 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
  * Discover available ROS topics suitable for publishing
  */
 export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const rosApi = ros as any;
     rosApi.getTopics(
       (result: any) => {
@@ -253,9 +246,7 @@ export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
 /**
  * Discover all available ROS resources (actions, services, topics)
  */
-export const discoverAllROSResources = async (
-  ros: Ros
-): Promise<ROSDiscoveryResult> => {
+export const discoverAllROSResources = async (ros: Ros): Promise<ROSDiscoveryResult> => {
   try {
     const [actions, services, topics] = await Promise.all([
       discoverROSActions(ros),
@@ -281,11 +272,8 @@ export const discoverAllROSResources = async (
 /**
  * Get service type for a specific service
  */
-export const getServiceType = async (
-  ros: Ros,
-  serviceName: string
-): Promise<string | null> => {
-  return new Promise((resolve) => {
+export const getServiceType = async (ros: Ros, serviceName: string): Promise<string | null> => {
+  return new Promise(resolve => {
     const rosApi = ros as any;
     rosApi.getServiceType(
       serviceName,
@@ -312,25 +300,30 @@ interface FieldTypedef {
 }
 
 /** Build a default value for one field from its ROS type. */
-function rosDefaultValue(
-  fieldtype: string,
-  arraylen: number,
-  allTypedefs: FieldTypedef[]
-): unknown {
+function rosDefaultValue(fieldtype: string, arraylen: number, allTypedefs: FieldTypedef[]): unknown {
   const scalar = (): unknown => {
     switch (fieldtype) {
-      case 'bool':    return false;
-      case 'string':  return '';
-      case 'byte': case 'char':
-      case 'int8':  case 'int16':  case 'int32':  case 'int64':
-      case 'uint8': case 'uint16': case 'uint32': case 'uint64':
-      case 'float32': case 'float64': return 0;
+      case 'bool':
+        return false;
+      case 'string':
+        return '';
+      case 'byte':
+      case 'char':
+      case 'int8':
+      case 'int16':
+      case 'int32':
+      case 'int64':
+      case 'uint8':
+      case 'uint16':
+      case 'uint32':
+      case 'uint64':
+      case 'float32':
+      case 'float64':
+        return 0;
       default: {
         // Complex / nested type — find its typedef and recurse
         const nested = allTypedefs.find(
-          (t) =>
-            t.type === fieldtype ||
-            t.type.split('/').pop() === fieldtype.split('/').pop()
+          t => t.type === fieldtype || t.type.split('/').pop() === fieldtype.split('/').pop()
         );
         return nested ? buildDefaultsFromTypedef(nested, allTypedefs) : {};
       }
@@ -344,10 +337,7 @@ function rosDefaultValue(
   return scalar();
 }
 
-function buildDefaultsFromTypedef(
-  typedef: FieldTypedef,
-  allTypedefs: FieldTypedef[]
-): Record<string, unknown> {
+function buildDefaultsFromTypedef(typedef: FieldTypedef, allTypedefs: FieldTypedef[]): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
   const names: string[] = typedef.fieldnames ?? [];
   const types: string[] = typedef.fieldtypes ?? [];
@@ -378,11 +368,8 @@ function buildDefaultsFromTypedef(
   return obj;
 }
 
-async function queryMessageDetails(
-  ros: Ros,
-  type: string
-): Promise<Record<string, unknown> | null> {
-  return new Promise((resolve) => {
+async function queryMessageDetails(ros: Ros, type: string): Promise<Record<string, unknown> | null> {
+  return new Promise(resolve => {
     try {
       const srv = new (ROSLIB as any).Service({
         ros,
@@ -397,12 +384,15 @@ async function queryMessageDetails(
           // Full raw log so future type-introspection issues are diagnosable.
           console.log(
             `[BT] /rosapi/message_details("${type}") → ${typedefs.length} typedef(s):`,
-            typedefs.map((t) =>
-              `${t.type} fields:[${t.fieldnames?.join(',')}] ` +
-              `types:[${t.fieldtypes?.join(',')}] ` +
-              `lens:[${t.fieldarraylen?.join(',')}] ` +
-              `consts:[${t.constnames?.join(',')}]`
-            ).join('\n')
+            typedefs
+              .map(
+                t =>
+                  `${t.type} fields:[${t.fieldnames?.join(',')}] ` +
+                  `types:[${t.fieldtypes?.join(',')}] ` +
+                  `lens:[${t.fieldarraylen?.join(',')}] ` +
+                  `consts:[${t.constnames?.join(',')}]`
+              )
+              .join('\n')
           );
 
           if (!typedefs.length) {
@@ -416,9 +406,9 @@ async function queryMessageDetails(
           const goalSuffix = type.split('/').pop() ?? ''; // e.g. "Takeoff_Goal"
           const targetTypedef =
             // 1. Exact suffix match (most reliable)
-            typedefs.find((t) => t.type.endsWith(goalSuffix) && t.fieldnames?.length) ??
+            typedefs.find(t => t.type.endsWith(goalSuffix) && t.fieldnames?.length) ??
             // 2. First typedef with actual fields
-            typedefs.find((t) => t.fieldnames?.length) ??
+            typedefs.find(t => t.fieldnames?.length) ??
             null;
 
           if (!targetTypedef) {
@@ -442,6 +432,49 @@ async function queryMessageDetails(
   });
 }
 
+async function queryActionGoalSchema(ros: Ros, actionType: string): Promise<Record<string, unknown> | null> {
+  return new Promise(resolve => {
+    try {
+      const srv = new (ROSLIB as any).Service({
+        ros,
+        name: '/rosapi/action_goal_details',
+        serviceType: 'rosapi_msgs/srv/ActionGoalDetails',
+      });
+      srv.callService(
+        { type: actionType },
+        (res: any) => {
+          const typedefs: FieldTypedef[] = res?.typedefs ?? [];
+
+          console.log(
+            `[BT] /rosapi/action_goal_details("${actionType}") → ${typedefs.length} typedef(s):`,
+            typedefs.map(t => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+          );
+
+          const targetTypedef =
+            typedefs.find(t => t.type.endsWith('_Goal') && t.fieldnames?.length) ??
+            typedefs.find(t => t.fieldnames?.length) ??
+            null;
+
+          if (!targetTypedef) {
+            resolve(null);
+            return;
+          }
+
+          const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
+          resolve(Object.keys(defaults).length > 0 ? defaults : null);
+        },
+        (err: any) => {
+          console.warn(`[BT] /rosapi/action_goal_details("${actionType}") failed:`, err);
+          resolve(null);
+        }
+      );
+    } catch (e) {
+      console.warn(`[BT] /rosapi/action_goal_details("${actionType}") exception:`, e);
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Fetch the goal message schema for a ROS 2 action and return an object with
  * default values for every field, ready to paste into the parameter editor.
@@ -450,17 +483,20 @@ async function queryMessageDetails(
  *   1. as2_msgs/action/TakeoffBehavior_Goal
  *   2. as2_msgs/TakeoffBehavior_Goal
  */
-export const fetchActionGoalSchema = async (
-  ros: Ros,
-  actionType: string
-): Promise<Record<string, unknown> | null> => {
+export const fetchActionGoalSchema = async (ros: Ros, actionType: string): Promise<Record<string, unknown> | null> => {
+  const actionGoalResult = await queryActionGoalSchema(ros, actionType);
+  if (actionGoalResult !== null) {
+    console.log(`[BT] Got goal schema for "${actionType}" via /rosapi/action_goal_details:`, actionGoalResult);
+    return actionGoalResult;
+  }
+
   const parts = actionType.split('/');
   const pkg = parts[0];
   const name = parts[parts.length - 1];
 
   const candidates = [
-    `${actionType}_Goal`,       // as2_msgs/action/TakeoffBehavior_Goal
-    `${pkg}/${name}_Goal`,      // as2_msgs/TakeoffBehavior_Goal
+    `${actionType}_Goal`, // as2_msgs/action/TakeoffBehavior_Goal
+    `${pkg}/${name}_Goal`, // as2_msgs/TakeoffBehavior_Goal
   ];
 
   for (const candidate of candidates) {
@@ -499,11 +535,24 @@ export interface ActionGoalDetails {
 
 // ROS primitive types that should never be expanded into sub-fields.
 const SCHEMA_PRIMITIVES = new Set([
-  'bool', 'string',
-  'int8', 'int16', 'int32', 'int64',
-  'uint8', 'uint16', 'uint32', 'uint64',
-  'float32', 'float64', 'float', 'double',
-  'int', 'uint', 'byte', 'char',
+  'bool',
+  'string',
+  'int8',
+  'int16',
+  'int32',
+  'int64',
+  'uint8',
+  'uint16',
+  'uint32',
+  'uint64',
+  'float32',
+  'float64',
+  'float',
+  'double',
+  'int',
+  'uint',
+  'byte',
+  'char',
 ]);
 
 /**
@@ -533,11 +582,7 @@ function buildSchemaFields(
     // Attempt to expand nested message types (not arrays, not primitives)
     let subfields: ActionFieldSchema[] | undefined;
     if (depth < 3 && arrayLen === -1 && !SCHEMA_PRIMITIVES.has(rosType)) {
-      const nested = allTypedefs.find(
-        (t) =>
-          t.type === rosType ||
-          t.type.split('/').pop() === rosType.split('/').pop()
-      );
+      const nested = allTypedefs.find(t => t.type === rosType || t.type.split('/').pop() === rosType.split('/').pop());
       if (nested?.fieldnames?.length) {
         const sub = buildSchemaFields(nested, allTypedefs, true, depth + 1);
         if (sub.length > 0) subfields = sub;
@@ -562,7 +607,7 @@ async function queryMessageDetailsFull(
    *  service-type response. */
   targetSuffix?: string
 ): Promise<ActionGoalDetails | null> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     try {
       const srv = new (ROSLIB as any).Service({
         ros,
@@ -576,15 +621,18 @@ async function queryMessageDetailsFull(
 
           console.log(
             `[BT] message_details("${type}") → ${typedefs.length} typedef(s):`,
-            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+            typedefs.map(t => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
           );
 
-          if (!typedefs.length) { resolve(null); return; }
+          if (!typedefs.length) {
+            resolve(null);
+            return;
+          }
 
-          const suffix = targetSuffix ?? (type.split('/').pop() ?? '');
+          const suffix = targetSuffix ?? type.split('/').pop() ?? '';
           const targetTypedef =
-            typedefs.find((t) => t.type.endsWith(suffix) && t.fieldnames?.length) ??
-            typedefs.find((t) => t.fieldnames?.length) ??
+            typedefs.find(t => t.type.endsWith(suffix) && t.fieldnames?.length) ??
+            typedefs.find(t => t.fieldnames?.length) ??
             null;
 
           if (!targetTypedef) {
@@ -610,24 +658,69 @@ async function queryMessageDetailsFull(
   });
 }
 
+async function queryActionGoalDetails(ros: Ros, actionType: string): Promise<ActionGoalDetails | null> {
+  return new Promise(resolve => {
+    try {
+      const srv = new (ROSLIB as any).Service({
+        ros,
+        name: '/rosapi/action_goal_details',
+        serviceType: 'rosapi_msgs/srv/ActionGoalDetails',
+      });
+      srv.callService(
+        { type: actionType },
+        (res: any) => {
+          const typedefs: FieldTypedef[] = res?.typedefs ?? [];
+
+          console.log(
+            `[BT] action_goal_details("${actionType}") → ${typedefs.length} typedef(s):`,
+            typedefs.map(t => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+          );
+
+          const targetTypedef =
+            typedefs.find(t => t.type.endsWith('_Goal') && t.fieldnames?.length) ??
+            typedefs.find(t => t.fieldnames?.length) ??
+            null;
+
+          if (!targetTypedef) {
+            console.warn(`[BT] action_goal_details("${actionType}"): no goal typedef with fields`);
+            resolve(null);
+            return;
+          }
+
+          const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
+          const fields = buildSchemaFields(targetTypedef, typedefs, true);
+          resolve(fields.length > 0 ? { fields, defaults } : null);
+        },
+        (err: any) => {
+          console.warn(`[BT] action_goal_details("${actionType}") call failed:`, err);
+          resolve(null);
+        }
+      );
+    } catch (e) {
+      console.warn(`[BT] action_goal_details("${actionType}") exception:`, e);
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Fetch the goal message schema for a ROS 2 action, returning both per-field
  * type information and default values.  Useful for building typed form UIs.
  *
  * Tries the same two type-string formats as fetchActionGoalSchema.
  */
-export const fetchActionGoalDetails = async (
-  ros: Ros,
-  actionType: string
-): Promise<ActionGoalDetails | null> => {
+export const fetchActionGoalDetails = async (ros: Ros, actionType: string): Promise<ActionGoalDetails | null> => {
+  const actionGoalResult = await queryActionGoalDetails(ros, actionType);
+  if (actionGoalResult !== null) {
+    console.log(`[BT] fetchActionGoalDetails "${actionType}" via /rosapi/action_goal_details:`, actionGoalResult);
+    return actionGoalResult;
+  }
+
   const parts = actionType.split('/');
   const pkg = parts[0];
   const name = parts[parts.length - 1];
 
-  const candidates = [
-    `${actionType}_Goal`,
-    `${pkg}/${name}_Goal`,
-  ];
+  const candidates = [`${actionType}_Goal`, `${pkg}/${name}_Goal`];
 
   for (const candidate of candidates) {
     const result = await queryMessageDetailsFull(ros, candidate);
@@ -645,11 +738,8 @@ export const fetchActionGoalDetails = async (
  * /rosapi/service_request_details endpoint which takes the service type
  * directly and reliably returns the request message typedefs.
  */
-async function queryServiceRequestDetails(
-  ros: Ros,
-  serviceType: string
-): Promise<ActionGoalDetails | null> {
-  return new Promise((resolve) => {
+async function queryServiceRequestDetails(ros: Ros, serviceType: string): Promise<ActionGoalDetails | null> {
+  return new Promise(resolve => {
     try {
       const srv = new (ROSLIB as any).Service({
         ros,
@@ -662,18 +752,24 @@ async function queryServiceRequestDetails(
           const typedefs: FieldTypedef[] = res?.typedefs ?? [];
           console.log(
             `[BT] service_request_details("${serviceType}") → ${typedefs.length} typedef(s):`,
-            typedefs.map((t) => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
+            typedefs.map(t => `${t.type}[${t.fieldnames?.join(',') ?? ''}]`).join(' | ')
           );
 
-          if (!typedefs.length) { resolve(null); return; }
+          if (!typedefs.length) {
+            resolve(null);
+            return;
+          }
 
           // Prefer typedef ending in _Request; fall back to first with fields
           const targetTypedef =
-            typedefs.find((t) => t.type.endsWith('_Request') && t.fieldnames?.length) ??
-            typedefs.find((t) => t.fieldnames?.length) ??
+            typedefs.find(t => t.type.endsWith('_Request') && t.fieldnames?.length) ??
+            typedefs.find(t => t.fieldnames?.length) ??
             null;
 
-          if (!targetTypedef) { resolve(null); return; }
+          if (!targetTypedef) {
+            resolve(null);
+            return;
+          }
 
           const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
           const fields = buildSchemaFields(targetTypedef, typedefs, true);
@@ -702,10 +798,7 @@ async function queryServiceRequestDetails(
  *   3. message_details with std_srvs/srv/SetBool (scan typedefs for _Request)
  *   4. message_details with std_srvs/SetBool     (scan typedefs for _Request)
  */
-export const fetchServiceRequestSchema = async (
-  ros: Ros,
-  serviceType: string
-): Promise<ActionGoalDetails | null> => {
+export const fetchServiceRequestSchema = async (ros: Ros, serviceType: string): Promise<ActionGoalDetails | null> => {
   if (!serviceType || serviceType === 'unknown') return null;
 
   // Strategy 0: dedicated rosapi endpoint (most reliable)
@@ -721,8 +814,8 @@ export const fetchServiceRequestSchema = async (
 
   // Strategy 1 & 2: explicit _Request suffix (full path or short path)
   const explicitCandidates = [
-    `${serviceType}_Request`,   // e.g. std_srvs/srv/SetBool_Request
-    `${pkg}/${name}_Request`,   // e.g. std_srvs/SetBool_Request
+    `${serviceType}_Request`, // e.g. std_srvs/srv/SetBool_Request
+    `${pkg}/${name}_Request`, // e.g. std_srvs/SetBool_Request
   ];
 
   for (const candidate of explicitCandidates) {
@@ -735,8 +828,8 @@ export const fetchServiceRequestSchema = async (
 
   // Strategy 3 & 4: bare service type, scan typedefs for _Request entry
   const bareCandidates = [
-    serviceType,          // e.g. std_srvs/srv/SetBool
-    `${pkg}/${name}`,     // e.g. std_srvs/SetBool
+    serviceType, // e.g. std_srvs/srv/SetBool
+    `${pkg}/${name}`, // e.g. std_srvs/SetBool
   ];
 
   for (const candidate of bareCandidates) {
@@ -754,11 +847,8 @@ export const fetchServiceRequestSchema = async (
 /**
  * Get message type for a specific topic
  */
-export const getTopicType = async (
-  ros: Ros,
-  topicName: string
-): Promise<string | null> => {
-  return new Promise((resolve) => {
+export const getTopicType = async (ros: Ros, topicName: string): Promise<string | null> => {
+  return new Promise(resolve => {
     const rosApi = ros as any;
     rosApi.getTopicType(
       topicName,
@@ -772,4 +862,3 @@ export const getTopicType = async (
     );
   });
 };
-

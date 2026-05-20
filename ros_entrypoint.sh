@@ -10,35 +10,52 @@ if [ -f /republisher_ws/install/setup.bash ]; then
     source /republisher_ws/install/setup.bash
 fi
 
-# Source optional robot overlay workspace for custom message types.
-# To enable: mount your robot's workspace install dir to /overlay_ws in
-# docker-compose.yml, e.g.:
-#   volumes:
-#     - /path/to/robot_ws/install:/overlay_ws:ro
+# Source optional robot overlay workspaces for custom message types.
+# Supported mounts:
+#   /overlay_ws                         legacy single install workspace
+#   /overlay_ws/<name>                  one or more install workspaces
 #
-# The workspace's setup.bash may have "not found" warnings because local_setup.bash
-# paths reference the original build container. We therefore add the Python
-# dist-packages directories directly to PYTHONPATH as a reliable fallback.
-if [ -d /overlay_ws ]; then
-    echo "--- Activating overlay workspace (/overlay_ws) ---"
-    # Attempt standard setup (best-effort; warnings are harmless)
-    source /overlay_ws/setup.bash 2>/dev/null || true
-    # Directly prepend all dist-packages dirs so Python imports always work
-    for py_dir in /overlay_ws/*/local/lib/python*/dist-packages; do
+# Some setup.bash files contain paths from the original build container, so we
+# also add Python, library, and ament paths directly as a reliable fallback.
+activate_overlay_workspace() {
+    local overlay_dir="$1"
+
+    if [ ! -f "${overlay_dir}/setup.bash" ]; then
+        return
+    fi
+
+    echo "--- Activating overlay workspace (${overlay_dir}) ---"
+    source "${overlay_dir}/setup.bash" 2>/dev/null || true
+
+    # Directly prepend all Python package dirs so imports work even when a
+    # relocated setup.bash cannot source every generated hook cleanly.
+    for py_dir in "${overlay_dir}"/*/local/lib/python*/dist-packages "${overlay_dir}"/*/lib/python*/site-packages; do
         if [ -d "$py_dir" ]; then
             export PYTHONPATH="${py_dir}:${PYTHONPATH}"
         fi
     done
-    # Add lib dirs to LD_LIBRARY_PATH so C type-support .so files can be loaded
-    for lib_dir in /overlay_ws/*/lib; do
+
+    # Add lib dirs to LD_LIBRARY_PATH so C type-support .so files can be loaded.
+    for lib_dir in "${overlay_dir}"/*/lib; do
         if [ -d "$lib_dir" ]; then
             export LD_LIBRARY_PATH="${lib_dir}:${LD_LIBRARY_PATH}"
         fi
     done
-    # Add overlay package prefixes to AMENT_PREFIX_PATH so C type support can find them
-    for pkg_dir in /overlay_ws/*/; do
+
+    # Add overlay package prefixes to AMENT_PREFIX_PATH so C type support can find them.
+    for pkg_dir in "${overlay_dir}"/*/; do
         if [ -d "${pkg_dir}share/ament_index" ]; then
             export AMENT_PREFIX_PATH="${pkg_dir%/}:${AMENT_PREFIX_PATH}"
+        fi
+    done
+}
+
+if [ -d /overlay_ws ]; then
+    activate_overlay_workspace /overlay_ws
+
+    for overlay_dir in /overlay_ws/*; do
+        if [ -d "$overlay_dir" ]; then
+            activate_overlay_workspace "$overlay_dir"
         fi
     done
 fi

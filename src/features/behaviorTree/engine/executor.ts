@@ -11,49 +11,193 @@ import {
   ROSTopicNodeData,
 } from '../types';
 import { ACTION_TEMPLATES } from '../actionTemplates';
+import { ActionFieldSchema, fetchActionGoalDetails } from '../services/rosDiscovery';
 
 // Tracks an in-flight ROS2 action goal so stop()/timeout can cancel it via
-// the action's underlying cancel_goal service.
+// rosbridge's action protocol.
 interface ActiveAction {
   actionName: string;
-  uuid: number[];
+  requestId: string;
 }
 
 // action_msgs/msg/GoalStatus values
 const GOAL_STATUS_SUCCEEDED = 4;
-const GOAL_STATUS_CANCELED  = 5;
-const GOAL_STATUS_ABORTED   = 6;
+const GOAL_STATUS_CANCELED = 5;
+const GOAL_STATUS_ABORTED = 6;
 
-// ROS 2 action goal_id is a unique_identifier_msgs/UUID (16-byte array).
-// rosbridge accepts a plain JS number[] when sending, but encodes uint8[16]
-// as a base64 string when delivering topic messages.
-function generateGoalUuid(): number[] {
+const ROS_BOOL_TYPES = new Set(['bool', 'boolean']);
+const ROS_FLOAT_TYPES = new Set(['float32', 'float64', 'float', 'double']);
+const ROS_INT_TYPES = new Set([
+  'byte',
+  'char',
+  'int',
+  'uint',
+  'int8',
+  'int16',
+  'int32',
+  'int64',
+  'uint8',
+  'uint16',
+  'uint32',
+  'uint64',
+]);
+
+interface RosbridgeActionMessage {
+  op?: string;
+  id?: string;
+  action?: string;
+  result?: boolean;
+  status?: number;
+  values?: unknown;
+}
+
+type RosbridgeActionListener = (message: RosbridgeActionMessage) => void;
+
+interface RosWithActionBridge extends Ros {
+  __btActionBridgeListeners?: Set<RosbridgeActionListener>;
+}
+
+function createActionRequestId(nodeId: string): string {
   const buf = new Uint8Array(16);
   crypto.getRandomValues(buf);
-  return Array.from(buf);
+  const suffix = Array.from(buf, v => v.toString(16).padStart(2, '0')).join('');
+  return `bt-action-${nodeId}-${suffix}`;
 }
 
-/**
- * Normalise a UUID value received from rosbridge.
- * Outgoing (sent by us): number[16] — rosbridge encodes to ROS bytes.
- * Incoming (from topic): base64 string OR number[] depending on rosbridge ver.
- * We accept either form and return a number[].
- */
-function decodeRosbridgeUuid(raw: number[] | string | undefined): number[] | null {
-  if (!raw) return null;
-  if (Array.isArray(raw)) return raw as number[];
-  if (typeof raw === 'string') {
-    try {
-      const bin = atob(raw);
-      return Array.from({ length: bin.length }, (_, i) => bin.charCodeAt(i));
-    } catch { return null; }
+function parseRosbridgeJsonFrame(event: unknown): RosbridgeActionMessage | null {
+  const data = typeof event === 'string' ? event : (event as { data?: unknown } | null)?.data;
+  if (typeof data !== 'string') return null;
+
+  try {
+    return JSON.parse(data) as RosbridgeActionMessage;
+  } catch {
+    return null;
   }
-  return null;
 }
 
-/** Compare two 16-byte UUID arrays for equality. */
-function uuidMatches(a: number[], b: number[]): boolean {
-  return a.length === 16 && b.length === 16 && a.every((v, i) => v === b[i]);
+function ensureRosbridgeActionBridge(ros: Ros): void {
+  const bridgedRos = ros as RosWithActionBridge & { socket?: any };
+  bridgedRos.__btActionBridgeListeners ??= new Set();
+
+  const socket = bridgedRos.socket;
+  if (!socket || socket.__btActionBridgeInstalled) return;
+
+  const originalOnMessage = typeof socket.onmessage === 'function' ? socket.onmessage.bind(socket) : null;
+
+  socket.onmessage = (event: unknown) => {
+    const message = parseRosbridgeJsonFrame(event);
+    if (message?.op === 'action_result' || message?.op === 'action_feedback') {
+      bridgedRos.__btActionBridgeListeners?.forEach(listener => listener(message));
+    }
+    originalOnMessage?.(event);
+  };
+  socket.__btActionBridgeInstalled = true;
+}
+
+function addRosbridgeActionListener(ros: Ros, listener: RosbridgeActionListener): () => void {
+  const bridgedRos = ros as RosWithActionBridge & {
+    on?: (event: string, listener: () => void) => void;
+    off?: (event: string, listener: () => void) => void;
+    removeListener?: (event: string, listener: () => void) => void;
+  };
+  bridgedRos.__btActionBridgeListeners ??= new Set();
+  bridgedRos.__btActionBridgeListeners.add(listener);
+
+  const installOnConnection = () => ensureRosbridgeActionBridge(ros);
+  ensureRosbridgeActionBridge(ros);
+  bridgedRos.on?.('connection', installOnConnection);
+
+  return () => {
+    bridgedRos.__btActionBridgeListeners?.delete(listener);
+    if (bridgedRos.off) {
+      bridgedRos.off('connection', installOnConnection);
+    } else {
+      bridgedRos.removeListener?.('connection', installOnConnection);
+    }
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function unwrapParameterValue(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+
+  if ('value' in value) return value.value;
+  if ('data' in value && Object.keys(value).length === 1) return value.data;
+
+  return value;
+}
+
+function normalizeNumber(value: unknown, fallback: number, integer: boolean): number {
+  const unwrapped = unwrapParameterValue(value);
+  const parsed =
+    typeof unwrapped === 'number'
+      ? unwrapped
+      : typeof unwrapped === 'string' && unwrapped.trim() !== ''
+        ? Number(unwrapped)
+        : fallback;
+
+  if (!Number.isFinite(parsed)) return fallback;
+  return integer ? Math.trunc(parsed) : parsed;
+}
+
+function normalizeBool(value: unknown, fallback: boolean): boolean {
+  const unwrapped = unwrapParameterValue(value);
+  if (typeof unwrapped === 'boolean') return unwrapped;
+  if (typeof unwrapped === 'number') return unwrapped !== 0;
+  if (typeof unwrapped === 'string') {
+    const lower = unwrapped.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(lower)) return true;
+    if (['false', '0', 'no', 'off'].includes(lower)) return false;
+  }
+  return fallback;
+}
+
+function normalizeString(value: unknown, fallback: string): string {
+  const unwrapped = unwrapParameterValue(value);
+  if (typeof unwrapped === 'string') return unwrapped;
+  if (typeof unwrapped === 'number' || typeof unwrapped === 'boolean') return String(unwrapped);
+  return fallback;
+}
+
+function normalizeActionFieldValue(value: unknown, fallback: unknown, field: ActionFieldSchema): unknown {
+  const unwrapped = unwrapParameterValue(value);
+
+  if (field.arrayLen >= 0) {
+    return Array.isArray(unwrapped) ? unwrapped : Array.isArray(fallback) ? fallback : [];
+  }
+
+  if (field.subfields?.length) {
+    return normalizeActionGoalPayload(
+      isRecord(unwrapped) ? unwrapped : {},
+      field.subfields,
+      isRecord(fallback) ? fallback : {}
+    );
+  }
+
+  if (ROS_BOOL_TYPES.has(field.rosType)) return normalizeBool(unwrapped, fallback === true);
+  if (ROS_FLOAT_TYPES.has(field.rosType)) return normalizeNumber(unwrapped, Number(fallback ?? 0), false);
+  if (ROS_INT_TYPES.has(field.rosType)) return normalizeNumber(unwrapped, Number(fallback ?? 0), true);
+  if (field.rosType === 'string') return normalizeString(unwrapped, typeof fallback === 'string' ? fallback : '');
+
+  return unwrapped ?? fallback;
+}
+
+function normalizeActionGoalPayload(
+  rawGoal: Record<string, unknown>,
+  fields: ActionFieldSchema[],
+  defaults: Record<string, unknown>
+): Record<string, unknown> {
+  const source = isRecord(rawGoal.goal) && !fields.some(field => field.name in rawGoal) ? rawGoal.goal : rawGoal;
+  const normalized: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    normalized[field.name] = normalizeActionFieldValue(source[field.name], defaults[field.name], field);
+  }
+
+  return normalized;
 }
 
 /**
@@ -79,7 +223,7 @@ export class BehaviorTreeExecutor {
     this.activeActions = new Map();
 
     // Initialize all nodes to idle status
-    tree.nodes.forEach((node) => {
+    tree.nodes.forEach(node => {
       this.nodeStatuses.set(node.id, ExecutionStatus.Idle);
     });
   }
@@ -110,7 +254,7 @@ export class BehaviorTreeExecutor {
 
       // Execute from root
       const result = await this.executeNode(rootNode);
-      
+
       this.emitEvent({
         type: 'completed',
         timestamp: Date.now(),
@@ -134,9 +278,9 @@ export class BehaviorTreeExecutor {
   public stop(): void {
     if (!this.isRunning) return;
 
-    // Cancel any in-flight ROS2 action goals via their cancel_goal service.
-    this.activeActions.forEach(({ actionName, uuid }) => {
-      this.cancelActionGoal(actionName, uuid);
+    // Cancel any in-flight ROS2 action goals via rosbridge's action protocol.
+    this.activeActions.forEach(({ actionName, requestId }) => {
+      this.cancelActionGoal(actionName, requestId);
     });
     this.activeActions.clear();
 
@@ -145,7 +289,7 @@ export class BehaviorTreeExecutor {
     }
 
     this.isRunning = false;
-    
+
     this.emitEvent({
       type: 'stopped',
       timestamp: Date.now(),
@@ -171,16 +315,19 @@ export class BehaviorTreeExecutor {
    * Prefers control-flow nodes over leaf nodes in case of ambiguity.
    */
   private findRootNode(): BehaviorTreeNode | null {
-    const nodesWithIncoming = new Set(this.tree.edges.map((e) => e.target));
-    const roots = this.tree.nodes.filter((node) => !nodesWithIncoming.has(node.id));
-    console.log(`[BT] findRootNode: ${roots.length} root candidate(s):`,
-      roots.map((n) => `${n.id}(${n.type})`).join(', '));
+    const nodesWithIncoming = new Set(this.tree.edges.map(e => e.target));
+    const roots = this.tree.nodes.filter(node => !nodesWithIncoming.has(node.id));
+    console.log(
+      `[BT] findRootNode: ${roots.length} root candidate(s):`,
+      roots.map(n => `${n.id}(${n.type})`).join(', ')
+    );
     // Prefer a control-flow node as root — avoids picking a lone action when
     // edges were drawn in the wrong direction (action→sequence instead of seq→action).
-    const controlRoot = roots.find((n) =>
-      n.type === BehaviorNodeType.Sequence ||
-      n.type === BehaviorNodeType.Selector ||
-      n.type === BehaviorNodeType.Parallel
+    const controlRoot = roots.find(
+      n =>
+        n.type === BehaviorNodeType.Sequence ||
+        n.type === BehaviorNodeType.Selector ||
+        n.type === BehaviorNodeType.Parallel
     );
     return controlRoot ?? roots[0] ?? null;
   }
@@ -189,16 +336,19 @@ export class BehaviorTreeExecutor {
    * Get child nodes of a given node, in edge-insertion order.
    */
   private getChildNodes(nodeId: string): BehaviorTreeNode[] {
-    const childIds = this.tree.edges
-      .filter((edge) => edge.source === nodeId)
-      .map((edge) => edge.target);
+    const childIds = this.tree.edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
 
-    console.log(`[BT] getChildNodes(${nodeId}): ${childIds.length} child(ren) — edges:`,
-      this.tree.edges.filter((e) => e.source === nodeId).map((e) => `${e.source}→${e.target}`).join(', '));
+    console.log(
+      `[BT] getChildNodes(${nodeId}): ${childIds.length} child(ren) — edges:`,
+      this.tree.edges
+        .filter(e => e.source === nodeId)
+        .map(e => `${e.source}→${e.target}`)
+        .join(', ')
+    );
 
     // Preserve the order edges were added (not the nodes-array order).
     return childIds
-      .map((id) => this.tree.nodes.find((n) => n.id === id))
+      .map(id => this.tree.nodes.find(n => n.id === id))
       .filter((n): n is BehaviorTreeNode => n !== undefined);
   }
 
@@ -256,11 +406,11 @@ export class BehaviorTreeExecutor {
 
     for (const child of children) {
       const result = await this.executeNode(child);
-      
+
       if (result === ExecutionStatus.Failure) {
         return ExecutionStatus.Failure;
       }
-      
+
       if (!this.isRunning) {
         return ExecutionStatus.Failure;
       }
@@ -277,11 +427,11 @@ export class BehaviorTreeExecutor {
 
     for (const child of children) {
       const result = await this.executeNode(child);
-      
+
       if (result === ExecutionStatus.Success) {
         return ExecutionStatus.Success;
       }
-      
+
       if (!this.isRunning) {
         return ExecutionStatus.Failure;
       }
@@ -295,13 +445,11 @@ export class BehaviorTreeExecutor {
    */
   private async executeParallel(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id);
-    
-    const results = await Promise.all(
-      children.map((child) => this.executeNode(child))
-    );
+
+    const results = await Promise.all(children.map(child => this.executeNode(child)));
 
     // Success if all children succeed
-    const allSuccess = results.every((r) => r === ExecutionStatus.Success);
+    const allSuccess = results.every(r => r === ExecutionStatus.Success);
     return allSuccess ? ExecutionStatus.Success : ExecutionStatus.Failure;
   }
 
@@ -309,19 +457,14 @@ export class BehaviorTreeExecutor {
    * Execute a ROS 2 action node.
    *
    * roslib 1.4.x ships only the ROS 1 actionlib client, which is incompatible
-   * with ROS 2 action servers. We drive ROS 2 actions by hand:
-   *
-   *   1. send_goal service → get back {accepted, stamp}
-   *   2. Subscribe to <action>/_action/status topic and watch for our goal_id
-   *      reaching a terminal state (SUCCEEDED=4, CANCELED=5, ABORTED=6).
-   *      We use the topic instead of get_result because get_result is a
-   *      long-blocking service call that rosbridge times out.
-   *   3. On stop()/timeout → cancel_goal service + unsubscribe.
+   * with ROS 2 action servers. rosbridge has a ROS 2 action protocol, so we
+   * send goals with `send_action_goal` and listen for its `action_result`
+   * websocket response.
    */
   private async executeActionNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const data = node.data as ROSActionNodeData;
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (!data.actionType) {
         console.error(
           `[BT] Action node "${data.actionName}" has no actionType. ` +
@@ -331,19 +474,17 @@ export class BehaviorTreeExecutor {
         return;
       }
 
-      const uuid = generateGoalUuid();
+      const requestId = createActionRequestId(node.id);
       let settled = false;
-      let statusTopic: any = null;
+      let removeActionListener: (() => void) | null = null;
 
       const settle = (status: ExecutionStatus) => {
         if (settled) return;
         settled = true;
         this.activeActions.delete(node.id);
         clearTimeout(timeoutId);
-        if (statusTopic) {
-          try { statusTopic.unsubscribe(); } catch { /* best effort */ }
-          statusTopic = null;
-        }
+        removeActionListener?.();
+        removeActionListener = null;
         resolve(status);
       };
 
@@ -351,116 +492,89 @@ export class BehaviorTreeExecutor {
       const timeout = data.timeout || 60000;
       const timeoutId = setTimeout(() => {
         console.warn(`[BT] Action "${data.actionName}" timed out after ${timeout}ms`);
-        this.cancelActionGoal(data.actionName, uuid);
+        this.cancelActionGoal(data.actionName, requestId);
         settle(ExecutionStatus.Failure);
       }, timeout);
 
-      try {
-        const sendGoal = new (ROSLIB as any).Service({
-          ros: this.ros,
-          name: `${data.actionName}/_action/send_goal`,
-          serviceType: `${data.actionType}_SendGoal`,
-        });
+      void (async () => {
+        try {
+          // Use saved parameters; fall back to the hardcoded template.
+          const hasParams = data.parameters && Object.keys(data.parameters).length > 0;
+          const rawGoal = hasParams ? data.parameters : (ACTION_TEMPLATES[data.actionType] ?? {});
 
-        // Use saved parameters; fall back to the hardcoded template.
-        const hasParams = data.parameters && Object.keys(data.parameters).length > 0;
-        const goal = hasParams
-          ? data.parameters
-          : (ACTION_TEMPLATES[data.actionType] ?? {});
+          if (!hasParams) {
+            console.warn(
+              `[BT] Action "${data.actionName}" has no saved parameters — ` +
+                `using ${ACTION_TEMPLATES[data.actionType] ? 'template' : 'empty {}'} for "${data.actionType}". ` +
+                `Double-click the node to set parameters.`
+            );
+          }
 
-        if (!hasParams) {
-          console.warn(
-            `[BT] Action "${data.actionName}" has no saved parameters — ` +
-            `using ${ACTION_TEMPLATES[data.actionType] ? 'template' : 'empty {}'} for "${data.actionType}". ` +
-            `Double-click the node to set parameters.`
-          );
-        }
+          const details = await fetchActionGoalDetails(this.ros, data.actionType);
+          const goal =
+            details && isRecord(rawGoal)
+              ? normalizeActionGoalPayload(rawGoal, details.fields, details.defaults)
+              : rawGoal;
 
-        const sendGoalReq = new (ROSLIB as any).ServiceRequest({
-          goal_id: { uuid },
-          goal,
-        });
+          if (settled || !this.isRunning) return;
 
-        this.activeActions.set(node.id, { actionName: data.actionName, uuid });
+          console.log(`[BT] send_action_goal payload for "${data.actionName}":`, JSON.stringify(goal));
 
-        sendGoal.callService(
-          sendGoalReq,
-          (resp: any) => {
-            console.log(`[BT] send_goal response for "${data.actionName}":`, JSON.stringify(resp));
-            if (!this.isRunning) { settle(ExecutionStatus.Failure); return; }
-            if (!resp || resp.accepted === false) {
-              console.warn(
-                `[BT] Action "${data.actionName}" rejected goal. ` +
-                `Goal sent: ${JSON.stringify(goal)}. ` +
-                `Full response: ${JSON.stringify(resp)}`
-              );
+          removeActionListener = addRosbridgeActionListener(this.ros, message => {
+            if (message.op !== 'action_result' || message.id !== requestId) return;
+
+            console.log(`[BT] action_result for "${data.actionName}":`, JSON.stringify(message));
+            if (!this.isRunning) {
               settle(ExecutionStatus.Failure);
               return;
             }
 
-            // Goal accepted — subscribe to _action/status to detect completion.
-            // We avoid the blocking get_result service because rosbridge times
-            // out long-running service calls (typically after ~5-10 s).
-            statusTopic = new (ROSLIB as any).Topic({
-              ros: this.ros,
-              name: `${data.actionName}/_action/status`,
-              messageType: 'action_msgs/msg/GoalStatusArray',
-            });
+            if (message.result === false) {
+              console.error(`[BT] send_action_goal failed for "${data.actionName}":`, message.values);
+              settle(ExecutionStatus.Failure);
+              return;
+            }
 
-            statusTopic.subscribe((msg: any) => {
-              const list: any[] = msg?.status_list ?? [];
-              // Log raw UUID format on first message so we can diagnose encoding issues.
-              if (list.length > 0) {
-                const rawUuid = list[0]?.goal_info?.goal_id?.uuid;
-                console.log(`[BT] status tick for "${data.actionName}": ` +
-                  `${list.length} goal(s), uuid[0] type=${typeof rawUuid}`, rawUuid);
-              }
-              for (const entry of list) {
-                const entryUuid = decodeRosbridgeUuid(entry?.goal_info?.goal_id?.uuid);
-                if (!entryUuid || !uuidMatches(entryUuid, uuid)) continue;
+            if (message.status === GOAL_STATUS_SUCCEEDED) {
+              console.log(`[BT] Action "${data.actionName}" succeeded`);
+              settle(ExecutionStatus.Success);
+            } else if (message.status === GOAL_STATUS_CANCELED || message.status === GOAL_STATUS_ABORTED) {
+              console.warn(`[BT] Action "${data.actionName}" ended with status ${message.status}`);
+              settle(ExecutionStatus.Failure);
+            } else {
+              console.warn(`[BT] Action "${data.actionName}" returned unexpected status ${message.status}`);
+              settle(ExecutionStatus.Failure);
+            }
+          });
 
-                const status: number = entry?.status ?? 0;
-                if (status === GOAL_STATUS_SUCCEEDED) {
-                  console.log(`[BT] Action "${data.actionName}" succeeded`);
-                  settle(ExecutionStatus.Success);
-                } else if (status === GOAL_STATUS_CANCELED || status === GOAL_STATUS_ABORTED) {
-                  console.warn(`[BT] Action "${data.actionName}" ended with status ${status}`);
-                  settle(ExecutionStatus.Failure);
-                }
-                // ACCEPTED(1) / EXECUTING(2) / CANCELING(3) → keep waiting
-              }
-            });
-          },
-          (err: any) => {
-            console.error(`[BT] send_goal failed for "${data.actionName}":`, err);
-            settle(ExecutionStatus.Failure);
-          }
-        );
-      } catch (error) {
-        console.error('[BT] Error executing action node:', error);
-        settle(ExecutionStatus.Failure);
-      }
+          this.activeActions.set(node.id, { actionName: data.actionName, requestId });
+
+          (this.ros as any).callOnConnection({
+            op: 'send_action_goal',
+            id: requestId,
+            action: data.actionName,
+            action_type: data.actionType,
+            args: goal,
+          });
+        } catch (error) {
+          console.error('[BT] Error executing action node:', error);
+          settle(ExecutionStatus.Failure);
+        }
+      })();
     });
   }
 
   /**
-   * Cancel an in-flight ROS 2 action goal via its cancel_goal service.
+   * Cancel an in-flight ROS 2 action goal via rosbridge's action protocol.
    * Best-effort: we don't wait for the response.
    */
-  private cancelActionGoal(actionName: string, uuid: number[]): void {
+  private cancelActionGoal(actionName: string, requestId: string): void {
     try {
-      const cancel = new (ROSLIB as any).Service({
-        ros: this.ros,
-        name: `${actionName}/_action/cancel_goal`,
-        serviceType: 'action_msgs/srv/CancelGoal',
+      (this.ros as any).callOnConnection({
+        op: 'cancel_action_goal',
+        id: requestId,
+        action: actionName,
       });
-      const req = new (ROSLIB as any).ServiceRequest({
-        goal_info: {
-          goal_id: { uuid },
-          stamp: { sec: 0, nanosec: 0 },
-        },
-      });
-      cancel.callService(req, () => {}, () => {});
     } catch (error) {
       console.error(`[BT] Failed to cancel action "${actionName}":`, error);
     }
@@ -471,8 +585,8 @@ export class BehaviorTreeExecutor {
    */
   private async executeServiceNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const data = node.data as ROSServiceNodeData;
-    
-    return new Promise((resolve) => {
+
+    return new Promise(resolve => {
       try {
         const service = new ROSLIB.Service({
           ros: this.ros,
@@ -489,12 +603,12 @@ export class BehaviorTreeExecutor {
 
         service.callService(
           request,
-          (result) => {
+          result => {
             clearTimeout(timeoutId);
             // Service call succeeded
             resolve(ExecutionStatus.Success);
           },
-          (error) => {
+          error => {
             clearTimeout(timeoutId);
             console.error('Service call failed:', error);
             resolve(ExecutionStatus.Failure);
@@ -512,8 +626,8 @@ export class BehaviorTreeExecutor {
    */
   private async executeTopicNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
     const data = node.data as ROSTopicNodeData;
-    
-    return new Promise((resolve) => {
+
+    return new Promise(resolve => {
       try {
         const topic = new ROSLIB.Topic({
           ros: this.ros,
@@ -546,7 +660,7 @@ export class BehaviorTreeExecutor {
     this.nodeStatuses.set(nodeId, status);
 
     let eventType: 'nodeRunning' | 'nodeSuccess' | 'nodeFailure' | 'nodeEntered';
-    
+
     switch (status) {
       case ExecutionStatus.Running:
         eventType = 'nodeRunning';
@@ -576,5 +690,3 @@ export class BehaviorTreeExecutor {
     this.callback(event);
   }
 }
-
-

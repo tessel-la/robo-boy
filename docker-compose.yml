@@ -53,11 +53,6 @@ services:
       dockerfile: Dockerfile.ros # Use the ROS Dockerfile
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Mount your robot's ROS 2 workspace install directory here to make
-      # custom message types (e.g. as2_msgs) available to rosbridge.
-      # For aerostack2: first run `docker cp aerial_sim_cont:/root/aerostack2_ws/install ~/.aerostack2_install`
-      # then uncomment the line below:
-      - ~/.aerostack2_install:/overlay_ws:ro
     environment:
       - DISPLAY=${DISPLAY}
 
