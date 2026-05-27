@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "--- Sourcing ROS Humble ---"
-source /opt/ros/humble/setup.bash
+ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+
+echo "--- Sourcing ROS ${ROS_DISTRO} ---"
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 # Source republisher workspace if built
 if [ -f /republisher_ws/install/setup.bash ]; then
@@ -58,6 +60,14 @@ if [ -d /overlay_ws ]; then
             activate_overlay_workspace "$overlay_dir"
         fi
     done
+fi
+
+# Optional exact-path workspace setup. This helps when an external workspace was
+# built with symlink-install or generated hooks that still reference its original
+# container path, e.g. Sunrise's /workspace/sunrise_robot_sw/install.
+if [ -n "${ROBOT_WORKSPACE_SETUP:-}" ] && [ -f "${ROBOT_WORKSPACE_SETUP}" ]; then
+    echo "--- Sourcing robot workspace setup (${ROBOT_WORKSPACE_SETUP}) ---"
+    source "${ROBOT_WORKSPACE_SETUP}" 2>/dev/null || true
 fi
 
 echo "--- Launching ROS Components ---"

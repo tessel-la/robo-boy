@@ -248,11 +248,12 @@ export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
  */
 export const discoverAllROSResources = async (ros: Ros): Promise<ROSDiscoveryResult> => {
   try {
-    const [actions, services, topics] = await Promise.all([
-      discoverROSActions(ros),
-      discoverROSServices(ros),
-      discoverROSTopics(ros),
-    ]);
+    // Keep rosapi introspection serialized. Opening the BT panel can trigger
+    // hundreds of service/type requests, and overlapping those calls has caused
+    // rosbridge/rosapi disconnects on large ROS 2 graphs.
+    const actions = await discoverROSActions(ros);
+    const services = await discoverROSServices(ros);
+    const topics = await discoverROSTopics(ros);
 
     return {
       actions,
@@ -637,9 +638,7 @@ async function queryMessageDetailsFull(
 
           const suffix = targetSuffix ?? type.split('/').pop() ?? '';
           const targetTypedef =
-            typedefs.find(t => t.type.endsWith(suffix) && t.fieldnames?.length) ??
-            typedefs.find(t => t.fieldnames?.length) ??
-            null;
+            typedefs.find(t => t.type.endsWith(suffix)) ?? typedefs.find(t => t.fieldnames?.length) ?? null;
 
           if (!targetTypedef) {
             console.warn(`[BT] message_details("${type}"): no typedef with suffix "${suffix}" or with fields`);
@@ -650,7 +649,7 @@ async function queryMessageDetailsFull(
           const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
           const fields = buildSchemaFields(targetTypedef, typedefs, true);
 
-          resolve(fields.length > 0 ? { fields, defaults } : null);
+          resolve({ fields, defaults });
         },
         (err: any) => {
           console.warn(`[BT] message_details("${type}") call failed:`, err);
@@ -766,9 +765,9 @@ async function queryServiceRequestDetails(ros: Ros, serviceType: string): Promis
             return;
           }
 
-          // Prefer typedef ending in _Request; fall back to first with fields
+          // Prefer typedef ending in _Request; empty request messages are valid.
           const targetTypedef =
-            typedefs.find(t => t.type.endsWith('_Request') && t.fieldnames?.length) ??
+            typedefs.find(t => t.type.endsWith('_Request')) ??
             typedefs.find(t => t.fieldnames?.length) ??
             null;
 
@@ -779,7 +778,7 @@ async function queryServiceRequestDetails(ros: Ros, serviceType: string): Promis
 
           const defaults = buildDefaultsFromTypedef(targetTypedef, typedefs);
           const fields = buildSchemaFields(targetTypedef, typedefs, true);
-          resolve(fields.length > 0 ? { fields, defaults } : null);
+          resolve({ fields, defaults });
         },
         (err: any) => {
           console.warn(`[BT] service_request_details("${serviceType}") failed:`, err);
@@ -801,8 +800,10 @@ async function queryServiceRequestDetails(ros: Ros, serviceType: string): Promis
  *   0. /rosapi/service_request_details  (dedicated endpoint, most reliable)
  *   1. message_details with std_srvs/srv/SetBool_Request
  *   2. message_details with std_srvs/SetBool_Request
- *   3. message_details with std_srvs/srv/SetBool (scan typedefs for _Request)
- *   4. message_details with std_srvs/SetBool     (scan typedefs for _Request)
+ *
+ * Do not call /rosapi/message_details with bare service types such as
+ * std_srvs/srv/Trigger. Jazzy rosapi can crash when it tries to instantiate a
+ * service class as a message class.
  */
 export const fetchServiceRequestSchema = async (ros: Ros, serviceType: string): Promise<ActionGoalDetails | null> => {
   if (!serviceType || serviceType === 'unknown') return null;
@@ -828,20 +829,6 @@ export const fetchServiceRequestSchema = async (ros: Ros, serviceType: string): 
     const result = await queryMessageDetailsFull(ros, candidate);
     if (result !== null) {
       console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via "${candidate}":`, result);
-      return result;
-    }
-  }
-
-  // Strategy 3 & 4: bare service type, scan typedefs for _Request entry
-  const bareCandidates = [
-    serviceType, // e.g. std_srvs/srv/SetBool
-    `${pkg}/${name}`, // e.g. std_srvs/SetBool
-  ];
-
-  for (const candidate of bareCandidates) {
-    const result = await queryMessageDetailsFull(ros, candidate, '_Request');
-    if (result !== null) {
-      console.log(`[BT] fetchServiceRequestSchema "${serviceType}" via bare "${candidate}" (_Request scan):`, result);
       return result;
     }
   }

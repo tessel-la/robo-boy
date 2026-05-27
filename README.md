@@ -61,7 +61,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
       mkcert -key-file certs/local-key.pem -cert-file certs/local-cert.pem localhost 127.0.0.1 ::1 YOUR_HOST_IP
       ```
 
-3.  **Build and Run Services:** This command builds the Docker images (if they don't exist or need updating) and starts the `app` (React Vite dev server), `ros-stack` (rosbridge, web_video_server), and `caddy` (reverse proxy) containers.
+3.  **Build and Run Services:** This command builds the Docker images (if they don't exist or need updating) and starts the `app` (React Vite dev server), `ros-stack` (rosbridge, web_video_server, Foxglove bridge), and `caddy` (reverse proxy) containers.
 
     ```bash
     docker compose up -d --build
@@ -73,9 +73,9 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
 <details>
 <summary><strong>Simulation Workspace Overlays</strong></summary>
 
-The `ros-stack` service runs with `network_mode: host` so it can discover ROS 2 nodes from host-networked simulation containers such as `aerial_sim_cont` and `manipulator_sim_cont`. To let rosbridge understand custom message, service, and action types from those simulations, mount each built ROS 2 workspace `install` directory under `/overlay_ws/<name>`.
+The `ros-stack` service runs with `network_mode: host` so it can discover ROS 2 nodes from host-networked simulation containers such as `aerial_sim_cont`, and `manipulator_sim_cont`. To let rosbridge understand custom message, service, and action types from those simulations, mount each built ROS 2 workspace `install` directory under `/overlay_ws/<name>`.
 
-`ros-stack` automatically sources every install workspace mounted under `/overlay_ws`, and still supports the legacy single-workspace mount at `/overlay_ws`.
+`ros-stack` automatically sources every install workspace mounted under `/overlay_ws`, and still supports the legacy single-workspace mount at `/overlay_ws`. It also supports `ROBOT_WORKSPACE_SETUP=/path/to/install/setup.bash` for workspaces whose generated hooks expect their original path.
 
 Robo-Boy keeps robot-specific mounts in Compose override files. Choose one setup by copying an example `.env`; after that, regular `docker compose up` uses the selected files automatically.
 
@@ -171,7 +171,7 @@ Then run Robo-Boy with both Compose files:
 COMPOSE_FILE=docker-compose.yml:docker-compose.custom.yml docker compose up -d --build
 ```
 
-Make sure the simulation container and `ros-stack` use compatible ROS settings, especially `ROS_DOMAIN_ID`, and that the workspace has been built before mounting its install directory.
+Make sure the simulation container and `ros-stack` use compatible ROS settings, especially `ROS_DISTRO` and `ROS_DOMAIN_ID`, and that the workspace has been built before mounting its install directory.
 
 If the custom workspace was built with `colcon build --symlink-install`, also mount any build/source paths referenced by generated hooks or symlinks. The manipulator override is the reference pattern for that case.
 

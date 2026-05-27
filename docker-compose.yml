@@ -51,6 +51,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ros # Use the ROS Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
@@ -59,6 +61,8 @@ services:
       # host-networked containers running as different users. Use UDP for
       # cross-container ROS traffic while keeping DDS discovery intact.
       - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
 
 volumes:
   caddy-data:

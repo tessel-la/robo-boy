@@ -163,6 +163,26 @@ function normalizeString(value: unknown, fallback: string): string {
   return fallback;
 }
 
+function isQuaternionField(field: ActionFieldSchema): boolean {
+  const names = field.subfields?.map(subfield => subfield.name).sort().join(',');
+  return field.rosType.endsWith('/Quaternion') || (field.name === 'orientation' && names === 'w,x,y,z');
+}
+
+function normalizeQuaternionRecord(value: Record<string, unknown>, fallback: unknown): Record<string, number> {
+  const fallbackRecord = isRecord(fallback) ? fallback : {};
+  const x = normalizeNumber(value.x, Number(fallbackRecord.x ?? 0), false);
+  const y = normalizeNumber(value.y, Number(fallbackRecord.y ?? 0), false);
+  const z = normalizeNumber(value.z, Number(fallbackRecord.z ?? 0), false);
+  const w = normalizeNumber(value.w, Number(fallbackRecord.w ?? 1), false);
+  const norm = Math.hypot(x, y, z, w);
+
+  if (!Number.isFinite(norm) || norm < 1e-12) {
+    return { x: 0, y: 0, z: 0, w: 1 };
+  }
+
+  return { x: x / norm, y: y / norm, z: z / norm, w: w / norm };
+}
+
 function normalizeActionFieldValue(value: unknown, fallback: unknown, field: ActionFieldSchema): unknown {
   const unwrapped = unwrapParameterValue(value);
 
@@ -171,6 +191,10 @@ function normalizeActionFieldValue(value: unknown, fallback: unknown, field: Act
   }
 
   if (field.subfields?.length) {
+    if (isQuaternionField(field)) {
+      return normalizeQuaternionRecord(isRecord(unwrapped) ? unwrapped : {}, fallback);
+    }
+
     return normalizeActionGoalPayload(
       isRecord(unwrapped) ? unwrapped : {},
       field.subfields,

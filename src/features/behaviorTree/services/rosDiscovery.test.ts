@@ -17,7 +17,7 @@ vi.mock('roslib', () => ({
   }),
 }));
 
-import { fetchActionGoalDetails } from './rosDiscovery';
+import { fetchActionGoalDetails, fetchServiceRequestSchema } from './rosDiscovery';
 
 describe('fetchActionGoalDetails', () => {
   beforeEach(() => {
@@ -90,5 +90,36 @@ describe('fetchActionGoalDetails', () => {
       ['yaw_tolerance', 'double', undefined],
       ['timeout', 'double', undefined],
     ]);
+  });
+});
+
+describe('fetchServiceRequestSchema', () => {
+  beforeEach(() => {
+    mockRoslib.calls = [];
+    mockRoslib.response = null;
+  });
+
+  it('treats empty service requests as valid schemas without falling back to message_details', async () => {
+    mockRoslib.response = {
+      typedefs: [
+        {
+          type: 'std_srvs/Trigger_Request',
+          fieldnames: [],
+          fieldtypes: [],
+          fieldarraylen: [],
+          constnames: [],
+          constvalues: [],
+        },
+      ],
+    };
+
+    const details = await fetchServiceRequestSchema({} as any, 'std_srvs/srv/Trigger');
+
+    expect(details).toEqual({ fields: [], defaults: {} });
+    expect(mockRoslib.calls).toHaveLength(1);
+    expect(mockRoslib.calls[0].options).toMatchObject({
+      name: '/rosapi/service_request_details',
+      serviceType: 'rosapi_msgs/srv/ServiceRequestDetails',
+    });
   });
 });
