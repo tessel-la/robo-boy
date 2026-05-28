@@ -50,6 +50,21 @@ interface BehaviorTreePanelProps {
   ros: Ros | null;
   isConnected: boolean;
   isActive: boolean;
+  onExecutionChange?: (snapshot: BehaviorTreeExecutionSnapshot) => void;
+  onExecutionControlsChange?: (controls: BehaviorTreeExecutionControls | null) => void;
+}
+
+export interface BehaviorTreeExecutionSnapshot {
+  isExecuting: boolean;
+  treeName: string;
+  activeNodeId?: string;
+  activeNodeLabel?: string;
+  status?: ExecutionStatus | 'completed' | 'stopped' | 'error';
+  startedAt?: number;
+}
+
+export interface BehaviorTreeExecutionControls {
+  stop: () => void;
 }
 
 interface SaveNotice {
@@ -65,6 +80,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
   isActive,
+  onExecutionChange,
+  onExecutionControlsChange,
 }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -82,10 +99,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
+  const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
+    isExecuting: false,
+    treeName: '',
+  });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
+  const executionNodeLabels = useRef<Map<string, string>>(new Map());
+  const executionStartedAt = useRef<number | undefined>(undefined);
 
   const { screenToFlowPosition, deleteElements } = useReactFlow();
 
@@ -354,17 +377,43 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleExecutionEvent = useCallback(
     (event: ExecutionEvent) => {
       if (event.nodeId && event.data?.status) {
+        const nodeId = event.nodeId;
         setNodes((nds) =>
           nds.map((node) => {
-            if (node.id === event.nodeId) {
+            if (node.id === nodeId) {
               return { ...node, data: { ...node.data, status: event.data.status } };
             }
             return node;
           })
         );
+
+        const status = event.data.status as ExecutionStatus;
+        if (status === ExecutionStatus.Running) {
+          setExecutionSnapshot((prev) => ({
+            ...prev,
+            isExecuting: true,
+            activeNodeId: nodeId,
+            activeNodeLabel: executionNodeLabels.current.get(nodeId) ?? nodeId,
+            status,
+          }));
+        }
       }
-      if (event.type === 'completed' || event.type === 'stopped') {
+
+      if (event.type === 'started') {
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: true,
+          status: ExecutionStatus.Running,
+          startedAt: executionStartedAt.current,
+        }));
+      } else if (event.type === 'completed' || event.type === 'stopped' || event.type === 'error') {
+        const status = event.type;
         setIsExecuting(false);
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: false,
+          status,
+        }));
         setTimeout(() => {
           setNodes((nds) =>
             nds.map((node) => ({
@@ -392,22 +441,52 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       nodes: nodes as BehaviorTreeNode[],
       edges,
     };
+    executionNodeLabels.current = new Map(
+      treeToExecute.nodes.map((node) => [node.id, node.data.label || node.id])
+    );
+    executionStartedAt.current = Date.now();
     executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     setIsExecuting(true);
+    setExecutionSnapshot({
+      isExecuting: true,
+      treeName: treeToExecute.name,
+      activeNodeLabel: 'Starting',
+      status: ExecutionStatus.Running,
+      startedAt: executionStartedAt.current,
+    });
     executorRef.current.start();
   }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
 
   const handleStop = useCallback(() => {
     if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
-  }, []);
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: { ...node.data, status: ExecutionStatus.Idle },
+      }))
+    );
+    setExecutionSnapshot((prev) => ({
+      ...prev,
+      isExecuting: false,
+      status: 'stopped',
+    }));
+  }, [setNodes]);
 
-  // Stop executor when user navigates away so it doesn't block gamepad control
   useEffect(() => {
-    if (!isActive && isExecuting) {
-      handleStop();
-    }
-  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+    onExecutionChange?.(executionSnapshot);
+  }, [executionSnapshot, onExecutionChange]);
+
+  useEffect(() => {
+    onExecutionControlsChange?.({ stop: handleStop });
+    return () => onExecutionControlsChange?.(null);
+  }, [handleStop, onExecutionControlsChange]);
+
+  useEffect(() => {
+    return () => {
+      if (executorRef.current) executorRef.current.stop();
+    };
+  }, []);
 
   // Add a node at the centre of the visible canvas — used for mobile tap-to-add.
   const handleAddNode = useCallback(

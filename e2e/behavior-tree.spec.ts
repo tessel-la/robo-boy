@@ -58,6 +58,38 @@ async function seedSavedTree(page: Page) {
   });
 }
 
+async function seedRunningActionTree(page: Page) {
+  await page.evaluate(() => {
+    const now = Date.now();
+    const tree = {
+      id: 'e2e-running-action',
+      name: 'Long Action Tree',
+      nodes: [
+        {
+          id: 'node-0',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Navigate',
+            actionName: '/navigate_to_pose',
+            actionType: 'nav2_msgs/action/NavigateToPose',
+            parameters: {},
+            timeout: 60000,
+          },
+        },
+      ],
+      edges: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([{ tree, version: '1.0.0' }])
+    );
+  });
+}
+
 test.describe('Behavior Tree panel', () => {
   test.beforeEach(async ({ page }) => {
     page.on('dialog', (dialog) => dialog.accept());
@@ -160,5 +192,36 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(2);
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(2);
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+  });
+
+  test('keeps execution alive in 3D view and exposes top-bar controls', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedRunningActionTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Long Action Tree' }).click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Navigate' })).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Run' }).click();
+    await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
+
+    await page.getByLabel('Switch to 3D View').click();
+    const island = page.locator('.bt-execution-island');
+    await expect(island).toBeVisible();
+    await expect(island).toContainText('Long Action Tree');
+    await expect(island).toContainText('Navigate');
+
+    await page.getByLabel('Open behavior tree').click();
+    await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
+    await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();
+    await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
+
+    await page.getByLabel('Switch to 3D View').click();
+    await page.getByLabel('Stop behavior tree').click();
+    await expect(island).toHaveCount(0);
+
+    await page.getByLabel('Switch to Behavior Tree').click();
+    await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
+    await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).not.toHaveClass(/status-running/);
   });
 });

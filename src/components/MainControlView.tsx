@@ -19,7 +19,10 @@ import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
 import { getGamepadLayout } from '../features/customGamepad/gamepadStorage';
-import BehaviorTreePanel from '../features/behaviorTree/components/BehaviorTreePanel';
+import BehaviorTreePanel, {
+  BehaviorTreeExecutionControls,
+  BehaviorTreeExecutionSnapshot,
+} from '../features/behaviorTree/components/BehaviorTreePanel';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -65,6 +68,11 @@ const IconMCVDisconnect = () => (
     <path d="M18 6 6 18M6 6l12 12"/>
   </svg>
 );
+const IconMCVStop = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="7" y="7" width="10" height="10" rx="2"/>
+  </svg>
+);
 // --- End Top Bar Icons ---
 
 // Use Icon components
@@ -75,6 +83,7 @@ const icons = {
   connected: <IconMCVLink />,
   disconnected: <IconMCVUnlink />,
   disconnect: <IconMCVDisconnect />,
+  stop: <IconMCVStop />,
 };
 
 // Define Panel Types
@@ -97,6 +106,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
+  const [btExecution, setBtExecution] = useState<BehaviorTreeExecutionSnapshot>({
+    isExecuting: false,
+    treeName: '',
+  });
+  const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
@@ -211,6 +225,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [viewMode]);
 
   const handleInternalDisconnect = () => {
+    btExecutionControls.current?.stop();
     disconnect(); // Disconnect ROS
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
@@ -382,6 +397,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     });
   };
 
+  const handleReturnToBehaviorTree = () => {
+    if (viewMode === 'behaviorTree') return;
+    setBtEverMounted(true);
+    setViewMode('behaviorTree');
+    setIsTransitioning(false);
+  };
+
+  const handleStopBehaviorTree = () => {
+    btExecutionControls.current?.stop();
+  };
+
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
@@ -412,6 +438,35 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {icons.bt}
           </button>
         </div>
+        {btExecution.isExecuting && (
+          <div className="bt-execution-island" role="status" aria-live="polite">
+            <div className="bt-execution-pulse" aria-hidden="true" />
+            <button
+              className="bt-execution-return"
+              onClick={handleReturnToBehaviorTree}
+              title="Open behavior tree"
+              aria-label="Open behavior tree"
+            >
+              {icons.bt}
+            </button>
+            <div className="bt-execution-copy">
+              <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
+                {btExecution.treeName || 'Behavior tree'}
+              </span>
+              <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
+                {btExecution.activeNodeLabel || 'Running'}
+              </span>
+            </div>
+            <button
+              className="bt-execution-stop"
+              onClick={handleStopBehaviorTree}
+              title="Stop behavior tree"
+              aria-label="Stop behavior tree"
+            >
+              {icons.stop}
+            </button>
+          </div>
+        )}
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
@@ -460,7 +515,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {btEverMounted && (
               <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
                 {isConnected && ros ? (
-                  <BehaviorTreePanel ros={ros} isConnected={isConnected} isActive={viewMode === 'behaviorTree'} />
+                  <BehaviorTreePanel
+                    ros={ros}
+                    isConnected={isConnected}
+                    isActive={viewMode === 'behaviorTree'}
+                    onExecutionChange={setBtExecution}
+                    onExecutionControlsChange={(controls) => {
+                      btExecutionControls.current = controls;
+                    }}
+                  />
                 ) : (
                   <div className="placeholder">Connect to ROS to use Behavior Trees</div>
                 )}
@@ -526,4 +589,4 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   );
 };
 
-export default MainControlView; 
+export default MainControlView;
