@@ -164,3 +164,4 @@ playwright-report/
 test-results/
 generate-icons.ps1
 generate-icons.sh
+CLAUDE.md
