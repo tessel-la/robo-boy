@@ -5,6 +5,7 @@ import * as ROSLIB from 'roslib';
 import { CustomTFProvider, StoredTransform } from './tfUtils';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { LaserScan } from './ros3d/visualizers/LaserScan';
 
 // Basic viewer class implementation
 class Viewer {
@@ -287,7 +288,7 @@ class PointCloud2 extends THREE.Object3D {
   private pointSize: number;
   private compression: string;
   private throttleRate: number;
-  private points: any;
+  public points: any;
   private messageFrameId: string | null = null;
   private fixedFrame: string;
   private rosTopicInstance: ROSLIB.Topic | null = null; // Added for managing subscription
@@ -1864,9 +1865,10 @@ const ROS3D = {
   Axes,
   TfClient,
   PointCloud2,
+  LaserScan,
   OrbitControls,
   UrdfClient,
 };
 
-export { Viewer, Grid, Axes, TfClient, PointCloud2, OrbitControls, UrdfClient };
-export default ROS3D; 
+export { Viewer, Grid, Axes, TfClient, PointCloud2, LaserScan, OrbitControls, UrdfClient };
+export default ROS3D;

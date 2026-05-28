@@ -322,6 +322,9 @@ End-to-End tests are built with **Playwright**. They verify the full application
 # Run all E2E tests (headless)
 npm run e2e
 
+# Run against the Docker/Caddy stack that is already up on localhost
+npm run e2e:stack
+
 # Run E2E tests with UI runner (interactive debugging)
 npm run e2e:ui
 
