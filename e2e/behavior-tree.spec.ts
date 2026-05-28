@@ -211,6 +211,18 @@ test.describe('Behavior Tree panel', () => {
     await expect(island).toContainText('Long Action Tree');
     await expect(island).toContainText('Navigate');
 
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(island.locator('.bt-execution-pulse')).toBeVisible();
+    await expect(island.locator('.bt-execution-node')).toBeVisible();
+    const mobileIslandBox = await island.boundingBox();
+    const mobileReturnBox = await page.getByLabel('Open behavior tree').boundingBox();
+    const mobileToggleBox = await page.locator('.view-toggle').boundingBox();
+    expect(mobileIslandBox?.width).toBeGreaterThan(88);
+    expect(mobileIslandBox?.width).toBeLessThan(160);
+    expect(mobileReturnBox?.width).toBeGreaterThan(52);
+    expect(mobileReturnBox?.width).toBeLessThan(122);
+    expect(mobileToggleBox?.width).toBeLessThan(250);
+
     await page.getByLabel('Open behavior tree').click();
     await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
     await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();

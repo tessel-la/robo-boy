@@ -411,7 +411,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
-      <div className="top-bar">
+      <div className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''}`}>
         <div className="view-toggle">
           <button
             onClick={() => handleViewToggle('camera')}
@@ -429,44 +429,49 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           >
             {icons.view3d}
           </button>
-          <button
-            onClick={() => handleViewToggle('behaviorTree')}
-            className={viewMode === 'behaviorTree' ? 'active' : ''}
-            title="Behavior Tree"
-            aria-label="Switch to Behavior Tree"
-          >
-            {icons.bt}
-          </button>
-        </div>
-        {btExecution.isExecuting && (
-          <div className="bt-execution-island" role="status" aria-live="polite">
-            <div className="bt-execution-pulse" aria-hidden="true" />
+          {btExecution.isExecuting ? (
+            <div
+              className={`bt-execution-island ${viewMode === 'behaviorTree' ? 'active' : ''}`}
+              role="status"
+              aria-live="polite"
+            >
+              <button
+                className="bt-execution-return"
+                onClick={handleReturnToBehaviorTree}
+                title="Open behavior tree"
+                aria-label="Open behavior tree"
+              >
+                {icons.bt}
+                <span className="bt-execution-pulse" aria-hidden="true" />
+                <span className="bt-execution-copy">
+                  <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
+                    {btExecution.treeName || 'Behavior tree'}
+                  </span>
+                  <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
+                    {btExecution.activeNodeLabel || 'Running'}
+                  </span>
+                </span>
+              </button>
+              <button
+                className="bt-execution-stop"
+                onClick={handleStopBehaviorTree}
+                title="Stop behavior tree"
+                aria-label="Stop behavior tree"
+              >
+                {icons.stop}
+              </button>
+            </div>
+          ) : (
             <button
-              className="bt-execution-return"
-              onClick={handleReturnToBehaviorTree}
-              title="Open behavior tree"
-              aria-label="Open behavior tree"
+              onClick={() => handleViewToggle('behaviorTree')}
+              className={viewMode === 'behaviorTree' ? 'active' : ''}
+              title="Behavior Tree"
+              aria-label="Switch to Behavior Tree"
             >
               {icons.bt}
             </button>
-            <div className="bt-execution-copy">
-              <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
-                {btExecution.treeName || 'Behavior tree'}
-              </span>
-              <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
-                {btExecution.activeNodeLabel || 'Running'}
-              </span>
-            </div>
-            <button
-              className="bt-execution-stop"
-              onClick={handleStopBehaviorTree}
-              title="Stop behavior tree"
-              aria-label="Stop behavior tree"
-            >
-              {icons.stop}
-            </button>
-          </div>
-        )}
+          )}
+        </div>
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
