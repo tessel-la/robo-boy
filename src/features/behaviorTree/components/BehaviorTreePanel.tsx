@@ -88,6 +88,7 @@ interface ChildOrderPanelProps {
   parent: BehaviorTreeNode;
   childLinks: OrderedChildLink[];
   onMoveChild: (edgeId: string, direction: -1 | 1) => void;
+  onClose: () => void;
 }
 
 const getOrderNodeDetail = (node: BehaviorTreeNode): string | undefined => {
@@ -102,6 +103,7 @@ const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
   parent,
   childLinks,
   onMoveChild,
+  onClose,
 }) => (
   <div className="bt-order-panel" data-testid="bt-child-order-panel">
     <div className="bt-order-panel-header">
@@ -109,7 +111,18 @@ const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
         <span className="bt-order-panel-kicker">{parent.data.label}</span>
         <span>Child order</span>
       </div>
-      <span className="bt-order-panel-count">{childLinks.length}</span>
+      <div className="bt-order-panel-tools">
+        <span className="bt-order-panel-count">{childLinks.length}</span>
+        <button
+          type="button"
+          className="bt-order-close"
+          onClick={onClose}
+          aria-label="Close child order"
+          title="Close"
+        >
+          ×
+        </button>
+      </div>
     </div>
 
     {childLinks.length === 0 ? (
@@ -180,6 +193,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [editingService, setEditingService] = useState<
     { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
+  const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
@@ -345,14 +359,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [edges, nodes, selectedNodes, setEdges, setNodes]);
 
   const openNodeEditor = useCallback((node: Node) => {
-      if (node.type === BehaviorNodeType.Action) {
-        setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
-      } else if (node.type === BehaviorNodeType.Service) {
-        setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
-      }
-    },
-    []
-  );
+    if (node.type === BehaviorNodeType.Action) {
+      setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
+    } else if (node.type === BehaviorNodeType.Service) {
+      setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
+    } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
+      setOrderingParentId(node.id);
+    }
+  }, []);
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -364,7 +378,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
-      if (node.type !== BehaviorNodeType.Action && node.type !== BehaviorNodeType.Service) return;
+      if (
+        node.type !== BehaviorNodeType.Action &&
+        node.type !== BehaviorNodeType.Service &&
+        !isOrderedControlNode(node as BehaviorTreeNode)
+      ) {
+        return;
+      }
 
       const now = Date.now();
       const previousTap = lastMobileNodeTap.current;
@@ -448,6 +468,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setNodes(loadedNodes);
     setEdges(loadedEdges);
     setSelectedNodes([]);
+    setOrderingParentId(null);
     nodeIdCounter.current = getNodeCounterAfterNodes(loadedNodes);
   }, [setNodes, setEdges]);
 
@@ -468,6 +489,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setCurrentTree(newTree);
     setNodes([]);
     setEdges([]);
+    setOrderingParentId(null);
     nodeIdCounter.current = 0;
   }, [nodes, edges, setNodes, setEdges]);
 
@@ -620,28 +642,26 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     () => annotateOrderedEdges(behaviorNodes, edges),
     [behaviorNodes, edges]
   );
-  const selectedOrderedParent = useMemo(() => {
-    if (selectedNodes.length !== 1) return null;
-
-    const selectedNode = behaviorNodes.find((node) => node.id === selectedNodes[0].id);
-    return isOrderedControlNode(selectedNode) ? selectedNode : null;
-  }, [behaviorNodes, selectedNodes]);
+  const orderingParent = useMemo(() => {
+    const parent = behaviorNodes.find((node) => node.id === orderingParentId);
+    return isOrderedControlNode(parent) ? parent : null;
+  }, [behaviorNodes, orderingParentId]);
   const selectedOrderedChildLinks = useMemo(
-    () =>
-      selectedOrderedParent
-        ? getOrderedChildLinks(selectedOrderedParent.id, behaviorNodes, edges)
-        : [],
-    [behaviorNodes, edges, selectedOrderedParent]
+    () => (orderingParent ? getOrderedChildLinks(orderingParent.id, behaviorNodes, edges) : []),
+    [behaviorNodes, edges, orderingParent]
   );
   const handleMoveOrderedChild = useCallback(
     (edgeId: string, direction: -1 | 1) => {
-      if (!selectedOrderedParent) return;
+      if (!orderingParent) return;
       setEdges((currentEdges) =>
-        moveOrderedChildEdge(currentEdges, selectedOrderedParent.id, edgeId, direction)
+        moveOrderedChildEdge(currentEdges, orderingParent.id, edgeId, direction)
       );
     },
-    [selectedOrderedParent, setEdges]
+    [orderingParent, setEdges]
   );
+  const handlePaneClick = useCallback(() => {
+    setOrderingParentId(null);
+  }, []);
 
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
@@ -726,6 +746,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onNodesDelete={onNodesDelete}
             onNodeClick={onNodeClick}
             onNodeDoubleClick={onNodeDoubleClick}
+            onPaneClick={handlePaneClick}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
@@ -750,11 +771,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
-          {selectedOrderedParent && (
+          {orderingParent && (
             <ChildOrderPanel
-              parent={selectedOrderedParent}
+              parent={orderingParent}
               childLinks={selectedOrderedChildLinks}
               onMoveChild={handleMoveOrderedChild}
+              onClose={() => setOrderingParentId(null)}
             />
           )}
         </div>

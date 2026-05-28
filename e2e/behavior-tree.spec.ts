@@ -255,7 +255,10 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge-text').filter({ hasText: '1' })).toHaveCount(1);
     await expect(page.locator('.react-flow__edge-text').filter({ hasText: '2' })).toHaveCount(1);
 
-    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+    const sequenceNode = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    await sequenceNode.click();
+    await expect(page.getByTestId('bt-child-order-panel')).toHaveCount(0);
+    await sequenceNode.dblclick();
     const orderPanel = page.getByTestId('bt-child-order-panel');
     await expect(orderPanel).toBeVisible();
     await expect(orderPanel.getByTestId('bt-order-row')).toHaveCount(2);
