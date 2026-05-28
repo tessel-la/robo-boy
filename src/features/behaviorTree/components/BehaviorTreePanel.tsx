@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -17,6 +17,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import type { Ros } from 'roslib';
 import { v4 as uuidv4 } from 'uuid';
+import { FaArrowDown, FaArrowUp } from 'react-icons/fa';
 
 import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
@@ -32,6 +33,13 @@ import {
   getNodeCounterAfterNodes,
   ROSNodeInfo,
 } from '../nodeUtils';
+import {
+  annotateOrderedEdges,
+  getOrderedChildLinks,
+  isOrderedControlNode,
+  moveOrderedChildEdge,
+  OrderedChildLink,
+} from '../orderUtils';
 import {
   BehaviorTree,
   BehaviorTreeNode,
@@ -76,6 +84,80 @@ interface SaveNotice {
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 
+interface ChildOrderPanelProps {
+  parent: BehaviorTreeNode;
+  childLinks: OrderedChildLink[];
+  onMoveChild: (edgeId: string, direction: -1 | 1) => void;
+}
+
+const getOrderNodeDetail = (node: BehaviorTreeNode): string | undefined => {
+  const data = node.data;
+  if ('actionName' in data) return data.actionName;
+  if ('serviceName' in data) return data.serviceName;
+  if ('topicName' in data) return data.topicName;
+  return data.label;
+};
+
+const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
+  parent,
+  childLinks,
+  onMoveChild,
+}) => (
+  <div className="bt-order-panel" data-testid="bt-child-order-panel">
+    <div className="bt-order-panel-header">
+      <div className="bt-order-panel-title">
+        <span className="bt-order-panel-kicker">{parent.data.label}</span>
+        <span>Child order</span>
+      </div>
+      <span className="bt-order-panel-count">{childLinks.length}</span>
+    </div>
+
+    {childLinks.length === 0 ? (
+      <div className="bt-order-empty">No children connected</div>
+    ) : (
+      <ol className="bt-order-list">
+        {childLinks.map((link) => {
+          const label = link.child.data.label || link.child.id;
+          const detail = getOrderNodeDetail(link.child);
+          return (
+            <li className="bt-order-row" key={link.edge.id} data-testid="bt-order-row">
+              <span className="bt-order-index">{link.index + 1}</span>
+              <div className="bt-order-copy">
+                <span className="bt-order-label" title={label}>{label}</span>
+                {detail && detail !== label && (
+                  <span className="bt-order-detail" title={detail}>{detail}</span>
+                )}
+              </div>
+              <div className="bt-order-actions">
+                <button
+                  type="button"
+                  className="bt-order-button"
+                  onClick={() => onMoveChild(link.edge.id, -1)}
+                  disabled={link.index === 0}
+                  aria-label={`Move ${label} earlier`}
+                  title="Move earlier"
+                >
+                  <FaArrowUp />
+                </button>
+                <button
+                  type="button"
+                  className="bt-order-button"
+                  onClick={() => onMoveChild(link.edge.id, 1)}
+                  disabled={link.index === childLinks.length - 1}
+                  aria-label={`Move ${label} later`}
+                  title="Move later"
+                >
+                  <FaArrowDown />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    )}
+  </div>
+);
+
 const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
@@ -109,6 +191,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
   const executionStartedAt = useRef<number | undefined>(undefined);
+  const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
 
   const { screenToFlowPosition, deleteElements } = useReactFlow();
 
@@ -261,8 +344,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setSelectedNodes(result.duplicatedNodes);
   }, [edges, nodes, selectedNodes, setEdges, setNodes]);
 
-  const onNodeDoubleClick = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
+  const openNodeEditor = useCallback((node: Node) => {
       if (node.type === BehaviorNodeType.Action) {
         setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
       } else if (node.type === BehaviorNodeType.Service) {
@@ -270,6 +352,30 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       }
     },
     []
+  );
+
+  const onNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      openNodeEditor(node);
+    },
+    [openNodeEditor]
+  );
+
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
+      if (node.type !== BehaviorNodeType.Action && node.type !== BehaviorNodeType.Service) return;
+
+      const now = Date.now();
+      const previousTap = lastMobileNodeTap.current;
+      lastMobileNodeTap.current = { nodeId: node.id, timestamp: now };
+
+      if (previousTap?.nodeId === node.id && now - previousTap.timestamp < 420) {
+        lastMobileNodeTap.current = null;
+        openNodeEditor(node);
+      }
+    },
+    [openNodeEditor]
   );
 
   const handleSaveActionParameters = useCallback(
@@ -509,6 +615,34 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [addNodeAtPosition, screenToFlowPosition]
   );
 
+  const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
+  const displayedEdges = useMemo(
+    () => annotateOrderedEdges(behaviorNodes, edges),
+    [behaviorNodes, edges]
+  );
+  const selectedOrderedParent = useMemo(() => {
+    if (selectedNodes.length !== 1) return null;
+
+    const selectedNode = behaviorNodes.find((node) => node.id === selectedNodes[0].id);
+    return isOrderedControlNode(selectedNode) ? selectedNode : null;
+  }, [behaviorNodes, selectedNodes]);
+  const selectedOrderedChildLinks = useMemo(
+    () =>
+      selectedOrderedParent
+        ? getOrderedChildLinks(selectedOrderedParent.id, behaviorNodes, edges)
+        : [],
+    [behaviorNodes, edges, selectedOrderedParent]
+  );
+  const handleMoveOrderedChild = useCallback(
+    (edgeId: string, direction: -1 | 1) => {
+      if (!selectedOrderedParent) return;
+      setEdges((currentEdges) =>
+        moveOrderedChildEdge(currentEdges, selectedOrderedParent.id, edgeId, direction)
+      );
+    },
+    [selectedOrderedParent, setEdges]
+  );
+
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
@@ -583,13 +717,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         <div className="bt-canvas" ref={reactFlowWrapper} data-testid="bt-canvas">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={displayedEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onDrop={onDrop}
             onDragOver={onDragOver}
             onNodesDelete={onNodesDelete}
+            onNodeClick={onNodeClick}
             onNodeDoubleClick={onNodeDoubleClick}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
@@ -615,6 +750,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
+          {selectedOrderedParent && (
+            <ChildOrderPanel
+              parent={selectedOrderedParent}
+              childLinks={selectedOrderedChildLinks}
+              onMoveChild={handleMoveOrderedChild}
+            />
+          )}
         </div>
       </div>
 

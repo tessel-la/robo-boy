@@ -90,6 +90,57 @@ async function seedRunningActionTree(page: Page) {
   });
 }
 
+async function seedOrderedSequenceTree(page: Page) {
+  await page.evaluate(() => {
+    const now = Date.now();
+    const tree = {
+      id: 'e2e-ordered-sequence',
+      name: 'Ordered Sequence',
+      nodes: [
+        {
+          id: 'node-0',
+          type: 'sequence',
+          position: { x: 0, y: 0 },
+          data: { label: 'Sequence', type: 'sequence' },
+        },
+        {
+          id: 'node-1',
+          type: 'action',
+          position: { x: -220, y: 160 },
+          data: {
+            label: 'First Action',
+            actionName: '/first_action',
+            actionType: 'example_msgs/action/First',
+            parameters: {},
+          },
+        },
+        {
+          id: 'node-2',
+          type: 'action',
+          position: { x: 220, y: 160 },
+          data: {
+            label: 'Second Action',
+            actionName: '/second_action',
+            actionType: 'example_msgs/action/Second',
+            parameters: {},
+          },
+        },
+      ],
+      edges: [
+        { id: 'edge-0', source: 'node-0', target: 'node-1', animated: true },
+        { id: 'edge-1', source: 'node-0', target: 'node-2', animated: true },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([{ tree, version: '1.0.0' }])
+    );
+  });
+}
+
 test.describe('Behavior Tree panel', () => {
   test.beforeEach(async ({ page }) => {
     page.on('dialog', (dialog) => dialog.accept());
@@ -192,6 +243,46 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(2);
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(2);
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+  });
+
+  test('shows sequence child order and reorders children', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '1' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '2' })).toHaveCount(1);
+
+    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+    const orderPanel = page.getByTestId('bt-child-order-panel');
+    await expect(orderPanel).toBeVisible();
+    await expect(orderPanel.getByTestId('bt-order-row')).toHaveCount(2);
+    await expect(orderPanel.getByTestId('bt-order-row').nth(0)).toContainText('First Action');
+    await expect(orderPanel.getByTestId('bt-order-row').nth(1)).toContainText('Second Action');
+
+    await orderPanel.getByLabel('Move Second Action earlier').click();
+
+    await expect(orderPanel.getByTestId('bt-order-row').nth(0)).toContainText('Second Action');
+    await expect(orderPanel.getByTestId('bt-order-row').nth(1)).toContainText('First Action');
+  });
+
+  test('opens action settings with a mobile double tap', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openBehaviorTree(page);
+    await seedRunningActionTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Long Action Tree' }).click();
+
+    const actionNode = page.locator('.react-flow__node').filter({ hasText: 'Navigate' });
+    await expect(actionNode).toHaveCount(1);
+
+    await actionNode.click();
+    await actionNode.click();
+
+    await expect(page.locator('.ape-overlay')).toBeVisible();
   });
 
   test('keeps execution alive in 3D view and exposes top-bar controls', async ({ page }) => {
