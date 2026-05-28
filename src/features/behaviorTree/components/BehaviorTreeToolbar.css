@@ -142,7 +142,8 @@
 .bt-float-stop-btn:hover  { filter: brightness(1.08); }
 .bt-float-stop-btn:active { transform: scale(0.96); }
 
-.bt-float-delete-btn {
+.bt-float-delete-btn,
+.bt-float-duplicate-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -160,8 +161,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.bt-float-duplicate-btn {
+  color: var(--primary-color, #4285f4);
+}
+
 .bt-float-delete-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
-.bt-float-delete-btn:active { transform: scale(0.97); }
+.bt-float-duplicate-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
+.bt-float-delete-btn:active,
+.bt-float-duplicate-btn:active { transform: scale(0.97); }
 
 .bt-float-btn-label { font-size: 13px; }
 .bt-float-count     { font-size: 13px; }
@@ -172,7 +179,7 @@
   position: absolute;
   inset: 0;
   background: transparent;
-  z-index: 300;
+  z-index: 420;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -251,7 +258,7 @@
 /* Tree section — takes remaining space in panel, tree list scrolls inside */
 .bt-menu-tree-section {
   flex: 1;
-  min-height: 0;
+  min-height: 78px;
   display: flex;
   flex-direction: column;
   padding: 10px 0 0;
@@ -574,7 +581,8 @@
     justify-content: center;
   }
 
-  .bt-float-delete-btn {
+  .bt-float-delete-btn,
+  .bt-float-duplicate-btn {
     width: 36px;
     padding: 0;
     justify-content: center;

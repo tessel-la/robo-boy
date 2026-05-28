@@ -26,13 +26,18 @@ import ServiceParameterEditor from './ServiceParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { saveBehaviorTree, exportBehaviorTree } from '../storage/treeStorage';
 import {
+  createBehaviorTreeNode,
+  duplicateSelectedBehaviorNodes,
+  getNextBehaviorNodeId,
+  getNodeCounterAfterNodes,
+  ROSNodeInfo,
+} from '../nodeUtils';
+import {
   BehaviorTree,
   BehaviorTreeNode,
   BehaviorNodeType,
   ROSActionNodeData,
   ROSServiceNodeData,
-  ROSTopicNodeData,
-  ControlFlowNodeData,
   ExecutionEvent,
   ExecutionStatus,
   ROSActionInfo,
@@ -83,6 +88,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const saveNoticeTimer = useRef<number | null>(null);
 
   const { screenToFlowPosition, deleteElements } = useReactFlow();
+
+  const allocateNodeId = useCallback((existingNodes: Node[]) => {
+    const id = getNextBehaviorNodeId(existingNodes, nodeIdCounter.current);
+    nodeIdCounter.current = getNodeCounterAfterNodes([{ id }], nodeIdCounter.current);
+    return id;
+  }, []);
+
+  const addNodeAtPosition = useCallback(
+    (nodeType: BehaviorNodeType, position: { x: number; y: number }, rosInfo?: ROSNodeInfo) => {
+      setNodes((currentNodes) => {
+        const id = allocateNodeId(currentNodes);
+        const newNode = createBehaviorTreeNode({ id, nodeType, position, rosInfo });
+        return newNode ? currentNodes.concat(newNode) : currentNodes;
+      });
+    },
+    [allocateNodeId, setNodes]
+  );
 
   const showSaveNotice = useCallback((notice: Omit<SaveNotice, 'id'>) => {
     if (saveNoticeTimer.current !== null) {
@@ -157,63 +179,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
 
-      const data = JSON.parse(dataStr);
-      const { nodeType, rosInfo } = data;
-
-      const position = {
-        x: event.clientX - reactFlowBounds.left - 75,
-        y: event.clientY - reactFlowBounds.top - 40,
-      };
-
-      const id = `node-${nodeIdCounter.current++}`;
-      let nodeData: any;
-      let label = '';
-
-      switch (nodeType) {
-        case BehaviorNodeType.Sequence:
-          label = 'Sequence';
-          nodeData = { label, type: 'sequence' } as ControlFlowNodeData;
-          break;
-        case BehaviorNodeType.Selector:
-          label = 'Selector';
-          nodeData = { label, type: 'selector' } as ControlFlowNodeData;
-          break;
-        case BehaviorNodeType.Parallel:
-          label = 'Parallel';
-          nodeData = { label, type: 'parallel' } as ControlFlowNodeData;
-          break;
-        case BehaviorNodeType.Action:
-          label = rosInfo?.name || 'Action';
-          nodeData = {
-            label,
-            actionName: rosInfo?.name || '',
-            actionType: rosInfo?.type || '',
-          } as ROSActionNodeData;
-          break;
-        case BehaviorNodeType.Service:
-          label = rosInfo?.name || 'Service';
-          nodeData = {
-            label,
-            serviceName: rosInfo?.name || '',
-            serviceType: rosInfo?.type || '',
-          } as ROSServiceNodeData;
-          break;
-        case BehaviorNodeType.Topic:
-          label = rosInfo?.name || 'Topic';
-          nodeData = {
-            label,
-            topicName: rosInfo?.name || '',
-            messageType: rosInfo?.type || '',
-          } as ROSTopicNodeData;
-          break;
-        default:
-          return;
+      let data: { nodeType?: BehaviorNodeType; rosInfo?: ROSNodeInfo };
+      try {
+        data = JSON.parse(dataStr);
+      } catch {
+        return;
       }
 
-      const newNode: Node = { id, type: nodeType, position, data: nodeData };
-      setNodes((nds) => nds.concat(newNode));
+      if (!data.nodeType) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX - 75,
+        y: event.clientY - 40,
+      });
+
+      addNodeAtPosition(data.nodeType, position, data.rosInfo);
     },
-    [setNodes]
+    [addNodeAtPosition, screenToFlowPosition]
   );
 
   const onNodesDelete = useCallback(
@@ -236,6 +218,25 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     deleteElements({ nodes: selectedNodes });
     setSelectedNodes([]);
   }, [deleteElements, selectedNodes]);
+
+  const handleDuplicateSelected = useCallback(() => {
+    const selectedNodeIds = selectedNodes.map((node) => node.id);
+    if (selectedNodeIds.length === 0) return;
+
+    const result = duplicateSelectedBehaviorNodes({
+      nodes: nodes as BehaviorTreeNode[],
+      edges,
+      selectedNodeIds,
+      startNodeIndex: nodeIdCounter.current,
+    });
+
+    if (result.duplicatedNodes.length === 0) return;
+
+    nodeIdCounter.current = result.nextNodeCounter;
+    setNodes(result.nodes);
+    setEdges(result.edges);
+    setSelectedNodes(result.duplicatedNodes);
+  }, [edges, nodes, selectedNodes, setEdges, setNodes]);
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -302,10 +303,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [currentTree, nodes, edges, showSaveNotice]);
 
   const handleLoad = useCallback((tree: BehaviorTree) => {
-    setCurrentTree(tree);
-    setNodes(tree.nodes);
+    const loadedNodes = tree.nodes.map((node) => ({
+      ...node,
+      selected: false,
+      dragging: false,
+    }));
     // Strip legacy sourceHandle values (out-1, out-2, out-3) from saved trees.
-    setEdges(tree.edges.map((e) => ({ ...e, sourceHandle: null, targetHandle: null })));
+    const loadedEdges = tree.edges.map((e) => ({
+      ...e,
+      sourceHandle: null,
+      targetHandle: null,
+      selected: false,
+    }));
+    setCurrentTree({ ...tree, nodes: loadedNodes, edges: loadedEdges });
+    setNodes(loadedNodes);
+    setEdges(loadedEdges);
+    setSelectedNodes([]);
+    nodeIdCounter.current = getNodeCounterAfterNodes(loadedNodes);
   }, [setNodes, setEdges]);
 
   const handleNew = useCallback(() => {
@@ -406,48 +420,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         y: bounds.top + bounds.height / 2,
       });
 
-      const id = `node-${nodeIdCounter.current++}`;
-      let nodeData: ControlFlowNodeData | ROSActionNodeData | ROSServiceNodeData | ROSTopicNodeData;
-      let label = '';
-
-      switch (nodeType) {
-        case BehaviorNodeType.Sequence:
-          label = 'Sequence';
-          nodeData = { label, type: 'sequence' };
-          break;
-        case BehaviorNodeType.Selector:
-          label = 'Selector';
-          nodeData = { label, type: 'selector' };
-          break;
-        case BehaviorNodeType.Parallel:
-          label = 'Parallel';
-          nodeData = { label, type: 'parallel' };
-          break;
-        case BehaviorNodeType.Action:
-          label = rosInfo?.name || 'Action';
-          nodeData = { label, actionName: rosInfo?.name || '', actionType: rosInfo?.type || '' };
-          break;
-        case BehaviorNodeType.Service:
-          label = rosInfo?.name || 'Service';
-          nodeData = { label, serviceName: rosInfo?.name || '', serviceType: rosInfo?.type || '' };
-          break;
-        case BehaviorNodeType.Topic:
-          label = rosInfo?.name || 'Topic';
-          nodeData = { label, topicName: rosInfo?.name || '', messageType: rosInfo?.type || '' };
-          break;
-        default:
-          return;
-      }
-
-      const newNode: Node = { id, type: nodeType, position, data: nodeData };
-      setNodes((nds) => nds.concat(newNode));
+      addNodeAtPosition(nodeType, position, rosInfo);
 
       // Close palette on mobile after adding
       if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
         setIsPaletteCollapsed(true);
       }
     },
-    [screenToFlowPosition, setNodes]
+    [addNodeAtPosition, screenToFlowPosition]
   );
 
   return (
@@ -465,6 +445,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onExport={handleExport}
         onTogglePalette={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
         onDeleteSelected={handleDeleteSelected}
+        onDuplicateSelected={handleDuplicateSelected}
         onRename={handleRename}
       />
 

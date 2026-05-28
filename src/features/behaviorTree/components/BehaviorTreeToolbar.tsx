@@ -21,6 +21,7 @@ interface BehaviorTreeToolbarProps {
   onExport: () => void;
   onTogglePalette: () => void;
   onDeleteSelected: () => void;
+  onDuplicateSelected: () => void;
   onRename: (name: string) => void;
 }
 
@@ -37,6 +38,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onExport,
   onTogglePalette,
   onDeleteSelected,
+  onDuplicateSelected,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -155,18 +157,33 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
         {selectedNodeCount > 0 && (
-          <button
-            className="bt-float-delete-btn"
-            onClick={onDeleteSelected}
-            title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-          >
-            <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="0.5,3.5 12.5,3.5"/>
-              <path d="M4 3.5V2a0.8 0.8 0 0 1 0.8-0.8h3.4a0.8 0.8 0 0 1 0.8 0.8v1.5"/>
-              <path d="M2 3.5l0.8 9a0.8 0.8 0 0 0 0.8 0.8h5.8a0.8 0.8 0 0 0 0.8-0.8l0.8-9"/>
-            </svg>
-            <span className="bt-float-count">{selectedNodeCount}</span>
-          </button>
+          <>
+            <button
+              className="bt-float-duplicate-btn"
+              onClick={onDuplicateSelected}
+              title={`Duplicate ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
+              aria-label="Duplicate selected nodes"
+              data-testid="bt-duplicate-selected"
+            >
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="5" y="5" width="8" height="8" rx="1.2"/>
+                <path d="M2 10V3.2A1.2 1.2 0 0 1 3.2 2H10"/>
+              </svg>
+              <span className="bt-float-btn-label">Duplicate</span>
+            </button>
+            <button
+              className="bt-float-delete-btn"
+              onClick={onDeleteSelected}
+              title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
+            >
+              <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="0.5,3.5 12.5,3.5"/>
+                <path d="M4 3.5V2a0.8 0.8 0 0 1 0.8-0.8h3.4a0.8 0.8 0 0 1 0.8 0.8v1.5"/>
+                <path d="M2 3.5l0.8 9a0.8 0.8 0 0 0 0.8 0.8h5.8a0.8 0.8 0 0 0 0.8-0.8l0.8-9"/>
+              </svg>
+              <span className="bt-float-count">{selectedNodeCount}</span>
+            </button>
+          </>
         )}
 
         {isExecuting ? (

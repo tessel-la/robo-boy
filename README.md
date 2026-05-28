@@ -108,7 +108,7 @@ docker compose up -d --build
 
 #### Manipulator simulation
 
-The manipulator simulation stores its built install space in the Docker volume `manipulator-sim_colcon_install`, mounted in `manipulator_sim_cont` at `/home/rosuser/moveit_ws/install`. Because that workspace uses symlinked install files, the Robo-Boy override also mounts the simulation build volume at both `/overlay_ws/build` and `/home/rosuser/moveit_ws/build`, plus the source packages read-only, so custom action definitions resolve correctly.
+The manipulator simulation stores its Jazzy build cache in Docker volumes named `manipulator-sim_colcon_install_jazzy` and `manipulator-sim_colcon_build_jazzy`, mounted in `manipulator_sim_cont` at `/home/rosuser/moveit_ws/install` and `/home/rosuser/moveit_ws/build`. Because that workspace uses symlinked install files, the Robo-Boy override also mounts the simulation build volume at both `/overlay_ws/build` and `/home/rosuser/moveit_ws/build`, plus the source packages read-only, so custom action definitions resolve correctly.
 
 Start or build the manipulator simulation first, then start Robo-Boy with the optional override:
 
@@ -133,6 +133,13 @@ If Robo-Boy is already running, recreate only the ROS service after selecting th
 
 ```bash
 docker compose up -d --build --force-recreate ros-stack
+```
+
+If your simulator Compose project or volume names differ, set these overrides in `.env`:
+
+```bash
+MANIPULATOR_SIM_INSTALL_VOLUME=manipulator-sim_colcon_install_jazzy
+MANIPULATOR_SIM_BUILD_VOLUME=manipulator-sim_colcon_build_jazzy
 ```
 
 You should see overlay activation messages in the ROS stack logs:

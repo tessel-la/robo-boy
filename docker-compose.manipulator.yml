@@ -15,5 +15,7 @@ services:
 volumes:
   manipulator-sim_colcon_install:
     external: true
+    name: ${MANIPULATOR_SIM_INSTALL_VOLUME:-manipulator-sim_colcon_install_jazzy}
   manipulator-sim_colcon_build:
     external: true
+    name: ${MANIPULATOR_SIM_BUILD_VOLUME:-manipulator-sim_colcon_build_jazzy}
