@@ -1,0 +1,674 @@
+/* ─── Overlay ────────────────────────────────────────────────────────────────── */
+
+.ape-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ─── Panel — centered floating card ────────────────────────────────────────── */
+
+.ape-panel {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  width: min(380px, 100%);
+  max-width: 100%;
+  height: min(680px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  animation: ape-pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
+}
+
+@keyframes ape-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ─── Drag handle — hidden (side panel, no drag needed) ─────────────────────── */
+
+.ape-drag-handle {
+  display: none;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────────── */
+
+.ape-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.ape-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ape-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-color, #333333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ape-loading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  flex-shrink: 0;
+  animation: ape-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ape-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.6);
+  }
+}
+
+.ape-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Back button */
+.ape-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: none;
+  border: none;
+  color: var(--text-color-secondary, #666666);
+  cursor: pointer;
+  border-radius: 6px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-back-btn:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
+
+/* View toggle pill */
+.ape-view-toggle {
+  background: transparent;
+  border: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color-secondary, #666666);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-view-toggle:hover {
+  background: var(--background-color, #f5f5f5);
+  border-color: var(--text-color-secondary, #999999);
+  color: var(--text-color, #333333);
+}
+
+/* Close button */
+.ape-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  color: var(--text-color-secondary, #666666);
+  cursor: pointer;
+  border-radius: 6px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-close-btn:hover {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+}
+
+/* ─── Subtitle (action/service type) ─────────────────────────────────────────── */
+
+.ape-subtitle {
+  padding: 6px 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--text-color-secondary, #888888);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--background-color, #fafafa);
+}
+
+/* ─── Scrollable body ────────────────────────────────────────────────────────── */
+
+.ape-body {
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  min-height: 0;
+  scrollbar-gutter: stable;
+}
+
+/* ─── Type badge ─────────────────────────────────────────────────────────────── */
+
+.ape-type-badge {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 9px;
+  color: var(--primary-color, #4285f4);
+  background: rgba(66, 133, 244, 0.1);
+  padding: 2px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ─── Field list (layer 1) ───────────────────────────────────────────────────── */
+
+.ape-field-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ape-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  min-height: 58px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 12px;
+}
+
+.ape-list-row:last-child {
+  border-bottom: none;
+}
+
+/* Tappable (non-bool) rows */
+.ape-list-row-tap {
+  cursor: pointer;
+  border: none;
+  color: inherit;
+  text-align: left;
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-list-row-tap:hover {
+  background: var(--background-color, #fafafa);
+}
+
+.ape-list-row-tap:active,
+.ape-list-row-tap:focus-visible {
+  background: var(--background-color, #f5f5f5);
+  outline: none;
+}
+
+.ape-list-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ape-list-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.ape-list-name {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-color, #333333);
+  white-space: nowrap;
+}
+
+.ape-list-preview {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-color-secondary, #888888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  text-align: right;
+}
+
+.ape-chevron {
+  color: var(--text-color-secondary, #aaaaaa);
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ─── Bool toggle (inline in list) ──────────────────────────────────────────── */
+
+.ape-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ape-toggle-track {
+  width: 46px;
+  height: 27px;
+  border-radius: 14px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  position: relative;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.ape-toggle.on .ape-toggle-track {
+  background: var(--primary-color, #4285f4);
+  border-color: var(--primary-color, #4285f4);
+}
+
+.ape-toggle-thumb {
+  position: absolute;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.ape-toggle.on .ape-toggle-thumb {
+  transform: translateX(19px);
+}
+
+/* ─── Focused field editor (layer 2) ─────────────────────────────────────────── */
+
+.ape-edit-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 36px 24px 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Large number display + type badge */
+.ape-edit-big-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ape-edit-number-input {
+  background: transparent;
+  border: none;
+  color: var(--text-color, #333333);
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  width: 220px;
+  padding: 0;
+  -moz-appearance: textfield;
+  line-height: 1;
+}
+
+.ape-edit-number-input::-webkit-inner-spin-button,
+.ape-edit-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+.ape-edit-number-input:focus {
+  outline: none;
+}
+
+/* Slider section in edit view */
+.ape-edit-slider-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Base slider */
+.ape-slider {
+  width: 100%;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color, #e0e0e0);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+
+.ape-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
+  transition: transform 0.1s;
+}
+
+.ape-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+}
+
+.ape-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 6px rgba(66, 133, 244, 0.5);
+}
+
+/* Larger thumb for focused edit view */
+.ape-slider-large::-webkit-slider-thumb {
+  width: 32px;
+  height: 32px;
+}
+
+.ape-slider-large::-moz-range-thumb {
+  width: 32px;
+  height: 32px;
+}
+
+.ape-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ape-slider-labels > span {
+  font-size: 10px;
+  color: var(--text-color-secondary, #888888);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* String input in edit view */
+.ape-text-input {
+  width: 100%;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color, #333333);
+  font-size: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.ape-text-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+}
+
+/* Complex / JSON textarea in edit view */
+.ape-complex-ta {
+  width: 100%;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color, #333333);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 6px;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.ape-complex-ta.has-error {
+  border-color: var(--error-color, #f44336);
+}
+
+.ape-complex-ta:focus {
+  outline: none;
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+}
+
+.ape-field-err {
+  font-size: 10px;
+  color: var(--error-color, #f44336);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  align-self: flex-start;
+}
+
+/* ─── JSON raw view ──────────────────────────────────────────────────────────── */
+
+.ape-json-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  height: 100%;
+}
+
+.ape-json-ta {
+  flex: 1;
+  width: 100%;
+  min-height: 220px;
+  background: var(--background-color, #fafafa);
+  border: none;
+  color: var(--text-color, #333333);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 18px;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.ape-json-ta:focus {
+  outline: none;
+}
+
+.ape-json-error {
+  padding: 8px 18px;
+  background: rgba(244, 67, 54, 0.08);
+  border-top: 2px solid var(--error-color, #f44336);
+  color: var(--error-color, #f44336);
+  font-size: 11px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  flex-shrink: 0;
+}
+
+/* ─── Empty / skeleton ───────────────────────────────────────────────────────── */
+
+.ape-empty {
+  padding: 44px 24px;
+  text-align: center;
+  color: var(--text-color-secondary, #888888);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ape-empty strong {
+  color: var(--primary-color, #4285f4);
+}
+
+.ape-skeleton {
+  padding: 0;
+}
+
+.ape-skeleton-row {
+  height: 58px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background: linear-gradient(
+    90deg,
+    var(--background-color, #f5f5f5) 25%,
+    var(--border-color, #ebebeb) 50%,
+    var(--background-color, #f5f5f5) 75%
+  );
+  background-size: 200% 100%;
+  animation: ape-shimmer 1.5s ease infinite;
+}
+
+@keyframes ape-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────────── */
+
+.ape-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  flex-shrink: 0;
+  background: var(--card-bg, #ffffff);
+  position: relative;
+  z-index: 1;
+}
+
+.ape-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    filter 0.15s,
+    background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ape-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ape-btn-cancel {
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.ape-btn-cancel:hover:not(:disabled) {
+  background: var(--border-color, #e8e8e8);
+}
+
+.ape-btn-save {
+  background: var(--primary-color, #4285f4);
+  color: #fff;
+}
+
+.ape-btn-save:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+@media (max-height: 520px), (max-width: 480px) {
+  .ape-overlay {
+    padding: 8px;
+  }
+
+  .ape-panel {
+    height: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    min-height: 220px;
+  }
+
+  .ape-list-row {
+    min-height: 52px;
+  }
+
+  .ape-footer {
+    padding: 8px 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+  }
+}

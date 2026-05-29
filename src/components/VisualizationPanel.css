@@ -22,19 +22,24 @@
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 20; /* Above overlay */
-  background-color: rgba(50, 50, 50, 0.8);
-  color: #fff;
-  border: 1px solid #666;
-  border-radius: 50%;
-  width: 35px;
-  height: 35px;
+  z-index: 20;
+  background-color: var(--card-bg-alpha, rgba(var(--card-bg-rgb, 30 30 30) / 0.85));
+  color: var(--text-color, #fff);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.2));
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  font-size: 1.2em;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+
+.visualization-settings-button svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* Ensure icon button styling is defined */
@@ -51,12 +56,12 @@
 }
 
 .icon-button:hover {
-  color: var(--primary-color, #32CD32);
+  color: var(--primary-color);
 }
 
 .visualization-settings-button:hover {
-  background-color: rgba(80, 80, 80, 0.9);
-  border-color: #aaa;
+  background-color: var(--background-secondary, rgba(60, 60, 60, 0.9));
+  border-color: var(--border-color-hover, rgba(255,255,255,0.4));
 }
 
 /* --- Settings Popup Container (Now an Overlay) --- */

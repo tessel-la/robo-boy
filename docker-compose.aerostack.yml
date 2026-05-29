@@ -1,0 +1,4 @@
+services:
+  ros-stack:
+    volumes:
+      - ${AEROSTACK2_INSTALL_DIR:-~/.aerostack2_install}:/overlay_ws/aerostack2:ro

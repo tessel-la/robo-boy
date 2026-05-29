@@ -1,12 +1,13 @@
-# Dockerfile for ROS 2 Humble components
-# Start with Ubuntu 22.04 (Jammy) base image
-FROM ubuntu:22.04
+# Dockerfile for ROS 2 components
+ARG ROS_DISTRO=jazzy
+FROM ubuntu:24.04
 
 # Set noninteractive mode for installations
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-ENV ROS_DISTRO=humble
+ARG ROS_DISTRO
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 # Set the default shell to bash
 SHELL ["/bin/bash", "-c"]
@@ -34,23 +35,35 @@ RUN apt-get update && apt-get install -y \
 
 # Install necessary dependencies (ensure git is included)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-humble-ros-base \
+    ros-${ROS_DISTRO}-ros-base \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \
-    ros-humble-rosbridge-server \
-    ros-humble-image-transport \
-    ros-humble-cv-bridge \
-    ros-humble-web-video-server \
-    ros-humble-rosidl-default-generators \
-    ros-humble-foxglove-bridge \
+    ros-${ROS_DISTRO}-rosbridge-server \
+    ros-${ROS_DISTRO}-image-transport \
+    ros-${ROS_DISTRO}-cv-bridge \
+    ros-${ROS_DISTRO}-web-video-server \
+    ros-${ROS_DISTRO}-rosidl-default-generators \
+    ros-${ROS_DISTRO}-foxglove-bridge \
+    ros-${ROS_DISTRO}-geographic-msgs \
+    ros-${ROS_DISTRO}-moveit-msgs \
+    ros-${ROS_DISTRO}-type-description-interfaces \
+    ros-${ROS_DISTRO}-vision-msgs \
+    python3-numpy \
     python3-opencv \
     python3-pip \
     git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
-RUN pip install numpy pyquaternion
+RUN pip install --break-system-packages pyquaternion
+
+# Patch rosapi's action lookup. Some distros ship ros2action.api with a helper
+# that calls Node.get_action_names_and_types(), which rosapi's node class does
+# not expose. rclpy.action uses the node handle directly and works here.
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    proxy_path="$(python3 -c 'import importlib.util; print(importlib.util.find_spec("rosapi.proxy").origin)')" && \
+    sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
 
 # --- Build packages from source --- 
 RUN mkdir -p /republisher_ws/src
@@ -72,12 +85,12 @@ RUN echo "--- Contents of /republisher_ws/src: ---" && ls -la /republisher_ws/sr
 WORKDIR /republisher_ws
 # Clean potential stale artifacts before building
 RUN echo "--- Cleaning build/install/log directories --- " && rm -rf build install log
-# RUN echo "--- Attempting colcon build --- " && . /opt/ros/humble/setup.sh && colcon build --symlink-install --packages-select tf2_web_republisher && colcon build --symlink-install --packages-select tf2_web_republisher_py
+# RUN echo "--- Attempting colcon build --- " && . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build --symlink-install --packages-select tf2_web_republisher && colcon build --symlink-install --packages-select tf2_web_republisher_py
 # Build the entire workspace now, colcon handles order
 # --- Build TF2 web republisher if sources were copied ---
 # RUN if [ -d "src/tf2_web_republisher" ]; then \
 #       echo "--- Building tf2_web_republisher packages ---" && \
-#       . /opt/ros/humble/setup.sh && \
+#       . /opt/ros/${ROS_DISTRO}/setup.sh && \
 #       colcon build --symlink-install --packages-select tf2_web_republisher tf2_web_republisher_py; \
 #     else \
 #       echo "--- Skipping tf2_web_republisher build (sources not found) ---"; \
@@ -93,34 +106,15 @@ RUN echo "--- Contents of /republisher_ws/install after build: ---" && ls -la /r
 
 # --------------------------------------------
 
+# Create overlay workspace mount point (users can bind-mount their robot
+# workspace install dir here to expose custom message types to rosbridge).
+RUN mkdir -p /overlay_ws
+
 # Reset working directory
 WORKDIR /ros_ws
 
-# --- Entrypoint Script ---
-RUN echo '#!/bin/bash' > /ros_ws/entrypoint.sh && \
-    echo 'set -e' >> /ros_ws/entrypoint.sh && \
-    echo 'echo "--- Sourcing ROS Humble --- "' >> /ros_ws/entrypoint.sh && \
-    echo 'source /opt/ros/humble/setup.bash' >> /ros_ws/entrypoint.sh && \
-#    echo 'echo "--- Sourcing tf2_web_republisher workspace --- "' >> /ros_ws/entrypoint.sh && \
-#    echo 'if [ -f "/republisher_ws/install/setup.bash" ]; then source /republisher_ws/install/setup.bash; else echo "Republisher workspace not found, skipping source."; fi' >> /ros_ws/entrypoint.sh && \
-    echo 'echo "--- Launching ROS Components --- "' >> /ros_ws/entrypoint.sh && \
-    # Debug: Print PYTHONPATH after sourcing
-    echo 'echo "--- PYTHONPATH after sourcing: $PYTHONPATH"' >> /ros_ws/entrypoint.sh && \
-    # Launch rosbridge
-    echo 'ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=0.0.0.0 &' >> /ros_ws/entrypoint.sh && \
-    # Launch web_video_server
-    echo 'ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &' >> /ros_ws/entrypoint.sh && \
-    # Launch Foxglove Bridge
-    echo 'ros2 launch foxglove_bridge foxglove_bridge_launch.xml address:=0.0.0.0 port:=8765 &' >> /ros_ws/entrypoint.sh && \
-    # Launch tf2_web_republisher package, but use the expected executable/node name
-#    echo 'if [ -d "/republisher_ws/install/tf2_web_republisher_py" ]; then ros2 run tf2_web_republisher_py tf2_web_republisher_py & else echo "tf2_web_republisher_py not found, skipping launch."; fi' >> /ros_ws/entrypoint.sh && \
-    # Keep the container running
-    echo 'echo "--- Waiting for processes to exit --- "' >> /ros_ws/entrypoint.sh && \
-    echo 'wait -n' >> /ros_ws/entrypoint.sh && \
-    echo 'echo "--- Exiting entrypoint --- "' >> /ros_ws/entrypoint.sh && \
-    echo 'exit $?' >> /ros_ws/entrypoint.sh
-
-# Make entrypoint executable
+# Copy and use the entrypoint script
+COPY ros_entrypoint.sh /ros_ws/entrypoint.sh
 RUN chmod +x /ros_ws/entrypoint.sh
 
 # Run the entrypoint script

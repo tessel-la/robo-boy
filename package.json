@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "preview": "vite preview --host",
@@ -14,6 +14,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:stack": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report"
   },
@@ -27,9 +28,14 @@
     "react-dom": "^18.2.0",
     "react-icons": "^5.2.1",
     "react-joystick-component": "^6.2.1",
+    "reactflow": "^11.11.4",
     "roslib": "^1.4.1",
     "three": "^0.160.0",
-    "uuid": "^9.0.1"
+    "uuid": "^14.0.0"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.9.10",
+    "@rollup/plugin-terser": "^1.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

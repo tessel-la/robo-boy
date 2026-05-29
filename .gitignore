@@ -162,3 +162,10 @@ node_modules
 dev-dist/
 playwright-report/
 test-results/
+generate-icons.ps1
+generate-icons.sh
+CLAUDE.md
+.agents/
+.codex/
+.claude/
+docs/

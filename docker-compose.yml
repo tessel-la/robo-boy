@@ -40,21 +40,29 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ROS 2 Stack (Rosbridge + Image Publisher)
+  # network_mode: host so ROS 2 DDS multicast discovery works with other
+  # host-networked containers (e.g. aerial_sim_cont). Port mappings are
+  # incompatible with host networking; Caddy reaches services via
+  # host.docker.internal instead of the ros-stack hostname.
   ros-stack:
     restart: unless-stopped
+    network_mode: host
     ipc: host
     build:
       context: .
       dockerfile: Dockerfile.ros # Use the ROS Dockerfile
-    ports: # Expose web_video_server port
-      - "127.0.0.1:8080:8080" # Map container 8080 to host's localhost:8080
-      - "0.0.0.0:8765:8765" # Expose Foxglove WebSocket server
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw 
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
       - DISPLAY=${DISPLAY}
-    networks: # Assign to custom network
-      - app-net
+      # FastDDS shared-memory transport can deadlock action calls across
+      # host-networked containers running as different users. Use UDP for
+      # cross-container ROS traffic while keeping DDS discovery intact.
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
 
 volumes:
   caddy-data:

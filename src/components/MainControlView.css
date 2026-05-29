@@ -20,6 +20,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     padding: 5px 10px; /* Reduced padding */
     background-color: var(--navbar-bg, #333);
     color: var(--navbar-text, white);
@@ -33,6 +34,117 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); /* Adjusted shadow */
     border-bottom-left-radius: 10px; /* Round bottom-left corner */
     border-bottom-right-radius: 10px; /* Round bottom-right corner */
+}
+
+.bt-execution-island {
+    height: 26px;
+    width: auto;
+    min-width: 0;
+    max-width: min(170px, calc(100vw - 190px));
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px;
+    border-radius: 7px;
+    background: rgba(18, 21, 27, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(12px);
+    color: #fff;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.bt-execution-island.active {
+    background: color-mix(in srgb, var(--primary-color, #4285f4) 66%, #15181d);
+}
+
+.bt-execution-pulse {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 999px;
+    background: var(--success-color, #4caf50);
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.55);
+    animation: bt-execution-pulse 1.3s ease-out infinite;
+}
+
+@keyframes bt-execution-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.55); }
+    70% { box-shadow: 0 0 0 7px rgba(76, 175, 80, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+}
+
+.bt-execution-return,
+.bt-execution-stop {
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.bt-execution-return {
+    min-width: 0;
+    flex: 0 1 auto;
+    max-width: 134px;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 0 6px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.bt-execution-stop {
+    width: 28px;
+    flex: 0 0 28px;
+    background: rgba(220, 53, 69, 0.88);
+}
+
+.bt-execution-return:hover,
+.bt-execution-stop:hover {
+    transform: translateY(-1px);
+}
+
+.bt-execution-return svg,
+.bt-execution-stop svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+}
+
+.bt-execution-copy {
+    min-width: 0;
+    flex: 0 1 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.bt-execution-tree,
+.bt-execution-node {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bt-execution-tree {
+    display: none;
+    max-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.bt-execution-node {
+    max-width: 82px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.78);
 }
 
 /* Main Content Area Styles */
@@ -68,89 +180,145 @@
 /* Adjustments for elements within the top bar */
 .top-bar .view-toggle {
     display: flex;
-    gap: 8px;
-    margin: 0; /* Remove default margin */
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    padding: 3px;
+    min-width: 0;
 }
 
 .top-bar .view-toggle button {
-    background-color: transparent;
-    border: 1px solid var(--navbar-text, white);
-    color: var(--navbar-text, white);
-    padding: 5px; /* Adjust padding for icons */
-    border-radius: 5px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 4px 8px;
+    border-radius: 6px;
     cursor: pointer;
-    /* font-size: 1.2em; /* Remove font-size */
     line-height: 1;
-    opacity: 0.8;
-    /* Add flex centering for SVG */
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.top-bar.bt-running .view-toggle {
+    flex: 0 0 auto;
 }
 
 .top-bar .view-toggle button svg {
-    width: 1.2em; /* Reduced icon size */
-    height: 1.2em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .view-toggle button.active {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    opacity: 1;
+    background: var(--primary-color, #4285f4);
+    color: #fff;
 }
 
-.top-bar .view-toggle button:hover {
-    opacity: 1;
+.top-bar .view-toggle button:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.top-bar .view-toggle .bt-execution-return {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 134px;
+    height: 100%;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.top-bar .view-toggle .bt-execution-island.active .bt-execution-return {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.top-bar .view-toggle .bt-execution-stop {
+    width: 28px;
+    flex: 0 0 28px;
+    height: 100%;
+    padding: 0;
+    border-radius: 5px;
+    background: rgba(220, 53, 69, 0.88);
+    color: #fff;
+}
+
+.top-bar .view-toggle .bt-execution-return svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+}
+
+.top-bar .view-toggle .bt-execution-stop svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+}
+
+.top-bar .view-toggle .bt-execution-return:hover,
+.top-bar .view-toggle .bt-execution-stop:hover {
+    transform: translateY(-1px);
 }
 
 .top-bar .status-controls {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    padding: 3px;
 }
 
-/* Use icon class names from TSX */
 .top-bar .connection-status-icon {
-    /* font-size: 1.4em; Remove font-size */
-    line-height: 1;
-    /* Add flex centering for SVG */
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 4px 6px;
+    border-radius: 6px;
+    line-height: 1;
 }
+
 .top-bar .connection-status-icon svg {
-    width: 1.4em; /* Reduced icon size */
-    height: 1.4em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .connection-status-icon.connected {
-    color: #4caf50; /* Green for connected */
+    color: var(--success-color, #4caf50);
 }
 
 .top-bar .connection-status-icon.disconnected {
-    color: #ffc107; /* Yellow/Amber for disconnected */
+    color: var(--warning-color, #ffc107);
 }
 
 .top-bar .disconnect-button-icon {
-    background: none;
+    background: transparent;
     border: none;
-    color: var(--error-color, #dc3545); /* Use error color or default red */
-    /* font-size: 1.4em; Remove font-size */
-    line-height: 1;
+    color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
-    padding: 0;
-    /* Add flex centering for SVG */
+    padding: 4px 6px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
 }
+
 .top-bar .disconnect-button-icon svg {
-    width: 1.4em; /* Reduced icon size */
-    height: 1.4em;
+    width: 18px;
+    height: 18px;
 }
 
 .top-bar .disconnect-button-icon:hover {
-    color: var(--error-hover-color, #a71d2a); /* Darker red on hover */
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--error-color, #dc3545);
 }
 
 
@@ -218,6 +386,26 @@
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
+    .top-bar.bt-running {
+        gap: 6px;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    .top-bar.bt-running .view-toggle {
+        flex: 0 0 auto;
+    }
+
+    .bt-execution-island {
+        flex: 0 0 auto;
+        max-width: min(142px, calc(100vw - 188px));
+        min-width: 0;
+    }
+
+    .bt-execution-node {
+        max-width: 62px;
+    }
+
     .resize-handle {
         height: 20px; /* Even larger touch target on mobile */
         min-height: 20px;
@@ -227,6 +415,51 @@
     .resize-handle-bar {
         width: 80px; /* Wider bar on mobile */
         height: 4px; /* Thicker bar on mobile */
+    }
+}
+
+@media (max-width: 460px) {
+    .top-bar.bt-running .view-toggle {
+        gap: 1px;
+    }
+
+    .top-bar.bt-running .view-toggle > button {
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    .top-bar.bt-running .status-controls {
+        flex-shrink: 0;
+    }
+
+    .bt-execution-island {
+        max-width: min(126px, calc(100vw - 174px));
+        min-width: 0;
+    }
+
+    .bt-execution-return {
+        gap: 4px;
+        padding-left: 5px;
+        padding-right: 4px;
+    }
+
+    .bt-execution-node {
+        max-width: 42px;
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 360px) {
+    .bt-execution-copy {
+        display: none;
+    }
+
+    .bt-execution-return {
+        justify-content: center;
+    }
+
+    .bt-execution-island {
+        max-width: none;
     }
 }
 
@@ -245,6 +478,15 @@
 
 .view-panel {
     padding: 0 !important; /* Force remove all padding */
+}
+
+/* BT panel keep-alive wrapper */
+.view-slot {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .view-panel .card {
@@ -354,21 +596,6 @@ body.no-scroll {
 }
 
 /* Delete all transition-rope and rope-dot styles from here */
-
-/* Center placeholder message */
-.view-panel .placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    width: 100%;
-    text-align: center;
-    color: var(--text-color, #666);
-    font-size: 1.1em;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
 
 /* Remove the previous loading animation styles */
 .loading-animation-overlay {

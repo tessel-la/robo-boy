@@ -19,39 +19,58 @@ import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
 import { getGamepadLayout } from '../features/customGamepad/gamepadStorage';
+import BehaviorTreePanel, {
+  BehaviorTreeExecutionControls,
+  BehaviorTreeExecutionSnapshot,
+} from '../features/behaviorTree/components/BehaviorTreePanel';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-    <circle cx="12" cy="13" r="4" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+    <circle cx="12" cy="13" r="3.5"/>
+    <circle cx="18.5" cy="10.5" r="1" fill="currentColor" stroke="none"/>
   </svg>
 );
 const IconMCV3d = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+    <path d="M2 7v10l10 5V12"/>
+    <path d="M22 7v10l-10 5"/>
+  </svg>
+);
+const IconMCVBT = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="4.5" rx="1.2"/>
+    <line x1="12" y1="6.5" x2="12" y2="10"/>
+    <line x1="4" y1="10" x2="20" y2="10"/>
+    <line x1="4" y1="10" x2="4" y2="14"/>
+    <line x1="20" y1="10" x2="20" y2="14"/>
+    <rect x="1" y="14" width="6" height="4.5" rx="1.2"/>
+    <rect x="17" y="14" width="6" height="4.5" rx="1.2"/>
   </svg>
 );
 const IconMCVLink = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M16.9 16.9l1.4 1.4M5.6 18.4l1.4-1.4M16.9 7.1l1.4-1.4"/>
   </svg>
 );
 const IconMCVUnlink = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    <line x1="2" y1="2" x2="22" y2="22" />
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" strokeDasharray="4 2"/>
+    <path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>
   </svg>
 );
-const IconMCVClose = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
+const IconMCVDisconnect = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12"/>
+  </svg>
+);
+const IconMCVStop = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="7" y="7" width="10" height="10" rx="2"/>
   </svg>
 );
 // --- End Top Bar Icons ---
@@ -60,9 +79,11 @@ const IconMCVClose = () => (
 const icons = {
   camera: <IconMCVCamera />,
   view3d: <IconMCV3d />,
+  bt: <IconMCVBT />,
   connected: <IconMCVLink />,
   disconnected: <IconMCVUnlink />,
-  disconnect: <IconMCVClose />,
+  disconnect: <IconMCVDisconnect />,
+  stop: <IconMCVStop />,
 };
 
 // Define Panel Types
@@ -79,10 +100,17 @@ interface MainControlViewProps {
   onDisconnect: () => void;
 }
 
-type ViewMode = 'camera' | '3d';
+type ViewMode = 'camera' | '3d' | 'behaviorTree';
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
+  // Once BT panel mounts, keep it alive (preserves nodes/executor state)
+  const [btEverMounted, setBtEverMounted] = useState(false);
+  const [btExecution, setBtExecution] = useState<BehaviorTreeExecutionSnapshot>({
+    isExecuting: false,
+    treeName: '',
+  });
+  const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
@@ -186,7 +214,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     // Only re-run effect if connect/disconnect functions or connectionParams change
   }, [connect, disconnect, connectionParams]);
 
+  // Lazy-mount BT panel on first visit; trigger 3D resize on switch
+  useEffect(() => {
+    if (viewMode === 'behaviorTree') setBtEverMounted(true);
+    if (viewMode === '3d') {
+      // ResizeObserver needs a tick after display change to read correct dimensions
+      const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+      return () => clearTimeout(id);
+    }
+  }, [viewMode]);
+
   const handleInternalDisconnect = () => {
+    btExecutionControls.current?.stop();
     disconnect(); // Disconnect ROS
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
@@ -302,11 +341,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [selectedPanelId, activePanels, ros]);
 
   // View state management with animation
-  const handleViewToggle = () => {
-    if (isTransitioning) return;
+  const handleViewToggle = (mode: ViewMode) => {
+    if (isTransitioning || viewMode === mode) return;
     setIsTransitioning(true);
 
-    const newViewMode = viewMode === 'camera' ? '3d' : 'camera';
+    const newViewMode = mode;
 
     const currentView = viewPanelRef.current;
     if (!currentView) return;
@@ -330,8 +369,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     currentViewClone.style.height = '100%';
     currentView.parentElement?.appendChild(currentViewClone);
 
-    // Position the new view further off-screen
-    currentView.style.transform = `translateX(${newViewMode === '3d' ? '150%' : '-150%'})`;
+    // Determine animation direction based on view order
+    const viewOrder = ['camera', '3d', 'behaviorTree'];
+    const currentIndex = viewOrder.indexOf(viewMode);
+    const newIndex = viewOrder.indexOf(newViewMode);
+    const direction = newIndex > currentIndex ? 1 : -1;
+
+    // Position the new view off-screen
+    currentView.style.transform = `translateX(${direction * 150}%)`;
 
     // Update view mode immediately to show the new content
     setViewMode(newViewMode);
@@ -341,10 +386,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       targets: [currentViewClone, currentView],
       translateX: (_el: HTMLElement, i: number) => {
         // First element (clone) moves out, second element (new view) moves in
-        return i === 0 ? (newViewMode === '3d' ? '-150%' : '150%') : '0%';
+        return i === 0 ? `${-direction * 150}%` : '0%';
       },
-      duration: 800, // Reduced from 1500ms to 800ms for a quicker transition
-      easing: 'easeOutQuad', // Changed from elastic to smooth easing without bounce
+      duration: 800,
+      easing: 'easeOutQuad',
       complete: () => {
         // Clean up the clone after animation
         currentViewClone.remove();
@@ -352,13 +397,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     });
   };
 
+  const handleReturnToBehaviorTree = () => {
+    if (viewMode === 'behaviorTree') return;
+    setBtEverMounted(true);
+    setViewMode('behaviorTree');
+    setIsTransitioning(false);
+  };
+
+  const handleStopBehaviorTree = () => {
+    btExecutionControls.current?.stop();
+  };
+
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
-      <div className="top-bar">
+      <div className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''}`}>
         <div className="view-toggle">
           <button
-            onClick={handleViewToggle}
+            onClick={() => handleViewToggle('camera')}
             className={viewMode === 'camera' ? 'active' : ''}
             title="Camera View"
             aria-label="Switch to Camera View"
@@ -366,13 +422,55 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             {icons.camera}
           </button>
           <button
-            onClick={handleViewToggle}
+            onClick={() => handleViewToggle('3d')}
             className={viewMode === '3d' ? 'active' : ''}
             title="3D View"
             aria-label="Switch to 3D View"
           >
             {icons.view3d}
           </button>
+          {btExecution.isExecuting ? (
+            <div
+              className={`bt-execution-island ${viewMode === 'behaviorTree' ? 'active' : ''}`}
+              role="status"
+              aria-live="polite"
+            >
+              <button
+                className="bt-execution-return"
+                onClick={handleReturnToBehaviorTree}
+                title="Open behavior tree"
+                aria-label="Open behavior tree"
+              >
+                {icons.bt}
+                <span className="bt-execution-pulse" aria-hidden="true" />
+                <span className="bt-execution-copy">
+                  <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
+                    {btExecution.treeName || 'Behavior tree'}
+                  </span>
+                  <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
+                    {btExecution.activeNodeLabel || 'Running'}
+                  </span>
+                </span>
+              </button>
+              <button
+                className="bt-execution-stop"
+                onClick={handleStopBehaviorTree}
+                title="Stop behavior tree"
+                aria-label="Stop behavior tree"
+              >
+                {icons.stop}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleViewToggle('behaviorTree')}
+              className={viewMode === 'behaviorTree' ? 'active' : ''}
+              title="Behavior Tree"
+              aria-label="Switch to Behavior Tree"
+            >
+              {icons.bt}
+            </button>
+          )}
         </div>
         <div className="status-controls">
           <div
@@ -411,12 +509,33 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   {isConnected ? (availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found') : 'Connecting to ROS...'}
                 </div>
               )
-            ) : (
+            ) : viewMode === '3d' ? (
               isConnected && ros ? (
                 <VisualizationPanel ros={ros} key="visualization-panel" />
               ) : (
                 <div className="placeholder">Connecting to ROS...</div>
               )
+            ) : null}
+            {/* BT: lazy-mount once, kept alive with display:none to preserve nodes/executor */}
+            {btEverMounted && (
+              <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
+                {isConnected && ros ? (
+                  <BehaviorTreePanel
+                    ros={ros}
+                    isConnected={isConnected}
+                    isActive={viewMode === 'behaviorTree'}
+                    onExecutionChange={setBtExecution}
+                    onExecutionControlsChange={(controls) => {
+                      btExecutionControls.current = controls;
+                    }}
+                  />
+                ) : (
+                  <div className="placeholder">Connect to ROS to use Behavior Trees</div>
+                )}
+              </div>
+            )}
+            {viewMode === 'behaviorTree' && !btEverMounted && (
+              <div className="placeholder">Loading…</div>
             )}
           </div>
         </div>
@@ -475,4 +594,4 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   );
 };
 
-export default MainControlView; 
+export default MainControlView;

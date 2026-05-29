@@ -5,6 +5,25 @@ import './AddPanelMenu.css'; // Create CSS next
 import { GamepadType } from './gamepads/GamepadInterface';
 import { loadGamepadLibrary, deleteCustomGamepad } from '../features/customGamepad/gamepadStorage';
 
+const IconPencil = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11 2.5l2.5 2.5L5 13.5l-3 .5.5-3L11 2.5z"/>
+  </svg>
+);
+const IconTrash = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="1,4 15,4"/>
+    <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+    <path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+  </svg>
+);
+const IconPlus = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <line x1="8" y1="2" x2="8" y2="14"/>
+    <line x1="2" y1="8" x2="14" y2="8"/>
+  </svg>
+);
+
 interface AddPanelMenuProps {
   isOpen: boolean;
   onSelectType: (type: PanelType, layoutId?: string) => void;
@@ -210,15 +229,17 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
                     className="edit-gamepad-button"
                     onClick={(e) => handleEditCustomGamepad(gamepad.id, e)}
                     title="Edit custom gamepad"
+                    aria-label="Edit"
                   >
-                    ✏️
+                    <IconPencil />
                   </button>
                   <button
                     className="delete-gamepad-button"
                     onClick={(e) => handleDeleteCustomGamepad(gamepad.id, e)}
                     title="Delete custom gamepad"
+                    aria-label="Delete"
                   >
-                    ×
+                    <IconTrash />
                   </button>
                 </li>
               ))}
@@ -231,7 +252,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
             className="create-custom-button"
             onClick={() => onOpenCustomEditor()}
           >
-            <span className="icon">✏️</span>
+            <IconPlus />
             Create Custom Gamepad
           </button>
         </div>
