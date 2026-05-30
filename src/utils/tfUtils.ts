@@ -19,6 +19,11 @@ export type StoredTransform = {
   rotation: THREE.Quaternion;
 };
 
+export interface TfFrameEdge {
+  parentFrame: string;
+  childFrame: string;
+}
+
 // Reusable identity transform to avoid creating new objects
 export const IDENTITY_TRANSFORM: StoredTransform = {
   translation: new THREE.Vector3(0, 0, 0),
@@ -26,6 +31,38 @@ export const IDENTITY_TRANSFORM: StoredTransform = {
 };
 
 // --- Helper Functions for TF Logic (using THREE.js math) ---
+
+export function normalizeFrameId(frameId: string): string {
+  return frameId.startsWith('/') ? frameId.substring(1) : frameId;
+}
+
+export function getSelectedTfFrameEdges(
+  transforms: TransformStore,
+  selectedFrames: string[],
+): TfFrameEdge[] {
+  const selectedFrameSet = new Set(selectedFrames.map(normalizeFrameId));
+  const edgeKeys = new Set<string>();
+  const edges: TfFrameEdge[] = [];
+
+  Object.entries(transforms).forEach(([childFrameKey, data]) => {
+    const childFrame = normalizeFrameId(childFrameKey);
+    const parentFrame = normalizeFrameId(data.parentFrame);
+
+    if (!selectedFrameSet.has(parentFrame) || !selectedFrameSet.has(childFrame)) {
+      return;
+    }
+
+    const edgeKey = `${parentFrame}->${childFrame}`;
+    if (edgeKeys.has(edgeKey)) {
+      return;
+    }
+
+    edgeKeys.add(edgeKey);
+    edges.push({ parentFrame, childFrame });
+  });
+
+  return edges;
+}
 
 // Invert a Transform (represented by THREE.Vector3 and THREE.Quaternion)
 export function invertTransform(transform: StoredTransform): StoredTransform {
@@ -109,8 +146,8 @@ export function lookupTransform(
 ): StoredTransform | null {
 
   // Normalize frame IDs (remove leading slashes)
-  const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
-  const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
+  const normalizedTargetFrame = normalizeFrameId(targetFrame);
+  const normalizedSourceFrame = normalizeFrameId(sourceFrame);
 
   // For debugging
   const startTime = performance.now();
@@ -192,7 +229,7 @@ export class CustomTFProvider {
 
   constructor(/*ros: Ros,*/ fixedFrame: string, initialTransforms: TransformStore) {
     // this.ros = ros; // Removed ROS dependency if not strictly needed by provider itself
-    this.fixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
+    this.fixedFrame = normalizeFrameId(fixedFrame);
     this.transforms = initialTransforms;
     this.callbacks = new Map();
     console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
@@ -312,7 +349,7 @@ export class CustomTFProvider {
 
   updateFixedFrame(newFixedFrame: string) {
     // Normalize frame ID (remove leading slash)
-    const normalizedNewFrame = newFixedFrame.startsWith('/') ? newFixedFrame.substring(1) : newFixedFrame;
+    const normalizedNewFrame = normalizeFrameId(newFixedFrame);
 
     // Only update if actually changed
     if (this.fixedFrame === normalizedNewFrame) {
@@ -358,7 +395,7 @@ export class CustomTFProvider {
 
   // Modify subscribe to provide plain object initially
   subscribe(frameId: string, callback: (transform: any | null) => void) { // Use 'any' for now if Transform type is problematic
-    const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
+    const normalizedFrameId = normalizeFrameId(frameId);
     // console.log(`[CustomTFProvider] subscribe called for frameId: ${normalizedFrameId}`);
 
     if (!this.callbacks.has(normalizedFrameId)) {
@@ -386,7 +423,7 @@ export class CustomTFProvider {
 
   // Modify unsubscribe type signature
   unsubscribe(frameId: string, callback?: (transform: any | null) => void) { // Use 'any' for now
-    const normalizedFrameId = frameId.startsWith('/') ? frameId.substring(1) : frameId;
+    const normalizedFrameId = normalizeFrameId(frameId);
     // console.log(`[CustomTFProvider] unsubscribe called for frameId: ${normalizedFrameId}`);
     const frameCallbacks = this.callbacks.get(normalizedFrameId);
     if (frameCallbacks) {
@@ -409,8 +446,8 @@ export class CustomTFProvider {
   // Ensure this public method uses the external helper
   public lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
     // Normalize frames for consistency
-    const normalizedTargetFrame = targetFrame.startsWith('/') ? targetFrame.substring(1) : targetFrame;
-    const normalizedSourceFrame = sourceFrame.startsWith('/') ? sourceFrame.substring(1) : sourceFrame;
+    const normalizedTargetFrame = normalizeFrameId(targetFrame);
+    const normalizedSourceFrame = normalizeFrameId(sourceFrame);
 
     // IMPORTANT: For ROS3D.PointCloud2 compatibility, we need to swap sourceFrame and targetFrame
     // This is because pointcloud transformations expect the inverse direction compared to TF visualizations
@@ -460,4 +497,4 @@ export class CustomTFProvider {
 // Useful for typing refs or props that hold the provider instance.
 export interface ITFProvider extends CustomTFProvider {
   // Add any other methods/properties expected by consumers if needed
-} 
+}

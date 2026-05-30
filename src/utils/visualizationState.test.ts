@@ -12,7 +12,8 @@ describe('visualizationState', () => {
   const mockState = {
     visualizations: [{ id: '1', type: 'scan', topic: '/scan' }],
     fixedFrame: 'map',
-    displayedTfFrames: ['base_link']
+    displayedTfFrames: ['base_link'],
+    showTfFrameLabels: false
   };
 
   it('should save state to memory and localStorage', () => {
@@ -33,7 +34,8 @@ describe('visualizationState', () => {
     expect(state).toEqual({
       visualizations: [],
       fixedFrame: 'odom',
-      displayedTfFrames: []
+      displayedTfFrames: [],
+      showTfFrameLabels: true
     });
   });
 
@@ -78,5 +80,20 @@ describe('visualizationState', () => {
     expect(consoleSpy).toHaveBeenCalled();
 
     consoleSpy.mockRestore();
+  });
+
+  it('should default old saved state to showing TF frame labels', () => {
+    const oldState = {
+      visualizations: [{ id: '1', type: 'scan', topic: '/scan' }],
+      fixedFrame: 'map',
+      displayedTfFrames: ['base_link']
+    };
+
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(oldState));
+
+    expect(getVisualizationState()).toEqual({
+      ...oldState,
+      showTfFrameLabels: true
+    });
   });
 });

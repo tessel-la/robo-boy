@@ -99,6 +99,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
   const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]);
   const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]);
+  const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(true);
   const [tfAxesScale, setTfAxesScale] = useState<number>(0.5); // Add TF axes scale state
 
   // UI State
@@ -127,6 +128,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       setVisualizations(filteredVisualizations);
       setFixedFrame(savedState.fixedFrame || DEFAULT_FIXED_FRAME);
       setDisplayedTfFrames(savedState.displayedTfFrames || []);
+      setShowTfFrameLabels(savedState.showTfFrameLabels ?? true);
       console.log('Restored and filtered saved visualization state:', savedState, 'Filtered:', filteredVisualizations);
     } else {
       // Initialize with some default visualization if none are saved (optional)
@@ -142,12 +144,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
       const stateToSave = {
         visualizations,
         fixedFrame,
-        displayedTfFrames
+        displayedTfFrames,
+        showTfFrameLabels
       };
       saveVisualizationState(stateToSave);
       console.log('Saved visualization state:', stateToSave);
     }
-  }, [visualizations, fixedFrame, displayedTfFrames, isRosConnected]);
+  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, isRosConnected]);
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
@@ -239,6 +242,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
     ros3dViewer,
     customTFProvider,
     displayedTfFrames,
+    transforms,
+    showFrameLabels: showTfFrameLabels,
     axesScale: tfAxesScale, // Use the state value for axes scale
   });
 
@@ -572,8 +577,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
           fixedFrame={fixedFrame}
           availableFrames={availableFrames}
           displayedTfFrames={displayedTfFrames}
+          showTfFrameLabels={showTfFrameLabels}
           onFixedFrameChange={handleFixedFrameChange}
           onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
+          onShowTfFrameLabelsChange={setShowTfFrameLabels}
           activeVisualizations={visualizations}
           onRemoveVisualization={removeVisualization}
           onAddVisualizationClick={openAddVizModalFromSettings}

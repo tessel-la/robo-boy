@@ -80,20 +80,22 @@
 
 /* --- Settings Popup (Content Box within Overlay) --- */
 .settings-popup {
-  position: fixed;
-  max-height: 85vh;
+  position: absolute;
+  max-height: calc(100% - 24px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   background-color: var(--card-bg, #2f2f2f);
   color: var(--text-primary, #e0e0e0);
   padding: 15px 20px;
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   min-width: 300px;
-  max-width: 90%;
+  width: min(610px, calc(100% - 24px));
+  max-width: calc(100% - 24px);
   border: 1px solid var(--border-color, #444);
-  z-index: 1000; /* Ensure it appears above other elements */
+  z-index: 1000; /* Above viewer content, scoped to the 3D panel */
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%); /* Center in viewport */
@@ -130,8 +132,10 @@
 }
 
 .settings-popup-content {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(80vh - 80px); /* Adjusted for better fit */
+  max-height: none;
   padding-right: 10px; 
   margin-right: -10px; 
   scrollbar-width: thin;
@@ -251,42 +255,85 @@
     font-size: 0.9em;
 }
 
+.tf-label-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color, #e0e0e0);
+  cursor: pointer;
+  margin: 6px 0 10px 10px;
+  min-height: 26px;
+}
+
 /* --- Styles for TF Checkbox List --- */
+.tf-frame-group {
+  min-width: 0;
+}
+
 .tf-checkbox-list {
   list-style: none;
-  padding: 0;
+  padding: 2px 4px 2px 0;
   margin: 0;
-  max-height: 150px; /* Example max height */
+  max-height: clamp(88px, 18vh, 150px);
   overflow-y: auto;
+  overflow-x: hidden;
   font-size: 0.85rem; /* Smaller font for list items */
-  max-width: 70vw;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #333);
 }
 
 .tf-checkbox-list li {
-  padding: 3px 0; /* Less padding for more compact list */
+  padding: 2px 0; /* Less padding for more compact list */
 }
 
 .tf-checkbox-list li label {
   display: flex;
   align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.tf-checkbox-list li label:hover,
+.tf-label-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tf-checkbox-list li label {
+  overflow-wrap: anywhere;
+}
+
+.tf-checkbox-list input[type="checkbox"],
+.tf-label-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border-color, #666);
+  border-radius: 4px;
+  background-color: var(--background-secondary, #333);
   cursor: pointer;
 }
 
-.tf-checkbox-list li input[type="checkbox"] {
-  margin-right: 8px;
-}
-
-.tf-checkbox-list input[type="checkbox"]:checked {
+.tf-checkbox-list input[type="checkbox"]:checked,
+.tf-label-toggle input[type="checkbox"]:checked {
   background-color: var(--primary-color, #32CD32);
   border-color: var(--primary-color, #32CD32);
 }
 
-/* Custom Checkmark (optional) */
-.tf-checkbox-list input[type="checkbox"]:checked::before {
+.tf-checkbox-list input[type="checkbox"]:checked::before,
+.tf-label-toggle input[type="checkbox"]:checked::before {
   content: '';
   position: absolute;
-  left: 5px;
-  top: 2px;
+  left: 4px;
+  top: 1px;
   width: 4px;
   height: 8px;
   border: solid white;
@@ -415,7 +462,7 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 180px; /* Adjust as needed */
+  max-height: clamp(88px, 18vh, 150px);
   overflow-y: auto;
   font-size: 0.85rem; /* Smaller font for visualization items */
 }
@@ -582,7 +629,7 @@
 @media (max-width: 768px) {
   .settings-popup {
     max-width: 95%;
-    max-height: 90%; /* More space on mobile */
+    max-height: calc(100% - 16px); /* Stay inside the 3D panel */
     padding: 12px 15px; /* Slightly less padding on mobile */
   }
   
@@ -592,7 +639,11 @@
   
   .settings-popup-content {
     font-size: 0.85rem; /* Even smaller text on mobile */
-    max-height: calc(90vh - 70px);
+    max-height: none;
+  }
+
+  .tf-checkbox-list {
+    max-height: clamp(86px, 20vh, 160px);
   }
   
   .active-visualizations-list li,
@@ -626,4 +677,4 @@
   .active-visualizations-list .viz-settings-button {
     right: 32px; /* Closer on small screens */
   }
-} 
+}
