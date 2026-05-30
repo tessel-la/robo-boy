@@ -93,9 +93,6 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
 # Launch web_video_server
 ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &
 
-# Launch Foxglove Bridge
-ros2 launch foxglove_bridge foxglove_bridge_launch.xml address:=0.0.0.0 port:=8765 &
-
 echo "--- Waiting for processes to exit ---"
 wait -n
 echo "--- Exiting entrypoint ---"

@@ -61,7 +61,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
       mkcert -key-file certs/local-key.pem -cert-file certs/local-cert.pem localhost 127.0.0.1 ::1 YOUR_HOST_IP
       ```
 
-3.  **Build and Run Services:** This command builds the Docker images (if they don't exist or need updating) and starts the `app` (React Vite dev server), `ros-stack` (rosbridge, web_video_server, Foxglove bridge), and `caddy` (reverse proxy) containers.
+3.  **Build and Run Services:** This command builds the Docker images (if they don't exist or need updating) and starts the `app` (React Vite dev server), `ros-stack` (rosbridge and web_video_server), and `caddy` (reverse proxy) containers.
 
     ```bash
     docker compose up -d --build

@@ -17,6 +17,8 @@ interface SettingsPopupProps {
   onFixedFrameChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   displayedTfFrames: string[];
   onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
+  showTfFrameLabels: boolean;
+  onShowTfFrameLabelsChange: (show: boolean) => void;
   activeVisualizations: VisualizationConfig[];
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void; // Prop to open the Add modal
@@ -47,6 +49,8 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     onFixedFrameChange,
     displayedTfFrames,
     onDisplayedTfFramesChange,
+    showTfFrameLabels,
+    onShowTfFrameLabelsChange,
     // New props
     activeVisualizations,
     onRemoveVisualization,
@@ -212,6 +216,15 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                 </div>
               </div>
 
+              <label className="tf-label-toggle">
+                <input
+                  type="checkbox"
+                  checked={showTfFrameLabels}
+                  onChange={(event) => onShowTfFrameLabelsChange(event.target.checked)}
+                />
+                Show frame labels
+              </label>
+
               <div className="popup-control-group tf-frame-group">
                 {availableFrames.length > 0 ? (
                   <ul className="tf-checkbox-list">
@@ -321,4 +334,4 @@ const SettingsPopup = (props: SettingsPopupProps) => {
   );
 };
 
-export default SettingsPopup; 
+export default SettingsPopup;

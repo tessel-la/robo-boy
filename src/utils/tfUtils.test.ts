@@ -4,7 +4,9 @@ import {
   invertTransform,
   multiplyTransforms,
   findTransformPath,
+  getSelectedTfFrameEdges,
   lookupTransform,
+  normalizeFrameId,
   IDENTITY_TRANSFORM,
   CustomTFProvider,
   type StoredTransform,
@@ -24,6 +26,75 @@ describe('tfUtils', () => {
       expect(IDENTITY_TRANSFORM.rotation.y).toBe(0)
       expect(IDENTITY_TRANSFORM.rotation.z).toBe(0)
       expect(IDENTITY_TRANSFORM.rotation.w).toBe(1)
+    })
+  })
+
+  describe('normalizeFrameId', () => {
+    it('should remove a leading slash', () => {
+      expect(normalizeFrameId('/base_link')).toBe('base_link')
+    })
+
+    it('should leave normalized names unchanged', () => {
+      expect(normalizeFrameId('base_link')).toBe('base_link')
+    })
+  })
+
+  describe('getSelectedTfFrameEdges', () => {
+    it('should return only selected parent-child edges', () => {
+      const transforms: TransformStore = {
+        odom: {
+          parentFrame: 'map',
+          transform: {
+            translation: new THREE.Vector3(1, 0, 0),
+            rotation: new THREE.Quaternion(0, 0, 0, 1),
+          },
+          isStatic: false,
+        },
+        base_link: {
+          parentFrame: 'odom',
+          transform: {
+            translation: new THREE.Vector3(0, 1, 0),
+            rotation: new THREE.Quaternion(0, 0, 0, 1),
+          },
+          isStatic: false,
+        },
+      }
+
+      expect(getSelectedTfFrameEdges(transforms, ['map', 'odom'])).toEqual([
+        { parentFrame: 'map', childFrame: 'odom' },
+      ])
+    })
+
+    it('should normalize selected frame names and transform frame names', () => {
+      const transforms: TransformStore = {
+        '/odom': {
+          parentFrame: '/map',
+          transform: {
+            translation: new THREE.Vector3(1, 0, 0),
+            rotation: new THREE.Quaternion(0, 0, 0, 1),
+          },
+          isStatic: false,
+        },
+      }
+
+      expect(getSelectedTfFrameEdges(transforms, ['/map', '/odom'])).toEqual([
+        { parentFrame: 'map', childFrame: 'odom' },
+      ])
+    })
+
+    it('should skip edges when either side is not selected', () => {
+      const transforms: TransformStore = {
+        odom: {
+          parentFrame: 'map',
+          transform: {
+            translation: new THREE.Vector3(1, 0, 0),
+            rotation: new THREE.Quaternion(0, 0, 0, 1),
+          },
+          isStatic: false,
+        },
+      }
+
+      expect(getSelectedTfFrameEdges(transforms, ['odom'])).toEqual([])
     })
   })
 
@@ -529,4 +600,3 @@ describe('tfUtils', () => {
     })
   })
 })
-

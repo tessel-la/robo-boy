@@ -10,6 +10,7 @@ describe('SettingsPopup', () => {
     const mockOnRemoveVisualization = vi.fn();
     const mockOnAddVisualizationClick = vi.fn();
     const mockOnTfAxesScaleChange = vi.fn();
+    const mockOnShowTfFrameLabelsChange = vi.fn();
 
     const defaultProps = {
         onClose: mockOnClose,
@@ -18,6 +19,8 @@ describe('SettingsPopup', () => {
         onFixedFrameChange: mockOnFixedFrameChange,
         displayedTfFrames: ['base_link'],
         onDisplayedTfFramesChange: mockOnDisplayedTfFramesChange,
+        showTfFrameLabels: true,
+        onShowTfFrameLabelsChange: mockOnShowTfFrameLabelsChange,
         activeVisualizations: [
             { id: 'viz-1', type: 'pointcloud' as const, topic: '/points' },
             { id: 'viz-2', type: 'laserscan' as const, topic: '/scan' },
@@ -115,10 +118,19 @@ describe('SettingsPopup', () => {
         it('should allow toggling TF frame display', () => {
             render(<SettingsPopup {...defaultProps} />);
 
-            // Should have checkboxes for TF frames
-            const checkboxes = screen.queryAllByRole('checkbox');
-            // May or may not have checkboxes depending on section state
-            expect(checkboxes.length).toBeGreaterThanOrEqual(0);
+            fireEvent.click(screen.getByRole('button', { name: /displayed tf frames/i }));
+            fireEvent.click(screen.getByLabelText('odom'));
+
+            expect(mockOnDisplayedTfFramesChange).toHaveBeenCalledWith(['base_link', 'odom']);
+        });
+
+        it('should toggle TF frame labels', () => {
+            render(<SettingsPopup {...defaultProps} />);
+
+            fireEvent.click(screen.getByRole('button', { name: /displayed tf frames/i }));
+            fireEvent.click(screen.getByLabelText(/show frame labels/i));
+
+            expect(mockOnShowTfFrameLabelsChange).toHaveBeenCalledWith(false);
         });
     });
 

@@ -13,25 +13,41 @@ interface VisualizationPanelState {
   visualizations: VisualizationConfig[];
   fixedFrame: string;
   displayedTfFrames: string[];
+  showTfFrameLabels: boolean;
 }
 
 // Global state to store visualizations
 let savedState: VisualizationPanelState = {
   visualizations: [],
   fixedFrame: 'odom',
-  displayedTfFrames: []
+  displayedTfFrames: [],
+  showTfFrameLabels: true
 };
+
+const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
+  visualizations: [],
+  fixedFrame: 'odom',
+  displayedTfFrames: [],
+  showTfFrameLabels: true
+};
+
+const normalizeVisualizationState = (state: Partial<VisualizationPanelState>): VisualizationPanelState => ({
+  visualizations: state.visualizations || [],
+  fixedFrame: state.fixedFrame || DEFAULT_VISUALIZATION_STATE.fixedFrame,
+  displayedTfFrames: state.displayedTfFrames || [],
+  showTfFrameLabels: state.showTfFrameLabels ?? true,
+});
 
 /**
  * Save the current state of the visualization panel
  * @param state Current visualization panel state
  */
 export const saveVisualizationState = (state: VisualizationPanelState): void => {
-  savedState = { ...state };
+  savedState = normalizeVisualizationState(state);
   
   // Also save to localStorage for persistence across sessions
   try {
-    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(state));
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(savedState));
   } catch (error) {
     console.error('Failed to save visualization state to localStorage:', error);
   }
@@ -51,7 +67,7 @@ export const getVisualizationState = (): VisualizationPanelState => {
   try {
     const savedStateStr = localStorage.getItem('roboboy_3d_visualization_state');
     if (savedStateStr) {
-      const parsedState = JSON.parse(savedStateStr);
+      const parsedState = normalizeVisualizationState(JSON.parse(savedStateStr));
       savedState = parsedState; // Update in-memory state
       return parsedState;
     }
@@ -60,11 +76,7 @@ export const getVisualizationState = (): VisualizationPanelState => {
   }
   
   // Return default state if nothing is saved
-  return {
-    visualizations: [],
-    fixedFrame: 'odom',
-    displayedTfFrames: []
-  };
+  return { ...DEFAULT_VISUALIZATION_STATE };
 };
 
 /**
@@ -74,7 +86,8 @@ export const clearVisualizationState = (): void => {
   savedState = {
     visualizations: [],
     fixedFrame: 'odom',
-    displayedTfFrames: []
+    displayedTfFrames: [],
+    showTfFrameLabels: true
   };
   
   try {
@@ -82,4 +95,4 @@ export const clearVisualizationState = (): void => {
   } catch (error) {
     console.error('Failed to clear visualization state from localStorage:', error);
   }
-}; 
+};
