@@ -22,12 +22,6 @@
        reverse_proxy host.docker.internal:9090
     }
 
-    # Route Foxglove WebSocket requests to the ros-stack container
-    handle /foxglove* {
-       uri strip_prefix /foxglove
-       reverse_proxy host.docker.internal:8765
-    }
-
     # Route video stream requests to the ros-stack container
     handle /video_stream* {
         uri strip_prefix /video_stream
@@ -59,12 +53,6 @@
     handle /websocket* {
        uri strip_prefix /websocket
        reverse_proxy host.docker.internal:9090
-    }
-
-    # Route Foxglove WebSocket requests to the ros-stack container
-    handle /foxglove* {
-       uri strip_prefix /foxglove
-       reverse_proxy host.docker.internal:8765
     }
 
     # Route video stream requests to the ros-stack container
