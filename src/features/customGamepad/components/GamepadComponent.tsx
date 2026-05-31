@@ -6,6 +6,8 @@ import ButtonComponent from './ButtonComponent';
 import DPadComponent from './DPadComponent';
 import ToggleComponent from './ToggleComponent';
 import SliderComponent from './SliderComponent';
+import CameraComponent from './CameraComponent';
+import PlotComponent from './PlotComponent';
 import './GamepadComponent.css';
 
 interface GamepadComponentProps {
@@ -355,6 +357,10 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         return <ToggleComponent {...commonProps} />;
       case 'slider':
         return <SliderComponent {...commonProps} />;
+      case 'camera':
+        return <CameraComponent {...commonProps} />;
+      case 'plot':
+        return <PlotComponent {...commonProps} />;
       default:
         return <div className="unknown-component">Unknown component type</div>;
     }

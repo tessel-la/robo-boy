@@ -3,6 +3,12 @@ import type { Ros } from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import RangeSlider from './RangeSlider';
 import ValueControl from './ValueControl';
+import {
+  CAMERA_MESSAGE_TYPES,
+  fetchNumericFields,
+  filterCameraTopics,
+  NumericFieldOption,
+} from '../rosMessageUtils';
 import './ComponentSettingsModal.css';
 
 interface ComponentSettingsModalProps {
@@ -67,7 +73,40 @@ const MESSAGE_TYPES = {
     fields: {
       'data': { type: 'bool', label: 'Data' }
     }
+  },
+  'sensor_msgs/Image': {
+    label: 'Image',
+    alternativeTypes: ['sensor_msgs/msg/Image'],
+    fields: {}
+  },
+  'sensor_msgs/CompressedImage': {
+    label: 'Compressed Image',
+    alternativeTypes: ['sensor_msgs/msg/CompressedImage'],
+    fields: {}
+  },
+  'nav_msgs/Odometry': {
+    label: 'Odometry',
+    alternativeTypes: ['nav_msgs/msg/Odometry'],
+    fields: {}
+  },
+  'sensor_msgs/JointState': {
+    label: 'Joint State',
+    alternativeTypes: ['sensor_msgs/msg/JointState'],
+    fields: {}
   }
+};
+
+const getCanonicalMessageType = (type: string): string => {
+  if (type in MESSAGE_TYPES) return type;
+
+  const match = Object.entries(MESSAGE_TYPES).find(([, config]) =>
+    (config.alternativeTypes || []).includes(type)
+  );
+  return match?.[0] || type;
+};
+
+const getMessageTypeConfig = (type: string) => {
+  return MESSAGE_TYPES[getCanonicalMessageType(type) as keyof typeof MESSAGE_TYPES];
 };
 
 // Define allowed message types for each component type
@@ -76,7 +115,9 @@ const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
   'button': ['std_msgs/Bool', 'std_msgs/Int32'],
   'dpad': ['sensor_msgs/Joy'], // D-pad only supports Joy
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
-  'slider': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32']
+  'slider': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
+  'camera': ['sensor_msgs/Image', 'sensor_msgs/CompressedImage'],
+  'plot': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32', 'sensor_msgs/Joy', 'geometry_msgs/Twist', 'nav_msgs/Odometry', 'sensor_msgs/JointState']
 };
 
 const getInferredDataType = (messageType: string, field: string): 'float' | 'int' => {
@@ -108,6 +149,15 @@ const isAxisConfigurationEnabled = (messageType: string): boolean => {
 const isTwistMessageType = (messageType: string): boolean => {
   return messageType === 'geometry_msgs/Twist' || messageType === 'geometry_msgs/msg/Twist';
 };
+
+const parsePositiveIntegerOrUndefined = (value: string): number | undefined => {
+  if (!value.trim()) return undefined;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const getDefaultCameraStreamType = (messageType: string): string =>
+  messageType.includes('CompressedImage') ? 'ros_compressed' : 'mjpeg';
 
 const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   isOpen,
@@ -143,6 +193,21 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [buttonIndex, setButtonIndex] = useState(0);
   const [momentary, setMomentary] = useState(true);
 
+  // Camera-specific settings
+  const [cameraTransport, setCameraTransport] = useState<'proxy' | 'ros'>('proxy');
+  const [streamType, setStreamType] = useState('mjpeg');
+  const [streamWidth, setStreamWidth] = useState('');
+  const [streamHeight, setStreamHeight] = useState('');
+
+  // Plot-specific settings
+  const [plotFieldPaths, setPlotFieldPaths] = useState<string[]>(['data']);
+  const [plotFieldOptions, setPlotFieldOptions] = useState<NumericFieldOption[]>([]);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [timeWindowSec, setTimeWindowSec] = useState(10);
+  const [autoScale, setAutoScale] = useState(true);
+  const [minY, setMinY] = useState(-1);
+  const [maxY, setMaxY] = useState(1);
+
   // Loading state
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
 
@@ -163,7 +228,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     const existingTopic = availableTopics.find(t => t.name === topic);
     if (existingTopic) {
       // Get the message type configuration to check for alternative formats
-      const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
+      const messageConfig = getMessageTypeConfig(messageType);
       const acceptableTypes = messageConfig
         ? [messageType, ...(messageConfig.alternativeTypes || [])]
         : [messageType];
@@ -245,6 +310,16 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           defaultMessageType = 'sensor_msgs/Joy';
           defaultField = 'axes';
           break;
+        case 'camera':
+          defaultTopic = '/camera/image_raw/compressed';
+          defaultMessageType = 'sensor_msgs/CompressedImage';
+          defaultField = '';
+          break;
+        case 'plot':
+          defaultTopic = '/plot';
+          defaultMessageType = 'std_msgs/Float32';
+          defaultField = 'data';
+          break;
       }
 
       // Set topic, message type, and field from action if it exists, otherwise use defaults
@@ -325,19 +400,65 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           setDpadButtonMapping(component.config.buttonMapping || {
             up: 0, right: 1, down: 2, left: 3
           });
+        } else if (component.type === 'camera') {
+          setCameraTransport(component.config.cameraTransport ?? 'proxy');
+          setStreamType(component.config.streamType ?? getDefaultCameraStreamType(action.messageType || defaultMessageType));
+          setStreamWidth(component.config.streamWidth ? String(component.config.streamWidth) : '');
+          setStreamHeight(component.config.streamHeight ? String(component.config.streamHeight) : '');
+        } else if (component.type === 'plot') {
+          const plotFields = component.config.fieldPaths?.length
+            ? component.config.fieldPaths
+            : [component.config.fieldPath || action.field || 'data'];
+          setPlotFieldPaths(plotFields);
+          setTimeWindowSec(component.config.timeWindowSec ?? 10);
+          setAutoScale(component.config.autoScale !== false);
+          setMinY(component.config.minY ?? -1);
+          setMaxY(component.config.maxY ?? 1);
         }
       }
     }
   }, [component]);
 
+  useEffect(() => {
+    if (!isOpen || component?.type !== 'plot' || !ros || !ros.isConnected || !messageType) {
+      setPlotFieldOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingFields(true);
+    fetchNumericFields(ros, messageType).then(fields => {
+      if (cancelled) return;
+      setPlotFieldOptions(fields);
+      if (fields.length > 0 && plotFieldPaths.every(path => !fields.some(option => option.path === path))) {
+        setPlotFieldPaths([fields[0].path]);
+      }
+      setIsLoadingFields(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [component?.type, isOpen, messageType, plotFieldPaths, ros]);
+
   const inferredDataType = useMemo(() => getInferredDataType(messageType, field), [messageType, field]);
 
   // Get available topics filtered by message type
   const filteredTopics = useMemo(() => {
+    if (component?.type === 'camera') {
+      return filterCameraTopics(availableTopics);
+    }
+
+    if (component?.type === 'plot') {
+      return availableTopics.filter(topicInfo =>
+        topicInfo.type && !topicInfo.name.includes('/_action/') && !topicInfo.name.includes('/parameter_events')
+      );
+    }
+
     if (!messageType) return availableTopics;
 
     // Get the message type configuration
-    const messageConfig = MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES];
+    const messageConfig = getMessageTypeConfig(messageType);
     if (!messageConfig) return [];
 
     // Create a list of all possible type formats to match against
@@ -354,14 +475,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     console.log('Filtered topics:', filtered.map(t => `${t.name} (${t.type})`));
 
     return filtered;
-  }, [availableTopics, messageType]);
+  }, [availableTopics, component?.type, messageType]);
 
   // Get available fields for the selected message type
   const availableFields = useMemo(() => {
-    if (!messageType || !MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES]) {
+    const messageConfig = getMessageTypeConfig(messageType);
+    if (!messageType || !messageConfig) {
       return {};
     }
-    return MESSAGE_TYPES[messageType as keyof typeof MESSAGE_TYPES].fields;
+    return messageConfig.fields;
   }, [messageType]);
 
   // Get allowed message types for the current component type
@@ -397,6 +519,18 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       }
     }
 
+    if (component.type === 'camera' && !CAMERA_MESSAGE_TYPES.includes(messageType)) {
+      setErrorMessage('Camera components can only use Image or CompressedImage message types.');
+      return;
+    }
+
+    const selectedPlotFields = plotFieldPaths.map(path => path.trim()).filter(Boolean);
+
+    if (component.type === 'plot' && selectedPlotFields.length === 0) {
+      setErrorMessage('Plot components need a numeric field path.');
+      return;
+    }
+
     const dataType = getInferredDataType(messageType, field);
     const precision = getPrecision(dataType === 'float' ? 0.1 : 1);
 
@@ -404,7 +538,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     const action: ROSTopicConfig = {
       topic,
       messageType,
-      field: field || undefined
+      field: component.type === 'plot' ? selectedPlotFields[0] : (field || undefined)
     };
 
     let updatedConfig = { ...component.config };
@@ -447,6 +581,24 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         ...updatedConfig,
         // Remove any incompatible config that might have been carried over
       };
+    } else if (component.type === 'camera') {
+      updatedConfig = {
+        ...updatedConfig,
+        cameraTransport,
+        streamType: streamType || getDefaultCameraStreamType(messageType),
+        streamWidth: parsePositiveIntegerOrUndefined(streamWidth),
+        streamHeight: parsePositiveIntegerOrUndefined(streamHeight)
+      };
+    } else if (component.type === 'plot') {
+      updatedConfig = {
+        ...updatedConfig,
+        fieldPath: selectedPlotFields[0],
+        fieldPaths: selectedPlotFields,
+        timeWindowSec: Math.max(1, timeWindowSec),
+        autoScale,
+        minY,
+        maxY
+      };
     }
 
     const updatedComponent: GamepadComponentConfig = {
@@ -462,6 +614,21 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
   const handleCancel = () => {
     onClose();
+  };
+
+  const handlePlotFieldToggle = (path: string, checked: boolean) => {
+    setPlotFieldPaths(previous => {
+      const next = checked
+        ? Array.from(new Set([...previous, path]))
+        : previous.filter(item => item !== path);
+      return next.length > 0 ? next : [path];
+    });
+  };
+
+  const handlePlotFieldTextChange = (value: string) => {
+    const paths = value.split(',').map(path => path.trim()).filter(Boolean);
+    const nextPaths = paths.length > 0 ? paths : [''];
+    setPlotFieldPaths(nextPaths);
   };
 
   if (!isOpen || !component) return null;
@@ -504,6 +671,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 onChange={(e) => {
                   const newMessageType = e.target.value;
                   setMessageType(newMessageType);
+                  if (component?.type === 'camera') {
+                    setStreamType(getDefaultCameraStreamType(newMessageType));
+                  }
                   // Auto-set field for restricted components
                   if (component?.type === 'toggle' && newMessageType.includes('Bool')) {
                     setField('data');
@@ -556,7 +726,20 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 <select
                   id="topic-select"
                   value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                  onChange={(e) => {
+                    const nextTopic = e.target.value;
+                    setTopic(nextTopic);
+                    if (component.type === 'camera' || component.type === 'plot') {
+                      const selectedTopic = availableTopics.find(item => item.name === nextTopic);
+                      if (selectedTopic?.type) {
+                        const canonicalType = getCanonicalMessageType(selectedTopic.type);
+                        setMessageType(canonicalType);
+                        if (component.type === 'camera') {
+                          setStreamType(getDefaultCameraStreamType(canonicalType));
+                        }
+                      }
+                    }
+                  }}
                   className="setting-select topic-select"
                   disabled={isLoadingTopics}
                 >
@@ -608,7 +791,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               )}
             </div>
 
-            {messageType && Object.keys(availableFields).length > 0 && (
+            {messageType && component.type !== 'plot' && component.type !== 'camera' && Object.keys(availableFields).length > 0 && (
               <div className="setting-group">
                 <label htmlFor="field-select">Message Field:</label>
                 <select
@@ -649,6 +832,140 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           </div>
 
           {/* Component-specific Settings */}
+          {component.type === 'camera' && (
+            <div className="settings-section">
+              <h4>Camera Settings</h4>
+
+              <div className="setting-group">
+                <label htmlFor="camera-transport">Transport:</label>
+                <select
+                  id="camera-transport"
+                  value={cameraTransport}
+                  onChange={(e) => setCameraTransport(e.target.value as 'proxy' | 'ros')}
+                  className="setting-select"
+                >
+                  <option value="proxy">Proxy stream (/video_stream)</option>
+                  <option value="ros">ROS topic subscription</option>
+                </select>
+              </div>
+
+              {cameraTransport === 'proxy' && (
+                <>
+                  <div className="setting-group">
+                    <label htmlFor="camera-stream-type">Stream Type:</label>
+                    <input
+                      id="camera-stream-type"
+                      type="text"
+                      value={streamType}
+                      onChange={(e) => setStreamType(e.target.value)}
+                      placeholder="mjpeg"
+                      className="setting-input"
+                    />
+                  </div>
+                  <div className="setting-group range-controls">
+                    <ValueControl
+                      label="Width"
+                      value={streamWidth ? Number(streamWidth) : 0}
+                      onChange={(value) => setStreamWidth(value > 0 ? String(Math.round(value)) : '')}
+                      step={1}
+                      min={0}
+                    />
+                    <ValueControl
+                      label="Height"
+                      value={streamHeight ? Number(streamHeight) : 0}
+                      onChange={(value) => setStreamHeight(value > 0 ? String(Math.round(value)) : '')}
+                      step={1}
+                      min={0}
+                    />
+                  </div>
+                  <small className="axis-help-text">
+                    Leave width and height at 0 to use the stream's native size.
+                  </small>
+                </>
+              )}
+            </div>
+          )}
+
+          {component.type === 'plot' && (
+            <div className="settings-section">
+              <h4>Plot Settings</h4>
+
+              <div className="setting-group">
+                <label htmlFor="plot-field-custom">Numeric Fields:</label>
+                {plotFieldOptions.length > 0 && (
+                  <div className="plot-field-options" aria-label="Numeric fields">
+                    {plotFieldOptions.map(option => (
+                      <label key={option.path} className="checkbox-label compact">
+                        <input
+                          type="checkbox"
+                          checked={plotFieldPaths.includes(option.path)}
+                          onChange={(e) => handlePlotFieldToggle(option.path, e.target.checked)}
+                          disabled={isLoadingFields}
+                        />
+                        <span>{option.label} ({option.rosType})</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="topic-input-group">
+                  <input
+                    id="plot-field-custom"
+                    type="text"
+                    value={plotFieldPaths.join(', ')}
+                    onChange={(e) => handlePlotFieldTextChange(e.target.value)}
+                    placeholder="linear.x, angular.z"
+                    className="setting-input topic-input"
+                  />
+                </div>
+                {messageType && plotFieldOptions.length === 0 && !isLoadingFields && (
+                  <div className="topic-warning">
+                    No numeric fields were discovered. Enter one or more comma-separated field paths manually.
+                  </div>
+                )}
+              </div>
+
+              <div className="setting-group range-controls">
+                <ValueControl
+                  label="Time Window (s)"
+                  value={timeWindowSec}
+                  onChange={setTimeWindowSec}
+                  step={1}
+                  min={1}
+                />
+              </div>
+
+              <div className="setting-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={autoScale}
+                    onChange={(e) => setAutoScale(e.target.checked)}
+                  />
+                  Auto-scale Y axis
+                </label>
+              </div>
+
+              {!autoScale && (
+                <div className="setting-group range-controls">
+                  <ValueControl
+                    label="Y Min"
+                    value={minY}
+                    onChange={setMinY}
+                    step={0.1}
+                    max={maxY}
+                  />
+                  <ValueControl
+                    label="Y Max"
+                    value={maxY}
+                    onChange={setMaxY}
+                    step={0.1}
+                    min={minY}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {component.type === 'joystick' && (
             <div className="settings-section">
               <h4>Joystick Settings</h4>

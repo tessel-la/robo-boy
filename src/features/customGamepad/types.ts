@@ -33,7 +33,7 @@ export enum ComponentInteractionMode {
 
 export interface GamepadComponentConfig {
   id: string;
-  type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider';
+  type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot';
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
@@ -61,6 +61,21 @@ export interface GamepadComponentConfig {
     orientation?: 'horizontal' | 'vertical';
     sliderMin?: number;  // Alias for min used by settings modal
     sliderMax?: number;  // Alias for max used by settings modal
+
+    // Camera specific
+    cameraTransport?: 'proxy' | 'ros';
+    streamType?: string;
+    streamWidth?: number;
+    streamHeight?: number;
+
+    // Plot specific
+    fieldPath?: string;
+    fieldPaths?: string[];
+    timeWindowSec?: number;
+    sampleLimit?: number;
+    autoScale?: boolean;
+    minY?: number;
+    maxY?: number;
   };
 }
 

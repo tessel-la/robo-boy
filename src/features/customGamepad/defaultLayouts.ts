@@ -492,5 +492,19 @@ export const componentLibrary = [
     description: 'Linear control slider',
     defaultSize: { width: 3, height: 1 },
     icon: '🎚️'
+  },
+  {
+    type: 'camera' as const,
+    name: 'Camera',
+    description: 'Live camera image stream',
+    defaultSize: { width: 4, height: 3 },
+    icon: '📷'
+  },
+  {
+    type: 'plot' as const,
+    name: 'Plot',
+    description: 'Time series graph for numeric topic values',
+    defaultSize: { width: 4, height: 2 },
+    icon: '📈'
   }
 ]; 

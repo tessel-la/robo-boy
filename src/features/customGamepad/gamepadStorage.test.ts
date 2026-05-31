@@ -207,6 +207,14 @@ describe('gamepadStorage', () => {
       expect(layout?.name).toBe('Standard Dual Joystick')
     })
 
+    it('should return a default layout by nested layout ID', () => {
+      const layout = getGamepadLayout('default-standard')
+
+      expect(layout).not.toBeNull()
+      expect(layout?.id).toBe('standard')
+      expect(layout?.layout.id).toBe('default-standard')
+    })
+
     it('should return a custom layout by ID', () => {
       const customLayout = createMockLayout('custom-get', 'Get Test')
       saveCustomGamepad(customLayout)

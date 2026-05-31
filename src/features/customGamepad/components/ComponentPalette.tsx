@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { componentLibrary } from '../defaultLayouts';
+import { GamepadComponentConfig } from '../types';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
 import DPadComponent from './DPadComponent';
 import ToggleComponent from './ToggleComponent';
 import SliderComponent from './SliderComponent';
+import CameraComponent from './CameraComponent';
+import PlotComponent from './PlotComponent';
 import './ComponentPalette.css';
 
 interface ComponentPaletteProps {
@@ -51,16 +54,23 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   }, [selectedComponent]);
 
   const renderComponentPreview = (componentType: string, size: 'small' | 'medium' = 'small') => {
-    const mockConfig = {
+    const mockConfig: GamepadComponentConfig = {
       id: `preview-${componentType}`,
       type: componentType as any,
       position: { x: 0, y: 0, width: 1, height: 1 },
       label: componentType === 'dpad' ? '' : componentLibrary.find(c => c.type === componentType)?.name || '',
       action: {
         topic: '/preview',
-        messageType: 'sensor_msgs/Joy'
+        messageType: componentType === 'camera' ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Joy',
+        field: componentType === 'plot' ? 'data' : undefined
       },
-      config: componentType === 'button' ? { momentary: true } : {}
+      config: componentType === 'button'
+        ? { momentary: true }
+        : componentType === 'camera'
+          ? { cameraTransport: 'proxy' as const }
+          : componentType === 'plot'
+            ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true }
+            : {}
     };
 
     const previewStyle: React.CSSProperties = {
@@ -95,6 +105,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         {componentType === 'dpad' && <DPadComponent {...componentProps} />}
         {componentType === 'toggle' && <ToggleComponent {...componentProps} />}
         {componentType === 'slider' && <SliderComponent {...componentProps} />}
+        {componentType === 'camera' && <CameraComponent {...componentProps} />}
+        {componentType === 'plot' && <PlotComponent {...componentProps} />}
       </div>
     );
   };
