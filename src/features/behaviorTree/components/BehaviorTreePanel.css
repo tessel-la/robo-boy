@@ -136,6 +136,10 @@
   stroke: var(--primary-color, #4285f4);
 }
 
+.react-flow__edge-interaction {
+  stroke-width: 24px;
+}
+
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--primary-color, #4285f4);
   stroke-width: 3;
@@ -352,18 +356,20 @@
 }
 
 .react-flow__handle {
-  width: 10px;
-  height: 10px;
-  background: var(--primary-color, #4285f4);
-  border: 2px solid var(--card-bg, #ffffff);
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
 }
 
-.react-flow__handle-connecting {
+.react-flow__handle-connecting::after {
   background: var(--success-color, #4caf50);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--success-color, #4caf50) 24%, transparent);
 }
 
-.react-flow__handle-valid {
+.react-flow__handle-valid::after {
   background: var(--success-color, #4caf50);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--success-color, #4caf50) 28%, transparent);
 }
 
 /* Controls styling */
@@ -442,6 +448,10 @@
 @media (max-width: 768px) {
   .bt-content {
     flex-direction: column;
+  }
+
+  .react-flow__edge-interaction {
+    stroke-width: 32px;
   }
 
   .bt-save-toast {

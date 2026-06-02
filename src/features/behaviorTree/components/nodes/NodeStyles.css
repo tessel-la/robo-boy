@@ -150,19 +150,55 @@
 
 /* React Flow handles */
 .bt-handle {
-  width: 10px;
-  height: 10px;
-  background: var(--primary-color, #4285f4);
-  border: 2px solid var(--card-bg, #ffffff);
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: transform 0.15s ease;
+  touch-action: none;
 }
 
-.bt-handle:hover {
+.bt-handle::after {
+  content: '';
   width: 12px;
   height: 12px;
+  border-radius: 50%;
+  background: var(--primary-color, #4285f4);
+  border: 2px solid var(--card-bg, #ffffff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 18%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.bt-handle:hover::after,
+.bt-handle:focus::after {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-color, #4285f4) 22%, transparent);
 }
 
 .bt-handle-multi {
   opacity: 0.7;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .bt-node {
+    min-width: 165px;
+    padding: 10px;
+  }
+
+  .bt-handle {
+    width: 38px;
+    height: 38px;
+  }
+
+  .bt-handle::after {
+    width: 14px;
+    height: 14px;
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--primary-color, #4285f4) 18%, transparent);
+  }
 }
 
 /* Dark mode support */
@@ -184,4 +220,3 @@
     color: var(--text-color-tertiary, #888888);
   }
 }
-

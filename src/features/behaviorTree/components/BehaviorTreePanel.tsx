@@ -748,6 +748,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
+            connectionRadius={48}
             fitView
             minZoom={0.1}
             maxZoom={2}
