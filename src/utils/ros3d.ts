@@ -7,6 +7,21 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
 
+interface UrdfModelCacheEntry {
+  urdfString: string;
+  model?: THREE.Object3D;
+  linkNameMap?: Map<string, THREE.Object3D>;
+  rootLinks?: string[];
+  cachedAt: number;
+}
+
+const urdfModelCache = new Map<string, UrdfModelCacheEntry>();
+
+function getUrdfCacheKey(ros: Ros, topic: string): string {
+  const rosUrl = (ros as any)?.url || 'default-ros';
+  return `${rosUrl}:${topic}`;
+}
+
 // Basic viewer class implementation
 class Viewer {
   scene: THREE.Scene;
@@ -1367,10 +1382,17 @@ class UrdfClient extends THREE.Object3D {
   private rootObject: THREE.Object3D;
   private urdfModel: THREE.Object3D | null = null;
   private robotDescriptionTopic: ROSLIB.Topic | null = null;
+  private robotDescriptionTopicName: string;
   private onComplete?: (model: THREE.Object3D) => void;
   private linkNameMap: Map<string, THREE.Object3D> = new Map();
   private colladaLoader: ColladaLoader;
   private stlLoader: STLLoader;
+  private cacheKey: string;
+  private disposed = false;
+  private tfSubscriptions: Array<{
+    frameId: string;
+    callback: (transform: StoredTransform | null) => void;
+  }> = [];
 
   constructor(options: {
     ros: Ros;
@@ -1389,10 +1411,39 @@ class UrdfClient extends THREE.Object3D {
 
     this.colladaLoader = new ColladaLoader();
     this.stlLoader = new STLLoader();
+    this.userData.preserveAcrossViewerCleanup = true;
 
     this.rootObject.add(this);
 
     const descriptionTopicName = options.robotDescriptionTopic || '/robot_description';
+    this.robotDescriptionTopicName = descriptionTopicName;
+    this.cacheKey = getUrdfCacheKey(this.ros, descriptionTopicName);
+
+    const cachedModel = urdfModelCache.get(this.cacheKey);
+    if (cachedModel?.model && cachedModel.linkNameMap && cachedModel.rootLinks) {
+      console.log(`[UrdfClient] Reusing cached URDF model for ${descriptionTopicName}.`);
+      this.urdfModel = cachedModel.model;
+      this.linkNameMap = new Map(cachedModel.linkNameMap);
+      this.add(this.urdfModel);
+
+      queueMicrotask(() => {
+        if (this.disposed || !this.urdfModel) return;
+        this.onComplete?.(this.urdfModel);
+        this.setupTfUpdates(cachedModel.rootLinks || []);
+      });
+      return;
+    }
+
+    if (cachedModel?.urdfString) {
+      console.log(`[UrdfClient] Loading URDF for ${descriptionTopicName} from cached description.`);
+      queueMicrotask(() => {
+        if (!this.disposed) {
+          this.loadUrdf(cachedModel.urdfString);
+        }
+      });
+      return;
+    }
+
     this.robotDescriptionTopic = new ROSLIB.Topic({
       ros: this.ros,
       name: descriptionTopicName,
@@ -1414,6 +1465,11 @@ class UrdfClient extends THREE.Object3D {
     }
     console.log('[UrdfClient] Received URDF string.');
     this.robotDescriptionTopic?.unsubscribe();
+    this.robotDescriptionTopic = null;
+    urdfModelCache.set(this.cacheKey, {
+      urdfString: message.data,
+      cachedAt: Date.now(),
+    });
     this.loadUrdf(message.data);
   }
 
@@ -1526,6 +1582,13 @@ class UrdfClient extends THREE.Object3D {
     });
 
     console.log('[UrdfClient] URDF structure processed.', this.urdfModel);
+    urdfModelCache.set(this.cacheKey, {
+      urdfString: urdfString,
+      model: this.urdfModel,
+      linkNameMap: new Map(this.linkNameMap),
+      rootLinks: [...rootLinks],
+      cachedAt: Date.now(),
+    });
     if (this.onComplete && this.urdfModel) {
       this.onComplete(this.urdfModel);
     }
@@ -1729,8 +1792,8 @@ class UrdfClient extends THREE.Object3D {
         
         const robotModelName = this.urdfModel.name || ''; // e.g., "drone0" or "my_robot"
         let topicNamespace = '';
-        if (this.robotDescriptionTopic?.name) {
-            const parts = this.robotDescriptionTopic.name.split('/').filter(p => p.length > 0);
+        if (this.robotDescriptionTopicName) {
+            const parts = this.robotDescriptionTopicName.split('/').filter(p => p.length > 0);
             // A common pattern for robot_description is /namespace/robot_description or /robot_description
             // If namespaced, parts[0] would be the namespace.
             if (parts.length > 1 && parts[0] !== 'robot_description') { 
@@ -1789,9 +1852,11 @@ class UrdfClient extends THREE.Object3D {
             };
 
             uniqueFramesToTry.forEach(frameName => {
-                this.tfClient.subscribe(frameName, (transform: StoredTransform | null) => {
+                const callback = (transform: StoredTransform | null) => {
                     subscriptionCallback(frameName, transform);
-                });
+                };
+                this.tfClient.subscribe(frameName, callback);
+                this.tfSubscriptions.push({ frameId: frameName, callback });
             });
 
             // Optional: Initial check for immediate availability (for faster first render)
@@ -1817,41 +1882,36 @@ class UrdfClient extends THREE.Object3D {
         if (this.linkNameMap.size === 0 && this.urdfModel && rootLinks.length > 0) {
             const baseFrameToTry = rootLinks[0]; 
             console.warn(`[UrdfClient] Fallback: No links in URDF. Subscribing to ${baseFrameToTry} for the whole model.`);
-            this.tfClient.subscribe(baseFrameToTry, (transform: StoredTransform | null) => {
+            const callback = (transform: StoredTransform | null) => {
                 if (transform && this.urdfModel) {
                     this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
                     this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
                     this.urdfModel.updateMatrix();
                     this.urdfModel.matrixWorldNeedsUpdate = true;
                 }
-            });
+            };
+            this.tfClient.subscribe(baseFrameToTry, callback);
+            this.tfSubscriptions.push({ frameId: baseFrameToTry, callback });
         }
     }
     console.log(`[UrdfClient] TF update subscriptions configured.`);
   }
 
   public dispose(): void {
+    this.disposed = true;
     if (this.robotDescriptionTopic) {
       this.robotDescriptionTopic.unsubscribe();
       this.robotDescriptionTopic = null;
     }
+    this.tfSubscriptions.forEach(({ frameId, callback }) => {
+      this.tfClient.unsubscribe(frameId, callback);
+    });
+    this.tfSubscriptions = [];
     if (this.urdfModel) {
-      // Traverse and dispose geometries/materials
-      this.urdfModel.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) {
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        }
-      });
       this.remove(this.urdfModel);
       this.urdfModel = null;
     }
+    this.rootObject.remove(this);
     this.linkNameMap.clear();
     // TODO: Unsubscribe from all TF frames if tfClient.unsubscribe supports targeted removal based on callback or ID
     console.log('[UrdfClient] Disposed.');
