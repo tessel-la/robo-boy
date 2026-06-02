@@ -109,14 +109,69 @@ describe('useRos3dViewer', () => {
         expect(disposeRendererMock).toHaveBeenCalled();
     });
 
+    it('should detach preserved scene objects without disposing their resources', () => {
+        const stopMock = vi.fn();
+        const disposeRendererMock = vi.fn();
+        const preservedGeometryDispose = vi.fn();
+        const normalGeometryDispose = vi.fn();
+        const sceneRemoveMock = vi.fn(function (child: any) {
+            scene.children = scene.children.filter((candidate: any) => candidate !== child);
+        });
+        const preservedObject = {
+            userData: { preserveAcrossViewerCleanup: true },
+            children: [],
+            geometry: { dispose: preservedGeometryDispose },
+        };
+        const normalObject = {
+            userData: {},
+            children: [],
+            geometry: { dispose: normalGeometryDispose },
+        };
+        const scene: any = {
+            children: [preservedObject, normalObject],
+            remove: sceneRemoveMock,
+        };
+
+        (ROS3D.Viewer as any).mockImplementation(function () {
+            return {
+                addObject: vi.fn(),
+                stop: stopMock,
+                renderer: {
+                    dispose: disposeRendererMock,
+                    domElement: {
+                        parentElement: {
+                            removeChild: vi.fn()
+                        }
+                    }
+                },
+                scene,
+                camera: {},
+                resize: vi.fn()
+            };
+        });
+
+        const { unmount } = renderHook(() => useRos3dViewer(viewerRef, true));
+
+        unmount();
+
+        expect(stopMock).toHaveBeenCalled();
+        expect(sceneRemoveMock).toHaveBeenCalledWith(preservedObject);
+        expect(sceneRemoveMock).toHaveBeenCalledWith(normalObject);
+        expect(preservedGeometryDispose).not.toHaveBeenCalled();
+        expect(normalGeometryDispose).toHaveBeenCalled();
+        expect(disposeRendererMock).toHaveBeenCalled();
+    });
+
     it('should resize viewer on observation', () => {
         const resizeMock = vi.fn();
-        (ROS3D.Viewer as any).mockImplementation(() => ({
-            addObject: vi.fn(),
-            scene: {},
-            camera: {},
-            resize: resizeMock
-        }));
+        (ROS3D.Viewer as any).mockImplementation(function () {
+            return {
+                addObject: vi.fn(),
+                scene: {},
+                camera: {},
+                resize: resizeMock
+            };
+        });
 
         renderHook(() => useRos3dViewer(viewerRef, true));
 
