@@ -11,7 +11,7 @@
   justify-content: center;
   align-items: center;
   z-index: 10000;
-  animation: fadeInOverlay 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInOverlay 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes fadeInOverlay {
@@ -35,7 +35,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideInModal 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideInModal 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: center;
 }
 
@@ -111,7 +111,7 @@
   padding: 16px;
   box-sizing: border-box;
   position: relative;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0; /* Don't shrink the sidebar */
   max-height: 35vh; /* Limit sidebar to 35% of viewport height */
 }
@@ -123,7 +123,7 @@
   gap: 16px;
   margin-bottom: 16px;
   width: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
 }
 
@@ -134,7 +134,7 @@
   max-height: 0;
   opacity: 0;
   transform: translateY(-10px);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   flex: 1;
   min-height: 0;
   
@@ -179,7 +179,7 @@
 .editor-sidebar.component-palette-expanded .sidebar-expanded-content .component-palette {
   width: 100%;
   display: block;
-  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: expandContent 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .editor-sidebar.component-palette-expanded .sidebar-expanded-content .grid-settings-menu {
@@ -201,7 +201,7 @@
 .editor-sidebar.grid-settings-expanded .sidebar-expanded-content .grid-settings-menu {
   width: 100%;
   display: block;
-  animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: expandContent 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .editor-sidebar.grid-settings-expanded .sidebar-expanded-content .component-palette {
@@ -225,7 +225,7 @@
   min-width: 0;
   margin-bottom: 0;
   box-sizing: border-box;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Update GridSettingsMenu to work in new layout */
@@ -234,7 +234,7 @@
   min-width: 0;
   margin-bottom: 0;
   box-sizing: border-box;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* When neither is expanded, show buttons side by side */
