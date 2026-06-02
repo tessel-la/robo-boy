@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Ros, Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
@@ -30,24 +30,62 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
   const autoScale = config.config?.autoScale !== false;
   const minY = config.config?.minY ?? -1;
   const maxY = config.config?.maxY ?? 1;
+  const seriesSamplesRef = useRef<Record<string, PlotSample[]>>({});
+  const animationFrameRef = useRef<number | null>(null);
+  const statusRef = useRef('No plot topic selected');
   const [seriesSamples, setSeriesSamples] = useState<Record<string, PlotSample[]>>({});
   const [status, setStatus] = useState('No plot topic selected');
 
+  const setStatusIfChanged = useCallback((nextStatus: string) => {
+    if (statusRef.current === nextStatus) return;
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
+
+  const flushSamples = useCallback(() => {
+    animationFrameRef.current = null;
+    setSeriesSamples({ ...seriesSamplesRef.current });
+  }, []);
+
+  const cancelPendingFlush = useCallback(() => {
+    if (animationFrameRef.current !== null && window.cancelAnimationFrame) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = null;
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (animationFrameRef.current !== null) return;
+
+    if (!window.requestAnimationFrame) {
+      flushSamples();
+      return;
+    }
+
+    animationFrameRef.current = -1;
+    const frameId = window.requestAnimationFrame(flushSamples);
+    if (animationFrameRef.current === -1) {
+      animationFrameRef.current = frameId;
+    }
+  }, [flushSamples]);
+
   useEffect(() => {
+    cancelPendingFlush();
+    seriesSamplesRef.current = {};
     setSeriesSamples({});
 
     if (isEditing) {
-      setStatus('Plot preview');
+      setStatusIfChanged('Plot preview');
       return;
     }
 
     if (!action?.topic || !action.messageType || fieldPaths.length === 0) {
-      setStatus('No plot topic selected');
+      setStatusIfChanged('No plot topic selected');
       return;
     }
 
     if (!ros?.isConnected) {
-      setStatus('Connecting...');
+      setStatusIfChanged('Connecting...');
       return;
     }
 
@@ -64,25 +102,28 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
         .filter((item): item is { path: string; value: number } => item.value !== null);
 
       if (nextValues.length === 0) {
-        setStatus(`No numeric data at ${fieldPaths.join(', ')}`);
+        setStatusIfChanged(`No numeric data at ${fieldPaths.join(', ')}`);
         return;
       }
 
-      setSeriesSamples(previous => {
-        const next = { ...previous };
-        nextValues.forEach(({ path, value }) => {
-          next[path] = trimPlotSamples([...(next[path] ?? []), { time: now, value }], now, timeWindowSec, sampleLimit);
-        });
-        return next;
+      nextValues.forEach(({ path, value }) => {
+        seriesSamplesRef.current[path] = trimPlotSamples(
+          [...(seriesSamplesRef.current[path] ?? []), { time: now, value }],
+          now,
+          timeWindowSec,
+          sampleLimit
+        );
       });
-      setStatus('');
+      scheduleFlush();
+      setStatusIfChanged('');
     });
 
     topicRef.current = topic;
-    setStatus('Waiting for data...');
+    setStatusIfChanged('Waiting for data...');
 
     return () => {
       topic.unsubscribe();
+      cancelPendingFlush();
       topicRef.current = null;
     };
   }, [
@@ -92,6 +133,10 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
     isEditing,
     ros,
     ros?.isConnected,
+    sampleLimit,
+    cancelPendingFlush,
+    scheduleFlush,
+    setStatusIfChanged,
     timeWindowSec,
   ]);
 

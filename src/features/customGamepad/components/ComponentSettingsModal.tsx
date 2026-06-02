@@ -468,12 +468,6 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       typesToMatch.some(typeToMatch => topic.type === typeToMatch)
     );
 
-    // Debug logging to help troubleshoot
-    console.log('Filtering topics for message type:', messageType);
-    console.log('Types to match:', typesToMatch);
-    console.log('Available topics:', availableTopics.map(t => `${t.name} (${t.type})`));
-    console.log('Filtered topics:', filtered.map(t => `${t.name} (${t.type})`));
-
     return filtered;
   }, [availableTopics, component?.type, messageType]);
 

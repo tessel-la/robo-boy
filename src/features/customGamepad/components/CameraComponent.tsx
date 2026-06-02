@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Ros, Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
@@ -11,6 +11,8 @@ interface CameraComponentProps {
   isEditing?: boolean;
   scaleFactor?: number;
 }
+
+const ROS_IMAGE_FRAME_INTERVAL_MS = 66;
 
 function getImageMimeType(messageType: string, format?: string): string {
   if (!messageType.includes('CompressedImage')) return 'image/png';
@@ -89,6 +91,8 @@ function rawImageToDataUrl(message: any): string | null {
 
 const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditing = false, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
+  const statusRef = useRef('No camera topic selected');
+  const lastRosFrameAtRef = useRef(-Infinity);
   const action = config.action as ROSTopicConfig | undefined;
   const transport = config.config?.cameraTransport ?? 'proxy';
   const streamType = action?.messageType?.includes('CompressedImage') && (!config.config?.streamType || config.config.streamType === 'mjpeg')
@@ -99,16 +103,23 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [status, setStatus] = useState('No camera topic selected');
 
+  const setStatusIfChanged = useCallback((nextStatus: string) => {
+    if (statusRef.current === nextStatus) return;
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
+
   useEffect(() => {
     setImageUrl(null);
+    lastRosFrameAtRef.current = -Infinity;
 
     if (isEditing) {
-      setStatus('Camera preview');
+      setStatusIfChanged('Camera preview');
       return;
     }
 
     if (!action?.topic || !action.messageType) {
-      setStatus('No camera topic selected');
+      setStatusIfChanged('No camera topic selected');
       return;
     }
 
@@ -119,12 +130,12 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
         width: streamWidth,
         height: streamHeight,
       }));
-      setStatus('');
+      setStatusIfChanged('');
       return;
     }
 
     if (!ros?.isConnected) {
-      setStatus('Connecting...');
+      setStatusIfChanged('Connecting...');
       return;
     }
 
@@ -136,25 +147,31 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
 
     topic.subscribe((message: any) => {
       if (!message?.data) {
-        setStatus('Waiting for image data...');
+        setStatusIfChanged('Waiting for image data...');
         return;
       }
+
+      const now = performance.now();
+      if (now - lastRosFrameAtRef.current < ROS_IMAGE_FRAME_INTERVAL_MS) {
+        return;
+      }
+      lastRosFrameAtRef.current = now;
 
       const nextUrl = action.messageType.includes('CompressedImage')
         ? `data:${getImageMimeType(action.messageType, message.format)};base64,${arrayDataToBase64(message.data)}`
         : rawImageToDataUrl(message);
 
       if (!nextUrl) {
-        setStatus('Unsupported image encoding');
+        setStatusIfChanged('Unsupported image encoding');
         return;
       }
 
       setImageUrl(nextUrl);
-      setStatus('');
+      setStatusIfChanged('');
     });
 
     topicRef.current = topic;
-    setStatus('Waiting for image data...');
+    setStatusIfChanged('Waiting for image data...');
 
     return () => {
       topic.unsubscribe();
@@ -166,6 +183,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
     isEditing,
     ros,
     ros?.isConnected,
+    setStatusIfChanged,
     streamHeight,
     streamType,
     streamWidth,
@@ -180,7 +198,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
         <img
           src={imageUrl}
           alt={`Camera stream ${action?.topic || ''}`}
-          onError={() => setStatus('Failed to load camera stream')}
+          onError={() => setStatusIfChanged('Failed to load camera stream')}
         />
       ) : (
         <div className="data-display-placeholder" style={{ fontSize }}>
