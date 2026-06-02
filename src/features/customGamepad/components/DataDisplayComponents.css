@@ -1,0 +1,152 @@
+.data-display-component {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--background-secondary, #16191d);
+  border: 1px solid var(--border-color, #323842);
+  color: var(--text-color, #e8eaed);
+  box-sizing: border-box;
+}
+
+.camera-pad-component img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #050607;
+}
+
+.data-display-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.data-display-placeholder span {
+  font-weight: 700;
+}
+
+.data-display-placeholder small {
+  color: var(--text-color-secondary, #9aa3ad);
+  line-height: 1.25;
+}
+
+.data-display-status {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.58);
+  color: #f5f7fa;
+  text-align: center;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.plot-pad-component {
+  display: block;
+  padding: 0;
+}
+
+.plot-header,
+.plot-footer {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-color-secondary, #9aa3ad);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.plot-header {
+  top: 8px;
+}
+
+.plot-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-header strong {
+  color: var(--primary-color, #32cd32);
+  font-weight: 700;
+}
+
+.plot-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+}
+
+.plot-svg line {
+  stroke: rgba(154, 163, 173, 0.42);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.plot-svg polyline {
+  fill: none;
+  stroke: var(--primary-color, #32cd32);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.plot-legend {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--text-color-secondary, #9aa3ad);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.1;
+  pointer-events: none;
+}
+
+.plot-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}

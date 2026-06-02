@@ -108,7 +108,7 @@ export function deleteCustomGamepad(layoutId: string): boolean {
  */
 export function getGamepadLayout(layoutId: string): GamepadLibraryItem | null {
   const library = loadGamepadLibrary();
-  return library.find(item => item.id === layoutId) || null;
+  return library.find(item => item.id === layoutId || item.layout.id === layoutId) || null;
 }
 
 /**

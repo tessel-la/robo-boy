@@ -26,7 +26,7 @@ describe('defaultLayouts', () => {
 
   const validateComponent = (component: CustomGamepadLayout['components'][0]) => {
     expect(component.id).toBeTruthy()
-    expect(['joystick', 'button', 'dpad', 'toggle', 'slider']).toContain(component.type)
+    expect(['joystick', 'button', 'dpad', 'toggle', 'slider', 'camera', 'plot']).toContain(component.type)
     expect(component.position).toBeDefined()
     expect(component.position.x).toBeGreaterThanOrEqual(0)
     expect(component.position.y).toBeGreaterThanOrEqual(0)
@@ -226,10 +226,12 @@ describe('defaultLayouts', () => {
       expect(types).toContain('dpad')
       expect(types).toContain('toggle')
       expect(types).toContain('slider')
+      expect(types).toContain('camera')
+      expect(types).toContain('plot')
     })
 
-    it('should have 5 component types', () => {
-      expect(componentLibrary).toHaveLength(5)
+    it('should have 7 component types', () => {
+      expect(componentLibrary).toHaveLength(7)
     })
 
     it('should have valid default sizes', () => {
@@ -262,6 +264,15 @@ describe('defaultLayouts', () => {
       const button = componentLibrary.find((c) => c.type === 'button')
       expect(button?.defaultSize).toEqual({ width: 1, height: 1 })
     })
+
+    it('should have camera with 4x3 default size', () => {
+      const camera = componentLibrary.find((c) => c.type === 'camera')
+      expect(camera?.defaultSize).toEqual({ width: 4, height: 3 })
+    })
+
+    it('should have plot with 4x2 default size', () => {
+      const plot = componentLibrary.find((c) => c.type === 'plot')
+      expect(plot?.defaultSize).toEqual({ width: 4, height: 2 })
+    })
   })
 })
-

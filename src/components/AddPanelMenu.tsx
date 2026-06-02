@@ -35,8 +35,7 @@ interface AddPanelMenuProps {
 }
 
 // Define available panel types here or pass them as props
-const availablePanelTypes = [
-  { type: GamepadType.Voice, label: 'Voice Control' },
+const availablePanelTypes: Array<{ type: GamepadType; label: string; layoutId?: string }> = [
   { type: GamepadType.Drone, label: 'Drone Control' },
   { type: GamepadType.Manipulator, label: 'Manipulator Control' },
   { type: GamepadType.Custom, label: 'Custom Gamepad' },
@@ -203,9 +202,9 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         <div className="menu-section">
           <h4>Default Layouts</h4>
           <ul>
-            {availablePanelTypes.filter(p => p.type !== GamepadType.Custom).map(panelInfo => (
-              <li key={panelInfo.type}>
-                <button onClick={() => onSelectType(panelInfo.type)}>
+            {availablePanelTypes.filter(p => p.label !== 'Custom Gamepad').map(panelInfo => (
+              <li key={`${panelInfo.type}-${panelInfo.label}`}>
+                <button onClick={() => onSelectType(panelInfo.type, panelInfo.layoutId)}>
                   {panelInfo.label}
                 </button>
               </li>

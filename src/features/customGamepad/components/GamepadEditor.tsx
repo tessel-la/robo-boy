@@ -137,6 +137,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       case 'slider':
         action = { topic: '/slider', messageType: 'std_msgs/Float32', field: 'data' };
         break;
+      case 'camera':
+        action = { topic: '/camera/image_raw', messageType: 'sensor_msgs/Image' };
+        break;
+      case 'plot':
+        action = { topic: '/plot', messageType: 'std_msgs/Float32', field: 'data' };
+        break;
       default:
         action = { topic: `/${componentType}`, messageType: layout.rosConfig.defaultMessageType };
     }
@@ -151,7 +157,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         height: componentDef.defaultSize.height
       },
       label: componentDef.name,
-      action: action
+      action: action,
+      config: componentType === 'camera'
+        ? { cameraTransport: 'proxy' }
+        : componentType === 'plot'
+          ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
+          : undefined
     };
 
     setLayout(prev => ({

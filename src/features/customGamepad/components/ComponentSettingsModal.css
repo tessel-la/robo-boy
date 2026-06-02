@@ -200,6 +200,31 @@
   line-height: 1.4;
 }
 
+.plot-field-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  margin-bottom: 10px;
+  background-color: var(--background-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+}
+
+.checkbox-label.compact {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.checkbox-label.compact span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Inline Error Message */
 .error-message-inline {
   margin-top: 6px;
