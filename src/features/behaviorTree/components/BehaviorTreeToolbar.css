@@ -564,8 +564,61 @@
   .bt-menu-panel {
     width: 100%;
     max-width: 100%;
+    height: calc(100% - 32px);
     max-height: calc(100% - 32px);
     transform-origin: center;
+  }
+
+  .bt-menu-section {
+    padding: 10px 12px;
+  }
+
+  .bt-menu-section-top {
+    margin-bottom: 6px;
+  }
+
+  .bt-menu-label {
+    margin-bottom: 6px;
+  }
+
+  .bt-menu-name-input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .bt-menu-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .bt-menu-action-btn {
+    min-width: 0;
+    padding: 8px 4px;
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .bt-menu-action-btn svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+
+  .bt-menu-tree-section {
+    min-height: 0;
+    padding-top: 8px;
+  }
+
+  .bt-menu-tree-section > .bt-menu-label {
+    padding: 0 12px 6px;
+  }
+
+  .bt-menu-tree-row {
+    padding: 9px 12px;
+  }
+
+  .bt-menu-tree-row.active {
+    padding-left: 9px;
   }
 }
 

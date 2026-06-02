@@ -182,9 +182,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(
-    () => window.matchMedia(MOBILE_BREAKPOINT).matches
-  );
+  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   // Action node currently being edited via the parameter editor modal.
   const [editingAction, setEditingAction] = useState<
@@ -676,7 +674,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onExecute={handleExecute}
         onStop={handleStop}
         onExport={handleExport}
-        onTogglePalette={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+        onTogglePalette={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
         onRename={handleRename}
@@ -730,7 +728,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           isConnected={isConnected}
           isCollapsed={isPaletteCollapsed}
-          onToggleCollapse={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+          onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
           onAddNode={handleAddNode}
         />
 
@@ -750,6 +748,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
+            connectionRadius={48}
             fitView
             minZoom={0.1}
             maxZoom={2}
