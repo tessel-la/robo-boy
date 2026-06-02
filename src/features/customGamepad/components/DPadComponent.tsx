@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
@@ -73,8 +73,8 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     }
   }, [config, isEditing]);
 
-  const publishThrottled = useCallback(
-    throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
+  const publishThrottled = useMemo(
+    () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [publishMessage]
   );
 
@@ -92,10 +92,11 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     topicRef.current.advertise();
 
     return () => {
+      publishThrottled.cancel();
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, isEditing]);
+  }, [ros, config.action, isEditing, publishThrottled]);
 
   const handleDirectionPress = useCallback((direction: string, pressed: boolean) => {
     if (isEditing) return;

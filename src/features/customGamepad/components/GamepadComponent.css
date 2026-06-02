@@ -176,6 +176,17 @@
   border-bottom-color: rgba(20, 20, 20, 0.96);
 }
 
+/* Popup positioned inside when the component touches both vertical grid edges */
+.component-controls-popup.popup-inside {
+  top: auto;
+  bottom: 12px;
+  animation: popupFadeIn 0.15s ease-out;
+}
+
+.component-controls-popup.popup-inside::after {
+  display: none;
+}
+
 /* Control buttons (delete, settings) */
 .control-button {
   position: relative;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
@@ -51,8 +51,8 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     }
   }, [config, isEditing]);
 
-  const publishThrottled = useCallback(
-    throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
+  const publishThrottled = useMemo(
+    () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [publishMessage]
   );
 
@@ -70,10 +70,11 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     topicRef.current.advertise();
 
     return () => {
+      publishThrottled.cancel();
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, isEditing]);
+  }, [ros, config.action, isEditing, publishThrottled]);
 
   const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (isEditing) return;

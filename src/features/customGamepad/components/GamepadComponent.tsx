@@ -27,6 +27,7 @@ interface GamepadComponentProps {
 }
 
 type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null;
+type ControlsPlacement = 'above' | 'below' | 'inside';
 
 const GamepadComponent: React.FC<GamepadComponentProps> = ({
   config,
@@ -383,6 +384,23 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     return className;
   };
 
+  const getControlsPlacement = (): ControlsPlacement => {
+    const touchesTop = config.position.y <= 0;
+    const touchesBottom = config.position.y + config.position.height >= gridSize.height;
+
+    if (touchesTop && touchesBottom) {
+      return 'inside';
+    }
+
+    if (touchesTop) {
+      return 'below';
+    }
+
+    return 'above';
+  };
+
+  const controlsPlacement = getControlsPlacement();
+
   return (
     <div
       ref={componentRef}
@@ -408,7 +426,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       
       {/* Editing controls - only when selected AND controls toggled on */}
       {isEditing && isSelected && showControls && (
-        <div className={`component-controls-popup ${config.position.y === 0 ? 'popup-below' : ''}`}>
+        <div className={`component-controls-popup popup-${controlsPlacement}`}>
           <button
             className="control-button settings-button"
             onClick={handleOpenSettings}

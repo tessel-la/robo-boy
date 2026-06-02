@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlotComponent from './PlotComponent';
 import { GamepadComponentConfig } from '../types';
 
@@ -43,20 +43,29 @@ describe('PlotComponent', () => {
   beforeEach(() => {
     roslibMock.subscribers = [];
     roslibMock.unsubscribe.mockClear();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(performance.now());
+      return 1;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('subscribes and plots numeric samples', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1_000);
+    const nowSpy = vi.spyOn(Date, 'now');
 
     render(<PlotComponent config={baseConfig} ros={{ isConnected: true } as any} />);
     expect(roslibMock.subscribers).toHaveLength(1);
 
     act(() => {
+      nowSpy.mockReturnValue(1_000);
       roslibMock.subscribers[0]({ linear: { x: 1 } });
-      vi.setSystemTime(2_000);
+      nowSpy.mockReturnValue(2_000);
       roslibMock.subscribers[0]({ linear: { x: 2 } });
-      vi.setSystemTime(3_000);
+      nowSpy.mockReturnValue(3_000);
       roslibMock.subscribers[0]({ linear: { x: 3 } });
     });
 
@@ -67,7 +76,6 @@ describe('PlotComponent', () => {
     expect(points[0].split(',')[0]).toBe('24.0');
     expect(points[2].split(',')[0]).toBe('308.0');
 
-    vi.useRealTimers();
   });
 
   it('plots multiple numeric fields from one topic', () => {

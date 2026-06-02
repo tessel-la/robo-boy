@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
@@ -138,12 +138,6 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       }) :
       values; // Use raw joystick values [-1, 1] when no custom range is set
 
-    // Debug logging
-    console.log('Joystick values:', values);
-    console.log('Config range:', { min: minValue, max: maxValue });
-    console.log('Mapped values:', mappedValues);
-    console.log('Topic:', action.topic, 'Type:', action.messageType);
-
     let message: any;
 
     if (action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy') {
@@ -205,14 +199,13 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     }
 
     if (message) {
-      console.log('Publishing message:', message);
       topicRef.current.publish(message);
       lastSentValues.current = [...values];
     }
   }, [config, isEditing]);
 
-  const publishThrottled = useCallback(
-    throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
+  const publishThrottled = useMemo(
+    () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [publishMessage]
   );
 
@@ -243,14 +236,6 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null || event.distance === null || isEditing) return;
 
-    // Debug: Log raw joystick component values
-    console.log('Raw joystick event:', {
-      x: event.x,
-      y: event.y,
-      distance: event.distance,
-      direction: event.direction
-    });
-
     // Use distance (0-100) from the event to ensure correct scaling.
     const magnitude = event.distance / 100; // Normalize distance to 0-1.
 
@@ -266,13 +251,6 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
     // Reconstruct the normalized x and y from the magnitude and angle.
     const x = magnitude * Math.cos(angleRad);
     const y = magnitude * Math.sin(angleRad);
-
-    console.log('Calculated normalized values:', {
-      magnitude,
-      angleRad,
-      normalizedX: x,
-      normalizedY: y
-    });
 
     publishThrottled([x, y]);
   }, [publishThrottled, isEditing]);
