@@ -17,6 +17,24 @@ async function openBehaviorTree(page: Page) {
   await expect(page.getByTestId('bt-canvas')).toBeVisible();
 }
 
+async function openNodePalette(page: Page) {
+  const palette = page.getByTestId('bt-node-palette');
+  if ((await palette.count()) > 0 && (await palette.first().isVisible())) {
+    return;
+  }
+
+  const toggle = page.getByTestId('bt-palette-toggle');
+  const isActive = await toggle.evaluate((element) => element.classList.contains('active'));
+
+  if (isActive) {
+    await toggle.click();
+    await expect(palette).toHaveCount(0);
+  }
+
+  await toggle.click();
+  await expect(palette).toBeVisible();
+}
+
 async function seedSavedTree(page: Page) {
   await page.evaluate(() => {
     const now = Date.now();
@@ -152,6 +170,8 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(page.getByTestId('bt-menu-button')).toBeVisible();
     await expect(page.getByTestId('bt-palette-toggle')).toBeVisible();
+
+    await openNodePalette(page);
     await expect(page.getByTestId('bt-node-palette')).toBeVisible();
     await expect(page.getByText('Node Palette')).toBeVisible();
     await expect(page.getByText('Control Flow')).toBeVisible();
@@ -198,6 +218,7 @@ test.describe('Behavior Tree panel', () => {
   test('keeps loaded nodes when adding another node after load', async ({ page }) => {
     await openBehaviorTree(page);
 
+    await openNodePalette(page);
     await page.getByTestId('bt-node-palette').getByText('Sequence').click();
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
 
@@ -213,6 +234,7 @@ test.describe('Behavior Tree panel', () => {
     await page.locator('.bt-menu-tree-row').filter({ hasText: 'Collision Tree' }).click();
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
 
+    await openNodePalette(page);
     await page.getByTestId('bt-node-palette').getByText('Selector').click();
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(1);
