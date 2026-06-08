@@ -19,24 +19,6 @@
   max-height: 100%;
 }
 
-/* Override for D-pad to remove centering and let it fill the entire space */
-.gamepad-component.dpad {
-  display: block;
-  align-items: unset;
-  justify-content: unset;
-}
-
-.gamepad-component.dpad.editing {
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  max-width: none !important;
-  max-height: none !important;
-  flex-shrink: 0;
-  flex-grow: 1;
-}
-
 .gamepad-component.editing {
   border-color: var(--border-color, #ddd);
   cursor: pointer;
@@ -411,12 +393,6 @@
   transform: translateY(-50%) scale(1.1);
 }
 
-/* D-pad specific control button overrides */
-.gamepad-component.dpad .delete-button,
-.gamepad-component.dpad .settings-button {
-  z-index: 100 !important;
-}
-
 /* Component-specific styles */
 
 .joystick-component {
@@ -473,23 +449,6 @@ button.joystick-disabled {
   min-height: 0;
   flex-shrink: 0;
   z-index: 1;
-}
-
-.gamepad-component.dpad.editing .dpad-component {
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  z-index: 1 !important;
-}
-
-.gamepad-component.dpad.editing .custom-dpad-grid {
-  z-index: 2 !important;
-  position: relative !important;
-}
-
-.gamepad-component.dpad.editing .custom-dpad-button {
-  z-index: 3 !important;
 }
 
 .dpad-component button {

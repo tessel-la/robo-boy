@@ -3,6 +3,7 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { isJoyMessageType } from '../rosMessageUtils';
 import './DPadComponent.css';
 
 interface DPadComponentProps {
@@ -47,11 +48,12 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     const action = config.action as ROSTopicConfig;
     if (!action || !action.topic) return;
 
-    if (action.messageType === 'sensor_msgs/Joy') {
-      const buttons = Array(8).fill(0);
+    if (isJoyMessageType(action.messageType)) {
       const buttonMapping = config.config?.buttonMapping || {
         up: 0, right: 1, down: 2, left: 3
       };
+      const highestMappedButton = Math.max(3, ...Object.values(buttonMapping));
+      const buttons = Array(Math.max(8, highestMappedButton + 1)).fill(0);
 
       directions.forEach(direction => {
         const buttonIndex = buttonMapping[direction];

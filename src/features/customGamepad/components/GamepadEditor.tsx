@@ -147,6 +147,17 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         action = { topic: `/${componentType}`, messageType: layout.rosConfig.defaultMessageType };
     }
 
+    const defaultConfig =
+      componentType === 'camera'
+        ? { cameraTransport: 'proxy' as const }
+        : componentType === 'plot'
+          ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
+          : componentType === 'dpad'
+            ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
+            : componentType === 'joystick'
+              ? { min: -1, max: 1, sliderMin: -1, sliderMax: 1, axes: ['0', '1'] }
+              : undefined;
+
     const newComponent: GamepadComponentConfig = {
       id: `${componentType}-${Date.now()}`,
       type: componentType as any,
@@ -158,11 +169,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       },
       label: componentDef.name,
       action: action,
-      config: componentType === 'camera'
-        ? { cameraTransport: 'proxy' }
-        : componentType === 'plot'
-          ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
-          : undefined
+      config: defaultConfig
     };
 
     setLayout(prev => ({
