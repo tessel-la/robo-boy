@@ -5,6 +5,7 @@ export interface CustomTheme {
   id: string; // Unique identifier (e.g., timestamp or UUID)
   name: string;
   iconId?: string; // Make icon optional
+  fontFamily?: string;
   colors: {
     primary: string;
     secondary: string;
@@ -20,6 +21,27 @@ export interface CustomTheme {
 export const DEFAULT_THEMES = ['light', 'dark', 'solarized'];
 export const THEME_STORAGE_KEY = 'appTheme';
 export const CUSTOM_THEMES_STORAGE_KEY = 'customThemes';
+export const SYSTEM_UI_FONT_FAMILY =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif";
+export const DEFAULT_THEME_FONT_FAMILY = "'Courier New', Courier, monospace";
+
+export const FONT_OPTIONS = [
+  { label: 'Courier', value: DEFAULT_THEME_FONT_FAMILY },
+  { label: 'System UI', value: SYSTEM_UI_FONT_FAMILY },
+  { label: 'Arial', value: "Arial, 'Helvetica Neue', Helvetica, sans-serif" },
+  { label: 'Verdana', value: "Verdana, Geneva, sans-serif" },
+  { label: 'Tahoma', value: "Tahoma, Geneva, sans-serif" },
+  { label: 'Trebuchet', value: "'Trebuchet MS', 'Segoe UI', sans-serif" },
+  { label: 'Georgia', value: "Georgia, 'Times New Roman', serif" },
+] as const;
+
+const FONT_OPTION_VALUES = new Set<string>(FONT_OPTIONS.map(option => option.value));
+
+export const resolveThemeFontFamily = (fontFamily?: string): string => {
+  return fontFamily && FONT_OPTION_VALUES.has(fontFamily)
+    ? fontFamily
+    : DEFAULT_THEME_FONT_FAMILY;
+};
 
 // Helper to generate dynamic CSS (basic version)
 export const generateThemeCss = (theme: CustomTheme): string => {
@@ -35,6 +57,7 @@ export const generateThemeCss = (theme: CustomTheme): string => {
   const border = colors.border || (isColorDark(background) ? '#555555' : '#cccccc');
   const cardBg = colors.cardBg || (isColorDark(background) ? '#333333' : '#f8f8f8');
   const buttonText = colors.buttonText || (isColorDark(primary) ? '#ffffff' : '#000000');
+  const fontFamily = resolveThemeFontFamily(theme.fontFamily);
 
   // Basic hover/darker logic (placeholder - replace with library)
   const primaryHover = lightenDarkenColor(primary, -15);
@@ -58,6 +81,7 @@ export const generateThemeCss = (theme: CustomTheme): string => {
       --card-bg: ${cardBg};
       --card-border: ${lightenDarkenColor(border, isColorDark(border) ? 10 : -10)}; /* Slightly adjust card border */
       --button-text-color: ${buttonText};
+      --font-family-ui: ${fontFamily};
       --error-color: ${errorColor};
       --error-hover-color: ${errorHover};
       --error-rgb: ${errorRgb};

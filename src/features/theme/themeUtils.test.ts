@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_THEMES,
+  DEFAULT_THEME_FONT_FAMILY,
+  FONT_OPTIONS,
   THEME_STORAGE_KEY,
   CUSTOM_THEMES_STORAGE_KEY,
   generateThemeCss,
@@ -177,6 +179,57 @@ describe('themeUtils', () => {
       expect(css).toContain('--error-rgb:')
     })
 
+    it('should generate the default app font when no custom font is provided', () => {
+      const theme: CustomTheme = {
+        id: 'default-font',
+        name: 'Default Font',
+        colors: {
+          primary: '#4a90d9',
+          secondary: '#888888',
+          background: '#ffffff',
+        },
+      }
+
+      const css = generateThemeCss(theme)
+
+      expect(css).toContain(`--font-family-ui: ${DEFAULT_THEME_FONT_FAMILY}`)
+    })
+
+    it('should respect selected font families from the font catalog', () => {
+      const selectedFont = FONT_OPTIONS.find(option => option.label === 'Georgia')?.value
+      const theme: CustomTheme = {
+        id: 'custom-font',
+        name: 'Custom Font',
+        fontFamily: selectedFont,
+        colors: {
+          primary: '#4a90d9',
+          secondary: '#888888',
+          background: '#ffffff',
+        },
+      }
+
+      const css = generateThemeCss(theme)
+
+      expect(css).toContain(`--font-family-ui: ${selectedFont}`)
+    })
+
+    it('should ignore font families outside the font catalog', () => {
+      const theme: CustomTheme = {
+        id: 'invalid-font',
+        name: 'Invalid Font',
+        fontFamily: 'Comic Sans MS',
+        colors: {
+          primary: '#4a90d9',
+          secondary: '#888888',
+          background: '#ffffff',
+        },
+      }
+
+      const css = generateThemeCss(theme)
+
+      expect(css).toContain(`--font-family-ui: ${DEFAULT_THEME_FONT_FAMILY}`)
+    })
+
     it('should handle shorthand hex colors', () => {
       const theme: CustomTheme = {
         id: 'shorthand',
@@ -213,4 +266,3 @@ describe('themeUtils', () => {
     })
   })
 })
-

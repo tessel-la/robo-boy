@@ -454,7 +454,7 @@ button.joystick-disabled {
 .dpad-component button {
   border: none;
   outline: none;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-family-ui);
   font-weight: bold;
   text-align: center;
   line-height: 1;

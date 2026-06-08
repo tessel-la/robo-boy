@@ -27,7 +27,7 @@
 }
 
 .ascii-logo {
-    font-family: monospace;
+    font-family: var(--font-family-ui);
     white-space: pre;
     font-size: 0.7em;
     line-height: 1.2;

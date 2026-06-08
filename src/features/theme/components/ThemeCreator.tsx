@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { CustomTheme } from '../themeUtils';
+import {
+  CustomTheme,
+  DEFAULT_THEME_FONT_FAMILY,
+  FONT_OPTIONS,
+  resolveThemeFontFamily
+} from '../themeUtils';
 import './ThemeCreator.css';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 // Removed incorrect import again
@@ -70,6 +75,7 @@ const ThemeCreator: React.FC<ThemeCreatorProps> = ({
   const [themeName, setThemeName] = useState('');
   const [colors, setColors] = useState(DEFAULT_NEW_THEME_COLORS);
   const [selectedIconId, setSelectedIconId] = useState<string>('palette'); // Default icon
+  const [selectedFontFamily, setSelectedFontFamily] = useState<string>(DEFAULT_THEME_FONT_FAMILY);
 
   // Populate form if editing an existing theme
   useEffect(() => {
@@ -77,10 +83,12 @@ const ThemeCreator: React.FC<ThemeCreatorProps> = ({
       setThemeName(existingTheme.name);
       setColors({ ...DEFAULT_NEW_THEME_COLORS, ...existingTheme.colors });
       setSelectedIconId(existingTheme.iconId || 'palette'); // Use existing or default
+      setSelectedFontFamily(resolveThemeFontFamily(existingTheme.fontFamily));
     } else {
       setThemeName('');
       setColors(DEFAULT_NEW_THEME_COLORS);
       setSelectedIconId('palette'); // Reset to default for new theme
+      setSelectedFontFamily(DEFAULT_THEME_FONT_FAMILY);
     }
   }, [existingTheme, isOpen]);
 
@@ -97,6 +105,7 @@ const ThemeCreator: React.FC<ThemeCreatorProps> = ({
       id: existingTheme?.id || uuidv4(),
       name: themeName.trim(),
       iconId: selectedIconId, // Save the selected icon ID
+      fontFamily: selectedFontFamily,
       colors: colors, // Pass the full colors object
     };
     onSave(themeToSave);
@@ -148,6 +157,25 @@ const ThemeCreator: React.FC<ThemeCreatorProps> = ({
                   </label>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="themeFont">Font</label>
+            <select
+              id="themeFont"
+              className="font-select"
+              value={selectedFontFamily}
+              onChange={(e) => setSelectedFontFamily(e.target.value)}
+            >
+              {FONT_OPTIONS.map(option => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="font-preview" style={{ fontFamily: selectedFontFamily }}>
+              Robotic control panel
             </div>
           </div>
 

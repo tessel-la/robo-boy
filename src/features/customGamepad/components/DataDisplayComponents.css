@@ -73,7 +73,7 @@
   gap: 8px;
   min-width: 0;
   color: var(--text-color-secondary, #9aa3ad);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-family-ui);
   line-height: 1.1;
   overflow: hidden;
   pointer-events: none;
@@ -128,7 +128,7 @@
   gap: 6px;
   overflow: hidden;
   color: var(--text-color-secondary, #9aa3ad);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-family-ui);
   line-height: 1.1;
   pointer-events: none;
 }

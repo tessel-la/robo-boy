@@ -212,7 +212,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       fontWeight: 'bold',
       color: pressedDirections.has(direction) ? 'white' : 'var(--text-color)',
       overflow: 'hidden',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontFamily: 'var(--font-family-ui)',
       lineHeight: 1,
       textAlign: 'center' as const,
       boxShadow: pressedDirections.has(direction) 

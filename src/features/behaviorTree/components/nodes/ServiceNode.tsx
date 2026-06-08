@@ -16,10 +16,16 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
       </div>
       
       <div className="bt-node-content">
-        <div className="bt-node-label">{data.label}</div>
-        <div className="bt-node-detail">{data.serviceName}</div>
+        <div className="bt-node-label" title={data.label}>
+          {data.label}
+        </div>
+        <div className="bt-node-detail" title={data.serviceName}>
+          {data.serviceName}
+        </div>
         {data.serviceType && (
-          <div className="bt-node-subdetail">{data.serviceType}</div>
+          <div className="bt-node-subdetail" title={data.serviceType}>
+            {data.serviceType}
+          </div>
         )}
       </div>
       
@@ -35,4 +41,3 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
 };
 
 export default ServiceNode;
-

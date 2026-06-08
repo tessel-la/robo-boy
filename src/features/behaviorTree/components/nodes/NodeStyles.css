@@ -6,9 +6,11 @@
   padding: 8px;
   min-width: 150px;
   max-width: 200px;
+  box-sizing: border-box;
   font-family: inherit;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .bt-node.selected {
@@ -40,6 +42,8 @@
 /* Node content */
 .bt-node-content {
   margin-bottom: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bt-node-label {
@@ -47,15 +51,17 @@
   font-weight: 600;
   color: var(--text-color, #333333);
   margin-bottom: 4px;
-  word-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bt-node-detail {
   font-size: 11px;
   color: var(--text-color-secondary, #666666);
-  word-wrap: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bt-node-subdetail {
@@ -63,6 +69,9 @@
   color: var(--text-color-tertiary, #999999);
   margin-top: 2px;
   font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Node status indicator */

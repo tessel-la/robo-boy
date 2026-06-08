@@ -147,7 +147,7 @@
     background 0.15s,
     color 0.15s,
     border-color 0.15s;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -189,7 +189,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   color: var(--text-color-secondary, #888888);
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   border-bottom: 1px solid var(--border-color, #e0e0e0);
   flex-shrink: 0;
   white-space: nowrap;
@@ -214,7 +214,7 @@
 /* ─── Type badge ─────────────────────────────────────────────────────────────── */
 
 .ape-type-badge {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   font-size: 9px;
   color: var(--primary-color, #4285f4);
   background: rgba(66, 133, 244, 0.1);
@@ -286,7 +286,7 @@
 }
 
 .ape-list-name {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -295,7 +295,7 @@
 }
 
 .ape-list-preview {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   font-size: 12px;
   color: var(--text-color-secondary, #888888);
   white-space: nowrap;
@@ -467,7 +467,7 @@
 .ape-slider-labels > span {
   font-size: 10px;
   color: var(--text-color-secondary, #888888);
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
 }
 
 /* String input in edit view */
@@ -495,7 +495,7 @@
   background: var(--background-color, #f5f5f5);
   border: 1px solid var(--border-color, #e0e0e0);
   color: var(--text-color, #333333);
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   font-size: 12px;
   line-height: 1.55;
   padding: 10px 12px;
@@ -518,7 +518,7 @@
 .ape-field-err {
   font-size: 10px;
   color: var(--error-color, #f44336);
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   align-self: flex-start;
 }
 
@@ -538,7 +538,7 @@
   background: var(--background-color, #fafafa);
   border: none;
   color: var(--text-color, #333333);
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   font-size: 13px;
   line-height: 1.65;
   padding: 18px;
@@ -556,7 +556,7 @@
   border-top: 2px solid var(--error-color, #f44336);
   color: var(--error-color, #f44336);
   font-size: 11px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-family-ui);
   flex-shrink: 0;
 }
 
