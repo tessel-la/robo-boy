@@ -264,6 +264,10 @@
   padding: 10px 0 0;
 }
 
+.bt-menu-engine-tree-section {
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
 .bt-menu-tree-section > .bt-menu-label {
   flex-shrink: 0;
   padding: 0 16px 6px;

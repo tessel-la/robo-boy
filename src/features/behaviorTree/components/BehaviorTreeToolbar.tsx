@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BehaviorTree } from '../types';
+import { BehaviorTree, BehaviorTreeRuntimeTreeInfo } from '../types';
 import {
   listBehaviorTrees,
   loadBehaviorTree,
@@ -23,6 +23,8 @@ interface BehaviorTreeToolbarProps {
   onDeleteSelected: () => void;
   onDuplicateSelected: () => void;
   onRename: (name: string) => void;
+  engineTrees?: BehaviorTreeRuntimeTreeInfo[];
+  onLoadEngineTree?: (tree: BehaviorTreeRuntimeTreeInfo) => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
@@ -40,6 +42,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onDeleteSelected,
   onDuplicateSelected,
   onRename,
+  engineTrees = [],
+  onLoadEngineTree,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
   const [savedTrees, setSavedTrees]   = useState(listBehaviorTrees());
@@ -70,6 +74,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const handleLoad = (treeId: string) => {
     const tree = loadBehaviorTree(treeId);
     if (tree) { onLoad(tree); closeMenu(); }
+  };
+
+  const handleLoadEngineTree = (tree: BehaviorTreeRuntimeTreeInfo) => {
+    onLoadEngineTree?.(tree);
+    closeMenu();
   };
 
   const handleDelete = (tree: BehaviorTree, e: React.MouseEvent) => {
@@ -309,10 +318,39 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               </div>
             </div>
 
+            {engineTrees.length > 0 && (
+              <div className="bt-menu-tree-section bt-menu-engine-tree-section">
+                <label className="bt-menu-label">
+                  Engine Trees
+                  <span className="bt-menu-count">{engineTrees.length}</span>
+                </label>
+                <div className="bt-menu-tree-list">
+                  {engineTrees.map((tree) => (
+                    <div
+                      key={tree.id}
+                      className={`bt-menu-tree-row${tree.id === currentTree?.id ? ' active' : ''}`}
+                      onClick={() => handleLoadEngineTree(tree)}
+                      role="button"
+                      tabIndex={0}
+                      title={tree.description ?? tree.id}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLoadEngineTree(tree)}
+                    >
+                      <div className="bt-menu-tree-info">
+                        <span className="bt-menu-tree-name">{tree.name}</span>
+                        <span className="bt-menu-tree-date">
+                          {[tree.engine, tree.format, tree.id].filter(Boolean).join(' · ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json"
+              accept=".json,.yaml,.yml,.xml"
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />

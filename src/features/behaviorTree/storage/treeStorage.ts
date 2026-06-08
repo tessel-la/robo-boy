@@ -1,4 +1,5 @@
 import { BehaviorTree, SavedBehaviorTree } from '../types';
+import { importTreeFromText } from '../engineIntegration';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
 const STORAGE_VERSION = '1.0.0';
@@ -114,7 +115,7 @@ export const exportBehaviorTree = (tree: BehaviorTree): void => {
 };
 
 /**
- * Import a behavior tree from JSON file
+ * Import a behavior tree from JSON, backend-neutral YAML, or BT.CPP XML.
  */
 export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => {
   return new Promise((resolve) => {
@@ -123,14 +124,13 @@ export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => 
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        const savedTree: SavedBehaviorTree = JSON.parse(content);
-        
-        // Validate structure
-        if (!savedTree.tree || !savedTree.tree.id || !savedTree.tree.nodes) {
+        const tree = importTreeFromText(content, file.name);
+
+        if (!tree || !tree.id || !tree.nodes) {
           throw new Error('Invalid behavior tree file format');
         }
-        
-        resolve(savedTree.tree);
+
+        resolve(tree);
       } catch (error) {
         console.error('Failed to import behavior tree:', error);
         resolve(null);
@@ -176,4 +176,3 @@ export const getStorageInfo = (): { count: number; size: number } => {
     return { count: 0, size: 0 };
   }
 };
-

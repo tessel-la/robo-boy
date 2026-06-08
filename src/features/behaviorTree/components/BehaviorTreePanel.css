@@ -21,6 +21,288 @@
   background: var(--background-color, #fafafa);
 }
 
+.bt-engine-panel {
+  position: absolute;
+  top: 58px;
+  left: 12px;
+  z-index: 9;
+  width: min(360px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.12);
+  color: var(--text-color, #333333);
+}
+
+.bt-engine-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bt-engine-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.bt-engine-grid.compact {
+  grid-template-columns: 1fr;
+}
+
+.bt-engine-details {
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: var(--background-color, #f5f5f5);
+}
+
+.bt-engine-details summary {
+  padding: 8px;
+  color: var(--text-color-secondary, #666666);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bt-engine-details .bt-engine-grid {
+  padding: 0 8px 8px;
+}
+
+.bt-engine-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bt-engine-field span {
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.bt-engine-field input,
+.bt-engine-field select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  color: var(--text-color, #333333);
+  font: inherit;
+  font-size: 12px;
+}
+
+.bt-engine-field input:focus,
+.bt-engine-field select:focus {
+  outline: none;
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.12);
+}
+
+.bt-engine-status {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color-secondary, #666666);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bt-engine-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bt-engine-status.connected {
+  color: var(--success-color, #4caf50);
+}
+
+.bt-engine-status.offline {
+  color: var(--text-color-secondary, #777777);
+}
+
+.bt-engine-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.bt-engine-actions button {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color, #333333);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bt-engine-actions button:first-child,
+.bt-engine-actions button:nth-child(2) {
+  background: var(--primary-color, #4285f4);
+  border-color: var(--primary-color, #4285f4);
+  color: #ffffff;
+}
+
+.bt-engine-actions button:disabled {
+  cursor: default;
+  filter: grayscale(1);
+  opacity: 0.48;
+}
+
+.bt-runtime-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: var(--background-color, #f5f5f5);
+}
+
+.bt-runtime-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bt-runtime-empty {
+  padding: 12px 8px;
+  color: var(--text-color-secondary, #777777);
+  font-size: 12px;
+}
+
+.bt-runtime-node {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e0e0e0) 64%, transparent);
+  background: transparent;
+  color: var(--text-color, #333333);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bt-runtime-node:hover,
+.bt-runtime-node.selected {
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 10%, transparent);
+}
+
+.bt-runtime-node.selected {
+  box-shadow: inset 3px 0 0 var(--primary-color, #4285f4);
+}
+
+.bt-runtime-node-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-color, #cccccc);
+}
+
+.bt-runtime-node-status.status-running {
+  background: #ffc107;
+}
+
+.bt-runtime-node-status.status-success {
+  background: #4caf50;
+}
+
+.bt-runtime-node-status.status-failure {
+  background: #f44336;
+}
+
+.bt-runtime-node-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bt-runtime-node-name,
+.bt-runtime-node-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-runtime-node-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bt-runtime-node-meta {
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+}
+
+.bt-engine-message {
+  max-height: 116px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  color: var(--text-color-secondary, #666666);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.bt-engine-validation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.bt-engine-validation-error {
+  color: var(--error-color, #f44336);
+  font-weight: 700;
+}
+
+.bt-engine-validation-note {
+  color: var(--text-color-secondary, #666666);
+}
+
 .bt-save-toast {
   position: absolute;
   top: 58px;
@@ -467,6 +749,29 @@
   .bt-order-row {
     grid-template-columns: 24px minmax(0, 1fr) auto;
     padding: 7px;
+  }
+
+  .bt-engine-panel {
+    top: 62px;
+    width: min(360px, calc(100% - 18px));
+    max-height: 34%;
+    overflow: auto;
+  }
+
+  .bt-engine-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bt-engine-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bt-engine-row {
+    align-items: stretch;
+  }
+
+  .bt-engine-status {
+    justify-content: center;
   }
 
   .bt-order-button {

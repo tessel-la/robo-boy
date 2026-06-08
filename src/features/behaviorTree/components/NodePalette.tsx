@@ -84,6 +84,7 @@ import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
   ROSDiscoveryResult,
   BehaviorNodeType,
+  BehaviorTreeNodeTypeInfo,
   NodePaletteItem,
   ROSActionInfo,
   ROSServiceInfo,
@@ -97,6 +98,8 @@ interface NodePaletteProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onAddNode?: (type: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => void;
+  engineNodeTypes?: BehaviorTreeNodeTypeInfo[];
+  onAddEngineNode?: (nodeType: BehaviorTreeNodeTypeInfo) => void;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
@@ -107,6 +110,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   isCollapsed,
   onToggleCollapse,
   onAddNode,
+  engineNodeTypes = [],
+  onAddEngineNode,
 }) => {
   const [rosResources, setRosResources] = useState<ROSDiscoveryResult>({
     actions: [],
@@ -120,6 +125,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     actions: false,
     services: false,
     topics: false,
+    engine: true,
   });
 
   const [isMobile, setIsMobile] = React.useState(false);
@@ -274,9 +280,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const handleDragStart = (
     e: React.DragEvent,
     nodeType: BehaviorNodeType,
-    rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo
+    rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo,
+    engineNodeType?: BehaviorTreeNodeTypeInfo
   ) => {
-    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, rosInfo }));
+    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, rosInfo, engineNodeType }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -350,6 +357,41 @@ const NodePalette: React.FC<NodePaletteProps> = ({
           </div>
         )}
       </div>
+
+      {/* Engine Nodes Section */}
+      {engineNodeTypes.length > 0 && (
+        <div className="palette-section">
+          <div className="palette-section-header" onClick={() => toggleSection('engine')}>
+            <span className="palette-section-icon">
+              {expandedSections.engine ? <IconChevronDown /> : <IconChevronRight />}
+            </span>
+            <span className="palette-section-title">Engine Nodes</span>
+            <span className="palette-section-count">{engineNodeTypes.length}</span>
+          </div>
+          {expandedSections.engine && (
+            <div className="palette-section-content">
+              {engineNodeTypes.slice(0, 120).map((nodeType) => (
+                <div
+                  key={nodeType.id}
+                  className="palette-node palette-node-engine"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, undefined, nodeType)}
+                  onClick={() => onAddEngineNode?.(nodeType)}
+                  title={nodeType.description ?? nodeType.id}
+                >
+                  <span className="palette-node-icon"><IconAction /></span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">{nodeType.label}</span>
+                    <span className="palette-node-meta">
+                      {[nodeType.category, nodeType.id].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ROS Actions Section */}
       <div className="palette-section">

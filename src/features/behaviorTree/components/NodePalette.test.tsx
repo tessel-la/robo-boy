@@ -39,6 +39,28 @@ describe('NodePalette', () => {
     render(<NodePalette {...defaultProps} />);
     expect(() => fireEvent.click(screen.getByText('Sequence'))).not.toThrow();
   });
+
+  it('shows engine node types in the same palette and adds them by click', () => {
+    const onAddEngineNode = vi.fn();
+    const engineNode = {
+      id: 'image_capture',
+      label: 'Image Capture',
+      category: 'action' as const,
+      description: 'Capture a camera frame',
+    };
+
+    render(
+      <NodePalette
+        {...defaultProps}
+        engineNodeTypes={[engineNode]}
+        onAddEngineNode={onAddEngineNode}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Image Capture'));
+
+    expect(onAddEngineNode).toHaveBeenCalledWith(engineNode);
+  });
 });
 
 describe('NodePalette mobile sheet', () => {

@@ -200,8 +200,33 @@
   white-space: nowrap;
 }
 
+.palette-node-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-node-copy .palette-node-label {
+  flex: none;
+}
+
+.palette-node-meta {
+  color: var(--text-color-secondary, #888888);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .palette-node-ros .palette-node-label {
   font-size: 11px;
+}
+
+.palette-node-engine .palette-node-label {
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* Empty state */

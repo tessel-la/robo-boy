@@ -16,6 +16,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import type { Ros } from 'roslib';
+import ROSLIB from 'roslib';
 import { v4 as uuidv4 } from 'uuid';
 import { FaArrowDown, FaArrowUp } from 'react-icons/fa';
 
@@ -42,7 +43,13 @@ import {
 } from '../orderUtils';
 import {
   BehaviorTree,
+  BehaviorTreeEngine,
+  BehaviorTreeEngineCapabilities,
+  BehaviorTreeEngineConfig,
   BehaviorTreeNode,
+  BehaviorTreeNodeTypeInfo,
+  BehaviorTreeRuntimeTreeInfo,
+  BehaviorTreeRuntimeNode,
   BehaviorNodeType,
   ROSActionNodeData,
   ROSServiceNodeData,
@@ -52,6 +59,22 @@ import {
   ROSServiceInfo,
   ROSTopicInfo,
 } from '../types';
+import {
+  DEFAULT_ENGINE_CONFIGS,
+  DEFAULT_NODE_TYPES,
+  behaviorNodeTypeFromEngineType,
+  createNodeDataFromEngineType,
+  downloadTextFile,
+  exportTreeAsBtCppXml,
+  exportTreeAsYaml,
+  getEngineConfig,
+  importTreeFromText,
+  parseEngineCapabilitiesMessage,
+  parseRuntimeNodeCatalogMessage,
+  parseRuntimeTreeCatalogMessage,
+  parseRuntimeStatusMessage,
+  validateBehaviorTreeForEngine,
+} from '../engineIntegration';
 import './BehaviorTreePanel.css';
 
 interface BehaviorTreePanelProps {
@@ -90,6 +113,260 @@ interface ChildOrderPanelProps {
   onMoveChild: (edgeId: string, direction: -1 | 1) => void;
   onClose: () => void;
 }
+
+interface EnginePanelProps {
+  config: BehaviorTreeEngineConfig;
+  isConnected: boolean;
+  liveStatus: string;
+  runtimeNodes: BehaviorTreeRuntimeNode[];
+  constraints: string[];
+  validationErrors: string[];
+  selectedRuntimeNodeId?: string;
+  lastRuntimeMessage: string;
+  onConfigChange: (config: BehaviorTreeEngineConfig) => void;
+  onSelectRuntimeNode: (node: BehaviorTreeRuntimeNode) => void;
+  onExportYaml: () => void;
+  onExportXml: () => void;
+  onPublishSpec: () => void;
+  onRunExternal: () => void;
+  onStopExternal: () => void;
+}
+
+const ENGINE_LABELS: Record<BehaviorTreeEngine, string> = {
+  [BehaviorTreeEngine.Local]: 'Local',
+  [BehaviorTreeEngine.PyTrees]: 'py_trees',
+  [BehaviorTreeEngine.BehaviorTreeCpp]: 'BT.CPP',
+};
+
+const runtimeTopic = (namespace: string, suffix: string): string => {
+  const normalized = namespace.trim().replace(/^\/+|\/+$/g, '');
+  return `/${[normalized, 'behavior_tree/runtime', suffix].filter(Boolean).join('/')}`;
+};
+
+const runtimeTopicConfig = (namespace: string): Pick<
+  BehaviorTreeEngineConfig,
+  | 'capabilitiesTopic'
+  | 'treeCatalogTopic'
+  | 'catalogTopic'
+  | 'specTopic'
+  | 'commandTopic'
+  | 'statusTopic'
+  | 'treeTopic'
+> => ({
+  capabilitiesTopic: runtimeTopic(namespace, 'capabilities'),
+  treeCatalogTopic: runtimeTopic(namespace, 'trees'),
+  catalogTopic: runtimeTopic(namespace, 'nodes'),
+  specTopic: runtimeTopic(namespace, 'spec'),
+  commandTopic: runtimeTopic(namespace, 'command'),
+  statusTopic: runtimeTopic(namespace, 'status'),
+  treeTopic: runtimeTopic(namespace, 'tree'),
+});
+
+const runtimeNamespaceFromTopic = (topic: string): string | null => {
+  const match = topic.match(/^\/(.+)\/behavior_tree\/runtime\/capabilities$/);
+  return match?.[1] ?? null;
+};
+
+const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
+  config,
+  isConnected,
+  liveStatus,
+  runtimeNodes,
+  constraints,
+  validationErrors,
+  selectedRuntimeNodeId,
+  lastRuntimeMessage,
+  onConfigChange,
+  onSelectRuntimeNode,
+  onExportYaml,
+  onExportXml,
+  onPublishSpec,
+  onRunExternal,
+  onStopExternal,
+}) => {
+  const updateConfig = (patch: Partial<BehaviorTreeEngineConfig>) => {
+    const nextEngine = patch.engine ?? config.engine;
+    const engineChanged = patch.engine !== undefined && patch.engine !== config.engine;
+    const baseConfig = engineChanged ? DEFAULT_ENGINE_CONFIGS[nextEngine] : config;
+    const nextConfig: BehaviorTreeEngineConfig = {
+      ...baseConfig,
+      ...patch,
+      engine: nextEngine,
+    };
+
+    if (patch.namespace !== undefined && nextEngine !== BehaviorTreeEngine.Local) {
+      Object.assign(nextConfig, runtimeTopicConfig(patch.namespace));
+    }
+
+    onConfigChange(nextConfig);
+  };
+
+  return (
+    <div className="bt-engine-panel" data-testid="bt-engine-panel">
+      <div className="bt-engine-row">
+        <label className="bt-engine-field">
+          <span>Engine</span>
+          <select
+            value={config.engine}
+            onChange={(event) => updateConfig({ engine: event.target.value as BehaviorTreeEngine })}
+            aria-label="Behavior tree engine"
+          >
+            {Object.values(BehaviorTreeEngine).map((engine) => (
+              <option key={engine} value={engine}>
+                {ENGINE_LABELS[engine]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className={`bt-engine-status ${isConnected ? 'connected' : 'offline'}`}>
+          <span className="bt-engine-dot" aria-hidden="true" />
+          {liveStatus}
+        </div>
+      </div>
+
+      {config.engine !== BehaviorTreeEngine.Local && (
+        <>
+          <div className="bt-engine-grid compact">
+            <label className="bt-engine-field">
+              <span>Namespace</span>
+              <input
+                value={config.namespace}
+                onChange={(event) => updateConfig({ namespace: event.target.value })}
+                placeholder="/arm_1"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+
+          <details className="bt-engine-details">
+            <summary>Runtime topics</summary>
+            <div className="bt-engine-grid">
+              <label className="bt-engine-field">
+                <span>Catalog topic</span>
+                <input
+                  value={config.catalogTopic}
+                  onChange={(event) => updateConfig({ catalogTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Capabilities</span>
+                <input
+                  value={config.capabilitiesTopic}
+                  onChange={(event) => updateConfig({ capabilitiesTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Trees</span>
+                <input
+                  value={config.treeCatalogTopic}
+                  onChange={(event) => updateConfig({ treeCatalogTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Spec topic</span>
+                <input
+                  value={config.specTopic}
+                  onChange={(event) => updateConfig({ specTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Command</span>
+                <input
+                  value={config.commandTopic}
+                  onChange={(event) => updateConfig({ commandTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Status topic</span>
+                <input
+                  value={config.statusTopic}
+                  onChange={(event) => updateConfig({ statusTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+              <label className="bt-engine-field">
+                <span>Tree topic</span>
+                <input
+                  value={config.treeTopic}
+                  onChange={(event) => updateConfig({ treeTopic: event.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+            </div>
+          </details>
+
+          <div className="bt-engine-actions">
+            <button type="button" onClick={onPublishSpec} disabled={!isConnected}>
+              Sync
+            </button>
+            <button type="button" onClick={onRunExternal} disabled={!isConnected || validationErrors.length > 0}>
+              Run
+            </button>
+            <button type="button" onClick={onStopExternal} disabled={!isConnected}>
+              Stop
+            </button>
+            <button type="button" onClick={onExportYaml}>
+              YAML
+            </button>
+            <button type="button" onClick={onExportXml}>
+              XML
+            </button>
+          </div>
+
+          <div className="bt-runtime-list" aria-label="Published behavior tree nodes">
+            <div className="bt-runtime-list-header">
+              <span>Published nodes</span>
+              <span>{runtimeNodes.length}</span>
+            </div>
+            {runtimeNodes.length === 0 ? (
+              <div className="bt-runtime-empty">Waiting for a runtime catalog</div>
+            ) : (
+              runtimeNodes.slice(0, 80).map((node) => (
+                <button
+                  key={`${node.source ?? 'runtime'}-${node.id}`}
+                  type="button"
+                  className={`bt-runtime-node${node.id === selectedRuntimeNodeId ? ' selected' : ''}`}
+                  onClick={() => onSelectRuntimeNode(node)}
+                  title={node.path ?? node.name}
+                >
+                  <span className={`bt-runtime-node-status status-${node.status ?? ExecutionStatus.Idle}`} />
+                  <span className="bt-runtime-node-copy">
+                    <span className="bt-runtime-node-name">{node.name}</span>
+                    <span className="bt-runtime-node-meta">
+                      {[node.type, node.treeId, node.source].filter(Boolean).join(' · ') || node.id}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          {(validationErrors.length > 0 || constraints.length > 0) && (
+            <div className="bt-engine-validation" role={validationErrors.length > 0 ? 'alert' : 'status'}>
+              {validationErrors.slice(0, 4).map((error) => (
+                <div key={error} className="bt-engine-validation-error">{error}</div>
+              ))}
+              {validationErrors.length === 0 && constraints.slice(0, 4).map((constraint) => (
+                <div key={constraint} className="bt-engine-validation-note">{constraint}</div>
+              ))}
+            </div>
+          )}
+
+          {lastRuntimeMessage && (
+            <pre className="bt-engine-message" aria-label="Runtime behavior tree snapshot">
+              {lastRuntimeMessage}
+            </pre>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const getOrderNodeDetail = (node: BehaviorTreeNode): string | undefined => {
   const data = node.data;
@@ -193,12 +470,22 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   >(null);
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
+  const [engineConfig, setEngineConfig] = useState<BehaviorTreeEngineConfig>(
+    DEFAULT_ENGINE_CONFIGS[BehaviorTreeEngine.Local]
+  );
+  const [engineCapabilities, setEngineCapabilities] = useState<BehaviorTreeEngineCapabilities | null>(null);
+  const [runtimeTrees, setRuntimeTrees] = useState<BehaviorTreeRuntimeTreeInfo[]>([]);
+  const [runtimeNodes, setRuntimeNodes] = useState<BehaviorTreeRuntimeNode[]>([]);
+  const [selectedRuntimeNodeId, setSelectedRuntimeNodeId] = useState<string | undefined>();
+  const [lastRuntimeMessage, setLastRuntimeMessage] = useState('');
   const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
     treeName: '',
   });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
+  const runtimeTopicsRef = useRef<Array<{ unsubscribe: () => void }>>([]);
+  const behaviorNodesRef = useRef<BehaviorTreeNode[]>([]);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
@@ -206,6 +493,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
 
   const { screenToFlowPosition, deleteElements } = useReactFlow();
+
+  useEffect(() => {
+    behaviorNodesRef.current = nodes as BehaviorTreeNode[];
+  }, [nodes]);
 
   const allocateNodeId = useCallback((existingNodes: Node[]) => {
     const id = getNextBehaviorNodeId(existingNodes, nodeIdCounter.current);
@@ -219,6 +510,22 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         const id = allocateNodeId(currentNodes);
         const newNode = createBehaviorTreeNode({ id, nodeType, position, rosInfo });
         return newNode ? currentNodes.concat(newNode) : currentNodes;
+      });
+    },
+    [allocateNodeId, setNodes]
+  );
+
+  const addEngineNodeAtPosition = useCallback(
+    (engineNodeType: BehaviorTreeNodeTypeInfo, position: { x: number; y: number }) => {
+      const nodeType = behaviorNodeTypeFromEngineType(engineNodeType);
+      setNodes((currentNodes) => {
+        const id = allocateNodeId(currentNodes);
+        return currentNodes.concat({
+          id,
+          type: nodeType,
+          position,
+          data: createNodeDataFromEngineType(engineNodeType),
+        });
       });
     },
     [allocateNodeId, setNodes]
@@ -250,6 +557,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const newTree: BehaviorTree = {
         id: uuidv4(),
         name: 'Untitled Behavior Tree',
+        engine: BehaviorTreeEngine.Local,
+        engineConfig: DEFAULT_ENGINE_CONFIGS[BehaviorTreeEngine.Local],
         nodes: [],
         edges: [],
         createdAt: Date.now(),
@@ -266,6 +575,186 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       }
     };
   }, []);
+
+  const clearRuntimeSubscriptions = useCallback(() => {
+    runtimeTopicsRef.current.forEach((topic) => topic.unsubscribe());
+    runtimeTopicsRef.current = [];
+  }, []);
+
+  const mergeRuntimeNodes = useCallback((incomingNodes: BehaviorTreeRuntimeNode[], replace = false) => {
+    if (incomingNodes.length === 0) return;
+    setRuntimeNodes((currentNodes) => {
+      const next = replace ? [] : [...currentNodes];
+      const indexByKey = new Map(
+        next.map((node, index) => [`${node.source ?? 'runtime'}:${node.id}`, index])
+      );
+      incomingNodes.forEach((node) => {
+        const key = `${node.source ?? 'runtime'}:${node.id}`;
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex === undefined) {
+          indexByKey.set(key, next.length);
+          next.push(node);
+        } else {
+          next[existingIndex] = { ...next[existingIndex], ...node };
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    clearRuntimeSubscriptions();
+    setLastRuntimeMessage('');
+    setRuntimeNodes((currentNodes) => (currentNodes.length === 0 ? currentNodes : []));
+    setRuntimeTrees((currentTrees) => (currentTrees.length === 0 ? currentTrees : []));
+    setEngineCapabilities((currentCapabilities) => (
+      currentCapabilities?.engine === engineConfig.engine ? currentCapabilities : null
+    ));
+
+    if (!ros || !isConnected || engineConfig.engine === BehaviorTreeEngine.Local) {
+      return;
+    }
+
+    const subscribeToStringTopic = (topicName: string, callback: (message: any) => void) => {
+      if (!topicName.trim()) return;
+      const topic = new ROSLIB.Topic({
+        ros,
+        name: topicName.trim(),
+        messageType: 'std_msgs/msg/String',
+      });
+      topic.subscribe(callback);
+      runtimeTopicsRef.current.push(topic);
+    };
+
+    subscribeToStringTopic(engineConfig.capabilitiesTopic, (message) => {
+      const capabilities = parseEngineCapabilitiesMessage(message);
+      if (!capabilities) return;
+      setEngineCapabilities(capabilities);
+      if (capabilities.trees && capabilities.trees.length > 0) {
+        setRuntimeTrees(capabilities.trees);
+      }
+    });
+
+    subscribeToStringTopic(engineConfig.treeCatalogTopic, (message) => {
+      const trees = parseRuntimeTreeCatalogMessage(message);
+      if (trees.length > 0) {
+        setRuntimeTrees(trees);
+      }
+    });
+
+    subscribeToStringTopic(engineConfig.catalogTopic, (message) => {
+      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'catalog'), true);
+    });
+
+    subscribeToStringTopic(engineConfig.statusTopic, (message) => {
+      const text = typeof message?.data === 'string' ? message.data : JSON.stringify(message);
+      setLastRuntimeMessage(text);
+      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'status'));
+      const statuses = parseRuntimeStatusMessage(message, behaviorNodesRef.current);
+      if (statuses.size === 0) return;
+      const statusValues = Array.from(statuses.values());
+      const hasRunningNode = statusValues.some((status) => status === ExecutionStatus.Running);
+      const hasTerminalNode = statusValues.some((status) => (
+        status === ExecutionStatus.Success || status === ExecutionStatus.Failure
+      ));
+      if (hasRunningNode) {
+        setIsExecuting(true);
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: true,
+          status: ExecutionStatus.Running,
+          activeNodeLabel: prev.activeNodeLabel ?? 'Runtime active',
+        }));
+      } else if (hasTerminalNode) {
+        setIsExecuting(false);
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: false,
+          status: statusValues.some((status) => status === ExecutionStatus.Failure) ? 'error' : 'completed',
+        }));
+      }
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const direct = statuses.get(node.id);
+          const byLabel = statuses.get(String(node.data.label));
+          const nextStatus = direct ?? byLabel;
+          return nextStatus ? { ...node, data: { ...node.data, status: nextStatus } } : node;
+        })
+      );
+    });
+
+    subscribeToStringTopic(engineConfig.treeTopic, (message) => {
+      const text = typeof message?.data === 'string' ? message.data : JSON.stringify(message);
+      setLastRuntimeMessage(text);
+      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'tree'), true);
+    });
+
+    return clearRuntimeSubscriptions;
+  }, [
+    clearRuntimeSubscriptions,
+    engineConfig.capabilitiesTopic,
+    engineConfig.catalogTopic,
+    engineConfig.engine,
+    engineConfig.statusTopic,
+    engineConfig.treeCatalogTopic,
+    engineConfig.treeTopic,
+    isConnected,
+    mergeRuntimeNodes,
+    ros,
+    setNodes,
+  ]);
+
+  useEffect(() => {
+    if (
+      !ros ||
+      !isConnected ||
+      engineConfig.engine === BehaviorTreeEngine.Local ||
+      engineConfig.namespace.trim()
+    ) {
+      return;
+    }
+
+    const rosApi = ros as any;
+    if (typeof rosApi.getTopics !== 'function') return;
+
+    let cancelled = false;
+    rosApi.getTopics(
+      (result: any) => {
+        if (cancelled) return;
+        const topics: string[] = Array.isArray(result?.topics) ? result.topics : [];
+        const namespace = Array.from(
+          new Set(
+            topics
+              .map(runtimeNamespaceFromTopic)
+              .filter((value): value is string => Boolean(value))
+          )
+        ).sort()[0];
+
+        if (!namespace) return;
+        const topicConfig = runtimeTopicConfig(namespace);
+        setEngineConfig((currentConfig) => {
+          if (
+            currentConfig.engine !== engineConfig.engine ||
+            currentConfig.namespace.trim()
+          ) {
+            return currentConfig;
+          }
+          const nextConfig = { ...currentConfig, namespace, ...topicConfig };
+          setCurrentTree((prev) => (
+            prev ? { ...prev, engine: nextConfig.engine, engineConfig: nextConfig } : prev
+          ));
+          return nextConfig;
+        });
+      },
+      () => {
+        // Topic discovery is an enhancement; manual namespace entry still works.
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [engineConfig.engine, engineConfig.namespace, isConnected, ros]);
 
   // Strip sourceHandle so edges always bind to the node's default (null-id)
   // handle. This keeps saved trees compatible after the handle-ID refactor.
@@ -297,23 +786,33 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
 
-      let data: { nodeType?: BehaviorNodeType; rosInfo?: ROSNodeInfo };
+      let data: {
+        nodeType?: BehaviorNodeType;
+        rosInfo?: ROSNodeInfo;
+        engineNodeType?: BehaviorTreeNodeTypeInfo;
+      };
       try {
         data = JSON.parse(dataStr);
       } catch {
         return;
       }
 
-      if (!data.nodeType) return;
+      if (!data.nodeType && !data.engineNodeType) return;
 
       const position = screenToFlowPosition({
         x: event.clientX - 75,
         y: event.clientY - 40,
       });
 
+      if (data.engineNodeType) {
+        addEngineNodeAtPosition(data.engineNodeType, position);
+        return;
+      }
+
+      if (!data.nodeType) return;
       addNodeAtPosition(data.nodeType, position, data.rosInfo);
     },
-    [addNodeAtPosition, screenToFlowPosition]
+    [addEngineNodeAtPosition, addNodeAtPosition, screenToFlowPosition]
   );
 
   const onNodesDelete = useCallback(
@@ -403,7 +902,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, parameters } };
+          const data = {
+            ...node.data,
+            parameters,
+          };
+          if (data.externalKind) {
+            data.externalParams = parameters;
+          }
+          return { ...node, data };
         })
       );
     },
@@ -417,7 +923,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, request } };
+          const data = {
+            ...node.data,
+            request,
+          };
+          if (data.externalKind) {
+            data.externalParams = request;
+          }
+          return { ...node, data };
         })
       );
     },
@@ -428,6 +941,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (!currentTree) return;
     const updatedTree: BehaviorTree = {
       ...currentTree,
+      engine: engineConfig.engine,
+      engineConfig,
       nodes: nodes as BehaviorTreeNode[],
       edges,
       updatedAt: Date.now(),
@@ -447,28 +962,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         message: 'The tree could not be saved. Please try again.',
       });
     }
-  }, [currentTree, nodes, edges, showSaveNotice]);
+  }, [currentTree, engineConfig, nodes, edges, showSaveNotice]);
 
   const handleLoad = useCallback((tree: BehaviorTree) => {
+    if (!Array.isArray(tree.nodes)) {
+      showSaveNotice({
+        type: 'error',
+        title: 'Load failed',
+        message: 'Behavior tree data is missing editable nodes.',
+      });
+      return;
+    }
+
+    const treeEdges = Array.isArray(tree.edges) ? tree.edges : [];
+    const loadedConfig = getEngineConfig(tree);
     const loadedNodes = tree.nodes.map((node) => ({
       ...node,
       selected: false,
       dragging: false,
     }));
+    const loadedTree = { ...tree, engine: loadedConfig.engine, engineConfig: loadedConfig };
     // Strip legacy sourceHandle values (out-1, out-2, out-3) from saved trees.
-    const loadedEdges = tree.edges.map((e) => ({
+    const loadedEdges = treeEdges.map((e) => ({
       ...e,
       sourceHandle: null,
       targetHandle: null,
       selected: false,
     }));
-    setCurrentTree({ ...tree, nodes: loadedNodes, edges: loadedEdges });
+    setCurrentTree({ ...loadedTree, nodes: loadedNodes, edges: loadedEdges });
+    setEngineConfig(loadedConfig);
+    setSelectedRuntimeNodeId(loadedConfig.selectedRuntimeNodeId);
     setNodes(loadedNodes);
     setEdges(loadedEdges);
     setSelectedNodes([]);
     setOrderingParentId(null);
     nodeIdCounter.current = getNodeCounterAfterNodes(loadedNodes);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, showSaveNotice]);
 
   const handleNew = useCallback(() => {
     if (nodes.length > 0 || edges.length > 0) {
@@ -479,12 +1008,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const newTree: BehaviorTree = {
       id: uuidv4(),
       name: 'Untitled Behavior Tree',
+      engine: BehaviorTreeEngine.Local,
+      engineConfig: DEFAULT_ENGINE_CONFIGS[BehaviorTreeEngine.Local],
       nodes: [],
       edges: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
     setCurrentTree(newTree);
+    setEngineConfig(DEFAULT_ENGINE_CONFIGS[BehaviorTreeEngine.Local]);
+    setSelectedRuntimeNodeId(undefined);
+    setRuntimeNodes([]);
     setNodes([]);
     setEdges([]);
     setOrderingParentId(null);
@@ -493,12 +1027,184 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleExport = useCallback(() => {
     if (!currentTree) return;
-    exportBehaviorTree({ ...currentTree, nodes: nodes as BehaviorTreeNode[], edges });
-  }, [currentTree, nodes, edges]);
+    exportBehaviorTree({
+      ...currentTree,
+      engine: engineConfig.engine,
+      engineConfig,
+      nodes: nodes as BehaviorTreeNode[],
+      edges,
+    });
+  }, [currentTree, engineConfig, nodes, edges]);
 
   const handleRename = useCallback((name: string) => {
     setCurrentTree((prev) => (prev ? { ...prev, name } : null));
   }, []);
+
+  const handleEngineConfigChange = useCallback((config: BehaviorTreeEngineConfig) => {
+    setEngineConfig(config);
+    setSelectedRuntimeNodeId(config.selectedRuntimeNodeId);
+    setCurrentTree((prev) => (prev ? { ...prev, engine: config.engine, engineConfig: config } : prev));
+  }, []);
+
+  const handleSelectRuntimeNode = useCallback((runtimeNode: BehaviorTreeRuntimeNode) => {
+    setSelectedRuntimeNodeId(runtimeNode.id);
+    setEngineConfig((config) => ({ ...config, selectedRuntimeNodeId: runtimeNode.id }));
+    setCurrentTree((prev) =>
+      prev
+        ? {
+          ...prev,
+          engineConfig: {
+            ...prev.engineConfig,
+            selectedRuntimeNodeId: runtimeNode.id,
+          },
+        }
+        : prev
+    );
+
+    setNodes((currentNodes) => {
+      const runtimeKeys = new Set(
+        [runtimeNode.id, runtimeNode.name, runtimeNode.path, runtimeNode.type]
+          .filter((value): value is string => Boolean(value))
+          .map((value) => value.toLowerCase())
+      );
+      const matchedNode = currentNodes.find((node) => {
+        const data = node.data;
+        const graphKeys = [
+          node.id,
+          data.label,
+          data.externalKind,
+          'actionName' in data ? data.actionName : undefined,
+          'serviceName' in data ? data.serviceName : undefined,
+          'topicName' in data ? data.topicName : undefined,
+        ].filter((value): value is string => Boolean(value));
+
+        return graphKeys.some((value) => runtimeKeys.has(value.toLowerCase()));
+      });
+
+      if (!matchedNode) return currentNodes;
+      const selected = currentNodes.map((node) => ({ ...node, selected: node.id === matchedNode.id }));
+      setSelectedNodes(selected.filter((node) => node.selected));
+      return selected;
+    });
+  }, [setNodes]);
+
+  const getCurrentTreeForIntegration = useCallback((): BehaviorTree | null => {
+    if (!currentTree) return null;
+    return {
+      ...currentTree,
+      engine: engineConfig.engine,
+      engineConfig,
+      nodes: nodes as BehaviorTreeNode[],
+      edges,
+      updatedAt: Date.now(),
+    };
+  }, [currentTree, engineConfig, nodes, edges]);
+
+  const handleExportYaml = useCallback(() => {
+    const tree = getCurrentTreeForIntegration();
+    if (!tree) return;
+    downloadTextFile(
+      exportTreeAsYaml(tree),
+      `${tree.name.replace(/[^a-z0-9]/gi, '_')}.yaml`,
+      'text/yaml'
+    );
+  }, [getCurrentTreeForIntegration]);
+
+  const handleExportXml = useCallback(() => {
+    const tree = getCurrentTreeForIntegration();
+    if (!tree) return;
+    downloadTextFile(
+      exportTreeAsBtCppXml(tree),
+      `${tree.name.replace(/[^a-z0-9]/gi, '_')}.xml`,
+      'application/xml'
+    );
+  }, [getCurrentTreeForIntegration]);
+
+  const handlePublishSpec = useCallback(() => {
+    const tree = getCurrentTreeForIntegration();
+    if (!tree || !ros || !isConnected) return;
+
+    const payload = engineConfig.engine === BehaviorTreeEngine.BehaviorTreeCpp
+      ? exportTreeAsBtCppXml(tree)
+      : exportTreeAsYaml(tree);
+    const topic = new ROSLIB.Topic({
+      ros,
+      name: engineConfig.specTopic,
+      messageType: 'std_msgs/msg/String',
+    });
+    topic.advertise();
+    topic.publish(new ROSLIB.Message({ data: payload }));
+    topic.unadvertise();
+    showSaveNotice({
+      type: 'success',
+      title: 'Tree synced',
+      message: `Published to ${engineConfig.specTopic}.`,
+    });
+  }, [engineConfig.engine, engineConfig.specTopic, getCurrentTreeForIntegration, isConnected, ros, showSaveNotice]);
+
+  const publishRuntimeCommand = useCallback((command: Record<string, unknown>) => {
+    if (!ros || !isConnected || !engineConfig.commandTopic.trim()) return;
+    const topic = new ROSLIB.Topic({
+      ros,
+      name: engineConfig.commandTopic,
+      messageType: 'std_msgs/msg/String',
+    });
+    topic.advertise();
+    topic.publish(new ROSLIB.Message({ data: JSON.stringify(command) }));
+    topic.unadvertise();
+  }, [engineConfig.commandTopic, isConnected, ros]);
+
+  const handleRunExternal = useCallback(() => {
+    const tree = getCurrentTreeForIntegration();
+    if (!tree) return;
+    if (!ros || !isConnected) {
+      showSaveNotice({
+        type: 'error',
+        title: 'Runtime offline',
+        message: 'Connect to ROS before running an external behavior tree engine.',
+      });
+      return;
+    }
+    handlePublishSpec();
+    publishRuntimeCommand({
+      command: 'load_and_run',
+      treeId: tree.id,
+      name: tree.name,
+      engine: engineConfig.engine,
+      format: engineConfig.engine === BehaviorTreeEngine.BehaviorTreeCpp ? 'xml' : 'yaml',
+    });
+    executionStartedAt.current = Date.now();
+    setIsExecuting(true);
+    setExecutionSnapshot({
+      isExecuting: true,
+      treeName: tree.name,
+      activeNodeLabel: 'Runtime starting',
+      status: ExecutionStatus.Running,
+      startedAt: executionStartedAt.current,
+    });
+  }, [
+    engineConfig.engine,
+    getCurrentTreeForIntegration,
+    handlePublishSpec,
+    isConnected,
+    publishRuntimeCommand,
+    ros,
+    showSaveNotice,
+  ]);
+
+  const handleStopExternal = useCallback(() => {
+    publishRuntimeCommand({
+      command: 'stop',
+      engine: engineConfig.engine,
+      selectedRuntimeNodeId,
+    });
+    setIsExecuting(false);
+    setExecutionSnapshot((prev) => ({
+      ...prev,
+      isExecuting: false,
+      status: 'stopped',
+    }));
+  }, [engineConfig.engine, publishRuntimeCommand, selectedRuntimeNodeId]);
 
   const handleExecutionEvent = useCallback(
     (event: ExecutionEvent) => {
@@ -554,6 +1260,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const handleExecute = useCallback(() => {
+    if (engineConfig.engine !== BehaviorTreeEngine.Local) {
+      handleRunExternal();
+      return;
+    }
     if (!ros || !isConnected) {
       alert('Please connect to ROS first');
       return;
@@ -581,9 +1291,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       startedAt: executionStartedAt.current,
     });
     executorRef.current.start();
-  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
+  }, [engineConfig.engine, ros, isConnected, currentTree, nodes, edges, handleExecutionEvent, handleRunExternal]);
 
   const handleStop = useCallback(() => {
+    if (engineConfig.engine !== BehaviorTreeEngine.Local) {
+      handleStopExternal();
+    }
     if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
     setNodes((nds) =>
@@ -597,7 +1310,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       isExecuting: false,
       status: 'stopped',
     }));
-  }, [setNodes]);
+  }, [engineConfig.engine, handleStopExternal, setNodes]);
 
   useEffect(() => {
     onExecutionChange?.(executionSnapshot);
@@ -635,7 +1348,72 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [addNodeAtPosition, screenToFlowPosition]
   );
 
+  const handleAddEngineNode = useCallback(
+    (engineNodeType: BehaviorTreeNodeTypeInfo) => {
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const position = screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+
+      addEngineNodeAtPosition(engineNodeType, position);
+    },
+    [addEngineNodeAtPosition, screenToFlowPosition]
+  );
+
+  const handleLoadRuntimeTree = useCallback(
+    (runtimeTree: BehaviorTreeRuntimeTreeInfo) => {
+      if (!runtimeTree.spec) {
+        showSaveNotice({
+          type: 'error',
+          title: 'Tree spec unavailable',
+          message: `${runtimeTree.name} is listed by the engine but did not include an editable spec.`,
+        });
+        return;
+      }
+
+      try {
+        const fileName = runtimeTree.format === 'xml'
+          ? 'tree.xml'
+          : runtimeTree.format === 'json'
+            ? 'tree.json'
+            : 'tree.yaml';
+        const loadedTree = importTreeFromText(runtimeTree.spec, fileName);
+        if (!Array.isArray(loadedTree.nodes)) {
+          throw new Error('Runtime tree spec does not include editable nodes.');
+        }
+        handleLoad({
+          ...loadedTree,
+          id: runtimeTree.id || loadedTree.id,
+          name: runtimeTree.name || loadedTree.name,
+          engine: engineConfig.engine,
+          engineConfig,
+        });
+      } catch (error) {
+        showSaveNotice({
+          type: 'error',
+          title: 'Load failed',
+          message: error instanceof Error ? error.message : 'Could not parse the engine tree.',
+        });
+      }
+    },
+    [engineConfig, handleLoad, showSaveNotice]
+  );
+
   const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
+  const engineNodeTypes = useMemo(
+    () => engineCapabilities?.nodeTypes?.length ? engineCapabilities.nodeTypes : DEFAULT_NODE_TYPES,
+    [engineCapabilities]
+  );
+  const engineConstraints = useMemo(
+    () => engineCapabilities?.constraints ?? [],
+    [engineCapabilities]
+  );
+  const validationErrors = useMemo(() => {
+    const tree = getCurrentTreeForIntegration();
+    return tree ? validateBehaviorTreeForEngine(tree, engineNodeTypes) : [];
+  }, [engineNodeTypes, getCurrentTreeForIntegration]);
   const displayedEdges = useMemo(
     () => annotateOrderedEdges(behaviorNodes, edges),
     [behaviorNodes, edges]
@@ -648,6 +1426,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     () => (orderingParent ? getOrderedChildLinks(orderingParent.id, behaviorNodes, edges) : []),
     [behaviorNodes, edges, orderingParent]
   );
+  const engineLiveStatus = useMemo(() => {
+    if (engineConfig.engine === BehaviorTreeEngine.Local) return 'Local executor';
+    if (!isConnected) return 'ROS offline';
+    return lastRuntimeMessage ? 'Live runtime' : 'Listening';
+  }, [engineConfig.engine, isConnected, lastRuntimeMessage]);
   const handleMoveOrderedChild = useCallback(
     (edgeId: string, direction: -1 | 1) => {
       if (!orderingParent) return;
@@ -678,6 +1461,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
         onRename={handleRename}
+        engineTrees={engineConfig.engine === BehaviorTreeEngine.Local ? [] : runtimeTrees}
+        onLoadEngineTree={handleLoadRuntimeTree}
       />
 
       {saveNotice && (
@@ -730,9 +1515,28 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           isCollapsed={isPaletteCollapsed}
           onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
           onAddNode={handleAddNode}
+          engineNodeTypes={engineConfig.engine === BehaviorTreeEngine.Local ? [] : engineNodeTypes}
+          onAddEngineNode={handleAddEngineNode}
         />
 
         <div className="bt-canvas" ref={reactFlowWrapper} data-testid="bt-canvas">
+          <EngineIntegrationPanel
+            config={engineConfig}
+            isConnected={isConnected}
+            liveStatus={engineLiveStatus}
+            runtimeNodes={runtimeNodes}
+            constraints={engineConstraints}
+            validationErrors={validationErrors}
+            selectedRuntimeNodeId={selectedRuntimeNodeId}
+            lastRuntimeMessage={lastRuntimeMessage}
+            onConfigChange={handleEngineConfigChange}
+            onSelectRuntimeNode={handleSelectRuntimeNode}
+            onExportYaml={handleExportYaml}
+            onExportXml={handleExportXml}
+            onPublishSpec={handlePublishSpec}
+            onRunExternal={handleRunExternal}
+            onStopExternal={handleStopExternal}
+          />
           <ReactFlow
             nodes={nodes}
             edges={displayedEdges}
@@ -784,7 +1588,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       {editingAction && (
         <ActionParameterEditor
           nodeData={editingAction.data}
-          ros={ros}
+          ros={editingAction.data.externalKind ? null : ros}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
         />
@@ -792,7 +1596,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       {editingService && (
         <ServiceParameterEditor
           nodeData={editingService.data}
-          ros={ros}
+          ros={editingService.data.externalKind ? null : ros}
           onSave={handleSaveServiceRequest}
           onClose={() => setEditingService(null)}
         />

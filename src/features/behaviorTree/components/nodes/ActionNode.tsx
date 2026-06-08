@@ -22,6 +22,11 @@ const ActionNode: React.FC<NodeProps<ROSActionNodeData>> = ({ data, selected }) 
         <div className="bt-node-detail" title={data.actionName}>
           {data.actionName}
         </div>
+        {data.externalKind && data.externalKind !== data.actionName && (
+          <div className="bt-node-subdetail" title={data.externalKind}>
+            {data.externalKind}
+          </div>
+        )}
         {data.actionType && (
           <div className="bt-node-subdetail" title={data.actionType}>
             {data.actionType}

@@ -8,6 +8,71 @@ export enum ExecutionStatus {
   Failure = 'failure',
 }
 
+export enum BehaviorTreeEngine {
+  Local = 'local',
+  PyTrees = 'py_trees',
+  BehaviorTreeCpp = 'behavior_tree_cpp',
+}
+
+export interface BehaviorTreeEngineConfig {
+  engine: BehaviorTreeEngine;
+  namespace: string;
+  capabilitiesTopic: string;
+  treeCatalogTopic: string;
+  catalogTopic: string;
+  specTopic: string;
+  commandTopic: string;
+  statusTopic: string;
+  treeTopic: string;
+  selectedRuntimeNodeId?: string;
+}
+
+export interface BehaviorTreeNodeParamInfo {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object';
+  required?: boolean;
+  default?: any;
+  description?: string;
+}
+
+export interface BehaviorTreeNodeTypeInfo {
+  id: string;
+  label: string;
+  category: 'control' | 'action' | 'condition' | 'decorator' | 'utility';
+  description?: string;
+  params?: BehaviorTreeNodeParamInfo[];
+  minChildren?: number;
+  maxChildren?: number;
+}
+
+export interface BehaviorTreeRuntimeTreeInfo {
+  id: string;
+  name: string;
+  engine?: BehaviorTreeEngine | string;
+  format?: 'yaml' | 'xml' | 'json';
+  spec?: string;
+  description?: string;
+}
+
+export interface BehaviorTreeEngineCapabilities {
+  engine: BehaviorTreeEngine | string;
+  nodeTypes: BehaviorTreeNodeTypeInfo[];
+  trees?: BehaviorTreeRuntimeTreeInfo[];
+  constraints?: string[];
+}
+
+export interface BehaviorTreeRuntimeNode {
+  id: string;
+  name: string;
+  type?: string;
+  status?: ExecutionStatus;
+  treeId?: string;
+  path?: string;
+  parentId?: string;
+  source?: string;
+  raw?: Record<string, any>;
+}
+
 // Base node types
 export enum BehaviorNodeType {
   // Control flow nodes
@@ -51,6 +116,8 @@ export interface ROSDiscoveryResult {
 export interface BaseNodeData {
   label: string;
   status?: ExecutionStatus;
+  externalKind?: string;
+  externalParams?: Record<string, any>;
 }
 
 export interface ROSActionNodeData extends BaseNodeData {
@@ -101,6 +168,8 @@ export interface BehaviorTree {
   id: string;
   name: string;
   description?: string;
+  engine?: BehaviorTreeEngine;
+  engineConfig?: Partial<BehaviorTreeEngineConfig>;
   nodes: BehaviorTreeNode[];
   edges: Edge[];
   createdAt: number;
@@ -153,4 +222,3 @@ export interface NodePaletteItem {
   category: 'control' | 'ros' | 'utility';
   rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo;
 }
-
