@@ -16,10 +16,16 @@ const ActionNode: React.FC<NodeProps<ROSActionNodeData>> = ({ data, selected }) 
       </div>
       
       <div className="bt-node-content">
-        <div className="bt-node-label">{data.label}</div>
-        <div className="bt-node-detail">{data.actionName}</div>
+        <div className="bt-node-label" title={data.label}>
+          {data.label}
+        </div>
+        <div className="bt-node-detail" title={data.actionName}>
+          {data.actionName}
+        </div>
         {data.actionType && (
-          <div className="bt-node-subdetail">{data.actionType}</div>
+          <div className="bt-node-subdetail" title={data.actionType}>
+            {data.actionType}
+          </div>
         )}
       </div>
       
@@ -35,4 +41,3 @@ const ActionNode: React.FC<NodeProps<ROSActionNodeData>> = ({ data, selected }) 
 };
 
 export default ActionNode;
-

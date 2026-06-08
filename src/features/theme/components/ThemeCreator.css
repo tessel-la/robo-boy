@@ -57,7 +57,8 @@
     font-size: 0.9rem;
 }
 
-.theme-creator-form input[type="text"] {
+.theme-creator-form input[type="text"],
+.theme-creator-form select {
     width: calc(100% - 22px); /* Full width minus padding/border */
     padding: 10px;
     border: 1px solid var(--border-color);
@@ -65,6 +66,21 @@
     color: var(--text-color);
     border-radius: 6px;
     font-size: 1rem;
+    font-family: var(--font-family-ui);
+}
+
+.theme-creator-form select {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.font-preview {
+    padding: 10px;
+    border: 1px dashed var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    background-color: var(--background-secondary);
+    font-size: 0.95rem;
 }
 
 .color-input-group {

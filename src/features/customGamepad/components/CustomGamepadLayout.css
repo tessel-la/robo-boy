@@ -129,7 +129,7 @@
 
 .metadata-value {
   color: var(--text-color, #333);
-  font-family: monospace;
+  font-family: var(--font-family-ui);
   background-color: var(--background-secondary, #f8f9fa);
   padding: 2px 6px;
   border-radius: 4px;

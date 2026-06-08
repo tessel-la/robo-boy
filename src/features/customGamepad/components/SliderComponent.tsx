@@ -124,7 +124,7 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
   const valueStyle: React.CSSProperties = {
     fontSize: `${0.8 * scaleFactor}em`,
     color: 'var(--text-color-secondary)',
-    fontFamily: 'monospace'
+    fontFamily: 'var(--font-family-ui)'
   };
 
   return (
