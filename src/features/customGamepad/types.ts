@@ -46,6 +46,11 @@ export interface GamepadComponentConfig {
     // Joystick specific
     maxValue?: number;
     axes?: string[]; // Which axes to map to
+    poseStampedFrameId?: string;
+    poseStampedReferenceMode?: 'frame' | 'odometry';
+    poseStampedOdometryTopic?: string;
+    poseStampedOdometryMessageType?: string;
+    poseStampedUseOdometryOrientation?: boolean;
 
     // Button specific
     buttonIndex?: number;

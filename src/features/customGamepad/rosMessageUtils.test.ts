@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPoseStampedPayload,
   buildCameraStreamUrl,
   filterCameraTopics,
   flattenNumericFields,
@@ -7,6 +8,7 @@ import {
   getPlotRange,
   trimPlotSamples,
 } from './rosMessageUtils';
+import type { GamepadComponentConfig } from './types';
 
 describe('rosMessageUtils', () => {
   it('filters camera topics by ROS 1 and ROS 2 image types', () => {
@@ -93,5 +95,74 @@ describe('rosMessageUtils', () => {
   it('computes auto and fixed plot ranges', () => {
     expect(getPlotRange([{ time: 0, value: 2 }], true)).toEqual({ min: 1, max: 3 });
     expect(getPlotRange([], false, -5, 5)).toEqual({ min: -5, max: 5 });
+  });
+
+  it('builds PoseStamped joystick output in a configured frame', () => {
+    const config: GamepadComponentConfig = {
+      id: 'pose-stick',
+      type: 'joystick',
+      position: { x: 0, y: 0, width: 2, height: 2 },
+      config: {
+        axes: ['position.x', 'position.z'],
+        poseStampedFrameId: 'map',
+        poseStampedReferenceMode: 'frame',
+      },
+    };
+
+    expect(buildPoseStampedPayload({
+      messageType: 'geometry_msgs/msg/PoseStamped',
+      config,
+      values: [1.5, -0.25],
+      date: new Date(1_000),
+    })).toEqual({
+      header: {
+        stamp: { sec: 1, nanosec: 0 },
+        frame_id: 'map',
+      },
+      pose: {
+        position: { x: 1.5, y: 0, z: -0.25 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    });
+  });
+
+  it('builds PoseStamped joystick output as an odometry offset', () => {
+    const config: GamepadComponentConfig = {
+      id: 'pose-stick',
+      type: 'joystick',
+      position: { x: 0, y: 0, width: 2, height: 2 },
+      config: {
+        axes: ['position.x', 'position.y'],
+        poseStampedReferenceMode: 'odometry',
+        poseStampedUseOdometryOrientation: true,
+      },
+    };
+
+    const message = buildPoseStampedPayload({
+      messageType: 'geometry_msgs/PoseStamped',
+      config,
+      values: [0.5, -1],
+      latestOdometry: {
+        header: { frame_id: 'odom' },
+        pose: {
+          pose: {
+            position: { x: 10, y: 3, z: 0.25 },
+            orientation: { x: 0, y: 0, z: 0.7, w: 0.7 },
+          },
+        },
+      },
+      date: new Date(2_500),
+    });
+
+    expect(message).toEqual({
+      header: {
+        stamp: { secs: 2, nsecs: 500_000_000 },
+        frame_id: 'odom',
+      },
+      pose: {
+        position: { x: 10.5, y: 2, z: 0.25 },
+        orientation: { x: 0, y: 0, z: 0.7, w: 0.7 },
+      },
+    });
   });
 });

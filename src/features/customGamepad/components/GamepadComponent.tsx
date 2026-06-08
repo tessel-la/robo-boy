@@ -376,7 +376,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   };
 
   const getComponentClass = () => {
-    let className = `gamepad-component ${config.type}`;
+    const typeClass = config.type === 'dpad' ? 'component-dpad' : config.type;
+    let className = `gamepad-component ${typeClass}`;
     if (isEditing) className += ' editing';
     if (isBeingDragged) className += ' being-dragged';
     if (isSelected) className += ' selected';

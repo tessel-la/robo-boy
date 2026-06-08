@@ -1,5 +1,6 @@
 import type { Ros } from 'roslib';
 import ROSLIB from 'roslib';
+import type { GamepadComponentConfig } from './types';
 
 export interface TopicInfo {
   name: string;
@@ -43,6 +44,21 @@ export const CAMERA_MESSAGE_TYPES = [
   'sensor_msgs/msg/Image',
   'sensor_msgs/CompressedImage',
   'sensor_msgs/msg/CompressedImage',
+];
+
+export const JOY_MESSAGE_TYPES = [
+  'sensor_msgs/Joy',
+  'sensor_msgs/msg/Joy',
+];
+
+export const POSE_STAMPED_MESSAGE_TYPES = [
+  'geometry_msgs/PoseStamped',
+  'geometry_msgs/msg/PoseStamped',
+];
+
+export const ODOMETRY_MESSAGE_TYPES = [
+  'nav_msgs/Odometry',
+  'nav_msgs/msg/Odometry',
 ];
 
 const DYNAMIC_ARRAY_PREVIEW_LENGTH = 8;
@@ -136,8 +152,118 @@ export function isCameraMessageType(type: string): boolean {
   return CAMERA_MESSAGE_TYPES.includes(type);
 }
 
+export function isJoyMessageType(type: string): boolean {
+  return JOY_MESSAGE_TYPES.includes(type);
+}
+
+export function isPoseStampedMessageType(type: string): boolean {
+  return POSE_STAMPED_MESSAGE_TYPES.includes(type);
+}
+
+export function isOdometryMessageType(type: string): boolean {
+  return ODOMETRY_MESSAGE_TYPES.includes(type);
+}
+
 export function filterCameraTopics(topics: TopicInfo[]): TopicInfo[] {
   return topics.filter(topic => isCameraMessageType(topic.type));
+}
+
+export function filterOdometryTopics(topics: TopicInfo[]): TopicInfo[] {
+  return topics.filter(topic => isOdometryMessageType(topic.type));
+}
+
+export interface OdometryLikeMessage {
+  header?: {
+    frame_id?: string;
+  };
+  pose?: {
+    pose?: {
+      position?: Partial<Record<'x' | 'y' | 'z', number>>;
+      orientation?: Partial<Record<'x' | 'y' | 'z' | 'w', number>>;
+    };
+  };
+}
+
+export function buildStampedHeader(messageType: string, frameId: string, date = new Date()) {
+  const millis = date.getTime();
+  const seconds = Math.floor(millis / 1000);
+  const nanos = Math.floor((millis - seconds * 1000) * 1_000_000);
+
+  return {
+    stamp: messageType.includes('/msg/')
+      ? { sec: seconds, nanosec: nanos }
+      : { secs: seconds, nsecs: nanos },
+    frame_id: frameId,
+  };
+}
+
+function writePoseAxis(
+  position: Record<'x' | 'y' | 'z', number>,
+  axisPath: string,
+  value: number
+) {
+  const normalized = axisPath.replace(/^pose\./, '');
+  const component = normalized.startsWith('position.')
+    ? normalized.split('.')[1]
+    : normalized;
+
+  if (component === 'x' || component === 'y' || component === 'z') {
+    position[component] = value;
+  }
+}
+
+export function buildPoseStampedPayload({
+  messageType,
+  config,
+  values,
+  latestOdometry,
+  date,
+}: {
+  messageType: string;
+  config: GamepadComponentConfig;
+  values: number[];
+  latestOdometry?: OdometryLikeMessage | null;
+  date?: Date;
+}) {
+  const frameId = config.config?.poseStampedFrameId?.trim()
+    || latestOdometry?.header?.frame_id?.trim()
+    || 'map';
+  const axesConfig = config.config?.axes?.length
+    ? config.config.axes
+    : ['position.x', 'position.y'];
+  const offset = { x: 0, y: 0, z: 0 };
+
+  axesConfig.forEach((axis, index) => {
+    if (index < values.length) {
+      writePoseAxis(offset, axis, values[index]);
+    }
+  });
+
+  const odometryPose = latestOdometry?.pose?.pose;
+  const useOdometry = config.config?.poseStampedReferenceMode === 'odometry' && !!odometryPose;
+  const basePosition = odometryPose?.position;
+  const position = {
+    x: (useOdometry ? basePosition?.x ?? 0 : 0) + offset.x,
+    y: (useOdometry ? basePosition?.y ?? 0 : 0) + offset.y,
+    z: (useOdometry ? basePosition?.z ?? 0 : 0) + offset.z,
+  };
+  const odometryOrientation = odometryPose?.orientation;
+  const orientation = (useOdometry && config.config?.poseStampedUseOdometryOrientation !== false)
+    ? {
+      x: odometryOrientation?.x ?? 0,
+      y: odometryOrientation?.y ?? 0,
+      z: odometryOrientation?.z ?? 0,
+      w: odometryOrientation?.w ?? 1,
+    }
+    : { x: 0, y: 0, z: 0, w: 1 };
+
+  return {
+    header: buildStampedHeader(messageType, frameId, date),
+    pose: {
+      position,
+      orientation,
+    },
+  };
 }
 
 export function buildCameraStreamUrl({

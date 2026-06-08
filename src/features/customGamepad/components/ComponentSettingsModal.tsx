@@ -7,7 +7,10 @@ import {
   CAMERA_MESSAGE_TYPES,
   fetchNumericFields,
   filterCameraTopics,
+  filterOdometryTopics,
+  isPoseStampedMessageType,
   NumericFieldOption,
+  ODOMETRY_MESSAGE_TYPES,
 } from '../rosMessageUtils';
 import './ComponentSettingsModal.css';
 
@@ -44,6 +47,13 @@ const MESSAGE_TYPES = {
       'angular.x': { type: 'float', label: 'Angular X' },
       'angular.y': { type: 'float', label: 'Angular Y' },
       'angular.z': { type: 'float', label: 'Angular Z' }
+    }
+  },
+  'geometry_msgs/PoseStamped': {
+    label: 'PoseStamped',
+    alternativeTypes: ['geometry_msgs/msg/PoseStamped'],
+    fields: {
+      'pose': { type: 'pose', label: 'Pose' }
     }
   },
   'std_msgs/Float32': {
@@ -111,7 +121,7 @@ const getMessageTypeConfig = (type: string) => {
 
 // Define allowed message types for each component type
 const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
-  'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
+  'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'geometry_msgs/PoseStamped', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
   'button': ['std_msgs/Bool', 'std_msgs/Int32'],
   'dpad': ['sensor_msgs/Joy'], // D-pad only supports Joy
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
@@ -142,12 +152,17 @@ const isAxisConfigurationEnabled = (messageType: string): boolean => {
   return messageType === 'sensor_msgs/Joy' ||
     messageType === 'sensor_msgs/msg/Joy' ||
     messageType === 'geometry_msgs/Twist' ||
-    messageType === 'geometry_msgs/msg/Twist';
+    messageType === 'geometry_msgs/msg/Twist' ||
+    isPoseStampedMessageType(messageType);
 };
 
 // Helper function to check if this is a twist message type
 const isTwistMessageType = (messageType: string): boolean => {
   return messageType === 'geometry_msgs/Twist' || messageType === 'geometry_msgs/msg/Twist';
+};
+
+const isPoseStampedAxisConfigurationEnabled = (messageType: string): boolean => {
+  return isPoseStampedMessageType(messageType);
 };
 
 const parsePositiveIntegerOrUndefined = (value: string): number | undefined => {
@@ -183,6 +198,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // New twist-specific settings
   const [twistAxes, setTwistAxes] = useState<string[]>(['linear.x', 'linear.y']);
   const [useTwistCustomAxes, setUseTwistCustomAxes] = useState(false);
+
+  // PoseStamped-specific settings
+  const [poseStampedAxes, setPoseStampedAxes] = useState<string[]>(['position.x', 'position.y']);
+  const [usePoseStampedCustomAxes, setUsePoseStampedCustomAxes] = useState(false);
+  const [poseStampedFrameId, setPoseStampedFrameId] = useState('map');
+  const [poseStampedReferenceMode, setPoseStampedReferenceMode] = useState<'frame' | 'odometry'>('frame');
+  const [poseStampedOdometryTopic, setPoseStampedOdometryTopic] = useState('/odom');
+  const [poseStampedOdometryMessageType, setPoseStampedOdometryMessageType] = useState('nav_msgs/Odometry');
+  const [poseStampedUseOdometryOrientation, setPoseStampedUseOdometryOrientation] = useState(true);
 
   // D-pad-specific settings
   const [dpadButtonMapping, setDpadButtonMapping] = useState<Record<string, number>>({
@@ -332,6 +356,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         if (component.type === 'dpad') {
           setMessageType(action.messageType || 'sensor_msgs/Joy');
           setField('buttons');
+        } else if (component.type === 'joystick' && isPoseStampedMessageType(action.messageType || '')) {
+          setMessageType(action.messageType);
+          setField('pose');
         } else if (component.type === 'toggle') {
           const validToggleType = ['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(action.messageType || '')
             ? action.messageType
@@ -341,13 +368,32 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         }
       }
 
+      setValueRange({ min: -1, max: 1 });
+      setSliderMin(-1);
+      setSliderMax(1);
+      setAxisSelection('xy');
+      setCustomAxes(['0', '1']);
+      setUseCustomAxes(false);
+      setTwistAxes(['linear.x', 'linear.y']);
+      setUseTwistCustomAxes(false);
+      setPoseStampedAxes(['position.x', 'position.y']);
+      setUsePoseStampedCustomAxes(false);
+      setPoseStampedFrameId('map');
+      setPoseStampedReferenceMode('frame');
+      setPoseStampedOdometryTopic('/odom');
+      setPoseStampedOdometryMessageType('nav_msgs/Odometry');
+      setPoseStampedUseOdometryOrientation(true);
+      setDpadButtonMapping({ up: 0, right: 1, down: 2, left: 3 });
+      setButtonIndex(0);
+      setMomentary(true);
+
       // Initialize component-specific settings
       if (component.config) {
         if (component.type === 'joystick') {
           const min = component.config.min ?? -1;
           const max = component.config.max ?? 1;
 
-          const inferredStep = getInferredDataType(action.messageType || 'sensor_msgs/Joy', action.field || 'axes') === 'float' ? 0.1 : 1;
+          const inferredStep = getInferredDataType(action?.messageType || 'sensor_msgs/Joy', action?.field || 'axes') === 'float' ? 0.1 : 1;
           const minPrecision = getPrecision(inferredStep);
 
           setValueRange({
@@ -360,8 +406,17 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           if (component.config.axes) {
             const axes = component.config.axes;
 
-            // Check if this is a twist message type
-            if (isTwistMessageType(action.messageType || '')) {
+            if (isPoseStampedMessageType(action?.messageType || '')) {
+              setPoseStampedAxes(axes);
+              const standardPoseCombos = [
+                ['position.x', 'position.y'],
+                ['position.y', 'position.z'],
+                ['position.x', 'position.z']
+              ];
+              const isStandardCombo = standardPoseCombos
+                .some(combo => combo.length === axes.length && combo.every((axis, index) => axis === axes[index]));
+              setUsePoseStampedCustomAxes(!isStandardCombo);
+            } else if (isTwistMessageType(action?.messageType || '')) {
               setTwistAxes(axes);
               // Check if it's using standard combinations or custom
               const standardLinearCombos = [
@@ -392,6 +447,12 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               }
             }
           }
+
+          setPoseStampedFrameId(component.config.poseStampedFrameId || 'map');
+          setPoseStampedReferenceMode(component.config.poseStampedReferenceMode || 'frame');
+          setPoseStampedOdometryTopic(component.config.poseStampedOdometryTopic || '/odom');
+          setPoseStampedOdometryMessageType(component.config.poseStampedOdometryMessageType || 'nav_msgs/Odometry');
+          setPoseStampedUseOdometryOrientation(component.config.poseStampedUseOdometryOrientation !== false);
         } else if (component.type === 'button') {
           setButtonIndex(component.config.buttonIndex ?? 0);
           setMomentary(component.config.momentary ?? true);
@@ -402,13 +463,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           });
         } else if (component.type === 'camera') {
           setCameraTransport(component.config.cameraTransport ?? 'proxy');
-          setStreamType(component.config.streamType ?? getDefaultCameraStreamType(action.messageType || defaultMessageType));
+          setStreamType(component.config.streamType ?? getDefaultCameraStreamType(action?.messageType || defaultMessageType));
           setStreamWidth(component.config.streamWidth ? String(component.config.streamWidth) : '');
           setStreamHeight(component.config.streamHeight ? String(component.config.streamHeight) : '');
         } else if (component.type === 'plot') {
           const plotFields = component.config.fieldPaths?.length
             ? component.config.fieldPaths
-            : [component.config.fieldPath || action.field || 'data'];
+            : [component.config.fieldPath || action?.field || 'data'];
           setPlotFieldPaths(plotFields);
           setTimeWindowSec(component.config.timeWindowSec ?? 10);
           setAutoScale(component.config.autoScale !== false);
@@ -471,6 +532,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     return filtered;
   }, [availableTopics, component?.type, messageType]);
 
+  const odometryTopics = useMemo(() => filterOdometryTopics(availableTopics), [availableTopics]);
+
   // Get available fields for the selected message type
   const availableFields = useMemo(() => {
     const messageConfig = getMessageTypeConfig(messageType);
@@ -518,6 +581,17 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return;
     }
 
+    if (component.type === 'joystick' && isPoseStampedMessageType(messageType)) {
+      if (poseStampedReferenceMode === 'frame' && !poseStampedFrameId.trim()) {
+        setErrorMessage('PoseStamped joystick output needs a frame ID.');
+        return;
+      }
+      if (poseStampedReferenceMode === 'odometry' && !poseStampedOdometryTopic.trim()) {
+        setErrorMessage('PoseStamped odometry offset mode needs an odometry topic.');
+        return;
+      }
+    }
+
     const selectedPlotFields = plotFieldPaths.map(path => path.trim()).filter(Boolean);
 
     if (component.type === 'plot' && selectedPlotFields.length === 0) {
@@ -532,7 +606,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     const action: ROSTopicConfig = {
       topic,
       messageType,
-      field: component.type === 'plot' ? selectedPlotFields[0] : (field || undefined)
+      field: component.type === 'plot'
+        ? selectedPlotFields[0]
+        : (component.type === 'joystick' && isPoseStampedMessageType(messageType) ? 'pose' : (field || undefined))
     };
 
     let updatedConfig = { ...component.config };
@@ -541,7 +617,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     if (component.type === 'joystick') {
       let axesToUse: string[];
 
-      if (isTwistMessageType(messageType)) {
+      if (isPoseStampedMessageType(messageType)) {
+        axesToUse = usePoseStampedCustomAxes ? poseStampedAxes : poseStampedAxes;
+      } else if (isTwistMessageType(messageType)) {
         axesToUse = useTwistCustomAxes ? twistAxes : twistAxes;
       } else {
         axesToUse = useCustomAxes ? customAxes : (axisSelection === 'xy' ? ['0', '1'] : ['2', '3']);
@@ -553,7 +631,20 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         max: parseFloat(valueRange.max.toFixed(precision)),
         sliderMin: parseFloat(sliderMin.toFixed(precision)),
         sliderMax: parseFloat(sliderMax.toFixed(precision)),
-        axes: axesToUse
+        axes: axesToUse,
+        poseStampedFrameId: isPoseStampedMessageType(messageType) && poseStampedFrameId.trim()
+          ? poseStampedFrameId.trim()
+          : undefined,
+        poseStampedReferenceMode: isPoseStampedMessageType(messageType) ? poseStampedReferenceMode : undefined,
+        poseStampedOdometryTopic: isPoseStampedMessageType(messageType) && poseStampedReferenceMode === 'odometry'
+          ? poseStampedOdometryTopic.trim()
+          : undefined,
+        poseStampedOdometryMessageType: isPoseStampedMessageType(messageType) && poseStampedReferenceMode === 'odometry'
+          ? poseStampedOdometryMessageType
+          : undefined,
+        poseStampedUseOdometryOrientation: isPoseStampedMessageType(messageType) && poseStampedReferenceMode === 'odometry'
+          ? poseStampedUseOdometryOrientation
+          : undefined
       };
       // Remove legacy maxValue if it exists
       delete updatedConfig.maxValue;
@@ -673,6 +764,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     setField('data');
                   } else if (component?.type === 'dpad' && newMessageType.includes('Joy')) {
                     setField('buttons');
+                  } else if (component?.type === 'joystick' && isPoseStampedMessageType(newMessageType)) {
+                    setField('pose');
+                    setPoseStampedAxes(['position.x', 'position.y']);
                   }
                 }}
                 className="setting-select"
@@ -998,12 +1092,72 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 />
               </div>
 
-              {/* Only show axis configuration for Joy and Twist message types */}
+              {/* Only show axis configuration for Joy, Twist, and PoseStamped message types */}
               {isAxisConfigurationEnabled(messageType) && (
                 <div className="setting-group">
                   <label>Axis Configuration:</label>
                   <div className="axis-config">
-                    {isTwistMessageType(messageType) ? (
+                    {isPoseStampedAxisConfigurationEnabled(messageType) ? (
+                      <>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={usePoseStampedCustomAxes}
+                            onChange={(e) => setUsePoseStampedCustomAxes(e.target.checked)}
+                          />
+                          Use custom pose mapping
+                        </label>
+
+                        {!usePoseStampedCustomAxes && (
+                          <div className="axis-selection">
+                            <label className="radio-label">
+                              <input
+                                type="radio"
+                                value="position.x,position.y"
+                                checked={poseStampedAxes.join(',') === 'position.x,position.y'}
+                                onChange={() => setPoseStampedAxes(['position.x', 'position.y'])}
+                              />
+                              Position X and Y
+                            </label>
+                            <label className="radio-label">
+                              <input
+                                type="radio"
+                                value="position.y,position.z"
+                                checked={poseStampedAxes.join(',') === 'position.y,position.z'}
+                                onChange={() => setPoseStampedAxes(['position.y', 'position.z'])}
+                              />
+                              Position Y and Z
+                            </label>
+                            <label className="radio-label">
+                              <input
+                                type="radio"
+                                value="position.x,position.z"
+                                checked={poseStampedAxes.join(',') === 'position.x,position.z'}
+                                onChange={() => setPoseStampedAxes(['position.x', 'position.z'])}
+                              />
+                              Position X and Z
+                            </label>
+                          </div>
+                        )}
+
+                        {usePoseStampedCustomAxes && (
+                          <div className="custom-axes">
+                            <label htmlFor="pose-stamped-custom-axes-input">Custom Pose Axes (comma-separated):</label>
+                            <input
+                              id="pose-stamped-custom-axes-input"
+                              type="text"
+                              value={poseStampedAxes.join(', ')}
+                              onChange={(e) => setPoseStampedAxes(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                              placeholder="position.x, position.y"
+                              className="setting-input"
+                            />
+                            <small className="axis-help-text">
+                              Available: position.x, position.y, position.z
+                            </small>
+                          </div>
+                        )}
+                      </>
+                    ) : isTwistMessageType(messageType) ? (
                       /* Twist message type axis configuration */
                       <>
                         <label className="checkbox-label">
@@ -1168,11 +1322,133 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 </div>
               )}
 
+              {isPoseStampedMessageType(messageType) && (
+                <div className="setting-group">
+                  <label>Pose Reference:</label>
+                  <div className="axis-config">
+                    <div className="setting-group">
+                      <label htmlFor="pose-stamped-frame-id">Output Frame ID:</label>
+                      <input
+                        id="pose-stamped-frame-id"
+                        type="text"
+                        value={poseStampedFrameId}
+                        onChange={(e) => setPoseStampedFrameId(e.target.value)}
+                        placeholder="map"
+                        className="setting-input"
+                      />
+                      {poseStampedReferenceMode === 'odometry' && (
+                        <small className="axis-help-text">
+                          Leave blank to publish in the latest odometry frame.
+                        </small>
+                      )}
+                    </div>
+
+                    <div className="axis-selection">
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          value="frame"
+                          checked={poseStampedReferenceMode === 'frame'}
+                          onChange={() => {
+                            setPoseStampedReferenceMode('frame');
+                            if (!poseStampedFrameId.trim()) {
+                              setPoseStampedFrameId('map');
+                            }
+                          }}
+                        />
+                        Publish joystick pose in this frame
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          value="odometry"
+                          checked={poseStampedReferenceMode === 'odometry'}
+                          onChange={() => {
+                            setPoseStampedReferenceMode('odometry');
+                            if (poseStampedFrameId === 'map') {
+                              setPoseStampedFrameId('');
+                            }
+                          }}
+                        />
+                        Add joystick offset to odometry pose
+                      </label>
+                    </div>
+
+                    {poseStampedReferenceMode === 'odometry' && (
+                      <>
+                        <div className="setting-group">
+                          <label htmlFor="pose-stamped-odom-topic">Odometry Topic:</label>
+                          <div className="topic-input-group">
+                            <select
+                              id="pose-stamped-odom-topic"
+                              value={poseStampedOdometryTopic}
+                              onChange={(e) => {
+                                const nextTopic = e.target.value;
+                                setPoseStampedOdometryTopic(nextTopic);
+                                const selectedTopic = odometryTopics.find(item => item.name === nextTopic);
+                                if (selectedTopic?.type) {
+                                  setPoseStampedOdometryMessageType(selectedTopic.type);
+                                }
+                              }}
+                              className="setting-select topic-select"
+                              disabled={isLoadingTopics}
+                            >
+                              <option value="">
+                                {isLoadingTopics ? 'Loading topics...' : 'Select odometry topic...'}
+                              </option>
+                              {odometryTopics.map(topicInfo => (
+                                <option key={topicInfo.name} value={topicInfo.name}>
+                                  {topicInfo.name} ({topicInfo.type})
+                                </option>
+                              ))}
+                              {odometryTopics.length === 0 && (
+                                <option disabled>No odometry topics found</option>
+                              )}
+                            </select>
+                            <span className="topic-input-separator">or</span>
+                            <input
+                              type="text"
+                              value={poseStampedOdometryTopic}
+                              onChange={(e) => setPoseStampedOdometryTopic(e.target.value)}
+                              placeholder="/odom"
+                              className="setting-input topic-input"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="setting-group">
+                          <label htmlFor="pose-stamped-odom-message-type">Odometry Message Type:</label>
+                          <select
+                            id="pose-stamped-odom-message-type"
+                            value={poseStampedOdometryMessageType}
+                            onChange={(e) => setPoseStampedOdometryMessageType(e.target.value)}
+                            className="setting-select"
+                          >
+                            {ODOMETRY_MESSAGE_TYPES.map(type => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={poseStampedUseOdometryOrientation}
+                            onChange={(e) => setPoseStampedUseOdometryOrientation(e.target.checked)}
+                          />
+                          Use odometry orientation
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Show message when axis configuration is disabled */}
               {!isAxisConfigurationEnabled(messageType) && messageType && (
                 <div className="setting-group">
                   <div className="axis-config-disabled">
-                    <p>Axis configuration is only available for Joy and Twist message types.</p>
+                    <p>Axis configuration is only available for Joy, Twist, and PoseStamped message types.</p>
                     <p>Current message type <strong>{messageType}</strong> uses default single-value mapping.</p>
                   </div>
                 </div>
