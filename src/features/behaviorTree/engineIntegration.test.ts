@@ -33,6 +33,20 @@ const sequenceYaml = `steps:
       seconds: 0.5
 `;
 
+const duplicateMoveYaml = `name: duplicate_moves
+backend: py_trees
+root:
+  sequence:
+    name: Sequence
+    children:
+      - move_relative:
+          name: Move Relative
+          up: 0.05
+      - move_relative:
+          name: Move Relative
+          up: -0.05
+`;
+
 describe('behavior tree engine integration', () => {
   it('imports manipulator py_trees YAML into editable nodes', () => {
     const tree = importTreeFromYaml(demoYaml);
@@ -87,6 +101,14 @@ describe('behavior tree engine integration', () => {
     expect(xml).toContain('<MoveRelative name="lift" up="0.05" />');
   });
 
+  it('exports duplicate sibling action nodes with unique runtime names', () => {
+    const tree = importTreeFromYaml(duplicateMoveYaml);
+    const yaml = exportTreeAsYaml(tree);
+
+    expect(yaml).toContain('name: move_relative_node_1');
+    expect(yaml).toContain('name: move_relative_node_2');
+  });
+
   it('maps runtime JSON status messages onto graph nodes', () => {
     const tree = importTreeFromYaml(demoYaml);
     const statuses = parseRuntimeStatusMessage(
@@ -127,6 +149,26 @@ describe('behavior tree engine integration', () => {
             'Imported Behavior Tree': 'RUNNING',
             'Imported Behavior Tree/1_move_relative': 'SUCCESS',
             'Imported Behavior Tree/2_wait': 'RUNNING',
+          },
+        }),
+      },
+      tree.nodes
+    );
+
+    expect(statuses.get('node-0')).toBe(ExecutionStatus.Running);
+    expect(statuses.get('node-1')).toBe(ExecutionStatus.Success);
+    expect(statuses.get('node-2')).toBe(ExecutionStatus.Running);
+  });
+
+  it('maps duplicate exported runtime names back onto separate graph nodes', () => {
+    const tree = importTreeFromYaml(duplicateMoveYaml);
+    const statuses = parseRuntimeStatusMessage(
+      {
+        data: JSON.stringify({
+          nodes: {
+            Sequence: 'RUNNING',
+            'Sequence/move_relative_node_1': 'SUCCESS',
+            'Sequence/move_relative_node_2': 'RUNNING',
           },
         }),
       },

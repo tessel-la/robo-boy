@@ -91,9 +91,8 @@ describe('BehaviorTreePanel', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Behavior tree engine'), {
-      target: { value: 'py_trees' },
-    });
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Use py_trees engine' }));
     expect(await screen.findByDisplayValue('arm_1')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Execute tree'));
@@ -122,9 +121,8 @@ describe('BehaviorTreePanel', () => {
   it('does not enter external execution mode when ROS is offline', async () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
 
-    fireEvent.change(screen.getByLabelText('Behavior tree engine'), {
-      target: { value: 'py_trees' },
-    });
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Use py_trees engine' }));
     fireEvent.click(screen.getByTitle('Execute tree'));
 
     expect(await screen.findByText('Runtime offline')).toBeInTheDocument();

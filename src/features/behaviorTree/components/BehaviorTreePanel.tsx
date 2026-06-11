@@ -122,7 +122,7 @@ interface EnginePanelProps {
   constraints: string[];
   validationErrors: string[];
   selectedRuntimeNodeId?: string;
-  lastRuntimeMessage: string;
+  embedded?: boolean;
   onConfigChange: (config: BehaviorTreeEngineConfig) => void;
   onSelectRuntimeNode: (node: BehaviorTreeRuntimeNode) => void;
   onExportYaml: () => void;
@@ -167,6 +167,31 @@ const runtimeNamespaceFromTopic = (topic: string): string | null => {
   return match?.[1] ?? null;
 };
 
+const runtimeNodeLookupKeys = (node: BehaviorTreeRuntimeNode): string[] => {
+  const pathTail = node.path?.split('/').filter(Boolean).pop();
+  return [
+    node.id,
+    node.path,
+    pathTail,
+    node.name,
+    node.treeId && node.name ? `${node.treeId}/${node.name}` : undefined,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+};
+
+const runtimeNodeStatusFromMap = (
+  node: BehaviorTreeRuntimeNode,
+  statuses: Map<string, ExecutionStatus>
+): ExecutionStatus | undefined => {
+  const normalizedStatuses = new Map(
+    Array.from(statuses.entries()).map(([key, status]) => [key.toLowerCase(), status])
+  );
+  return runtimeNodeLookupKeys(node)
+    .map((key) => normalizedStatuses.get(key))
+    .find((status): status is ExecutionStatus => Boolean(status));
+};
+
 const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
   config,
   isConnected,
@@ -175,7 +200,7 @@ const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
   constraints,
   validationErrors,
   selectedRuntimeNodeId,
-  lastRuntimeMessage,
+  embedded = false,
   onConfigChange,
   onSelectRuntimeNode,
   onExportYaml,
@@ -202,22 +227,23 @@ const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
   };
 
   return (
-    <div className="bt-engine-panel" data-testid="bt-engine-panel">
+    <div className={`bt-engine-panel${embedded ? ' embedded' : ''}`} data-testid="bt-engine-panel">
       <div className="bt-engine-row">
-        <label className="bt-engine-field">
-          <span>Engine</span>
-          <select
-            value={config.engine}
-            onChange={(event) => updateConfig({ engine: event.target.value as BehaviorTreeEngine })}
-            aria-label="Behavior tree engine"
-          >
-            {Object.values(BehaviorTreeEngine).map((engine) => (
-              <option key={engine} value={engine}>
-                {ENGINE_LABELS[engine]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="bt-engine-switch" role="radiogroup" aria-label="Behavior tree engine">
+          {Object.values(BehaviorTreeEngine).map((engine) => (
+            <button
+              key={engine}
+              type="button"
+              className={`bt-engine-switch-option${config.engine === engine ? ' active' : ''}`}
+              role="radio"
+              aria-checked={config.engine === engine}
+              aria-label={`Use ${ENGINE_LABELS[engine]} engine`}
+              onClick={() => updateConfig({ engine })}
+            >
+              {ENGINE_LABELS[engine]}
+            </button>
+          ))}
+        </div>
         <div className={`bt-engine-status ${isConnected ? 'connected' : 'offline'}`}>
           <span className="bt-engine-dot" aria-hidden="true" />
           {liveStatus}
@@ -226,7 +252,7 @@ const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
 
       {config.engine !== BehaviorTreeEngine.Local && (
         <>
-          <div className="bt-engine-grid compact">
+          <div className="bt-engine-session">
             <label className="bt-engine-field">
               <span>Namespace</span>
               <input
@@ -236,7 +262,63 @@ const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
                 spellCheck={false}
               />
             </label>
+            <div className="bt-engine-actions">
+              <button type="button" onClick={onPublishSpec} disabled={!isConnected}>
+                Sync
+              </button>
+              <button type="button" onClick={onRunExternal} disabled={!isConnected || validationErrors.length > 0}>
+                Run
+              </button>
+              <button type="button" onClick={onStopExternal} disabled={!isConnected}>
+                Stop
+              </button>
+              <button type="button" onClick={onExportYaml}>
+                YAML
+              </button>
+              <button type="button" onClick={onExportXml}>
+                XML
+              </button>
+            </div>
           </div>
+
+          <details className="bt-runtime-list" aria-label="Published behavior tree nodes" open={!embedded}>
+            <summary className="bt-runtime-list-header">
+              <span>Published nodes</span>
+              <span>{runtimeNodes.length}</span>
+            </summary>
+            {runtimeNodes.length === 0 ? (
+              <div className="bt-runtime-empty">Waiting for a runtime catalog</div>
+            ) : (
+              runtimeNodes.slice(0, 80).map((node) => (
+                <button
+                  key={`${node.source ?? 'runtime'}-${node.id}`}
+                  type="button"
+                  className={`bt-runtime-node${node.id === selectedRuntimeNodeId ? ' selected' : ''}`}
+                  onClick={() => onSelectRuntimeNode(node)}
+                  title={node.path ?? node.name}
+                >
+                  <span className={`bt-runtime-node-status status-${node.status ?? ExecutionStatus.Idle}`} />
+                  <span className="bt-runtime-node-copy">
+                    <span className="bt-runtime-node-name">{node.name}</span>
+                    <span className="bt-runtime-node-meta">
+                      {[node.type, node.treeId, node.source].filter(Boolean).join(' · ') || node.id}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </details>
+
+          {(validationErrors.length > 0 || constraints.length > 0) && (
+            <div className="bt-engine-validation" role={validationErrors.length > 0 ? 'alert' : 'status'}>
+              {validationErrors.slice(0, 4).map((error) => (
+                <div key={error} className="bt-engine-validation-error">{error}</div>
+              ))}
+              {validationErrors.length === 0 && constraints.slice(0, 4).map((constraint) => (
+                <div key={constraint} className="bt-engine-validation-note">{constraint}</div>
+              ))}
+            </div>
+          )}
 
           <details className="bt-engine-details">
             <summary>Runtime topics</summary>
@@ -299,69 +381,6 @@ const EngineIntegrationPanel: React.FC<EnginePanelProps> = ({
               </label>
             </div>
           </details>
-
-          <div className="bt-engine-actions">
-            <button type="button" onClick={onPublishSpec} disabled={!isConnected}>
-              Sync
-            </button>
-            <button type="button" onClick={onRunExternal} disabled={!isConnected || validationErrors.length > 0}>
-              Run
-            </button>
-            <button type="button" onClick={onStopExternal} disabled={!isConnected}>
-              Stop
-            </button>
-            <button type="button" onClick={onExportYaml}>
-              YAML
-            </button>
-            <button type="button" onClick={onExportXml}>
-              XML
-            </button>
-          </div>
-
-          <div className="bt-runtime-list" aria-label="Published behavior tree nodes">
-            <div className="bt-runtime-list-header">
-              <span>Published nodes</span>
-              <span>{runtimeNodes.length}</span>
-            </div>
-            {runtimeNodes.length === 0 ? (
-              <div className="bt-runtime-empty">Waiting for a runtime catalog</div>
-            ) : (
-              runtimeNodes.slice(0, 80).map((node) => (
-                <button
-                  key={`${node.source ?? 'runtime'}-${node.id}`}
-                  type="button"
-                  className={`bt-runtime-node${node.id === selectedRuntimeNodeId ? ' selected' : ''}`}
-                  onClick={() => onSelectRuntimeNode(node)}
-                  title={node.path ?? node.name}
-                >
-                  <span className={`bt-runtime-node-status status-${node.status ?? ExecutionStatus.Idle}`} />
-                  <span className="bt-runtime-node-copy">
-                    <span className="bt-runtime-node-name">{node.name}</span>
-                    <span className="bt-runtime-node-meta">
-                      {[node.type, node.treeId, node.source].filter(Boolean).join(' · ') || node.id}
-                    </span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-
-          {(validationErrors.length > 0 || constraints.length > 0) && (
-            <div className="bt-engine-validation" role={validationErrors.length > 0 ? 'alert' : 'status'}>
-              {validationErrors.slice(0, 4).map((error) => (
-                <div key={error} className="bt-engine-validation-error">{error}</div>
-              ))}
-              {validationErrors.length === 0 && constraints.slice(0, 4).map((constraint) => (
-                <div key={constraint} className="bt-engine-validation-note">{constraint}</div>
-              ))}
-            </div>
-          )}
-
-          {lastRuntimeMessage && (
-            <pre className="bt-engine-message" aria-label="Runtime behavior tree snapshot">
-              {lastRuntimeMessage}
-            </pre>
-          )}
         </>
       )}
     </div>
@@ -581,21 +600,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     runtimeTopicsRef.current = [];
   }, []);
 
-  const mergeRuntimeNodes = useCallback((incomingNodes: BehaviorTreeRuntimeNode[], replace = false) => {
+  const mergeRuntimeNodes = useCallback((
+    incomingNodes: BehaviorTreeRuntimeNode[],
+    replace = false,
+    replaceOnlyWhenEmpty = false
+  ) => {
     if (incomingNodes.length === 0) return;
     setRuntimeNodes((currentNodes) => {
+      if (replaceOnlyWhenEmpty && currentNodes.length > 0) return currentNodes;
       const next = replace ? [] : [...currentNodes];
+      const currentIndexByLookupKey = new Map<string, number>();
+      currentNodes.forEach((node, index) => {
+        runtimeNodeLookupKeys(node).forEach((key) => currentIndexByLookupKey.set(key, index));
+      });
       const indexByKey = new Map(
         next.map((node, index) => [`${node.source ?? 'runtime'}:${node.id}`, index])
       );
       incomingNodes.forEach((node) => {
         const key = `${node.source ?? 'runtime'}:${node.id}`;
+        const matchingCurrentIndex = runtimeNodeLookupKeys(node)
+          .map((lookupKey) => currentIndexByLookupKey.get(lookupKey))
+          .find((index): index is number => index !== undefined);
         const existingIndex = indexByKey.get(key);
+        const existingNode = matchingCurrentIndex !== undefined ? currentNodes[matchingCurrentIndex] : undefined;
         if (existingIndex === undefined) {
           indexByKey.set(key, next.length);
-          next.push(node);
+          next.push({
+            ...existingNode,
+            ...node,
+            status: node.status ?? existingNode?.status,
+          });
         } else {
-          next[existingIndex] = { ...next[existingIndex], ...node };
+          next[existingIndex] = {
+            ...next[existingIndex],
+            ...node,
+            status: node.status ?? next[existingIndex].status ?? existingNode?.status,
+          };
         }
       });
       return next;
@@ -649,9 +689,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     subscribeToStringTopic(engineConfig.statusTopic, (message) => {
       const text = typeof message?.data === 'string' ? message.data : JSON.stringify(message);
       setLastRuntimeMessage(text);
-      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'status'));
       const statuses = parseRuntimeStatusMessage(message, behaviorNodesRef.current);
       if (statuses.size === 0) return;
+      setRuntimeNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const status = runtimeNodeStatusFromMap(node, statuses);
+          return status && status !== node.status ? { ...node, status } : node;
+        })
+      );
       const statusValues = Array.from(statuses.values());
       const hasRunningNode = statusValues.some((status) => status === ExecutionStatus.Running);
       const hasTerminalNode = statusValues.some((status) => (
@@ -686,7 +731,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     subscribeToStringTopic(engineConfig.treeTopic, (message) => {
       const text = typeof message?.data === 'string' ? message.data : JSON.stringify(message);
       setLastRuntimeMessage(text);
-      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'tree'), true);
+      mergeRuntimeNodes(parseRuntimeNodeCatalogMessage(message, 'tree'), true, true);
     });
 
     return clearRuntimeSubscriptions;
@@ -1431,6 +1476,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (!isConnected) return 'ROS offline';
     return lastRuntimeMessage ? 'Live runtime' : 'Listening';
   }, [engineConfig.engine, isConnected, lastRuntimeMessage]);
+  const handleCycleBackend = useCallback(() => {
+    const engines = [
+      BehaviorTreeEngine.Local,
+      BehaviorTreeEngine.PyTrees,
+      BehaviorTreeEngine.BehaviorTreeCpp,
+    ];
+    const currentIndex = engines.indexOf(engineConfig.engine);
+    const nextEngine = engines[(currentIndex + 1) % engines.length];
+    const nextConfig: BehaviorTreeEngineConfig = nextEngine === BehaviorTreeEngine.Local
+      ? { ...DEFAULT_ENGINE_CONFIGS[nextEngine] }
+      : {
+          ...DEFAULT_ENGINE_CONFIGS[nextEngine],
+          namespace: engineConfig.namespace,
+          ...runtimeTopicConfig(engineConfig.namespace),
+        };
+    handleEngineConfigChange(nextConfig);
+  }, [engineConfig.engine, engineConfig.namespace, handleEngineConfigChange]);
   const handleMoveOrderedChild = useCallback(
     (edgeId: string, direction: -1 | 1) => {
       if (!orderingParent) return;
@@ -1451,6 +1513,28 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         isExecuting={isExecuting}
         isPaletteCollapsed={isPaletteCollapsed}
         selectedNodeCount={selectedNodes.length}
+        backendLabel={ENGINE_LABELS[engineConfig.engine]}
+        backendStatus={engineLiveStatus}
+        backendConnected={engineConfig.engine === BehaviorTreeEngine.Local || isConnected}
+        engineSettings={(
+          <EngineIntegrationPanel
+            config={engineConfig}
+            isConnected={isConnected}
+            liveStatus={engineLiveStatus}
+            runtimeNodes={runtimeNodes}
+            constraints={engineConstraints}
+            validationErrors={validationErrors}
+            selectedRuntimeNodeId={selectedRuntimeNodeId}
+            embedded
+            onConfigChange={handleEngineConfigChange}
+            onSelectRuntimeNode={handleSelectRuntimeNode}
+            onExportYaml={handleExportYaml}
+            onExportXml={handleExportXml}
+            onPublishSpec={handlePublishSpec}
+            onRunExternal={handleRunExternal}
+            onStopExternal={handleStopExternal}
+          />
+        )}
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
@@ -1458,6 +1542,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onStop={handleStop}
         onExport={handleExport}
         onTogglePalette={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
+        onCycleBackend={handleCycleBackend}
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
         onRename={handleRename}
@@ -1520,23 +1605,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         />
 
         <div className="bt-canvas" ref={reactFlowWrapper} data-testid="bt-canvas">
-          <EngineIntegrationPanel
-            config={engineConfig}
-            isConnected={isConnected}
-            liveStatus={engineLiveStatus}
-            runtimeNodes={runtimeNodes}
-            constraints={engineConstraints}
-            validationErrors={validationErrors}
-            selectedRuntimeNodeId={selectedRuntimeNodeId}
-            lastRuntimeMessage={lastRuntimeMessage}
-            onConfigChange={handleEngineConfigChange}
-            onSelectRuntimeNode={handleSelectRuntimeNode}
-            onExportYaml={handleExportYaml}
-            onExportXml={handleExportXml}
-            onPublishSpec={handlePublishSpec}
-            onRunExternal={handleRunExternal}
-            onStopExternal={handleStopExternal}
-          />
           <ReactFlow
             nodes={nodes}
             edges={displayedEdges}

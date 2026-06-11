@@ -144,6 +144,17 @@ const getNodeKind = (node: BehaviorTreeNode): string => {
   return 'action';
 };
 
+const runtimeNameBaseForNode = (node: BehaviorTreeNode): string =>
+  toSnakeCase(node.data.label || getNodeKind(node) || node.id) || toSnakeCase(node.id) || 'node';
+
+const runtimeIdSuffixForNode = (node: BehaviorTreeNode): string => toSnakeCase(node.id) || node.id;
+
+const exportedRuntimeNameForNode = (node: BehaviorTreeNode, needsUniqueName: boolean): string => {
+  const label = node.data.label || node.id;
+  if (!needsUniqueName) return label;
+  return `${runtimeNameBaseForNode(node)}_${runtimeIdSuffixForNode(node)}`;
+};
+
 const cloneParams = (value?: Record<string, any>): Record<string, any> =>
   value ? JSON.parse(JSON.stringify(value)) : {};
 
@@ -185,16 +196,23 @@ const treeToSpec = (tree: BehaviorTree): BehaviorNodeSpec | null => {
   const root = findRootNode(tree.nodes, tree.edges);
   if (!root) return null;
 
-  const visit = (node: BehaviorTreeNode): BehaviorNodeSpec => {
+  const visit = (node: BehaviorTreeNode, needsUniqueName = false): BehaviorNodeSpec => {
     const kind = getNodeKind(node);
-    const children = sortEdgesForParent(tree.edges, node.id)
+    const childNodes = sortEdgesForParent(tree.edges, node.id)
       .map((edge) => nodesById.get(edge.target))
-      .filter((child): child is BehaviorTreeNode => Boolean(child))
-      .map(visit);
+      .filter((child): child is BehaviorTreeNode => Boolean(child));
+    const childNameCounts = childNodes.reduce((counts, child) => {
+      const key = runtimeNameBaseForNode(child);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>());
+    const children = childNodes.map((child) =>
+      visit(child, (childNameCounts.get(runtimeNameBaseForNode(child)) ?? 0) > 1)
+    );
 
     return {
       kind,
-      name: node.data.label || node.id,
+      name: exportedRuntimeNameForNode(node, needsUniqueName),
       params: getNodeParams(node),
       children,
     };
@@ -607,7 +625,7 @@ const parseJsonStatus = (message: any): Map<string, ExecutionStatus> => {
 
 const runtimeStatusKeysForNode = (node: BehaviorTreeNode): string[] => {
   const data = node.data;
-  return [
+  const directKeys = [
     node.id,
     data.label,
     data.externalKind,
@@ -617,6 +635,13 @@ const runtimeStatusKeysForNode = (node: BehaviorTreeNode): string[] => {
   ]
     .filter((value): value is string => Boolean(value))
     .map((value) => value.toLowerCase());
+  const exportKeys = [
+    runtimeNameBaseForNode(node),
+    `${runtimeNameBaseForNode(node)}_${runtimeIdSuffixForNode(node)}`,
+    `${toSnakeCase(data.externalKind ?? '')}_${runtimeIdSuffixForNode(node)}`,
+  ].filter((value) => value && !value.startsWith('_'));
+
+  return Array.from(new Set([...directKeys, ...exportKeys.map((value) => value.toLowerCase())]));
 };
 
 const mapRuntimeStatusesToGraphNodes = (
@@ -664,16 +689,11 @@ export const parseRuntimeStatusMessage = (
     const statuses = new Map<string, ExecutionStatus>();
     const lines = trimmed.split(/\r?\n/);
     nodes.forEach((node) => {
-      const names = [
-        node.id,
-        node.data.label,
-        node.data.externalKind,
-        'actionName' in node.data ? node.data.actionName : undefined,
-        'serviceName' in node.data ? node.data.serviceName : undefined,
-        'topicName' in node.data ? node.data.topicName : undefined,
-      ].filter((value): value is string => Boolean(value));
-
-      const line = lines.find((candidate) => names.some((name) => candidate.includes(name)));
+      const names = runtimeStatusKeysForNode(node);
+      const line = lines.find((candidate) => {
+        const normalizedCandidate = candidate.toLowerCase();
+        return names.some((name) => normalizedCandidate.includes(name));
+      });
       if (!line) return;
       const status = normalizeStatus(line);
       if (status) statuses.set(node.id, status);

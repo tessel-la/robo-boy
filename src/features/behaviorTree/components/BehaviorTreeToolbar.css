@@ -92,6 +92,52 @@
   color: #fff;
 }
 
+.bt-backend-pill {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 112px;
+  padding: 0 10px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--text-color, #333333);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bt-backend-pill:active {
+  transform: scale(0.97);
+}
+
+.bt-backend-pill.connected {
+  color: var(--success-color, #4caf50);
+}
+
+.bt-backend-pill.offline {
+  color: var(--text-color-secondary, #777777);
+}
+
+.bt-backend-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bt-backend-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Floating actions — top-right ─────────────────────────────────────────── */
 
 .bt-float-actions {
@@ -190,20 +236,42 @@
 /* Popover card — springs from button origin */
 .bt-menu-panel {
   position: relative;
-  width: 280px;
+  width: 420px;
   max-width: calc(100vw - 24px);
   /* 100% here resolves against overlay height (position:absolute inset:0 = definite) */
   max-height: calc(100% - 80px);
-  display: flex;
-  flex-direction: column;
+  display: block;
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   animation: bt-popover-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: top left;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary-color, #4285f4) 45%, var(--text-color-secondary, #888888)) transparent;
+}
+
+.bt-menu-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bt-menu-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bt-menu-panel::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 36%, var(--text-color-secondary, #888888));
+  border: 2px solid var(--card-bg, #ffffff);
+  border-radius: 999px;
+}
+
+.bt-menu-panel::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 58%, var(--text-color-secondary, #888888));
 }
 
 @keyframes bt-popover-in {
@@ -255,23 +323,51 @@
   flex-shrink: 0;
 }
 
-/* Tree section — takes remaining space in panel, tree list scrolls inside */
+.bt-menu-backend-section {
+  padding-bottom: 12px;
+}
+
+.bt-menu-summary {
+  margin-bottom: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.bt-menu-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bt-menu-summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--text-color-secondary, #888888);
+  font-size: 10px;
+}
+
+.bt-menu-backend-section:not([open]),
+.bt-menu-tree-section:not([open]) {
+  padding-bottom: 14px;
+}
+
+.bt-menu-backend-section:not([open]) .bt-menu-summary,
+.bt-menu-tree-section:not([open]) .bt-menu-summary {
+  margin-bottom: 0;
+}
+
+.bt-menu-backend-section:not([open]) .bt-menu-summary::after,
+.bt-menu-tree-section:not([open]) .bt-menu-summary::after {
+  content: '▸';
+}
+
 .bt-menu-tree-section {
-  flex: 1;
-  min-height: 78px;
-  display: flex;
-  flex-direction: column;
-  padding: 10px 0 0;
+  flex: none;
+  min-height: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
 }
 
 .bt-menu-engine-tree-section {
   border-top: 1px solid var(--border-color, #e0e0e0);
-}
-
-.bt-menu-tree-section > .bt-menu-label {
-  flex-shrink: 0;
-  padding: 0 16px 6px;
-  margin-bottom: 0;
 }
 
 .bt-menu-label {
@@ -363,12 +459,8 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: visible;
 }
 
 .bt-menu-empty {
@@ -383,6 +475,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0 -16px;
   padding: 10px 16px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color, #f0f0f0);
@@ -570,7 +663,12 @@
     max-width: 100%;
     height: calc(100% - 32px);
     max-height: calc(100% - 32px);
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     transform-origin: center;
+    -webkit-overflow-scrolling: touch;
   }
 
   .bt-menu-section {
@@ -609,15 +707,13 @@
   }
 
   .bt-menu-tree-section {
+    flex: none;
     min-height: 0;
-    padding-top: 8px;
-  }
-
-  .bt-menu-tree-section > .bt-menu-label {
-    padding: 0 12px 6px;
+    padding: 10px 12px;
   }
 
   .bt-menu-tree-row {
+    margin: 0 -12px;
     padding: 9px 12px;
   }
 
@@ -628,6 +724,11 @@
 
 @media (max-width: 480px) {
   .bt-float-name { max-width: 80px; font-size: 12px; }
+
+  .bt-backend-pill {
+    max-width: 74px;
+    padding: 0 8px;
+  }
 
   .bt-float-btn-label { display: none; }
 

@@ -13,6 +13,10 @@ interface BehaviorTreeToolbarProps {
   isExecuting: boolean;
   isPaletteCollapsed: boolean;
   selectedNodeCount: number;
+  backendLabel: string;
+  backendStatus: string;
+  backendConnected: boolean;
+  engineSettings?: React.ReactNode;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -20,6 +24,7 @@ interface BehaviorTreeToolbarProps {
   onStop: () => void;
   onExport: () => void;
   onTogglePalette: () => void;
+  onCycleBackend: () => void;
   onDeleteSelected: () => void;
   onDuplicateSelected: () => void;
   onRename: (name: string) => void;
@@ -32,6 +37,10 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   isExecuting,
   isPaletteCollapsed,
   selectedNodeCount,
+  backendLabel,
+  backendStatus,
+  backendConnected,
+  engineSettings,
   onSave,
   onLoad,
   onNew,
@@ -39,6 +48,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onStop,
   onExport,
   onTogglePalette,
+  onCycleBackend,
   onDeleteSelected,
   onDuplicateSelected,
   onRename,
@@ -161,6 +171,18 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <line x1="15.6" y1="7.2" x2="21.2" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
           </svg>
         </button>
+
+        <button
+          type="button"
+          className={`bt-backend-pill${backendConnected ? ' connected' : ' offline'}`}
+          onClick={onCycleBackend}
+          title={`Backend: ${backendLabel} · ${backendStatus}`}
+          aria-label={`Switch backend, currently ${backendLabel}`}
+          data-testid="bt-backend-toggle"
+        >
+          <span className="bt-backend-dot" aria-hidden="true" />
+          <span className="bt-backend-label">{backendLabel}</span>
+        </button>
       </div>
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
@@ -277,14 +299,20 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               </div>
             </div>
 
-            {/* Saved trees */}
-            <div className="bt-menu-tree-section">
-              <label className="bt-menu-label">
+            {engineSettings && (
+              <details className="bt-menu-section bt-menu-backend-section" open>
+                <summary className="bt-menu-label bt-menu-summary">Backend</summary>
+                {engineSettings}
+              </details>
+            )}
+
+            <details className="bt-menu-tree-section" open>
+              <summary className="bt-menu-label bt-menu-summary">
                 Saved Trees
                 {savedTrees.length > 0 && (
                   <span className="bt-menu-count">{savedTrees.length}</span>
                 )}
-              </label>
+              </summary>
               <div className="bt-menu-tree-list">
                 {savedTrees.length === 0 ? (
                   <div className="bt-menu-empty">No saved trees yet</div>
@@ -316,14 +344,14 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                   ))
                 )}
               </div>
-            </div>
+            </details>
 
             {engineTrees.length > 0 && (
-              <div className="bt-menu-tree-section bt-menu-engine-tree-section">
-                <label className="bt-menu-label">
+              <details className="bt-menu-tree-section bt-menu-engine-tree-section">
+                <summary className="bt-menu-label bt-menu-summary">
                   Engine Trees
                   <span className="bt-menu-count">{engineTrees.length}</span>
-                </label>
+                </summary>
                 <div className="bt-menu-tree-list">
                   {engineTrees.map((tree) => (
                     <div
@@ -344,7 +372,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                     </div>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
 
             <input

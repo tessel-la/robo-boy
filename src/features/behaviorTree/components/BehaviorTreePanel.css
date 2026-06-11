@@ -26,23 +26,79 @@
   top: 58px;
   left: 12px;
   z-index: 9;
-  width: min(360px, calc(100% - 24px));
+  width: min(420px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 8px;
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.12);
   color: var(--text-color, #333333);
+}
+
+.bt-engine-panel.embedded {
+  position: static;
+  width: 100%;
+  padding: 0;
+  transform: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .bt-engine-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+}
+
+.bt-engine-switch {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+}
+
+.bt-engine-switch-option {
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, #666666);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.bt-engine-switch-option.active {
+  background: var(--card-bg, #ffffff);
+  color: var(--primary-color, #4285f4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+}
+
+.bt-engine-switch-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color, #4285f4) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.bt-engine-session {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: end;
 }
 
 .bt-engine-grid {
@@ -74,6 +130,14 @@
   padding: 0 8px 8px;
 }
 
+.bt-engine-panel.embedded .bt-engine-details {
+  background: transparent;
+}
+
+.bt-engine-panel.embedded .bt-runtime-list {
+  max-height: 132px;
+}
+
 .bt-engine-field {
   min-width: 0;
   display: flex;
@@ -94,7 +158,7 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  height: 30px;
+  height: 34px;
   padding: 0 8px;
   background: var(--background-color, #f5f5f5);
   border: 1px solid var(--border-color, #e0e0e0);
@@ -112,11 +176,11 @@
 }
 
 .bt-engine-status {
-  height: 30px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: 999px;
   background: var(--background-color, #f5f5f5);
   color: var(--text-color-secondary, #666666);
@@ -143,12 +207,12 @@
 .bt-engine-actions {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
+  gap: 6px;
 }
 
 .bt-engine-actions button {
-  height: 30px;
-  padding: 0 8px;
+  height: 34px;
+  padding: 0 6px;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 6px;
   background: var(--background-color, #f5f5f5);
@@ -175,11 +239,27 @@
 .bt-runtime-list {
   display: flex;
   flex-direction: column;
-  max-height: 180px;
+  max-height: 170px;
   overflow-y: auto;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 6px;
   background: var(--background-color, #f5f5f5);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary-color, #4285f4) 45%, var(--text-color-secondary, #888888)) transparent;
+}
+
+.bt-runtime-list::-webkit-scrollbar {
+  width: 7px;
+}
+
+.bt-runtime-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bt-runtime-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 36%, var(--text-color-secondary, #888888));
+  border: 2px solid var(--background-color, #f5f5f5);
+  border-radius: 999px;
 }
 
 .bt-runtime-list-header {
@@ -190,9 +270,29 @@
   padding: 7px 8px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
   color: var(--text-color-secondary, #666666);
+  cursor: pointer;
   font-size: 10px;
   font-weight: 700;
+  list-style: none;
   text-transform: uppercase;
+}
+
+.bt-runtime-list-header::-webkit-details-marker {
+  display: none;
+}
+
+.bt-runtime-list-header::after {
+  content: '▾';
+  color: var(--text-color-secondary, #777777);
+  font-size: 10px;
+}
+
+.bt-runtime-list:not([open]) .bt-runtime-list-header {
+  border-bottom: none;
+}
+
+.bt-runtime-list:not([open]) .bt-runtime-list-header::after {
+  content: '▸';
 }
 
 .bt-runtime-empty {
@@ -266,20 +366,6 @@
 .bt-runtime-node-meta {
   color: var(--text-color-secondary, #666666);
   font-size: 10px;
-}
-
-.bt-engine-message {
-  max-height: 116px;
-  margin: 0;
-  padding: 8px;
-  overflow: auto;
-  background: var(--background-color, #f5f5f5);
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 6px;
-  color: var(--text-color-secondary, #666666);
-  font-size: 11px;
-  line-height: 1.35;
-  white-space: pre-wrap;
 }
 
 .bt-engine-validation {
@@ -752,26 +838,84 @@
   }
 
   .bt-engine-panel {
-    top: 62px;
-    width: min(360px, calc(100% - 18px));
-    max-height: 34%;
+    top: auto;
+    right: 8px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    left: 8px;
+    width: auto;
+    max-height: min(48%, 380px);
+    padding: 8px;
+    transform: none;
     overflow: auto;
+    border-radius: 14px;
   }
 
   .bt-engine-grid {
     grid-template-columns: 1fr;
   }
 
+  .bt-engine-session {
+    grid-template-columns: 1fr;
+  }
+
   .bt-engine-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .bt-engine-row {
-    align-items: stretch;
+    align-items: center;
   }
 
   .bt-engine-status {
+    height: 36px;
     justify-content: center;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .bt-engine-switch-option,
+  .bt-engine-actions button,
+  .bt-engine-field input {
+    height: 38px;
+  }
+
+  .bt-engine-switch-option {
+    padding: 0 5px;
+    font-size: 11px;
+  }
+
+  .bt-engine-actions button {
+    padding: 0 4px;
+    font-size: 11px;
+  }
+
+  .bt-runtime-list {
+    max-height: 120px;
+  }
+
+  .bt-engine-panel.embedded {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .bt-engine-panel.embedded .bt-engine-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .bt-engine-panel.embedded .bt-engine-status {
+    width: fit-content;
+    height: 30px;
+    justify-content: flex-start;
+  }
+
+  .bt-engine-panel.embedded .bt-engine-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bt-engine-panel.embedded .bt-runtime-list {
+    max-height: 128px;
   }
 
   .bt-order-button {
