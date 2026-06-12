@@ -3,6 +3,7 @@ import type { Ros } from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import RangeSlider from './RangeSlider';
 import ValueControl from './ValueControl';
+import { getDynamicRangeStep, roundToStepPrecision } from '../rangeUtils';
 import {
   CAMERA_MESSAGE_TYPES,
   fetchNumericFields,
@@ -135,7 +136,7 @@ const getMessageTypeConfig = (type: string) => {
 const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
   'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped', 'geometry_msgs/PoseStamped', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
   'button': ['std_msgs/Bool', 'std_msgs/Int32', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped'],
-  'dpad': ['sensor_msgs/Joy'], // D-pad only supports Joy
+  'dpad': ['sensor_msgs/Joy', 'geometry_msgs/PoseStamped'],
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
   'slider': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
   'camera': ['sensor_msgs/Image', 'sensor_msgs/CompressedImage'],
@@ -220,7 +221,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [poseStampedAxes, setPoseStampedAxes] = useState<string[]>(['position.x', 'position.y']);
   const [usePoseStampedCustomAxes, setUsePoseStampedCustomAxes] = useState(false);
   const [poseStampedFrameId, setPoseStampedFrameId] = useState('map');
-  const [poseStampedReferenceMode, setPoseStampedReferenceMode] = useState<'frame' | 'odometry'>('frame');
+  const [poseStampedReferenceMode, setPoseStampedReferenceMode] = useState<'frame' | 'tf' | 'odometry'>('frame');
+  const [poseStampedReferenceFrameId, setPoseStampedReferenceFrameId] = useState('');
   const [poseStampedOdometryTopic, setPoseStampedOdometryTopic] = useState('/odom');
   const [poseStampedOdometryMessageType, setPoseStampedOdometryMessageType] = useState('nav_msgs/Odometry');
   const [poseStampedUseOdometryOrientation, setPoseStampedUseOdometryOrientation] = useState(true);
@@ -285,14 +287,6 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       }
     }
   }, [topic, messageType, availableTopics]);
-
-  const getPrecision = (num: number) => {
-    const numString = String(num);
-    if (numString.includes('.')) {
-      return numString.split('.')[1].length;
-    }
-    return 0;
-  };
 
   // Fetch available topics when modal opens
   useEffect(() => {
@@ -382,7 +376,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       if (action) {
         if (component.type === 'dpad') {
           setMessageType(action.messageType || 'sensor_msgs/Joy');
-          setField('buttons');
+          setField(isPoseStampedMessageType(action.messageType || '') ? 'pose' : 'buttons');
         } else if (component.type === 'joystick' && isPoseStampedMessageType(action.messageType || '')) {
           setMessageType(action.messageType);
           setField('pose');
@@ -407,6 +401,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setUsePoseStampedCustomAxes(false);
       setPoseStampedFrameId('map');
       setPoseStampedReferenceMode('frame');
+      setPoseStampedReferenceFrameId('');
       setPoseStampedOdometryTopic('/odom');
       setPoseStampedOdometryMessageType('nav_msgs/Odometry');
       setPoseStampedUseOdometryOrientation(true);
@@ -419,19 +414,35 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
       // Initialize component-specific settings
       if (component.config) {
+        if ((component.type === 'joystick' || component.type === 'dpad')
+          && isPoseStampedMessageType(action?.messageType || '')) {
+          const axes = component.config.axes || ['position.x', 'position.y'];
+          setPoseStampedAxes(axes);
+          const standardPoseCombos = [
+            ['position.x', 'position.y'],
+            ['position.y', 'position.z'],
+            ['position.x', 'position.z']
+          ];
+          setUsePoseStampedCustomAxes(!standardPoseCombos
+            .some(combo => combo.length === axes.length && combo.every((axis, index) => axis === axes[index])));
+          setPoseStampedFrameId(component.config.poseStampedFrameId || 'map');
+          setPoseStampedReferenceMode(component.config.poseStampedReferenceMode || 'frame');
+          setPoseStampedReferenceFrameId(component.config.poseStampedReferenceFrameId || '');
+          setPoseStampedOdometryTopic(component.config.poseStampedOdometryTopic || '/odom');
+          setPoseStampedOdometryMessageType(component.config.poseStampedOdometryMessageType || 'nav_msgs/Odometry');
+          setPoseStampedUseOdometryOrientation(component.config.poseStampedUseOdometryOrientation !== false);
+        }
+
         if (component.type === 'joystick') {
           const min = component.config.min ?? -1;
           const max = component.config.max ?? 1;
 
-          const inferredStep = getInferredDataType(action?.messageType || 'sensor_msgs/Joy', action?.field || 'axes') === 'float' ? 0.1 : 1;
-          const minPrecision = getPrecision(inferredStep);
-
           setValueRange({
-            min: parseFloat(min.toFixed(minPrecision)),
-            max: parseFloat(max.toFixed(minPrecision))
+            min,
+            max
           });
-          setSliderMin(parseFloat((component.config.sliderMin ?? min).toFixed(minPrecision)));
-          setSliderMax(parseFloat((component.config.sliderMax ?? max).toFixed(minPrecision)));
+          setSliderMin(component.config.sliderMin ?? min);
+          setSliderMax(component.config.sliderMax ?? max);
 
           if (component.config.axes) {
             const axes = component.config.axes;
@@ -537,6 +548,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   }, [component?.type, isOpen, messageType, plotFieldPaths, ros]);
 
   const inferredDataType = useMemo(() => getInferredDataType(messageType, field), [messageType, field]);
+  const rangeStep = useMemo(
+    () => getDynamicRangeStep(sliderMin, sliderMax, inferredDataType === 'int'),
+    [inferredDataType, sliderMax, sliderMin]
+  );
 
   // Get available topics filtered by message type
   const filteredTopics = useMemo(() => {
@@ -607,9 +622,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     }
 
     // Additional validation for dpad components
-    if (component.type === 'dpad') {
+    if (component.type === 'dpad' && !isPoseStampedMessageType(messageType)) {
       if (!['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'].includes(messageType)) {
-        setErrorMessage('D-Pad components can only use Joy message types (sensor_msgs/Joy).');
+        setErrorMessage('D-Pad components support Joy and PoseStamped message types.');
         return;
       }
       if (field !== 'buttons') {
@@ -623,9 +638,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return;
     }
 
-    if (component.type === 'joystick' && isPoseStampedMessageType(messageType)) {
+    if ((component.type === 'joystick' || component.type === 'dpad')
+      && isPoseStampedMessageType(messageType)) {
       if (poseStampedReferenceMode === 'frame' && !poseStampedFrameId.trim()) {
-        setErrorMessage('PoseStamped joystick output needs a frame ID.');
+        setErrorMessage('PoseStamped output needs an output frame ID.');
+        return;
+      }
+      if (poseStampedReferenceMode === 'tf'
+        && (!poseStampedFrameId.trim() || !poseStampedReferenceFrameId.trim())) {
+        setErrorMessage('PoseStamped TF offset mode needs output and reference frame IDs.');
         return;
       }
       if (poseStampedReferenceMode === 'odometry' && !poseStampedOdometryTopic.trim()) {
@@ -647,7 +668,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     }
 
     const dataType = getInferredDataType(messageType, field);
-    const precision = getPrecision(dataType === 'float' ? 0.1 : 1);
+    const saveRangeStep = getDynamicRangeStep(sliderMin, sliderMax, dataType === 'int');
 
     // Build the updated configuration
     const action: ROSTopicConfig = {
@@ -657,7 +678,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         ? selectedPlotFields[0]
         : component.type === 'heartbeat' && heartbeatMode === 'boolean'
           ? heartbeatFieldPath.trim()
-        : (component.type === 'joystick' && isPoseStampedMessageType(messageType) ? 'pose' : (field || undefined))
+        : ((component.type === 'joystick' || component.type === 'dpad')
+          && isPoseStampedMessageType(messageType) ? 'pose' : (field || undefined))
     };
 
     let updatedConfig = { ...component.config };
@@ -676,15 +698,18 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
       updatedConfig = {
         ...updatedConfig,
-        min: parseFloat(valueRange.min.toFixed(precision)),
-        max: parseFloat(valueRange.max.toFixed(precision)),
-        sliderMin: parseFloat(sliderMin.toFixed(precision)),
-        sliderMax: parseFloat(sliderMax.toFixed(precision)),
+        min: roundToStepPrecision(valueRange.min, saveRangeStep),
+        max: roundToStepPrecision(valueRange.max, saveRangeStep),
+        sliderMin: roundToStepPrecision(sliderMin, saveRangeStep),
+        sliderMax: roundToStepPrecision(sliderMax, saveRangeStep),
         axes: axesToUse,
         poseStampedFrameId: isPoseStampedMessageType(messageType) && poseStampedFrameId.trim()
           ? poseStampedFrameId.trim()
           : undefined,
         poseStampedReferenceMode: isPoseStampedMessageType(messageType) ? poseStampedReferenceMode : undefined,
+        poseStampedReferenceFrameId: isPoseStampedMessageType(messageType) && poseStampedReferenceMode === 'tf'
+          ? poseStampedReferenceFrameId.trim()
+          : undefined,
         poseStampedOdometryTopic: isPoseStampedMessageType(messageType) && poseStampedReferenceMode === 'odometry'
           ? poseStampedOdometryTopic.trim()
           : undefined,
@@ -704,10 +729,37 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         momentary
       };
     } else if (component.type === 'dpad') {
-      updatedConfig = {
-        ...updatedConfig,
-        buttonMapping: dpadButtonMapping
-      };
+      updatedConfig = isPoseStampedMessageType(messageType)
+        ? {
+          ...updatedConfig,
+          axes: poseStampedAxes,
+          buttonMapping: undefined,
+          poseStampedFrameId: poseStampedFrameId.trim() || undefined,
+          poseStampedReferenceMode,
+          poseStampedReferenceFrameId: poseStampedReferenceMode === 'tf'
+            ? poseStampedReferenceFrameId.trim()
+            : undefined,
+          poseStampedOdometryTopic: poseStampedReferenceMode === 'odometry'
+            ? poseStampedOdometryTopic.trim()
+            : undefined,
+          poseStampedOdometryMessageType: poseStampedReferenceMode === 'odometry'
+            ? poseStampedOdometryMessageType
+            : undefined,
+          poseStampedUseOdometryOrientation: poseStampedReferenceMode === 'odometry'
+            ? poseStampedUseOdometryOrientation
+            : undefined,
+        }
+        : {
+          ...updatedConfig,
+          buttonMapping: dpadButtonMapping,
+          axes: undefined,
+          poseStampedFrameId: undefined,
+          poseStampedReferenceMode: undefined,
+          poseStampedReferenceFrameId: undefined,
+          poseStampedOdometryTopic: undefined,
+          poseStampedOdometryMessageType: undefined,
+          poseStampedUseOdometryOrientation: undefined,
+        };
     } else if (component.type === 'toggle') {
       // For toggle, we don't need any special config beyond the topic and message type
       // The component is purely boolean on/off
@@ -839,18 +891,18 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     setField('data');
                   } else if (component?.type === 'dpad' && newMessageType.includes('Joy')) {
                     setField('buttons');
-                  } else if (component?.type === 'joystick' && isPoseStampedMessageType(newMessageType)) {
+                  } else if ((component?.type === 'joystick' || component?.type === 'dpad')
+                    && isPoseStampedMessageType(newMessageType)) {
                     setField('pose');
                     setPoseStampedAxes(['position.x', 'position.y']);
                   }
                 }}
                 className="setting-select"
-                disabled={component.type === 'dpad' || component.type === 'toggle'}
+                disabled={component.type === 'toggle'}
               >
                 <option value="">Select message type...</option>
                 {component.type === 'dpad' ? (
-                  // Only show Joy message types for D-pad
-                  allowedMessageTypes.filter(type => type.includes('Joy')).map(type => (
+                  allowedMessageTypes.map(type => (
                     <option key={type} value={type}>
                       {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
                     </option>
@@ -874,7 +926,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               )}
               {component.type === 'dpad' && (
                 <small className="axis-help-text">
-                  D-Pad components only support Joy message types for directional button control.
+                  D-Pads can publish Joy buttons or directional PoseStamped offsets.
                 </small>
               )}
               {component.type === 'toggle' && (
@@ -971,8 +1023,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 >
                   <option value="">Select field...</option>
                   {component.type === 'dpad' ? (
-                    // Only show buttons field for D-pad
-                    <option value="buttons">Buttons (buttons)</option>
+                    isPoseStampedMessageType(messageType)
+                      ? <option value="pose">Pose (pose)</option>
+                      : <option value="buttons">Buttons (buttons)</option>
                   ) : component.type === 'toggle' ? (
                     // Only show data field for Toggle
                     <option value="data">Data (data)</option>
@@ -987,7 +1040,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 </select>
                 {component.type === 'dpad' && (
                   <small className="axis-help-text">
-                    D-Pad components use the buttons field to map directional presses to button indices.
+                    {isPoseStampedMessageType(messageType)
+                      ? 'D-Pad directions map to the configured pose axes.'
+                      : 'D-Pad directions map to button indices in the buttons field.'}
                   </small>
                 )}
                 {component.type === 'toggle' && (
@@ -1186,43 +1241,48 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             </div>
           )}
 
-          {component.type === 'joystick' && (
+          {(component.type === 'joystick'
+            || (component.type === 'dpad' && isPoseStampedMessageType(messageType))) && (
             <div className="settings-section">
-              <h4>Joystick Settings</h4>
+              <h4>{component.type === 'joystick' ? 'Joystick Settings' : 'D-Pad Pose Settings'}</h4>
 
-              <div className="setting-group range-controls">
-                <ValueControl
-                  label="Slider Min"
-                  value={sliderMin}
-                  onChange={setSliderMin}
-                  step={inferredDataType === 'float' ? 0.1 : 1}
-                  max={sliderMax}
-                />
-                <ValueControl
-                  label="Slider Max"
-                  value={sliderMax}
-                  onChange={setSliderMax}
-                  step={inferredDataType === 'float' ? 0.1 : 1}
-                  min={sliderMin}
-                />
-              </div>
+              {component.type === 'joystick' && (
+                <>
+                  <div className="setting-group range-controls">
+                    <ValueControl
+                      label="Slider Min"
+                      value={sliderMin}
+                      onChange={setSliderMin}
+                      step={rangeStep}
+                      max={sliderMax}
+                    />
+                    <ValueControl
+                      label="Slider Max"
+                      value={sliderMax}
+                      onChange={setSliderMax}
+                      step={rangeStep}
+                      min={sliderMin}
+                    />
+                  </div>
 
-              <div className="setting-group">
-                <label>Value Range:</label>
-                <RangeSlider
-                  min={sliderMin}
-                  max={sliderMax}
-                  step={inferredDataType === 'float' ? 0.1 : 1}
-                  minValue={valueRange.min}
-                  maxValue={valueRange.max}
-                  onChange={(newRange) => {
-                    setValueRange({
-                      min: Math.max(sliderMin, newRange.min),
-                      max: Math.min(sliderMax, newRange.max),
-                    });
-                  }}
-                />
-              </div>
+                  <div className="setting-group">
+                    <label>Value Range:</label>
+                    <RangeSlider
+                      min={sliderMin}
+                      max={sliderMax}
+                      step={rangeStep}
+                      minValue={valueRange.min}
+                      maxValue={valueRange.max}
+                      onChange={(newRange) => {
+                        setValueRange({
+                          min: Math.max(sliderMin, newRange.min),
+                          max: Math.min(sliderMax, newRange.max),
+                        });
+                      }}
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Only show axis configuration for Joy, Twist, and PoseStamped message types */}
               {isAxisConfigurationEnabled(messageType) && (
@@ -1488,7 +1548,16 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             }
                           }}
                         />
-                        Publish joystick pose in this frame
+                        Publish the offset directly in this frame
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          value="tf"
+                          checked={poseStampedReferenceMode === 'tf'}
+                          onChange={() => setPoseStampedReferenceMode('tf')}
+                        />
+                        Apply offset relative to another TF frame
                       </label>
                       <label className="radio-label">
                         <input
@@ -1502,9 +1571,26 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                             }
                           }}
                         />
-                        Add joystick offset to odometry pose
+                        Add control offset to odometry pose
                       </label>
                     </div>
+
+                    {poseStampedReferenceMode === 'tf' && (
+                      <div className="setting-group">
+                        <label htmlFor="pose-stamped-reference-frame-id">Reference Frame ID:</label>
+                        <input
+                          id="pose-stamped-reference-frame-id"
+                          type="text"
+                          value={poseStampedReferenceFrameId}
+                          onChange={(e) => setPoseStampedReferenceFrameId(e.target.value)}
+                          placeholder="end_effector"
+                          className="setting-input"
+                        />
+                        <small className="axis-help-text">
+                          The offset follows this frame's axes, then the result is published in the output frame.
+                        </small>
+                      </div>
+                    )}
 
                     {poseStampedReferenceMode === 'odometry' && (
                       <>
@@ -1617,19 +1703,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             </div>
           )}
 
-          {component.type === 'dpad' && (
+          {component.type === 'dpad' && !isPoseStampedMessageType(messageType) && (
             <div className="settings-section">
               <h4>D-Pad Settings</h4>
-
-              {/* Force Joy message type for D-pad */}
-              {messageType && messageType !== 'sensor_msgs/Joy' && messageType !== 'sensor_msgs/msg/Joy' && (
-                <div className="setting-group">
-                  <div className="axis-config-disabled">
-                    <p><strong>Important:</strong> D-Pad only supports Joy message types.</p>
-                    <p>Please select <strong>sensor_msgs/Joy</strong> as the message type for proper D-Pad functionality.</p>
-                  </div>
-                </div>
-              )}
 
               {(!messageType || messageType === 'sensor_msgs/Joy' || messageType === 'sensor_msgs/msg/Joy') && (
                 <div className="setting-group">

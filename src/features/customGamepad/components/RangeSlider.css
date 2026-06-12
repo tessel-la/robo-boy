@@ -15,6 +15,27 @@
   color: var(--text-color);
 }
 
+.range-slider-value-input {
+  width: min(42%, 120px);
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--input-bg, var(--background-color));
+  color: var(--text-color);
+  font: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.range-slider-value-input-right {
+  text-align: right;
+}
+
+.range-slider-value-input:focus {
+  border-color: var(--primary-color);
+  outline: 1px solid var(--primary-color);
+}
+
 .range-slider {
   position: relative;
   width: 100%;
@@ -95,4 +116,4 @@
 
 .thumb-right {
   z-index: 4;
-} 
+}

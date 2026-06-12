@@ -47,7 +47,8 @@ export interface GamepadComponentConfig {
     maxValue?: number;
     axes?: string[]; // Which axes to map to
     poseStampedFrameId?: string;
-    poseStampedReferenceMode?: 'frame' | 'odometry';
+    poseStampedReferenceMode?: 'frame' | 'tf' | 'odometry';
+    poseStampedReferenceFrameId?: string;
     poseStampedOdometryTopic?: string;
     poseStampedOdometryMessageType?: string;
     poseStampedUseOdometryOrientation?: boolean;
