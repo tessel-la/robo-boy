@@ -163,6 +163,53 @@
     position: relative;
 }
 
+.pad-empty-state {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.pad-empty-state-content {
+    max-width: 520px;
+    padding: 24px;
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    background: var(--background-secondary);
+}
+
+.pad-empty-state-kicker {
+    color: var(--primary-color);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.pad-empty-state h2 {
+    margin: 8px 0;
+    color: var(--text-color);
+}
+
+.pad-empty-state p {
+    margin: 0 0 18px;
+    color: var(--text-color-secondary);
+}
+
+.pad-empty-state button {
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 16px;
+    background: var(--primary-color);
+    color: var(--button-text-color, #fff);
+    cursor: pointer;
+    font-weight: 700;
+}
+
 /* Remove styles for the old .view-header */
 /* .view-header {
     display: flex;

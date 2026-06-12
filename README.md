@@ -14,10 +14,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
 - Responsive design for desktop and mobile
 - ROS 2 connection (via rosbridge)
 - Camera stream display (via web_video_server)
-- Interchangeable control interfaces:
-  - Drone control pad for aerial vehicles
-  - Manipulator control for robotic arms
-  - And many more that you can create!
+- User-created control pads with reusable starter templates
 - 3D visualization support
 - Customizable themes with user-created color palettes
 
@@ -199,22 +196,22 @@ docker compose down -v
 
 ## Control Interfaces & Gamepad Creation
 
-The application provides multiple control interfaces that can be swapped during runtime:
+The application starts with an empty control area and lets each user create the pads they need. Pads can be built from scratch or cloned from a starter template.
 
 <details>
-<summary><strong>Pre-built Control Pads</strong></summary>
+<summary><strong>Starter Templates</strong></summary>
 
-#### Drone Control Pad
+#### Drone Control
 
-Specialized control interface for aerial vehicles. For testing, use in conjunction with [aerial-sim](https://github.com/tessel-la/aerial-sim) repository.
+Custom-pad template for aerial vehicles. For testing, use in conjunction with [aerial-sim](https://github.com/tessel-la/aerial-sim) repository.
 
-#### Manipulator Control
+#### Manipulator Cartesian Control
 
-Interface for controlling robotic arms with precise joint movements. For testing, use in conjunction with [manipulator-sim](https://github.com/tessel-la/manipulator-sim) repository.
+Custom-pad template modeled on the former manipulator interface, with dual Cartesian joysticks, Z-axis controls, and an arm heartbeat. For testing, use in conjunction with [manipulator-sim](https://github.com/tessel-la/manipulator-sim) repository.
 
-#### Standard, GameBoy & Voice Layouts
+#### Standard, GameBoy & Mobile Layouts
 
-Additional pre-built interfaces including standard dual-joystick, retro GameBoy-style controls, and voice command interface.
+Additional custom-pad templates for common control schemes and screen sizes.
 
 </details>
 
@@ -234,7 +231,7 @@ Additional pre-built interfaces including standard dual-joystick, retro GameBoy-
 **Getting Started:**
 
 1. Click the "+" button in the control panel tabs
-2. Select "Create Custom Gamepad"
+2. Select "Create Custom Gamepad" or choose a template
 3. Drag components from the palette to design your layout
 4. Configure each component's ROS topic and behavior
 5. Save your custom gamepad for future use
@@ -246,7 +243,7 @@ Perfect for creating specialized control interfaces tailored to your specific ro
 <details>
 <summary><strong>Tab Management</strong></summary>
 
-You can open multiple control panels and switch between them with tabs. Mix and match pre-built pads with your custom creations for maximum flexibility.
+You can open multiple user-created control panels and switch between them with tabs.
 
 </details>
 
@@ -346,13 +343,7 @@ The codebase follows a component-based architecture:
   - `entry-page.spec.ts` - Entry page interaction tests
 - `/src/components` - Main UI components and layouts
   - Core UI components: `MainControlView`, `VisualizationPanel`, `Navbar`, `SettingsPopup`, etc.
-  - `/gamepads` - Pre-built gamepad control interfaces
-    - `/standard` - Standard dual joystick layout
-    - `/gameboy` - GameBoy-style control layout
-    - `/voice` - Voice control interface
-    - `/drone` - Drone control interface
-    - `/manipulator` - Robotic arm control interface
-    - `/custom` - Custom gamepad wrapper component
+  - `/gamepads/custom` - Runtime wrapper for user-created gamepads
   - `/visualizers` - React wrappers for 3D visualization
     - `PointCloudViz.tsx` - Point cloud visualization component
     - `LaserScanViz.tsx` - Laser scan visualization component
@@ -403,7 +394,7 @@ Use the built-in Custom Gamepad Creator accessible through the "+" button in con
 
 **Implementation Paths:**
 
-- **Hardcoded Layouts**: Create traditional gamepad components in `/src/components/gamepads`
+- **Starter Templates**: Add reusable layouts to `defaultLayouts.ts`
 - **Extend Custom System**: Add new component types to the custom gamepad library
 - **Comprehensive Guide**: See the detailed README in `/src/features/customGamepad` for the architecture overview, component system, new component types, ROS message support, and storage format.
 

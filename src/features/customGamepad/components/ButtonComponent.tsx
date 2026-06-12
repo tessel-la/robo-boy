@@ -3,6 +3,7 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { buildTwistPayload } from '../rosMessageUtils';
 
 interface ButtonComponentProps {
   config: GamepadComponentConfig;
@@ -43,10 +44,26 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
       message = new ROSLIB.Message({
         data: pressed
       });
-    } else if (action.messageType === 'std_msgs/Int32') {
+    } else if (action.messageType === 'std_msgs/Int32' || action.messageType === 'std_msgs/msg/Int32') {
       message = new ROSLIB.Message({
         data: pressed ? 1 : 0
       });
+    } else if (
+      action.messageType === 'geometry_msgs/Twist' ||
+      action.messageType === 'geometry_msgs/msg/Twist' ||
+      action.messageType === 'geometry_msgs/TwistStamped' ||
+      action.messageType === 'geometry_msgs/msg/TwistStamped'
+    ) {
+      const path = config.config?.messagePath || 'linear.z';
+      const value = pressed
+        ? config.config?.pressedValue ?? 1
+        : config.config?.releasedValue ?? 0;
+      message = new ROSLIB.Message(buildTwistPayload({
+        messageType: action.messageType,
+        axes: [path],
+        values: [value],
+        frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
+      }));
     }
 
     if (message) {

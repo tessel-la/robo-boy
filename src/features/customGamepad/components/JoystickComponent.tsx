@@ -6,6 +6,7 @@ import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import {
   buildPoseStampedPayload,
+  buildTwistPayload,
   isPoseStampedMessageType,
   OdometryLikeMessage,
 } from '../rosMessageUtils';
@@ -169,30 +170,19 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
         axes: axes,
         buttons: []
       });
-    } else if (action.messageType === 'geometry_msgs/Twist' || action.messageType === 'geometry_msgs/msg/Twist') {
-      // For Twist messages
-      const linear = { x: 0, y: 0, z: 0 };
-      const angular = { x: 0, y: 0, z: 0 };
-
+    } else if (
+      action.messageType === 'geometry_msgs/Twist' ||
+      action.messageType === 'geometry_msgs/msg/Twist' ||
+      action.messageType === 'geometry_msgs/TwistStamped' ||
+      action.messageType === 'geometry_msgs/msg/TwistStamped'
+    ) {
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
-      axesConfig.forEach((axis, index) => {
-        if (index < mappedValues.length) {
-          const parts = axis.split('.');
-          if (parts.length === 2) {
-            const [type, component] = parts;
-            if (type === 'linear' && component in linear) {
-              (linear as any)[component] = mappedValues[index];
-            } else if (type === 'angular' && component in angular) {
-              (angular as any)[component] = mappedValues[index];
-            }
-          }
-        }
-      });
-
-      message = new ROSLIB.Message({
-        linear,
-        angular
-      });
+      message = new ROSLIB.Message(buildTwistPayload({
+        messageType: action.messageType,
+        axes: axesConfig,
+        values: mappedValues,
+        frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
+      }));
     } else if (isPoseStampedMessageType(action.messageType)) {
       message = new ROSLIB.Message(buildPoseStampedPayload({
         messageType: action.messageType,

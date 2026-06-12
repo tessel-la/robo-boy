@@ -7,8 +7,8 @@ import { GamepadType } from './gamepads/GamepadInterface';
 
 describe('ControlPanelTabs', () => {
     const createMockPanels = (): ActivePanel[] => [
-        { id: 'panel-1', type: GamepadType.Voice, name: 'Voice Control' },
-        { id: 'panel-2', type: GamepadType.Standard, name: 'Gamepad' },
+        { id: 'panel-1', type: GamepadType.Custom, name: 'Arm Control', layoutId: 'custom-arm' },
+        { id: 'panel-2', type: GamepadType.Custom, name: 'Drive Control', layoutId: 'custom-drive' },
     ];
 
     const mockOnSelectPanel = vi.fn();
@@ -39,8 +39,8 @@ describe('ControlPanelTabs', () => {
         it('should render all panel tabs', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByText('Voice Control')).toBeInTheDocument();
-            expect(screen.getByText('Gamepad')).toBeInTheDocument();
+            expect(screen.getByText('Arm Control')).toBeInTheDocument();
+            expect(screen.getByText('Drive Control')).toBeInTheDocument();
         });
 
         it('should render add button', () => {
@@ -52,15 +52,15 @@ describe('ControlPanelTabs', () => {
         it('should render remove buttons for each panel when multiple panels', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByLabelText('Remove Voice Control')).toBeInTheDocument();
-            expect(screen.getByLabelText('Remove Gamepad')).toBeInTheDocument();
+            expect(screen.getByLabelText('Remove Arm Control')).toBeInTheDocument();
+            expect(screen.getByLabelText('Remove Drive Control')).toBeInTheDocument();
         });
 
-        it('should not render remove button when only one panel', () => {
-            const singlePanel = [{ id: 'panel-1', type: GamepadType.Voice, name: 'Voice' }];
+        it('should allow removing the last panel', () => {
+            const singlePanel = [{ id: 'panel-1', type: GamepadType.Custom, name: 'Arm Control', layoutId: 'custom-arm' }];
             render(<ControlPanelTabs {...defaultProps} panels={singlePanel} />);
 
-            expect(screen.queryByLabelText('Remove Voice')).not.toBeInTheDocument();
+            expect(screen.getByLabelText('Remove Arm Control')).toBeInTheDocument();
         });
     });
 
@@ -68,15 +68,15 @@ describe('ControlPanelTabs', () => {
         it('should mark selected panel as active', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const activeTab = screen.getByText('Voice Control').closest('.tab-button');
+            const activeTab = screen.getByText('Arm Control').closest('.tab-button');
             expect(activeTab).toHaveClass('active');
         });
 
         it('should set correct aria-selected', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
-            const gamepadTab = screen.getByText('Gamepad').closest('[role="tab"]');
+            const camera1Tab = screen.getByText('Arm Control').closest('[role="tab"]');
+            const gamepadTab = screen.getByText('Drive Control').closest('[role="tab"]');
 
             expect(camera1Tab).toHaveAttribute('aria-selected', 'true');
             expect(gamepadTab).toHaveAttribute('aria-selected', 'false');
@@ -85,8 +85,8 @@ describe('ControlPanelTabs', () => {
         it('should set correct tabIndex', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
-            const gamepadTab = screen.getByText('Gamepad').closest('[role="tab"]');
+            const camera1Tab = screen.getByText('Arm Control').closest('[role="tab"]');
+            const gamepadTab = screen.getByText('Drive Control').closest('[role="tab"]');
 
             expect(camera1Tab).toHaveAttribute('tabIndex', '0');
             expect(gamepadTab).toHaveAttribute('tabIndex', '-1');
@@ -97,7 +97,7 @@ describe('ControlPanelTabs', () => {
         it('should call onSelectPanel when tab clicked', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const gamepadTab = screen.getByText('Gamepad').closest('[role="tab"]');
+            const gamepadTab = screen.getByText('Drive Control').closest('[role="tab"]');
             fireEvent.click(gamepadTab!);
 
             expect(mockOnSelectPanel).toHaveBeenCalledWith('panel-2');
@@ -114,7 +114,7 @@ describe('ControlPanelTabs', () => {
         it('should call onRemovePanel when remove button clicked', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            fireEvent.click(screen.getByLabelText('Remove Gamepad'));
+            fireEvent.click(screen.getByLabelText('Remove Drive Control'));
 
             expect(mockOnRemovePanel).toHaveBeenCalledWith('panel-2');
         });
@@ -122,7 +122,7 @@ describe('ControlPanelTabs', () => {
         it('should stop propagation when remove clicked', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            fireEvent.click(screen.getByLabelText('Remove Gamepad'));
+            fireEvent.click(screen.getByLabelText('Remove Drive Control'));
 
             // Should not have selected the panel
             expect(mockOnSelectPanel).not.toHaveBeenCalledWith('panel-2');
@@ -150,8 +150,8 @@ describe('ControlPanelTabs', () => {
         it('should have title attribute on tabs', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            const camera1Tab = screen.getByText('Voice Control').closest('[role="tab"]');
-            expect(camera1Tab).toHaveAttribute('title', 'Voice Control');
+            const camera1Tab = screen.getByText('Arm Control').closest('[role="tab"]');
+            expect(camera1Tab).toHaveAttribute('title', 'Arm Control');
         });
 
         it('should have title on add button', () => {
@@ -163,7 +163,7 @@ describe('ControlPanelTabs', () => {
         it('should have title on remove buttons', () => {
             render(<ControlPanelTabs {...defaultProps} />);
 
-            expect(screen.getByLabelText('Remove Voice Control')).toHaveAttribute('title', 'Remove Panel');
+            expect(screen.getByLabelText('Remove Arm Control')).toHaveAttribute('title', 'Remove Panel');
         });
     });
 });

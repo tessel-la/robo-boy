@@ -8,6 +8,7 @@ import {
   exportGamepadLayouts,
   importGamepadLayouts,
   clearCustomGamepads,
+  cloneGamepadTemplate,
 } from './gamepadStorage'
 import { defaultGamepadLibrary } from './defaultLayouts'
 import type { CustomGamepadLayout } from './types'
@@ -229,6 +230,25 @@ describe('gamepadStorage', () => {
       const layout = getGamepadLayout('non-existent')
 
       expect(layout).toBeNull()
+    })
+  })
+
+  describe('cloneGamepadTemplate', () => {
+    it('creates a new editable layout without changing the template', () => {
+      const clone = cloneGamepadTemplate('manipulator')
+
+      expect(clone).not.toBeNull()
+      expect(clone?.id).toBe('custom-manipulator-cartesian-control')
+      expect(clone?.name).toBe('Manipulator Cartesian Control')
+      expect(clone?.components).not.toBe(defaultGamepadLibrary.find(item => item.id === 'manipulator')?.layout.components)
+      expect(getGamepadLayout(clone!.id)).toBeNull()
+    })
+
+    it('returns null for a custom layout or unknown template', () => {
+      saveCustomGamepad(createMockLayout('custom-test', 'Custom Test'))
+
+      expect(cloneGamepadTemplate('custom-test')).toBeNull()
+      expect(cloneGamepadTemplate('missing')).toBeNull()
     })
   })
 

@@ -121,21 +121,26 @@ describe('defaultLayouts', () => {
 
     it('should have correct ID and name', () => {
       expect(defaultManipulatorLayout.id).toBe('default-manipulator')
-      expect(defaultManipulatorLayout.name).toBe('Manipulator Control')
+      expect(defaultManipulatorLayout.name).toBe('Manipulator Cartesian Control')
     })
 
-    it('should have slider components', () => {
-      const sliders = defaultManipulatorLayout.components.filter(
-        (c) => c.type === 'slider'
+    it('should mirror the legacy dual-stick Cartesian controls', () => {
+      const joysticks = defaultManipulatorLayout.components.filter(
+        (c) => c.type === 'joystick'
       )
-      expect(sliders.length).toBeGreaterThan(0)
+      expect(joysticks).toHaveLength(2)
+      expect(joysticks.map((component) => component.config?.axes)).toEqual([
+        ['angular.x', 'angular.y'],
+        ['linear.x', 'linear.y'],
+      ])
     })
 
-    it('should have gripper toggle', () => {
-      const gripper = defaultManipulatorLayout.components.find(
-        (c) => c.type === 'toggle' && c.label?.includes('Gripper')
+    it('should have momentary Z-axis controls', () => {
+      const zButtons = defaultManipulatorLayout.components.filter(
+        (c) => c.type === 'button' && c.config?.messagePath === 'linear.z'
       )
-      expect(gripper).toBeDefined()
+      expect(zButtons).toHaveLength(2)
+      expect(zButtons.map((component) => component.config?.pressedValue)).toEqual([0.6, -0.6])
     })
 
     it('should monitor the simulator arm-specific joint state heartbeat', () => {

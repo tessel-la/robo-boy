@@ -197,6 +197,36 @@ export function buildStampedHeader(messageType: string, frameId: string, date = 
   };
 }
 
+export function buildTwistPayload({
+  messageType,
+  axes,
+  values,
+  frameId = 'panda_link0',
+  date,
+}: {
+  messageType: string;
+  axes: string[];
+  values: number[];
+  frameId?: string;
+  date?: Date;
+}) {
+  const linear = { x: 0, y: 0, z: 0 };
+  const angular = { x: 0, y: 0, z: 0 };
+
+  axes.forEach((path, index) => {
+    if (index >= values.length) return;
+    const [group, axis] = path.replace(/^twist\./, '').split('.');
+    if ((group === 'linear' || group === 'angular') && axis in linear) {
+      (group === 'linear' ? linear : angular)[axis as keyof typeof linear] = values[index];
+    }
+  });
+
+  const twist = { linear, angular };
+  return messageType.includes('TwistStamped')
+    ? { header: buildStampedHeader(messageType, frameId, date), twist }
+    : twist;
+}
+
 function writePoseAxis(
   position: Record<'x' | 'y' | 'z', number>,
   axisPath: string,

@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState, RefObject } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
-import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
-import { GamepadType } from './gamepads/GamepadInterface';
 import { loadGamepadLibrary, deleteCustomGamepad } from '../features/customGamepad/gamepadStorage';
 
 const IconPencil = () => (
@@ -26,21 +24,14 @@ const IconPlus = () => (
 
 interface AddPanelMenuProps {
   isOpen: boolean;
-  onSelectType: (type: PanelType, layoutId?: string) => void;
+  onSelectLayout: (layoutId: string) => void;
   onClose: () => void;
   onOpenCustomEditor: (layoutId?: string) => void;
+  onOpenTemplate: (layoutId: string) => void;
   addButtonRef: RefObject<HTMLButtonElement>; // Re-add button ref
   refreshKey?: number; // New prop to force refresh
-  onCustomGamepadDeleted?: () => void; // Callback when a custom gamepad is deleted
+  onCustomGamepadDeleted?: (layoutId: string) => void; // Callback when a custom gamepad is deleted
 }
-
-// Define available panel types here or pass them as props
-const availablePanelTypes: Array<{ type: GamepadType; label: string; layoutId?: string }> = [
-  { type: GamepadType.Drone, label: 'Drone Control' },
-  { type: GamepadType.Manipulator, label: 'Manipulator Control' },
-  { type: GamepadType.Custom, label: 'Custom Gamepad' },
-  // Add other layouts here as they are created
-];
 
 // Find or create the portal root element
 let portalRoot = document.getElementById('portal-root');
@@ -52,9 +43,10 @@ if (!portalRoot) {
 
 const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   isOpen,
-  onSelectType,
+  onSelectLayout,
   onClose,
   onOpenCustomEditor,
+  onOpenTemplate,
   addButtonRef, // Use the ref
   refreshKey, // Use the refreshKey prop
   onCustomGamepadDeleted, // Use the onCustomGamepadDeleted prop
@@ -158,6 +150,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   // This must be called before any early returns to follow Rules of Hooks
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const gamepadLibrary = React.useMemo(() => loadGamepadLibrary(), [refreshKey]);
+  const templates = gamepadLibrary.filter(item => item.isDefault);
   const customGamepads = gamepadLibrary.filter((item: any) => !item.isDefault);
 
   if (!isOpen || !portalRoot) { // Also check if portalRoot exists
@@ -165,7 +158,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   }
 
   const handleCustomGamepadSelect = (layoutId: string) => {
-    onSelectType(GamepadType.Custom, layoutId);
+    onSelectLayout(layoutId);
   };
 
   const handleDeleteCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
@@ -175,7 +168,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
     // Note: This won't automatically refresh, user needs to reopen menu
     // For full refresh, parent component should manage the refreshKey
     if (onCustomGamepadDeleted) {
-      onCustomGamepadDeleted();
+      onCustomGamepadDeleted(layoutId);
     }
   };
 
@@ -200,12 +193,12 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         }}
       >
         <div className="menu-section">
-          <h4>Default Layouts</h4>
+          <h4>Templates</h4>
           <ul>
-            {availablePanelTypes.filter(p => p.label !== 'Custom Gamepad').map(panelInfo => (
-              <li key={`${panelInfo.type}-${panelInfo.label}`}>
-                <button onClick={() => onSelectType(panelInfo.type, panelInfo.layoutId)}>
-                  {panelInfo.label}
+            {templates.map(template => (
+              <li key={template.id}>
+                <button onClick={() => onOpenTemplate(template.id)} title={template.description}>
+                  {template.name}
                 </button>
               </li>
             ))}

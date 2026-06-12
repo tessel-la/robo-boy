@@ -258,90 +258,81 @@ export const defaultDroneLayout: CustomGamepadLayout = {
 
 export const defaultManipulatorLayout: CustomGamepadLayout = {
   id: 'default-manipulator',
-  name: 'Manipulator Control',
-  description: 'Control interface for robotic arms',
-  gridSize: { width: 8, height: 6 },
+  name: 'Manipulator Cartesian Control',
+  description: 'Dual-stick Cartesian arm control based on the legacy manipulator pad',
+  gridSize: { width: 8, height: 4 },
   cellSize: 80,
   components: [
     {
-      id: 'base-rotation',
-      type: 'slider',
-      position: { x: 0, y: 0, width: 4, height: 1 },
-      label: 'Base Rotation',
-      action: {
-        topic: '/joint_commands',
-        messageType: 'sensor_msgs/JointState',
-        field: 'position'
-      },
-      config: {
-        min: -3.14,
-        max: 3.14,
-        step: 0.1,
-        orientation: 'horizontal'
-      }
-    },
-    {
-      id: 'shoulder-pitch',
-      type: 'slider',
-      position: { x: 4, y: 0, width: 4, height: 1 },
-      label: 'Shoulder Pitch',
-      action: {
-        topic: '/joint_commands',
-        messageType: 'sensor_msgs/JointState',
-        field: 'position'
-      },
-      config: {
-        min: -1.57,
-        max: 1.57,
-        step: 0.1,
-        orientation: 'horizontal'
-      }
-    },
-    {
-      id: 'end-effector',
+      id: 'rotation-stick',
       type: 'joystick',
-      position: { x: 3, y: 2, width: 2, height: 2 },
-      label: 'End Effector',
+      position: { x: 0, y: 1, width: 3, height: 3 },
+      label: 'Rotation',
       action: {
-        topic: '/cartesian_commands',
-        messageType: 'geometry_msgs/Twist'
+        topic: '/servo_node/delta_twist_cmds',
+        messageType: 'geometry_msgs/TwistStamped'
       },
       config: {
-        maxValue: 0.5,
-        axes: ['linear.x', 'linear.y']
+        min: -0.6,
+        max: 0.6,
+        axes: ['angular.x', 'angular.y'],
+        twistStampedFrameId: 'panda_link0'
       }
     },
     {
-      id: 'gripper-toggle',
-      type: 'toggle',
-      position: { x: 0, y: 5, width: 2, height: 1 },
-      label: 'Gripper',
+      id: 'translation-stick',
+      type: 'joystick',
+      position: { x: 5, y: 1, width: 3, height: 3 },
+      label: 'Translation',
       action: {
-        topic: '/gripper/command',
-        messageType: 'std_msgs/Bool'
+        topic: '/servo_node/delta_twist_cmds',
+        messageType: 'geometry_msgs/TwistStamped'
+      },
+      config: {
+        min: -0.6,
+        max: 0.6,
+        axes: ['linear.x', 'linear.y'],
+        twistStampedFrameId: 'panda_link0'
       }
     },
     {
-      id: 'home-button',
+      id: 'z-up-button',
       type: 'button',
-      position: { x: 6, y: 5, width: 2, height: 1 },
-      label: 'HOME',
+      position: { x: 3, y: 1, width: 2, height: 1 },
+      label: 'Z +',
       action: {
-        name: '/manipulator/home',
-        type: 'action',
-        messageType: 'manipulator_msgs/HomeAction'
+        topic: '/servo_node/delta_twist_cmds',
+        messageType: 'geometry_msgs/TwistStamped'
       },
       config: {
-        momentary: false
+        momentary: true,
+        messagePath: 'linear.z',
+        pressedValue: 0.6,
+        releasedValue: 0,
+        twistStampedFrameId: 'panda_link0'
+      }
+    },
+    {
+      id: 'z-down-button',
+      type: 'button',
+      position: { x: 3, y: 2, width: 2, height: 1 },
+      label: 'Z -',
+      action: {
+        topic: '/servo_node/delta_twist_cmds',
+        messageType: 'geometry_msgs/TwistStamped'
       },
-      style: {
-        color: '#3742fa'
+      config: {
+        momentary: true,
+        messagePath: 'linear.z',
+        pressedValue: -0.6,
+        releasedValue: 0,
+        twistStampedFrameId: 'panda_link0'
       }
     },
     {
       id: 'manipulator-heartbeat',
       type: 'heartbeat',
-      position: { x: 7, y: 4, width: 1, height: 1 },
+      position: { x: 3, y: 0, width: 1, height: 1 },
       label: 'Arm 1',
       action: {
         topic: '/arm_1/dynamic_joint_states',
@@ -463,8 +454,8 @@ export const defaultGamepadLibrary: GamepadLibraryItem[] = [
   },
   {
     id: 'manipulator',
-    name: 'Manipulator Control',
-    description: 'Control interface for robotic arms and manipulators',
+    name: 'Manipulator Cartesian Control',
+    description: 'Dual-stick Cartesian arm controls with Z movement and heartbeat',
     layout: defaultManipulatorLayout,
     isDefault: true
   }

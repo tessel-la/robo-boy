@@ -49,6 +49,18 @@ const MESSAGE_TYPES = {
       'angular.z': { type: 'float', label: 'Angular Z' }
     }
   },
+  'geometry_msgs/TwistStamped': {
+    label: 'TwistStamped Message',
+    alternativeTypes: ['geometry_msgs/msg/TwistStamped'],
+    fields: {
+      'twist.linear.x': { type: 'float', label: 'Linear X' },
+      'twist.linear.y': { type: 'float', label: 'Linear Y' },
+      'twist.linear.z': { type: 'float', label: 'Linear Z' },
+      'twist.angular.x': { type: 'float', label: 'Angular X' },
+      'twist.angular.y': { type: 'float', label: 'Angular Y' },
+      'twist.angular.z': { type: 'float', label: 'Angular Z' }
+    }
+  },
   'geometry_msgs/PoseStamped': {
     label: 'PoseStamped',
     alternativeTypes: ['geometry_msgs/msg/PoseStamped'],
@@ -121,8 +133,8 @@ const getMessageTypeConfig = (type: string) => {
 
 // Define allowed message types for each component type
 const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
-  'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'geometry_msgs/PoseStamped', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
-  'button': ['std_msgs/Bool', 'std_msgs/Int32'],
+  'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped', 'geometry_msgs/PoseStamped', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
+  'button': ['std_msgs/Bool', 'std_msgs/Int32', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped'],
   'dpad': ['sensor_msgs/Joy'], // D-pad only supports Joy
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
   'slider': ['std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
@@ -153,12 +165,17 @@ const isAxisConfigurationEnabled = (messageType: string): boolean => {
     messageType === 'sensor_msgs/msg/Joy' ||
     messageType === 'geometry_msgs/Twist' ||
     messageType === 'geometry_msgs/msg/Twist' ||
+    messageType === 'geometry_msgs/TwistStamped' ||
+    messageType === 'geometry_msgs/msg/TwistStamped' ||
     isPoseStampedMessageType(messageType);
 };
 
 // Helper function to check if this is a twist message type
 const isTwistMessageType = (messageType: string): boolean => {
-  return messageType === 'geometry_msgs/Twist' || messageType === 'geometry_msgs/msg/Twist';
+  return messageType === 'geometry_msgs/Twist' ||
+    messageType === 'geometry_msgs/msg/Twist' ||
+    messageType === 'geometry_msgs/TwistStamped' ||
+    messageType === 'geometry_msgs/msg/TwistStamped';
 };
 
 const isPoseStampedAxisConfigurationEnabled = (messageType: string): boolean => {

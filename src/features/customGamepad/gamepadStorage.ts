@@ -112,6 +112,30 @@ export function getGamepadLayout(layoutId: string): GamepadLibraryItem | null {
 }
 
 /**
+ * Create an editable custom layout from a built-in template.
+ */
+export function cloneGamepadTemplate(templateId: string): CustomGamepadLayout | null {
+  const template = loadGamepadLibrary().find(item => item.isDefault && (
+    item.id === templateId || item.layout.id === templateId
+  ));
+  if (!template) return null;
+
+  const now = new Date().toISOString();
+  const layout = JSON.parse(JSON.stringify(template.layout)) as CustomGamepadLayout;
+  return {
+    ...layout,
+    id: generateGamepadId(template.name),
+    name: template.name,
+    metadata: {
+      ...layout.metadata,
+      created: now,
+      modified: now,
+      version: STORAGE_VERSION
+    }
+  };
+}
+
+/**
  * Generate a unique ID for a new gamepad layout
  */
 export function generateGamepadId(baseName: string): string {

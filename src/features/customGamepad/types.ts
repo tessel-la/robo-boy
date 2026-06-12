@@ -51,10 +51,14 @@ export interface GamepadComponentConfig {
     poseStampedOdometryTopic?: string;
     poseStampedOdometryMessageType?: string;
     poseStampedUseOdometryOrientation?: boolean;
+    twistStampedFrameId?: string;
 
     // Button specific
     buttonIndex?: number;
     momentary?: boolean; // true for momentary, false for toggle
+    messagePath?: string;
+    pressedValue?: number;
+    releasedValue?: number;
 
     // D-pad specific
     buttonMapping?: Record<string, number>; // direction -> button index
