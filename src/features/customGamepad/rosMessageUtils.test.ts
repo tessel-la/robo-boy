@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPoseStampedPayload,
+  buildTwistPayload,
   buildCameraStreamUrl,
   filterCameraTopics,
   flattenNumericFields,
   getNumericValueAtPath,
   getValueAtPath,
   getPlotRange,
+  mergeJoyAxes,
   trimPlotSamples,
 } from './rosMessageUtils';
 import type { GamepadComponentConfig } from './types';
@@ -99,6 +101,16 @@ describe('rosMessageUtils', () => {
     expect(getPlotRange([], false, -5, 5)).toEqual({ min: -5, max: 5 });
   });
 
+  it('merges two joystick mappings and resets only the stopped stick', () => {
+    const leftActive = mergeJoyAxes([], ['0', '1'], [0.25, -0.5]);
+    const bothActive = mergeJoyAxes(leftActive, ['2', '3'], [0.75, 1]);
+    const leftStopped = mergeJoyAxes(bothActive, ['0', '1'], [0, 0]);
+
+    expect(leftActive).toEqual([0.25, -0.5, 0, 0]);
+    expect(bothActive).toEqual([0.25, -0.5, 0.75, 1]);
+    expect(leftStopped).toEqual([0, 0, 0.75, 1]);
+  });
+
   it('builds PoseStamped joystick output in a configured frame', () => {
     const config: GamepadComponentConfig = {
       id: 'pose-stick',
@@ -124,6 +136,25 @@ describe('rosMessageUtils', () => {
       pose: {
         position: { x: 1.5, y: 0, z: -0.25 },
         orientation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    });
+  });
+
+  it('builds stamped Cartesian commands for custom manipulator controls', () => {
+    expect(buildTwistPayload({
+      messageType: 'geometry_msgs/msg/TwistStamped',
+      axes: ['angular.x', 'linear.z'],
+      values: [0.4, -0.6],
+      frameId: 'panda_link0',
+      date: new Date(1_500),
+    })).toEqual({
+      header: {
+        stamp: { sec: 1, nanosec: 500_000_000 },
+        frame_id: 'panda_link0',
+      },
+      twist: {
+        linear: { x: 0, y: 0, z: -0.6 },
+        angular: { x: 0.4, y: 0, z: 0 },
       },
     });
   });

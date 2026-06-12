@@ -14,10 +14,5 @@ export interface GamepadProps {
  * Use this for type-safe references to gamepad types
  */
 export enum GamepadType {
-  Standard = 'standardpad',
-  Voice = 'voicelayout',
-  GameBoy = 'gameboy',
-  Drone = 'dronepad',
-  Manipulator = 'manipulatorpad',
   Custom = 'custom'
-} 
+}

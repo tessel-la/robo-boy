@@ -3,9 +3,10 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
 import { throttle } from 'lodash-es';
-import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { GamepadComponentConfig, JoyAxesPublisher, ROSTopicConfig } from '../types';
 import {
   buildPoseStampedPayload,
+  buildTwistPayload,
   isPoseStampedMessageType,
   OdometryLikeMessage,
 } from '../rosMessageUtils';
@@ -24,11 +25,18 @@ interface JoystickComponentProps {
   ros: Ros;
   isEditing?: boolean;
   scaleFactor?: number;
+  onJoyAxesChange?: JoyAxesPublisher;
 }
 
 const THROTTLE_INTERVAL = 100;
 
-const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEditing, scaleFactor: _scaleFactor = 1 }) => {
+const JoystickComponent: React.FC<JoystickComponentProps> = ({
+  config,
+  ros,
+  isEditing,
+  scaleFactor: _scaleFactor = 1,
+  onJoyAxesChange,
+}) => {
   const topicRef = useRef<Topic | null>(null);
   const odometryTopicRef = useRef<Topic | null>(null);
   const latestOdometryRef = useRef<OdometryLikeMessage | null>(null);
@@ -125,7 +133,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
   const { size: joystickSize, stickSize } = calculateJoystickSize();
 
   const publishMessage = useCallback((values: number[]) => {
-    if (!topicRef.current || isEditing) return;
+    if (isEditing) return;
 
     const action = config.action as ROSTopicConfig;
     if (!action || !action.topic) return;
@@ -145,9 +153,19 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       }) :
       values; // Use raw joystick values [-1, 1] when no custom range is set
 
+    const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
+    if (isJoyMessage && onJoyAxesChange) {
+      if (onJoyAxesChange(config, mappedValues)) {
+        lastSentValues.current = [...values];
+      }
+      return;
+    }
+
+    if (!topicRef.current) return;
+
     let message: any;
 
-    if (action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy') {
+    if (isJoyMessage) {
       // For Joy messages, update the specific axes
       const axesConfig = config.config?.axes || ['0', '1'];
       const maxAxisIndex = Math.max(...axesConfig.map(a => parseInt(a)).filter(n => !isNaN(n)));
@@ -169,30 +187,19 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
         axes: axes,
         buttons: []
       });
-    } else if (action.messageType === 'geometry_msgs/Twist' || action.messageType === 'geometry_msgs/msg/Twist') {
-      // For Twist messages
-      const linear = { x: 0, y: 0, z: 0 };
-      const angular = { x: 0, y: 0, z: 0 };
-
+    } else if (
+      action.messageType === 'geometry_msgs/Twist' ||
+      action.messageType === 'geometry_msgs/msg/Twist' ||
+      action.messageType === 'geometry_msgs/TwistStamped' ||
+      action.messageType === 'geometry_msgs/msg/TwistStamped'
+    ) {
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
-      axesConfig.forEach((axis, index) => {
-        if (index < mappedValues.length) {
-          const parts = axis.split('.');
-          if (parts.length === 2) {
-            const [type, component] = parts;
-            if (type === 'linear' && component in linear) {
-              (linear as any)[component] = mappedValues[index];
-            } else if (type === 'angular' && component in angular) {
-              (angular as any)[component] = mappedValues[index];
-            }
-          }
-        }
-      });
-
-      message = new ROSLIB.Message({
-        linear,
-        angular
-      });
+      message = new ROSLIB.Message(buildTwistPayload({
+        messageType: action.messageType,
+        axes: axesConfig,
+        values: mappedValues,
+        frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
+      }));
     } else if (isPoseStampedMessageType(action.messageType)) {
       message = new ROSLIB.Message(buildPoseStampedPayload({
         messageType: action.messageType,
@@ -216,7 +223,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       topicRef.current.publish(message);
       lastSentValues.current = [...values];
     }
-  }, [config, isEditing]);
+  }, [config, isEditing, onJoyAxesChange]);
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -228,6 +235,8 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
 
     const action = config.action as ROSTopicConfig;
     if (!action.topic || !action.messageType) return;
+    const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
+    if (isJoyMessage && onJoyAxesChange) return;
 
     topicRef.current = new ROSLIB.Topic({
       ros: ros,
@@ -245,7 +254,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({ config, ros, isEd
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, publishMessage, publishThrottled, isEditing]);
+  }, [ros, config.action, publishMessage, publishThrottled, isEditing, onJoyAxesChange]);
 
   useEffect(() => {
     if (!config.action || isEditing) return;

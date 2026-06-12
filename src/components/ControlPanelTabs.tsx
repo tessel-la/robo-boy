@@ -45,16 +45,14 @@ const ControlPanelTabs: React.FC<ControlPanelTabsProps> = ({
             aria-selected={panel.id === selectedPanelId}
           >
             <span className="tab-name">{panel.name}</span>
-            {panels.length > 1 && (
-              <button
-                onClick={(e) => handleRemoveClick(e, panel.id)}
-                className="tab-remove-button"
-                aria-label={`Remove ${panel.name}`}
-                title="Remove Panel"
-              >
-                <IconClose />
-              </button>
-            )}
+            <button
+              onClick={(e) => handleRemoveClick(e, panel.id)}
+              className="tab-remove-button"
+              aria-label={`Remove ${panel.name}`}
+              title="Remove Panel"
+            >
+              <IconClose />
+            </button>
           </div>
         ))}
         <button 
@@ -71,4 +69,4 @@ const ControlPanelTabs: React.FC<ControlPanelTabsProps> = ({
   );
 };
 
-export default ControlPanelTabs; 
+export default ControlPanelTabs;

@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState, RefObject } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
-import { PanelType } from './MainControlView'; // Import PanelType
 import './AddPanelMenu.css'; // Create CSS next
-import { GamepadType } from './gamepads/GamepadInterface';
-import { loadGamepadLibrary, deleteCustomGamepad } from '../features/customGamepad/gamepadStorage';
+import {
+  deleteCustomGamepad,
+  downloadGamepadLayout,
+  importGamepadFile,
+  loadGamepadLibrary,
+} from '../features/customGamepad/gamepadStorage';
 
 const IconPencil = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -23,24 +26,30 @@ const IconPlus = () => (
     <line x1="2" y1="8" x2="14" y2="8"/>
   </svg>
 );
+const IconExport = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 2v8M5 7l3 3 3-3"/>
+    <path d="M2 11v3h12v-3"/>
+  </svg>
+);
+const IconImport = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 10V2M5 5l3-3 3 3"/>
+    <path d="M2 11v3h12v-3"/>
+  </svg>
+);
 
 interface AddPanelMenuProps {
   isOpen: boolean;
-  onSelectType: (type: PanelType, layoutId?: string) => void;
+  onSelectLayout: (layoutId: string) => void;
   onClose: () => void;
   onOpenCustomEditor: (layoutId?: string) => void;
+  onOpenTemplate: (layoutId: string) => void;
   addButtonRef: RefObject<HTMLButtonElement>; // Re-add button ref
   refreshKey?: number; // New prop to force refresh
-  onCustomGamepadDeleted?: () => void; // Callback when a custom gamepad is deleted
+  onCustomGamepadDeleted?: (layoutId: string) => void; // Callback when a custom gamepad is deleted
+  onGamepadLibraryChanged?: () => void;
 }
-
-// Define available panel types here or pass them as props
-const availablePanelTypes: Array<{ type: GamepadType; label: string; layoutId?: string }> = [
-  { type: GamepadType.Drone, label: 'Drone Control' },
-  { type: GamepadType.Manipulator, label: 'Manipulator Control' },
-  { type: GamepadType.Custom, label: 'Custom Gamepad' },
-  // Add other layouts here as they are created
-];
 
 // Find or create the portal root element
 let portalRoot = document.getElementById('portal-root');
@@ -52,15 +61,19 @@ if (!portalRoot) {
 
 const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   isOpen,
-  onSelectType,
+  onSelectLayout,
   onClose,
   onOpenCustomEditor,
+  onOpenTemplate,
   addButtonRef, // Use the ref
   refreshKey, // Use the refreshKey prop
   onCustomGamepadDeleted, // Use the onCustomGamepadDeleted prop
+  onGamepadLibraryChanged,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Calculate position based on button ref
   useEffect(() => {
@@ -158,6 +171,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   // This must be called before any early returns to follow Rules of Hooks
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const gamepadLibrary = React.useMemo(() => loadGamepadLibrary(), [refreshKey]);
+  const templates = gamepadLibrary.filter(item => item.isDefault);
   const customGamepads = gamepadLibrary.filter((item: any) => !item.isDefault);
 
   if (!isOpen || !portalRoot) { // Also check if portalRoot exists
@@ -165,7 +179,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   }
 
   const handleCustomGamepadSelect = (layoutId: string) => {
-    onSelectType(GamepadType.Custom, layoutId);
+    onSelectLayout(layoutId);
   };
 
   const handleDeleteCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
@@ -175,13 +189,41 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
     // Note: This won't automatically refresh, user needs to reopen menu
     // For full refresh, parent component should manage the refreshKey
     if (onCustomGamepadDeleted) {
-      onCustomGamepadDeleted();
+      onCustomGamepadDeleted(layoutId);
     }
   };
 
   const handleEditCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent triggering the select action
     onOpenCustomEditor(layoutId);
+  };
+
+  const handleExportCustomGamepad = (layoutId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setNotice(downloadGamepadLayout(layoutId)
+      ? { type: 'success', message: 'Gamepad exported' }
+      : { type: 'error', message: 'Unable to export this gamepad' });
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const result = await importGamepadFile(file);
+    if (result.success) {
+      setNotice({
+        type: result.errors.length > 0 ? 'error' : 'success',
+        message: result.errors.length > 0
+          ? `Imported ${result.imported} pad(s). ${result.errors.join(' ')}`
+          : `Imported ${result.imported} gamepad${result.imported === 1 ? '' : 's'}`,
+      });
+      onGamepadLibraryChanged?.();
+    } else {
+      setNotice({ type: 'error', message: result.errors.join(' ') || 'Unable to import gamepad' });
+    }
+    event.target.value = '';
   };
 
   // Render into the portal
@@ -200,12 +242,12 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         }}
       >
         <div className="menu-section">
-          <h4>Default Layouts</h4>
+          <h4>Templates</h4>
           <ul>
-            {availablePanelTypes.filter(p => p.label !== 'Custom Gamepad').map(panelInfo => (
-              <li key={`${panelInfo.type}-${panelInfo.label}`}>
-                <button onClick={() => onSelectType(panelInfo.type, panelInfo.layoutId)}>
-                  {panelInfo.label}
+            {templates.map(template => (
+              <li key={template.id}>
+                <button onClick={() => onOpenTemplate(template.id)} title={template.description}>
+                  {template.name}
                 </button>
               </li>
             ))}
@@ -223,6 +265,14 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
                     onClick={() => handleCustomGamepadSelect(gamepad.id)}
                   >
                     {gamepad.name}
+                  </button>
+                  <button
+                    className="export-gamepad-button"
+                    onClick={(e) => handleExportCustomGamepad(gamepad.id, e)}
+                    title="Export custom gamepad"
+                    aria-label={`Export ${gamepad.name}`}
+                  >
+                    <IconExport />
                   </button>
                   <button
                     className="edit-gamepad-button"
@@ -247,13 +297,31 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
         )}
 
         <div className="menu-section">
-          <button
-            className="create-custom-button"
-            onClick={() => onOpenCustomEditor()}
-          >
-            <IconPlus />
-            Create Custom Gamepad
-          </button>
+          <div className="gamepad-file-actions">
+            <button className="import-gamepad-button" onClick={handleImportClick}>
+              <IconImport />
+              Import Gamepad
+            </button>
+            <button
+              className="create-custom-button"
+              onClick={() => onOpenCustomEditor()}
+            >
+              <IconPlus />
+              Create Custom Gamepad
+            </button>
+          </div>
+          {notice && (
+            <div className={`gamepad-file-notice ${notice.type}`} role="status">
+              {notice.message}
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={handleImportFile}
+          />
         </div>
       </div>
     </div>,

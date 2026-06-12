@@ -20,8 +20,8 @@ The Custom Gamepad System allows users to create, edit, and use personalized con
 
 ### 💾 Storage & Management
 - **Local Storage**: Gamepads saved locally in browser
-- **Import/Export**: Share gamepad layouts via JSON files
-- **Default Layouts**: Pre-built layouts for common use cases
+- **Import/Export**: Share individual gamepad layouts via versioned JSON files
+- **Starter Template**: Clone the built-in dual-joystick and heartbeat layout into an editable user pad
 - **Version Control**: Layout versioning and metadata tracking
 
 ## Usage
@@ -63,8 +63,8 @@ The Custom Gamepad System allows users to create, edit, and use personalized con
 
 - **Edit Existing**: Select a custom gamepad and modify it
 - **Delete**: Remove unwanted custom layouts
-- **Export**: Share layouts with other users
-- **Import**: Load layouts from JSON files
+- **Export**: Download one saved layout as a JSON file
+- **Import**: Add layouts from JSON files to the library without opening a tab
 
 ## Architecture
 
@@ -336,4 +336,4 @@ This will log component interactions and ROS message publishing to the browser c
 - **Advanced Styling**: More customization options
 - **Gesture Support**: Touch and gesture controls
 - **Voice Integration**: Voice command components
-- **Analytics**: Usage analytics and optimization suggestions 
+- **Analytics**: Usage analytics and optimization suggestions
