@@ -138,15 +138,16 @@ describe('defaultLayouts', () => {
       expect(gripper).toBeDefined()
     })
 
-    it('should monitor the simulator joint state heartbeat', () => {
+    it('should monitor the simulator arm-specific joint state heartbeat', () => {
       const heartbeat = defaultManipulatorLayout.components.find(
         (c) => c.type === 'heartbeat'
       )
       expect(heartbeat).toMatchObject({
+        label: 'Arm 1',
         position: { width: 1, height: 1 },
         action: {
-          topic: '/joint_states',
-          messageType: 'sensor_msgs/msg/JointState',
+          topic: '/arm_1/dynamic_joint_states',
+          messageType: 'control_msgs/msg/DynamicJointState',
         },
         config: {
           heartbeatMode: 'pulse',

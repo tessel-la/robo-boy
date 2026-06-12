@@ -27,6 +27,7 @@ describe('HeartbeatComponent', () => {
     id: 'heartbeat-1',
     type: 'heartbeat',
     position: { x: 0, y: 0, width: 1, height: 1 },
+    label: 'Arm 1',
     action: {
       topic: '/joint_states',
       messageType: 'sensor_msgs/msg/JointState',
@@ -50,22 +51,23 @@ describe('HeartbeatComponent', () => {
     vi.useFakeTimers();
     render(<HeartbeatComponent config={pulseConfig} ros={{ isConnected: true } as any} />);
 
-    expect(screen.getByRole('status')).toHaveAccessibleName('Waiting for heartbeat');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Waiting for heartbeat');
+    expect(screen.getByText('Arm 1')).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat unhealthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat unhealthy');
 
     act(() => {
       roslibMock.subscribers[0]({ position: [0] });
     });
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat healthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat healthy');
 
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat unhealthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat unhealthy');
   });
 
   it('reads nested boolean-compatible values without applying a stale timeout', () => {
@@ -86,19 +88,19 @@ describe('HeartbeatComponent', () => {
 
     render(<HeartbeatComponent config={booleanConfig} ros={{ isConnected: true } as any} />);
     act(() => roslibMock.subscribers[0]({ status: { alive: 0 } }));
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat unhealthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat unhealthy');
 
     act(() => {
       roslibMock.subscribers[0]({ status: { alive: 'healthy' } });
       vi.advanceTimersByTime(5000);
     });
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat healthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat healthy');
   });
 
   it('shows a preview without subscribing while editing', () => {
     render(<HeartbeatComponent config={pulseConfig} ros={{ isConnected: true } as any} isEditing />);
 
-    expect(screen.getByRole('status')).toHaveAccessibleName('Heartbeat healthy');
+    expect(screen.getByRole('status')).toHaveAccessibleName('Arm 1: Heartbeat healthy');
     expect(roslibMock.subscribers).toHaveLength(0);
   });
 

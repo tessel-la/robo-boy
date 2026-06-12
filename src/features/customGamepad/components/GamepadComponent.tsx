@@ -422,7 +422,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       {renderComponent()}
       
       {/* Label */}
-      {config.label && (
+      {config.label && config.type !== 'heartbeat' && (
         <div className="component-label" style={{ fontSize: `${0.7 * scaleFactor}em` }}>
           {config.label}
         </div>

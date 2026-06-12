@@ -42,16 +42,20 @@
 }
 
 .manipulator-heartbeat .heartbeat-pad-component {
-  gap: 2px;
-  padding: 3px;
+  gap: 1px;
+  padding: 2px;
 }
 
 .manipulator-heartbeat .heartbeat-dot {
-  width: 10px;
+  width: 7px;
+}
+
+.manipulator-heartbeat .heartbeat-label {
+  font-size: 8px !important;
 }
 
 .manipulator-heartbeat .heartbeat-text {
-  font-size: 8px !important;
+  font-size: 7px !important;
 }
 
 .speed-button {

@@ -60,9 +60,10 @@ const MANIPULATOR_HEARTBEAT_CONFIG: GamepadComponentConfig = {
   id: 'manipulator-heartbeat',
   type: 'heartbeat',
   position: { x: 0, y: 0, width: 1, height: 1 },
+  label: 'Arm 1',
   action: {
-    topic: '/joint_states',
-    messageType: 'sensor_msgs/msg/JointState',
+    topic: '/arm_1/dynamic_joint_states',
+    messageType: 'control_msgs/msg/DynamicJointState',
   },
   config: {
     heartbeatMode: 'pulse',

@@ -109,16 +109,19 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
       : status === 'disconnected'
         ? 'ROS disconnected'
         : 'Heartbeat unhealthy';
+  const label = config.label?.trim() || action?.topic || 'Heartbeat';
   const fontSize = Math.max(8, Math.floor(11 * scaleFactor));
+  const labelFontSize = Math.max(8, Math.floor(10 * scaleFactor));
 
   return (
     <div
       className={`data-display-component heartbeat-pad-component heartbeat-${status}`}
       data-testid="heartbeat-component"
       role="status"
-      aria-label={description}
+      aria-label={`${label}: ${description}`}
       title={`${description}${action?.topic ? `: ${action.topic}` : ''}`}
     >
+      <span className="heartbeat-label" style={{ fontSize: labelFontSize }}>{label}</span>
       <span className="heartbeat-dot" aria-hidden="true" />
       <span className="heartbeat-text" style={{ fontSize }}>{statusText}</span>
     </div>
