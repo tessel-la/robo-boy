@@ -232,6 +232,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [minY, setMinY] = useState(-1);
   const [maxY, setMaxY] = useState(1);
 
+  // Heartbeat-specific settings
+  const [heartbeatMode, setHeartbeatMode] = useState<'boolean' | 'pulse'>('boolean');
+  const [heartbeatTimeoutMs, setHeartbeatTimeoutMs] = useState(2000);
+  const [heartbeatFieldPath, setHeartbeatFieldPath] = useState('data');
+
   // Loading state
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
 
@@ -344,6 +349,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           defaultMessageType = 'std_msgs/Float32';
           defaultField = 'data';
           break;
+        case 'heartbeat':
+          defaultTopic = '/heartbeat';
+          defaultMessageType = 'std_msgs/Bool';
+          defaultField = 'data';
+          break;
       }
 
       // Set topic, message type, and field from action if it exists, otherwise use defaults
@@ -386,6 +396,9 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setDpadButtonMapping({ up: 0, right: 1, down: 2, left: 3 });
       setButtonIndex(0);
       setMomentary(true);
+      setHeartbeatMode('boolean');
+      setHeartbeatTimeoutMs(2000);
+      setHeartbeatFieldPath(action?.field || 'data');
 
       // Initialize component-specific settings
       if (component.config) {
@@ -475,6 +488,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           setAutoScale(component.config.autoScale !== false);
           setMinY(component.config.minY ?? -1);
           setMaxY(component.config.maxY ?? 1);
+        } else if (component.type === 'heartbeat') {
+          setHeartbeatMode(component.config.heartbeatMode ?? 'boolean');
+          setHeartbeatTimeoutMs(component.config.heartbeatTimeoutMs ?? 2000);
+          setHeartbeatFieldPath(component.config.heartbeatFieldPath || action?.field || 'data');
         }
       }
     }
@@ -510,7 +527,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return filterCameraTopics(availableTopics);
     }
 
-    if (component?.type === 'plot') {
+    if (component?.type === 'plot' || component?.type === 'heartbeat') {
       return availableTopics.filter(topicInfo =>
         topicInfo.type && !topicInfo.name.includes('/_action/') && !topicInfo.name.includes('/parameter_events')
       );
@@ -546,8 +563,16 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // Get allowed message types for the current component type
   const allowedMessageTypes = useMemo(() => {
     if (!component) return [];
+    if (component.type === 'heartbeat') {
+      return Array.from(new Set([
+        'std_msgs/Bool',
+        'std_msgs/Int32',
+        'std_msgs/String',
+        ...availableTopics.map(topicInfo => getCanonicalMessageType(topicInfo.type)).filter(Boolean),
+      ]));
+    }
     return COMPONENT_MESSAGE_TYPES[component.type] || [];
-  }, [component?.type]);
+  }, [availableTopics, component?.type]);
 
   const handleSave = () => {
     if (!component) return;
@@ -599,6 +624,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return;
     }
 
+    if (component.type === 'heartbeat' && heartbeatMode === 'boolean' && !heartbeatFieldPath.trim()) {
+      setErrorMessage('Boolean heartbeat mode needs a field path.');
+      return;
+    }
+
     const dataType = getInferredDataType(messageType, field);
     const precision = getPrecision(dataType === 'float' ? 0.1 : 1);
 
@@ -608,6 +638,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       messageType,
       field: component.type === 'plot'
         ? selectedPlotFields[0]
+        : component.type === 'heartbeat' && heartbeatMode === 'boolean'
+          ? heartbeatFieldPath.trim()
         : (component.type === 'joystick' && isPoseStampedMessageType(messageType) ? 'pose' : (field || undefined))
     };
 
@@ -684,6 +716,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         minY,
         maxY
       };
+    } else if (component.type === 'heartbeat') {
+      updatedConfig = {
+        ...updatedConfig,
+        heartbeatMode,
+        heartbeatTimeoutMs: Math.max(100, heartbeatTimeoutMs),
+        heartbeatFieldPath: heartbeatMode === 'boolean' ? heartbeatFieldPath.trim() : undefined
+      };
     }
 
     const updatedComponent: GamepadComponentConfig = {
@@ -750,7 +789,26 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
             <div className="setting-group">
               <label htmlFor="message-type">Message Type:</label>
-              <select
+              {component.type === 'heartbeat' ? (
+                <>
+                  <input
+                    id="message-type"
+                    type="text"
+                    list="heartbeat-message-types"
+                    value={messageType}
+                    onChange={(e) => setMessageType(e.target.value)}
+                    placeholder="e.g. std_msgs/msg/Bool"
+                    className="setting-input"
+                  />
+                  <datalist id="heartbeat-message-types">
+                    {allowedMessageTypes.map(type => <option key={type} value={type} />)}
+                  </datalist>
+                  <small className="axis-help-text">
+                    Heartbeats accept any ROS message type. Selecting an existing topic fills this automatically.
+                  </small>
+                </>
+              ) : (
+                <select
                 id="message-type"
                 value={messageType}
                 onChange={(e) => {
@@ -795,7 +853,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     </option>
                   ))
                 )}
-              </select>
+                </select>
+              )}
               {component.type === 'dpad' && (
                 <small className="axis-help-text">
                   D-Pad components only support Joy message types for directional button control.
@@ -817,13 +876,17 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   onChange={(e) => {
                     const nextTopic = e.target.value;
                     setTopic(nextTopic);
-                    if (component.type === 'camera' || component.type === 'plot') {
+                    if (component.type === 'camera' || component.type === 'plot' || component.type === 'heartbeat') {
                       const selectedTopic = availableTopics.find(item => item.name === nextTopic);
                       if (selectedTopic?.type) {
                         const canonicalType = getCanonicalMessageType(selectedTopic.type);
                         setMessageType(canonicalType);
                         if (component.type === 'camera') {
                           setStreamType(getDefaultCameraStreamType(canonicalType));
+                        } else if (component.type === 'heartbeat') {
+                          const isBooleanType = canonicalType.endsWith('/Bool') || canonicalType.endsWith('/msg/Bool');
+                          setHeartbeatMode(isBooleanType ? 'boolean' : 'pulse');
+                          if (isBooleanType) setHeartbeatFieldPath('data');
                         }
                       }
                     }
@@ -879,7 +942,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               )}
             </div>
 
-            {messageType && component.type !== 'plot' && component.type !== 'camera' && Object.keys(availableFields).length > 0 && (
+            {messageType && component.type !== 'plot' && component.type !== 'camera' && component.type !== 'heartbeat' && Object.keys(availableFields).length > 0 && (
               <div className="setting-group">
                 <label htmlFor="field-select">Message Field:</label>
                 <select
@@ -970,6 +1033,58 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     Leave width and height at 0 to use the stream's native size.
                   </small>
                 </>
+              )}
+            </div>
+          )}
+
+          {component.type === 'heartbeat' && (
+            <div className="settings-section">
+              <h4>Heartbeat Settings</h4>
+
+              <div className="setting-group">
+                <label htmlFor="heartbeat-mode">Validation Mode:</label>
+                <select
+                  id="heartbeat-mode"
+                  value={heartbeatMode}
+                  onChange={(e) => setHeartbeatMode(e.target.value as 'boolean' | 'pulse')}
+                  className="setting-select"
+                >
+                  <option value="boolean">Boolean / status value</option>
+                  <option value="pulse">Recurring message</option>
+                </select>
+                <small className="axis-help-text">
+                  Boolean mode reflects a field value. Recurring mode is healthy while messages keep arriving.
+                </small>
+              </div>
+
+              {heartbeatMode === 'boolean' ? (
+                <div className="setting-group">
+                  <label htmlFor="heartbeat-field-path">Status Field Path:</label>
+                  <input
+                    id="heartbeat-field-path"
+                    type="text"
+                    value={heartbeatFieldPath}
+                    onChange={(e) => setHeartbeatFieldPath(e.target.value)}
+                    placeholder="data or status.healthy"
+                    className="setting-input"
+                  />
+                  <small className="axis-help-text">
+                    Supports booleans, non-zero numbers, and values such as true, alive, ok, or healthy.
+                  </small>
+                </div>
+              ) : (
+                <div className="setting-group">
+                  <label htmlFor="heartbeat-timeout">Stale Timeout (ms):</label>
+                  <input
+                    id="heartbeat-timeout"
+                    type="number"
+                    min="100"
+                    step="100"
+                    value={heartbeatTimeoutMs}
+                    onChange={(e) => setHeartbeatTimeoutMs(Number(e.target.value) || 100)}
+                    className="setting-input"
+                  />
+                </div>
               )}
             </div>
           )}

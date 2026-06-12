@@ -388,13 +388,17 @@ function readPathSegment(value: unknown, segment: string): unknown {
   return next[Number(match[2])];
 }
 
-export function getNumericValueAtPath(message: unknown, fieldPath: string): number | null {
+export function getValueAtPath(message: unknown, fieldPath: string): unknown {
   if (!fieldPath) return null;
 
-  const value = fieldPath.split('.').reduce<unknown>((current, segment) => {
+  return fieldPath.split('.').reduce<unknown>((current, segment) => {
     if (current === undefined || current === null) return undefined;
     return readPathSegment(current, segment);
   }, message);
+}
+
+export function getNumericValueAtPath(message: unknown, fieldPath: string): number | null {
+  const value = getValueAtPath(message, fieldPath);
 
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return value;

@@ -337,6 +337,20 @@ export const defaultManipulatorLayout: CustomGamepadLayout = {
       style: {
         color: '#3742fa'
       }
+    },
+    {
+      id: 'manipulator-heartbeat',
+      type: 'heartbeat',
+      position: { x: 7, y: 4, width: 1, height: 1 },
+      label: 'Robot',
+      action: {
+        topic: '/joint_states',
+        messageType: 'sensor_msgs/msg/JointState'
+      },
+      config: {
+        heartbeatMode: 'pulse',
+        heartbeatTimeoutMs: 1500
+      }
     }
   ],
   rosConfig: {
@@ -506,5 +520,12 @@ export const componentLibrary = [
     description: 'Time series graph for numeric topic values',
     defaultSize: { width: 4, height: 2 },
     icon: '📈'
+  },
+  {
+    type: 'heartbeat' as const,
+    name: 'Heartbeat',
+    description: 'Boolean status or recurring topic monitor',
+    defaultSize: { width: 1, height: 1 },
+    icon: 'HB'
   }
 ]; 

@@ -26,7 +26,7 @@ describe('defaultLayouts', () => {
 
   const validateComponent = (component: CustomGamepadLayout['components'][0]) => {
     expect(component.id).toBeTruthy()
-    expect(['joystick', 'button', 'dpad', 'toggle', 'slider', 'camera', 'plot']).toContain(component.type)
+    expect(['joystick', 'button', 'dpad', 'toggle', 'slider', 'camera', 'plot', 'heartbeat']).toContain(component.type)
     expect(component.position).toBeDefined()
     expect(component.position.x).toBeGreaterThanOrEqual(0)
     expect(component.position.y).toBeGreaterThanOrEqual(0)
@@ -138,6 +138,23 @@ describe('defaultLayouts', () => {
       expect(gripper).toBeDefined()
     })
 
+    it('should monitor the simulator joint state heartbeat', () => {
+      const heartbeat = defaultManipulatorLayout.components.find(
+        (c) => c.type === 'heartbeat'
+      )
+      expect(heartbeat).toMatchObject({
+        position: { width: 1, height: 1 },
+        action: {
+          topic: '/joint_states',
+          messageType: 'sensor_msgs/msg/JointState',
+        },
+        config: {
+          heartbeatMode: 'pulse',
+          heartbeatTimeoutMs: 1500,
+        },
+      })
+    })
+
     it('should have valid components', () => {
       defaultManipulatorLayout.components.forEach(validateComponent)
     })
@@ -228,10 +245,11 @@ describe('defaultLayouts', () => {
       expect(types).toContain('slider')
       expect(types).toContain('camera')
       expect(types).toContain('plot')
+      expect(types).toContain('heartbeat')
     })
 
-    it('should have 7 component types', () => {
-      expect(componentLibrary).toHaveLength(7)
+    it('should have 8 component types', () => {
+      expect(componentLibrary).toHaveLength(8)
     })
 
     it('should have valid default sizes', () => {
@@ -273,6 +291,11 @@ describe('defaultLayouts', () => {
     it('should have plot with 4x2 default size', () => {
       const plot = componentLibrary.find((c) => c.type === 'plot')
       expect(plot?.defaultSize).toEqual({ width: 4, height: 2 })
+    })
+
+    it('should have heartbeat with 1x1 default size', () => {
+      const heartbeat = componentLibrary.find((c) => c.type === 'heartbeat')
+      expect(heartbeat?.defaultSize).toEqual({ width: 1, height: 1 })
     })
   })
 })

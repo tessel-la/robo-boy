@@ -7,6 +7,8 @@ import type { IJoystickUpdateEvent } from '../../../types/joystick';
 import { throttle } from 'lodash-es';
 import './ManipulatorGamepadLayout.css';
 import { GamepadProps } from '../GamepadInterface';
+import HeartbeatComponent from '../../../features/customGamepad/components/HeartbeatComponent';
+import type { GamepadComponentConfig } from '../../../features/customGamepad/types';
 
 // SpeedMode enum
 enum SpeedMode { Slow, Normal, Fast }
@@ -53,6 +55,20 @@ const THROTTLE_INTERVAL = 33; // Milliseconds (approx 30Hz)
 const JOYSTICK_MAX_OUTPUT_NORMALIZED = 1.0; // Joystick output will be normalized to this
 const JOYSTICK_DEADZONE = 0.001; // Set to a very small value
 const JOYSTICK_EVENT_MAX_VAL = 1.0; // Changed from 50 to 1.0
+
+const MANIPULATOR_HEARTBEAT_CONFIG: GamepadComponentConfig = {
+  id: 'manipulator-heartbeat',
+  type: 'heartbeat',
+  position: { x: 0, y: 0, width: 1, height: 1 },
+  action: {
+    topic: '/joint_states',
+    messageType: 'sensor_msgs/msg/JointState',
+  },
+  config: {
+    heartbeatMode: 'pulse',
+    heartbeatTimeoutMs: 1500,
+  },
+};
 
 // Frame IDs
 const WORLD_FRAME = 'panda_link0';
@@ -422,6 +438,10 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
           </button>
         </div>
 
+        <div className="manipulator-heartbeat">
+          <HeartbeatComponent config={MANIPULATOR_HEARTBEAT_CONFIG} ros={ros} />
+        </div>
+
         {/* Frame ID Toggle Switch */}
         <div
           className="frame-toggle-switch-container"
@@ -517,4 +537,4 @@ const ManipulatorGamepadLayout: React.FC<GamepadProps> = ({ ros }: GamepadProps)
   );
 };
 
-export default ManipulatorGamepadLayout; 
+export default ManipulatorGamepadLayout;

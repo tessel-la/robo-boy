@@ -8,6 +8,7 @@ import ToggleComponent from './ToggleComponent';
 import SliderComponent from './SliderComponent';
 import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
+import HeartbeatComponent from './HeartbeatComponent';
 import './GamepadComponent.css';
 
 interface GamepadComponentProps {
@@ -362,6 +363,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         return <CameraComponent {...commonProps} />;
       case 'plot':
         return <PlotComponent {...commonProps} />;
+      case 'heartbeat':
+        return <HeartbeatComponent {...commonProps} />;
       default:
         return <div className="unknown-component">Unknown component type</div>;
     }

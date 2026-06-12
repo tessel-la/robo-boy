@@ -33,7 +33,7 @@ export enum ComponentInteractionMode {
 
 export interface GamepadComponentConfig {
   id: string;
-  type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot';
+  type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot' | 'heartbeat';
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
@@ -81,6 +81,11 @@ export interface GamepadComponentConfig {
     autoScale?: boolean;
     minY?: number;
     maxY?: number;
+
+    // Heartbeat specific
+    heartbeatMode?: 'boolean' | 'pulse';
+    heartbeatTimeoutMs?: number;
+    heartbeatFieldPath?: string;
   };
 }
 
