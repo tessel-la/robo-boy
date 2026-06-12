@@ -1,307 +1,88 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
-  defaultStandardLayout,
-  defaultGameBoyLayout,
-  defaultDroneLayout,
-  defaultManipulatorLayout,
-  defaultMobileLayout,
-  defaultGamepadLibrary,
   componentLibrary,
-} from './defaultLayouts'
-import type { CustomGamepadLayout, GamepadLibraryItem } from './types'
+  defaultDualJoystickHeartbeatLayout,
+  defaultGamepadLibrary,
+} from './defaultLayouts';
+import type { CustomGamepadLayout, GamepadLibraryItem } from './types';
 
 describe('defaultLayouts', () => {
   const validateLayout = (layout: CustomGamepadLayout) => {
-    expect(layout.id).toBeTruthy()
-    expect(layout.name).toBeTruthy()
-    expect(layout.gridSize).toBeDefined()
-    expect(layout.gridSize.width).toBeGreaterThan(0)
-    expect(layout.gridSize.height).toBeGreaterThan(0)
-    expect(layout.cellSize).toBeGreaterThan(0)
-    expect(Array.isArray(layout.components)).toBe(true)
-    expect(layout.rosConfig).toBeDefined()
-    expect(layout.metadata).toBeDefined()
-    expect(layout.metadata.version).toBeTruthy()
-  }
+    expect(layout.id).toBeTruthy();
+    expect(layout.name).toBeTruthy();
+    expect(layout.gridSize.width).toBeGreaterThan(0);
+    expect(layout.gridSize.height).toBeGreaterThan(0);
+    expect(layout.cellSize).toBeGreaterThan(0);
+    expect(Array.isArray(layout.components)).toBe(true);
+    expect(layout.metadata.version).toBeTruthy();
+  };
 
-  const validateComponent = (component: CustomGamepadLayout['components'][0]) => {
-    expect(component.id).toBeTruthy()
-    expect(['joystick', 'button', 'dpad', 'toggle', 'slider', 'camera', 'plot', 'heartbeat']).toContain(component.type)
-    expect(component.position).toBeDefined()
-    expect(component.position.x).toBeGreaterThanOrEqual(0)
-    expect(component.position.y).toBeGreaterThanOrEqual(0)
-    expect(component.position.width).toBeGreaterThan(0)
-    expect(component.position.height).toBeGreaterThan(0)
-  }
+  it('provides one generic dual-joystick heartbeat template', () => {
+    validateLayout(defaultDualJoystickHeartbeatLayout);
+    expect(defaultGamepadLibrary).toHaveLength(1);
+    expect(defaultGamepadLibrary[0]).toMatchObject({
+      id: 'dual-joystick-heartbeat',
+      name: 'Dual Joystick + Heartbeat',
+      isDefault: true,
+    });
+  });
 
-  describe('defaultStandardLayout', () => {
-    it('should be a valid layout', () => {
-      validateLayout(defaultStandardLayout)
-    })
+  it('maps both joysticks to one four-axis Joy topic', () => {
+    const joysticks = defaultDualJoystickHeartbeatLayout.components.filter(
+      component => component.type === 'joystick'
+    );
 
-    it('should have correct ID and name', () => {
-      expect(defaultStandardLayout.id).toBe('default-standard')
-      expect(defaultStandardLayout.name).toBe('Standard Dual Joystick')
-    })
+    expect(joysticks).toHaveLength(2);
+    expect(joysticks.map(component => component.action)).toEqual([
+      { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
+      { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
+    ]);
+    expect(joysticks.map(component => component.config?.axes)).toEqual([
+      ['0', '1'],
+      ['2', '3'],
+    ]);
+  });
 
-    it('should have two joystick components', () => {
-      const joysticks = defaultStandardLayout.components.filter(
-        (c) => c.type === 'joystick'
-      )
-      expect(joysticks).toHaveLength(2)
-    })
+  it('contains one pulse heartbeat and no Z controls', () => {
+    const heartbeat = defaultDualJoystickHeartbeatLayout.components.find(
+      component => component.type === 'heartbeat'
+    );
+    const buttons = defaultDualJoystickHeartbeatLayout.components.filter(
+      component => component.type === 'button'
+    );
 
-    it('should have valid components', () => {
-      defaultStandardLayout.components.forEach(validateComponent)
-    })
-  })
+    expect(buttons).toHaveLength(0);
+    expect(heartbeat).toMatchObject({
+      label: 'Heartbeat',
+      action: { topic: '/heartbeat', messageType: 'std_msgs/msg/Bool' },
+      config: { heartbeatMode: 'pulse', heartbeatTimeoutMs: 1500 },
+    });
+  });
 
-  describe('defaultGameBoyLayout', () => {
-    it('should be a valid layout', () => {
-      validateLayout(defaultGameBoyLayout)
-    })
+  it('contains valid library items', () => {
+    defaultGamepadLibrary.forEach((item: GamepadLibraryItem) => {
+      expect(item.description).toBeTruthy();
+      validateLayout(item.layout);
+    });
+  });
 
-    it('should have correct ID and name', () => {
-      expect(defaultGameBoyLayout.id).toBe('default-gameboy')
-      expect(defaultGameBoyLayout.name).toBe('GameBoy Style')
-    })
-
-    it('should have a D-pad component', () => {
-      const dpad = defaultGameBoyLayout.components.find((c) => c.type === 'dpad')
-      expect(dpad).toBeDefined()
-    })
-
-    it('should have A and B buttons', () => {
-      const buttons = defaultGameBoyLayout.components.filter((c) => c.type === 'button')
-      expect(buttons.length).toBeGreaterThanOrEqual(2)
-      expect(buttons.find((b) => b.label === 'A')).toBeDefined()
-      expect(buttons.find((b) => b.label === 'B')).toBeDefined()
-    })
-
-    it('should have valid components', () => {
-      defaultGameBoyLayout.components.forEach(validateComponent)
-    })
-  })
-
-  describe('defaultDroneLayout', () => {
-    it('should be a valid layout', () => {
-      validateLayout(defaultDroneLayout)
-    })
-
-    it('should have correct ID and name', () => {
-      expect(defaultDroneLayout.id).toBe('default-drone')
-      expect(defaultDroneLayout.name).toBe('Drone Control')
-    })
-
-    it('should have arm toggle', () => {
-      const armToggle = defaultDroneLayout.components.find(
-        (c) => c.type === 'toggle' && c.label?.includes('ARM')
-      )
-      expect(armToggle).toBeDefined()
-    })
-
-    it('should have takeoff and land buttons', () => {
-      const takeoff = defaultDroneLayout.components.find((c) =>
-        c.label?.includes('TAKEOFF')
-      )
-      const land = defaultDroneLayout.components.find((c) => c.label?.includes('LAND'))
-      expect(takeoff).toBeDefined()
-      expect(land).toBeDefined()
-    })
-
-    it('should have valid components', () => {
-      defaultDroneLayout.components.forEach(validateComponent)
-    })
-  })
-
-  describe('defaultManipulatorLayout', () => {
-    it('should be a valid layout', () => {
-      validateLayout(defaultManipulatorLayout)
-    })
-
-    it('should have correct ID and name', () => {
-      expect(defaultManipulatorLayout.id).toBe('default-manipulator')
-      expect(defaultManipulatorLayout.name).toBe('Manipulator Cartesian Control')
-    })
-
-    it('should mirror the legacy dual-stick Cartesian controls', () => {
-      const joysticks = defaultManipulatorLayout.components.filter(
-        (c) => c.type === 'joystick'
-      )
-      expect(joysticks).toHaveLength(2)
-      expect(joysticks.map((component) => component.config?.axes)).toEqual([
-        ['angular.x', 'angular.y'],
-        ['linear.x', 'linear.y'],
-      ])
-    })
-
-    it('should have momentary Z-axis controls', () => {
-      const zButtons = defaultManipulatorLayout.components.filter(
-        (c) => c.type === 'button' && c.config?.messagePath === 'linear.z'
-      )
-      expect(zButtons).toHaveLength(2)
-      expect(zButtons.map((component) => component.config?.pressedValue)).toEqual([0.6, -0.6])
-    })
-
-    it('should monitor the simulator arm-specific joint state heartbeat', () => {
-      const heartbeat = defaultManipulatorLayout.components.find(
-        (c) => c.type === 'heartbeat'
-      )
-      expect(heartbeat).toMatchObject({
-        label: 'Arm 1',
-        position: { width: 1, height: 1 },
-        action: {
-          topic: '/arm_1/dynamic_joint_states',
-          messageType: 'control_msgs/msg/DynamicJointState',
-        },
-        config: {
-          heartbeatMode: 'pulse',
-          heartbeatTimeoutMs: 1500,
-        },
-      })
-    })
-
-    it('should have valid components', () => {
-      defaultManipulatorLayout.components.forEach(validateComponent)
-    })
-  })
-
-  describe('defaultMobileLayout', () => {
-    it('should be a valid layout', () => {
-      validateLayout(defaultMobileLayout)
-    })
-
-    it('should have correct ID and name', () => {
-      expect(defaultMobileLayout.id).toBe('default-mobile')
-      expect(defaultMobileLayout.name).toBe('Mobile Optimized')
-    })
-
-    it('should have smaller grid for mobile', () => {
-      expect(defaultMobileLayout.gridSize.width).toBeLessThanOrEqual(6)
-    })
-
-    it('should have larger cell size for touch', () => {
-      expect(defaultMobileLayout.cellSize).toBeGreaterThanOrEqual(100)
-    })
-
-    it('should have valid components', () => {
-      defaultMobileLayout.components.forEach(validateComponent)
-    })
-  })
-
-  describe('defaultGamepadLibrary', () => {
-    it('should contain all default layouts', () => {
-      expect(defaultGamepadLibrary).toHaveLength(5)
-    })
-
-    it('should have all items marked as default', () => {
-      expect(defaultGamepadLibrary.every((item) => item.isDefault)).toBe(true)
-    })
-
-    it('should have unique IDs', () => {
-      const ids = defaultGamepadLibrary.map((item) => item.id)
-      const uniqueIds = new Set(ids)
-      expect(uniqueIds.size).toBe(ids.length)
-    })
-
-    it('should include mobile layout', () => {
-      const mobile = defaultGamepadLibrary.find((item) => item.id === 'mobile')
-      expect(mobile).toBeDefined()
-      expect(mobile?.layout.id).toBe('default-mobile')
-    })
-
-    it('should include standard layout', () => {
-      const standard = defaultGamepadLibrary.find((item) => item.id === 'standard')
-      expect(standard).toBeDefined()
-    })
-
-    it('should include gameboy layout', () => {
-      const gameboy = defaultGamepadLibrary.find((item) => item.id === 'gameboy')
-      expect(gameboy).toBeDefined()
-    })
-
-    it('should include drone layout', () => {
-      const drone = defaultGamepadLibrary.find((item) => item.id === 'drone')
-      expect(drone).toBeDefined()
-    })
-
-    it('should include manipulator layout', () => {
-      const manipulator = defaultGamepadLibrary.find((item) => item.id === 'manipulator')
-      expect(manipulator).toBeDefined()
-    })
-
-    it('should have valid library items', () => {
-      defaultGamepadLibrary.forEach((item: GamepadLibraryItem) => {
-        expect(item.id).toBeTruthy()
-        expect(item.name).toBeTruthy()
-        expect(typeof item.description).toBe('string')
-        expect(item.layout).toBeDefined()
-        validateLayout(item.layout)
-      })
-    })
-  })
-
-  describe('componentLibrary', () => {
-    it('should have all component types', () => {
-      const types = componentLibrary.map((c) => c.type)
-      expect(types).toContain('joystick')
-      expect(types).toContain('button')
-      expect(types).toContain('dpad')
-      expect(types).toContain('toggle')
-      expect(types).toContain('slider')
-      expect(types).toContain('camera')
-      expect(types).toContain('plot')
-      expect(types).toContain('heartbeat')
-    })
-
-    it('should have 8 component types', () => {
-      expect(componentLibrary).toHaveLength(8)
-    })
-
-    it('should have valid default sizes', () => {
-      componentLibrary.forEach((comp) => {
-        expect(comp.defaultSize).toBeDefined()
-        expect(comp.defaultSize.width).toBeGreaterThan(0)
-        expect(comp.defaultSize.height).toBeGreaterThan(0)
-      })
-    })
-
-    it('should have names and descriptions', () => {
-      componentLibrary.forEach((comp) => {
-        expect(comp.name).toBeTruthy()
-        expect(comp.description).toBeTruthy()
-      })
-    })
-
-    it('should have icons', () => {
-      componentLibrary.forEach((comp) => {
-        expect(comp.icon).toBeTruthy()
-      })
-    })
-
-    it('should have joystick with 2x2 default size', () => {
-      const joystick = componentLibrary.find((c) => c.type === 'joystick')
-      expect(joystick?.defaultSize).toEqual({ width: 2, height: 2 })
-    })
-
-    it('should have button with 1x1 default size', () => {
-      const button = componentLibrary.find((c) => c.type === 'button')
-      expect(button?.defaultSize).toEqual({ width: 1, height: 1 })
-    })
-
-    it('should have camera with 4x3 default size', () => {
-      const camera = componentLibrary.find((c) => c.type === 'camera')
-      expect(camera?.defaultSize).toEqual({ width: 4, height: 3 })
-    })
-
-    it('should have plot with 4x2 default size', () => {
-      const plot = componentLibrary.find((c) => c.type === 'plot')
-      expect(plot?.defaultSize).toEqual({ width: 4, height: 2 })
-    })
-
-    it('should have heartbeat with 1x1 default size', () => {
-      const heartbeat = componentLibrary.find((c) => c.type === 'heartbeat')
-      expect(heartbeat?.defaultSize).toEqual({ width: 1, height: 1 })
-    })
-  })
-})
+  it('keeps all editor component types available', () => {
+    expect(componentLibrary.map(component => component.type)).toEqual([
+      'joystick',
+      'button',
+      'dpad',
+      'toggle',
+      'slider',
+      'camera',
+      'plot',
+      'heartbeat',
+    ]);
+    componentLibrary.forEach(component => {
+      expect(component.name).toBeTruthy();
+      expect(component.description).toBeTruthy();
+      expect(component.icon).toBeTruthy();
+      expect(component.defaultSize.width).toBeGreaterThan(0);
+      expect(component.defaultSize.height).toBeGreaterThan(0);
+    });
+  });
+});

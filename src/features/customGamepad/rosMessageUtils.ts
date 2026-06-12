@@ -227,6 +227,31 @@ export function buildTwistPayload({
     : twist;
 }
 
+export function mergeJoyAxes(
+  currentAxes: number[],
+  axisMappings: string[],
+  values: number[],
+  minimumAxisCount = 4
+): number[] {
+  const numericMappings = axisMappings
+    .map(mapping => Number.parseInt(mapping, 10))
+    .filter(index => Number.isInteger(index) && index >= 0);
+  const highestAxis = numericMappings.length > 0 ? Math.max(...numericMappings) : -1;
+  const axes = Array(Math.max(minimumAxisCount, currentAxes.length, highestAxis + 1)).fill(0);
+
+  currentAxes.forEach((value, index) => {
+    axes[index] = value;
+  });
+  axisMappings.forEach((mapping, valueIndex) => {
+    const axisIndex = Number.parseInt(mapping, 10);
+    if (Number.isInteger(axisIndex) && axisIndex >= 0 && valueIndex < values.length) {
+      axes[axisIndex] = values[valueIndex];
+    }
+  });
+
+  return axes;
+}
+
 function writePoseAxis(
   position: Record<'x' | 'y' | 'z', number>,
   axisPath: string,

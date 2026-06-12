@@ -10,6 +10,12 @@ interface StorageData {
   lastModified: string;
 }
 
+export interface GamepadImportResult {
+  success: boolean;
+  imported: number;
+  errors: string[];
+}
+
 /**
  * Load all gamepad layouts (default + custom) from storage
  */
@@ -142,7 +148,10 @@ export function generateGamepadId(baseName: string): string {
   const library = loadGamepadLibrary();
   const existingIds = library.map(item => item.id);
   
-  const baseId = baseName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const baseId = baseName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'gamepad';
   let counter = 1;
   let newId = `custom-${baseId}`;
   
@@ -172,10 +181,34 @@ export function exportGamepadLayouts(layoutIds?: string[]): string {
   return JSON.stringify(exportData, null, 2);
 }
 
+export function getGamepadExportFilename(name: string): string {
+  const sanitized = name.trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+  return `${sanitized || 'gamepad'}.json`;
+}
+
+export function downloadGamepadLayout(layoutId: string): boolean {
+  try {
+    const item = loadGamepadLibrary().find(layout => !layout.isDefault && layout.id === layoutId);
+    if (!item) return false;
+
+    const blob = new Blob([exportGamepadLayouts([layoutId])], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = getGamepadExportFilename(item.name);
+    link.click();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    console.error('Failed to download gamepad layout:', error);
+    return false;
+  }
+}
+
 /**
  * Import gamepad layouts from JSON
  */
-export function importGamepadLayouts(jsonData: string): { success: boolean; imported: number; errors: string[] } {
+export function importGamepadLayouts(jsonData: string): GamepadImportResult {
   const result = { success: false, imported: 0, errors: [] as string[] };
   
   try {
@@ -224,6 +257,21 @@ export function importGamepadLayouts(jsonData: string): { success: boolean; impo
     result.errors.push(`Failed to parse JSON: ${error}`);
     return result;
   }
+}
+
+export function importGamepadFile(file: File): Promise<GamepadImportResult> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+
+    reader.onload = event => {
+      resolve(importGamepadLayouts(String(event.target?.result || '')));
+    };
+    reader.onerror = () => {
+      resolve({ success: false, imported: 0, errors: ['Failed to read gamepad file'] });
+    };
+
+    reader.readAsText(file);
+  });
 }
 
 /**

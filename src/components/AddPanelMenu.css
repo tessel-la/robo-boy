@@ -127,7 +127,8 @@
 }
 
 /* Create custom button styling */
-.add-panel-menu .create-custom-button {
+.add-panel-menu .create-custom-button,
+.add-panel-menu .import-gamepad-button {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -144,14 +145,16 @@
     margin-top: 8px;
 }
 
-.add-panel-menu .create-custom-button svg {
+.add-panel-menu .create-custom-button svg,
+.add-panel-menu .import-gamepad-button svg {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
     opacity: 0.7;
 }
 
-.add-panel-menu .create-custom-button:hover {
+.add-panel-menu .create-custom-button:hover,
+.add-panel-menu .import-gamepad-button:hover {
     background-color: var(--background-secondary);
     color: var(--primary-color);
     transform: none;
@@ -177,6 +180,7 @@
     white-space: nowrap;
 }
 
+.add-panel-menu .export-gamepad-button,
 .add-panel-menu .edit-gamepad-button,
 .add-panel-menu .delete-gamepad-button {
     flex-shrink: 0;
@@ -194,16 +198,45 @@
     color: var(--text-color-secondary, #888);
 }
 
+.add-panel-menu .export-gamepad-button svg,
 .add-panel-menu .edit-gamepad-button svg,
 .add-panel-menu .delete-gamepad-button svg {
     width: 13px;
     height: 13px;
 }
 
+.add-panel-menu .export-gamepad-button:hover,
 .add-panel-menu .edit-gamepad-button:hover {
     background-color: var(--background-secondary);
     color: var(--primary-color);
     transform: none;
+}
+
+.gamepad-file-actions {
+    display: grid;
+    gap: 6px;
+}
+
+.add-panel-menu .import-gamepad-button {
+    margin-top: 0;
+}
+
+.gamepad-file-notice {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.gamepad-file-notice.success {
+    color: var(--success-color, #2e7d32);
+    background: color-mix(in srgb, var(--success-color, #2e7d32) 12%, transparent);
+}
+
+.gamepad-file-notice.error {
+    color: var(--error-color, #dc3545);
+    background: color-mix(in srgb, var(--error-color, #dc3545) 12%, transparent);
 }
 
 .add-panel-menu .delete-gamepad-button:hover {

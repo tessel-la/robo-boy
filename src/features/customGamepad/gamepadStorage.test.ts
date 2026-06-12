@@ -9,6 +9,9 @@ import {
   importGamepadLayouts,
   clearCustomGamepads,
   cloneGamepadTemplate,
+  downloadGamepadLayout,
+  getGamepadExportFilename,
+  importGamepadFile,
 } from './gamepadStorage'
 import { defaultGamepadLibrary } from './defaultLayouts'
 import type { CustomGamepadLayout } from './types'
@@ -179,12 +182,12 @@ describe('gamepadStorage', () => {
     })
 
     it('should not affect default layouts', () => {
-      const result = deleteCustomGamepad('standard')
+      const result = deleteCustomGamepad('dual-joystick-heartbeat')
 
       expect(result).toBe(true)
 
       const library = loadGamepadLibrary()
-      expect(library.find((item) => item.id === 'standard')).toBeDefined()
+      expect(library.find((item) => item.id === 'dual-joystick-heartbeat')).toBeDefined()
     })
 
     it('should return false on storage error', () => {
@@ -202,18 +205,18 @@ describe('gamepadStorage', () => {
 
   describe('getGamepadLayout', () => {
     it('should return a default layout by ID', () => {
-      const layout = getGamepadLayout('standard')
+      const layout = getGamepadLayout('dual-joystick-heartbeat')
 
       expect(layout).not.toBeNull()
-      expect(layout?.name).toBe('Standard Dual Joystick')
+      expect(layout?.name).toBe('Dual Joystick + Heartbeat')
     })
 
     it('should return a default layout by nested layout ID', () => {
-      const layout = getGamepadLayout('default-standard')
+      const layout = getGamepadLayout('default-dual-joystick-heartbeat')
 
       expect(layout).not.toBeNull()
-      expect(layout?.id).toBe('standard')
-      expect(layout?.layout.id).toBe('default-standard')
+      expect(layout?.id).toBe('dual-joystick-heartbeat')
+      expect(layout?.layout.id).toBe('default-dual-joystick-heartbeat')
     })
 
     it('should return a custom layout by ID', () => {
@@ -235,12 +238,12 @@ describe('gamepadStorage', () => {
 
   describe('cloneGamepadTemplate', () => {
     it('creates a new editable layout without changing the template', () => {
-      const clone = cloneGamepadTemplate('manipulator')
+      const clone = cloneGamepadTemplate('dual-joystick-heartbeat')
 
       expect(clone).not.toBeNull()
-      expect(clone?.id).toBe('custom-manipulator-cartesian-control')
-      expect(clone?.name).toBe('Manipulator Cartesian Control')
-      expect(clone?.components).not.toBe(defaultGamepadLibrary.find(item => item.id === 'manipulator')?.layout.components)
+      expect(clone?.id).toBe('custom-dual-joystick-heartbeat')
+      expect(clone?.name).toBe('Dual Joystick + Heartbeat')
+      expect(clone?.components).not.toBe(defaultGamepadLibrary[0].layout.components)
       expect(getGamepadLayout(clone!.id)).toBeNull()
     })
 
@@ -262,8 +265,7 @@ describe('gamepadStorage', () => {
     it('should handle special characters by replacing with dashes', () => {
       const id = generateGamepadId('Test@#$123')
 
-      // The actual behavior: non-alphanumeric chars become dashes
-      expect(id).toMatch(/^custom-test-+123$/)
+      expect(id).toBe('custom-test-123')
     })
 
     it('should increment counter for duplicate IDs', () => {
@@ -317,6 +319,52 @@ describe('gamepadStorage', () => {
       const parsed = JSON.parse(exported)
 
       expect(parsed.layouts).toEqual([])
+    })
+  })
+
+  describe('gamepad files', () => {
+    it('creates a sanitized export filename', () => {
+      expect(getGamepadExportFilename('  Arm / Control #1  ')).toBe('Arm_Control_1.json')
+      expect(getGamepadExportFilename('***')).toBe('gamepad.json')
+    })
+
+    it('downloads one saved custom gamepad', () => {
+      saveCustomGamepad(createMockLayout('custom-export-file', 'Arm / Control'))
+      const createObjectURL = vi.fn(() => 'blob:gamepad')
+      const revokeObjectURL = vi.fn()
+      Object.defineProperty(globalThis.URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+      Object.defineProperty(globalThis.URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true })
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { })
+      const createElement = vi.spyOn(document, 'createElement')
+
+      expect(downloadGamepadLayout('custom-export-file')).toBe(true)
+      const anchor = createElement.mock.results.find(result => result.value instanceof HTMLAnchorElement)?.value as HTMLAnchorElement
+      expect(anchor.download).toBe('Arm_Control.json')
+      expect(createObjectURL).toHaveBeenCalledOnce()
+      expect(clickSpy).toHaveBeenCalledOnce()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:gamepad')
+    })
+
+    it('imports a valid gamepad file', async () => {
+      const file = new File([
+        JSON.stringify({ layouts: [createMockLayout('shared-pad', 'Shared Pad')] })
+      ], 'shared-pad.json', { type: 'application/json' })
+
+      await expect(importGamepadFile(file)).resolves.toMatchObject({
+        success: true,
+        imported: 1,
+        errors: [],
+      })
+      expect(getGamepadLayout('shared-pad')?.name).toBe('Shared Pad')
+    })
+
+    it('reports malformed gamepad files', async () => {
+      const file = new File(['not json'], 'broken.json', { type: 'application/json' })
+
+      const result = await importGamepadFile(file)
+      expect(result.success).toBe(false)
+      expect(result.imported).toBe(0)
+      expect(result.errors.length).toBeGreaterThan(0)
     })
   })
 

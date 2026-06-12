@@ -14,6 +14,7 @@ import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
 import { cloneGamepadTemplate, getGamepadLayout } from '../features/customGamepad/gamepadStorage';
+import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
   BehaviorTreeExecutionSnapshot,
@@ -96,6 +97,10 @@ interface MainControlViewProps {
 }
 
 type ViewMode = 'camera' | '3d' | 'behaviorTree';
+type GamepadEditorSession = {
+  mode: GamepadSaveMode;
+  initialLayout: CustomGamepadLayout | null;
+};
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
@@ -114,8 +119,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
-  const [isCustomEditorOpen, setIsCustomEditorOpen] = useState(false);
-  const [editorInitialLayout, setEditorInitialLayout] = useState<CustomGamepadLayout | null>(null);
+  const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   // State to trigger refresh of custom gamepads in AddPanelMenu
   const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   // Ref for the Add Panel button (+) 
@@ -260,29 +264,43 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleOpenCustomEditor = (layoutId?: string) => {
-    setEditorInitialLayout(layoutId ? getGamepadLayout(layoutId)?.layout || null : null);
-    setIsCustomEditorOpen(true);
+    setEditorSession({
+      mode: layoutId ? 'edit' : 'create',
+      initialLayout: layoutId ? getGamepadLayout(layoutId)?.layout || null : null,
+    });
     setIsAddPanelMenuOpen(false);
   };
 
   const handleOpenTemplate = (layoutId: string) => {
     const template = cloneGamepadTemplate(layoutId);
     if (!template) return;
-    setEditorInitialLayout(template);
-    setIsCustomEditorOpen(true);
+    setEditorSession({ mode: 'template', initialLayout: template });
     setIsAddPanelMenuOpen(false);
   };
 
   const handleCloseCustomEditor = () => {
-    setIsCustomEditorOpen(false);
-    setEditorInitialLayout(null);
+    setEditorSession(null);
   };
 
   const handleSaveCustomGamepad = (layout: CustomGamepadLayout) => {
-    setActivePanels(prev => prev.map(panel =>
-      panel.layoutId === layout.id ? { ...panel, name: layout.name } : panel
-    ));
-    handleAddCustomPanel(layout.id);
+    const mode = editorSession?.mode || 'create';
+    setActivePanels(prev => {
+      const result = applySavedGamepadToPanels({
+        panels: prev,
+        selectedPanelId,
+        layout,
+        mode,
+        createPanel: savedLayout => ({
+          id: generateUniqueId('panel'),
+          type: GamepadType.Custom,
+          name: savedLayout.name,
+          layoutId: savedLayout.id,
+        }),
+      });
+      setSelectedPanelId(result.selectedPanelId);
+      return result.panels;
+    });
+    setIsAddPanelMenuOpen(false);
     // Trigger refresh of custom gamepad list in AddPanelMenu
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
@@ -561,15 +579,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         addButtonRef={addButtonRef}
         refreshKey={customGamepadRefreshKey}
         onCustomGamepadDeleted={handleCustomGamepadDeleted}
+        onGamepadLibraryChanged={() => setCustomGamepadRefreshKey(prev => prev + 1)}
       />
 
       {/* Render GamepadEditor modal */}
-      {isCustomEditorOpen && ros && (
+      {editorSession && ros && (
         <GamepadEditor
-          isOpen={isCustomEditorOpen}
+          isOpen
           onClose={handleCloseCustomEditor}
           onSave={handleSaveCustomGamepad}
-          initialLayout={editorInitialLayout}
+          initialLayout={editorSession.initialLayout}
           ros={ros}
         />
       )}

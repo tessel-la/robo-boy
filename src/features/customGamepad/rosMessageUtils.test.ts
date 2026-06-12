@@ -8,6 +8,7 @@ import {
   getNumericValueAtPath,
   getValueAtPath,
   getPlotRange,
+  mergeJoyAxes,
   trimPlotSamples,
 } from './rosMessageUtils';
 import type { GamepadComponentConfig } from './types';
@@ -98,6 +99,16 @@ describe('rosMessageUtils', () => {
   it('computes auto and fixed plot ranges', () => {
     expect(getPlotRange([{ time: 0, value: 2 }], true)).toEqual({ min: 1, max: 3 });
     expect(getPlotRange([], false, -5, 5)).toEqual({ min: -5, max: 5 });
+  });
+
+  it('merges two joystick mappings and resets only the stopped stick', () => {
+    const leftActive = mergeJoyAxes([], ['0', '1'], [0.25, -0.5]);
+    const bothActive = mergeJoyAxes(leftActive, ['2', '3'], [0.75, 1]);
+    const leftStopped = mergeJoyAxes(bothActive, ['0', '1'], [0, 0]);
+
+    expect(leftActive).toEqual([0.25, -0.5, 0, 0]);
+    expect(bothActive).toEqual([0.25, -0.5, 0.75, 1]);
+    expect(leftStopped).toEqual([0, 0, 0.75, 1]);
   });
 
   it('builds PoseStamped joystick output in a configured frame', () => {

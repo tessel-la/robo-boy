@@ -93,6 +93,11 @@ export interface GamepadComponentConfig {
   };
 }
 
+export type JoyAxesPublisher = (
+  config: GamepadComponentConfig,
+  values: number[]
+) => boolean;
+
 export interface CustomGamepadLayout {
   id: string;
   name: string;

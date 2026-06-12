@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
-import type { Ros } from 'roslib';
-import { CustomGamepadLayout as LayoutType, DragState, DropPreview } from '../types';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import type { Ros, Topic } from 'roslib';
+import ROSLIB from 'roslib';
+import { CustomGamepadLayout as LayoutType, DragState, DropPreview, GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { buildStampedHeader, mergeJoyAxes } from '../rosMessageUtils';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -21,6 +23,13 @@ interface CustomGamepadLayoutProps {
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
+interface JoyTopicState {
+  topic: Topic;
+  messageType: string;
+}
+
+const getJoyTopicKey = (action: ROSTopicConfig) => `${action.topic}\u0000${action.messageType}`;
+
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   layout,
   ros,
@@ -39,6 +48,68 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
+  const joyTopicsRef = useRef<Map<string, JoyTopicState>>(new Map());
+  const joyAxesRef = useRef<Map<string, number[]>>(new Map());
+
+  useEffect(() => {
+    joyTopicsRef.current.clear();
+    joyAxesRef.current.clear();
+    if (isEditing) return;
+
+    const joyActions = layout.components
+      .filter(component => component.type === 'joystick')
+      .map(component => component.action as ROSTopicConfig | undefined)
+      .filter((action): action is ROSTopicConfig => Boolean(
+        action?.topic &&
+        (action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy')
+      ));
+
+    joyActions.forEach(action => {
+      const key = getJoyTopicKey(action);
+      if (joyTopicsRef.current.has(key)) return;
+      const topic = new ROSLIB.Topic({ ros, name: action.topic, messageType: action.messageType });
+      topic.advertise();
+      joyTopicsRef.current.set(key, { topic, messageType: action.messageType });
+      joyAxesRef.current.set(key, []);
+    });
+
+    return () => {
+      joyTopicsRef.current.forEach(({ topic, messageType }, key) => {
+        const axes = joyAxesRef.current.get(key) || [];
+        if (axes.some(value => value !== 0)) {
+          topic.publish(new ROSLIB.Message({
+            header: buildStampedHeader(messageType, ''),
+            axes: axes.map(() => 0),
+            buttons: [],
+          }));
+        }
+        topic.unadvertise();
+      });
+      joyTopicsRef.current.clear();
+      joyAxesRef.current.clear();
+    };
+  }, [isEditing, layout.components, ros]);
+
+  const publishJoyAxes = useCallback((config: GamepadComponentConfig, values: number[]) => {
+    const action = config.action as ROSTopicConfig | undefined;
+    if (!action?.topic) return false;
+    const key = getJoyTopicKey(action);
+    const topicState = joyTopicsRef.current.get(key);
+    if (!topicState) return false;
+
+    const axes = mergeJoyAxes(
+      joyAxesRef.current.get(key) || [],
+      config.config?.axes || ['0', '1'],
+      values
+    );
+    joyAxesRef.current.set(key, axes);
+    topicState.topic.publish(new ROSLIB.Message({
+      header: buildStampedHeader(action.messageType, ''),
+      axes,
+      buttons: [],
+    }));
+    return true;
+  }, []);
 
   // Monitor container size changes for responsive scaling
   useEffect(() => {
@@ -327,6 +398,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
               onDragStart={onComponentDragStart}
               onDragEnd={onDragEnd}
               scaleFactor={scaling.scaleFactor}
+              onJoyAxesChange={publishJoyAxes}
             />
           );
         })}
@@ -335,4 +407,4 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   );
 };
 
-export default CustomGamepadLayout; 
+export default CustomGamepadLayout;

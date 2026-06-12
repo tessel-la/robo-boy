@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
-import { GamepadComponentConfig } from '../types';
+import { GamepadComponentConfig, JoyAxesPublisher } from '../types';
 import JoystickComponent from './JoystickComponent';
 import ButtonComponent from './ButtonComponent';
 import DPadComponent from './DPadComponent';
@@ -25,6 +25,7 @@ interface GamepadComponentProps {
   onOpenSettings?: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  onJoyAxesChange?: JoyAxesPublisher;
 }
 
 type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null;
@@ -43,7 +44,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   onDelete,
   onOpenSettings,
   onDragStart,
-  onDragEnd
+  onDragEnd,
+  onJoyAxesChange
 }) => {
   const componentRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -350,7 +352,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
 
     switch (config.type) {
       case 'joystick':
-        return <JoystickComponent {...commonProps} />;
+        return <JoystickComponent {...commonProps} onJoyAxesChange={onJoyAxesChange} />;
       case 'button':
         return <ButtonComponent {...commonProps} />;
       case 'dpad':

@@ -199,19 +199,11 @@ docker compose down -v
 The application starts with an empty control area and lets each user create the pads they need. Pads can be built from scratch or cloned from a starter template.
 
 <details>
-<summary><strong>Starter Templates</strong></summary>
+<summary><strong>Starter Template</strong></summary>
 
-#### Drone Control
+#### Dual Joystick + Heartbeat
 
-Custom-pad template for aerial vehicles. For testing, use in conjunction with [aerial-sim](https://github.com/tessel-la/aerial-sim) repository.
-
-#### Manipulator Cartesian Control
-
-Custom-pad template modeled on the former manipulator interface, with dual Cartesian joysticks, Z-axis controls, and an arm heartbeat. For testing, use in conjunction with [manipulator-sim](https://github.com/tessel-la/manipulator-sim) repository.
-
-#### Standard, GameBoy & Mobile Layouts
-
-Additional custom-pad templates for common control schemes and screen sizes.
+A generic starter pad with two joysticks publishing one four-axis `sensor_msgs/msg/Joy` message on `/joy`, plus a pulse heartbeat monitor on `/heartbeat`. Selecting the template creates an editable user-owned copy.
 
 </details>
 
@@ -235,6 +227,8 @@ Additional custom-pad templates for common control schemes and screen sizes.
 3. Drag components from the palette to design your layout
 4. Configure each component's ROS topic and behavior
 5. Save your custom gamepad for future use
+
+Saved pads can be exported individually as versioned JSON files and imported on another device or browser. Imports are added to the custom layout library without opening a control tab.
 
 Perfect for creating specialized control interfaces tailored to your specific robot's needs!
 
