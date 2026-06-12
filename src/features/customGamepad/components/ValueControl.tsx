@@ -23,12 +23,8 @@ const ValueControl: React.FC<ValueControlProps> = ({
   const [inputValue, setInputValue] = useState(value.toFixed(precision));
 
   useEffect(() => {
-    // Only update inputValue if the 'value' prop changes, ensuring it's formatted
-    const formattedValue = value.toFixed(precision);
-    if (inputValue !== formattedValue) {
-      setInputValue(formattedValue);
-    }
-  }, [value, precision, inputValue]);
+    setInputValue(value.toFixed(precision));
+  }, [value, precision]);
 
   const commitChange = (val: number) => {
     const clampedValue = Math.max(min, Math.min(max, val));
