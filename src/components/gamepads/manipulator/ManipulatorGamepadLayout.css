@@ -35,6 +35,29 @@
   width: fit-content;
 }
 
+.manipulator-heartbeat {
+  width: 38px;
+  height: 32px;
+  flex: 0 0 38px;
+}
+
+.manipulator-heartbeat .heartbeat-pad-component {
+  gap: 1px;
+  padding: 2px;
+}
+
+.manipulator-heartbeat .heartbeat-dot {
+  width: 7px;
+}
+
+.manipulator-heartbeat .heartbeat-label {
+  font-size: 8px !important;
+}
+
+.manipulator-heartbeat .heartbeat-text {
+  font-size: 7px !important;
+}
+
 .speed-button {
   background-color: var(--background-secondary, #3c4043);
   border: 1.5px solid var(--border-color, #5f6368);
@@ -277,6 +300,11 @@
     flex-shrink: 0;
     flex-grow: 0;
   }
+  .manipulator-heartbeat {
+    width: 32px;
+    height: 28px;
+    flex-basis: 32px;
+  }
   .speed-button svg {
     width: 16px;
     height: 16px;
@@ -435,4 +463,4 @@
   .z-axis-controls {
     gap: 12px;
   }
-} 
+}

@@ -143,6 +143,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       case 'plot':
         action = { topic: '/plot', messageType: 'std_msgs/Float32', field: 'data' };
         break;
+      case 'heartbeat':
+        action = { topic: '/heartbeat', messageType: 'std_msgs/Bool', field: 'data' };
+        break;
       default:
         action = { topic: `/${componentType}`, messageType: layout.rosConfig.defaultMessageType };
     }
@@ -152,6 +155,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         ? { cameraTransport: 'proxy' as const }
         : componentType === 'plot'
           ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
+          : componentType === 'heartbeat'
+            ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
           : componentType === 'dpad'
             ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
             : componentType === 'joystick'

@@ -5,6 +5,7 @@ import {
   filterCameraTopics,
   flattenNumericFields,
   getNumericValueAtPath,
+  getValueAtPath,
   getPlotRange,
   trimPlotSamples,
 } from './rosMessageUtils';
@@ -77,6 +78,7 @@ describe('rosMessageUtils', () => {
     expect(getNumericValueAtPath(message, 'twist.twist.linear.x')).toBe(1.25);
     expect(getNumericValueAtPath(message, 'axes[1]')).toBe(-0.5);
     expect(getNumericValueAtPath(message, 'missing.value')).toBeNull();
+    expect(getValueAtPath({ status: { flags: [false, true] } }, 'status.flags[1]')).toBe(true);
   });
 
   it('trims plot samples by window and sample limit', () => {

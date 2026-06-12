@@ -8,6 +8,7 @@ import ToggleComponent from './ToggleComponent';
 import SliderComponent from './SliderComponent';
 import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
+import HeartbeatComponent from './HeartbeatComponent';
 import './ComponentPalette.css';
 
 interface ComponentPaletteProps {
@@ -62,7 +63,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       action: {
         topic: '/preview',
         messageType: componentType === 'camera' ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Joy',
-        field: componentType === 'plot' ? 'data' : undefined
+        field: componentType === 'plot' || componentType === 'heartbeat' ? 'data' : undefined
       },
       config: componentType === 'button'
         ? { momentary: true }
@@ -70,6 +71,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
           ? { cameraTransport: 'proxy' as const }
           : componentType === 'plot'
             ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true }
+            : componentType === 'heartbeat'
+              ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
             : {}
     };
 
@@ -107,6 +110,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         {componentType === 'slider' && <SliderComponent {...componentProps} />}
         {componentType === 'camera' && <CameraComponent {...componentProps} />}
         {componentType === 'plot' && <PlotComponent {...componentProps} />}
+        {componentType === 'heartbeat' && <HeartbeatComponent {...componentProps} />}
       </div>
     );
   };
