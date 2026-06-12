@@ -198,4 +198,38 @@ describe('rosMessageUtils', () => {
       },
     });
   });
+
+  it('expresses a reference-frame offset in the configured output frame', () => {
+    const config: GamepadComponentConfig = {
+      id: 'pose-stick',
+      type: 'joystick',
+      position: { x: 0, y: 0, width: 2, height: 2 },
+      config: {
+        axes: ['position.x', 'position.y'],
+        poseStampedFrameId: 'base_link',
+        poseStampedReferenceMode: 'tf',
+        poseStampedReferenceFrameId: 'end_effector',
+      },
+    };
+
+    const message = buildPoseStampedPayload({
+      messageType: 'geometry_msgs/msg/PoseStamped',
+      config,
+      values: [1, 0],
+      latestReferenceTransform: {
+        translation: { x: 10, y: 2, z: 3 },
+        rotation: { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 },
+      },
+      date: new Date(3_000),
+    });
+
+    expect(message.header.frame_id).toBe('base_link');
+    expect(message.pose.position.x).toBeCloseTo(10);
+    expect(message.pose.position.y).toBeCloseTo(3);
+    expect(message.pose.position.z).toBeCloseTo(3);
+    expect(message.pose.orientation.x).toBe(0);
+    expect(message.pose.orientation.y).toBe(0);
+    expect(message.pose.orientation.z).toBeCloseTo(Math.SQRT1_2);
+    expect(message.pose.orientation.w).toBeCloseTo(Math.SQRT1_2);
+  });
 });

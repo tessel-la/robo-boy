@@ -184,6 +184,11 @@ export interface OdometryLikeMessage {
   };
 }
 
+export interface TransformLike {
+  translation?: Partial<Record<'x' | 'y' | 'z', number>>;
+  rotation?: Partial<Record<'x' | 'y' | 'z' | 'w', number>>;
+}
+
 export function buildStampedHeader(messageType: string, frameId: string, date = new Date()) {
   const millis = date.getTime();
   const seconds = Math.floor(millis / 1000);
@@ -272,12 +277,14 @@ export function buildPoseStampedPayload({
   config,
   values,
   latestOdometry,
+  latestReferenceTransform,
   date,
 }: {
   messageType: string;
   config: GamepadComponentConfig;
   values: number[];
   latestOdometry?: OdometryLikeMessage | null;
+  latestReferenceTransform?: TransformLike | null;
   date?: Date;
 }) {
   const frameId = config.config?.poseStampedFrameId?.trim()
@@ -296,14 +303,47 @@ export function buildPoseStampedPayload({
 
   const odometryPose = latestOdometry?.pose?.pose;
   const useOdometry = config.config?.poseStampedReferenceMode === 'odometry' && !!odometryPose;
+  const useReferenceTransform = config.config?.poseStampedReferenceMode === 'tf'
+    && !!latestReferenceTransform;
   const basePosition = odometryPose?.position;
-  const position = {
-    x: (useOdometry ? basePosition?.x ?? 0 : 0) + offset.x,
-    y: (useOdometry ? basePosition?.y ?? 0 : 0) + offset.y,
-    z: (useOdometry ? basePosition?.z ?? 0 : 0) + offset.z,
+  const referenceTranslation = latestReferenceTransform?.translation;
+  const referenceRotation = latestReferenceTransform?.rotation;
+  const quaternionLength = Math.hypot(
+    referenceRotation?.x ?? 0,
+    referenceRotation?.y ?? 0,
+    referenceRotation?.z ?? 0,
+    referenceRotation?.w ?? 1
+  ) || 1;
+  const normalizedReferenceRotation = {
+    x: (referenceRotation?.x ?? 0) / quaternionLength,
+    y: (referenceRotation?.y ?? 0) / quaternionLength,
+    z: (referenceRotation?.z ?? 0) / quaternionLength,
+    w: (referenceRotation?.w ?? 1) / quaternionLength,
   };
+  const { x: qx, y: qy, z: qz, w: qw } = normalizedReferenceRotation;
+  const tx = 2 * (qy * offset.z - qz * offset.y);
+  const ty = 2 * (qz * offset.x - qx * offset.z);
+  const tz = 2 * (qx * offset.y - qy * offset.x);
+  const rotatedOffset = {
+    x: offset.x + qw * tx + (qy * tz - qz * ty),
+    y: offset.y + qw * ty + (qz * tx - qx * tz),
+    z: offset.z + qw * tz + (qx * ty - qy * tx),
+  };
+  const position = useReferenceTransform
+    ? {
+      x: (referenceTranslation?.x ?? 0) + rotatedOffset.x,
+      y: (referenceTranslation?.y ?? 0) + rotatedOffset.y,
+      z: (referenceTranslation?.z ?? 0) + rotatedOffset.z,
+    }
+    : {
+      x: (useOdometry ? basePosition?.x ?? 0 : 0) + offset.x,
+      y: (useOdometry ? basePosition?.y ?? 0 : 0) + offset.y,
+      z: (useOdometry ? basePosition?.z ?? 0 : 0) + offset.z,
+    };
   const odometryOrientation = odometryPose?.orientation;
-  const orientation = (useOdometry && config.config?.poseStampedUseOdometryOrientation !== false)
+  const orientation = useReferenceTransform
+    ? normalizedReferenceRotation
+    : (useOdometry && config.config?.poseStampedUseOdometryOrientation !== false)
     ? {
       x: odometryOrientation?.x ?? 0,
       y: odometryOrientation?.y ?? 0,

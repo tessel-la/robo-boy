@@ -3,7 +3,12 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
-import { isJoyMessageType } from '../rosMessageUtils';
+import {
+  buildPoseStampedPayload,
+  isJoyMessageType,
+  isPoseStampedMessageType,
+} from '../rosMessageUtils';
+import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
 import './DPadComponent.css';
 
 interface DPadComponentProps {
@@ -20,6 +25,11 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
   const [pressedDirections, setPressedDirections] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(
+    ros,
+    config,
+    isEditing
+  );
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -72,6 +82,23 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       });
 
       topicRef.current.publish(message);
+    } else if (isPoseStampedMessageType(action.messageType)) {
+      if (config.config?.poseStampedReferenceMode === 'tf'
+        && !latestTransformRef.current) return;
+      if (config.config?.poseStampedReferenceMode === 'odometry'
+        && !latestOdometryRef.current) return;
+
+      const values = [
+        Number(directions.has('right')) - Number(directions.has('left')),
+        Number(directions.has('up')) - Number(directions.has('down')),
+      ];
+      topicRef.current.publish(new ROSLIB.Message(buildPoseStampedPayload({
+        messageType: action.messageType,
+        config,
+        values,
+        latestOdometry: latestOdometryRef.current,
+        latestReferenceTransform: latestTransformRef.current,
+      })));
     }
   }, [config, isEditing]);
 

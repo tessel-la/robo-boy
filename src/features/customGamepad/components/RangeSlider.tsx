@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { getStepPrecision } from '../rangeUtils';
 import './RangeSlider.css';
 
 interface RangeSliderProps {
@@ -76,12 +77,13 @@ const RangeSlider: React.FC<RangeSliderProps> = ({ min, max, step, minValue, max
   const range = max - min;
   const minPos = range === 0 ? 0 : ((minVal - min) / range) * 100;
   const maxPos = range === 0 ? 0 : ((maxVal - min) / range) * 100;
+  const precision = getStepPrecision(step);
 
   return (
     <div className="range-slider-container">
       <div className="range-slider-values">
-        <span>{minVal.toFixed(step < 1 ? 2 : 0)}</span>
-        <span>{maxVal.toFixed(step < 1 ? 2 : 0)}</span>
+        <span>{minVal.toFixed(precision)}</span>
+        <span>{maxVal.toFixed(precision)}</span>
       </div>
       <div className="range-slider">
         <input
@@ -110,4 +112,4 @@ const RangeSlider: React.FC<RangeSliderProps> = ({ min, max, step, minValue, max
   );
 };
 
-export default RangeSlider; 
+export default RangeSlider;

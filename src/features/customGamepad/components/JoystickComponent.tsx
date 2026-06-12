@@ -8,8 +8,8 @@ import {
   buildPoseStampedPayload,
   buildTwistPayload,
   isPoseStampedMessageType,
-  OdometryLikeMessage,
 } from '../rosMessageUtils';
+import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
 
 // Define the joystick update event interface locally since it's not exported from the library
 interface IJoystickUpdateEvent {
@@ -38,14 +38,17 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
   onJoyAxesChange,
 }) => {
   const topicRef = useRef<Topic | null>(null);
-  const odometryTopicRef = useRef<Topic | null>(null);
-  const latestOdometryRef = useRef<OdometryLikeMessage | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const joystickSizeRef = useRef(100); // Use ref to hold joystick size
   const [baseColor, setBaseColor] = useState<string>('#6c757d');
   const [stickColor, setStickColor] = useState<string>('#32CD32');
+  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(
+    ros,
+    config,
+    isEditing
+  );
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -201,11 +204,16 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
         frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
       }));
     } else if (isPoseStampedMessageType(action.messageType)) {
+      if (config.config?.poseStampedReferenceMode === 'tf'
+        && !latestTransformRef.current) return;
+      if (config.config?.poseStampedReferenceMode === 'odometry'
+        && !latestOdometryRef.current) return;
       message = new ROSLIB.Message(buildPoseStampedPayload({
         messageType: action.messageType,
         config,
         values: mappedValues,
         latestOdometry: latestOdometryRef.current,
+        latestReferenceTransform: latestTransformRef.current,
       }));
     } else if (action.messageType.includes('Float32') || action.messageType.includes('Float64')) {
       // For float messages
@@ -255,37 +263,6 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       topicRef.current = null;
     };
   }, [ros, config.action, publishMessage, publishThrottled, isEditing, onJoyAxesChange]);
-
-  useEffect(() => {
-    if (!config.action || isEditing) return;
-
-    const action = config.action as ROSTopicConfig;
-    const shouldUseOdometry = isPoseStampedMessageType(action.messageType)
-      && config.config?.poseStampedReferenceMode === 'odometry'
-      && !!config.config?.poseStampedOdometryTopic;
-
-    latestOdometryRef.current = null;
-
-    if (!shouldUseOdometry) return;
-
-    const odometryTopic = config.config?.poseStampedOdometryTopic;
-    if (!odometryTopic) return;
-
-    odometryTopicRef.current = new ROSLIB.Topic({
-      ros,
-      name: odometryTopic,
-      messageType: config.config?.poseStampedOdometryMessageType || 'nav_msgs/Odometry',
-    });
-    odometryTopicRef.current.subscribe((message: OdometryLikeMessage) => {
-      latestOdometryRef.current = message;
-    });
-
-    return () => {
-      odometryTopicRef.current?.unsubscribe();
-      odometryTopicRef.current = null;
-      latestOdometryRef.current = null;
-    };
-  }, [ros, config.action, config.config, isEditing]);
 
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null || event.distance === null || isEditing) return;

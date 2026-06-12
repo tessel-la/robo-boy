@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getStepPrecision } from '../rangeUtils';
 import './ValueControl.css';
 
 interface ValueControlProps {
@@ -18,15 +19,7 @@ const ValueControl: React.FC<ValueControlProps> = ({
   min = -Infinity,
   max = Infinity,
 }) => {
-  const getPrecision = (s: number) => {
-    const stepString = String(s);
-    if (stepString.includes('.')) {
-      return stepString.split('.')[1].length;
-    }
-    return 0;
-  };
-
-  const precision = getPrecision(step);
+  const precision = getStepPrecision(step);
   const [inputValue, setInputValue] = useState(value.toFixed(precision));
 
   useEffect(() => {
@@ -99,4 +92,4 @@ const ValueControl: React.FC<ValueControlProps> = ({
   );
 };
 
-export default ValueControl; 
+export default ValueControl;
