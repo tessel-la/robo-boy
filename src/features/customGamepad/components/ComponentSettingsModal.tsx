@@ -416,7 +416,12 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       if (component.config) {
         if ((component.type === 'joystick' || component.type === 'dpad')
           && isPoseStampedMessageType(action?.messageType || '')) {
+          const min = component.config.min ?? -1;
+          const max = component.config.max ?? 1;
           const axes = component.config.axes || ['position.x', 'position.y'];
+          setValueRange({ min, max });
+          setSliderMin(component.config.sliderMin ?? min);
+          setSliderMax(component.config.sliderMax ?? max);
           setPoseStampedAxes(axes);
           const standardPoseCombos = [
             ['position.x', 'position.y'],
@@ -732,6 +737,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       updatedConfig = isPoseStampedMessageType(messageType)
         ? {
           ...updatedConfig,
+          min: roundToStepPrecision(valueRange.min, saveRangeStep),
+          max: roundToStepPrecision(valueRange.max, saveRangeStep),
+          sliderMin: roundToStepPrecision(sliderMin, saveRangeStep),
+          sliderMax: roundToStepPrecision(sliderMax, saveRangeStep),
           axes: poseStampedAxes,
           buttonMapping: undefined,
           poseStampedFrameId: poseStampedFrameId.trim() || undefined,
@@ -752,6 +761,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         : {
           ...updatedConfig,
           buttonMapping: dpadButtonMapping,
+          min: undefined,
+          max: undefined,
+          sliderMin: undefined,
+          sliderMax: undefined,
           axes: undefined,
           poseStampedFrameId: undefined,
           poseStampedReferenceMode: undefined,
@@ -1246,43 +1259,39 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             <div className="settings-section">
               <h4>{component.type === 'joystick' ? 'Joystick Settings' : 'D-Pad Pose Settings'}</h4>
 
-              {component.type === 'joystick' && (
-                <>
-                  <div className="setting-group range-controls">
-                    <ValueControl
-                      label="Slider Min"
-                      value={sliderMin}
-                      onChange={setSliderMin}
-                      step={rangeStep}
-                      max={sliderMax}
-                    />
-                    <ValueControl
-                      label="Slider Max"
-                      value={sliderMax}
-                      onChange={setSliderMax}
-                      step={rangeStep}
-                      min={sliderMin}
-                    />
-                  </div>
+              <div className="setting-group range-controls">
+                <ValueControl
+                  label="Slider Min"
+                  value={sliderMin}
+                  onChange={setSliderMin}
+                  step={rangeStep}
+                  max={sliderMax}
+                />
+                <ValueControl
+                  label="Slider Max"
+                  value={sliderMax}
+                  onChange={setSliderMax}
+                  step={rangeStep}
+                  min={sliderMin}
+                />
+              </div>
 
-                  <div className="setting-group">
-                    <label>Value Range:</label>
-                    <RangeSlider
-                      min={sliderMin}
-                      max={sliderMax}
-                      step={rangeStep}
-                      minValue={valueRange.min}
-                      maxValue={valueRange.max}
-                      onChange={(newRange) => {
-                        setValueRange({
-                          min: Math.max(sliderMin, newRange.min),
-                          max: Math.min(sliderMax, newRange.max),
-                        });
-                      }}
-                    />
-                  </div>
-                </>
-              )}
+              <div className="setting-group">
+                <label>Value Range:</label>
+                <RangeSlider
+                  min={sliderMin}
+                  max={sliderMax}
+                  step={rangeStep}
+                  minValue={valueRange.min}
+                  maxValue={valueRange.max}
+                  onChange={(newRange) => {
+                    setValueRange({
+                      min: Math.max(sliderMin, newRange.min),
+                      max: Math.min(sliderMax, newRange.max),
+                    });
+                  }}
+                />
+              </div>
 
               {/* Only show axis configuration for Joy, Twist, and PoseStamped message types */}
               {isAxisConfigurationEnabled(messageType) && (

@@ -91,7 +91,11 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       const values = [
         Number(directions.has('right')) - Number(directions.has('left')),
         Number(directions.has('up')) - Number(directions.has('down')),
-      ];
+      ].map(value => {
+        if (value > 0) return config.config?.max ?? config.config?.maxValue ?? 1;
+        if (value < 0) return config.config?.min ?? -1;
+        return 0;
+      });
       topicRef.current.publish(new ROSLIB.Message(buildPoseStampedPayload({
         messageType: action.messageType,
         config,
