@@ -153,6 +153,76 @@
   overflow-y: auto;
 }
 
+.palette-resource-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px;
+  padding: 0 9px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  color: var(--text-color-secondary, #888888);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.palette-resource-search-empty {
+  margin: 0 8px 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color-secondary, #888888);
+  font-size: 11px;
+  text-align: center;
+}
+
+.palette-resource-search:focus-within {
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 12%, transparent);
+}
+
+.palette-resource-search-input[type='search'] {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-color, #333333);
+  font-size: 11px;
+  outline: none;
+}
+
+.palette-resource-search-input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+
+.palette-resource-search-input::placeholder {
+  color: var(--text-color-secondary, #888888);
+}
+
+.palette-resource-search-clear {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--background-color, #f5f5f5);
+  color: var(--text-color-secondary, #888888);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.palette-resource-search-clear:hover {
+  color: var(--text-color, #333333);
+}
+
 /* Nodes */
 .palette-node {
   display: flex;
@@ -196,6 +266,26 @@
   color: var(--text-color, #333333);
   font-weight: 500;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-node-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-node-copy .palette-node-label {
+  flex: none;
+}
+
+.palette-node-detail {
+  overflow: hidden;
+  color: var(--text-color-secondary, #888888);
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -330,6 +420,15 @@
 
   .palette-node-label {
     font-size: 13px;
+  }
+
+  .palette-resource-search-input[type='search'] {
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .palette-node-detail {
+    font-size: 10px;
   }
 
   .palette-section-content {

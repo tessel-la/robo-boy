@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Ros } from 'roslib';
 
 // ─── Palette icons ────────────────────────────────────────────────────────────
@@ -33,6 +33,22 @@ const IconDiscovering = () => (
     <circle cx="6.5" cy="6.5" r="5" strokeDasharray="8 6" strokeLinecap="round">
       <animateTransform attributeName="transform" type="rotate" from="0 6.5 6.5" to="360 6.5 6.5" dur="0.9s" repeatCount="indefinite"/>
     </circle>
+  </svg>
+);
+
+const IconSearch = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 14 14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="6" cy="6" r="4" />
+    <line x1="9" y1="9" x2="13" y2="13" />
   </svg>
 );
 
@@ -101,6 +117,16 @@ interface NodePaletteProps {
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 
+const matchesResourceSearch = (
+  resource: { name: string; type: string },
+  terms: string[]
+): boolean => {
+  if (terms.length === 0) return true;
+
+  const searchableText = `${resource.name} ${resource.type}`.toLocaleLowerCase();
+  return terms.every((term) => searchableText.includes(term));
+};
+
 const NodePalette: React.FC<NodePaletteProps> = ({
   ros,
   isConnected,
@@ -114,6 +140,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     topics: [],
   });
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [resourceQuery, setResourceQuery] = useState('');
   const hasDiscovered = React.useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     control: true,
@@ -241,6 +268,28 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     { type: BehaviorNodeType.Parallel, label: 'Parallel', icon: '∥', category: 'control' },
   ];
 
+  const resourceSearchTerms = useMemo(
+    () => resourceQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
+    [resourceQuery]
+  );
+  const isResourceSearchActive = resourceSearchTerms.length > 0;
+  const filteredActions = useMemo(
+    () => rosResources.actions.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    [resourceSearchTerms, rosResources.actions]
+  );
+  const filteredServices = useMemo(
+    () => rosResources.services.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    [resourceSearchTerms, rosResources.services]
+  );
+  const filteredTopics = useMemo(
+    () => rosResources.topics.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    [resourceSearchTerms, rosResources.topics]
+  );
+  const filteredResourceCount =
+    filteredActions.length + filteredServices.length + filteredTopics.length;
+  const resourceCount =
+    rosResources.actions.length + rosResources.services.length + rosResources.topics.length;
+
   // Discover ROS resources once when first connected.
   // We guard with a ref so switching tabs back and forth doesn't re-trigger
   // discovery (which would flood rosbridge with service calls).
@@ -324,6 +373,39 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         </button>
       )}
 
+      {resourceCount > 0 && (
+        <div className="palette-resource-search" role="search">
+          <IconSearch />
+          <input
+            className="palette-resource-search-input"
+            type="search"
+            value={resourceQuery}
+            onChange={(e) => setResourceQuery(e.target.value)}
+            placeholder="Search actions, services, topics..."
+            aria-label="Search available ROS resources"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {resourceQuery && (
+            <button
+              className="palette-resource-search-clear"
+              type="button"
+              onClick={() => setResourceQuery('')}
+              aria-label="Clear ROS resource search"
+              title="Clear search"
+            >
+              x
+            </button>
+          )}
+        </div>
+      )}
+
+      {isResourceSearchActive && filteredResourceCount === 0 && (
+        <div className="palette-resource-search-empty" role="status">
+          No matching actions, services, or topics
+        </div>
+      )}
+
       {/* Control Flow Section */}
       <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('control')}>
@@ -352,112 +434,145 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
 
       {/* ROS Actions Section */}
-      <div className="palette-section">
-        <div className="palette-section-header" onClick={() => toggleSection('actions')}>
-          <span className="palette-section-icon">
-            {expandedSections.actions ? <IconChevronDown /> : <IconChevronRight />}
-          </span>
-          <span className="palette-section-title">ROS Actions</span>
-          {rosResources.actions.length > 0 && (
-            <span className="palette-section-count">{rosResources.actions.length}</span>
-          )}
-        </div>
-        {expandedSections.actions && (
-          <div className="palette-section-content">
-            {rosResources.actions.length === 0 ? (
-              <div className="palette-empty">
-                {isConnected ? 'No actions found' : 'Connect to ROS first'}
-              </div>
-            ) : (
-              rosResources.actions.map((action, index) => (
-                <div
-                  key={`${action.name}-${index}`}
-                  className="palette-node palette-node-ros"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, action)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
-                  title={action.name}
-                >
-                  <span className="palette-node-icon"><IconAction /></span>
-                  <span className="palette-node-label">{action.name}</span>
-                </div>
-              ))
+      {(!isResourceSearchActive || filteredActions.length > 0) && (
+        <div className="palette-section">
+          <div className="palette-section-header" onClick={() => toggleSection('actions')}>
+            <span className="palette-section-icon">
+              {isResourceSearchActive || expandedSections.actions ? <IconChevronDown /> : <IconChevronRight />}
+            </span>
+            <span className="palette-section-title">ROS Actions</span>
+            {rosResources.actions.length > 0 && (
+              <span className="palette-section-count">
+                {isResourceSearchActive
+                  ? `${filteredActions.length}/${rosResources.actions.length}`
+                  : rosResources.actions.length}
+              </span>
             )}
           </div>
-        )}
-      </div>
+          {(isResourceSearchActive || expandedSections.actions) && (
+            <div className="palette-section-content">
+              {rosResources.actions.length === 0 ? (
+                <div className="palette-empty">
+                  {isConnected ? 'No actions found' : 'Connect to ROS first'}
+                </div>
+              ) : (
+                filteredActions.map((action, index) => (
+                  <div
+                    key={`${action.name}-${index}`}
+                    className="palette-node palette-node-ros"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, action)}
+                    onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
+                    title={`${action.name} (${action.type})`}
+                  >
+                    <span className="palette-node-icon">
+                      <IconAction />
+                    </span>
+                    <span className="palette-node-copy">
+                      <span className="palette-node-label">{action.name}</span>
+                      <span className="palette-node-detail">{action.type}</span>
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ROS Services Section */}
-      <div className="palette-section">
+      {(!isResourceSearchActive || filteredServices.length > 0) && (
+        <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('services')}>
           <span className="palette-section-icon">
-            {expandedSections.services ? <IconChevronDown /> : <IconChevronRight />}
+            {isResourceSearchActive || expandedSections.services ? <IconChevronDown /> : <IconChevronRight />}
           </span>
           <span className="palette-section-title">ROS Services</span>
           {rosResources.services.length > 0 && (
-            <span className="palette-section-count">{rosResources.services.length}</span>
+            <span className="palette-section-count">
+              {isResourceSearchActive
+                ? `${filteredServices.length}/${rosResources.services.length}`
+                : rosResources.services.length}
+            </span>
           )}
         </div>
-        {expandedSections.services && (
+        {(isResourceSearchActive || expandedSections.services) && (
           <div className="palette-section-content">
             {rosResources.services.length === 0 ? (
               <div className="palette-empty">
                 {isConnected ? 'No services found' : 'Connect to ROS first'}
               </div>
             ) : (
-              rosResources.services.map((service, index) => (
+              filteredServices.map((service, index) => (
                 <div
                   key={`${service.name}-${index}`}
                   className="palette-node palette-node-ros"
                   draggable
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Service, service)}
                   onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
-                  title={service.name}
+                  title={`${service.name} (${service.type})`}
                 >
-                  <span className="palette-node-icon"><IconService /></span>
-                  <span className="palette-node-label">{service.name}</span>
+                  <span className="palette-node-icon">
+                    <IconService />
+                  </span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">{service.name}</span>
+                    <span className="palette-node-detail">{service.type}</span>
+                  </span>
                 </div>
               ))
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* ROS Topics Section */}
-      <div className="palette-section">
+      {(!isResourceSearchActive || filteredTopics.length > 0) && (
+        <div className="palette-section">
         <div className="palette-section-header" onClick={() => toggleSection('topics')}>
           <span className="palette-section-icon">
-            {expandedSections.topics ? <IconChevronDown /> : <IconChevronRight />}
+            {isResourceSearchActive || expandedSections.topics ? <IconChevronDown /> : <IconChevronRight />}
           </span>
           <span className="palette-section-title">ROS Topics</span>
           {rosResources.topics.length > 0 && (
-            <span className="palette-section-count">{rosResources.topics.length}</span>
+            <span className="palette-section-count">
+              {isResourceSearchActive
+                ? `${filteredTopics.length}/${rosResources.topics.length}`
+                : rosResources.topics.length}
+            </span>
           )}
         </div>
-        {expandedSections.topics && (
+        {(isResourceSearchActive || expandedSections.topics) && (
           <div className="palette-section-content">
             {rosResources.topics.length === 0 ? (
               <div className="palette-empty">
                 {isConnected ? 'No topics found' : 'Connect to ROS first'}
               </div>
             ) : (
-              rosResources.topics.map((topic, index) => (
+              filteredTopics.map((topic, index) => (
                 <div
                   key={`${topic.name}-${index}`}
                   className="palette-node palette-node-ros"
                   draggable
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Topic, topic)}
                   onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
-                  title={topic.name}
+                  title={`${topic.name} (${topic.type})`}
                 >
-                  <span className="palette-node-icon"><IconTopic /></span>
-                  <span className="palette-node-label">{topic.name}</span>
+                  <span className="palette-node-icon">
+                    <IconTopic />
+                  </span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">{topic.name}</span>
+                    <span className="palette-node-detail">{topic.type}</span>
+                  </span>
                 </div>
               ))
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
       </div>{/* end palette-body */}
     </div>
   );

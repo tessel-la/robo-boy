@@ -21,6 +21,7 @@ import { FaArrowDown, FaArrowUp } from 'react-icons/fa';
 
 import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
+import NodeSearch from './NodeSearch';
 import BehaviorTreeToolbar from './BehaviorTreeToolbar';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
@@ -205,7 +206,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const executionStartedAt = useRef<number | undefined>(undefined);
   const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
 
-  const { screenToFlowPosition, deleteElements } = useReactFlow();
+  const { screenToFlowPosition, deleteElements, getZoom, setCenter } = useReactFlow();
 
   const allocateNodeId = useCallback((existingNodes: Node[]) => {
     const id = getNextBehaviorNodeId(existingNodes, nodeIdCounter.current);
@@ -661,6 +662,27 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setOrderingParentId(null);
   }, []);
 
+  const handleSearchSelect = useCallback(
+    (node: BehaviorTreeNode) => {
+      const position = node.positionAbsolute ?? node.position;
+      const centerX = position.x + (node.width ?? 150) / 2;
+      const centerY = position.y + (node.height ?? 80) / 2;
+      const selectedNode = { ...node, selected: true, dragging: false };
+
+      setNodes((currentNodes) =>
+        currentNodes.map((currentNode) => ({
+          ...currentNode,
+          selected: currentNode.id === node.id,
+          dragging: false,
+        }))
+      );
+      setSelectedNodes([selectedNode]);
+      setOrderingParentId(null);
+      setCenter(centerX, centerY, { zoom: Math.max(getZoom(), 1), duration: 400 });
+    },
+    [getZoom, setCenter, setNodes]
+  );
+
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
@@ -770,6 +792,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
+          <NodeSearch nodes={behaviorNodes} onSelectNode={handleSearchSelect} />
           {orderingParent && (
             <ChildOrderPanel
               parent={orderingParent}

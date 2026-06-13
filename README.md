@@ -16,6 +16,7 @@ A web application for controlling ROS 2 robots, featuring a React frontend, ROS 
 - Camera stream display (via web_video_server)
 - User-created control pads with reusable starter templates
 - 3D visualization support
+- Behavior tree editing with searchable nodes and ROS resources
 - Customizable themes with user-created color palettes
 
 ## App Demo

@@ -176,6 +176,18 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.getByText('Node Palette')).toBeVisible();
     await expect(page.getByText('Control Flow')).toBeVisible();
 
+    const resourceSearch = page.getByRole('searchbox', { name: 'Search available ROS resources' });
+    await expect(resourceSearch).toBeVisible();
+    await resourceSearch.fill('NavigateToPose');
+    await expect(page.getByText('/navigate_to_pose', { exact: true })).toBeVisible();
+    await resourceSearch.fill('SetBool');
+    await expect(page.getByText('/set_bool', { exact: true })).toBeVisible();
+    await expect(page.getByText('/navigate_to_pose', { exact: true })).toHaveCount(0);
+    await resourceSearch.fill('Twist');
+    await expect(page.getByText('/cmd_vel', { exact: true })).toBeVisible();
+    await resourceSearch.fill('missing resource');
+    await expect(page.getByText('No matching actions, services, or topics')).toBeVisible();
+
     await page.getByTestId('bt-menu-button').click();
     await expect(page.getByTestId('bt-menu-panel')).toBeVisible();
     await expect(page.getByText('Saved Trees', { exact: true })).toBeVisible();
@@ -197,6 +209,21 @@ test.describe('Behavior Tree panel', () => {
       return JSON.parse(stored).map((item: { tree: { name: string } }) => item.tree.name);
     });
     expect(savedTreeNames).toContain('Inspection Tree');
+  });
+
+  test('searches loaded nodes by ROS name and focuses the result', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedRunningActionTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Long Action Tree' }).click();
+
+    const search = page.getByRole('combobox', { name: 'Search tree nodes' });
+    await search.fill('navigate_to_pose');
+    await page.getByRole('option', { name: /Navigate/ }).click();
+
+    await expect(search).toHaveValue('Navigate');
+    await expect(page.locator('.bt-node.selected').filter({ hasText: 'Navigate' })).toHaveCount(1);
   });
 
   test('uses the mobile bottom sheet to tap-add a Sequence node', async ({ page }) => {
