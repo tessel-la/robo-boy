@@ -242,6 +242,40 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
   });
 
+  test('defaults an action node name and lets the user rename it', async ({ page }) => {
+    await openBehaviorTree(page);
+    await openNodePalette(page);
+
+    await page.getByText('ROS Actions', { exact: true }).click();
+    await page.getByTestId('bt-node-palette').getByTitle('/navigate_to_pose').click();
+
+    const actionNode = page.locator('.react-flow__node').filter({ hasText: '/navigate_to_pose' });
+    await expect(actionNode).toHaveCount(1);
+    await actionNode.click();
+
+    await page.getByTestId('bt-rename-selected').click();
+    const dialog = page.getByRole('dialog', { name: 'Name node' });
+    await expect(dialog.getByLabel('Node name')).toHaveValue('/navigate_to_pose');
+    await dialog.getByLabel('Node name').fill('Navigate home');
+    await dialog.getByRole('button', { name: 'Save name' }).click();
+
+    await expect(actionNode).toContainText('Navigate home');
+    await expect(actionNode).toContainText('/navigate_to_pose');
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    const savedAction = await page.evaluate(() => {
+      const stored = localStorage.getItem('robo-boy-behavior-trees');
+      if (!stored) return null;
+      return JSON.parse(stored)[0]?.tree.nodes[0]?.data ?? null;
+    });
+    expect(savedAction).toMatchObject({
+      label: 'Navigate home',
+      actionName: '/navigate_to_pose',
+    });
+  });
+
   test('keeps loaded nodes when adding another node after load', async ({ page }) => {
     await openBehaviorTree(page);
 
