@@ -23,6 +23,7 @@ import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
 import NodeSearch from './NodeSearch';
 import BehaviorTreeToolbar from './BehaviorTreeToolbar';
+import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
@@ -98,6 +99,24 @@ const getOrderNodeDetail = (node: BehaviorTreeNode): string | undefined => {
   if ('serviceName' in data) return data.serviceName;
   if ('topicName' in data) return data.topicName;
   return data.label;
+};
+
+const getDefaultNodeName = (node: BehaviorTreeNode): string => {
+  const data = node.data;
+  if ('actionName' in data && data.actionName) return data.actionName;
+  if ('serviceName' in data && data.serviceName) return data.serviceName;
+  if ('topicName' in data && data.topicName) return data.topicName;
+
+  switch (node.type) {
+    case BehaviorNodeType.Sequence:
+      return 'Sequence';
+    case BehaviorNodeType.Selector:
+      return 'Selector';
+    case BehaviorNodeType.Parallel:
+      return 'Parallel';
+    default:
+      return data.label || 'Node';
+  }
 };
 
 const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
@@ -192,6 +211,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [editingService, setEditingService] = useState<
     { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
@@ -357,6 +377,27 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setSelectedNodes(result.duplicatedNodes);
   }, [edges, nodes, selectedNodes, setEdges, setNodes]);
 
+  const handleOpenSelectedNodeRename = useCallback(() => {
+    if (selectedNodes.length !== 1) return;
+    setRenamingNodeId(selectedNodes[0].id);
+  }, [selectedNodes]);
+
+  const handleSaveNodeName = useCallback(
+    (name: string) => {
+      if (!renamingNodeId) return;
+
+      const updateName = (node: Node) =>
+        node.id === renamingNodeId
+          ? { ...node, data: { ...node.data, label: name } }
+          : node;
+
+      setNodes((currentNodes) => currentNodes.map(updateName));
+      setSelectedNodes((currentNodes) => currentNodes.map(updateName));
+      setRenamingNodeId(null);
+    },
+    [renamingNodeId, setNodes]
+  );
+
   const openNodeEditor = useCallback((node: Node) => {
     if (node.type === BehaviorNodeType.Action) {
       setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
@@ -468,6 +509,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setEdges(loadedEdges);
     setSelectedNodes([]);
     setOrderingParentId(null);
+    setRenamingNodeId(null);
     nodeIdCounter.current = getNodeCounterAfterNodes(loadedNodes);
   }, [setNodes, setEdges]);
 
@@ -489,6 +531,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setNodes([]);
     setEdges([]);
     setOrderingParentId(null);
+    setRenamingNodeId(null);
     nodeIdCounter.current = 0;
   }, [nodes, edges, setNodes, setEdges]);
 
@@ -645,6 +688,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const parent = behaviorNodes.find((node) => node.id === orderingParentId);
     return isOrderedControlNode(parent) ? parent : null;
   }, [behaviorNodes, orderingParentId]);
+  const renamingNode = useMemo(
+    () => behaviorNodes.find((node) => node.id === renamingNodeId) ?? null,
+    [behaviorNodes, renamingNodeId]
+  );
   const selectedOrderedChildLinks = useMemo(
     () => (orderingParent ? getOrderedChildLinks(orderingParent.id, behaviorNodes, edges) : []),
     [behaviorNodes, edges, orderingParent]
@@ -699,6 +746,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onTogglePalette={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
+        onRenameSelected={handleOpenSelectedNodeRename}
         onRename={handleRename}
       />
 
@@ -818,6 +866,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           onSave={handleSaveServiceRequest}
           onClose={() => setEditingService(null)}
+        />
+      )}
+      {renamingNode && (
+        <NodeNameEditor
+          initialName={renamingNode.data.label}
+          defaultName={getDefaultNodeName(renamingNode)}
+          onSave={handleSaveNodeName}
+          onClose={() => setRenamingNodeId(null)}
         />
       )}
     </div>

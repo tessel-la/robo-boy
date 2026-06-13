@@ -444,6 +444,145 @@
   z-index: 0;
 }
 
+/* Node name editor */
+.bt-node-name-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.bt-node-name-dialog {
+  width: min(380px, 100%);
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
+}
+
+.bt-node-name-header,
+.bt-node-name-actions,
+.bt-node-name-default {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bt-node-name-kicker,
+.bt-node-name-label {
+  color: var(--text-color-secondary, #666666);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bt-node-name-header h2 {
+  margin: 3px 0 0;
+  color: var(--text-color, #333333);
+  font-size: 20px;
+}
+
+.bt-node-name-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color-secondary, #666666);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.bt-node-name-close:hover {
+  background: var(--background-color, #f5f5f5);
+}
+
+.bt-node-name-label {
+  display: block;
+  margin: 22px 0 8px;
+}
+
+.bt-node-name-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 8px;
+  outline: none;
+  background: var(--background-color, #fafafa);
+  color: var(--text-color, #333333);
+  font: inherit;
+}
+
+.bt-node-name-input:focus {
+  border-color: var(--primary-color, #4285f4);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 18%, transparent);
+}
+
+.bt-node-name-default {
+  min-width: 0;
+  margin: 8px 0 22px;
+  color: var(--text-color-secondary, #777777);
+  font-size: 11px;
+}
+
+.bt-node-name-default span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-node-name-default button {
+  padding: 3px 0;
+  border: none;
+  background: transparent;
+  color: var(--primary-color, #4285f4);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.bt-node-name-actions {
+  justify-content: flex-end;
+}
+
+.bt-node-name-actions button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.bt-node-name-cancel {
+  border: 1px solid var(--border-color, #d0d0d0);
+  background: transparent;
+  color: var(--text-color, #333333);
+}
+
+.bt-node-name-save {
+  border: 1px solid var(--primary-color, #4285f4);
+  background: var(--primary-color, #4285f4);
+  color: #ffffff;
+}
+
+.bt-node-name-save:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 /* ── Mobile ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .bt-content {

@@ -143,7 +143,8 @@
 .bt-float-stop-btn:active { transform: scale(0.96); }
 
 .bt-float-delete-btn,
-.bt-float-duplicate-btn {
+.bt-float-duplicate-btn,
+.bt-float-rename-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -165,10 +166,16 @@
   color: var(--primary-color, #4285f4);
 }
 
+.bt-float-rename-btn {
+  color: var(--text-color, #333333);
+}
+
 .bt-float-delete-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
 .bt-float-duplicate-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
+.bt-float-rename-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
 .bt-float-delete-btn:active,
-.bt-float-duplicate-btn:active { transform: scale(0.97); }
+.bt-float-duplicate-btn:active,
+.bt-float-rename-btn:active { transform: scale(0.97); }
 
 .bt-float-btn-label { font-size: 13px; }
 .bt-float-count     { font-size: 13px; }
@@ -635,7 +642,8 @@
   }
 
   .bt-float-delete-btn,
-  .bt-float-duplicate-btn {
+  .bt-float-duplicate-btn,
+  .bt-float-rename-btn {
     width: 36px;
     padding: 0;
     justify-content: center;

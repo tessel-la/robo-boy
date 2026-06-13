@@ -43,6 +43,25 @@ describe('behavior tree node utilities', () => {
     });
   });
 
+  it('uses the ROS action name as the default node name', () => {
+    const node = createBehaviorTreeNode({
+      id: 'node-8',
+      nodeType: BehaviorNodeType.Action,
+      position: { x: 0, y: 0 },
+      rosInfo: {
+        name: '/navigate_to_pose',
+        type: 'nav2_msgs/action/NavigateToPose',
+        namespace: '/',
+      },
+    });
+
+    expect(node?.data).toMatchObject({
+      label: '/navigate_to_pose',
+      actionName: '/navigate_to_pose',
+      actionType: 'nav2_msgs/action/NavigateToPose',
+    });
+  });
+
   it('duplicates selected nodes with new ids and only selected internal edges', () => {
     const nodes: BehaviorTreeNode[] = [
       {

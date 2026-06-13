@@ -22,6 +22,7 @@ interface BehaviorTreeToolbarProps {
   onTogglePalette: () => void;
   onDeleteSelected: () => void;
   onDuplicateSelected: () => void;
+  onRenameSelected: () => void;
   onRename: (name: string) => void;
 }
 
@@ -39,6 +40,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onTogglePalette,
   onDeleteSelected,
   onDuplicateSelected,
+  onRenameSelected,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -158,6 +160,21 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       <div className="bt-float-actions">
         {selectedNodeCount > 0 && (
           <>
+            {selectedNodeCount === 1 && (
+              <button
+                className="bt-float-rename-btn"
+                onClick={onRenameSelected}
+                title="Rename selected node"
+                aria-label="Rename selected node"
+                data-testid="bt-rename-selected"
+              >
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.8 1.5l2.7 2.7-8.2 8.2-3.6.9.9-3.6 8.2-8.2z"/>
+                  <path d="M9.2 3.1l2.7 2.7"/>
+                </svg>
+                <span className="bt-float-btn-label">Rename</span>
+              </button>
+            )}
             <button
               className="bt-float-duplicate-btn"
               onClick={onDuplicateSelected}
