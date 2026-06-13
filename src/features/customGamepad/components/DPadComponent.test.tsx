@@ -52,6 +52,8 @@ describe('DPadComponent', () => {
       },
       config: {
         axes: ['position.x', 'position.z'],
+        min: -0.25,
+        max: 0.75,
         poseStampedFrameId: 'base_link',
         poseStampedReferenceMode: 'frame',
       },
@@ -65,8 +67,37 @@ describe('DPadComponent', () => {
     expect(roslibMock.topics[0].publish.mock.calls[0][0]).toMatchObject({
       header: { frame_id: 'base_link' },
       pose: {
-        position: { x: 0, y: 0, z: 1 },
+        position: { x: 0, y: 0, z: 0.75 },
         orientation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    });
+  });
+
+  it('uses the configured minimum for negative PoseStamped directions', () => {
+    const config: GamepadComponentConfig = {
+      id: 'negative-pose-dpad',
+      type: 'dpad',
+      position: { x: 0, y: 0, width: 2, height: 2 },
+      action: {
+        topic: '/target_pose',
+        messageType: 'geometry_msgs/msg/PoseStamped',
+        field: 'pose',
+      },
+      config: {
+        axes: ['position.x', 'position.y'],
+        min: -0.25,
+        max: 0.75,
+        poseStampedFrameId: 'base_link',
+        poseStampedReferenceMode: 'frame',
+      },
+    };
+
+    const { getByRole } = render(<DPadComponent config={config} ros={{} as any} />);
+    fireEvent.pointerDown(getByRole('button', { name: '←' }));
+
+    expect(roslibMock.topics[0].publish.mock.calls[0][0]).toMatchObject({
+      pose: {
+        position: { x: -0.25, y: 0, z: 0 },
       },
     });
   });
