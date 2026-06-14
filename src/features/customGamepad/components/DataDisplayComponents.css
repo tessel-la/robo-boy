@@ -61,7 +61,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 10px;
   padding: 5px;
   transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -85,13 +85,6 @@
   box-shadow: 0 0 0 3px rgba(154, 163, 173, 0.16);
 }
 
-.heartbeat-text {
-  color: var(--text-color-secondary, #9aa3ad);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1;
-}
-
 .heartbeat-healthy {
   border-color: rgba(50, 205, 50, 0.7);
   background: rgba(50, 205, 50, 0.1);
@@ -103,10 +96,6 @@
   animation: heartbeat-pulse 1.2s ease-in-out infinite;
 }
 
-.heartbeat-healthy .heartbeat-text {
-  color: var(--primary-color, #32cd32);
-}
-
 .heartbeat-unhealthy {
   border-color: rgba(220, 53, 69, 0.72);
   background: rgba(220, 53, 69, 0.1);
@@ -115,10 +104,6 @@
 .heartbeat-unhealthy .heartbeat-dot {
   background: #dc3545;
   box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.16);
-}
-
-.heartbeat-unhealthy .heartbeat-text {
-  color: #ff6b7a;
 }
 
 @keyframes heartbeat-pulse {
