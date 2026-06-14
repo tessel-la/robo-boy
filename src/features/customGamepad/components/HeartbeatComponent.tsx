@@ -95,13 +95,6 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
     };
   }, [action?.messageType, action?.topic, fieldPath, isEditing, mode, ros, ros?.isConnected, timeoutMs]);
 
-  const statusText = status === 'healthy'
-    ? 'LIVE'
-    : status === 'waiting'
-      ? 'WAIT'
-      : status === 'disconnected'
-        ? 'OFF'
-        : 'DOWN';
   const description = status === 'healthy'
     ? 'Heartbeat healthy'
     : status === 'waiting'
@@ -110,7 +103,6 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
         ? 'ROS disconnected'
         : 'Heartbeat unhealthy';
   const label = config.label?.trim() || action?.topic || 'Heartbeat';
-  const fontSize = Math.max(8, Math.floor(11 * scaleFactor));
   const labelFontSize = Math.max(8, Math.floor(10 * scaleFactor));
 
   return (
@@ -123,7 +115,6 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
     >
       <span className="heartbeat-label" style={{ fontSize: labelFontSize }}>{label}</span>
       <span className="heartbeat-dot" aria-hidden="true" />
-      <span className="heartbeat-text" style={{ fontSize }}>{statusText}</span>
     </div>
   );
 };

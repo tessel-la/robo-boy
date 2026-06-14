@@ -204,7 +204,7 @@
 
 .settings-button {
   background-color: var(--primary-color, #007bff);
-  color: white !important;
+  color: var(--button-text-color, #ffffff) !important;
 }
 
 .settings-button:hover {

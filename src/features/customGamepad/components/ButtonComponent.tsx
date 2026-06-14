@@ -144,8 +144,8 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
   const basePadding = size === 'small' ? 4 : size === 'large' ? 12 : 8;
   
   const buttonStyle: React.CSSProperties = {
-    backgroundColor: isActive ? (color || 'var(--primary-color)') : 'var(--secondary-color)',
-    color: isActive ? 'white' : 'var(--text-color)',
+    backgroundColor: isActive ? (color || 'var(--primary-color)') : 'var(--background-secondary)',
+    color: isActive ? 'var(--button-text-color)' : 'var(--text-color)',
     border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${isActive ? (color || 'var(--primary-color)') : 'var(--border-color)'}`,
     borderRadius: `${Math.floor(8 * scaleFactor)}px`,
     padding: `${Math.floor(basePadding * scaleFactor)}px ${Math.floor(basePadding * 2 * scaleFactor)}px`,

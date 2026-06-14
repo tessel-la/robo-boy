@@ -228,7 +228,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     const baseStyle: React.CSSProperties = {
       backgroundColor: pressedDirections.has(direction) 
         ? (config.style?.color || 'var(--primary-color)') 
-        : 'var(--secondary-color)',
+        : 'var(--background-secondary)',
       border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${pressedDirections.has(direction) 
         ? (config.style?.color || 'var(--primary-color)') 
         : 'var(--border-color)'}`,
@@ -241,7 +241,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       justifyContent: 'center',
       fontSize: `${scaledFontSize}px`,
       fontWeight: 'bold',
-      color: pressedDirections.has(direction) ? 'white' : 'var(--text-color)',
+      color: pressedDirections.has(direction) ? 'var(--button-text-color)' : 'var(--text-color)',
       overflow: 'hidden',
       fontFamily: 'var(--font-family-ui)',
       lineHeight: 1,
