@@ -577,6 +577,16 @@
 
 /* Small screens: center the popover instead of anchoring to button */
 @media (max-width: 600px) {
+  .bt-float-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bt-float-actions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
   .bt-menu-overlay {
     align-items: center;
     justify-content: center;

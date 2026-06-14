@@ -328,6 +328,44 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
   });
 
+  test('stacks mobile toolbar groups vertically without overlap', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 740 });
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+
+    const leftTools = page.locator('.bt-float-bar');
+    const rightTools = page.locator('.bt-float-actions');
+    const menuButton = page.getByTestId('bt-menu-button');
+    const paletteButton = page.getByTestId('bt-palette-toggle');
+    const arrangeButton = page.getByTestId('bt-arrange-tree');
+    const renameButton = page.getByTestId('bt-rename-selected');
+    const duplicateButton = page.getByTestId('bt-duplicate-selected');
+    await expect(page.getByTestId('bt-rename-selected')).toBeVisible();
+    await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
+
+    const leftBox = await leftTools.boundingBox();
+    const rightBox = await rightTools.boundingBox();
+    const menuBox = await menuButton.boundingBox();
+    const paletteBox = await paletteButton.boundingBox();
+    const arrangeBox = await arrangeButton.boundingBox();
+    const renameBox = await renameButton.boundingBox();
+    const duplicateBox = await duplicateButton.boundingBox();
+
+    expect(leftBox).not.toBeNull();
+    expect(rightBox).not.toBeNull();
+    expect((leftBox?.x ?? 0) + (leftBox?.width ?? 0)).toBeLessThanOrEqual(rightBox?.x ?? 0);
+    expect(menuBox?.x).toBe(paletteBox?.x);
+    expect(paletteBox?.x).toBe(arrangeBox?.x);
+    expect(menuBox?.y ?? 0).toBeLessThan(paletteBox?.y ?? 0);
+    expect(paletteBox?.y ?? 0).toBeLessThan(arrangeBox?.y ?? 0);
+    expect(renameBox?.x).toBe(duplicateBox?.x);
+    expect(renameBox?.y ?? 0).toBeLessThan(duplicateBox?.y ?? 0);
+  });
+
   test('shows sequence child order and reorders children', async ({ page }) => {
     await openBehaviorTree(page);
     await seedOrderedSequenceTree(page);
