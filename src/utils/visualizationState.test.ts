@@ -13,7 +13,8 @@ describe('visualizationState', () => {
     visualizations: [{ id: '1', type: 'scan', topic: '/scan' }],
     fixedFrame: 'map',
     displayedTfFrames: ['base_link'],
-    showTfFrameLabels: false
+    showTfFrameLabels: false,
+    tfAxesScale: 1.2,
   };
 
   it('should save state to memory and localStorage', () => {
@@ -35,7 +36,8 @@ describe('visualizationState', () => {
       visualizations: [],
       fixedFrame: 'odom',
       displayedTfFrames: [],
-      showTfFrameLabels: true
+      showTfFrameLabels: true,
+      tfAxesScale: 0.5,
     });
   });
 
@@ -60,6 +62,39 @@ describe('visualizationState', () => {
     // Even if we mess with local storage
     localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(mockState));
     expect(getVisualizationState()).toEqual(memState);
+  });
+
+  it('should keep empty-visualization state in memory', () => {
+    const emptyState = {
+      ...mockState,
+      visualizations: [],
+      fixedFrame: 'base_link',
+    };
+    saveVisualizationState(emptyState);
+
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(mockState));
+
+    expect(getVisualizationState()).toEqual(emptyState);
+  });
+
+  it('should preserve URDF topic and options', () => {
+    const urdfState = {
+      ...mockState,
+      visualizations: [{
+        id: 'urdf-1',
+        type: 'urdf',
+        topic: '/robot/robot_description',
+        options: {
+          robotDescriptionTopic: '/robot/robot_description',
+          urdfPath: '/robot_meshes/',
+        },
+      }],
+    };
+
+    saveVisualizationState(urdfState);
+
+    expect(getVisualizationState()).toEqual(urdfState);
+    expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!)).toEqual(urdfState);
   });
 
   it('should clear state', () => {
@@ -93,7 +128,8 @@ describe('visualizationState', () => {
 
     expect(getVisualizationState()).toEqual({
       ...oldState,
-      showTfFrameLabels: true
+      showTfFrameLabels: true,
+      tfAxesScale: 0.5,
     });
   });
 });

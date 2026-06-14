@@ -75,11 +75,28 @@ interface TopicInfo {
 }
 
 const DEFAULT_FIXED_FRAME = 'odom'; // Or your preferred default, e.g., 'map', 'base_link'
+const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
+  'pointcloud',
+  'camerainfo',
+  'urdf',
+  'laserscan',
+  'tf',
+  'posestamped',
+];
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
   const viewerRef = useRef<HTMLDivElement>(null);
+  const [initialState] = useState(() => {
+    const savedState = getVisualizationState();
+    return {
+      ...savedState,
+      visualizations: savedState.visualizations.filter((viz) =>
+        VALID_VISUALIZATION_TYPES.includes(viz.type as VisualizationConfig['type'])
+      ) as VisualizationConfig[],
+    };
+  });
 
   // Use the custom hook for viewer management
   const isRosConnected = ros?.isConnected ?? false;
@@ -96,11 +113,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
 
   // Frame States
-  const [fixedFrame, setFixedFrame] = useState<string>(DEFAULT_FIXED_FRAME);
-  const [availableFrames, setAvailableFrames] = useState<string[]>([DEFAULT_FIXED_FRAME]);
-  const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>([]);
-  const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(true);
-  const [tfAxesScale, setTfAxesScale] = useState<number>(0.5); // Add TF axes scale state
+  const [fixedFrame, setFixedFrame] = useState<string>(initialState.fixedFrame || DEFAULT_FIXED_FRAME);
+  const [availableFrames, setAvailableFrames] = useState<string[]>([initialState.fixedFrame || DEFAULT_FIXED_FRAME]);
+  const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>(initialState.displayedTfFrames);
+  const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(initialState.showTfFrameLabels);
+  const [tfAxesScale, setTfAxesScale] = useState<number>(initialState.tfAxesScale);
 
   // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false);
@@ -110,33 +127,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   const [activeSettingsVizId, setActiveSettingsVizId] = useState<string | null>(null);
 
   // State for modular visualizations
-  const [visualizations, setVisualizations] = useState<VisualizationConfig[]>([]);
+  const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
 
   // Add a ref to track TF provider initialization to prevent repeated logging
   const tfProviderInitialized = useRef<boolean>(false);
-
-  // Load saved visualizations on initial mount
-  useEffect(() => {
-    const savedState = getVisualizationState();
-    if (savedState.visualizations && savedState.visualizations.length > 0) {
-      const validTypes: VisualizationConfig['type'][] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'tf', 'posestamped'];
-      const filteredVisualizations = savedState.visualizations.filter(
-        (viz: any) => validTypes.includes(viz.type)
-      ) as VisualizationConfig[];
-
-      setVisualizations(filteredVisualizations);
-      setFixedFrame(savedState.fixedFrame || DEFAULT_FIXED_FRAME);
-      setDisplayedTfFrames(savedState.displayedTfFrames || []);
-      setShowTfFrameLabels(savedState.showTfFrameLabels ?? true);
-      console.log('Restored and filtered saved visualization state:', savedState, 'Filtered:', filteredVisualizations);
-    } else {
-      // Initialize with some default visualization if none are saved (optional)
-      // setVisualizations([
-      //   { id: uuidv4(), type: 'pointcloud', topic: '/your_default_pointcloud_topic', options: {} },
-      // ]);
-    }
-  }, []);
 
   // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
   useEffect(() => {
@@ -145,12 +140,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         visualizations,
         fixedFrame,
         displayedTfFrames,
-        showTfFrameLabels
+        showTfFrameLabels,
+        tfAxesScale,
       };
       saveVisualizationState(stateToSave);
       console.log('Saved visualization state:', stateToSave);
     }
-  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, isRosConnected]);
+  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, tfAxesScale, isRosConnected]);
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
@@ -205,7 +201,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
   }, []);
 
   // Update the TF provider hook call
-  const { customTFProvider, ensureProviderFunctionality } = useTfProvider({
+  const { customTFProvider, ensureProviderFunctionality, isProviderReady } = useTfProvider({
     ros,
     isRosConnected,
     ros3dViewer, // Pass viewer ref from the other hook
@@ -509,6 +505,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
                 customTFProvider={customTFProvider}
+                dependenciesReady={isProviderReady}
                 robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
                 urdfPath={(viz.options as UrdfOptions)?.urdfPath}
               // Pass other URDF options as needed

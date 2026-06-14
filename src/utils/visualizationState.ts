@@ -9,33 +9,36 @@ interface VisualizationConfig {
 }
 
 // Complete state for the visualization panel
-interface VisualizationPanelState {
+export interface VisualizationPanelState {
   visualizations: VisualizationConfig[];
   fixedFrame: string;
   displayedTfFrames: string[];
   showTfFrameLabels: boolean;
+  tfAxesScale: number;
 }
 
-// Global state to store visualizations
-let savedState: VisualizationPanelState = {
+export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
   visualizations: [],
   fixedFrame: 'odom',
   displayedTfFrames: [],
-  showTfFrameLabels: true
+  showTfFrameLabels: true,
+  tfAxesScale: 0.5,
 };
 
-const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
-  visualizations: [],
-  fixedFrame: 'odom',
-  displayedTfFrames: [],
-  showTfFrameLabels: true
-};
+// Keep an explicit flag because an empty visualization list is still valid saved state.
+let hasSavedStateInMemory = false;
+let savedState: VisualizationPanelState = { ...DEFAULT_VISUALIZATION_STATE };
 
-const normalizeVisualizationState = (state: Partial<VisualizationPanelState>): VisualizationPanelState => ({
-  visualizations: state.visualizations || [],
-  fixedFrame: state.fixedFrame || DEFAULT_VISUALIZATION_STATE.fixedFrame,
-  displayedTfFrames: state.displayedTfFrames || [],
-  showTfFrameLabels: state.showTfFrameLabels ?? true,
+const normalizeVisualizationState = (
+  state: Partial<VisualizationPanelState> | null | undefined
+): VisualizationPanelState => ({
+  visualizations: Array.isArray(state?.visualizations) ? state.visualizations : [],
+  fixedFrame: state?.fixedFrame || DEFAULT_VISUALIZATION_STATE.fixedFrame,
+  displayedTfFrames: Array.isArray(state?.displayedTfFrames) ? state.displayedTfFrames : [],
+  showTfFrameLabels: state?.showTfFrameLabels ?? DEFAULT_VISUALIZATION_STATE.showTfFrameLabels,
+  tfAxesScale: typeof state?.tfAxesScale === 'number' && Number.isFinite(state.tfAxesScale)
+    ? state.tfAxesScale
+    : DEFAULT_VISUALIZATION_STATE.tfAxesScale,
 });
 
 /**
@@ -44,6 +47,7 @@ const normalizeVisualizationState = (state: Partial<VisualizationPanelState>): V
  */
 export const saveVisualizationState = (state: VisualizationPanelState): void => {
   savedState = normalizeVisualizationState(state);
+  hasSavedStateInMemory = true;
   
   // Also save to localStorage for persistence across sessions
   try {
@@ -59,7 +63,7 @@ export const saveVisualizationState = (state: VisualizationPanelState): void => 
  */
 export const getVisualizationState = (): VisualizationPanelState => {
   // If we have in-memory state, return that
-  if (savedState.visualizations.length > 0) {
+  if (hasSavedStateInMemory) {
     return { ...savedState };
   }
   
@@ -69,6 +73,7 @@ export const getVisualizationState = (): VisualizationPanelState => {
     if (savedStateStr) {
       const parsedState = normalizeVisualizationState(JSON.parse(savedStateStr));
       savedState = parsedState; // Update in-memory state
+      hasSavedStateInMemory = true;
       return parsedState;
     }
   } catch (error) {
@@ -83,12 +88,8 @@ export const getVisualizationState = (): VisualizationPanelState => {
  * Clear the saved visualization state
  */
 export const clearVisualizationState = (): void => {
-  savedState = {
-    visualizations: [],
-    fixedFrame: 'odom',
-    displayedTfFrames: [],
-    showTfFrameLabels: true
-  };
+  savedState = { ...DEFAULT_VISUALIZATION_STATE };
+  hasSavedStateInMemory = false;
   
   try {
     localStorage.removeItem('roboboy_3d_visualization_state');

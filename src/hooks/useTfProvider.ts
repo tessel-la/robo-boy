@@ -182,6 +182,7 @@ export function useTfProvider({
   // Return the TF provider instance ref, needed by the PointCloud client
   return {
     customTFProvider,
-    ensureProviderFunctionality // Export the function for external use
+    ensureProviderFunctionality, // Export the function for external use
+    isProviderReady,
   };
-} 
+}

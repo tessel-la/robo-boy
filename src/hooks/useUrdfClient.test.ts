@@ -29,6 +29,7 @@ describe('useUrdfClient', () => {
             isRosConnected: true,
             ros3dViewer: { current: { scene: {} } },
             tfClient: { current: {} },
+            dependenciesReady: true,
             robotDescriptionTopic: '/robot_description'
         };
     });
@@ -54,6 +55,26 @@ describe('useUrdfClient', () => {
         props.ros3dViewer = { current: null };
         renderHook(() => useUrdfClient(props));
         expect(ROS3D.UrdfClient).not.toHaveBeenCalled();
+    });
+
+    it('should initialize when stable dependency refs become ready', () => {
+        const ros3dViewer = { current: null as any };
+        const tfClient = { current: null as any };
+        const initialProps = {
+            ...props,
+            ros3dViewer,
+            tfClient,
+            dependenciesReady: false,
+        };
+        const { rerender } = renderHook((p) => useUrdfClient(p), { initialProps });
+
+        expect(ROS3D.UrdfClient).not.toHaveBeenCalled();
+
+        ros3dViewer.current = { scene: {} };
+        tfClient.current = {};
+        rerender({ ...initialProps, dependenciesReady: true });
+
+        expect(ROS3D.UrdfClient).toHaveBeenCalledTimes(1);
     });
 
     it('should cleanup on disconnect', () => {
