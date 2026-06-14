@@ -9,6 +9,7 @@ interface UseUrdfClientProps {
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   tfClient: React.RefObject<CustomTFProvider | null>; // Changed to CustomTFProvider
+  dependenciesReady: boolean;
   robotDescriptionTopic?: string; // Topic for URDF string
   urdfPath?: string; // Base path for mesh resources
   // Consider adding loader options if your UrdfClient supports them
@@ -20,13 +21,14 @@ export function useUrdfClient({
   isRosConnected,
   ros3dViewer,
   tfClient,
+  dependenciesReady,
   robotDescriptionTopic = '/robot_description',
 }: UseUrdfClientProps) {
   const urdfClientRef = useRef<ROS3D.UrdfClient | null>(null);
   const [isUrdfLoaded, setIsUrdfLoaded] = useState(false);
 
   useEffect(() => {
-    if (isRosConnected && ros && ros3dViewer.current && tfClient.current && !urdfClientRef.current) {
+    if (dependenciesReady && isRosConnected && ros && ros3dViewer.current && tfClient.current && !urdfClientRef.current) {
       console.log('[useUrdfClient] Initializing UrdfClient...');
 
       const urdfClient = new ROS3D.UrdfClient({
@@ -41,7 +43,7 @@ export function useUrdfClient({
         },
       });
       urdfClientRef.current = urdfClient;
-    } else if ((!isRosConnected || !ros3dViewer.current || !tfClient.current) && urdfClientRef.current) {
+    } else if ((!dependenciesReady || !isRosConnected || !ros3dViewer.current || !tfClient.current) && urdfClientRef.current) {
       console.log('[useUrdfClient] Cleaning up UrdfClient...');
       urdfClientRef.current.dispose();
       urdfClientRef.current = null;
@@ -57,7 +59,7 @@ export function useUrdfClient({
         setIsUrdfLoaded(false);
       }
     };
-  }, [isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic]);
+  }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic]);
 
   return { urdfClient: urdfClientRef.current, isUrdfLoaded };
-} 
+}
