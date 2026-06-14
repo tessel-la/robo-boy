@@ -118,13 +118,13 @@ async function seedOrderedSequenceTree(page: Page) {
         {
           id: 'node-0',
           type: 'sequence',
-          position: { x: 0, y: 0 },
+          position: { x: 260, y: 260 },
           data: { label: 'Sequence', type: 'sequence' },
         },
         {
           id: 'node-1',
           type: 'action',
-          position: { x: -220, y: 160 },
+          position: { x: 220, y: -120 },
           data: {
             label: 'First Action',
             actionName: '/first_action',
@@ -135,7 +135,7 @@ async function seedOrderedSequenceTree(page: Page) {
         {
           id: 'node-2',
           type: 'action',
-          position: { x: 220, y: 160 },
+          position: { x: -220, y: 100 },
           data: {
             label: 'Second Action',
             actionName: '/second_action',
@@ -352,6 +352,33 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(orderPanel.getByTestId('bt-order-row').nth(0)).toContainText('Second Action');
     await expect(orderPanel.getByTestId('bt-order-row').nth(1)).toContainText('First Action');
+  });
+
+  test('arranges a messy tree on a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const sequenceBefore = await sequence.boundingBox();
+    const firstBefore = await firstAction.boundingBox();
+
+    expect(sequenceBefore?.y).toBeGreaterThan(firstBefore?.y ?? 0);
+    await page.getByRole('button', { name: 'Arrange tree' }).click();
+
+    await expect.poll(async () => {
+      const sequenceBox = await sequence.boundingBox();
+      const firstBox = await firstAction.boundingBox();
+      const secondBox = await secondAction.boundingBox();
+      if (!sequenceBox || !firstBox || !secondBox) return false;
+
+      return sequenceBox.y < firstBox.y && sequenceBox.y < secondBox.y && firstBox.x < secondBox.x;
+    }).toBe(true);
   });
 
   test('opens action settings with a mobile double tap', async ({ page }) => {

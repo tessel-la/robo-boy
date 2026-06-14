@@ -12,6 +12,7 @@ interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
   isPaletteCollapsed: boolean;
+  nodeCount: number;
   selectedNodeCount: number;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
@@ -19,6 +20,7 @@ interface BehaviorTreeToolbarProps {
   onExecute: () => void;
   onStop: () => void;
   onExport: () => void;
+  onArrange: () => void;
   onTogglePalette: () => void;
   onDeleteSelected: () => void;
   onDuplicateSelected: () => void;
@@ -30,6 +32,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
   isPaletteCollapsed,
+  nodeCount,
   selectedNodeCount,
   onSave,
   onLoad,
@@ -37,6 +40,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onExecute,
   onStop,
   onExport,
+  onArrange,
   onTogglePalette,
   onDeleteSelected,
   onDuplicateSelected,
@@ -152,6 +156,22 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <circle cx="23" cy="21" r="3.5"/>
             <line x1="12.4" y1="7.2" x2="6.8" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
             <line x1="15.6" y1="7.2" x2="21.2" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        <button
+          className="bt-float-icon-btn bt-arrange-tree-btn"
+          onClick={onArrange}
+          disabled={nodeCount === 0}
+          title="Arrange tree"
+          aria-label="Arrange tree"
+          data-testid="bt-arrange-tree"
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="7.5" y="1.5" width="7" height="5" rx="1.5" />
+            <rect x="1.5" y="15.5" width="7" height="5" rx="1.5" />
+            <rect x="13.5" y="15.5" width="7" height="5" rx="1.5" />
+            <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
           </svg>
         </button>
       </div>

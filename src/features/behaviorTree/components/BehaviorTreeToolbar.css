@@ -92,6 +92,21 @@
   color: #fff;
 }
 
+.bt-arrange-tree-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.bt-arrange-tree-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.bt-arrange-tree-btn:disabled:hover {
+  box-shadow: none;
+}
+
 /* ── Floating actions — top-right ─────────────────────────────────────────── */
 
 .bt-float-actions {
