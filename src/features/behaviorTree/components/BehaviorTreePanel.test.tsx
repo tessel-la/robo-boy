@@ -24,6 +24,7 @@ vi.mock('reactflow', () => ({
   useReactFlow: () => ({
     screenToFlowPosition: (position: { x: number; y: number }) => position,
     deleteElements: vi.fn(),
+    fitView: vi.fn(),
   }),
 }));
 
@@ -48,5 +49,11 @@ describe('BehaviorTreePanel', () => {
     expect(reactFlowMock.render).toHaveBeenCalledWith(
       expect.objectContaining({ connectionRadius: 48 })
     );
+  });
+
+  it('offers a responsive tree arrangement action', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    expect(screen.getByRole('button', { name: 'Arrange tree' })).toBeInTheDocument();
   });
 });

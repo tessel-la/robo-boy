@@ -27,6 +27,7 @@ import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
+import { arrangeBehaviorTree } from '../layoutUtils';
 import { saveBehaviorTree, exportBehaviorTree } from '../storage/treeStorage';
 import {
   createBehaviorTreeNode,
@@ -226,7 +227,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const executionStartedAt = useRef<number | undefined>(undefined);
   const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
 
-  const { screenToFlowPosition, deleteElements, getZoom, setCenter } = useReactFlow();
+  const { screenToFlowPosition, deleteElements, fitView, getZoom, setCenter } = useReactFlow();
 
   const allocateNodeId = useCallback((existingNodes: Node[]) => {
     const id = getNextBehaviorNodeId(existingNodes, nodeIdCounter.current);
@@ -540,6 +541,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     exportBehaviorTree({ ...currentTree, nodes: nodes as BehaviorTreeNode[], edges });
   }, [currentTree, nodes, edges]);
 
+  const handleArrange = useCallback(() => {
+    if (nodes.length === 0) return;
+
+    setNodes(arrangeBehaviorTree(nodes as BehaviorTreeNode[], edges));
+    window.requestAnimationFrame(() => {
+      fitView({ padding: 0.18, duration: 450, maxZoom: 1.15 });
+    });
+  }, [edges, fitView, nodes, setNodes]);
+
   const handleRename = useCallback((name: string) => {
     setCurrentTree((prev) => (prev ? { ...prev, name } : null));
   }, []);
@@ -736,6 +746,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         currentTree={currentTree}
         isExecuting={isExecuting}
         isPaletteCollapsed={isPaletteCollapsed}
+        nodeCount={nodes.length}
         selectedNodeCount={selectedNodes.length}
         onSave={handleSave}
         onLoad={handleLoad}
@@ -743,6 +754,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onExecute={handleExecute}
         onStop={handleStop}
         onExport={handleExport}
+        onArrange={handleArrange}
         onTogglePalette={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}

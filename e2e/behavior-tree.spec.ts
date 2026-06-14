@@ -118,13 +118,13 @@ async function seedOrderedSequenceTree(page: Page) {
         {
           id: 'node-0',
           type: 'sequence',
-          position: { x: 0, y: 0 },
+          position: { x: 260, y: 260 },
           data: { label: 'Sequence', type: 'sequence' },
         },
         {
           id: 'node-1',
           type: 'action',
-          position: { x: -220, y: 160 },
+          position: { x: 220, y: -120 },
           data: {
             label: 'First Action',
             actionName: '/first_action',
@@ -135,7 +135,7 @@ async function seedOrderedSequenceTree(page: Page) {
         {
           id: 'node-2',
           type: 'action',
-          position: { x: 220, y: 160 },
+          position: { x: -220, y: 100 },
           data: {
             label: 'Second Action',
             actionName: '/second_action',
@@ -328,6 +328,44 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
   });
 
+  test('stacks mobile toolbar groups vertically without overlap', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 740 });
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+
+    const leftTools = page.locator('.bt-float-bar');
+    const rightTools = page.locator('.bt-float-actions');
+    const menuButton = page.getByTestId('bt-menu-button');
+    const paletteButton = page.getByTestId('bt-palette-toggle');
+    const arrangeButton = page.getByTestId('bt-arrange-tree');
+    const renameButton = page.getByTestId('bt-rename-selected');
+    const duplicateButton = page.getByTestId('bt-duplicate-selected');
+    await expect(page.getByTestId('bt-rename-selected')).toBeVisible();
+    await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
+
+    const leftBox = await leftTools.boundingBox();
+    const rightBox = await rightTools.boundingBox();
+    const menuBox = await menuButton.boundingBox();
+    const paletteBox = await paletteButton.boundingBox();
+    const arrangeBox = await arrangeButton.boundingBox();
+    const renameBox = await renameButton.boundingBox();
+    const duplicateBox = await duplicateButton.boundingBox();
+
+    expect(leftBox).not.toBeNull();
+    expect(rightBox).not.toBeNull();
+    expect((leftBox?.x ?? 0) + (leftBox?.width ?? 0)).toBeLessThanOrEqual(rightBox?.x ?? 0);
+    expect(menuBox?.x).toBe(paletteBox?.x);
+    expect(paletteBox?.x).toBe(arrangeBox?.x);
+    expect(menuBox?.y ?? 0).toBeLessThan(paletteBox?.y ?? 0);
+    expect(paletteBox?.y ?? 0).toBeLessThan(arrangeBox?.y ?? 0);
+    expect(renameBox?.x).toBe(duplicateBox?.x);
+    expect(renameBox?.y ?? 0).toBeLessThan(duplicateBox?.y ?? 0);
+  });
+
   test('shows sequence child order and reorders children', async ({ page }) => {
     await openBehaviorTree(page);
     await seedOrderedSequenceTree(page);
@@ -352,6 +390,33 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(orderPanel.getByTestId('bt-order-row').nth(0)).toContainText('Second Action');
     await expect(orderPanel.getByTestId('bt-order-row').nth(1)).toContainText('First Action');
+  });
+
+  test('arranges a messy tree on a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const sequenceBefore = await sequence.boundingBox();
+    const firstBefore = await firstAction.boundingBox();
+
+    expect(sequenceBefore?.y).toBeGreaterThan(firstBefore?.y ?? 0);
+    await page.getByRole('button', { name: 'Arrange tree' }).click();
+
+    await expect.poll(async () => {
+      const sequenceBox = await sequence.boundingBox();
+      const firstBox = await firstAction.boundingBox();
+      const secondBox = await secondAction.boundingBox();
+      if (!sequenceBox || !firstBox || !secondBox) return false;
+
+      return sequenceBox.y < firstBox.y && sequenceBox.y < secondBox.y && firstBox.x < secondBox.x;
+    }).toBe(true);
   });
 
   test('opens action settings with a mobile double tap', async ({ page }) => {

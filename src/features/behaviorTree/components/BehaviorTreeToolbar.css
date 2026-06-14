@@ -92,6 +92,21 @@
   color: #fff;
 }
 
+.bt-arrange-tree-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.bt-arrange-tree-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.bt-arrange-tree-btn:disabled:hover {
+  box-shadow: none;
+}
+
 /* ── Floating actions — top-right ─────────────────────────────────────────── */
 
 .bt-float-actions {
@@ -562,6 +577,16 @@
 
 /* Small screens: center the popover instead of anchoring to button */
 @media (max-width: 600px) {
+  .bt-float-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bt-float-actions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
   .bt-menu-overlay {
     align-items: center;
     justify-content: center;
