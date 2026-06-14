@@ -19,7 +19,7 @@
 }
 
 .control-btn {
-  background-color: var(--secondary-color);
+  background-color: var(--background-secondary);
   color: var(--text-color);
   border: 1px solid var(--border-color);
   width: 34px;
@@ -38,7 +38,7 @@
 
 .control-btn:hover:not(:disabled) {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--button-text-color);
 }
 
 .control-btn:disabled {
@@ -76,4 +76,4 @@
 .control-value-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
-} 
+}
