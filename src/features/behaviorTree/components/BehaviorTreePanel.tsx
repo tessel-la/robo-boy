@@ -439,6 +439,32 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [openNodeEditor]
   );
 
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      const targetNode = nodes.find((node) => node.id === edge.target);
+      if (!targetNode) return;
+
+      const selectedTargetNode = { ...targetNode, selected: true, dragging: false };
+
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => ({
+          ...node,
+          selected: node.id === edge.target,
+          dragging: false,
+        }))
+      );
+      setEdges((currentEdges) =>
+        currentEdges.map((currentEdge) => ({
+          ...currentEdge,
+          selected: currentEdge.id === edge.id,
+        }))
+      );
+      setSelectedNodes([selectedTargetNode]);
+      setOrderingParentId(null);
+    },
+    [nodes, setEdges, setNodes]
+  );
+
   const handleSaveActionParameters = useCallback(
     (parameters: Record<string, any>) => {
       if (!editingAction) return;
@@ -826,6 +852,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onNodesDelete={onNodesDelete}
             onNodeClick={onNodeClick}
             onNodeDoubleClick={onNodeDoubleClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={handlePaneClick}
             onSelectionChange={onSelectionChange}
             nodeTypes={nodeTypes}
