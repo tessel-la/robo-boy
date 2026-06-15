@@ -113,7 +113,7 @@ RUN mkdir -p /overlay_ws
 WORKDIR /ros_ws
 
 # Copy and use the entrypoint script
-COPY ros_entrypoint.sh /ros_ws/entrypoint.sh
+COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 RUN chmod +x /ros_ws/entrypoint.sh
 
 # Run the entrypoint script

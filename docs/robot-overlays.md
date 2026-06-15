@@ -6,13 +6,13 @@ Select an overlay by copying one example to `.env`. Docker Compose reads `COMPOS
 
 ```bash
 # No robot-specific workspace
-cp .env.no-overlay.example .env
+cp config/env/no-overlay.env.example .env
 
 # Aerostack workspace
-cp .env.aerostack.example .env
+cp config/env/aerostack.env.example .env
 
 # Manipulator simulation workspace
-cp .env.manipulator.example .env
+cp config/env/manipulator.env.example .env
 ```
 
 After changing overlays, recreate the ROS service:
@@ -27,7 +27,7 @@ The Aerostack override mounts `~/.aerostack2_install` at `/overlay_ws/aerostack2
 
 ```bash
 docker cp aerial_sim_cont:/root/aerostack2_ws/install ~/.aerostack2_install
-cp .env.aerostack.example .env
+cp config/env/aerostack.env.example .env
 docker compose up -d --build
 ```
 
@@ -42,7 +42,7 @@ cd /path/to/manipulator-sim
 docker compose up -d --build
 
 cd /path/to/robo-boy
-cp .env.manipulator.example .env
+cp config/env/manipulator.env.example .env
 docker compose up -d --build
 ```
 
@@ -88,7 +88,7 @@ volumes:
 Start with both Compose files:
 
 ```bash
-COMPOSE_FILE=docker-compose.yml:docker-compose.custom.yml docker compose up -d --build
+COMPOSE_FILE=docker-compose.yml:infra/compose/custom.yml docker compose up -d --build
 ```
 
 If generated hooks require the original build path, mount the referenced build/source directories too or set `ROBOT_WORKSPACE_SETUP` to an accessible `setup.bash` path.

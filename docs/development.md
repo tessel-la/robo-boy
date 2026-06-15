@@ -23,7 +23,7 @@ Open `http://localhost:5173`. The frontend can load without Docker, but ROS, vid
 Generate the certificate as described in the root README, select a Compose configuration, and start the stack:
 
 ```bash
-cp .env.no-overlay.example .env
+cp config/env/no-overlay.env.example .env
 docker compose up -d --build
 ```
 
@@ -33,7 +33,7 @@ The stack starts:
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 
-Changes under `src/` should hot reload. Rebuild after changing Dockerfiles, Compose files, ROS dependencies, or the Caddy configuration:
+Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
 
 ```bash
 docker compose up -d --build --force-recreate

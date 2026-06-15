@@ -22,9 +22,9 @@ Robo-Boy is a web interface for controlling and visualizing ROS 2 robots. It inc
 git clone git@github.com:tessel-la/robo-boy.git
 cd robo-boy
 mkcert -install
-mkdir -p certs
-mkcert -key-file certs/local-key.pem -cert-file certs/local-cert.pem localhost 127.0.0.1 ::1 YOUR_HOST_IP
-cp .env.no-overlay.example .env
+mkdir -p infra/caddy/certs
+mkcert -key-file infra/caddy/certs/local-key.pem -cert-file infra/caddy/certs/local-cert.pem localhost 127.0.0.1 ::1 YOUR_HOST_IP
+cp config/env/no-overlay.env.example .env
 docker compose up -d --build
 ```
 
