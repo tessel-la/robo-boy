@@ -328,6 +328,36 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
   });
 
+  test('highlights a clicked connection and its child node', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+
+    const edge = page
+      .locator('.react-flow__edge')
+      .filter({ has: page.locator('.react-flow__edge-interaction') });
+    const parent = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    const child = page.locator('.react-flow__node').filter({ hasText: 'Selector' });
+
+    await parent.click();
+    const parentBox = await parent.boundingBox();
+    const childBox = await child.boundingBox();
+    expect(parentBox).not.toBeNull();
+    expect(childBox).not.toBeNull();
+    await page.mouse.click(
+      (parentBox?.x ?? 0) + (parentBox?.width ?? 0) / 2,
+      ((parentBox?.y ?? 0) + (parentBox?.height ?? 0) + (childBox?.y ?? 0)) / 2
+    );
+
+    await expect(edge).toHaveClass(/selected/);
+    await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke', 'rgb(255, 179, 0)');
+    await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke-width', '5px');
+    await expect(child).toHaveClass(/selected/);
+    await expect(parent).not.toHaveClass(/selected/);
+  });
+
   test('stacks mobile toolbar groups vertically without overlap', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 740 });
     await openBehaviorTree(page);

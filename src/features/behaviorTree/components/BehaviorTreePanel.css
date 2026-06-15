@@ -134,6 +134,7 @@
 
 .react-flow__edge-path {
   stroke: var(--primary-color, #4285f4);
+  transition: stroke-width 0.16s ease, filter 0.16s ease;
 }
 
 .react-flow__edge-interaction {
@@ -141,8 +142,16 @@
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--primary-color, #4285f4);
-  stroke-width: 3;
+  stroke: #ffb300 !important;
+  stroke-width: 5 !important;
+  filter: drop-shadow(
+    0 0 5px color-mix(in srgb, #ffb300 72%, transparent)
+  );
+}
+
+.react-flow__edge.selected .react-flow__edge-text {
+  fill: #ffb300;
+  font-weight: 700;
 }
 
 .react-flow__edge-text {
