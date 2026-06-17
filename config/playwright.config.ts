@@ -1,10 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const isStackRun = process.env.npm_lifecycle_event === 'e2e:stack';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? (isStackRun ? 'http://127.0.0.1' : 'http://127.0.0.1:5173');
 const skipWebServer = isStackRun || process.env.PLAYWRIGHT_SKIP_WEB_SERVER === '1';
 const webServer = {
     command: 'VITE_PWA_DEV=false npm run dev',
+    cwd: projectRoot,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
@@ -15,7 +20,8 @@ const webServer = {
  * See https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-    testDir: './e2e',
+    testDir: resolve(projectRoot, 'e2e'),
+    outputDir: resolve(projectRoot, 'test-results'),
     /* Run tests in files in parallel */
     fullyParallel: true,
     /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -25,7 +31,7 @@ export default defineConfig({
     /* Opt out of parallel tests on CI. */
     workers: process.env.CI ? 1 : undefined,
     /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-    reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+    reporter: [['html', { outputFolder: resolve(projectRoot, 'playwright-report') }], ['list']],
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
         /* Base URL to use in actions like `await page.goto('/')`. */

@@ -21,4 +21,5 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 | Shared utilities and persistence | `src/utils/`                                      |
 | Unit tests                       | Co-located `*.test.ts` and `*.test.tsx` files     |
 | End-to-end tests                 | `e2e/`                                            |
-| Runtime infrastructure           | `docker-compose*.yml`, `Dockerfile*`, `Caddyfile` |
+| Build and test configuration     | `config/`                                         |
+| Runtime infrastructure           | `docker-compose.yml`, `infra/`                    |

@@ -3,7 +3,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: infra/docker/Dockerfile.dev
     volumes:
       - .:/app
       - /app/node_modules 
@@ -27,8 +27,8 @@ services:
       - "443:443"  # Bind to all host interfaces
       - "0.0.0.0:443:443/udp" # Bind to all host interfaces
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
@@ -50,7 +50,7 @@ services:
     ipc: host
     build:
       context: .
-      dockerfile: Dockerfile.ros # Use the ROS Dockerfile
+      dockerfile: infra/docker/Dockerfile.ros # Use the ROS Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
     volumes:

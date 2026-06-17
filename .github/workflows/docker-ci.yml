@@ -20,20 +20,20 @@ jobs:
 
     - name: Test Docker build for app
       run: |
-        docker build -t robo-boy-app -f Dockerfile.dev .
+        docker build -t robo-boy-app -f infra/docker/Dockerfile.dev .
         echo "✅ App container build successful"
 
     - name: Test Docker build for ROS stack
       run: |
-        docker build -t robo-boy-ros -f Dockerfile.ros .
+        docker build -t robo-boy-ros -f infra/docker/Dockerfile.ros .
         echo "✅ ROS stack container build successful"
 
     - name: Test Docker Compose setup
       run: |
         # Create dummy certs directory and files required by docker-compose
-        mkdir -p certs
-        touch certs/local-key.pem
-        touch certs/local-cert.pem
+        mkdir -p infra/caddy/certs
+        touch infra/caddy/certs/local-key.pem
+        touch infra/caddy/certs/local-cert.pem
         
         # Run docker-compose build to test all services
         docker compose build
