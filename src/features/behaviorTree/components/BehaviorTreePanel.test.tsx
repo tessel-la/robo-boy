@@ -34,6 +34,38 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
   toJSON: () => ({}),
 } as DOMRect);
 
+const firePointerEvent = (
+  element: Element,
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+  init: {
+    pointerId?: number;
+    pointerType?: string;
+    button?: number;
+    buttons?: number;
+    clientX: number;
+    clientY: number;
+  }
+) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const eventInit = {
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
+    ...init,
+  };
+
+  Object.entries(eventInit).forEach(([key, value]) => {
+    Object.defineProperty(event, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+    });
+  });
+
+  fireEvent(element, event);
+};
+
 vi.mock('../engine/executor', () => ({
   BehaviorTreeExecutor: vi.fn().mockImplementation(
     function MockBehaviorTreeExecutor(
@@ -694,7 +726,8 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByText('Loaded Tree'));
 
     await screen.findByTestId('rf-node-node-loaded');
-    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(screen.getByTestId('bt-undo')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('bt-undo'));
 
     await waitFor(() => {
       const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
@@ -870,7 +903,8 @@ describe('BehaviorTreePanel', () => {
       expect(latestProps.nodes.some((node) => node.type === 'retry')).toBe(true);
     });
 
-    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(screen.getByTestId('bt-undo')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('bt-undo'));
 
     await waitFor(() => {
       const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
@@ -1600,16 +1634,11 @@ describe('BehaviorTreePanel', () => {
       );
     });
     const flow = screen.getByTestId('mock-react-flow');
-    fireEvent.pointerDown(flow, {
-      pointerId: 1,
-      pointerType: 'mouse',
-      button: 0,
+    firePointerEvent(flow, 'pointerdown', {
       clientX: 40,
       clientY: 40,
     });
-    fireEvent.pointerMove(flow, {
-      pointerId: 1,
-      pointerType: 'mouse',
+    firePointerEvent(flow, 'pointermove', {
       clientX: 190,
       clientY: 160,
     });
@@ -1623,9 +1652,7 @@ describe('BehaviorTreePanel', () => {
     });
     expect(screen.getByTestId('bt-custom-selection')).toBeInTheDocument();
 
-    fireEvent.pointerMove(flow, {
-      pointerId: 1,
-      pointerType: 'mouse',
+    firePointerEvent(flow, 'pointermove', {
       clientX: 390,
       clientY: 190,
     });
@@ -1638,9 +1665,7 @@ describe('BehaviorTreePanel', () => {
       expect(latestProps.nodes.find((node) => node.id === 'node-b')?.data?.isHighlighted).toBe(true);
     });
 
-    fireEvent.pointerUp(flow, {
-      pointerId: 1,
-      pointerType: 'mouse',
+    firePointerEvent(flow, 'pointerup', {
       clientX: 390,
       clientY: 190,
     });

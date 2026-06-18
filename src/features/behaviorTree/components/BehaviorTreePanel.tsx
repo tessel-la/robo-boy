@@ -1992,7 +1992,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleCanvasPointerDownCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (canvasInteractionMode !== 'select') return;
-      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      const isNonPrimaryMouseButton =
+        event.pointerType === 'mouse' &&
+        typeof event.button === 'number' &&
+        event.button !== 0;
+      if (isNonPrimaryMouseButton) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
