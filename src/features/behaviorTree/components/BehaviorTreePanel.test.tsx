@@ -214,6 +214,7 @@ describe('BehaviorTreePanel', () => {
     reactFlowMock.setCenter.mockReset();
     reactFlowMock.fitView.mockReset();
     executorMock.instances = [];
+    window.confirm = vi.fn(() => true);
     localStorage.clear();
   });
 
@@ -1579,8 +1580,8 @@ describe('BehaviorTreePanel', () => {
       ])
     );
     reactFlowMock.nodeRects = {
-      'node-a': createRect(30, 30, 100, 70),
-      'node-b': createRect(210, 45, 100, 70),
+      'node-a': createRect(80, 80, 100, 70),
+      'node-b': createRect(260, 95, 100, 70),
     };
 
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
@@ -1603,14 +1604,14 @@ describe('BehaviorTreePanel', () => {
       pointerId: 1,
       pointerType: 'mouse',
       button: 0,
-      clientX: 10,
-      clientY: 10,
+      clientX: 40,
+      clientY: 40,
     });
     fireEvent.pointerMove(flow, {
       pointerId: 1,
       pointerType: 'mouse',
-      clientX: 95,
-      clientY: 80,
+      clientX: 190,
+      clientY: 160,
     });
 
     await waitFor(() => {
@@ -1625,8 +1626,8 @@ describe('BehaviorTreePanel', () => {
     fireEvent.pointerMove(flow, {
       pointerId: 1,
       pointerType: 'mouse',
-      clientX: 340,
-      clientY: 140,
+      clientX: 390,
+      clientY: 190,
     });
 
     await waitFor(() => {
@@ -1640,8 +1641,8 @@ describe('BehaviorTreePanel', () => {
     fireEvent.pointerUp(flow, {
       pointerId: 1,
       pointerType: 'mouse',
-      clientX: 340,
-      clientY: 140,
+      clientX: 390,
+      clientY: 190,
     });
     await waitFor(() => expect(screen.getByTestId('bt-selection-actions')).toBeInTheDocument());
     expect(screen.queryByTestId('bt-custom-selection')).not.toBeInTheDocument();
