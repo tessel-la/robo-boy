@@ -1,6 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { Buffer } from 'node:buffer';
 import { installRosMock } from './helpers/rosMock';
+
+const MULTI_SELECT_MODIFIER = (process.platform === 'darwin' ? 'Meta' : 'Control') as
+  | 'Meta'
+  | 'Control';
 
 async function connectWithMockRos(page: Page) {
   await installRosMock(page);
@@ -34,6 +38,20 @@ async function openNodePalette(page: Page) {
 
   await toggle.click();
   await expect(palette).toBeVisible();
+}
+
+async function closeNodePalette(page: Page) {
+  const palette = page.getByTestId('bt-node-palette');
+  if ((await palette.count()) === 0 || !(await palette.first().isVisible())) {
+    return;
+  }
+
+  await page.getByTestId('bt-palette-toggle').click();
+  await expect(palette).toHaveCount(0);
+}
+
+async function multiSelectClick(locator: Locator) {
+  await locator.click({ modifiers: [MULTI_SELECT_MODIFIER] });
 }
 
 async function seedSavedTree(page: Page) {
@@ -216,7 +234,7 @@ test.describe('Behavior Tree panel', () => {
 
     await page.getByTestId('bt-menu-button').click();
     await expect(page.getByTestId('bt-menu-panel')).toBeVisible();
-    await expect(page.getByText('Saved Trees', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('bt-menu-panel').getByText('Saved Trees', { exact: true })).toBeVisible();
   });
 
   test('renames and saves a tree into localStorage', async ({ page }) => {
@@ -342,9 +360,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
     await sequence.click();
-    await page.keyboard.down('Control');
-    await selector.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(selector);
 
     await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
     await page.getByTestId('bt-duplicate-selected').click();
@@ -365,9 +381,7 @@ test.describe('Behavior Tree panel', () => {
     const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
 
     await firstAction.click();
-    await page.keyboard.down('Control');
-    await secondAction.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(secondAction);
 
     await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
     await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
@@ -427,9 +441,7 @@ test.describe('Behavior Tree panel', () => {
     const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
 
     await firstAction.click();
-    await page.keyboard.down('Control');
-    await secondAction.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(secondAction);
 
     await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
     await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
@@ -453,9 +465,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
 
     await firstAction.click();
-    await page.keyboard.down('Control');
-    await secondAction.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(secondAction);
     await page.getByTestId('bt-context-wrap').click();
 
     await expect(subtreeNode).toHaveCount(1);
@@ -518,9 +528,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
 
     await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
-    await page.keyboard.down('Control');
-    await page.locator('.react-flow__node').filter({ hasText: 'Selector' }).click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(page.locator('.react-flow__node').filter({ hasText: 'Selector' }));
     await page.getByTestId('bt-context-wrap').click();
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
     await page.getByTestId('bt-context-open-subtree').click();
@@ -603,9 +611,7 @@ test.describe('Behavior Tree panel', () => {
     const sourceA = page.locator('.react-flow__node').filter({ hasText: 'Source A' });
     const sourceB = page.locator('.react-flow__node').filter({ hasText: 'Source B' });
     await sourceA.click();
-    await page.keyboard.down('Control');
-    await sourceB.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(sourceB);
     await page.getByTestId('bt-context-wrap').click();
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
     await page.getByTestId('bt-context-open-subtree').click();
@@ -624,6 +630,7 @@ test.describe('Behavior Tree panel', () => {
 
     await page.getByTestId('bt-node-palette').getByText('Retry').click();
     await page.getByTestId('bt-node-palette').getByText('Repeat').click();
+    await closeNodePalette(page);
 
     const retryNode = page.locator('.react-flow__node').filter({ hasText: 'Retry' });
     const repeatNode = page.locator('.react-flow__node').filter({ hasText: 'Repeat' });

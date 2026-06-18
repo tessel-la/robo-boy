@@ -155,6 +155,11 @@ const MAX_UNDO_HISTORY = 80;
 const SELECTION_ACTIONS_MAX_WIDTH = 360;
 const BOX_SELECTION_CLEAR_SUPPRESSION_MS = 120;
 const BOX_SELECTION_DRAG_THRESHOLD = 4;
+const PALETTE_ADD_NODE_X_GAP = 190;
+const PALETTE_ADD_NODE_Y_GAP = 130;
+const PALETTE_ADD_NODE_COLUMNS = 3;
+const NODE_POSITION_COLLISION_X = 160;
+const NODE_POSITION_COLLISION_Y = 110;
 const MANUAL_EDGE_SELECTION_SUPPRESSION_MS = 160;
 
 const getKnownReactFlowElementId = (
@@ -201,6 +206,32 @@ const createViewportRect = (left: number, top: number, right: number, bottom: nu
   bottom,
   toJSON: () => ({}),
 } as DOMRect);
+
+const findOpenPaletteAddPosition = (
+  position: { x: number; y: number },
+  existingNodes: BehaviorTreeNode[]
+): { x: number; y: number } => {
+  const isOccupied = (candidate: { x: number; y: number }) =>
+    existingNodes.some(
+      (node) =>
+        Math.abs(node.position.x - candidate.x) < NODE_POSITION_COLLISION_X &&
+        Math.abs(node.position.y - candidate.y) < NODE_POSITION_COLLISION_Y
+    );
+
+  for (let index = 0; index < 12; index += 1) {
+    const candidate = {
+      x: position.x + (index % PALETTE_ADD_NODE_COLUMNS) * PALETTE_ADD_NODE_X_GAP,
+      y: position.y + Math.floor(index / PALETTE_ADD_NODE_COLUMNS) * PALETTE_ADD_NODE_Y_GAP,
+    };
+
+    if (!isOccupied(candidate)) return candidate;
+  }
+
+  return {
+    x: position.x + existingNodes.length * 48,
+    y: position.y + existingNodes.length * 48,
+  };
+};
 
 interface ChildOrderPanelProps {
   parent: BehaviorTreeNode;
@@ -724,13 +755,19 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     (
       nodeType: BehaviorNodeType,
       position: { x: number; y: number },
-      item?: ROSNodeInfo | BehaviorTree
+      item?: ROSNodeInfo | BehaviorTree,
+      options: { avoidOverlap?: boolean } = {}
     ) => {
+      const existingBehaviorNodes = nodes as BehaviorTreeNode[];
+      const nextPosition = options.avoidOverlap
+        ? findOpenPaletteAddPosition(position, existingBehaviorNodes)
+        : position;
+
       if (nodeType === BehaviorNodeType.Subtree && item && 'nodes' in item && 'edges' in item) {
         const subtreeNode = createSubtreeNode({
           id: allocateNodeId(nodes),
           label: item.name,
-          position,
+          position: nextPosition,
           tree: cloneBehaviorTree(item),
           sourceTreeId: item.id,
         });
@@ -741,7 +778,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const newNode = createBehaviorTreeNode({
         id: allocateNodeId(nodes),
         nodeType,
-        position,
+        position: nextPosition,
         rosInfo: item as ROSNodeInfo | undefined,
       });
       if (!newNode) return;
@@ -1871,7 +1908,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         y: bounds.top + bounds.height / 2,
       });
 
-      addNodeAtPosition(nodeType, position, item);
+      addNodeAtPosition(nodeType, position, item, { avoidOverlap: true });
 
       // Close palette on mobile after adding
       if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
