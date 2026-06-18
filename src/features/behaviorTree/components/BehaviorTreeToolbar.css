@@ -104,13 +104,15 @@
 
 .bt-arrange-tree-btn,
 .bt-interaction-mode-btn,
+.bt-follow-mode-btn,
 .bt-undo-tree-btn,
 .bt-redo-tree-btn {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
 }
 
-.bt-interaction-mode-btn.active {
+.bt-interaction-mode-btn.active,
+.bt-follow-mode-btn.active {
   background: var(--primary-color, #4285f4);
   border-color: var(--primary-color, #4285f4);
   color: #fff;
@@ -119,14 +121,20 @@
 
 .bt-select-tool-icon,
 .bt-pan-tool-icon {
-  width: 25px;
-  height: 25px;
+  width: 31px;
+  height: 31px;
   display: block;
 }
 
 .bt-pan-tool-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.bt-follow-tool-icon {
   width: 27px;
   height: 27px;
+  display: block;
 }
 
 .bt-undo-tree-btn:disabled,

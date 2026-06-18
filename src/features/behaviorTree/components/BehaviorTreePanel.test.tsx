@@ -14,6 +14,14 @@ const reactFlowMock = vi.hoisted(() => ({
   fitView: vi.fn(),
 }));
 
+const executorMock = vi.hoisted(() => ({
+  instances: [] as Array<{
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+    callback: (event: Record<string, unknown>) => void;
+  }>,
+}));
+
 const createRect = (x: number, y: number, width: number, height: number): DOMRect => ({
   x,
   y,
@@ -26,12 +34,27 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
   toJSON: () => ({}),
 } as DOMRect);
 
+vi.mock('../engine/executor', () => ({
+  BehaviorTreeExecutor: vi.fn().mockImplementation(
+    (_tree: unknown, _ros: unknown, callback: (event: Record<string, unknown>) => void) => {
+      const instance = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        callback,
+      };
+      executorMock.instances.push(instance);
+      return instance;
+    }
+  ),
+}));
+
 vi.mock('reactflow', () => ({
   default: (props: {
     children?: React.ReactNode;
     nodes?: Array<Record<string, any>>;
     edges?: Array<Record<string, any>>;
     onNodeClick?: (event: React.MouseEvent, node: Record<string, any>) => void;
+    onEdgeClick?: (event: React.MouseEvent, edge: Record<string, any>) => void;
     onNodesChange?: (changes: Array<Record<string, any>>) => void;
     onEdgesChange?: (changes: Array<Record<string, any>>) => void;
     onSelectionStart?: () => void;
@@ -109,6 +132,13 @@ vi.mock('reactflow', () => ({
               const rect = reactFlowMock.edgeRects[edge.id];
               if (element && rect) element.getBoundingClientRect = () => rect;
             }}
+            onClick={(event) => {
+              props.onEdgeClick?.(event, edge);
+              props.onSelectionChange?.({
+                nodes: [],
+                edges: props.edges?.filter((candidate) => candidate.id === edge.id) ?? [],
+              });
+            }}
           />
         ))}
         {reactFlowMock.selectionRect && (
@@ -171,6 +201,7 @@ describe('BehaviorTreePanel', () => {
     reactFlowMock.selectionRect = null;
     reactFlowMock.setCenter.mockReset();
     reactFlowMock.fitView.mockReset();
+    executorMock.instances = [];
     localStorage.clear();
   });
 
@@ -235,6 +266,63 @@ describe('BehaviorTreePanel', () => {
     expect(screen.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('toggles follow mode and centers the running node while executing', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'follow-tree',
+            name: 'Follow Tree',
+            nodes: [
+              {
+                id: 'node-follow',
+                type: 'action',
+                position: { x: 480, y: 360 },
+                width: 180,
+                height: 70,
+                data: { label: 'Follow Action', actionName: '/follow', actionType: 'example/Follow' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Follow Tree'));
+    await screen.findByTestId('rf-node-node-follow');
+
+    fireEvent.click(screen.getByTestId('bt-follow-mode'));
+    expect(screen.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(executorMock.instances).toHaveLength(1);
+
+    act(() => {
+      executorMock.instances[0].callback({
+        type: 'nodeRunning',
+        nodeId: 'node-follow',
+        timestamp: Date.now(),
+        data: { status: 'running', treePath: [] },
+      });
+    });
+
+    await waitFor(() => {
+      expect(reactFlowMock.setCenter).toHaveBeenCalledWith(
+        570,
+        395,
+        expect.objectContaining({ zoom: 1, duration: 360 })
+      );
+    });
+  });
+
   it('handles an edge click without crashing', () => {
     reactFlowMock.nodes = [
       { id: 'parent', position: { x: 0, y: 0 }, data: {}, selected: true },
@@ -251,9 +339,86 @@ describe('BehaviorTreePanel', () => {
     };
 
     act(() => {
-      props.onEdgeClick({} as React.MouseEvent, reactFlowMock.edges[0]);
+      props.onEdgeClick(
+        {
+          ctrlKey: false,
+          metaKey: false,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as React.MouseEvent,
+        reactFlowMock.edges[0]
+      );
     });
     expect(reactFlowMock.render).toHaveBeenCalled();
+  });
+
+  it('keeps multiple links selected after Ctrl-clicking edges', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'ctrl-edge-tree',
+            name: 'Ctrl Edge Tree',
+            nodes: [
+              {
+                id: 'root',
+                type: 'sequence',
+                position: { x: 0, y: 0 },
+                data: { label: 'Root', type: 'sequence' },
+              },
+              {
+                id: 'child-a',
+                type: 'action',
+                position: { x: 0, y: 120 },
+                data: { label: 'Child A', actionName: '/a', actionType: 'example/A' },
+              },
+              {
+                id: 'child-b',
+                type: 'action',
+                position: { x: 220, y: 120 },
+                data: { label: 'Child B', actionName: '/b', actionType: 'example/B' },
+              },
+            ],
+            edges: [
+              { id: 'edge-root-a', source: 'root', target: 'child-a', animated: true },
+              { id: 'edge-root-b', source: 'root', target: 'child-b', animated: true },
+            ],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Ctrl Edge Tree'));
+
+    const edgeA = await screen.findByTestId('rf__edge-edge-root-a');
+    const edgeB = await screen.findByTestId('rf__edge-edge-root-b');
+
+    fireEvent.click(edgeA);
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        edges: Array<Record<string, any>>;
+      };
+      expect(latestProps.edges.find((edge) => edge.id === 'edge-root-a')?.selected).toBe(true);
+      expect(latestProps.edges.find((edge) => edge.id === 'edge-root-b')?.selected).not.toBe(true);
+    });
+
+    fireEvent.click(edgeB, { ctrlKey: true });
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+        edges: Array<Record<string, any>>;
+      };
+      expect(latestProps.edges.find((edge) => edge.id === 'edge-root-a')?.selected).toBe(true);
+      expect(latestProps.edges.find((edge) => edge.id === 'edge-root-b')?.selected).toBe(true);
+      expect(latestProps.nodes.some((node) => node.selected)).toBe(false);
+    });
   });
 
   it('keeps multiple nodes highlighted after Ctrl-click selection', async () => {
@@ -703,6 +868,77 @@ describe('BehaviorTreePanel', () => {
       expect(latestProps.nodes.some((node) => node.type === 'retry')).toBe(false);
     });
     expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument();
+  });
+
+  it('opens a saved tree as a root tree when currently inside a subtree', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'subtree-load-source',
+            name: 'Subtree Load Source',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+              {
+                id: 'node-b',
+                type: 'action',
+                position: { x: 220, y: 0 },
+                data: { label: 'Node B', actionName: '/b', actionType: 'example/B' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'fresh-root-tree',
+            name: 'Fresh Root Tree',
+            nodes: [
+              {
+                id: 'node-root',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Fresh Root Action', actionName: '/root', actionType: 'example/Root' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Subtree Load Source'));
+
+    const nodeA = await screen.findByTestId('rf-node-node-a');
+    const nodeB = await screen.findByTestId('rf-node-node-b');
+    fireEvent.click(nodeA);
+    fireEvent.click(nodeB, { ctrlKey: true });
+    await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-wrap'));
+    await waitFor(() => expect(screen.getByTestId('bt-context-open-subtree')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-open-subtree'));
+    await waitFor(() => expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Fresh Root Tree'));
+
+    await screen.findByTestId('rf-node-node-root');
+    expect(screen.queryByTestId('bt-subtree-parent')).not.toBeInTheDocument();
   });
 
   it('does not keep a box-selected edge unless both endpoint nodes are selected', async () => {

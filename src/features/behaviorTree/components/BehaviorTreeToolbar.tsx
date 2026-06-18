@@ -19,6 +19,7 @@ interface BehaviorTreeToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   interactionMode: BehaviorTreeInteractionMode;
+  isFollowMode: boolean;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -30,6 +31,7 @@ interface BehaviorTreeToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
+  onToggleFollowMode: () => void;
   onRename: (name: string) => void;
 }
 
@@ -41,6 +43,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   canUndo,
   canRedo,
   interactionMode,
+  isFollowMode,
   onSave,
   onLoad,
   onNew,
@@ -52,6 +55,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onUndo,
   onRedo,
   onInteractionModeChange,
+  onToggleFollowMode,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -200,10 +204,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           aria-pressed={interactionMode === 'select'}
           data-testid="bt-select-mode"
         >
-          <svg className="bt-select-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3.5" y="3.5" width="11.5" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3.4 2.6" />
-            <path d="M12.7 12.7l7.1 7.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <path d="M16.6 20.2l3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <svg className="bt-select-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M5 3.4v16.8l4.9-4.4 3.3 5.6 3.1-1.8-3.3-5.6 6.5-1.1L5 3.4z"
+              fill="currentColor"
+            />
           </svg>
         </button>
         <button
@@ -215,10 +220,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           data-testid="bt-pan-mode"
         >
           <svg className="bt-pan-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M8.4 12.2V7.1a1.55 1.55 0 0 1 3.1 0v4.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M11.5 11.6V5.7a1.55 1.55 0 0 1 3.1 0v6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M14.6 12.1V7.5a1.55 1.55 0 0 1 3.1 0v7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8.4 12.2l-1.2-1.2a1.8 1.8 0 0 0-2.55 2.55l4.75 4.75A6.2 6.2 0 0 0 13.8 20h.85a5.05 5.05 0 0 0 5.05-5.05v-2.2a1.5 1.5 0 0 0-3 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 3v18M12 3L8.5 6.5M12 3l3.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M21 12H3M21 12l-3.5-3.5M21 12l-3.5 3.5M3 12l3.5-3.5M3 12l3.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="1.7" fill="currentColor" />
           </svg>
         </button>
         <button
@@ -251,6 +255,20 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
+        <button
+          className={`bt-float-icon-btn bt-follow-mode-btn${isFollowMode ? ' active' : ''}`}
+          onClick={onToggleFollowMode}
+          title={isFollowMode ? 'Disable follow mode' : 'Enable follow mode'}
+          aria-label={isFollowMode ? 'Disable follow mode' : 'Enable follow mode'}
+          aria-pressed={isFollowMode}
+          data-testid="bt-follow-mode"
+        >
+          <svg className="bt-follow-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" />
+            <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+            <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
         {isExecuting ? (
           <button className="bt-float-stop-btn" onClick={onStop} title="Stop execution">
             <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">

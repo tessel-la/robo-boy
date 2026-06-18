@@ -183,13 +183,19 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.getByTestId('bt-palette-toggle')).toBeVisible();
     await expect(page.getByTestId('bt-select-mode')).toBeVisible();
     await expect(page.getByTestId('bt-pan-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-follow-mode')).toBeVisible();
     await expect(page.getByTestId('bt-redo')).toBeDisabled();
     await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'false');
 
     await page.getByTestId('bt-select-mode').click();
     await expect(page.getByTestId('bt-select-mode')).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('bt-pan-mode').click();
     await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-follow-mode').click();
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-follow-mode').click();
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'false');
 
     await openNodePalette(page);
     await expect(page.getByTestId('bt-node-palette')).toBeVisible();
@@ -524,6 +530,92 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(1);
+  });
+
+  test('opens a saved tree as root when selected from inside a subtree', async ({ page }) => {
+    await openBehaviorTree(page);
+    await page.evaluate(() => {
+      const now = Date.now();
+      const subtreeSource = {
+        id: 'e2e-subtree-load-source',
+        name: 'Subtree Load Source',
+        nodes: [
+          {
+            id: 'node-a',
+            type: 'action',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Source A',
+              actionName: '/source_a',
+              actionType: 'example_msgs/action/SourceA',
+              parameters: {},
+            },
+          },
+          {
+            id: 'node-b',
+            type: 'action',
+            position: { x: 260, y: 0 },
+            data: {
+              label: 'Source B',
+              actionName: '/source_b',
+              actionType: 'example_msgs/action/SourceB',
+              parameters: {},
+            },
+          },
+        ],
+        edges: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const freshRoot = {
+        id: 'e2e-fresh-root-tree',
+        name: 'Fresh Root Tree',
+        nodes: [
+          {
+            id: 'node-root',
+            type: 'action',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Fresh Root Action',
+              actionName: '/fresh_root',
+              actionType: 'example_msgs/action/FreshRoot',
+              parameters: {},
+            },
+          },
+        ],
+        edges: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      localStorage.setItem(
+        'robo-boy-behavior-trees',
+        JSON.stringify([
+          { tree: subtreeSource, version: '1.0.0' },
+          { tree: freshRoot, version: '1.0.0' },
+        ])
+      );
+    });
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Subtree Load Source' }).click();
+
+    const sourceA = page.locator('.react-flow__node').filter({ hasText: 'Source A' });
+    const sourceB = page.locator('.react-flow__node').filter({ hasText: 'Source B' });
+    await sourceA.click();
+    await page.keyboard.down('Control');
+    await sourceB.click();
+    await page.keyboard.up('Control');
+    await page.getByTestId('bt-context-wrap').click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await page.getByTestId('bt-context-open-subtree').click();
+    await expect(page.getByTestId('bt-subtree-parent')).toBeVisible();
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Fresh Root Tree' }).click();
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Fresh Root Action' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-subtree-parent')).toHaveCount(0);
   });
 
   test('adds retry and repeat nodes and edits their iteration counts', async ({ page }) => {
