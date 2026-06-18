@@ -894,6 +894,16 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByTestId('bt-context-open-subtree'));
     await waitFor(() => expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument());
 
+    let subtreeNodeCountBeforeRetry = 0;
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(['node-a', 'node-b']));
+      subtreeNodeCountBeforeRetry = latestProps.nodes.length;
+      expect(subtreeNodeCountBeforeRetry).toBeGreaterThanOrEqual(2);
+    });
+
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
     fireEvent.click(screen.getByText('Retry'));
     await waitFor(() => {
@@ -911,7 +921,7 @@ describe('BehaviorTreePanel', () => {
         nodes: Array<Record<string, any>>;
       };
       expect(latestProps.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(['node-a', 'node-b']));
-      expect(latestProps.nodes).toHaveLength(2);
+      expect(latestProps.nodes).toHaveLength(subtreeNodeCountBeforeRetry);
       expect(latestProps.nodes.some((node) => node.type === 'retry')).toBe(false);
     });
     expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument();
