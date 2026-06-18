@@ -123,6 +123,7 @@ interface SyncEditorOptions {
 
 interface HistorySnapshot {
   tree: BehaviorTree;
+  activeTree: BehaviorTree | null;
   path: string[];
 }
 
@@ -577,6 +578,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     return {
       tree: cloneBehaviorTree(rootTreeRef.current),
+      activeTree: currentTreeRef.current ? cloneBehaviorTree(currentTreeRef.current) : null,
       path: [...treePathRef.current],
     };
   }, []);
@@ -1681,7 +1683,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const restoreRootTreeSnapshot = useCallback(
     (snapshot: HistorySnapshot) => {
-      syncRootTreeAndEditor(snapshot.tree, snapshot.path);
+      const activeTree = snapshot.activeTree;
+      const snapshotTree =
+        activeTree && snapshot.path.length > 0
+          ? updateTreeAtPath(snapshot.tree, snapshot.path, () => activeTree)
+          : snapshot.tree;
+
+      syncRootTreeAndEditor(snapshotTree, snapshot.path);
     },
     [syncRootTreeAndEditor]
   );
