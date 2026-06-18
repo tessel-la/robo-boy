@@ -36,13 +36,25 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
 
 vi.mock('../engine/executor', () => ({
   BehaviorTreeExecutor: vi.fn().mockImplementation(
-    (_tree: unknown, _ros: unknown, callback: (event: Record<string, unknown>) => void) => {
+    function MockBehaviorTreeExecutor(
+      this: {
+        start: ReturnType<typeof vi.fn>;
+        stop: ReturnType<typeof vi.fn>;
+        callback: (event: Record<string, unknown>) => void;
+      },
+      _tree: unknown,
+      _ros: unknown,
+      callback: (event: Record<string, unknown>) => void
+    ) {
       const instance = {
         start: vi.fn(),
         stop: vi.fn(),
         callback,
       };
       executorMock.instances.push(instance);
+      this.start = instance.start;
+      this.stop = instance.stop;
+      this.callback = instance.callback;
       return instance;
     }
   ),
@@ -1573,10 +1585,19 @@ describe('BehaviorTreePanel', () => {
 
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
     fireEvent.click(screen.getByTestId('bt-select-mode'));
+    await waitFor(() => expect(screen.getByTestId('bt-select-mode')).toHaveAttribute('aria-pressed', 'true'));
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Early End Tree'));
 
     await screen.findByTestId('rf-node-node-a');
+    await waitFor(() => {
+      expect(reactFlowMock.render.mock.lastCall?.[0]).toEqual(
+        expect.objectContaining({
+          panOnDrag: false,
+          selectionOnDrag: false,
+        })
+      );
+    });
     const flow = screen.getByTestId('mock-react-flow');
     fireEvent.pointerDown(flow, {
       pointerId: 1,
