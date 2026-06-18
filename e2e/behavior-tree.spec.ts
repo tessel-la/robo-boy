@@ -170,6 +170,15 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(page.getByTestId('bt-menu-button')).toBeVisible();
     await expect(page.getByTestId('bt-palette-toggle')).toBeVisible();
+    await expect(page.getByTestId('bt-select-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-pan-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-redo')).toBeDisabled();
+    await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByTestId('bt-select-mode').click();
+    await expect(page.getByTestId('bt-select-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-pan-mode').click();
+    await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
 
     await openNodePalette(page);
     await expect(page.getByTestId('bt-node-palette')).toBeVisible();
@@ -328,7 +337,88 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
   });
 
-  test('highlights a clicked connection and its child node', async ({ page }) => {
+  test('highlights all ctrl-selected nodes and clears them with one pane click', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+
+    await firstAction.click();
+    await page.keyboard.down('Control');
+    await secondAction.click();
+    await page.keyboard.up('Control');
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(secondAction.locator('.bt-node')).toHaveClass(/clicked/);
+
+    await page.getByTestId('bt-canvas').click({ position: { x: 24, y: 24 } });
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(0);
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+  });
+
+  test('wraps and explodes from the contextual selection actions', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+
+    await firstAction.click();
+    await page.keyboard.down('Control');
+    await secondAction.click();
+    await page.keyboard.up('Control');
+
+    await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
+    await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
+    await page.getByTestId('bt-context-wrap').click();
+
+    const subtreeNode = page.locator('.react-flow__node').filter({ hasText: 'Subtree' });
+    await expect(subtreeNode).toHaveCount(1);
+    await expect(page.getByTestId('bt-undo')).toBeEnabled();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'First Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Second Action' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-redo')).toBeEnabled();
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z');
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-redo')).toBeDisabled();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+
+    await firstAction.click();
+    await page.keyboard.down('Control');
+    await secondAction.click();
+    await page.keyboard.up('Control');
+    await page.getByTestId('bt-context-wrap').click();
+
+    await expect(subtreeNode).toHaveCount(1);
+    await expect(page.getByTestId('bt-context-open-subtree')).toBeVisible();
+    await expect(page.getByTestId('bt-context-save-subtree')).toBeVisible();
+    await expect(page.getByTestId('bt-context-explode')).toBeVisible();
+    await page.getByTestId('bt-context-explode').click();
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'First Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Second Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '1' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '2' })).toHaveCount(1);
+  });
+
+  test('selects a clicked connection without keeping stale node highlights', async ({ page }) => {
     await openBehaviorTree(page);
     await seedSavedTree(page);
 
@@ -354,8 +444,42 @@ test.describe('Behavior Tree panel', () => {
     await expect(edge).toHaveClass(/selected/);
     await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke', 'rgb(255, 179, 0)');
     await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke-width', '5px');
-    await expect(child).toHaveClass(/selected/);
+    await expect(child).not.toHaveClass(/selected/);
     await expect(parent).not.toHaveClass(/selected/);
+  });
+
+  test('ctrl-selects multiple links without selecting nodes', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const sequenceBox = await sequence.boundingBox();
+    const firstBox = await firstAction.boundingBox();
+    const secondBox = await secondAction.boundingBox();
+
+    expect(sequenceBox).not.toBeNull();
+    expect(firstBox).not.toBeNull();
+    expect(secondBox).not.toBeNull();
+
+    await page.mouse.click(
+      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2) / 2,
+      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2) / 2
+    );
+    await page.keyboard.down('Control');
+    await page.mouse.click(
+      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (secondBox?.x ?? 0) + (secondBox?.width ?? 0) / 2) / 2,
+      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (secondBox?.y ?? 0) + (secondBox?.height ?? 0) / 2) / 2
+    );
+    await page.keyboard.up('Control');
+
+    await expect(page.locator('.react-flow__edge.selected')).toHaveCount(2);
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(0);
   });
 
   test('stacks mobile toolbar groups vertically without overlap', async ({ page }) => {
@@ -372,18 +496,16 @@ test.describe('Behavior Tree panel', () => {
     const menuButton = page.getByTestId('bt-menu-button');
     const paletteButton = page.getByTestId('bt-palette-toggle');
     const arrangeButton = page.getByTestId('bt-arrange-tree');
-    const renameButton = page.getByTestId('bt-rename-selected');
-    const duplicateButton = page.getByTestId('bt-duplicate-selected');
+    const selectionActions = page.getByTestId('bt-selection-actions');
     await expect(page.getByTestId('bt-rename-selected')).toBeVisible();
     await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
+    await expect(selectionActions).toBeVisible();
 
     const leftBox = await leftTools.boundingBox();
     const rightBox = await rightTools.boundingBox();
     const menuBox = await menuButton.boundingBox();
     const paletteBox = await paletteButton.boundingBox();
     const arrangeBox = await arrangeButton.boundingBox();
-    const renameBox = await renameButton.boundingBox();
-    const duplicateBox = await duplicateButton.boundingBox();
 
     expect(leftBox).not.toBeNull();
     expect(rightBox).not.toBeNull();
@@ -392,8 +514,6 @@ test.describe('Behavior Tree panel', () => {
     expect(paletteBox?.x).toBe(arrangeBox?.x);
     expect(menuBox?.y ?? 0).toBeLessThan(paletteBox?.y ?? 0);
     expect(paletteBox?.y ?? 0).toBeLessThan(arrangeBox?.y ?? 0);
-    expect(renameBox?.x).toBe(duplicateBox?.x);
-    expect(renameBox?.y ?? 0).toBeLessThan(duplicateBox?.y ?? 0);
   });
 
   test('shows sequence child order and reorders children', async ({ page }) => {

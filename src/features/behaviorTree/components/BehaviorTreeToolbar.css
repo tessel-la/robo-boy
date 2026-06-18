@@ -61,6 +61,16 @@
   opacity: 0.95;
 }
 
+.bt-palette-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 .bt-float-icon-btn {
   width: 36px;
   height: 36px;
@@ -82,6 +92,21 @@
   height: 44px;
 }
 
+.bt-parent-tree-btn {
+  width: auto;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 14px 0 10px;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bt-parent-tree-btn svg {
+  width: 21px;
+  height: 21px;
+}
+
 .bt-float-icon-btn:hover {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
@@ -92,17 +117,31 @@
   color: #fff;
 }
 
-.bt-arrange-tree-btn {
+.bt-arrange-tree-btn,
+.bt-interaction-mode-btn,
+.bt-undo-tree-btn,
+.bt-redo-tree-btn {
   width: 44px;
   height: 44px;
 }
 
+.bt-interaction-mode-btn.active {
+  background: var(--primary-color, #4285f4);
+  border-color: var(--primary-color, #4285f4);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(66, 133, 244, 0.25);
+}
+
+.bt-undo-tree-btn:disabled,
+.bt-redo-tree-btn:disabled,
 .bt-arrange-tree-btn:disabled {
   cursor: default;
   opacity: 0.45;
   box-shadow: none;
 }
 
+.bt-undo-tree-btn:disabled:hover,
+.bt-redo-tree-btn:disabled:hover,
 .bt-arrange-tree-btn:disabled:hover {
   box-shadow: none;
 }

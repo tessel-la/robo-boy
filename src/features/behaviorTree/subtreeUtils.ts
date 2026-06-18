@@ -230,6 +230,90 @@ const averagePosition = (nodes: BehaviorTreeNode[]): XYPosition => {
   };
 };
 
+const translatePosition = (position: XYPosition, origin: XYPosition): XYPosition => ({
+  x: position.x - origin.x,
+  y: position.y - origin.y,
+});
+
+const isControlFlowNode = (node?: BehaviorTreeNode | null): boolean => {
+  return Boolean(
+    node?.type === BehaviorNodeType.Sequence ||
+      node?.type === BehaviorNodeType.Selector ||
+      node?.type === BehaviorNodeType.Parallel
+  );
+};
+
+const getChildEdges = (tree: Pick<BehaviorTree, 'edges'>, nodeId: string): Edge[] => {
+  return tree.edges.filter((edge) => edge.source === nodeId);
+};
+
+const getIncomingEdge = (tree: Pick<BehaviorTree, 'edges'>, nodeId: string): Edge | undefined => {
+  return tree.edges.find((edge) => edge.target === nodeId);
+};
+
+const hasSelectedDirectChild = (
+  tree: Pick<BehaviorTree, 'edges'>,
+  nodeId: string,
+  selectedIds: Set<string>
+): boolean => {
+  return getChildEdges(tree, nodeId).some((edge) => selectedIds.has(edge.target));
+};
+
+const hasAllDirectChildrenSelected = (
+  tree: Pick<BehaviorTree, 'edges'>,
+  nodeId: string,
+  selectedIds: Set<string>
+): boolean => {
+  const childEdges = getChildEdges(tree, nodeId);
+  return childEdges.length > 0 && childEdges.every((edge) => selectedIds.has(edge.target));
+};
+
+const hasAbsorbingSelectedAncestor = (
+  tree: Pick<BehaviorTree, 'edges'>,
+  nodeId: string,
+  selectedIds: Set<string>
+): boolean => {
+  let currentId = nodeId;
+  let incomingEdge = getIncomingEdge(tree, currentId);
+
+  while (incomingEdge) {
+    const parentId = incomingEdge.source;
+    if (selectedIds.has(parentId) && hasAllDirectChildrenSelected(tree, parentId, selectedIds)) {
+      return true;
+    }
+
+    currentId = parentId;
+    incomingEdge = getIncomingEdge(tree, currentId);
+  }
+
+  return false;
+};
+
+const getWrapRootNodes = (
+  tree: BehaviorTree,
+  selectedNodes: BehaviorTreeNode[],
+  selectedIds: Set<string>
+): BehaviorTreeNode[] => {
+  return selectedNodes.filter((node) => {
+    if (hasAbsorbingSelectedAncestor(tree, node.id, selectedIds)) return false;
+
+    const hasSelectedChildren = hasSelectedDirectChild(tree, node.id, selectedIds);
+    if (hasSelectedChildren && !hasAllDirectChildrenSelected(tree, node.id, selectedIds)) {
+      return false;
+    }
+
+    return true;
+  });
+};
+
+const isGeneratedSubtreeRoot = (node: BehaviorTreeNode): boolean => {
+  return Boolean(
+    node.type === BehaviorNodeType.Sequence &&
+      'generatedBySubtreeWrap' in node.data &&
+      node.data.generatedBySubtreeWrap
+  );
+};
+
 export interface WrapSelectionIntoSubtreeParams {
   tree: BehaviorTree;
   selectedNodeIds: string[];
@@ -265,43 +349,44 @@ export const wrapSelectionIntoSubtree = ({
     return { ok: false, reason: 'Some selected nodes could not be found.' };
   }
 
-  const selectedRoots = selectedNodes.filter(
-    (node) => !tree.edges.some((edge) => selectedIds.has(edge.source) && edge.target === node.id)
+  const selectedRoots = getWrapRootNodes(tree, selectedNodes, selectedIds);
+  if (selectedRoots.length === 0) {
+    return {
+      ok: false,
+      reason: 'Select neighboring children, or select a parent together with all of its children.',
+    };
+  }
+
+  const incomingParentEdges = selectedRoots.map((node) => getIncomingEdge(tree, node.id));
+  const rootsWithoutParent = incomingParentEdges.filter((edge) => !edge).length;
+  if (rootsWithoutParent > 0 && rootsWithoutParent !== incomingParentEdges.length) {
+    return {
+      ok: false,
+      reason: 'Selected nodes must be attached to the same parent before wrapping.',
+    };
+  }
+
+  const parentIds = Array.from(
+    new Set(incomingParentEdges.map((edge) => edge?.source).filter(Boolean))
   );
-  if (selectedRoots.length < 2) {
+  if (parentIds.length > 1) {
     return {
       ok: false,
-      reason: 'Select sibling sequence items, not just nested nodes from one branch.',
+      reason: 'Selected nodes must share the same parent to wrap them.',
     };
   }
 
-  const incomingParentEdges = selectedRoots.map((node) =>
-    tree.edges.find((edge) => edge.target === node.id)
-  );
-  if (incomingParentEdges.some((edge) => !edge)) {
+  const parentNode = parentIds.length === 1
+    ? tree.nodes.find((node) => node.id === parentIds[0])
+    : null;
+  if (parentNode && !isControlFlowNode(parentNode)) {
     return {
       ok: false,
-      reason: 'Selected nodes must already be attached to the same sequence before wrapping.',
+      reason: 'Only children of a control-flow node can be wrapped into a subtree.',
     };
   }
 
-  const parentIds = Array.from(new Set(incomingParentEdges.map((edge) => edge?.source)));
-  if (parentIds.length !== 1) {
-    return {
-      ok: false,
-      reason: 'Selected nodes must share the same parent sequence to wrap them.',
-    };
-  }
-
-  const parentNode = tree.nodes.find((node) => node.id === parentIds[0]);
-  if (!parentNode || parentNode.type !== BehaviorNodeType.Sequence) {
-    return {
-      ok: false,
-      reason: 'Only children of a sequence node can be wrapped into a subtree.',
-    };
-  }
-
-  const siblingEdges = tree.edges.filter((edge) => edge.source === parentNode.id);
+  const siblingEdges = parentNode ? getChildEdges(tree, parentNode.id) : [];
   const selectedSiblingIndexes = siblingEdges
     .map((edge, index) => ({ edge, index }))
     .filter(({ edge }) => selectedRoots.some((node) => node.id === edge.target))
@@ -312,18 +397,26 @@ export const wrapSelectionIntoSubtree = ({
     return offset === 0 || index === sortedIndexes[offset - 1] + 1;
   });
 
-  if (!isContiguous) {
+  if (parentNode && !isContiguous) {
     return {
       ok: false,
       reason: 'Wrap works on consecutive sequence items. Select neighboring children and try again.',
     };
   }
 
-  const includedIds = collectDescendantIds(tree, selectedRoots.map((node) => node.id));
+  const orderedSelectedRoots = parentNode
+    ? siblingEdges
+        .map((edge) => selectedRoots.find((node) => node.id === edge.target))
+        .filter((node): node is BehaviorTreeNode => Boolean(node))
+    : selectedRoots;
+  const subtreeAnchor = averagePosition(orderedSelectedRoots);
+  const toEmbeddedPosition = (position: XYPosition) => translatePosition(position, subtreeAnchor);
+  const includedIds = collectDescendantIds(tree, orderedSelectedRoots.map((node) => node.id));
   const subtreeNodes = tree.nodes
     .filter((node) => includedIds.has(node.id))
     .map((node) => ({
       ...deepClone(node),
+      position: toEmbeddedPosition(node.position),
       selected: false,
       dragging: false,
       data: {
@@ -340,34 +433,39 @@ export const wrapSelectionIntoSubtree = ({
       selected: false,
     }));
 
-  const subtreeSequenceRootId = getNextBehaviorNodeId(
-    subtreeNodes as Array<Pick<Node, 'id'>>,
-    0
-  );
-  const subtreeSequenceRoot: BehaviorTreeNode = {
-    id: subtreeSequenceRootId,
-    type: BehaviorNodeType.Sequence,
-    position: averagePosition(selectedRoots),
-    data: {
-      label: subtreeLabel,
-      type: 'sequence',
-    },
-  };
+  const shouldCreateWrapperRoot = selectedRoots.length > 1;
+  const subtreeSequenceRootId = shouldCreateWrapperRoot
+    ? getNextBehaviorNodeId(subtreeNodes as Array<Pick<Node, 'id'>>, 0)
+    : null;
+  const subtreeSequenceRoot: BehaviorTreeNode | null = subtreeSequenceRootId
+    ? {
+        id: subtreeSequenceRootId,
+        type: BehaviorNodeType.Sequence,
+        position: parentNode ? toEmbeddedPosition(parentNode.position) : { x: 0, y: 0 },
+        data: {
+          label: subtreeLabel,
+          type: 'sequence',
+          generatedBySubtreeWrap: true,
+        },
+      }
+    : null;
 
   const subtreeEdgeSeed = internalEdges.length;
-  const rootEdges: Edge[] = selectedRoots.map((node, index) => ({
-    id: `edge-subtree-${subtreeTreeId}-${subtreeEdgeSeed + index}`,
-    source: subtreeSequenceRoot.id,
-    target: node.id,
-    sourceHandle: null,
-    targetHandle: null,
-    selected: false,
-  }));
+  const rootEdges: Edge[] = subtreeSequenceRoot
+    ? orderedSelectedRoots.map((node, index) => ({
+        id: `edge-subtree-${subtreeTreeId}-${subtreeEdgeSeed + index}`,
+        source: subtreeSequenceRoot.id,
+        target: node.id,
+        sourceHandle: null,
+        targetHandle: null,
+        selected: false,
+      }))
+    : [];
 
   const embeddedTree: BehaviorTree = {
     id: subtreeTreeId,
     name: subtreeLabel,
-    nodes: [...subtreeNodes, subtreeSequenceRoot],
+    nodes: subtreeSequenceRoot ? [...subtreeNodes, subtreeSequenceRoot] : subtreeNodes,
     edges: [...rootEdges, ...internalEdges],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -376,7 +474,7 @@ export const wrapSelectionIntoSubtree = ({
   const subtreeNode = createSubtreeNode({
     id: subtreeNodeId,
     label: subtreeLabel,
-    position: averagePosition(selectedRoots),
+    position: subtreeAnchor,
     tree: embeddedTree,
   });
 
@@ -398,8 +496,9 @@ export const wrapSelectionIntoSubtree = ({
     if (includedIds.has(edge.source) || includedIds.has(edge.target)) {
       if (
         !insertedParentEdge &&
+        parentNode &&
         edge.source === parentNode.id &&
-        selectedRoots.some((node) => node.id === edge.target)
+        orderedSelectedRoots.some((node) => node.id === edge.target)
       ) {
         insertedParentEdge = true;
         return [
@@ -429,7 +528,7 @@ export const wrapSelectionIntoSubtree = ({
       updatedAt: Date.now(),
     },
     subtreeNode,
-    selectedRootIds: selectedRoots.map((node) => node.id),
+    selectedRootIds: orderedSelectedRoots.map((node) => node.id),
   };
 };
 
@@ -455,23 +554,51 @@ export const explodeSubtreeNode = ({
   }
 
   const nodesWithIncoming = new Set(embeddedTree.edges.map((edge) => edge.target));
-  const nodesWithOutgoing = new Set(embeddedTree.edges.map((edge) => edge.source));
   const embeddedRoots = embeddedTree.nodes.filter((node) => !nodesWithIncoming.has(node.id));
-  const embeddedLeaves = embeddedTree.nodes.filter((node) => !nodesWithOutgoing.has(node.id));
+  const generatedRoot =
+    embeddedRoots.length === 1 && isGeneratedSubtreeRoot(embeddedRoots[0])
+      ? embeddedRoots[0]
+      : null;
+  const generatedRootChildIds = generatedRoot
+    ? new Set(
+        embeddedTree.edges
+          .filter((edge) => edge.source === generatedRoot.id)
+          .map((edge) => edge.target)
+      )
+    : new Set<string>();
+  const explodableNodes = generatedRoot
+    ? embeddedTree.nodes.filter((node) => node.id !== generatedRoot.id)
+    : embeddedTree.nodes;
+  const explodableNodeIds = new Set(explodableNodes.map((node) => node.id));
+  const explodableEdges = embeddedTree.edges.filter(
+    (edge) =>
+      explodableNodeIds.has(edge.source) &&
+      explodableNodeIds.has(edge.target) &&
+      edge.source !== generatedRoot?.id &&
+      edge.target !== generatedRoot?.id
+  );
+  const explodableNodesWithIncoming = new Set(explodableEdges.map((edge) => edge.target));
+  const explodableNodesWithOutgoing = new Set(explodableEdges.map((edge) => edge.source));
+  const rootsToReconnect = generatedRoot
+    ? explodableNodes.filter((node) => generatedRootChildIds.has(node.id))
+    : explodableNodes.filter((node) => !explodableNodesWithIncoming.has(node.id));
+  const leavesToReconnect = explodableNodes.filter(
+    (node) => !explodableNodesWithOutgoing.has(node.id)
+  );
 
-  if (embeddedRoots.length === 0) {
+  if (rootsToReconnect.length === 0) {
     return {
       ok: false,
       reason: 'This subtree has no root node to reconnect.',
     };
   }
 
-  const anchor = averagePosition(embeddedRoots);
+  const anchor = averagePosition(rootsToReconnect);
   const allocationNodes: Array<Pick<Node, 'id'>> = tree.nodes.filter((node) => node.id !== subtreeNodeId);
   let nextNodeCounter = getNodeCounterAfterNodes(allocationNodes, startNodeIndex);
   const idMap = new Map<string, string>();
 
-  const clonedNodes = embeddedTree.nodes.map((node) => {
+  const clonedNodes = explodableNodes.map((node) => {
     const nextId = getNextBehaviorNodeId(allocationNodes, nextNodeCounter);
     nextNodeCounter = getNodeCounterAfterNodes([{ id: nextId }], nextNodeCounter);
     allocationNodes.push({ id: nextId });
@@ -493,7 +620,7 @@ export const explodeSubtreeNode = ({
     };
   });
 
-  const internalEdges = embeddedTree.edges.map((edge) => ({
+  const internalEdges = explodableEdges.map((edge) => ({
     ...deepClone(edge),
     id: `edge-expand-${subtreeNode.id}-${crypto.randomUUID()}`,
     source: idMap.get(edge.source) ?? edge.source,
@@ -501,24 +628,20 @@ export const explodeSubtreeNode = ({
     selected: false,
   }));
 
-  const incomingEdges = tree.edges.filter((edge) => edge.target === subtreeNode.id);
-  const outgoingEdges = tree.edges.filter((edge) => edge.source === subtreeNode.id);
-  const reconnectedIncomingEdges = incomingEdges.flatMap((edge) =>
-    embeddedRoots.map((root) => ({
+  const makeReconnectedIncomingEdges = (edge: Edge): Edge[] =>
+    rootsToReconnect.map((root) => ({
       ...deepClone(edge),
       id: `edge-expand-in-${subtreeNode.id}-${crypto.randomUUID()}`,
       target: idMap.get(root.id) ?? root.id,
       selected: false,
-    }))
-  );
-  const reconnectedOutgoingEdges = outgoingEdges.flatMap((edge) =>
-    embeddedLeaves.map((leaf) => ({
+    }));
+  const makeReconnectedOutgoingEdges = (edge: Edge): Edge[] =>
+    leavesToReconnect.map((leaf) => ({
       ...deepClone(edge),
       id: `edge-expand-out-${subtreeNode.id}-${crypto.randomUUID()}`,
       source: idMap.get(leaf.id) ?? leaf.id,
       selected: false,
-    }))
-  );
+    }));
 
   const nextNodes = [
     ...tree.nodes
@@ -535,10 +658,18 @@ export const explodeSubtreeNode = ({
     ...clonedNodes,
   ];
   const nextEdges = [
-    ...tree.edges.filter((edge) => edge.source !== subtreeNode.id && edge.target !== subtreeNode.id),
+    ...tree.edges.flatMap((edge) => {
+      if (edge.target === subtreeNode.id) {
+        return makeReconnectedIncomingEdges(edge);
+      }
+
+      if (edge.source === subtreeNode.id) {
+        return makeReconnectedOutgoingEdges(edge);
+      }
+
+      return [edge];
+    }),
     ...internalEdges,
-    ...reconnectedIncomingEdges,
-    ...reconnectedOutgoingEdges,
   ];
 
   return {

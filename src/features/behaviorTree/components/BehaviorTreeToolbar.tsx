@@ -9,15 +9,17 @@ import {
 } from '../storage/treeStorage';
 import './BehaviorTreeToolbar.css';
 
+export type BehaviorTreeInteractionMode = 'pan' | 'select';
+
 interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
   isPaletteCollapsed: boolean;
   isEditingSubtree: boolean;
   nodeCount: number;
-  selectedNodeCount: number;
-  canWrapSelection: boolean;
-  hasSelectedSubtree: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  interactionMode: BehaviorTreeInteractionMode;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -26,13 +28,9 @@ interface BehaviorTreeToolbarProps {
   onExport: () => void;
   onArrange: () => void;
   onTogglePalette: () => void;
-  onDeleteSelected: () => void;
-  onDuplicateSelected: () => void;
-  onRenameSelected: () => void;
-  onWrapSelection: () => void;
-  onOpenSelectedSubtree: () => void;
-  onSaveSelectedSubtree: () => void;
-  onExplodeSelectedSubtree: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
   onNavigateUp: () => void;
   onRename: (name: string) => void;
 }
@@ -43,9 +41,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   isPaletteCollapsed,
   isEditingSubtree,
   nodeCount,
-  selectedNodeCount,
-  canWrapSelection,
-  hasSelectedSubtree,
+  canUndo,
+  canRedo,
+  interactionMode,
   onSave,
   onLoad,
   onNew,
@@ -54,13 +52,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onExport,
   onArrange,
   onTogglePalette,
-  onDeleteSelected,
-  onDuplicateSelected,
-  onRenameSelected,
-  onWrapSelection,
-  onOpenSelectedSubtree,
-  onSaveSelectedSubtree,
-  onExplodeSelectedSubtree,
+  onUndo,
+  onRedo,
+  onInteractionModeChange,
   onNavigateUp,
   onRename,
 }) => {
@@ -163,15 +157,18 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       <div className="bt-float-bar">
         {isEditingSubtree && (
           <button
-            className="bt-float-icon-btn"
+            className="bt-float-icon-btn bt-parent-tree-btn"
             onClick={onNavigateUp}
             title="Back to parent tree"
             aria-label="Back to parent tree"
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10.5 4.5L6 9l4.5 4.5" />
-              <path d="M6.5 9H14" />
+            <svg width="21" height="21" viewBox="0 0 21 21" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="2.75" width="7.5" height="5.5" rx="1.4" />
+              <rect x="10.5" y="12.75" width="7.5" height="5.5" rx="1.4" />
+              <path d="M14.25 12.75V10H6.75V8.25" />
+              <path d="M6.75 8.25L4.2 10.8M6.75 8.25l2.55 2.55" />
             </svg>
+            <span>Parent</span>
           </button>
         )}
         <button
@@ -197,13 +194,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           aria-label="Toggle node palette"
           data-testid="bt-palette-toggle"
         >
-          <svg width="28" height="26" viewBox="0 0 28 26" fill="currentColor" aria-hidden="true">
-            <circle cx="14" cy="4" r="3.5"/>
-            <circle cx="5" cy="21" r="3.5"/>
-            <circle cx="23" cy="21" r="3.5"/>
-            <line x1="12.4" y1="7.2" x2="6.8" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
-            <line x1="15.6" y1="7.2" x2="21.2" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
-          </svg>
+          <span className="bt-palette-plus" aria-hidden="true">+</span>
         </button>
 
         <button
@@ -221,113 +212,65 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
           </svg>
         </button>
+        <button
+          className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'select' ? ' active' : ''}`}
+          onClick={() => onInteractionModeChange('select')}
+          title="Select nodes by dragging"
+          aria-label="Select nodes by dragging"
+          aria-pressed={interactionMode === 'select'}
+          data-testid="bt-select-mode"
+        >
+          <svg width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3.2" y="3.2" width="13.6" height="11.8" rx="2" strokeDasharray="3 2" />
+            <path d="M12.5 12.5l5.7 5.7" />
+            <path d="M15.6 18.1l2.6-2.6" />
+          </svg>
+        </button>
+        <button
+          className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'pan' ? ' active' : ''}`}
+          onClick={() => onInteractionModeChange('pan')}
+          title="Pan canvas"
+          aria-label="Pan canvas"
+          aria-pressed={interactionMode === 'pan'}
+          data-testid="bt-pan-mode"
+        >
+          <svg width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 11.2V6.4a1.45 1.45 0 0 1 2.9 0v4.3" />
+            <path d="M10.9 10.6V5.1a1.45 1.45 0 0 1 2.9 0v5.5" />
+            <path d="M13.8 11V6.6a1.45 1.45 0 0 1 2.9 0v6" />
+            <path d="M8 11.2l-1-1a1.55 1.55 0 0 0-2.2 2.2l4.9 4.9a6 6 0 0 0 4.2 1.7h.8a4.9 4.9 0 0 0 4.9-4.9v-2.4a1.45 1.45 0 0 0-2.9 0" />
+          </svg>
+        </button>
+        <button
+          className="bt-float-icon-btn bt-undo-tree-btn"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Undo last behavior tree change"
+          aria-label="Undo last behavior tree change"
+          data-testid="bt-undo"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M7.5 6H3.5V2" />
+            <path d="M3.8 6A7 7 0 1 1 5 15" />
+          </svg>
+        </button>
+        <button
+          className="bt-float-icon-btn bt-redo-tree-btn"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="Redo last behavior tree change"
+          aria-label="Redo last behavior tree change"
+          data-testid="bt-redo"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12.5 6h4V2" />
+            <path d="M16.2 6A7 7 0 1 0 15 15" />
+          </svg>
+        </button>
       </div>
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
-        {selectedNodeCount > 0 && (
-          <>
-            {selectedNodeCount === 1 && (
-              <button
-                className="bt-float-rename-btn"
-                onClick={onRenameSelected}
-                title="Rename selected node"
-                aria-label="Rename selected node"
-                data-testid="bt-rename-selected"
-              >
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10.8 1.5l2.7 2.7-8.2 8.2-3.6.9.9-3.6 8.2-8.2z"/>
-                  <path d="M9.2 3.1l2.7 2.7"/>
-                </svg>
-                <span className="bt-float-btn-label">Rename</span>
-              </button>
-            )}
-            {canWrapSelection && (
-              <button
-                className="bt-float-duplicate-btn"
-                onClick={onWrapSelection}
-                title="Wrap selected sequence items in a subtree"
-                aria-label="Wrap selected nodes in a subtree"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="1.5" y="3.5" width="4" height="4" rx="0.8" />
-                  <rect x="10.5" y="3.5" width="4" height="4" rx="0.8" />
-                  <rect x="6" y="9.5" width="4" height="4" rx="0.8" />
-                  <path d="M5.5 5.5h5M8 5.5v4" />
-                </svg>
-                <span className="bt-float-btn-label">Wrap</span>
-              </button>
-            )}
-            {hasSelectedSubtree && (
-              <>
-                <button
-                  className="bt-float-rename-btn"
-                  onClick={onOpenSelectedSubtree}
-                  title="Open selected subtree"
-                  aria-label="Open selected subtree"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="2" y="2" width="12" height="12" rx="2" />
-                    <path d="M6 5h5v5M11 5L5 11" />
-                  </svg>
-                  <span className="bt-float-btn-label">Open</span>
-                </button>
-                <button
-                  className="bt-float-rename-btn"
-                  onClick={onExplodeSelectedSubtree}
-                  title="Explode selected subtree back into this tree"
-                  aria-label="Explode selected subtree"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
-                    <path d="M8 5v6M5 8h6" />
-                    <path d="M5 5l-2-2M11 5l2-2M5 11l-2 2M11 11l2 2" />
-                  </svg>
-                  <span className="bt-float-btn-label">Explode</span>
-                </button>
-                <button
-                  className="bt-float-duplicate-btn"
-                  onClick={onSaveSelectedSubtree}
-                  title="Save selected subtree as a saved tree"
-                  aria-label="Save selected subtree"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <path d="M2 0h9l4 4v11a1 1 0 01-1 1H2a1 1 0 01-1-1V1a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-                    <rect x="4" y="0" width="6" height="5" rx="0" fill="currentColor" opacity=".5"/>
-                    <rect x="3" y="9" width="10" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-                  </svg>
-                  <span className="bt-float-btn-label">Save Subtree</span>
-                </button>
-              </>
-            )}
-            <button
-              className="bt-float-duplicate-btn"
-              onClick={onDuplicateSelected}
-              title={`Duplicate ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-              aria-label="Duplicate selected nodes"
-              data-testid="bt-duplicate-selected"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="5" y="5" width="8" height="8" rx="1.2"/>
-                <path d="M2 10V3.2A1.2 1.2 0 0 1 3.2 2H10"/>
-              </svg>
-              <span className="bt-float-btn-label">Duplicate</span>
-            </button>
-            <button
-              className="bt-float-delete-btn"
-              onClick={onDeleteSelected}
-              title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-            >
-              <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="0.5,3.5 12.5,3.5"/>
-                <path d="M4 3.5V2a0.8 0.8 0 0 1 0.8-0.8h3.4a0.8 0.8 0 0 1 0.8 0.8v1.5"/>
-                <path d="M2 3.5l0.8 9a0.8 0.8 0 0 0 0.8 0.8h5.8a0.8 0.8 0 0 0 0.8-0.8l0.8-9"/>
-              </svg>
-              <span className="bt-float-count">{selectedNodeCount}</span>
-            </button>
-          </>
-        )}
-
         {isExecuting ? (
           <button className="bt-float-stop-btn" onClick={onStop} title="Stop execution">
             <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">

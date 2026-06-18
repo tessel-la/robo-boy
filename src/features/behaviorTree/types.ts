@@ -79,6 +79,7 @@ export interface ROSTopicNodeData extends BaseNodeData {
 export interface ControlFlowNodeData extends BaseNodeData {
   type: 'sequence' | 'selector' | 'parallel';
   description?: string;
+  generatedBySubtreeWrap?: boolean;
 }
 
 export interface SubtreeNodeData extends BaseNodeData {
