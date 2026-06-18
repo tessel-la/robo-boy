@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Ros } from 'roslib';
+import { discoverAllROSResources } from '../services/rosDiscovery';
+import {
+  BEHAVIOR_TREE_STORAGE_EVENT,
+  listBehaviorTrees,
+} from '../storage/treeStorage';
+import {
+  BehaviorTree,
+  ROSDiscoveryResult,
+  BehaviorNodeType,
+  NodePaletteItem,
+  ROSActionInfo,
+  ROSServiceInfo,
+  ROSTopicInfo,
+} from '../types';
+import './NodePalette.css';
 
 // ─── Palette icons ────────────────────────────────────────────────────────────
 
@@ -96,23 +111,22 @@ const IconParallel = () => (
     <polyline points="6,7 7.5,9 9,7"/>
   </svg>
 );
-import { discoverAllROSResources } from '../services/rosDiscovery';
-import {
-  ROSDiscoveryResult,
-  BehaviorNodeType,
-  NodePaletteItem,
-  ROSActionInfo,
-  ROSServiceInfo,
-  ROSTopicInfo,
-} from '../types';
-import './NodePalette.css';
+const IconSubtree = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="11" height="11" rx="2" />
+    <path d="M4.5 4.5h5M4.5 7h5M4.5 9.5h3" />
+  </svg>
+);
 
 interface NodePaletteProps {
   ros: Ros | null;
   isConnected: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onAddNode?: (type: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => void;
+  onAddNode?: (
+    type: BehaviorNodeType,
+    item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
+  ) => void;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
@@ -144,10 +158,12 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const hasDiscovered = React.useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     control: true,
+    saved: true,
     actions: false,
     services: false,
     topics: false,
   });
+  const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
 
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
@@ -303,6 +319,15 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     }
   }, [isConnected, ros]);
 
+  useEffect(() => {
+    const handleSavedTreesChanged = () => {
+      setSavedTrees(listBehaviorTrees());
+    };
+
+    window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+    return () => window.removeEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+  }, []);
+
   const handleDiscover = async () => {
     if (!ros) return;
     setIsDiscovering(true);
@@ -323,9 +348,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const handleDragStart = (
     e: React.DragEvent,
     nodeType: BehaviorNodeType,
-    rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo
+    item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
   ) => {
-    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, rosInfo }));
+    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, item }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -429,6 +454,44 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <span className="palette-node-label">{node.label}</span>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="palette-section">
+        <div className="palette-section-header" onClick={() => toggleSection('saved')}>
+          <span className="palette-section-icon">
+            {expandedSections.saved ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
+          <span className="palette-section-title">Saved Trees</span>
+          <span className="palette-section-count">{savedTrees.length}</span>
+        </div>
+        {expandedSections.saved && (
+          <div className="palette-section-content">
+            {savedTrees.length === 0 ? (
+              <div className="palette-empty">Save a tree to reuse it as a subtree</div>
+            ) : (
+              savedTrees.map(({ tree }) => (
+                <div
+                  key={tree.id}
+                  className="palette-node palette-node-ros"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Subtree, tree)}
+                  onClick={() => onAddNode?.(BehaviorNodeType.Subtree, tree)}
+                  title={`Insert "${tree.name}" as a subtree`}
+                >
+                  <span className="palette-node-icon">
+                    <IconSubtree />
+                  </span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">{tree.name}</span>
+                    <span className="palette-node-detail">
+                      {tree.nodes.length} node{tree.nodes.length === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

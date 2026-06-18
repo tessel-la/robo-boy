@@ -7,7 +7,11 @@ const TopicNode: React.FC<NodeProps<ROSTopicNodeData>> = ({ data, selected }) =>
   const statusClass = data.status || ExecutionStatus.Idle;
 
   return (
-    <div className={`bt-node bt-topic-node status-${statusClass} ${selected ? 'selected' : ''}`}>
+    <div
+      className={`bt-node bt-topic-node status-${statusClass} ${selected ? 'selected' : ''} ${
+        data.isHighlighted ? 'clicked' : ''
+      }`}
+    >
       <Handle type="target" position={Position.Top} className="bt-handle" />
       
       <div className="bt-node-header">
@@ -35,4 +39,3 @@ const TopicNode: React.FC<NodeProps<ROSTopicNodeData>> = ({ data, selected }) =>
 };
 
 export default TopicNode;
-

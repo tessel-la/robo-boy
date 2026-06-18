@@ -5,6 +5,7 @@ import TopicNode from './TopicNode';
 import SequenceNode from './SequenceNode';
 import SelectorNode from './SelectorNode';
 import ParallelNode from './ParallelNode';
+import SubtreeNode from './SubtreeNode';
 
 export const nodeTypes: NodeTypes = {
   action: ActionNode,
@@ -13,5 +14,5 @@ export const nodeTypes: NodeTypes = {
   sequence: SequenceNode,
   selector: SelectorNode,
   parallel: ParallelNode,
+  subtree: SubtreeNode,
 };
-

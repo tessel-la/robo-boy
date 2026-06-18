@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BehaviorTree } from '../types';
+import { BehaviorNodeType, BehaviorTree } from '../types';
 import {
+  BEHAVIOR_TREE_STORAGE_EVENT,
   listBehaviorTrees,
   loadBehaviorTree,
   deleteBehaviorTree,
@@ -12,8 +13,11 @@ interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
   isPaletteCollapsed: boolean;
+  isEditingSubtree: boolean;
   nodeCount: number;
   selectedNodeCount: number;
+  canWrapSelection: boolean;
+  hasSelectedSubtree: boolean;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -25,6 +29,11 @@ interface BehaviorTreeToolbarProps {
   onDeleteSelected: () => void;
   onDuplicateSelected: () => void;
   onRenameSelected: () => void;
+  onWrapSelection: () => void;
+  onOpenSelectedSubtree: () => void;
+  onSaveSelectedSubtree: () => void;
+  onExplodeSelectedSubtree: () => void;
+  onNavigateUp: () => void;
   onRename: (name: string) => void;
 }
 
@@ -32,8 +41,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
   isPaletteCollapsed,
+  isEditingSubtree,
   nodeCount,
   selectedNodeCount,
+  canWrapSelection,
+  hasSelectedSubtree,
   onSave,
   onLoad,
   onNew,
@@ -45,6 +57,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onDeleteSelected,
   onDuplicateSelected,
   onRenameSelected,
+  onWrapSelection,
+  onOpenSelectedSubtree,
+  onSaveSelectedSubtree,
+  onExplodeSelectedSubtree,
+  onNavigateUp,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -57,6 +74,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   useEffect(() => {
     setNameValue(currentTree?.name ?? '');
   }, [currentTree?.id, currentTree?.name]);
+
+  useEffect(() => {
+    const handleSavedTreesChanged = () => setSavedTrees(listBehaviorTrees());
+    window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+    return () => window.removeEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+  }, []);
 
   const openMenu = () => {
     setSavedTrees(listBehaviorTrees());
@@ -76,6 +99,17 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const handleLoad = (treeId: string) => {
     const tree = loadBehaviorTree(treeId);
     if (tree) { onLoad(tree); closeMenu(); }
+  };
+
+  const handleTreeDragStart = (event: React.DragEvent, tree: BehaviorTree) => {
+    event.dataTransfer.setData(
+      'application/reactflow',
+      JSON.stringify({
+        nodeType: BehaviorNodeType.Subtree,
+        item: tree,
+      })
+    );
+    event.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDelete = (tree: BehaviorTree, e: React.MouseEvent) => {
@@ -127,6 +161,19 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
     <>
       {/* ── Floating top-left: menu pill ──────────────────────── */}
       <div className="bt-float-bar">
+        {isEditingSubtree && (
+          <button
+            className="bt-float-icon-btn"
+            onClick={onNavigateUp}
+            title="Back to parent tree"
+            aria-label="Back to parent tree"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10.5 4.5L6 9l4.5 4.5" />
+              <path d="M6.5 9H14" />
+            </svg>
+          </button>
+        )}
         <button
           className="bt-float-menu-btn"
           onClick={openMenu}
@@ -194,6 +241,64 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                 </svg>
                 <span className="bt-float-btn-label">Rename</span>
               </button>
+            )}
+            {canWrapSelection && (
+              <button
+                className="bt-float-duplicate-btn"
+                onClick={onWrapSelection}
+                title="Wrap selected sequence items in a subtree"
+                aria-label="Wrap selected nodes in a subtree"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="1.5" y="3.5" width="4" height="4" rx="0.8" />
+                  <rect x="10.5" y="3.5" width="4" height="4" rx="0.8" />
+                  <rect x="6" y="9.5" width="4" height="4" rx="0.8" />
+                  <path d="M5.5 5.5h5M8 5.5v4" />
+                </svg>
+                <span className="bt-float-btn-label">Wrap</span>
+              </button>
+            )}
+            {hasSelectedSubtree && (
+              <>
+                <button
+                  className="bt-float-rename-btn"
+                  onClick={onOpenSelectedSubtree}
+                  title="Open selected subtree"
+                  aria-label="Open selected subtree"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="2" y="2" width="12" height="12" rx="2" />
+                    <path d="M6 5h5v5M11 5L5 11" />
+                  </svg>
+                  <span className="bt-float-btn-label">Open</span>
+                </button>
+                <button
+                  className="bt-float-rename-btn"
+                  onClick={onExplodeSelectedSubtree}
+                  title="Explode selected subtree back into this tree"
+                  aria-label="Explode selected subtree"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+                    <path d="M8 5v6M5 8h6" />
+                    <path d="M5 5l-2-2M11 5l2-2M5 11l-2 2M11 11l2 2" />
+                  </svg>
+                  <span className="bt-float-btn-label">Explode</span>
+                </button>
+                <button
+                  className="bt-float-duplicate-btn"
+                  onClick={onSaveSelectedSubtree}
+                  title="Save selected subtree as a saved tree"
+                  aria-label="Save selected subtree"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M2 0h9l4 4v11a1 1 0 01-1 1H2a1 1 0 01-1-1V1a1 1 0 011-1z" fill="none" stroke="currentColor" strokeWidth="1.5"/>
+                    <rect x="4" y="0" width="6" height="5" rx="0" fill="currentColor" opacity=".5"/>
+                    <rect x="3" y="9" width="10" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/>
+                  </svg>
+                  <span className="bt-float-btn-label">Save Subtree</span>
+                </button>
+              </>
             )}
             <button
               className="bt-float-duplicate-btn"
@@ -321,6 +426,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                     <div
                       key={tree.id}
                       className={`bt-menu-tree-row${tree.id === currentTree?.id ? ' active' : ''}`}
+                      draggable
+                      onDragStart={(event) => handleTreeDragStart(event, tree)}
                       onClick={() => handleLoad(tree.id)}
                       role="button"
                       tabIndex={0}

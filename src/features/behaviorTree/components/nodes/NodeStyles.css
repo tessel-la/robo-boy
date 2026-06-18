@@ -18,6 +18,17 @@
   box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3);
 }
 
+.bt-node.clicked,
+.bt-node.clicked:hover,
+.bt-node.selected.clicked {
+  border-color: #ff9800;
+  box-shadow:
+    0 0 0 3px rgba(255, 152, 0, 0.32),
+    0 10px 22px rgba(255, 152, 0, 0.16);
+  outline: 2px solid rgba(255, 152, 0, 0.22);
+  outline-offset: 1px;
+}
+
 .bt-node:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -155,6 +166,10 @@
 
 .bt-parallel-node .bt-node-header {
   color: #3f51b5;
+}
+
+.bt-subtree-node .bt-node-header {
+  color: #795548;
 }
 
 /* React Flow handles */

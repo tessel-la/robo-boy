@@ -8,6 +8,7 @@ import {
   BehaviorNodeType,
   ROSActionNodeData,
   ROSServiceNodeData,
+  SubtreeNodeData,
   ROSTopicNodeData,
 } from '../types';
 import { ACTION_TEMPLATES } from '../actionTemplates';
@@ -237,6 +238,7 @@ export class BehaviorTreeExecutor {
   private callback: ExecutionCallback;
   private abortController: AbortController | null;
   private activeActions: Map<string, ActiveAction>;
+  private readonly rootPath: string[];
 
   constructor(tree: BehaviorTree, ros: Ros, callback: ExecutionCallback) {
     this.tree = tree;
@@ -246,6 +248,7 @@ export class BehaviorTreeExecutor {
     this.isRunning = false;
     this.abortController = null;
     this.activeActions = new Map();
+    this.rootPath = [];
 
     // Initialize all nodes to idle status
     tree.nodes.forEach(node => {
@@ -278,7 +281,7 @@ export class BehaviorTreeExecutor {
       }
 
       // Execute from root
-      const result = await this.executeNode(rootNode);
+      const result = await this.executeNode(rootNode, this.tree, this.rootPath);
 
       this.emitEvent({
         type: 'completed',
@@ -324,8 +327,8 @@ export class BehaviorTreeExecutor {
   /**
    * Get current status of a node
    */
-  public getNodeStatus(nodeId: string): ExecutionStatus {
-    return this.nodeStatuses.get(nodeId) || ExecutionStatus.Idle;
+  public getNodeStatus(nodeId: string, treePath: string[] = this.rootPath): ExecutionStatus {
+    return this.nodeStatuses.get(this.getExecutionNodeKey(nodeId, treePath)) || ExecutionStatus.Idle;
   }
 
   /**
@@ -335,13 +338,17 @@ export class BehaviorTreeExecutor {
     return new Map(this.nodeStatuses);
   }
 
+  private getExecutionNodeKey(nodeId: string, treePath: string[]): string {
+    return `${treePath.join('/') || 'root'}::${nodeId}`;
+  }
+
   /**
    * Find the root node (no incoming edges).
    * Prefers control-flow nodes over leaf nodes in case of ambiguity.
    */
-  private findRootNode(): BehaviorTreeNode | null {
-    const nodesWithIncoming = new Set(this.tree.edges.map(e => e.target));
-    const roots = this.tree.nodes.filter(node => !nodesWithIncoming.has(node.id));
+  private findRootNode(tree: BehaviorTree = this.tree): BehaviorTreeNode | null {
+    const nodesWithIncoming = new Set(tree.edges.map(e => e.target));
+    const roots = tree.nodes.filter(node => !nodesWithIncoming.has(node.id));
     console.log(
       `[BT] findRootNode: ${roots.length} root candidate(s):`,
       roots.map(n => `${n.id}(${n.type})`).join(', ')
@@ -360,12 +367,12 @@ export class BehaviorTreeExecutor {
   /**
    * Get child nodes of a given node, in edge-insertion order.
    */
-  private getChildNodes(nodeId: string): BehaviorTreeNode[] {
-    const childIds = this.tree.edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
+  private getChildNodes(nodeId: string, tree: BehaviorTree = this.tree): BehaviorTreeNode[] {
+    const childIds = tree.edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
 
     console.log(
       `[BT] getChildNodes(${nodeId}): ${childIds.length} child(ren) — edges:`,
-      this.tree.edges
+      tree.edges
         .filter(e => e.source === nodeId)
         .map(e => `${e.source}→${e.target}`)
         .join(', ')
@@ -373,32 +380,39 @@ export class BehaviorTreeExecutor {
 
     // Preserve the order edges were added (not the nodes-array order).
     return childIds
-      .map(id => this.tree.nodes.find(n => n.id === id))
+      .map(id => tree.nodes.find(n => n.id === id))
       .filter((n): n is BehaviorTreeNode => n !== undefined);
   }
 
   /**
    * Execute a single node
    */
-  private async executeNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
+  private async executeNode(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
     if (!this.isRunning) {
       return ExecutionStatus.Failure;
     }
 
-    this.setNodeStatus(node.id, ExecutionStatus.Running);
+    this.setNodeStatus(node.id, ExecutionStatus.Running, treePath);
 
     try {
       let result: ExecutionStatus;
 
       switch (node.type) {
         case BehaviorNodeType.Sequence:
-          result = await this.executeSequence(node);
+          result = await this.executeSequence(node, tree, treePath);
           break;
         case BehaviorNodeType.Selector:
-          result = await this.executeSelector(node);
+          result = await this.executeSelector(node, tree, treePath);
           break;
         case BehaviorNodeType.Parallel:
-          result = await this.executeParallel(node);
+          result = await this.executeParallel(node, tree, treePath);
+          break;
+        case BehaviorNodeType.Subtree:
+          result = await this.executeSubtreeNode(node, treePath);
           break;
         case BehaviorNodeType.Action:
           result = await this.executeActionNode(node);
@@ -414,11 +428,11 @@ export class BehaviorTreeExecutor {
           result = ExecutionStatus.Failure;
       }
 
-      this.setNodeStatus(node.id, result);
+      this.setNodeStatus(node.id, result, treePath);
       return result;
     } catch (error) {
       console.error(`Error executing node ${node.id}:`, error);
-      this.setNodeStatus(node.id, ExecutionStatus.Failure);
+      this.setNodeStatus(node.id, ExecutionStatus.Failure, treePath);
       return ExecutionStatus.Failure;
     }
   }
@@ -426,11 +440,15 @@ export class BehaviorTreeExecutor {
   /**
    * Execute sequence node (all children must succeed)
    */
-  private async executeSequence(node: BehaviorTreeNode): Promise<ExecutionStatus> {
-    const children = this.getChildNodes(node.id);
+  private async executeSequence(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const children = this.getChildNodes(node.id, tree);
 
     for (const child of children) {
-      const result = await this.executeNode(child);
+      const result = await this.executeNode(child, tree, treePath);
 
       if (result === ExecutionStatus.Failure) {
         return ExecutionStatus.Failure;
@@ -447,11 +465,15 @@ export class BehaviorTreeExecutor {
   /**
    * Execute selector node (first child to succeed wins)
    */
-  private async executeSelector(node: BehaviorTreeNode): Promise<ExecutionStatus> {
-    const children = this.getChildNodes(node.id);
+  private async executeSelector(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const children = this.getChildNodes(node.id, tree);
 
     for (const child of children) {
-      const result = await this.executeNode(child);
+      const result = await this.executeNode(child, tree, treePath);
 
       if (result === ExecutionStatus.Success) {
         return ExecutionStatus.Success;
@@ -468,14 +490,33 @@ export class BehaviorTreeExecutor {
   /**
    * Execute parallel node (all children execute simultaneously)
    */
-  private async executeParallel(node: BehaviorTreeNode): Promise<ExecutionStatus> {
-    const children = this.getChildNodes(node.id);
+  private async executeParallel(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const children = this.getChildNodes(node.id, tree);
 
-    const results = await Promise.all(children.map(child => this.executeNode(child)));
+    const results = await Promise.all(children.map(child => this.executeNode(child, tree, treePath)));
 
     // Success if all children succeed
     const allSuccess = results.every(r => r === ExecutionStatus.Success);
     return allSuccess ? ExecutionStatus.Success : ExecutionStatus.Failure;
+  }
+
+  private async executeSubtreeNode(
+    node: BehaviorTreeNode,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const data = node.data as SubtreeNodeData;
+    const subtreeRoot = this.findRootNode(data.tree);
+
+    if (!subtreeRoot) {
+      console.warn(`[BT] Subtree "${data.label}" has no root node`);
+      return ExecutionStatus.Failure;
+    }
+
+    return this.executeNode(subtreeRoot, data.tree, [...treePath, node.id]);
   }
 
   /**
@@ -681,8 +722,8 @@ export class BehaviorTreeExecutor {
   /**
    * Set node status and emit event
    */
-  private setNodeStatus(nodeId: string, status: ExecutionStatus): void {
-    this.nodeStatuses.set(nodeId, status);
+  private setNodeStatus(nodeId: string, status: ExecutionStatus, treePath: string[] = this.rootPath): void {
+    this.nodeStatuses.set(this.getExecutionNodeKey(nodeId, treePath), status);
 
     let eventType: 'nodeRunning' | 'nodeSuccess' | 'nodeFailure' | 'nodeEntered';
 
@@ -704,7 +745,7 @@ export class BehaviorTreeExecutor {
       type: eventType,
       nodeId,
       timestamp: Date.now(),
-      data: { status },
+      data: { status, treePath },
     });
   }
 

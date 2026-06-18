@@ -6,9 +6,9 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
+  applyNodeChanges,
+  applyEdgeChanges,
   addEdge,
-  useNodesState,
-  useEdgesState,
   ReactFlowProvider,
   BackgroundVariant,
   ConnectionMode,
@@ -28,7 +28,11 @@ import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { arrangeBehaviorTree } from '../layoutUtils';
-import { saveBehaviorTree, exportBehaviorTree } from '../storage/treeStorage';
+import {
+  exportBehaviorTree,
+  saveBehaviorTree,
+  syncBehaviorTreeReferences,
+} from '../storage/treeStorage';
 import {
   createBehaviorTreeNode,
   duplicateSelectedBehaviorNodes,
@@ -55,6 +59,19 @@ import {
   ROSServiceInfo,
   ROSTopicInfo,
 } from '../types';
+import {
+  areTreePathsEqual,
+  cloneBehaviorTree,
+  createSubtreeNode,
+  explodeSubtreeNode,
+  getTreeAtPath,
+  isSubtreeNode,
+  resetBehaviorTreeExecutionState,
+  replaceTreeAtPath,
+  syncReferencedSubtrees,
+  updateTreeAtPath,
+  wrapSelectionIntoSubtree,
+} from '../subtreeUtils';
 import './BehaviorTreePanel.css';
 
 interface BehaviorTreePanelProps {
@@ -118,6 +135,24 @@ const getDefaultNodeName = (node: BehaviorTreeNode): string => {
     default:
       return data.label || 'Node';
   }
+};
+
+const getExecutionNodeKey = (nodeId: string, treePath: string[]): string =>
+  `${treePath.join('/') || 'root'}::${nodeId}`;
+
+const collectExecutionNodeLabels = (
+  tree: BehaviorTree,
+  treePath: string[] = [],
+  labels: Map<string, string> = new Map()
+): Map<string, string> => {
+  tree.nodes.forEach((node) => {
+    labels.set(getExecutionNodeKey(node.id, treePath), node.data.label || node.id);
+    if (isSubtreeNode(node)) {
+      collectExecutionNodeLabels(node.data.tree, [...treePath, node.id], labels);
+    }
+  });
+
+  return labels;
 };
 
 const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
@@ -199,9 +234,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   onExecutionChange,
   onExecutionControlsChange,
 }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes] = useState<BehaviorTreeNode[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
+  const [rootTree, setRootTree] = useState<BehaviorTree | null>(null);
+  const [treePath, setTreePath] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
@@ -226,8 +263,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
   const executionStartedAt = useRef<number | undefined>(undefined);
   const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
+  const currentTreeRef = useRef<BehaviorTree | null>(null);
+  const rootTreeRef = useRef<BehaviorTree | null>(null);
+  const treePathRef = useRef<string[]>([]);
 
-  const { screenToFlowPosition, deleteElements, fitView, getZoom, setCenter } = useReactFlow();
+  const { screenToFlowPosition, fitView, getZoom, setCenter } = useReactFlow();
 
   const allocateNodeId = useCallback((existingNodes: Node[]) => {
     const id = getNextBehaviorNodeId(existingNodes, nodeIdCounter.current);
@@ -235,15 +275,140 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     return id;
   }, []);
 
-  const addNodeAtPosition = useCallback(
-    (nodeType: BehaviorNodeType, position: { x: number; y: number }, rosInfo?: ROSNodeInfo) => {
-      setNodes((currentNodes) => {
-        const id = allocateNodeId(currentNodes);
-        const newNode = createBehaviorTreeNode({ id, nodeType, position, rosInfo });
-        return newNode ? currentNodes.concat(newNode) : currentNodes;
-      });
+  const resetTransientNodeState = useCallback((treeNodes: BehaviorTreeNode[]): BehaviorTreeNode[] => {
+    return treeNodes.map((node) => ({
+      ...node,
+      selected: false,
+      dragging: false,
+      data: {
+        ...node.data,
+        isHighlighted: false,
+      },
+    }));
+  }, []);
+
+  const resetTransientEdgeState = useCallback((treeEdges: Edge[]): Edge[] => {
+    return treeEdges.map((edge) => ({
+      ...edge,
+      selected: false,
+      sourceHandle: null,
+      targetHandle: null,
+    }));
+  }, []);
+
+  useEffect(() => {
+    currentTreeRef.current = currentTree;
+  }, [currentTree]);
+
+  useEffect(() => {
+    rootTreeRef.current = rootTree;
+  }, [rootTree]);
+
+  useEffect(() => {
+    treePathRef.current = treePath;
+  }, [treePath]);
+
+  const syncEditorState = useCallback(
+    (tree: BehaviorTree, nextPath: string[]) => {
+      const nextNodes = resetTransientNodeState(tree.nodes);
+      const nextEdges = resetTransientEdgeState(tree.edges);
+      const nextTree = {
+        ...tree,
+        nodes: nextNodes,
+        edges: nextEdges,
+      };
+
+      currentTreeRef.current = nextTree;
+      treePathRef.current = nextPath;
+      setCurrentTree(nextTree);
+      setTreePath(nextPath);
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      setSelectedNodes([]);
+      setOrderingParentId(null);
+      setRenamingNodeId(null);
+      setEditingAction(null);
+      setEditingService(null);
+      nodeIdCounter.current = getNodeCounterAfterNodes(nextNodes);
     },
-    [allocateNodeId, setNodes]
+    [resetTransientEdgeState, resetTransientNodeState]
+  );
+
+  const persistEditorTree = useCallback(
+    (
+      nextNodes: BehaviorTreeNode[],
+      nextEdges: Edge[],
+      treeOverrides: Partial<BehaviorTree> = {}
+    ): BehaviorTree | null => {
+      if (!currentTree) return null;
+
+      const nextTree: BehaviorTree = {
+        ...currentTree,
+        ...treeOverrides,
+        nodes: nextNodes,
+        edges: nextEdges,
+        updatedAt: Date.now(),
+      };
+
+      currentTreeRef.current = nextTree;
+      setCurrentTree(nextTree);
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      setRootTree((previousRootTree) => {
+        const nextRootTree =
+          !previousRootTree || treePath.length === 0
+            ? nextTree
+            : updateTreeAtPath(previousRootTree, treePath, () => nextTree);
+        rootTreeRef.current = nextRootTree;
+        return nextRootTree;
+      });
+      return nextTree;
+    },
+    [currentTree, treePath]
+  );
+
+  const loadRootTree = useCallback(
+    (tree: BehaviorTree) => {
+      const hydrated: BehaviorTree = {
+        ...tree,
+        nodes: resetTransientNodeState(tree.nodes),
+        edges: resetTransientEdgeState(tree.edges),
+      };
+      rootTreeRef.current = hydrated;
+      setRootTree(hydrated);
+      syncEditorState(hydrated, []);
+    },
+    [resetTransientEdgeState, resetTransientNodeState, syncEditorState]
+  );
+
+  const addNodeAtPosition = useCallback(
+    (
+      nodeType: BehaviorNodeType,
+      position: { x: number; y: number },
+      item?: ROSNodeInfo | BehaviorTree
+    ) => {
+      if (nodeType === BehaviorNodeType.Subtree && item && 'nodes' in item && 'edges' in item) {
+        const subtreeNode = createSubtreeNode({
+          id: allocateNodeId(nodes),
+          label: item.name,
+          position,
+          tree: cloneBehaviorTree(item),
+          sourceTreeId: item.id,
+        });
+        persistEditorTree([...nodes, subtreeNode], edges);
+        return;
+      }
+
+      const newNode = createBehaviorTreeNode({
+        id: allocateNodeId(nodes),
+        nodeType,
+        position,
+        rosInfo: item as ROSNodeInfo | undefined,
+      });
+      if (!newNode) return;
+      persistEditorTree([...nodes, newNode], edges);
+    },
+    [allocateNodeId, edges, nodes, persistEditorTree]
   );
 
   const showSaveNotice = useCallback((notice: Omit<SaveNotice, 'id'>) => {
@@ -268,7 +433,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   // Initialize with empty tree
   useEffect(() => {
-    if (!currentTree) {
+    if (!rootTree) {
       const newTree: BehaviorTree = {
         id: uuidv4(),
         name: 'Untitled Behavior Tree',
@@ -277,9 +442,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      setCurrentTree(newTree);
+      loadRootTree(newTree);
     }
-  }, [currentTree]);
+  }, [loadRootTree, rootTree]);
 
   useEffect(() => {
     return () => {
@@ -299,9 +464,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(normalizeEdge(connection), eds));
+      persistEditorTree(nodes, addEdge(normalizeEdge(connection), edges));
     },
-    [setEdges]
+    [edges, nodes, persistEditorTree]
+  );
+
+  const onNodesChange = useCallback(
+    (changes: Parameters<typeof applyNodeChanges>[0]) => {
+      persistEditorTree(applyNodeChanges(changes, nodes) as BehaviorTreeNode[], edges);
+    },
+    [edges, nodes, persistEditorTree]
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: Parameters<typeof applyEdgeChanges>[0]) => {
+      persistEditorTree(nodes, applyEdgeChanges(changes, edges));
+    },
+    [edges, nodes, persistEditorTree]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -319,7 +498,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
 
-      let data: { nodeType?: BehaviorNodeType; rosInfo?: ROSNodeInfo };
+      let data: { nodeType?: BehaviorNodeType; item?: ROSNodeInfo | BehaviorTree };
       try {
         data = JSON.parse(dataStr);
       } catch {
@@ -333,7 +512,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         y: event.clientY - 40,
       });
 
-      addNodeAtPosition(data.nodeType, position, data.rosInfo);
+      addNodeAtPosition(data.nodeType, position, data.item);
     },
     [addNodeAtPosition, screenToFlowPosition]
   );
@@ -355,9 +534,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   // Delete selected nodes (and their connected edges)
   const handleDeleteSelected = useCallback(() => {
-    deleteElements({ nodes: selectedNodes });
+    const selectedIds = new Set(selectedNodes.map((node) => node.id));
+    if (selectedIds.size === 0) return;
+
+    persistEditorTree(
+      nodes.filter((node) => !selectedIds.has(node.id)),
+      edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target))
+    );
     setSelectedNodes([]);
-  }, [deleteElements, selectedNodes]);
+  }, [edges, nodes, persistEditorTree, selectedNodes]);
 
   const handleDuplicateSelected = useCallback(() => {
     const selectedNodeIds = selectedNodes.map((node) => node.id);
@@ -373,10 +558,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (result.duplicatedNodes.length === 0) return;
 
     nodeIdCounter.current = result.nextNodeCounter;
-    setNodes(result.nodes);
-    setEdges(result.edges);
+    persistEditorTree(result.nodes, result.edges);
     setSelectedNodes(result.duplicatedNodes);
-  }, [edges, nodes, selectedNodes, setEdges, setNodes]);
+  }, [edges, nodes, persistEditorTree, selectedNodes]);
 
   const handleOpenSelectedNodeRename = useCallback(() => {
     if (selectedNodes.length !== 1) return;
@@ -387,16 +571,80 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     (name: string) => {
       if (!renamingNodeId) return;
 
-      const updateName = (node: Node) =>
+      const nextNodes = nodes.map((node) =>
         node.id === renamingNodeId
-          ? { ...node, data: { ...node.data, label: name } }
-          : node;
+          ? {
+              ...node,
+              data: isSubtreeNode(node)
+                ? {
+                    ...node.data,
+                    label: name,
+                    tree: {
+                      ...node.data.tree,
+                      name,
+                    },
+                  }
+                : { ...node.data, label: name },
+            }
+          : node
+      );
 
-      setNodes((currentNodes) => currentNodes.map(updateName));
-      setSelectedNodes((currentNodes) => currentNodes.map(updateName));
+      persistEditorTree(nextNodes, edges);
+      setSelectedNodes((currentNodes) =>
+        currentNodes.map((node) =>
+          node.id === renamingNodeId
+            ? {
+                ...node,
+                data:
+                  'tree' in node.data
+                    ? {
+                        ...node.data,
+                        label: name,
+                        tree: {
+                          ...node.data.tree,
+                          name,
+                        },
+                      }
+                    : { ...node.data, label: name },
+              }
+            : node
+        )
+      );
       setRenamingNodeId(null);
     },
-    [renamingNodeId, setNodes]
+    [edges, nodes, persistEditorTree, renamingNodeId]
+  );
+
+  const openSubtreeNode = useCallback((subtreeNodeId: string) => {
+    if (!rootTree) return;
+    const nextPath = [...treePath, subtreeNodeId];
+    const nextTree = getTreeAtPath(rootTree, nextPath);
+    if (!nextTree) return;
+
+    syncEditorState(nextTree, nextPath);
+  }, [rootTree, syncEditorState, treePath]);
+
+  const handleOpenSelectedSubtree = useCallback(() => {
+    if (selectedNodes.length !== 1) return;
+    const selectedNode = nodes.find((node) => node.id === selectedNodes[0].id);
+    if (!isSubtreeNode(selectedNode)) return;
+    openSubtreeNode(selectedNode.id);
+  }, [nodes, openSubtreeNode, selectedNodes]);
+
+  const highlightClickedNode = useCallback(
+    (clickedNodeId: string | null) => {
+      persistEditorTree(
+        nodes.map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            isHighlighted: node.id === clickedNodeId,
+          },
+        })),
+        edges
+      );
+    },
+    [edges, nodes, persistEditorTree]
   );
 
   const openNodeEditor = useCallback((node: Node) => {
@@ -404,10 +652,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
     } else if (node.type === BehaviorNodeType.Service) {
       setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
+    } else if (isSubtreeNode(node as BehaviorTreeNode)) {
+      openSubtreeNode(node.id);
     } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
       setOrderingParentId(node.id);
     }
-  }, []);
+  }, [openSubtreeNode]);
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -418,10 +668,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      highlightClickedNode(node.id);
+
       if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
       if (
         node.type !== BehaviorNodeType.Action &&
         node.type !== BehaviorNodeType.Service &&
+        node.type !== BehaviorNodeType.Subtree &&
         !isOrderedControlNode(node as BehaviorTreeNode)
       ) {
         return;
@@ -436,7 +689,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         openNodeEditor(node);
       }
     },
-    [openNodeEditor]
+    [highlightClickedNode, openNodeEditor]
   );
 
   const onEdgeClick = useCallback(
@@ -446,51 +699,54 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
       const selectedTargetNode = { ...targetNode, selected: true, dragging: false };
 
-      setNodes((currentNodes) =>
-        currentNodes.map((node) => ({
+      const nextNodes = nodes.map((node) => ({
           ...node,
           selected: node.id === edge.target,
           dragging: false,
-        }))
-      );
-      setEdges((currentEdges) =>
-        currentEdges.map((currentEdge) => ({
+          data: {
+            ...node.data,
+            isHighlighted: node.id === edge.target,
+          },
+        }));
+      const nextEdges = edges.map((currentEdge) => ({
           ...currentEdge,
           selected: currentEdge.id === edge.id,
-        }))
-      );
+        }));
+      persistEditorTree(nextNodes, nextEdges);
       setSelectedNodes([selectedTargetNode]);
       setOrderingParentId(null);
     },
-    [nodes, setEdges, setNodes]
+    [edges, nodes, persistEditorTree]
   );
 
   const handleSaveActionParameters = useCallback(
     (parameters: Record<string, any>) => {
       if (!editingAction) return;
       const { nodeId } = editingAction;
-      setNodes((nds) =>
-        nds.map((node) => {
+      persistEditorTree(
+        nodes.map((node) => {
           if (node.id !== nodeId) return node;
           return { ...node, data: { ...node.data, parameters } };
-        })
+        }),
+        edges
       );
     },
-    [editingAction, setNodes]
+    [editingAction, edges, nodes, persistEditorTree]
   );
 
   const handleSaveServiceRequest = useCallback(
     (request: Record<string, any>) => {
       if (!editingService) return;
       const { nodeId } = editingService;
-      setNodes((nds) =>
-        nds.map((node) => {
+      persistEditorTree(
+        nodes.map((node) => {
           if (node.id !== nodeId) return node;
           return { ...node, data: { ...node.data, request } };
-        })
+        }),
+        edges
       );
     },
-    [editingService, setNodes]
+    [editingService, edges, nodes, persistEditorTree]
   );
 
   const handleSave = useCallback(() => {
@@ -503,7 +759,28 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     };
     const success = saveBehaviorTree(updatedTree);
     if (success) {
-      setCurrentTree(updatedTree);
+      syncBehaviorTreeReferences(updatedTree);
+
+      const activePath = treePathRef.current;
+      const baseRootTree = rootTreeRef.current;
+      const syncedRootTree = baseRootTree
+        ? syncReferencedSubtrees(
+            activePath.length === 0 ? updatedTree : updateTreeAtPath(baseRootTree, activePath, () => updatedTree),
+            updatedTree
+          )
+        : updatedTree;
+
+      rootTreeRef.current = syncedRootTree;
+      setRootTree(syncedRootTree);
+
+      const nextCurrentTree =
+        activePath.length === 0 ? syncedRootTree : getTreeAtPath(syncedRootTree, activePath);
+      if (nextCurrentTree) {
+        syncEditorState(nextCurrentTree, activePath);
+      } else {
+        persistEditorTree(nodes, edges, { name: updatedTree.name });
+      }
+
       showSaveNotice({
         type: 'success',
         title: 'Tree saved',
@@ -516,29 +793,45 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         message: 'The tree could not be saved. Please try again.',
       });
     }
-  }, [currentTree, nodes, edges, showSaveNotice]);
+  }, [currentTree, edges, nodes, persistEditorTree, showSaveNotice, syncEditorState]);
 
   const handleLoad = useCallback((tree: BehaviorTree) => {
-    const loadedNodes = tree.nodes.map((node) => ({
-      ...node,
-      selected: false,
-      dragging: false,
-    }));
-    // Strip legacy sourceHandle values (out-1, out-2, out-3) from saved trees.
-    const loadedEdges = tree.edges.map((e) => ({
-      ...e,
-      sourceHandle: null,
-      targetHandle: null,
-      selected: false,
-    }));
-    setCurrentTree({ ...tree, nodes: loadedNodes, edges: loadedEdges });
-    setNodes(loadedNodes);
-    setEdges(loadedEdges);
-    setSelectedNodes([]);
-    setOrderingParentId(null);
-    setRenamingNodeId(null);
-    nodeIdCounter.current = getNodeCounterAfterNodes(loadedNodes);
-  }, [setNodes, setEdges]);
+    if (treePath.length === 0) {
+      loadRootTree(tree);
+      return;
+    }
+
+    const loadedTree = { ...tree, name: tree.name || currentTree?.name || 'Subtree' };
+    const nextRootTree = rootTree ? replaceTreeAtPath(rootTree, treePath, loadedTree) : loadedTree;
+    const subtreeNodeId = treePath[treePath.length - 1];
+    const parentPath = treePath.slice(0, -1);
+    const parentTree =
+      parentPath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, parentPath);
+
+    const nextRootWithLabel =
+      subtreeNodeId && parentTree
+        ? parentPath.length === 0
+          ? {
+              ...parentTree,
+              nodes: parentTree.nodes.map((node) =>
+                node.id === subtreeNodeId && isSubtreeNode(node)
+                  ? { ...node, data: { ...node.data, label: loadedTree.name, tree: loadedTree } }
+                  : node
+              ),
+            }
+          : replaceTreeAtPath(nextRootTree, parentPath, {
+              ...parentTree,
+              nodes: parentTree.nodes.map((node) =>
+                node.id === subtreeNodeId && isSubtreeNode(node)
+                  ? { ...node, data: { ...node.data, label: loadedTree.name, tree: loadedTree } }
+                  : node
+              ),
+            })
+        : nextRootTree;
+
+    setRootTree(nextRootWithLabel);
+    syncEditorState(loadedTree, treePath);
+  }, [currentTree?.name, loadRootTree, rootTree, syncEditorState, treePath]);
 
   const handleNew = useCallback(() => {
     if (nodes.length > 0 || edges.length > 0) {
@@ -554,13 +847,40 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setCurrentTree(newTree);
-    setNodes([]);
-    setEdges([]);
-    setOrderingParentId(null);
-    setRenamingNodeId(null);
-    nodeIdCounter.current = 0;
-  }, [nodes, edges, setNodes, setEdges]);
+    if (treePath.length === 0) {
+      loadRootTree(newTree);
+      return;
+    }
+
+    const nextRootTree = rootTree ? replaceTreeAtPath(rootTree, treePath, newTree) : newTree;
+    const subtreeNodeId = treePath[treePath.length - 1];
+    const parentPath = treePath.slice(0, -1);
+    const parentTree =
+      parentPath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, parentPath);
+    const nextRootWithLabel =
+      subtreeNodeId && parentTree
+        ? parentPath.length === 0
+          ? {
+              ...parentTree,
+              nodes: parentTree.nodes.map((node) =>
+                node.id === subtreeNodeId && isSubtreeNode(node)
+                  ? { ...node, data: { ...node.data, label: newTree.name, tree: newTree } }
+                  : node
+              ),
+            }
+          : replaceTreeAtPath(nextRootTree, parentPath, {
+              ...parentTree,
+              nodes: parentTree.nodes.map((node) =>
+                node.id === subtreeNodeId && isSubtreeNode(node)
+                  ? { ...node, data: { ...node.data, label: newTree.name, tree: newTree } }
+                  : node
+              ),
+            })
+        : nextRootTree;
+
+    setRootTree(nextRootWithLabel);
+    syncEditorState(newTree, treePath);
+  }, [edges.length, loadRootTree, nodes.length, rootTree, syncEditorState, treePath]);
 
   const handleExport = useCallback(() => {
     if (!currentTree) return;
@@ -570,36 +890,107 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleArrange = useCallback(() => {
     if (nodes.length === 0) return;
 
-    setNodes(arrangeBehaviorTree(nodes as BehaviorTreeNode[], edges));
+    persistEditorTree(arrangeBehaviorTree(nodes as BehaviorTreeNode[], edges), edges);
     window.requestAnimationFrame(() => {
       fitView({ padding: 0.18, duration: 450, maxZoom: 1.15 });
     });
-  }, [edges, fitView, nodes, setNodes]);
+  }, [edges, fitView, nodes, persistEditorTree]);
 
   const handleRename = useCallback((name: string) => {
-    setCurrentTree((prev) => (prev ? { ...prev, name } : null));
+    if (!currentTree) return;
+
+    const nextTree = { ...currentTree, name };
+    currentTreeRef.current = nextTree;
+    setCurrentTree(nextTree);
+    setRootTree((previousRootTree) => {
+      if (!previousRootTree || treePath.length === 0) {
+        rootTreeRef.current = nextTree;
+        return nextTree;
+      }
+
+      const renamedRootTree = replaceTreeAtPath(previousRootTree, treePath, nextTree);
+      const subtreeNodeId = treePath[treePath.length - 1];
+      const parentPath = treePath.slice(0, -1);
+      if (!subtreeNodeId) return renamedRootTree;
+
+      const parentTree = parentPath.length === 0 ? renamedRootTree : getTreeAtPath(renamedRootTree, parentPath);
+      if (!parentTree) return renamedRootTree;
+
+      const renamedParentTree: BehaviorTree = {
+        ...parentTree,
+        nodes: parentTree.nodes.map((node) =>
+          node.id === subtreeNodeId && isSubtreeNode(node)
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  label: name,
+                  tree: nextTree,
+                },
+              }
+            : node
+        ),
+      };
+
+      const nextRootTree = parentPath.length === 0
+        ? renamedParentTree
+        : replaceTreeAtPath(renamedRootTree, parentPath, renamedParentTree);
+      rootTreeRef.current = nextRootTree;
+      return nextRootTree;
+    });
+  }, [currentTree, treePath]);
+
+  const updateDisplayedNodeStatus = useCallback((nodeId: string, status: ExecutionStatus) => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === nodeId ? { ...node, data: { ...node.data, status } } : node
+      )
+    );
+    setCurrentTree((previousTree) => {
+      if (!previousTree) return previousTree;
+
+      const nextTree = {
+        ...previousTree,
+        nodes: previousTree.nodes.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, status } } : node
+        ),
+      };
+      currentTreeRef.current = nextTree;
+      return nextTree;
+    });
   }, []);
 
   const handleExecutionEvent = useCallback(
     (event: ExecutionEvent) => {
       if (event.nodeId && event.data?.status) {
         const nodeId = event.nodeId;
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id === nodeId) {
-              return { ...node, data: { ...node.data, status: event.data.status } };
-            }
-            return node;
-          })
-        );
-
         const status = event.data.status as ExecutionStatus;
+        const eventPath = Array.isArray(event.data.treePath) ? event.data.treePath : [];
+
+        setRootTree((previousRootTree) => {
+          if (!previousRootTree) return previousRootTree;
+
+          const nextRootTree = updateTreeAtPath(previousRootTree, eventPath, (targetTree) => ({
+            ...targetTree,
+            nodes: targetTree.nodes.map((node) =>
+              node.id === nodeId ? { ...node, data: { ...node.data, status } } : node
+            ),
+          }));
+          rootTreeRef.current = nextRootTree;
+          return nextRootTree;
+        });
+
+        if (areTreePathsEqual(eventPath, treePathRef.current)) {
+          updateDisplayedNodeStatus(nodeId, status);
+        }
+
         if (status === ExecutionStatus.Running) {
           setExecutionSnapshot((prev) => ({
             ...prev,
             isExecuting: true,
             activeNodeId: nodeId,
-            activeNodeLabel: executionNodeLabels.current.get(nodeId) ?? nodeId,
+            activeNodeLabel:
+              executionNodeLabels.current.get(getExecutionNodeKey(nodeId, eventPath)) ?? nodeId,
             status,
           }));
         }
@@ -621,16 +1012,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           status,
         }));
         setTimeout(() => {
-          setNodes((nds) =>
-            nds.map((node) => ({
-              ...node,
-              data: { ...node.data, status: ExecutionStatus.Idle },
-            }))
-          );
+          setRootTree((previousRootTree) => {
+            if (!previousRootTree) return previousRootTree;
+
+            const nextRootTree = resetBehaviorTreeExecutionState(previousRootTree);
+            rootTreeRef.current = nextRootTree;
+
+            const activePath = treePathRef.current;
+            const nextCurrentTree =
+              activePath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, activePath);
+
+            if (nextCurrentTree) {
+              const nextNodes = resetTransientNodeState(nextCurrentTree.nodes);
+              const nextEdges = resetTransientEdgeState(nextCurrentTree.edges);
+              const hydratedCurrentTree = {
+                ...nextCurrentTree,
+                nodes: nextNodes,
+                edges: nextEdges,
+              };
+              currentTreeRef.current = hydratedCurrentTree;
+              setCurrentTree(hydratedCurrentTree);
+              setNodes(nextNodes);
+              setEdges(nextEdges);
+            }
+
+            return nextRootTree;
+          });
         }, 2000);
       }
     },
-    [setNodes]
+    [resetTransientEdgeState, resetTransientNodeState, updateDisplayedNodeStatus]
   );
 
   const handleExecute = useCallback(() => {
@@ -647,9 +1058,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       nodes: nodes as BehaviorTreeNode[],
       edges,
     };
-    executionNodeLabels.current = new Map(
-      treeToExecute.nodes.map((node) => [node.id, node.data.label || node.id])
-    );
+    executionNodeLabels.current = collectExecutionNodeLabels(treeToExecute);
     executionStartedAt.current = Date.now();
     executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     setIsExecuting(true);
@@ -666,18 +1075,37 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleStop = useCallback(() => {
     if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
-    setNodes((nds) =>
-      nds.map((node) => ({
-        ...node,
-        data: { ...node.data, status: ExecutionStatus.Idle },
-      }))
-    );
+    setRootTree((previousRootTree) => {
+      if (!previousRootTree) return previousRootTree;
+
+      const nextRootTree = resetBehaviorTreeExecutionState(previousRootTree);
+      rootTreeRef.current = nextRootTree;
+      const activePath = treePathRef.current;
+      const nextCurrentTree =
+        activePath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, activePath);
+
+      if (nextCurrentTree) {
+        const nextNodes = resetTransientNodeState(nextCurrentTree.nodes);
+        const nextEdges = resetTransientEdgeState(nextCurrentTree.edges);
+        const hydratedCurrentTree = {
+          ...nextCurrentTree,
+          nodes: nextNodes,
+          edges: nextEdges,
+        };
+        currentTreeRef.current = hydratedCurrentTree;
+        setCurrentTree(hydratedCurrentTree);
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+      }
+
+      return nextRootTree;
+    });
     setExecutionSnapshot((prev) => ({
       ...prev,
       isExecuting: false,
       status: 'stopped',
     }));
-  }, [setNodes]);
+  }, [resetTransientEdgeState, resetTransientNodeState]);
 
   useEffect(() => {
     onExecutionChange?.(executionSnapshot);
@@ -696,7 +1124,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   // Add a node at the centre of the visible canvas — used for mobile tap-to-add.
   const handleAddNode = useCallback(
-    (nodeType: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => {
+    (
+      nodeType: BehaviorNodeType,
+      item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
+    ) => {
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
 
@@ -705,7 +1136,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         y: bounds.top + bounds.height / 2,
       });
 
-      addNodeAtPosition(nodeType, position, rosInfo);
+      addNodeAtPosition(nodeType, position, item);
 
       // Close palette on mobile after adding
       if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
@@ -716,10 +1147,34 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
-  const displayedEdges = useMemo(
-    () => annotateOrderedEdges(behaviorNodes, edges),
-    [behaviorNodes, edges]
-  );
+  const displayedEdges = useMemo(() => {
+    const nodeStatusById = new Map(
+      behaviorNodes.map((node) => [node.id, node.data.status ?? ExecutionStatus.Idle])
+    );
+
+    return annotateOrderedEdges(behaviorNodes, edges).map((edge) => {
+      const targetStatus = nodeStatusById.get(edge.target) ?? ExecutionStatus.Idle;
+      const isRunning = targetStatus === ExecutionStatus.Running;
+      const isSuccess = targetStatus === ExecutionStatus.Success;
+      const isFailure = targetStatus === ExecutionStatus.Failure;
+
+      return {
+        ...edge,
+        animated: isRunning,
+        style: {
+          stroke: isRunning
+            ? '#ffc107'
+            : isSuccess
+              ? '#4caf50'
+              : isFailure
+                ? '#f44336'
+                : 'var(--primary-color, #4285f4)',
+          strokeWidth: isRunning ? 4 : isSuccess || isFailure ? 3 : 2,
+          opacity: isRunning || isSuccess || isFailure ? 1 : 0.9,
+        },
+      };
+    });
+  }, [behaviorNodes, edges]);
   const orderingParent = useMemo(() => {
     const parent = behaviorNodes.find((node) => node.id === orderingParentId);
     return isOrderedControlNode(parent) ? parent : null;
@@ -735,15 +1190,178 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleMoveOrderedChild = useCallback(
     (edgeId: string, direction: -1 | 1) => {
       if (!orderingParent) return;
-      setEdges((currentEdges) =>
-        moveOrderedChildEdge(currentEdges, orderingParent.id, edgeId, direction)
+      persistEditorTree(
+        nodes,
+        moveOrderedChildEdge(edges, orderingParent.id, edgeId, direction)
       );
     },
-    [orderingParent, setEdges]
+    [edges, nodes, orderingParent, persistEditorTree]
   );
   const handlePaneClick = useCallback(() => {
     setOrderingParentId(null);
   }, []);
+
+  const selectedSubtreeNode = useMemo(() => {
+    if (selectedNodes.length !== 1) return null;
+    const node = behaviorNodes.find((candidate) => candidate.id === selectedNodes[0].id);
+    return isSubtreeNode(node) ? node : null;
+  }, [behaviorNodes, selectedNodes]);
+
+  const canWrapSelection = useMemo(() => {
+    if (!currentTree || selectedNodes.length < 2) return false;
+
+    return wrapSelectionIntoSubtree({
+      tree: { ...currentTree, nodes: behaviorNodes, edges },
+      selectedNodeIds: selectedNodes.map((node) => node.id),
+      subtreeNodeId: 'preview-subtree',
+      subtreeTreeId: 'preview-tree',
+      subtreeLabel: 'Subtree',
+    }).ok;
+  }, [behaviorNodes, currentTree, edges, selectedNodes]);
+
+  const handleWrapSelectedIntoSubtree = useCallback(() => {
+    if (!currentTree) return;
+
+    const result = wrapSelectionIntoSubtree({
+      tree: { ...currentTree, nodes: behaviorNodes, edges },
+      selectedNodeIds: selectedNodes.map((node) => node.id),
+      subtreeNodeId: allocateNodeId(behaviorNodes),
+      subtreeTreeId: uuidv4(),
+      subtreeLabel: 'Subtree',
+    });
+
+    if (!result.ok) {
+      showSaveNotice({
+        type: 'error',
+        title: 'Wrap failed',
+        message: result.reason,
+      });
+      return;
+    }
+
+    const nextNodes = (result.tree.nodes as BehaviorTreeNode[]).map((node) => ({
+      ...node,
+      selected: node.id === result.subtreeNode.id,
+      data: {
+        ...node.data,
+        isHighlighted: node.id === result.subtreeNode.id,
+      },
+    }));
+
+    persistEditorTree(nextNodes, result.tree.edges, {
+      updatedAt: result.tree.updatedAt,
+    });
+    setSelectedNodes([
+      {
+        ...result.subtreeNode,
+        selected: true,
+        data: {
+          ...result.subtreeNode.data,
+          isHighlighted: true,
+        },
+      },
+    ]);
+    setOrderingParentId(null);
+  }, [
+    allocateNodeId,
+    behaviorNodes,
+    currentTree,
+    edges,
+    persistEditorTree,
+    selectedNodes,
+    showSaveNotice,
+  ]);
+
+  const handleSaveSelectedSubtree = useCallback(() => {
+    if (!selectedSubtreeNode) return;
+
+    const subtreeTree = cloneBehaviorTree(selectedSubtreeNode.data.tree);
+    const savedTree: BehaviorTree = {
+      ...subtreeTree,
+      name: selectedSubtreeNode.data.label,
+      updatedAt: Date.now(),
+    };
+    const success = saveBehaviorTree(savedTree);
+
+    if (success) {
+      syncBehaviorTreeReferences(savedTree);
+      if (rootTreeRef.current) {
+        const syncedRootTree = syncReferencedSubtrees(rootTreeRef.current, savedTree);
+        rootTreeRef.current = syncedRootTree;
+        setRootTree(syncedRootTree);
+
+        const activePath = treePathRef.current;
+        const nextCurrentTree =
+          activePath.length === 0 ? syncedRootTree : getTreeAtPath(syncedRootTree, activePath);
+        if (nextCurrentTree) {
+          syncEditorState(nextCurrentTree, activePath);
+        }
+      }
+    }
+
+    showSaveNotice(
+      success
+        ? {
+            type: 'success',
+            title: 'Subtree saved',
+            message: `"${selectedSubtreeNode.data.label}" is ready to drag back into a tree.`,
+          }
+        : {
+            type: 'error',
+            title: 'Save failed',
+            message: 'The selected subtree could not be saved.',
+          }
+    );
+  }, [selectedSubtreeNode, showSaveNotice, syncEditorState]);
+
+  const handleExplodeSelectedSubtree = useCallback(() => {
+    if (!currentTree || !selectedSubtreeNode) return;
+
+    const result = explodeSubtreeNode({
+      tree: { ...currentTree, nodes: behaviorNodes, edges },
+      subtreeNodeId: selectedSubtreeNode.id,
+      startNodeIndex: nodeIdCounter.current,
+    });
+
+    if (!result.ok) {
+      showSaveNotice({
+        type: 'error',
+        title: 'Explode failed',
+        message: result.reason,
+      });
+      return;
+    }
+
+    nodeIdCounter.current = result.nextNodeCounter;
+    persistEditorTree(result.tree.nodes as BehaviorTreeNode[], result.tree.edges, {
+      updatedAt: result.tree.updatedAt,
+    });
+    setSelectedNodes(
+      result.tree.nodes
+        .filter((node) => result.insertedNodeIds.includes(node.id))
+        .map((node) => ({
+          ...node,
+          selected: true,
+          dragging: false,
+        }))
+    );
+    setOrderingParentId(null);
+  }, [
+    behaviorNodes,
+    currentTree,
+    edges,
+    persistEditorTree,
+    selectedSubtreeNode,
+    showSaveNotice,
+  ]);
+
+  const handleNavigateUp = useCallback(() => {
+    if (!rootTree || treePath.length === 0) return;
+    const nextPath = treePath.slice(0, -1);
+    const nextTree = nextPath.length === 0 ? rootTree : getTreeAtPath(rootTree, nextPath);
+    if (!nextTree) return;
+    syncEditorState(nextTree, nextPath);
+  }, [rootTree, syncEditorState, treePath]);
 
   const handleSearchSelect = useCallback(
     (node: BehaviorTreeNode) => {
@@ -752,18 +1370,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const centerY = position.y + (node.height ?? 80) / 2;
       const selectedNode = { ...node, selected: true, dragging: false };
 
-      setNodes((currentNodes) =>
-        currentNodes.map((currentNode) => ({
+      persistEditorTree(
+        nodes.map((currentNode) => ({
           ...currentNode,
           selected: currentNode.id === node.id,
           dragging: false,
-        }))
+          data: {
+            ...currentNode.data,
+            isHighlighted: currentNode.id === node.id,
+          },
+        })),
+        edges
       );
       setSelectedNodes([selectedNode]);
       setOrderingParentId(null);
       setCenter(centerX, centerY, { zoom: Math.max(getZoom(), 1), duration: 400 });
     },
-    [getZoom, setCenter, setNodes]
+    [edges, getZoom, nodes, persistEditorTree, setCenter]
   );
 
   return (
@@ -772,8 +1395,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         currentTree={currentTree}
         isExecuting={isExecuting}
         isPaletteCollapsed={isPaletteCollapsed}
+        isEditingSubtree={treePath.length > 0}
         nodeCount={nodes.length}
         selectedNodeCount={selectedNodes.length}
+        canWrapSelection={canWrapSelection}
+        hasSelectedSubtree={Boolean(selectedSubtreeNode)}
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
@@ -785,6 +1411,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onDeleteSelected={handleDeleteSelected}
         onDuplicateSelected={handleDuplicateSelected}
         onRenameSelected={handleOpenSelectedNodeRename}
+        onWrapSelection={handleWrapSelectedIntoSubtree}
+        onOpenSelectedSubtree={handleOpenSelectedSubtree}
+        onSaveSelectedSubtree={handleSaveSelectedSubtree}
+        onExplodeSelectedSubtree={handleExplodeSelectedSubtree}
+        onNavigateUp={handleNavigateUp}
         onRename={handleRename}
       />
 

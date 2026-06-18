@@ -11,6 +11,7 @@ const NODE_TYPE_LABELS: Partial<Record<BehaviorNodeType, string>> = {
   [BehaviorNodeType.Sequence]: 'Sequence',
   [BehaviorNodeType.Selector]: 'Selector',
   [BehaviorNodeType.Parallel]: 'Parallel',
+  [BehaviorNodeType.Subtree]: 'Subtree',
   [BehaviorNodeType.Action]: 'Action',
   [BehaviorNodeType.Service]: 'Service',
   [BehaviorNodeType.Topic]: 'Topic',

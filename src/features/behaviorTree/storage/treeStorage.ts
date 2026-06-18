@@ -1,7 +1,13 @@
 import { BehaviorTree, SavedBehaviorTree } from '../types';
+import { syncReferencedSubtrees } from '../subtreeUtils';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
 const STORAGE_VERSION = '1.0.0';
+export const BEHAVIOR_TREE_STORAGE_EVENT = 'robo-boy-behavior-trees-changed';
+
+const emitBehaviorTreeStorageChanged = (): void => {
+  window.dispatchEvent(new CustomEvent(BEHAVIOR_TREE_STORAGE_EVENT));
+};
 
 /**
  * Get all saved behavior trees from localStorage
@@ -46,9 +52,43 @@ export const saveBehaviorTree = (tree: BehaviorTree): boolean => {
     }
     
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trees));
+    emitBehaviorTreeStorageChanged();
     return true;
   } catch (error) {
     console.error('Failed to save behavior tree:', error);
+    return false;
+  }
+};
+
+export const syncBehaviorTreeReferences = (sourceTree: BehaviorTree): boolean => {
+  try {
+    const trees = listBehaviorTrees();
+    let didChange = false;
+
+    const syncedTrees = trees.map((savedTree) => {
+      if (savedTree.tree.id === sourceTree.id) {
+        return savedTree;
+      }
+
+      const syncedTree = syncReferencedSubtrees(savedTree.tree, sourceTree);
+      if (syncedTree !== savedTree.tree) {
+        didChange = true;
+        return {
+          ...savedTree,
+          tree: syncedTree,
+        };
+      }
+
+      return savedTree;
+    });
+
+    if (!didChange) return true;
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedTrees));
+    emitBehaviorTreeStorageChanged();
+    return true;
+  } catch (error) {
+    console.error('Failed to sync behavior tree references:', error);
     return false;
   }
 };
@@ -81,6 +121,7 @@ export const deleteBehaviorTree = (id: string): boolean => {
     }
     
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    emitBehaviorTreeStorageChanged();
     return true;
   } catch (error) {
     console.error('Failed to delete behavior tree:', error);
@@ -129,7 +170,7 @@ export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => 
         if (!savedTree.tree || !savedTree.tree.id || !savedTree.tree.nodes) {
           throw new Error('Invalid behavior tree file format');
         }
-        
+
         resolve(savedTree.tree);
       } catch (error) {
         console.error('Failed to import behavior tree:', error);
@@ -152,6 +193,7 @@ export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => 
 export const clearAllBehaviorTrees = (): boolean => {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    emitBehaviorTreeStorageChanged();
     return true;
   } catch (error) {
     console.error('Failed to clear behavior trees:', error);
@@ -176,4 +218,3 @@ export const getStorageInfo = (): { count: number; size: number } => {
     return { count: 0, size: 0 };
   }
 };
-
