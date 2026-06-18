@@ -1,9 +1,9 @@
 .bt-node-search {
   position: absolute;
-  top: 58px;
+  top: 74px;
   right: 12px;
   z-index: 30;
-  width: min(300px, calc(100% - 24px));
+  width: min(260px, calc(100% - 24px));
   color: var(--text-color, #333333);
 }
 

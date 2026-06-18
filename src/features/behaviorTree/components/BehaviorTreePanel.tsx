@@ -155,9 +155,6 @@ const SELECTION_ACTIONS_MAX_WIDTH = 360;
 const BOX_SELECTION_CLEAR_SUPPRESSION_MS = 120;
 const BOX_SELECTION_DRAG_THRESHOLD = 4;
 const MANUAL_EDGE_SELECTION_SUPPRESSION_MS = 160;
-const SUBTREE_PARENT_BUTTON_WIDTH = 108;
-const SUBTREE_PARENT_BUTTON_HEIGHT = 42;
-const SUBTREE_PARENT_BUTTON_GAP = 10;
 
 const getKnownReactFlowElementId = (
   element: Element,
@@ -1945,17 +1942,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       return;
     }
 
-    const x = Math.min(
-      Math.max(
-        bounds.left - canvasRect.left - SUBTREE_PARENT_BUTTON_WIDTH - SUBTREE_PARENT_BUTTON_GAP,
-        8
-      ),
-      Math.max(canvasRect.width - SUBTREE_PARENT_BUTTON_WIDTH - 8, 8)
-    );
-    const y = Math.min(
-      Math.max(bounds.top - canvasRect.top + 4, 8),
-      Math.max(canvasRect.height - SUBTREE_PARENT_BUTTON_HEIGHT - 8, 8)
-    );
+    const x = Math.min(Math.max(bounds.left - canvasRect.left - 2, 8), Math.max(canvasRect.width - 132, 8));
+    const aboveY = bounds.top - canvasRect.top - 46;
+    const y =
+      aboveY >= 8
+        ? aboveY
+        : Math.min(Math.max(bounds.bottom - canvasRect.top + 10, 8), Math.max(canvasRect.height - 40, 8));
 
     setSubtreeReturnAnchor({ x, y });
   }, []);
