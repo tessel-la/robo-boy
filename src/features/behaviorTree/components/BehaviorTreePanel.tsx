@@ -22,9 +22,11 @@ import {
   FaArrowDown,
   FaArrowUp,
   FaClone,
+  FaCog,
   FaEdit,
   FaExpandArrowsAlt,
   FaFolderOpen,
+  FaLevelUpAlt,
   FaObjectGroup,
   FaSave,
   FaTrash,
@@ -63,6 +65,7 @@ import {
   BehaviorTree,
   BehaviorTreeNode,
   BehaviorNodeType,
+  ControlFlowNodeData,
   ROSActionNodeData,
   ROSServiceNodeData,
   ExecutionEvent,
@@ -118,10 +121,33 @@ interface SyncEditorOptions {
   center?: boolean;
 }
 
+interface HistorySnapshot {
+  tree: BehaviorTree;
+  path: string[];
+}
+
+interface CustomBoxSelectionGesture {
+  pointerId: number;
+  element: HTMLDivElement;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  didDrag: boolean;
+}
+
+interface CustomBoxSelectionBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 const MAX_UNDO_HISTORY = 80;
 const SELECTION_ACTIONS_MAX_WIDTH = 360;
 const BOX_SELECTION_CLEAR_SUPPRESSION_MS = 120;
+const BOX_SELECTION_DRAG_THRESHOLD = 4;
 
 const getKnownReactFlowElementId = (
   element: Element,
@@ -156,6 +182,18 @@ const rectFullyContains = (outer: DOMRect, inner: DOMRect) =>
   inner.top >= outer.top - 1 &&
   inner.bottom <= outer.bottom + 1;
 
+const createViewportRect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+  x: left,
+  y: top,
+  width: right - left,
+  height: bottom - top,
+  left,
+  top,
+  right,
+  bottom,
+  toJSON: () => ({}),
+} as DOMRect);
+
 interface ChildOrderPanelProps {
   parent: BehaviorTreeNode;
   childLinks: OrderedChildLink[];
@@ -184,10 +222,26 @@ const getDefaultNodeName = (node: BehaviorTreeNode): string => {
       return 'Selector';
     case BehaviorNodeType.Parallel:
       return 'Parallel';
+    case BehaviorNodeType.Retry:
+      return 'Retry';
+    case BehaviorNodeType.Repeat:
+      return 'Repeat';
     default:
       return data.label || 'Node';
   }
 };
+
+const isIteratingControlNode = (node?: BehaviorTreeNode | Node | null): node is BehaviorTreeNode =>
+  node?.type === BehaviorNodeType.Retry || node?.type === BehaviorNodeType.Repeat;
+
+const normalizeIterationLimit = (value: number): number => {
+  if (value === -1) return -1;
+  if (!Number.isFinite(value)) return 3;
+  return Math.max(1, Math.trunc(value));
+};
+
+const getIterationLimit = (node: BehaviorTreeNode): number =>
+  normalizeIterationLimit((node.data as ControlFlowNodeData).iterationLimit ?? 3);
 
 const getExecutionNodeKey = (nodeId: string, treePath: string[]): string =>
   `${treePath.join('/') || 'root'}::${nodeId}`;
@@ -279,6 +333,71 @@ const ChildOrderPanel: React.FC<ChildOrderPanelProps> = ({
   </div>
 );
 
+interface IterationLimitEditorProps {
+  node: BehaviorTreeNode;
+  onSave: (limit: number) => void;
+  onClose: () => void;
+}
+
+const IterationLimitEditor: React.FC<IterationLimitEditorProps> = ({ node, onSave, onClose }) => {
+  const [value, setValue] = useState(String(getIterationLimit(node)));
+  const parsed = Number(value);
+  const isValid =
+    value.trim() !== '' && Number.isFinite(parsed) && (parsed === -1 || Math.trunc(parsed) >= 1);
+  const nodeKind = node.type === BehaviorNodeType.Retry ? 'Retry' : 'Repeat';
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isValid) return;
+    onSave(normalizeIterationLimit(parsed));
+  };
+
+  return (
+    <div className="bt-iteration-overlay" role="dialog" aria-modal="true">
+      <form className="bt-iteration-dialog" onSubmit={handleSubmit}>
+        <div className="bt-node-name-header">
+          <div>
+            <div className="bt-node-name-kicker">{node.data.label}</div>
+            <h2>{nodeKind} count</h2>
+          </div>
+          <button
+            type="button"
+            className="bt-node-name-close"
+            onClick={onClose}
+            aria-label="Close count editor"
+          >
+            ×
+          </button>
+        </div>
+
+        <label className="bt-node-name-label" htmlFor="bt-iteration-limit">
+          {node.type === BehaviorNodeType.Retry ? 'Attempts' : 'Repeats'}
+        </label>
+        <input
+          id="bt-iteration-limit"
+          className="bt-node-name-input"
+          type="number"
+          step="1"
+          min="-1"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          autoFocus
+        />
+        <div className="bt-iteration-help">Use -1 for infinite.</div>
+
+        <div className="bt-node-name-actions">
+          <button type="button" className="bt-node-name-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="bt-node-name-save" disabled={!isValid}>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
@@ -296,6 +415,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
   const [selectionActionAnchor, setSelectionActionAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [customBoxSelection, setCustomBoxSelection] = useState<CustomBoxSelectionBox | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [canvasInteractionMode, setCanvasInteractionMode] =
@@ -308,7 +428,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     { nodeId: string; data: ROSServiceNodeData } | null
   >(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const [editingIterationNodeId, setEditingIterationNodeId] = useState<string | null>(null);
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
+  const [subtreeReturnAnchor, setSubtreeReturnAnchor] = useState<{ x: number; y: number } | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
@@ -324,8 +446,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const currentTreeRef = useRef<BehaviorTree | null>(null);
   const rootTreeRef = useRef<BehaviorTree | null>(null);
   const treePathRef = useRef<string[]>([]);
-  const undoHistoryRef = useRef<BehaviorTree[]>([]);
-  const redoHistoryRef = useRef<BehaviorTree[]>([]);
+  const undoHistoryRef = useRef<HistorySnapshot[]>([]);
+  const redoHistoryRef = useRef<HistorySnapshot[]>([]);
   const isRestoringHistory = useRef(false);
   const selectedNodeIdsRef = useRef<Set<string>>(new Set());
   const selectedEdgeIdsRef = useRef<Set<string>>(new Set());
@@ -333,6 +455,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const boxSelectionNodeIdsRef = useRef<Set<string> | null>(null);
   const boxSelectionEdgeIdsRef = useRef<Set<string> | null>(null);
   const boxSelectionEndedAtRef = useRef(0);
+  const boxSelectionPointerDownRef = useRef(false);
+  const boxSelectionEndPendingRef = useRef(false);
+  const customBoxSelectionGestureRef = useRef<CustomBoxSelectionGesture | null>(null);
+  const customBoxSelectionRectRef = useRef<DOMRect | null>(null);
+  const subtreeReturnAnchorFrameRef = useRef<number | null>(null);
 
   const { screenToFlowPosition, fitView, getZoom, setCenter } = useReactFlow();
 
@@ -405,6 +532,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       selectedEdgeIdsRef.current = new Set();
       setOrderingParentId(null);
       setRenamingNodeId(null);
+      setEditingIterationNodeId(null);
       setEditingAction(null);
       setEditingService(null);
       nodeIdCounter.current = getNodeCounterAfterNodes(nextNodes);
@@ -415,17 +543,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [centerTreeInView, resetTransientEdgeState, resetTransientNodeState]
   );
 
+  const syncRootTreeAndEditor = useCallback(
+    (nextRootTree: BehaviorTree, preferredPath: string[], options: SyncEditorOptions = {}) => {
+      const nextTreeAtPath =
+        preferredPath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, preferredPath);
+      const nextPath = nextTreeAtPath ? preferredPath : [];
+      const nextTree = nextTreeAtPath ?? nextRootTree;
+
+      rootTreeRef.current = nextRootTree;
+      setRootTree(nextRootTree);
+      syncEditorState(nextTree, nextPath, options);
+    },
+    [syncEditorState]
+  );
+
+  const createHistorySnapshot = useCallback((): HistorySnapshot | null => {
+    if (!rootTreeRef.current) return null;
+
+    return {
+      tree: cloneBehaviorTree(rootTreeRef.current),
+      path: [...treePathRef.current],
+    };
+  }, []);
+
   const pushUndoSnapshot = useCallback(() => {
     if (isRestoringHistory.current || !rootTreeRef.current) return;
+    const snapshot = createHistorySnapshot();
+    if (!snapshot) return;
 
     undoHistoryRef.current = [
       ...undoHistoryRef.current.slice(-(MAX_UNDO_HISTORY - 1)),
-      cloneBehaviorTree(rootTreeRef.current),
+      snapshot,
     ];
     redoHistoryRef.current = [];
     setCanUndo(true);
     setCanRedo(false);
-  }, []);
+  }, [createHistorySnapshot]);
 
   const persistEditorTree = useCallback(
     (
@@ -433,11 +586,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       nextEdges: Edge[],
       treeOverrides: Partial<BehaviorTree> = {}
     ): BehaviorTree | null => {
-      if (!currentTree) return null;
+      const activeTree = currentTreeRef.current;
+      const activePath = treePathRef.current;
+      if (!activeTree) return null;
       pushUndoSnapshot();
 
       const nextTree: BehaviorTree = {
-        ...currentTree,
+        ...activeTree,
         ...treeOverrides,
         nodes: nextNodes,
         edges: nextEdges,
@@ -449,16 +604,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setNodes(nextNodes);
       setEdges(nextEdges);
       setRootTree((previousRootTree) => {
+        const baseRootTree = previousRootTree ?? rootTreeRef.current;
         const nextRootTree =
-          !previousRootTree || treePath.length === 0
+          !baseRootTree || activePath.length === 0
             ? nextTree
-            : updateTreeAtPath(previousRootTree, treePath, () => nextTree);
+            : updateTreeAtPath(baseRootTree, activePath, () => nextTree);
         rootTreeRef.current = nextRootTree;
         return nextRootTree;
       });
       return nextTree;
     },
-    [currentTree, pushUndoSnapshot, treePath]
+    [pushUndoSnapshot]
   );
 
   const applySelectionState = useCallback(
@@ -527,11 +683,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         nodes: resetTransientNodeState(tree.nodes),
         edges: resetTransientEdgeState(tree.edges),
       };
-      rootTreeRef.current = hydrated;
-      setRootTree(hydrated);
-      syncEditorState(hydrated, [], { center: true });
+      syncRootTreeAndEditor(hydrated, [], { center: true });
     },
-    [resetTransientEdgeState, resetTransientNodeState, syncEditorState]
+    [resetTransientEdgeState, resetTransientNodeState, syncRootTreeAndEditor]
   );
 
   const addNodeAtPosition = useCallback(
@@ -623,6 +777,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const getCurrentSelectionRect = useCallback((): DOMRect | null => {
+    if (customBoxSelectionRectRef.current) {
+      return customBoxSelectionRectRef.current;
+    }
+
     const canvas = reactFlowWrapper.current;
     const selectionElement = canvas?.querySelector<HTMLElement>('.react-flow__selection');
     if (!canvas || !selectionElement) return null;
@@ -733,6 +891,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const shouldIgnoreRecentBoxSelectionReduction = useCallback(
     (nextSelectedNodeIds: Set<string>, nextSelectedEdgeIds: Set<string>) => {
+      if (boxSelectionPointerDownRef.current && boxSelectionEndPendingRef.current) {
+        return (
+          nextSelectedNodeIds.size < selectedNodeIdsRef.current.size ||
+          nextSelectedEdgeIds.size < selectedEdgeIdsRef.current.size
+        );
+      }
       if (boxSelectionActiveRef.current) return false;
       if (Date.now() - boxSelectionEndedAtRef.current > BOX_SELECTION_CLEAR_SUPPRESSION_MS) {
         return false;
@@ -886,7 +1050,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     ]
   );
 
-  const handleSelectionStart = useCallback(() => {
+  const finalizeBoxSelection = useCallback(() => {
+    if (!boxSelectionActiveRef.current) return;
+
+    const selectedNodeIds = getBoxSelectionNodeIds(new Set(selectedNodeIdsRef.current));
+    const selectedEdgeIds = getBoxSelectionEdgeIds(selectedNodeIds);
+    commitSelectionState(selectedNodeIds, selectedEdgeIds);
+    boxSelectionActiveRef.current = false;
+    boxSelectionEndPendingRef.current = false;
+    boxSelectionEndedAtRef.current =
+      selectedNodeIds.size > 0 || selectedEdgeIds.size > 0 ? Date.now() : 0;
+  }, [commitSelectionState, getBoxSelectionEdgeIds, getBoxSelectionNodeIds]);
+
+  const handleSelectionStart = useCallback((event?: React.MouseEvent | React.TouchEvent) => {
+    if (event) {
+      boxSelectionPointerDownRef.current = true;
+      boxSelectionEndPendingRef.current = false;
+    }
     boxSelectionActiveRef.current = true;
     boxSelectionNodeIdsRef.current = null;
     boxSelectionEdgeIdsRef.current = null;
@@ -898,14 +1078,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleSelectionEnd = useCallback(() => {
     if (!boxSelectionActiveRef.current) return;
+    if (boxSelectionPointerDownRef.current) {
+      boxSelectionEndPendingRef.current = true;
+      return;
+    }
 
-    const selectedNodeIds = getBoxSelectionNodeIds(new Set(selectedNodeIdsRef.current));
-    const selectedEdgeIds = getBoxSelectionEdgeIds(selectedNodeIds);
-    commitSelectionState(selectedNodeIds, selectedEdgeIds);
-    boxSelectionActiveRef.current = false;
-    boxSelectionEndedAtRef.current =
-      selectedNodeIds.size > 0 || selectedEdgeIds.size > 0 ? Date.now() : 0;
-  }, [commitSelectionState, getBoxSelectionEdgeIds, getBoxSelectionNodeIds]);
+    finalizeBoxSelection();
+  }, [finalizeBoxSelection]);
 
   // Delete selected nodes (and their connected edges)
   const handleDeleteSelected = useCallback(() => {
@@ -1002,13 +1181,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const openSubtreeNode = useCallback((subtreeNodeId: string) => {
-    if (!rootTree) return;
-    const nextPath = [...treePath, subtreeNodeId];
-    const nextTree = getTreeAtPath(rootTree, nextPath);
+    const activeRootTree = rootTreeRef.current;
+    const activePath = treePathRef.current;
+    if (!activeRootTree) return;
+    const nextPath = [...activePath, subtreeNodeId];
+    const nextTree = getTreeAtPath(activeRootTree, nextPath);
     if (!nextTree) return;
 
     syncEditorState(nextTree, nextPath, { center: true });
-  }, [rootTree, syncEditorState, treePath]);
+  }, [syncEditorState]);
 
   const handleOpenSelectedSubtree = useCallback(() => {
     if (selectedNodes.length !== 1) return;
@@ -1024,6 +1205,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
     } else if (isSubtreeNode(node as BehaviorTreeNode)) {
       openSubtreeNode(node.id);
+    } else if (isIteratingControlNode(node)) {
+      setEditingIterationNodeId(node.id);
     } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
       setOrderingParentId(node.id);
     }
@@ -1045,6 +1228,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         node.type !== BehaviorNodeType.Action &&
         node.type !== BehaviorNodeType.Service &&
         node.type !== BehaviorNodeType.Subtree &&
+        !isIteratingControlNode(node) &&
         !isOrderedControlNode(node as BehaviorTreeNode)
       ) {
         return;
@@ -1097,9 +1281,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const handleSave = useCallback(() => {
-    if (!currentTree) return;
+    const activeTree = currentTreeRef.current;
+    const activePath = treePathRef.current;
+    const activeRootTree = rootTreeRef.current;
+    if (!activeTree) return;
+
     const updatedTree: BehaviorTree = {
-      ...currentTree,
+      ...activeTree,
       nodes: nodes as BehaviorTreeNode[],
       edges,
       updatedAt: Date.now(),
@@ -1108,25 +1296,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (success) {
       syncBehaviorTreeReferences(updatedTree);
 
-      const activePath = treePathRef.current;
-      const baseRootTree = rootTreeRef.current;
-      const syncedRootTree = baseRootTree
+      const syncedRootTree = activeRootTree
         ? syncReferencedSubtrees(
-            activePath.length === 0 ? updatedTree : updateTreeAtPath(baseRootTree, activePath, () => updatedTree),
+            activePath.length === 0 ? updatedTree : updateTreeAtPath(activeRootTree, activePath, () => updatedTree),
             updatedTree
           )
         : updatedTree;
 
-      rootTreeRef.current = syncedRootTree;
-      setRootTree(syncedRootTree);
-
-      const nextCurrentTree =
-        activePath.length === 0 ? syncedRootTree : getTreeAtPath(syncedRootTree, activePath);
-      if (nextCurrentTree) {
-        syncEditorState(nextCurrentTree, activePath);
-      } else {
-        persistEditorTree(nodes, edges, { name: updatedTree.name });
-      }
+      syncRootTreeAndEditor(syncedRootTree, activePath);
 
       showSaveNotice({
         type: 'success',
@@ -1140,20 +1317,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         message: 'The tree could not be saved. Please try again.',
       });
     }
-  }, [currentTree, edges, nodes, persistEditorTree, showSaveNotice, syncEditorState]);
+  }, [edges, nodes, showSaveNotice, syncRootTreeAndEditor]);
 
   const handleLoad = useCallback((tree: BehaviorTree) => {
+    const activePath = treePathRef.current;
+    const activeRootTree = rootTreeRef.current;
+    const activeCurrentTree = currentTreeRef.current;
     pushUndoSnapshot();
 
-    if (treePath.length === 0) {
+    if (activePath.length === 0) {
       loadRootTree(tree);
       return;
     }
 
-    const loadedTree = { ...tree, name: tree.name || currentTree?.name || 'Subtree' };
-    const nextRootTree = rootTree ? replaceTreeAtPath(rootTree, treePath, loadedTree) : loadedTree;
-    const subtreeNodeId = treePath[treePath.length - 1];
-    const parentPath = treePath.slice(0, -1);
+    const loadedTree = { ...tree, name: tree.name || activeCurrentTree?.name || 'Subtree' };
+    const nextRootTree = activeRootTree ? replaceTreeAtPath(activeRootTree, activePath, loadedTree) : loadedTree;
+    const subtreeNodeId = activePath[activePath.length - 1];
+    const parentPath = activePath.slice(0, -1);
     const parentTree =
       parentPath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, parentPath);
 
@@ -1178,9 +1358,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             })
         : nextRootTree;
 
-    setRootTree(nextRootWithLabel);
-    syncEditorState(loadedTree, treePath, { center: true });
-  }, [currentTree?.name, loadRootTree, pushUndoSnapshot, rootTree, syncEditorState, treePath]);
+    syncRootTreeAndEditor(nextRootWithLabel, activePath, { center: true });
+  }, [loadRootTree, pushUndoSnapshot, syncRootTreeAndEditor]);
 
   const handleNew = useCallback(() => {
     if (nodes.length > 0 || edges.length > 0) {
@@ -1198,14 +1377,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    if (treePath.length === 0) {
+    const activePath = treePathRef.current;
+    const activeRootTree = rootTreeRef.current;
+    if (activePath.length === 0) {
       loadRootTree(newTree);
       return;
     }
 
-    const nextRootTree = rootTree ? replaceTreeAtPath(rootTree, treePath, newTree) : newTree;
-    const subtreeNodeId = treePath[treePath.length - 1];
-    const parentPath = treePath.slice(0, -1);
+    const nextRootTree = activeRootTree ? replaceTreeAtPath(activeRootTree, activePath, newTree) : newTree;
+    const subtreeNodeId = activePath[activePath.length - 1];
+    const parentPath = activePath.slice(0, -1);
     const parentTree =
       parentPath.length === 0 ? nextRootTree : getTreeAtPath(nextRootTree, parentPath);
     const nextRootWithLabel =
@@ -1229,9 +1410,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             })
         : nextRootTree;
 
-    setRootTree(nextRootWithLabel);
-    syncEditorState(newTree, treePath);
-  }, [edges.length, loadRootTree, nodes.length, pushUndoSnapshot, rootTree, syncEditorState, treePath]);
+    syncRootTreeAndEditor(nextRootWithLabel, activePath);
+  }, [edges.length, loadRootTree, nodes.length, pushUndoSnapshot, syncRootTreeAndEditor]);
 
   const handleExport = useCallback(() => {
     if (!currentTree) return;
@@ -1248,21 +1428,24 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [edges, fitView, nodes, persistEditorTree]);
 
   const handleRename = useCallback((name: string) => {
-    if (!currentTree) return;
+    const activeTree = currentTreeRef.current;
+    const activePath = treePathRef.current;
+    if (!activeTree) return;
     pushUndoSnapshot();
 
-    const nextTree = { ...currentTree, name };
+    const nextTree = { ...activeTree, name };
     currentTreeRef.current = nextTree;
     setCurrentTree(nextTree);
     setRootTree((previousRootTree) => {
-      if (!previousRootTree || treePath.length === 0) {
+      const baseRootTree = previousRootTree ?? rootTreeRef.current;
+      if (!baseRootTree || activePath.length === 0) {
         rootTreeRef.current = nextTree;
         return nextTree;
       }
 
-      const renamedRootTree = replaceTreeAtPath(previousRootTree, treePath, nextTree);
-      const subtreeNodeId = treePath[treePath.length - 1];
-      const parentPath = treePath.slice(0, -1);
+      const renamedRootTree = replaceTreeAtPath(baseRootTree, activePath, nextTree);
+      const subtreeNodeId = activePath[activePath.length - 1];
+      const parentPath = activePath.slice(0, -1);
       if (!subtreeNodeId) return renamedRootTree;
 
       const parentTree = parentPath.length === 0 ? renamedRootTree : getTreeAtPath(renamedRootTree, parentPath);
@@ -1290,7 +1473,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       rootTreeRef.current = nextRootTree;
       return nextRootTree;
     });
-  }, [currentTree, pushUndoSnapshot, treePath]);
+  }, [pushUndoSnapshot]);
 
   const updateDisplayedNodeStatus = useCallback((nodeId: string, status: ExecutionStatus) => {
     setNodes((currentNodes) =>
@@ -1460,50 +1643,45 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [resetTransientEdgeState, resetTransientNodeState]);
 
   const restoreRootTreeSnapshot = useCallback(
-    (snapshot: BehaviorTree) => {
-      const activePath = treePathRef.current;
-      const activeTree = activePath.length === 0 ? snapshot : getTreeAtPath(snapshot, activePath);
-      const nextPath = activeTree ? activePath : [];
-      const nextTree = activeTree ?? snapshot;
-
-      rootTreeRef.current = snapshot;
-      setRootTree(snapshot);
-      syncEditorState(nextTree, nextPath);
+    (snapshot: HistorySnapshot) => {
+      syncRootTreeAndEditor(snapshot.tree, snapshot.path);
     },
-    [syncEditorState]
+    [syncRootTreeAndEditor]
   );
 
   const handleUndo = useCallback(() => {
-    const previousRootTree = undoHistoryRef.current.pop();
-    if (!previousRootTree || !rootTreeRef.current) return;
+    const previousSnapshot = undoHistoryRef.current.pop();
+    const redoSnapshot = createHistorySnapshot();
+    if (!previousSnapshot || !redoSnapshot) return;
 
     redoHistoryRef.current = [
       ...redoHistoryRef.current.slice(-(MAX_UNDO_HISTORY - 1)),
-      cloneBehaviorTree(rootTreeRef.current),
+      redoSnapshot,
     ];
 
     isRestoringHistory.current = true;
-    restoreRootTreeSnapshot(previousRootTree);
+    restoreRootTreeSnapshot(previousSnapshot);
     setCanUndo(undoHistoryRef.current.length > 0);
     setCanRedo(true);
     isRestoringHistory.current = false;
-  }, [restoreRootTreeSnapshot]);
+  }, [createHistorySnapshot, restoreRootTreeSnapshot]);
 
   const handleRedo = useCallback(() => {
-    const nextRootTree = redoHistoryRef.current.pop();
-    if (!nextRootTree || !rootTreeRef.current) return;
+    const nextSnapshot = redoHistoryRef.current.pop();
+    const undoSnapshot = createHistorySnapshot();
+    if (!nextSnapshot || !undoSnapshot) return;
 
     undoHistoryRef.current = [
       ...undoHistoryRef.current.slice(-(MAX_UNDO_HISTORY - 1)),
-      cloneBehaviorTree(rootTreeRef.current),
+      undoSnapshot,
     ];
 
     isRestoringHistory.current = true;
-    restoreRootTreeSnapshot(nextRootTree);
+    restoreRootTreeSnapshot(nextSnapshot);
     setCanUndo(true);
     setCanRedo(redoHistoryRef.current.length > 0);
     isRestoringHistory.current = false;
-  }, [restoreRootTreeSnapshot]);
+  }, [createHistorySnapshot, restoreRootTreeSnapshot]);
 
   useEffect(() => {
     onExecutionChange?.(executionSnapshot);
@@ -1537,6 +1715,85 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     return () => onExecutionControlsChange?.(null);
   }, [handleStop, onExecutionControlsChange]);
 
+  const updateCustomBoxSelection = useCallback(
+    (gesture: CustomBoxSelectionGesture) => {
+      const canvas = reactFlowWrapper.current;
+      if (!canvas) return;
+
+      const left = Math.min(gesture.startX, gesture.currentX);
+      const right = Math.max(gesture.startX, gesture.currentX);
+      const top = Math.min(gesture.startY, gesture.currentY);
+      const bottom = Math.max(gesture.startY, gesture.currentY);
+      const selectionRect = createViewportRect(left, top, right, bottom);
+      const canvasRect = canvas.getBoundingClientRect();
+
+      customBoxSelectionRectRef.current = selectionRect;
+      setCustomBoxSelection({
+        left: left - canvasRect.left,
+        top: top - canvasRect.top,
+        width: selectionRect.width,
+        height: selectionRect.height,
+      });
+
+      if (!gesture.didDrag) return;
+
+      const selectedNodeIds = getBoxSelectionNodeIds(new Set());
+      const selectedEdgeIds = getBoxSelectionEdgeIds(selectedNodeIds);
+      commitSelectionState(selectedNodeIds, selectedEdgeIds);
+    },
+    [commitSelectionState, getBoxSelectionEdgeIds, getBoxSelectionNodeIds]
+  );
+
+  const finishCustomBoxSelection = useCallback((): boolean => {
+    const gesture = customBoxSelectionGestureRef.current;
+    if (!gesture) return false;
+
+    updateCustomBoxSelection(gesture);
+
+    if (typeof gesture.element.hasPointerCapture === 'function' &&
+      gesture.element.hasPointerCapture(gesture.pointerId) &&
+      typeof gesture.element.releasePointerCapture === 'function'
+    ) {
+      gesture.element.releasePointerCapture(gesture.pointerId);
+    }
+
+    customBoxSelectionGestureRef.current = null;
+    customBoxSelectionRectRef.current = null;
+    setCustomBoxSelection(null);
+    boxSelectionActiveRef.current = false;
+    boxSelectionPointerDownRef.current = false;
+    boxSelectionEndPendingRef.current = false;
+    boxSelectionEndedAtRef.current =
+      gesture.didDrag && (selectedNodeIdsRef.current.size > 0 || selectedEdgeIdsRef.current.size > 0)
+        ? Date.now()
+        : 0;
+
+    return true;
+  }, [updateCustomBoxSelection]);
+
+  const releaseBoxSelectionPointer = useCallback(() => {
+    if (finishCustomBoxSelection()) return;
+
+    if (!boxSelectionPointerDownRef.current) return;
+    boxSelectionPointerDownRef.current = false;
+
+    if (boxSelectionActiveRef.current || boxSelectionEndPendingRef.current) {
+      finalizeBoxSelection();
+    }
+  }, [finalizeBoxSelection, finishCustomBoxSelection]);
+
+  useEffect(() => {
+    document.addEventListener('pointerup', releaseBoxSelectionPointer);
+    document.addEventListener('pointercancel', releaseBoxSelectionPointer);
+    window.addEventListener('blur', releaseBoxSelectionPointer);
+
+    return () => {
+      document.removeEventListener('pointerup', releaseBoxSelectionPointer);
+      document.removeEventListener('pointercancel', releaseBoxSelectionPointer);
+      window.removeEventListener('blur', releaseBoxSelectionPointer);
+    };
+  }, [releaseBoxSelectionPointer]);
+
   useEffect(() => {
     return () => {
       if (executorRef.current) executorRef.current.stop();
@@ -1544,6 +1801,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       boxSelectionNodeIdsRef.current = null;
       boxSelectionEdgeIdsRef.current = null;
       boxSelectionEndedAtRef.current = 0;
+      boxSelectionPointerDownRef.current = false;
+      boxSelectionEndPendingRef.current = false;
+      if (subtreeReturnAnchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(subtreeReturnAnchorFrameRef.current);
+      }
     };
   }, []);
 
@@ -1603,6 +1865,68 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       };
     });
   }, [behaviorNodes, edges]);
+
+  const updateSubtreeReturnAnchor = useCallback(() => {
+    if (treePathRef.current.length === 0) {
+      setSubtreeReturnAnchor(null);
+      return;
+    }
+
+    const canvas = reactFlowWrapper.current;
+    if (!canvas) return;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const nodeElements = Array.from(canvas.querySelectorAll<HTMLElement>('.react-flow__node'));
+
+    if (nodeElements.length === 0) {
+      setSubtreeReturnAnchor({ x: 16, y: 64 });
+      return;
+    }
+
+    const bounds = nodeElements.reduce(
+      (acc, element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 && rect.height <= 0) return acc;
+        return {
+          left: Math.min(acc.left, rect.left),
+          top: Math.min(acc.top, rect.top),
+          right: Math.max(acc.right, rect.right),
+          bottom: Math.max(acc.bottom, rect.bottom),
+        };
+      },
+      { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
+    );
+
+    if (!Number.isFinite(bounds.left)) {
+      setSubtreeReturnAnchor({ x: 16, y: 64 });
+      return;
+    }
+
+    const x = Math.min(Math.max(bounds.left - canvasRect.left - 2, 8), Math.max(canvasRect.width - 132, 8));
+    const aboveY = bounds.top - canvasRect.top - 46;
+    const y =
+      aboveY >= 8
+        ? aboveY
+        : Math.min(Math.max(bounds.bottom - canvasRect.top + 10, 8), Math.max(canvasRect.height - 40, 8));
+
+    setSubtreeReturnAnchor({ x, y });
+  }, []);
+
+  const scheduleSubtreeReturnAnchorUpdate = useCallback(() => {
+    if (subtreeReturnAnchorFrameRef.current !== null) {
+      window.cancelAnimationFrame(subtreeReturnAnchorFrameRef.current);
+    }
+
+    subtreeReturnAnchorFrameRef.current = window.requestAnimationFrame(() => {
+      subtreeReturnAnchorFrameRef.current = null;
+      updateSubtreeReturnAnchor();
+    });
+  }, [updateSubtreeReturnAnchor]);
+
+  useEffect(() => {
+    scheduleSubtreeReturnAnchorUpdate();
+  }, [nodes, scheduleSubtreeReturnAnchorUpdate, treePath]);
+
   const orderingParent = useMemo(() => {
     const parent = behaviorNodes.find((node) => node.id === orderingParentId);
     return isOrderedControlNode(parent) ? parent : null;
@@ -1625,7 +1949,98 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     },
     [edges, nodes, orderingParent, persistEditorTree]
   );
+  const handleCanvasPointerDownCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (canvasInteractionMode !== 'select') return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest('.react-flow')) return;
+      if (
+        target.closest(
+          '.react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__controls, .react-flow__minimap, .bt-node-search, .bt-selection-actions, .bt-subtree-parent-action'
+        )
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.currentTarget.setPointerCapture === 'function') {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+
+      customBoxSelectionGestureRef.current = {
+        pointerId: event.pointerId,
+        element: event.currentTarget,
+        startX: event.clientX,
+        startY: event.clientY,
+        currentX: event.clientX,
+        currentY: event.clientY,
+        didDrag: false,
+      };
+      customBoxSelectionRectRef.current = createViewportRect(
+        event.clientX,
+        event.clientY,
+        event.clientX,
+        event.clientY
+      );
+      boxSelectionPointerDownRef.current = true;
+      boxSelectionActiveRef.current = true;
+      boxSelectionNodeIdsRef.current = null;
+      boxSelectionEdgeIdsRef.current = null;
+      boxSelectionEndedAtRef.current = 0;
+      boxSelectionEndPendingRef.current = false;
+      setCustomBoxSelection(null);
+      setOrderingParentId(null);
+      setSelectionActionAnchor(null);
+      commitSelectionState(new Set(), new Set());
+    },
+    [canvasInteractionMode, commitSelectionState]
+  );
+
+  const handleCanvasPointerMoveCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const gesture = customBoxSelectionGestureRef.current;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      gesture.currentX = event.clientX;
+      gesture.currentY = event.clientY;
+      if (
+        Math.hypot(gesture.currentX - gesture.startX, gesture.currentY - gesture.startY) >=
+        BOX_SELECTION_DRAG_THRESHOLD
+      ) {
+        gesture.didDrag = true;
+      }
+
+      updateCustomBoxSelection(gesture);
+    },
+    [updateCustomBoxSelection]
+  );
+
+  const handleCanvasPointerEndCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const gesture = customBoxSelectionGestureRef.current;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      gesture.currentX = event.clientX;
+      gesture.currentY = event.clientY;
+      finishCustomBoxSelection();
+    },
+    [finishCustomBoxSelection]
+  );
+
   const handlePaneClick = useCallback(() => {
+    if (boxSelectionActiveRef.current || boxSelectionPointerDownRef.current) {
+      return;
+    }
+
     if (
       Date.now() - boxSelectionEndedAtRef.current <= BOX_SELECTION_CLEAR_SUPPRESSION_MS &&
       (selectedNodeIdsRef.current.size > 0 || selectedEdgeIdsRef.current.size > 0)
@@ -1648,6 +2063,55 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const node = behaviorNodes.find((candidate) => candidate.id === selectedNodes[0].id);
     return isSubtreeNode(node) ? node : null;
   }, [behaviorNodes, selectedNodes]);
+  const selectedIterationNode = useMemo(() => {
+    if (selectedNodes.length !== 1) return null;
+    const node = behaviorNodes.find((candidate) => candidate.id === selectedNodes[0].id);
+    return isIteratingControlNode(node) ? node : null;
+  }, [behaviorNodes, selectedNodes]);
+  const editingIterationNode = useMemo(
+    () => behaviorNodes.find((node) => node.id === editingIterationNodeId && isIteratingControlNode(node)) ?? null,
+    [behaviorNodes, editingIterationNodeId]
+  );
+
+  const handleOpenSelectedIterationSettings = useCallback(() => {
+    if (!selectedIterationNode) return;
+    setEditingIterationNodeId(selectedIterationNode.id);
+  }, [selectedIterationNode]);
+
+  const handleSaveIterationLimit = useCallback(
+    (limit: number) => {
+      if (!editingIterationNode) return;
+      const normalizedLimit = normalizeIterationLimit(limit);
+      const nextNodes = nodes.map((node) =>
+        node.id === editingIterationNode.id
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                iterationLimit: normalizedLimit,
+              },
+            }
+          : node
+      ) as BehaviorTreeNode[];
+
+      persistEditorTree(nextNodes, edges);
+      setSelectedNodes((currentNodes) =>
+        currentNodes.map((node) =>
+          node.id === editingIterationNode.id
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  iterationLimit: normalizedLimit,
+                },
+              }
+            : node
+        )
+      );
+      setEditingIterationNodeId(null);
+    },
+    [editingIterationNode, edges, nodes, persistEditorTree]
+  );
 
   const canWrapSelection = useMemo(() => {
     if (!currentTree || selectedNodes.length < 2) return false;
@@ -1860,12 +2324,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ]);
 
   const handleNavigateUp = useCallback(() => {
-    if (!rootTree || treePath.length === 0) return;
-    const nextPath = treePath.slice(0, -1);
-    const nextTree = nextPath.length === 0 ? rootTree : getTreeAtPath(rootTree, nextPath);
+    const activeRootTree = rootTreeRef.current;
+    const activePath = treePathRef.current;
+    if (!activeRootTree || activePath.length === 0) return;
+    const nextPath = activePath.slice(0, -1);
+    const nextTree = nextPath.length === 0 ? activeRootTree : getTreeAtPath(activeRootTree, nextPath);
     if (!nextTree) return;
     syncEditorState(nextTree, nextPath, { center: true });
-  }, [rootTree, syncEditorState, treePath]);
+  }, [syncEditorState]);
 
   const handleSearchSelect = useCallback(
     (node: BehaviorTreeNode) => {
@@ -1889,7 +2355,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         currentTree={currentTree}
         isExecuting={isExecuting}
         isPaletteCollapsed={isPaletteCollapsed}
-        isEditingSubtree={treePath.length > 0}
         nodeCount={nodes.length}
         canUndo={canUndo}
         canRedo={canRedo}
@@ -1905,7 +2370,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onUndo={handleUndo}
         onRedo={handleRedo}
         onInteractionModeChange={setCanvasInteractionMode}
-        onNavigateUp={handleNavigateUp}
         onRename={handleRename}
       />
 
@@ -1961,7 +2425,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           onAddNode={handleAddNode}
         />
 
-        <div className="bt-canvas" ref={reactFlowWrapper} data-testid="bt-canvas">
+        <div
+          className="bt-canvas"
+          ref={reactFlowWrapper}
+          onPointerDownCapture={handleCanvasPointerDownCapture}
+          onPointerMoveCapture={handleCanvasPointerMoveCapture}
+          onPointerUpCapture={handleCanvasPointerEndCapture}
+          onPointerCancelCapture={handleCanvasPointerEndCapture}
+          data-testid="bt-canvas"
+        >
           <ReactFlow
             nodes={nodes}
             edges={displayedEdges}
@@ -1978,12 +2450,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onSelectionChange={onSelectionChange}
             onSelectionStart={handleSelectionStart}
             onSelectionEnd={handleSelectionEnd}
+            onMove={scheduleSubtreeReturnAnchorUpdate}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={['Control', 'Meta']}
             panOnDrag={canvasInteractionMode === 'pan'}
-            selectionOnDrag={canvasInteractionMode === 'select'}
+            selectionOnDrag={false}
             connectionRadius={48}
             fitView
             minZoom={0.1}
@@ -2006,7 +2479,37 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
+          {customBoxSelection && (
+            <div
+              className="bt-custom-selection"
+              style={{
+                left: customBoxSelection.left,
+                top: customBoxSelection.top,
+                width: customBoxSelection.width,
+                height: customBoxSelection.height,
+              }}
+              data-testid="bt-custom-selection"
+            />
+          )}
           <NodeSearch nodes={behaviorNodes} onSelectNode={handleSearchSelect} />
+          {treePath.length > 0 && subtreeReturnAnchor && (
+            <button
+              type="button"
+              className="bt-subtree-parent-action"
+              style={{ left: subtreeReturnAnchor.x, top: subtreeReturnAnchor.y }}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleNavigateUp();
+              }}
+              title="Back to parent tree"
+              aria-label="Back to parent tree"
+              data-testid="bt-subtree-parent"
+            >
+              <FaLevelUpAlt aria-hidden="true" />
+              <span>Parent</span>
+            </button>
+          )}
           {selectionActionAnchor && (selectedNodes.length > 0 || selectedEdges.length > 0) && (
             <div
               className="bt-selection-actions"
@@ -2029,6 +2532,19 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
                 >
                   <FaEdit aria-hidden="true" />
                   <span>Rename</span>
+                </button>
+              )}
+              {selectedIterationNode && (
+                <button
+                  type="button"
+                  className="bt-selection-action"
+                  onClick={handleOpenSelectedIterationSettings}
+                  title="Set retry/repeat count"
+                  aria-label="Set retry/repeat count"
+                  data-testid="bt-configure-iteration"
+                >
+                  <FaCog aria-hidden="true" />
+                  <span>Count</span>
                 </button>
               )}
               {selectedNodes.length > 0 && (
@@ -2141,6 +2657,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           defaultName={getDefaultNodeName(renamingNode)}
           onSave={handleSaveNodeName}
           onClose={() => setRenamingNodeId(null)}
+        />
+      )}
+      {editingIterationNode && (
+        <IterationLimitEditor
+          node={editingIterationNode}
+          onSave={handleSaveIterationLimit}
+          onClose={() => setEditingIterationNodeId(null)}
         />
       )}
     </div>

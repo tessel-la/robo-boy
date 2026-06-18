@@ -10,30 +10,40 @@ import {
 } from './subtreeUtils';
 import { BehaviorNodeType, BehaviorTree, BehaviorTreeNode } from './types';
 
+const makeNodeData = (id: string, type: BehaviorNodeType, label: string): BehaviorTreeNode['data'] => {
+  switch (type) {
+    case BehaviorNodeType.Sequence:
+      return { label, type: 'sequence' };
+    case BehaviorNodeType.Retry:
+      return { label, type: 'retry', iterationLimit: 3 };
+    case BehaviorNodeType.Repeat:
+      return { label, type: 'repeat', iterationLimit: 3 };
+    case BehaviorNodeType.Subtree:
+      return {
+        label,
+        tree: {
+          id: `${id}-tree`,
+          name: label,
+          nodes: [],
+          edges: [],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      };
+    default:
+      return {
+        label,
+        actionName: label,
+        actionType: 'example_msgs/action/Test',
+      };
+  }
+};
+
 const makeNode = (id: string, type: BehaviorNodeType, label = id): BehaviorTreeNode => ({
   id,
   type,
   position: { x: 0, y: 0 },
-  data:
-    type === BehaviorNodeType.Sequence
-      ? { label, type: 'sequence' }
-      : type === BehaviorNodeType.Subtree
-        ? {
-            label,
-            tree: {
-              id: `${id}-tree`,
-              name: label,
-              nodes: [],
-              edges: [],
-              createdAt: 1,
-              updatedAt: 1,
-            },
-          }
-        : {
-            label,
-            actionName: label,
-            actionType: 'example_msgs/action/Test',
-          },
+  data: makeNodeData(id, type, label),
 });
 
 describe('subtree utilities', () => {
@@ -501,6 +511,39 @@ describe('subtree utilities', () => {
       .filter((edge) => edge.source === 'sequence')
       .map((edge) => exploded.tree.nodes.find((node) => node.id === edge.target)?.data.label);
     expect(childLabels).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('allows wrapping children of retry and repeat control nodes', () => {
+    [BehaviorNodeType.Retry, BehaviorNodeType.Repeat].forEach((controlType) => {
+      const parent = makeNode('parent', controlType, controlType);
+      const first = makeNode('first', BehaviorNodeType.Action, 'First');
+      const second = makeNode('second', BehaviorNodeType.Action, 'Second');
+      const tree: BehaviorTree = {
+        id: `root-${controlType}`,
+        name: `Root ${controlType}`,
+        nodes: [parent, first, second],
+        edges: [
+          { id: 'edge-0', source: 'parent', target: 'first' },
+          { id: 'edge-1', source: 'parent', target: 'second' },
+        ],
+        createdAt: 1,
+        updatedAt: 1,
+      };
+
+      const wrapped = wrapSelectionIntoSubtree({
+        tree,
+        selectedNodeIds: ['first', 'second'],
+        subtreeNodeId: 'subtree-node',
+        subtreeTreeId: 'subtree-tree',
+        subtreeLabel: 'Wrapped',
+      });
+
+      expect(wrapped.ok).toBe(true);
+      if (!wrapped.ok) return;
+      expect(wrapped.tree.edges.filter((edge) => edge.source === 'parent').map((edge) => edge.target)).toEqual([
+        'subtree-node',
+      ]);
+    });
   });
 
   it('restores wrapped node positions when an unchanged subtree is exploded', () => {

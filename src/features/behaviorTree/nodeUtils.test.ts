@@ -43,6 +43,28 @@ describe('behavior tree node utilities', () => {
     });
   });
 
+  it('creates retry and repeat control nodes with editable iteration limits', () => {
+    const retry = createBehaviorTreeNode({
+      id: 'node-retry',
+      nodeType: BehaviorNodeType.Retry,
+      position: { x: 0, y: 0 },
+    });
+    const repeat = createBehaviorTreeNode({
+      id: 'node-repeat',
+      nodeType: BehaviorNodeType.Repeat,
+      position: { x: 100, y: 0 },
+    });
+
+    expect(retry).toMatchObject({
+      type: BehaviorNodeType.Retry,
+      data: { label: 'Retry', type: 'retry', iterationLimit: 3 },
+    });
+    expect(repeat).toMatchObject({
+      type: BehaviorNodeType.Repeat,
+      data: { label: 'Repeat', type: 'repeat', iterationLimit: 3 },
+    });
+  });
+
   it('uses the ROS action name as the default node name', () => {
     const node = createBehaviorTreeNode({
       id: 'node-8',

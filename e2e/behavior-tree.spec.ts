@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { Buffer } from 'node:buffer';
 import { installRosMock } from './helpers/rosMock';
 
 async function connectWithMockRos(page: Page) {
@@ -156,6 +157,16 @@ async function seedOrderedSequenceTree(page: Page) {
       'robo-boy-behavior-trees',
       JSON.stringify([{ tree, version: '1.0.0' }])
     );
+  });
+}
+
+async function importTreeFromMenu(page: Page, tree: Record<string, unknown>) {
+  await page.getByTestId('bt-menu-button').click();
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: 'imported-tree.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ tree, version: '1.0.0' })),
   });
 }
 
@@ -362,6 +373,43 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
   });
 
+  test('box-select stays active while dragging across nodes', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const firstBox = await firstAction.boundingBox();
+    const secondBox = await secondAction.boundingBox();
+    const canvasBox = await page.getByTestId('bt-canvas').boundingBox();
+    expect(firstBox).not.toBeNull();
+    expect(secondBox).not.toBeNull();
+    expect(canvasBox).not.toBeNull();
+
+    const startX = Math.max((canvasBox?.x ?? 0) + 72, Math.min(firstBox?.x ?? 0, secondBox?.x ?? 0) - 36);
+    const startY = Math.max((canvasBox?.y ?? 0) + 72, Math.min(firstBox?.y ?? 0, secondBox?.y ?? 0) - 36);
+    const firstCenterX = (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2;
+    const firstCenterY = (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2;
+    const endX = Math.max((firstBox?.x ?? 0) + (firstBox?.width ?? 0), (secondBox?.x ?? 0) + (secondBox?.width ?? 0)) + 36;
+    const endY = Math.max((firstBox?.y ?? 0) + (firstBox?.height ?? 0), (secondBox?.y ?? 0) + (secondBox?.height ?? 0)) + 36;
+
+    await page.getByTestId('bt-select-mode').click();
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(firstCenterX, firstCenterY, { steps: 5 });
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await page.mouse.move(endX, endY, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(secondAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
+  });
+
   test('wraps and explodes from the contextual selection actions', async ({ page }) => {
     await openBehaviorTree(page);
     await seedOrderedSequenceTree(page);
@@ -416,6 +464,93 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Second Action' })).toHaveCount(1);
     await expect(page.locator('.react-flow__edge-text').filter({ hasText: '1' })).toHaveCount(1);
     await expect(page.locator('.react-flow__edge-text').filter({ hasText: '2' })).toHaveCount(1);
+  });
+
+  test('undoes loading, creating, importing, and subtree-path changes safely', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node')).toHaveCount(0);
+    await expect(page.getByTestId('bt-redo')).toBeEnabled();
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.getByRole('button', { name: 'New' }).click();
+    await expect(page.locator('.react-flow__node')).toHaveCount(0);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    const now = Date.now();
+    await importTreeFromMenu(page, {
+      id: 'e2e-imported-tree',
+      name: 'Imported Tree',
+      nodes: [
+        {
+          id: 'node-imported',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Imported Action',
+            actionName: '/imported',
+            actionType: 'example_msgs/action/Imported',
+          },
+        },
+      ],
+      edges: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Imported Action' })).toHaveCount(1);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+    await page.keyboard.down('Control');
+    await page.locator('.react-flow__node').filter({ hasText: 'Selector' }).click();
+    await page.keyboard.up('Control');
+    await page.getByTestId('bt-context-wrap').click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await page.getByTestId('bt-context-open-subtree').click();
+    await expect(page.getByTestId('bt-subtree-parent')).toBeVisible();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.getByTestId('bt-subtree-parent')).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(1);
+  });
+
+  test('adds retry and repeat nodes and edits their iteration counts', async ({ page }) => {
+    await openBehaviorTree(page);
+    await openNodePalette(page);
+
+    await page.getByTestId('bt-node-palette').getByText('Retry').click();
+    await page.getByTestId('bt-node-palette').getByText('Repeat').click();
+
+    const retryNode = page.locator('.react-flow__node').filter({ hasText: 'Retry' });
+    const repeatNode = page.locator('.react-flow__node').filter({ hasText: 'Repeat' });
+    await expect(retryNode).toHaveCount(1);
+    await expect(retryNode).toContainText('3 attempts');
+    await expect(repeatNode).toHaveCount(1);
+    await expect(repeatNode).toContainText('3 repeats');
+
+    await retryNode.click();
+    await page.getByTestId('bt-configure-iteration').click();
+    await page.getByLabel('Attempts').fill('-1');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(retryNode).toContainText('Infinite');
+
+    await repeatNode.click();
+    await page.getByTestId('bt-configure-iteration').click();
+    await page.getByLabel('Repeats').fill('5');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(repeatNode).toContainText('5 repeats');
   });
 
   test('selects a clicked connection without keeping stale node highlights', async ({ page }) => {

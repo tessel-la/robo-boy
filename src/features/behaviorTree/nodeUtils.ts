@@ -67,6 +67,20 @@ export const createBehaviorNodeData = (
       return { label: 'Selector', type: 'selector' } as ControlFlowNodeData;
     case BehaviorNodeType.Parallel:
       return { label: 'Parallel', type: 'parallel' } as ControlFlowNodeData;
+    case BehaviorNodeType.Retry:
+      return {
+        label: 'Retry',
+        type: 'retry',
+        description: 'Retry children on failure',
+        iterationLimit: 3,
+      } as ControlFlowNodeData;
+    case BehaviorNodeType.Repeat:
+      return {
+        label: 'Repeat',
+        type: 'repeat',
+        description: 'Repeat children on success',
+        iterationLimit: 3,
+      } as ControlFlowNodeData;
     case BehaviorNodeType.Action:
       return {
         label: rosInfo?.name || 'Action',

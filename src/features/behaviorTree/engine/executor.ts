@@ -6,6 +6,7 @@ import {
   ExecutionEvent,
   ExecutionCallback,
   BehaviorNodeType,
+  ControlFlowNodeData,
   ROSActionNodeData,
   ROSServiceNodeData,
   SubtreeNodeData,
@@ -359,7 +360,9 @@ export class BehaviorTreeExecutor {
       n =>
         n.type === BehaviorNodeType.Sequence ||
         n.type === BehaviorNodeType.Selector ||
-        n.type === BehaviorNodeType.Parallel
+        n.type === BehaviorNodeType.Parallel ||
+        n.type === BehaviorNodeType.Retry ||
+        n.type === BehaviorNodeType.Repeat
     );
     return controlRoot ?? roots[0] ?? null;
   }
@@ -411,6 +414,12 @@ export class BehaviorTreeExecutor {
         case BehaviorNodeType.Parallel:
           result = await this.executeParallel(node, tree, treePath);
           break;
+        case BehaviorNodeType.Retry:
+          result = await this.executeRetry(node, tree, treePath);
+          break;
+        case BehaviorNodeType.Repeat:
+          result = await this.executeRepeat(node, tree, treePath);
+          break;
         case BehaviorNodeType.Subtree:
           result = await this.executeSubtreeNode(node, treePath);
           break;
@@ -460,6 +469,83 @@ export class BehaviorTreeExecutor {
     }
 
     return ExecutionStatus.Success;
+  }
+
+  private getIterationLimit(node: BehaviorTreeNode): number {
+    const limit = (node.data as ControlFlowNodeData).iterationLimit;
+    if (limit === -1) return -1;
+    if (typeof limit !== 'number' || !Number.isFinite(limit)) return 3;
+    return Math.max(1, Math.trunc(limit));
+  }
+
+  private async executeChildrenAsSequence(
+    children: BehaviorTreeNode[],
+    tree: BehaviorTree,
+    treePath: string[]
+  ): Promise<ExecutionStatus> {
+    if (children.length === 0) return ExecutionStatus.Failure;
+
+    for (const child of children) {
+      const result = await this.executeNode(child, tree, treePath);
+      if (result === ExecutionStatus.Failure || !this.isRunning) {
+        return ExecutionStatus.Failure;
+      }
+    }
+
+    return ExecutionStatus.Success;
+  }
+
+  private async yieldBetweenIterations(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  /**
+   * Execute retry node. Children are executed as a sequence. If that sequence
+   * fails, retry until it succeeds or the iteration limit is exhausted.
+   */
+  private async executeRetry(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const children = this.getChildNodes(node.id, tree);
+    const limit = this.getIterationLimit(node);
+    let attempt = 0;
+
+    while (this.isRunning && (limit === -1 || attempt < limit)) {
+      attempt += 1;
+      const result = await this.executeChildrenAsSequence(children, tree, treePath);
+      if (result === ExecutionStatus.Success) return ExecutionStatus.Success;
+      await this.yieldBetweenIterations();
+    }
+
+    return ExecutionStatus.Failure;
+  }
+
+  /**
+   * Execute repeat node. Children are executed as a sequence. If that sequence
+   * succeeds, repeat until the iteration limit is reached. A child failure fails
+   * the repeat node.
+   */
+  private async executeRepeat(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree = this.tree,
+    treePath: string[] = this.rootPath
+  ): Promise<ExecutionStatus> {
+    const children = this.getChildNodes(node.id, tree);
+    const limit = this.getIterationLimit(node);
+    let completedRepeats = 0;
+
+    while (this.isRunning && (limit === -1 || completedRepeats < limit)) {
+      const result = await this.executeChildrenAsSequence(children, tree, treePath);
+      if (result === ExecutionStatus.Failure) return ExecutionStatus.Failure;
+      completedRepeats += 1;
+      if (limit === -1 || completedRepeats < limit) {
+        await this.yieldBetweenIterations();
+      }
+    }
+
+    return this.isRunning ? ExecutionStatus.Success : ExecutionStatus.Failure;
   }
 
   /**

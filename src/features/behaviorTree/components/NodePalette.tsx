@@ -111,6 +111,23 @@ const IconParallel = () => (
     <polyline points="6,7 7.5,9 9,7"/>
   </svg>
 );
+
+const IconRetry = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.5 4.7A4.4 4.4 0 1 0 11 7" />
+    <polyline points="10.5,1.6 10.5,4.7 7.4,4.7" />
+  </svg>
+);
+
+const IconRepeat = () => (
+  <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2.2 4.5A4 4 0 0 1 5.9 2h5.3" />
+    <polyline points="9.2,0.5 11.2,2 9.2,3.5" />
+    <path d="M11.8 7.5A4 4 0 0 1 8.1 10H2.8" />
+    <polyline points="4.8,8.5 2.8,10 4.8,11.5" />
+  </svg>
+);
+
 const IconSubtree = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="1.5" y="1.5" width="11" height="11" rx="2" />
@@ -275,6 +292,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     Sequence: <IconSequence />,
     Selector: <IconSelector />,
     Parallel: <IconParallel />,
+    Retry: <IconRetry />,
+    Repeat: <IconRepeat />,
   };
 
   // Control flow nodes (always available)
@@ -282,6 +301,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     { type: BehaviorNodeType.Sequence, label: 'Sequence', icon: '→', category: 'control' },
     { type: BehaviorNodeType.Selector, label: 'Selector', icon: '?', category: 'control' },
     { type: BehaviorNodeType.Parallel, label: 'Parallel', icon: '∥', category: 'control' },
+    { type: BehaviorNodeType.Retry, label: 'Retry', icon: '↻', category: 'control' },
+    { type: BehaviorNodeType.Repeat, label: 'Repeat', icon: '⟳', category: 'control' },
   ];
 
   const resourceSearchTerms = useMemo(

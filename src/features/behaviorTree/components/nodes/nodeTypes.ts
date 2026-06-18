@@ -5,6 +5,8 @@ import TopicNode from './TopicNode';
 import SequenceNode from './SequenceNode';
 import SelectorNode from './SelectorNode';
 import ParallelNode from './ParallelNode';
+import RetryNode from './RetryNode';
+import RepeatNode from './RepeatNode';
 import SubtreeNode from './SubtreeNode';
 
 export const nodeTypes: NodeTypes = {
@@ -14,5 +16,7 @@ export const nodeTypes: NodeTypes = {
   sequence: SequenceNode,
   selector: SelectorNode,
   parallel: ParallelNode,
+  retry: RetryNode,
+  repeat: RepeatNode,
   subtree: SubtreeNode,
 };

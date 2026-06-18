@@ -440,6 +440,15 @@
   border: 1px solid var(--primary-color, #4285f4);
 }
 
+.bt-custom-selection {
+  position: absolute;
+  z-index: 18;
+  box-sizing: border-box;
+  background: rgba(66, 133, 244, 0.08);
+  border: 1px solid var(--primary-color, #4285f4);
+  pointer-events: none;
+}
+
 .react-flow__nodesselection-rect {
   display: none;
 }
@@ -505,6 +514,42 @@
   color: #ffffff;
 }
 
+.bt-subtree-parent-action {
+  position: absolute;
+  z-index: 24;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #4285f4) 34%, var(--border-color, #e0e0e0));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--card-bg, #ffffff) 95%, transparent);
+  color: var(--primary-color, #4285f4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.bt-subtree-parent-action svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.bt-subtree-parent-action:hover,
+.bt-subtree-parent-action:focus-visible {
+  background: var(--primary-color, #4285f4);
+  color: #ffffff;
+  outline: none;
+  transform: translateY(-1px);
+}
+
 /* Panel placeholder when empty */
 .bt-empty-state {
   position: absolute;
@@ -529,6 +574,35 @@
   padding: 16px;
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.24);
+}
+
+.bt-iteration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.bt-iteration-dialog {
+  width: min(380px, 100%);
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
+}
+
+.bt-iteration-help {
+  margin: 8px 0 22px;
+  color: var(--text-color-secondary, #777777);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .bt-node-name-dialog {

@@ -43,7 +43,7 @@ vi.mock('reactflow', () => ({
   }) => {
     reactFlowMock.render(props);
     return (
-      <div data-testid="mock-react-flow">
+      <div data-testid="mock-react-flow" className="react-flow react-flow__pane">
         {props.nodes?.map((node) => (
           <button
             key={node.id}
@@ -219,7 +219,7 @@ describe('BehaviorTreePanel', () => {
     expect(reactFlowMock.render.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         panOnDrag: false,
-        selectionOnDrag: true,
+        selectionOnDrag: false,
       })
     );
     expect(screen.getByTestId('bt-select-mode')).toHaveAttribute('aria-pressed', 'true');
@@ -483,6 +483,226 @@ describe('BehaviorTreePanel', () => {
       expect(latestProps.nodes.some((node) => node.type === 'subtree')).toBe(true);
       expect(screen.getByTestId('bt-redo')).toBeDisabled();
     });
+  });
+
+  it('restores the previous root tree after loading a saved tree and undoing', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'loaded-tree',
+            name: 'Loaded Tree',
+            nodes: [
+              {
+                id: 'node-loaded',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Loaded Action', actionName: '/loaded', actionType: 'example/Loaded' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Loaded Tree'));
+
+    await screen.findByTestId('rf-node-node-loaded');
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes).toHaveLength(0);
+    });
+    expect(screen.getByTestId('bt-redo')).toBeEnabled();
+  });
+
+  it('restores the previous tree after creating a new tree and undoing', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'new-undo-source',
+            name: 'New Undo Source',
+            nodes: [
+              {
+                id: 'node-existing',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Existing Action', actionName: '/existing', actionType: 'example/Existing' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('New Undo Source'));
+    await screen.findByTestId('rf-node-node-existing');
+
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('New'));
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes).toHaveLength(0);
+    });
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.map((node) => node.id)).toContain('node-existing');
+    });
+  });
+
+  it('undoes a newly created subtree from inside that subtree without leaving a broken path', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'subtree-path-undo',
+            name: 'Subtree Path Undo',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+              {
+                id: 'node-b',
+                type: 'action',
+                position: { x: 220, y: 0 },
+                data: { label: 'Node B', actionName: '/b', actionType: 'example/B' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Subtree Path Undo'));
+
+    const nodeA = await screen.findByTestId('rf-node-node-a');
+    const nodeB = await screen.findByTestId('rf-node-node-b');
+    fireEvent.click(nodeA);
+    fireEvent.click(nodeB, { ctrlKey: true });
+
+    await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-wrap'));
+    await waitFor(() => expect(screen.getByTestId('bt-context-open-subtree')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-open-subtree'));
+    await waitFor(() => expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(['node-a', 'node-b']));
+      expect(latestProps.nodes.some((node) => node.type === 'subtree')).toBe(false);
+    });
+    expect(screen.queryByTestId('bt-subtree-parent')).not.toBeInTheDocument();
+  });
+
+  it('keeps the active subtree path when undoing an edit made inside the subtree', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'subtree-edit-undo',
+            name: 'Subtree Edit Undo',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+              {
+                id: 'node-b',
+                type: 'action',
+                position: { x: 220, y: 0 },
+                data: { label: 'Node B', actionName: '/b', actionType: 'example/B' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Subtree Edit Undo'));
+
+    const nodeA = await screen.findByTestId('rf-node-node-a');
+    const nodeB = await screen.findByTestId('rf-node-node-b');
+    fireEvent.click(nodeA);
+    fireEvent.click(nodeB, { ctrlKey: true });
+    await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-wrap'));
+    await waitFor(() => expect(screen.getByTestId('bt-context-open-subtree')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-context-open-subtree'));
+    await waitFor(() => expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    fireEvent.click(screen.getByText('Retry'));
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.some((node) => node.type === 'retry')).toBe(true);
+    });
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(['node-a', 'node-b']));
+      expect(latestProps.nodes).toHaveLength(2);
+      expect(latestProps.nodes.some((node) => node.type === 'retry')).toBe(false);
+    });
+    expect(screen.getByTestId('bt-subtree-parent')).toBeInTheDocument();
   });
 
   it('does not keep a box-selected edge unless both endpoint nodes are selected', async () => {
@@ -1077,5 +1297,142 @@ describe('BehaviorTreePanel', () => {
 
     expect(screen.queryByTestId('bt-duplicate-selected')).not.toBeInTheDocument();
     await waitFor(() => expect(nodeA).toHaveAttribute('data-highlighted', 'false'));
+  });
+
+  it('keeps custom box selection alive while dragging across nodes', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'early-end-tree',
+            name: 'Early End Tree',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+              {
+                id: 'node-b',
+                type: 'action',
+                position: { x: 220, y: 0 },
+                data: { label: 'Node B', actionName: '/b', actionType: 'example/B' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+    reactFlowMock.nodeRects = {
+      'node-a': createRect(30, 30, 100, 70),
+      'node-b': createRect(210, 45, 100, 70),
+    };
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-select-mode'));
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Early End Tree'));
+
+    await screen.findByTestId('rf-node-node-a');
+    const flow = screen.getByTestId('mock-react-flow');
+    fireEvent.pointerDown(flow, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(flow, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 95,
+      clientY: 80,
+    });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.find((node) => node.id === 'node-a')?.data?.isHighlighted).toBe(true);
+      expect(latestProps.nodes.find((node) => node.id === 'node-b')?.data?.isHighlighted).not.toBe(true);
+    });
+    expect(screen.getByTestId('bt-custom-selection')).toBeInTheDocument();
+
+    fireEvent.pointerMove(flow, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 340,
+      clientY: 140,
+    });
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.find((node) => node.id === 'node-a')?.data?.isHighlighted).toBe(true);
+      expect(latestProps.nodes.find((node) => node.id === 'node-b')?.data?.isHighlighted).toBe(true);
+    });
+
+    fireEvent.pointerUp(flow, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 340,
+      clientY: 140,
+    });
+    await waitFor(() => expect(screen.getByTestId('bt-selection-actions')).toBeInTheDocument());
+    expect(screen.queryByTestId('bt-custom-selection')).not.toBeInTheDocument();
+  });
+
+  it('edits retry and repeat counts from the contextual action', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'iteration-tree',
+            name: 'Iteration Tree',
+            nodes: [
+              {
+                id: 'node-retry',
+                type: 'retry',
+                position: { x: 0, y: 0 },
+                data: { label: 'Retry', type: 'retry', iterationLimit: 3 },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Iteration Tree'));
+
+    const retryNode = await screen.findByTestId('rf-node-node-retry');
+    fireEvent.click(retryNode);
+
+    await waitFor(() => expect(screen.getByTestId('bt-configure-iteration')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('bt-configure-iteration'));
+    fireEvent.change(screen.getByLabelText('Attempts'), { target: { value: '-1' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
+        nodes: Array<Record<string, any>>;
+      };
+      expect(latestProps.nodes.find((node) => node.id === 'node-retry')?.data?.iterationLimit).toBe(-1);
+    });
   });
 });

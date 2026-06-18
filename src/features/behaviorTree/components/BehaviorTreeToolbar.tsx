@@ -15,7 +15,6 @@ interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
   isPaletteCollapsed: boolean;
-  isEditingSubtree: boolean;
   nodeCount: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -31,7 +30,6 @@ interface BehaviorTreeToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
-  onNavigateUp: () => void;
   onRename: (name: string) => void;
 }
 
@@ -39,7 +37,6 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
   isPaletteCollapsed,
-  isEditingSubtree,
   nodeCount,
   canUndo,
   canRedo,
@@ -55,7 +52,6 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onUndo,
   onRedo,
   onInteractionModeChange,
-  onNavigateUp,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -155,22 +151,6 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
     <>
       {/* ── Floating top-left: menu pill ──────────────────────── */}
       <div className="bt-float-bar">
-        {isEditingSubtree && (
-          <button
-            className="bt-float-icon-btn bt-parent-tree-btn"
-            onClick={onNavigateUp}
-            title="Back to parent tree"
-            aria-label="Back to parent tree"
-          >
-            <svg width="21" height="21" viewBox="0 0 21 21" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="2.75" width="7.5" height="5.5" rx="1.4" />
-              <rect x="10.5" y="12.75" width="7.5" height="5.5" rx="1.4" />
-              <path d="M14.25 12.75V10H6.75V8.25" />
-              <path d="M6.75 8.25L4.2 10.8M6.75 8.25l2.55 2.55" />
-            </svg>
-            <span>Parent</span>
-          </button>
-        )}
         <button
           className="bt-float-menu-btn"
           onClick={openMenu}
@@ -220,10 +200,10 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           aria-pressed={interactionMode === 'select'}
           data-testid="bt-select-mode"
         >
-          <svg width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3.2" y="3.2" width="13.6" height="11.8" rx="2" strokeDasharray="3 2" />
-            <path d="M12.5 12.5l5.7 5.7" />
-            <path d="M15.6 18.1l2.6-2.6" />
+          <svg className="bt-select-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="11.5" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3.4 2.6" />
+            <path d="M12.7 12.7l7.1 7.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M16.6 20.2l3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
         <button
@@ -234,11 +214,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           aria-pressed={interactionMode === 'pan'}
           data-testid="bt-pan-mode"
         >
-          <svg width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 11.2V6.4a1.45 1.45 0 0 1 2.9 0v4.3" />
-            <path d="M10.9 10.6V5.1a1.45 1.45 0 0 1 2.9 0v5.5" />
-            <path d="M13.8 11V6.6a1.45 1.45 0 0 1 2.9 0v6" />
-            <path d="M8 11.2l-1-1a1.55 1.55 0 0 0-2.2 2.2l4.9 4.9a6 6 0 0 0 4.2 1.7h.8a4.9 4.9 0 0 0 4.9-4.9v-2.4a1.45 1.45 0 0 0-2.9 0" />
+          <svg className="bt-pan-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M8.4 12.2V7.1a1.55 1.55 0 0 1 3.1 0v4.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M11.5 11.6V5.7a1.55 1.55 0 0 1 3.1 0v6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14.6 12.1V7.5a1.55 1.55 0 0 1 3.1 0v7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8.4 12.2l-1.2-1.2a1.8 1.8 0 0 0-2.55 2.55l4.75 4.75A6.2 6.2 0 0 0 13.8 20h.85a5.05 5.05 0 0 0 5.05-5.05v-2.2a1.5 1.5 0 0 0-3 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         <button

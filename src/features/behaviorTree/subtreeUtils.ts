@@ -239,7 +239,9 @@ const isControlFlowNode = (node?: BehaviorTreeNode | null): boolean => {
   return Boolean(
     node?.type === BehaviorNodeType.Sequence ||
       node?.type === BehaviorNodeType.Selector ||
-      node?.type === BehaviorNodeType.Parallel
+      node?.type === BehaviorNodeType.Parallel ||
+      node?.type === BehaviorNodeType.Retry ||
+      node?.type === BehaviorNodeType.Repeat
   );
 };
 

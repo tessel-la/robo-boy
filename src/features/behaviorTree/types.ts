@@ -14,6 +14,8 @@ export enum BehaviorNodeType {
   Sequence = 'sequence',
   Selector = 'selector',
   Parallel = 'parallel',
+  Retry = 'retry',
+  Repeat = 'repeat',
   Subtree = 'subtree',
   
   // ROS nodes
@@ -77,9 +79,10 @@ export interface ROSTopicNodeData extends BaseNodeData {
 }
 
 export interface ControlFlowNodeData extends BaseNodeData {
-  type: 'sequence' | 'selector' | 'parallel';
+  type: 'sequence' | 'selector' | 'parallel' | 'retry' | 'repeat';
   description?: string;
   generatedBySubtreeWrap?: boolean;
+  iterationLimit?: number;
 }
 
 export interface SubtreeNodeData extends BaseNodeData {

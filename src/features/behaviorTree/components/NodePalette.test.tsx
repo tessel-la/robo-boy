@@ -46,6 +46,17 @@ describe('NodePalette', () => {
     expect(onAddNode).toHaveBeenCalledWith(BehaviorNodeType.Parallel, undefined);
   });
 
+  it('calls onAddNode with Retry and Repeat control nodes', () => {
+    const onAddNode = vi.fn();
+    render(<NodePalette {...defaultProps} onAddNode={onAddNode} />);
+
+    fireEvent.click(screen.getByText('Retry'));
+    fireEvent.click(screen.getByText('Repeat'));
+
+    expect(onAddNode).toHaveBeenCalledWith(BehaviorNodeType.Retry, undefined);
+    expect(onAddNode).toHaveBeenCalledWith(BehaviorNodeType.Repeat, undefined);
+  });
+
   it('does not throw when onAddNode is not provided and item is clicked', () => {
     render(<NodePalette {...defaultProps} />);
     expect(() => fireEvent.click(screen.getByText('Sequence'))).not.toThrow();
