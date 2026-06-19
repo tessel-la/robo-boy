@@ -51,7 +51,30 @@ async function closeNodePalette(page: Page) {
 }
 
 async function multiSelectClick(locator: Locator) {
-  await locator.click({ modifiers: [MULTI_SELECT_MODIFIER] });
+  await locator.evaluate((element, modifier) => {
+    const isMeta = modifier === 'Meta';
+    element.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        button: 0,
+        buttons: 1,
+        ctrlKey: !isMeta,
+        metaKey: isMeta,
+      })
+    );
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        ctrlKey: !isMeta,
+        metaKey: isMeta,
+      })
+    );
+  }, MULTI_SELECT_MODIFIER);
 }
 
 async function seedSavedTree(page: Page) {
@@ -646,7 +669,7 @@ test.describe('Behavior Tree panel', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(retryNode).toContainText('Infinite');
 
-    await repeatNode.click({ force: true });
+    await repeatNode.click({ position: { x: 16, y: 16 } });
     await page.getByTestId('bt-configure-iteration').click();
     await page.getByLabel('Repeats').fill('5');
     await page.getByRole('button', { name: 'Save' }).click();

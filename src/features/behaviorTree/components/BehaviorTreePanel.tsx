@@ -2328,6 +2328,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setSelectedEdges([]);
     selectedNodeIdsRef.current = new Set([subtreeNode.id]);
     selectedEdgeIdsRef.current = new Set();
+    manualEdgeSelectionRef.current = {
+      nodeIds: new Set([subtreeNode.id]),
+      edgeIds: new Set(),
+      expiresAt: Date.now() + MANUAL_EDGE_SELECTION_SUPPRESSION_MS,
+    };
     setSelectedNodes([
       {
         ...subtreeNode,
