@@ -14,6 +14,9 @@ export enum BehaviorNodeType {
   Sequence = 'sequence',
   Selector = 'selector',
   Parallel = 'parallel',
+  Retry = 'retry',
+  Repeat = 'repeat',
+  Subtree = 'subtree',
   
   // ROS nodes
   Action = 'action',
@@ -51,6 +54,7 @@ export interface ROSDiscoveryResult {
 export interface BaseNodeData {
   label: string;
   status?: ExecutionStatus;
+  isHighlighted?: boolean;
 }
 
 export interface ROSActionNodeData extends BaseNodeData {
@@ -75,8 +79,15 @@ export interface ROSTopicNodeData extends BaseNodeData {
 }
 
 export interface ControlFlowNodeData extends BaseNodeData {
-  type: 'sequence' | 'selector' | 'parallel';
+  type: 'sequence' | 'selector' | 'parallel' | 'retry' | 'repeat';
   description?: string;
+  generatedBySubtreeWrap?: boolean;
+  iterationLimit?: number;
+}
+
+export interface SubtreeNodeData extends BaseNodeData {
+  tree: BehaviorTree;
+  sourceTreeId?: string;
 }
 
 export interface ConditionNodeData extends BaseNodeData {
@@ -91,6 +102,7 @@ export type BehaviorNodeData =
   | ROSServiceNodeData
   | ROSTopicNodeData
   | ControlFlowNodeData
+  | SubtreeNodeData
   | ConditionNodeData;
 
 // Behavior tree node (extends React Flow Node)
@@ -132,7 +144,11 @@ export interface ExecutionEvent {
   type: ExecutionEventType;
   nodeId?: string;
   timestamp: number;
-  data?: any;
+  data?: {
+    status?: ExecutionStatus;
+    treePath?: string[];
+    [key: string]: unknown;
+  };
   error?: string;
 }
 
@@ -153,4 +169,3 @@ export interface NodePaletteItem {
   category: 'control' | 'ros' | 'utility';
   rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo;
 }
-

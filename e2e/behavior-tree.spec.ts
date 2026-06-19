@@ -1,5 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
+import { Buffer } from 'node:buffer';
 import { installRosMock } from './helpers/rosMock';
+
+const MULTI_SELECT_MODIFIER = (process.platform === 'darwin' ? 'Meta' : 'Control') as
+  | 'Meta'
+  | 'Control';
 
 async function connectWithMockRos(page: Page) {
   await installRosMock(page);
@@ -33,6 +38,43 @@ async function openNodePalette(page: Page) {
 
   await toggle.click();
   await expect(palette).toBeVisible();
+}
+
+async function closeNodePalette(page: Page) {
+  const palette = page.getByTestId('bt-node-palette');
+  if ((await palette.count()) === 0 || !(await palette.first().isVisible())) {
+    return;
+  }
+
+  await page.getByTestId('bt-palette-toggle').click();
+  await expect(palette).toHaveCount(0);
+}
+
+async function multiSelectClick(locator: Locator) {
+  await locator.evaluate((element, modifier) => {
+    const isMeta = modifier === 'Meta';
+    element.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        button: 0,
+        buttons: 1,
+        ctrlKey: !isMeta,
+        metaKey: isMeta,
+      })
+    );
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        ctrlKey: !isMeta,
+        metaKey: isMeta,
+      })
+    );
+  }, MULTI_SELECT_MODIFIER);
 }
 
 async function seedSavedTree(page: Page) {
@@ -159,6 +201,16 @@ async function seedOrderedSequenceTree(page: Page) {
   });
 }
 
+async function importTreeFromMenu(page: Page, tree: Record<string, unknown>) {
+  await page.getByTestId('bt-menu-button').click();
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: 'imported-tree.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ tree, version: '1.0.0' })),
+  });
+}
+
 test.describe('Behavior Tree panel', () => {
   test.beforeEach(async ({ page }) => {
     page.on('dialog', (dialog) => dialog.accept());
@@ -170,6 +222,21 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(page.getByTestId('bt-menu-button')).toBeVisible();
     await expect(page.getByTestId('bt-palette-toggle')).toBeVisible();
+    await expect(page.getByTestId('bt-select-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-pan-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-follow-mode')).toBeVisible();
+    await expect(page.getByTestId('bt-redo')).toBeDisabled();
+    await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'false');
+
+    await page.getByTestId('bt-select-mode').click();
+    await expect(page.getByTestId('bt-select-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-pan-mode').click();
+    await expect(page.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-follow-mode').click();
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('bt-follow-mode').click();
+    await expect(page.getByTestId('bt-follow-mode')).toHaveAttribute('aria-pressed', 'false');
 
     await openNodePalette(page);
     await expect(page.getByTestId('bt-node-palette')).toBeVisible();
@@ -190,7 +257,7 @@ test.describe('Behavior Tree panel', () => {
 
     await page.getByTestId('bt-menu-button').click();
     await expect(page.getByTestId('bt-menu-panel')).toBeVisible();
-    await expect(page.getByText('Saved Trees', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('bt-menu-panel').getByText('Saved Trees', { exact: true })).toBeVisible();
   });
 
   test('renames and saves a tree into localStorage', async ({ page }) => {
@@ -316,9 +383,8 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
     await sequence.click();
-    await page.keyboard.down('Control');
-    await selector.click();
-    await page.keyboard.up('Control');
+    await multiSelectClick(selector);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
 
     await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
     await page.getByTestId('bt-duplicate-selected').click();
@@ -328,7 +394,289 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
   });
 
-  test('highlights a clicked connection and its child node', async ({ page }) => {
+  test('highlights all ctrl-selected nodes and clears them with one pane click', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+
+    await firstAction.click();
+    await multiSelectClick(secondAction);
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(secondAction.locator('.bt-node')).toHaveClass(/clicked/);
+
+    await page.getByTestId('bt-canvas').click({ position: { x: 24, y: 260 } });
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(0);
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+  });
+
+  test('box-select stays active while dragging across nodes', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const firstBox = await firstAction.boundingBox();
+    const secondBox = await secondAction.boundingBox();
+    const canvasBox = await page.getByTestId('bt-canvas').boundingBox();
+    expect(firstBox).not.toBeNull();
+    expect(secondBox).not.toBeNull();
+    expect(canvasBox).not.toBeNull();
+
+    const startX = Math.max((canvasBox?.x ?? 0) + 72, Math.min(firstBox?.x ?? 0, secondBox?.x ?? 0) - 36);
+    const startY = Math.max((canvasBox?.y ?? 0) + 72, Math.min(firstBox?.y ?? 0, secondBox?.y ?? 0) - 36);
+    const firstCenterX = (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2;
+    const firstCenterY = (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2;
+    const endX = Math.max((firstBox?.x ?? 0) + (firstBox?.width ?? 0), (secondBox?.x ?? 0) + (secondBox?.width ?? 0)) + 36;
+    const endY = Math.max((firstBox?.y ?? 0) + (firstBox?.height ?? 0), (secondBox?.y ?? 0) + (secondBox?.height ?? 0)) + 36;
+
+    await page.getByTestId('bt-select-mode').click();
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(firstCenterX, firstCenterY, { steps: 5 });
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await page.mouse.move(endX, endY, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(secondAction.locator('.bt-node')).toHaveClass(/clicked/);
+    await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
+  });
+
+  test('wraps and explodes from the contextual selection actions', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+
+    await firstAction.click();
+    await multiSelectClick(secondAction);
+
+    await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
+    await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
+    await page.getByTestId('bt-context-wrap').click();
+
+    const subtreeNode = page.locator('.react-flow__node').filter({ hasText: 'Subtree' });
+    await expect(subtreeNode).toHaveCount(1);
+    await expect(page.getByTestId('bt-undo')).toBeEnabled();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'First Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Second Action' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-redo')).toBeEnabled();
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z');
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-redo')).toBeDisabled();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+
+    await firstAction.click();
+    await multiSelectClick(secondAction);
+    await page.getByTestId('bt-context-wrap').click();
+
+    await expect(subtreeNode).toHaveCount(1);
+    await expect(page.getByTestId('bt-context-open-subtree')).toBeVisible();
+    await expect(page.getByTestId('bt-context-save-subtree')).toBeVisible();
+    await expect(page.getByTestId('bt-context-explode')).toBeVisible();
+    await page.getByTestId('bt-context-explode').click();
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'First Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Second Action' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '1' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge-text').filter({ hasText: '2' })).toHaveCount(1);
+  });
+
+  test('undoes loading, creating, importing, and subtree-path changes safely', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node')).toHaveCount(0);
+    await expect(page.getByTestId('bt-redo')).toBeEnabled();
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.getByRole('button', { name: 'New' }).click();
+    await expect(page.locator('.react-flow__node')).toHaveCount(0);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    const now = Date.now();
+    await importTreeFromMenu(page, {
+      id: 'e2e-imported-tree',
+      name: 'Imported Tree',
+      nodes: [
+        {
+          id: 'node-imported',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Imported Action',
+            actionName: '/imported',
+            actionType: 'example_msgs/action/Imported',
+          },
+        },
+      ],
+      edges: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Imported Action' })).toHaveCount(1);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+
+    await page.locator('.react-flow__node').filter({ hasText: 'Sequence' }).click();
+    await multiSelectClick(page.locator('.react-flow__node').filter({ hasText: 'Selector' }));
+    await page.getByTestId('bt-context-wrap').click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await page.getByTestId('bt-context-open-subtree').click();
+    await expect(page.getByTestId('bt-subtree-parent')).toBeVisible();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+    await expect(page.getByTestId('bt-subtree-parent')).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Selector' })).toHaveCount(1);
+  });
+
+  test('opens a saved tree as root when selected from inside a subtree', async ({ page }) => {
+    await openBehaviorTree(page);
+    await page.evaluate(() => {
+      const now = Date.now();
+      const subtreeSource = {
+        id: 'e2e-subtree-load-source',
+        name: 'Subtree Load Source',
+        nodes: [
+          {
+            id: 'node-a',
+            type: 'action',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Source A',
+              actionName: '/source_a',
+              actionType: 'example_msgs/action/SourceA',
+              parameters: {},
+            },
+          },
+          {
+            id: 'node-b',
+            type: 'action',
+            position: { x: 260, y: 0 },
+            data: {
+              label: 'Source B',
+              actionName: '/source_b',
+              actionType: 'example_msgs/action/SourceB',
+              parameters: {},
+            },
+          },
+        ],
+        edges: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const freshRoot = {
+        id: 'e2e-fresh-root-tree',
+        name: 'Fresh Root Tree',
+        nodes: [
+          {
+            id: 'node-root',
+            type: 'action',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Fresh Root Action',
+              actionName: '/fresh_root',
+              actionType: 'example_msgs/action/FreshRoot',
+              parameters: {},
+            },
+          },
+        ],
+        edges: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      localStorage.setItem(
+        'robo-boy-behavior-trees',
+        JSON.stringify([
+          { tree: subtreeSource, version: '1.0.0' },
+          { tree: freshRoot, version: '1.0.0' },
+        ])
+      );
+    });
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Subtree Load Source' }).click();
+
+    const sourceA = page.locator('.react-flow__node').filter({ hasText: 'Source A' });
+    const sourceB = page.locator('.react-flow__node').filter({ hasText: 'Source B' });
+    await sourceA.click();
+    await multiSelectClick(sourceB);
+    await page.getByTestId('bt-context-wrap').click();
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(1);
+    await page.getByTestId('bt-context-open-subtree').click();
+    await expect(page.getByTestId('bt-subtree-parent')).toBeVisible();
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Fresh Root Tree' }).click();
+
+    await expect(page.locator('.react-flow__node').filter({ hasText: 'Fresh Root Action' })).toHaveCount(1);
+    await expect(page.getByTestId('bt-subtree-parent')).toHaveCount(0);
+  });
+
+  test('adds retry and repeat nodes and edits their iteration counts', async ({ page }) => {
+    await openBehaviorTree(page);
+    await openNodePalette(page);
+
+    await page.getByTestId('bt-node-palette').getByText('Retry').click();
+    await page.getByTestId('bt-node-palette').getByText('Repeat').click();
+    await closeNodePalette(page);
+
+    const retryNode = page.locator('.react-flow__node').filter({ hasText: 'Retry' });
+    const repeatNode = page.locator('.react-flow__node').filter({ hasText: 'Repeat' });
+    await expect(retryNode).toHaveCount(1);
+    await expect(retryNode).toContainText('3 attempts');
+    await expect(repeatNode).toHaveCount(1);
+    await expect(repeatNode).toContainText('3 repeats');
+
+    await retryNode.click({ force: true });
+    await page.getByTestId('bt-configure-iteration').click();
+    await page.getByLabel('Attempts').fill('-1');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(retryNode).toContainText('Infinite');
+
+    await repeatNode.click({ position: { x: 16, y: 16 } });
+    await page.getByTestId('bt-configure-iteration').click();
+    await page.getByLabel('Repeats').fill('5');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(repeatNode).toContainText('5 repeats');
+  });
+
+  test('selects a clicked connection without keeping stale node highlights', async ({ page }) => {
     await openBehaviorTree(page);
     await seedSavedTree(page);
 
@@ -354,8 +702,42 @@ test.describe('Behavior Tree panel', () => {
     await expect(edge).toHaveClass(/selected/);
     await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke', 'rgb(255, 179, 0)');
     await expect(edge.locator('.react-flow__edge-path')).toHaveCSS('stroke-width', '5px');
-    await expect(child).toHaveClass(/selected/);
+    await expect(child).not.toHaveClass(/selected/);
     await expect(parent).not.toHaveClass(/selected/);
+  });
+
+  test('ctrl-selects multiple links without selecting nodes', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedOrderedSequenceTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
+
+    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
+    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
+    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    const sequenceBox = await sequence.boundingBox();
+    const firstBox = await firstAction.boundingBox();
+    const secondBox = await secondAction.boundingBox();
+
+    expect(sequenceBox).not.toBeNull();
+    expect(firstBox).not.toBeNull();
+    expect(secondBox).not.toBeNull();
+
+    await page.mouse.click(
+      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2) / 2,
+      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2) / 2
+    );
+    await page.keyboard.down('Control');
+    await page.mouse.click(
+      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (secondBox?.x ?? 0) + (secondBox?.width ?? 0) / 2) / 2,
+      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (secondBox?.y ?? 0) + (secondBox?.height ?? 0) / 2) / 2
+    );
+    await page.keyboard.up('Control');
+
+    await expect(page.locator('.react-flow__edge.selected')).toHaveCount(2);
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(0);
   });
 
   test('stacks mobile toolbar groups vertically without overlap', async ({ page }) => {
@@ -372,18 +754,16 @@ test.describe('Behavior Tree panel', () => {
     const menuButton = page.getByTestId('bt-menu-button');
     const paletteButton = page.getByTestId('bt-palette-toggle');
     const arrangeButton = page.getByTestId('bt-arrange-tree');
-    const renameButton = page.getByTestId('bt-rename-selected');
-    const duplicateButton = page.getByTestId('bt-duplicate-selected');
+    const selectionActions = page.getByTestId('bt-selection-actions');
     await expect(page.getByTestId('bt-rename-selected')).toBeVisible();
     await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
+    await expect(selectionActions).toBeVisible();
 
     const leftBox = await leftTools.boundingBox();
     const rightBox = await rightTools.boundingBox();
     const menuBox = await menuButton.boundingBox();
     const paletteBox = await paletteButton.boundingBox();
     const arrangeBox = await arrangeButton.boundingBox();
-    const renameBox = await renameButton.boundingBox();
-    const duplicateBox = await duplicateButton.boundingBox();
 
     expect(leftBox).not.toBeNull();
     expect(rightBox).not.toBeNull();
@@ -392,8 +772,6 @@ test.describe('Behavior Tree panel', () => {
     expect(paletteBox?.x).toBe(arrangeBox?.x);
     expect(menuBox?.y ?? 0).toBeLessThan(paletteBox?.y ?? 0);
     expect(paletteBox?.y ?? 0).toBeLessThan(arrangeBox?.y ?? 0);
-    expect(renameBox?.x).toBe(duplicateBox?.x);
-    expect(renameBox?.y ?? 0).toBeLessThan(duplicateBox?.y ?? 0);
   });
 
   test('shows sequence child order and reorders children', async ({ page }) => {
