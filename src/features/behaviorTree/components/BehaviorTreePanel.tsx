@@ -501,6 +501,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const customBoxSelectionRectRef = useRef<DOMRect | null>(null);
   const subtreeReturnAnchorFrameRef = useRef<number | null>(null);
   const manualEdgeSelectionRef = useRef<ManualEdgeSelection | null>(null);
+  const nodeMultiSelectSnapshotRef = useRef<Set<string> | null>(null);
   const isFollowModeRef = useRef(false);
   const followExecutionFrameRef = useRef<number | null>(null);
 
@@ -1315,6 +1316,30 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       manualEdgeSelectionRef.current = null;
       setOrderingParentId(null);
 
+      if (event.ctrlKey || event.metaKey) {
+        const nextSelectedNodeIds = new Set(
+          nodeMultiSelectSnapshotRef.current ?? selectedNodeIdsRef.current
+        );
+        const nextSelectedEdgeIds = new Set(selectedEdgeIdsRef.current);
+
+        if (nextSelectedNodeIds.has(node.id)) {
+          nextSelectedNodeIds.delete(node.id);
+        } else {
+          nextSelectedNodeIds.add(node.id);
+        }
+
+        nodeMultiSelectSnapshotRef.current = null;
+        manualEdgeSelectionRef.current = {
+          nodeIds: nextSelectedNodeIds,
+          edgeIds: nextSelectedEdgeIds,
+          expiresAt: Date.now() + MANUAL_EDGE_SELECTION_SUPPRESSION_MS,
+        };
+        commitSelectionState(nextSelectedNodeIds, nextSelectedEdgeIds);
+        return;
+      }
+
+      nodeMultiSelectSnapshotRef.current = null;
+
       if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
       if (
         node.type !== BehaviorNodeType.Action &&
@@ -1335,7 +1360,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         openNodeEditor(node);
       }
     },
-    [openNodeEditor]
+    [commitSelectionState, openNodeEditor]
   );
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -2036,6 +2061,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
   const handleCanvasPointerDownCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      nodeMultiSelectSnapshotRef.current =
+        (event.ctrlKey || event.metaKey) && target.closest('.react-flow__node')
+          ? new Set(selectedNodeIdsRef.current)
+          : null;
+
       if (canvasInteractionMode !== 'select') return;
       const isNonPrimaryMouseButton =
         event.pointerType === 'mouse' &&
@@ -2043,8 +2076,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         event.button !== 0;
       if (isNonPrimaryMouseButton) return;
 
-      const target = event.target;
-      if (!(target instanceof Element)) return;
       if (!target.closest('.react-flow')) return;
       if (
         target.closest(

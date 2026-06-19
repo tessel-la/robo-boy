@@ -361,6 +361,7 @@ test.describe('Behavior Tree panel', () => {
 
     await sequence.click();
     await multiSelectClick(selector);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
 
     await expect(page.getByTestId('bt-duplicate-selected')).toBeVisible();
     await page.getByTestId('bt-duplicate-selected').click();
@@ -639,13 +640,13 @@ test.describe('Behavior Tree panel', () => {
     await expect(repeatNode).toHaveCount(1);
     await expect(repeatNode).toContainText('3 repeats');
 
-    await retryNode.click();
+    await retryNode.click({ force: true });
     await page.getByTestId('bt-configure-iteration').click();
     await page.getByLabel('Attempts').fill('-1');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(retryNode).toContainText('Infinite');
 
-    await repeatNode.click();
+    await repeatNode.click({ force: true });
     await page.getByTestId('bt-configure-iteration').click();
     await page.getByLabel('Repeats').fill('5');
     await page.getByRole('button', { name: 'Save' }).click();
