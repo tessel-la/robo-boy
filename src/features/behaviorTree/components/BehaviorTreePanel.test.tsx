@@ -42,6 +42,8 @@ const firePointerEvent = (
     pointerType?: string;
     button?: number;
     buttons?: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
     clientX: number;
     clientY: number;
   }
@@ -62,8 +64,16 @@ const firePointerEvent = (
       value,
     });
   });
-
   fireEvent(element, event);
+};
+
+const ctrlClickNode = (element: Element) => {
+  firePointerEvent(element, 'pointerdown', {
+    clientX: 0,
+    clientY: 0,
+    ctrlKey: true,
+  });
+  fireEvent.click(element, { ctrlKey: true });
 };
 
 vi.mock('../engine/executor', () => ({
@@ -508,7 +518,7 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(nodeA);
     await waitFor(() => expect(nodeA).toHaveAttribute('data-highlighted', 'true'));
 
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
 
     await waitFor(() => {
       expect(nodeA).toHaveAttribute('data-highlighted', 'true');
@@ -595,7 +605,7 @@ describe('BehaviorTreePanel', () => {
     const nodeA = await screen.findByTestId('rf-node-node-a');
     const nodeB = await screen.findByTestId('rf-node-node-b');
     fireEvent.click(nodeA);
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
 
     await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bt-context-wrap'));
@@ -662,7 +672,7 @@ describe('BehaviorTreePanel', () => {
     const nodeA = await screen.findByTestId('rf-node-node-a');
     const nodeB = await screen.findByTestId('rf-node-node-b');
     fireEvent.click(nodeA);
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
 
     await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bt-context-wrap'));
@@ -828,7 +838,7 @@ describe('BehaviorTreePanel', () => {
     const nodeA = await screen.findByTestId('rf-node-node-a');
     const nodeB = await screen.findByTestId('rf-node-node-b');
     fireEvent.click(nodeA);
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
 
     await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bt-context-wrap'));
@@ -887,7 +897,7 @@ describe('BehaviorTreePanel', () => {
     const nodeA = await screen.findByTestId('rf-node-node-a');
     const nodeB = await screen.findByTestId('rf-node-node-b');
     fireEvent.click(nodeA);
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
     await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bt-context-wrap'));
     await waitFor(() => expect(screen.getByTestId('bt-context-open-subtree')).toBeInTheDocument());
@@ -984,7 +994,7 @@ describe('BehaviorTreePanel', () => {
     const nodeA = await screen.findByTestId('rf-node-node-a');
     const nodeB = await screen.findByTestId('rf-node-node-b');
     fireEvent.click(nodeA);
-    fireEvent.click(nodeB, { ctrlKey: true });
+    ctrlClickNode(nodeB);
     await waitFor(() => expect(screen.getByTestId('bt-context-wrap')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bt-context-wrap'));
     await waitFor(() => expect(screen.getByTestId('bt-context-open-subtree')).toBeInTheDocument());
