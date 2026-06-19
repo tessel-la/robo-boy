@@ -411,7 +411,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
     await expect(secondAction.locator('.bt-node')).toHaveClass(/clicked/);
 
-    await page.getByTestId('bt-canvas').click({ position: { x: 24, y: 24 } });
+    await page.getByTestId('bt-canvas').click({ position: { x: 24, y: 260 } });
 
     await expect(page.locator('.bt-node.clicked')).toHaveCount(0);
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
