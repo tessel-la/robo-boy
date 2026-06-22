@@ -165,6 +165,11 @@ type WorkspaceDraft = {
   type: WorkspacePanelType;
 };
 
+type WorkspaceSnapTarget = {
+  templateId: string;
+  zoneIndex: number;
+};
+
 type WorkspaceInteraction =
   | {
     mode: 'row';
@@ -252,6 +257,15 @@ const loadWorkspacePanels = (): WorkspacePanel[] => {
 type WorkspaceLayoutState = {
   rowRatios: number[];
   columnRatiosByRow: Record<number, number[]>;
+  rowSizes?: number[];
+};
+
+type WorkspaceSnapTemplate = {
+  id: string;
+  title: string;
+  rowSizes: number[];
+  rowRatios?: number[];
+  columnRatiosByRow?: Record<number, number[]>;
 };
 
 const normalizeRatios = (ratios: unknown, length: number): number[] => {
@@ -280,6 +294,9 @@ const loadWorkspaceLayout = (): WorkspaceLayoutState => {
       columnRatiosByRow: parsed.columnRatiosByRow && typeof parsed.columnRatiosByRow === 'object'
         ? parsed.columnRatiosByRow
         : {},
+      rowSizes: Array.isArray(parsed.rowSizes)
+        ? parsed.rowSizes.filter(value => Number.isInteger(value) && value > 0)
+        : undefined,
     };
   } catch (error) {
     console.error('Failed to load desktop workspace layout:', error);
@@ -316,13 +333,105 @@ const getWorkspaceColumnCount = (panelCount: number) => {
   return Math.ceil(Math.sqrt(panelCount));
 };
 
-const buildWorkspaceRows = <T,>(items: T[]) => {
+const buildWorkspaceRows = <T,>(items: T[], rowSizes?: number[]) => {
+  if (
+    rowSizes &&
+    rowSizes.length > 0 &&
+    rowSizes.every(size => Number.isInteger(size) && size > 0) &&
+    rowSizes.reduce((total, size) => total + size, 0) === items.length
+  ) {
+    const rows: T[][] = [];
+    let cursor = 0;
+    rowSizes.forEach(size => {
+      rows.push(items.slice(cursor, cursor + size));
+      cursor += size;
+    });
+    return rows;
+  }
+
   const columnCount = getWorkspaceColumnCount(items.length);
   const rows: T[][] = [];
   for (let index = 0; index < items.length; index += columnCount) {
     rows.push(items.slice(index, index + columnCount));
   }
   return rows;
+};
+
+const WORKSPACE_SNAP_TEMPLATES: WorkspaceSnapTemplate[] = [
+  {
+    id: 'split',
+    title: 'Split',
+    rowSizes: [2],
+    columnRatiosByRow: { 0: [1, 1] },
+  },
+  {
+    id: 'focus-left',
+    title: 'Focus left',
+    rowSizes: [2],
+    columnRatiosByRow: { 0: [1.7, 1] },
+  },
+  {
+    id: 'focus-right',
+    title: 'Focus right',
+    rowSizes: [2],
+    columnRatiosByRow: { 0: [1, 1.7] },
+  },
+  {
+    id: 'thirds',
+    title: 'Thirds',
+    rowSizes: [3],
+    columnRatiosByRow: { 0: [1, 1, 1] },
+  },
+  {
+    id: 'quad',
+    title: 'Quad',
+    rowSizes: [2, 2],
+    rowRatios: [1, 1],
+    columnRatiosByRow: { 0: [1, 1], 1: [1, 1] },
+  },
+  {
+    id: 'stack-top',
+    title: 'Top focus',
+    rowSizes: [1, 2],
+    rowRatios: [1.35, 1],
+    columnRatiosByRow: { 0: [1], 1: [1, 1] },
+  },
+];
+
+const getWorkspaceSnapTemplates = (tileCount: number) => {
+  return WORKSPACE_SNAP_TEMPLATES.filter(template => (
+    template.rowSizes.reduce((total, size) => total + size, 0) <= tileCount
+  ));
+};
+
+const createWorkspaceLayoutFromTemplate = (
+  template: WorkspaceSnapTemplate,
+  tileCount: number
+): WorkspaceLayoutState => {
+  const rowSizes = [...template.rowSizes];
+  const templateCapacity = rowSizes.reduce((total, size) => total + size, 0);
+  if (tileCount > templateCapacity && rowSizes.length > 0) {
+    rowSizes[rowSizes.length - 1] += tileCount - templateCapacity;
+  }
+
+  const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, index) => {
+    const templateRatios = template.columnRatiosByRow?.[index];
+    ratiosByRow[index] = templateRatios
+      ? [
+        ...templateRatios.slice(0, rowSize),
+        ...Array.from({ length: Math.max(0, rowSize - templateRatios.length) }, () => 1),
+      ]
+      : Array.from({ length: rowSize }, () => 1);
+    return ratiosByRow;
+  }, {});
+
+  return {
+    rowSizes,
+    rowRatios: template.rowRatios?.length === rowSizes.length
+      ? template.rowRatios
+      : Array.from({ length: rowSizes.length }, () => 1),
+    columnRatiosByRow,
+  };
 };
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
@@ -333,6 +442,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
+  const [workspaceDragKind, setWorkspaceDragKind] = useState<'new' | 'move' | null>(null);
+  const [workspaceSnapTarget, setWorkspaceSnapTarget] = useState<WorkspaceSnapTarget | null>(null);
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
   const [workspaceDropIndex, setWorkspaceDropIndex] = useState<number | null>(null);
   const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
@@ -389,7 +500,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
   }, [normalizedWorkspaceTileOrder, workspacePanels]);
-  const workspaceRows = useMemo(() => buildWorkspaceRows(workspaceTiles), [workspaceTiles]);
+  const workspaceRows = useMemo(
+    () => buildWorkspaceRows(workspaceTiles, workspaceLayout.rowSizes),
+    [workspaceLayout.rowSizes, workspaceTiles]
+  );
   const workspaceRowRatios = useMemo(
     () => normalizeRatios(workspaceLayout.rowRatios, workspaceRows.length),
     [workspaceLayout.rowRatios, workspaceRows.length]
@@ -405,6 +519,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       .slice(0, rowIndex)
       .reduce((total, row) => total + row.length, columnIndex);
   };
+  const workspaceSnapTileCount = workspaceTiles.length + (workspaceDragKind === 'new' ? 1 : 0);
+  const workspaceSnapTemplates = useMemo(
+    () => getWorkspaceSnapTemplates(workspaceSnapTileCount),
+    [workspaceSnapTileCount]
+  );
 
   // Resizable panels hook
   const { topHeight, bottomHeight, handleMouseDown, handleTouchStart, containerRef, isDragging } = useResizablePanels({
@@ -639,7 +758,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setWorkspaceLayout({ rowRatios: [], columnRatiosByRow: {} });
   };
 
-  const handleAddWorkspacePanel = (type: WorkspacePanelType, insertIndex?: number) => {
+  const handleAddWorkspacePanel = (
+    type: WorkspacePanelType,
+    insertIndex?: number,
+    snapTemplate?: WorkspaceSnapTemplate
+  ) => {
     setIsWorkspaceOpen(true);
     setWorkspacePanels(prev => {
       const selectedPadPanel = selectedPanelId
@@ -661,12 +784,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           0,
           newPanel.id
         );
+        if (snapTemplate) {
+          setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder.length));
+        }
         return nextOrder;
       });
       setLastAddedWorkspacePanelId(newPanel.id);
       return nextPanels;
     });
-    resetWorkspaceLayout();
+    if (!snapTemplate) {
+      resetWorkspaceLayout();
+    }
     setIsWorkspaceAddMenuOpen(false);
   };
 
@@ -674,6 +802,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsWorkspaceOpen(false);
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceDragActive(false);
+    setWorkspaceDragKind(null);
+    setWorkspaceSnapTarget(null);
     setIsWorkspaceResizing(false);
     setWorkspaceDropIndex(null);
   };
@@ -687,6 +817,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     event.dataTransfer.effectAllowed = 'copy';
     setIsWorkspaceOpen(true);
     setIsWorkspaceDragActive(true);
+    setWorkspaceDragKind('new');
   };
 
   const handleWorkspaceTileDragStart = (
@@ -696,10 +827,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     event.dataTransfer.setData(WORKSPACE_TILE_DRAG_FORMAT, tileId);
     event.dataTransfer.effectAllowed = 'move';
     setIsWorkspaceDragActive(true);
+    setWorkspaceDragKind('move');
   };
 
   const handleWorkspaceDragEnd = () => {
     setIsWorkspaceDragActive(false);
+    setWorkspaceDragKind(null);
+    setWorkspaceSnapTarget(null);
     setWorkspaceDropIndex(null);
   };
 
@@ -710,6 +844,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     ) {
       event.preventDefault();
       event.dataTransfer.dropEffect = event.dataTransfer.types.includes(WORKSPACE_TILE_DRAG_FORMAT) ? 'move' : 'copy';
+      setWorkspaceSnapTarget(null);
       setWorkspaceDropIndex(getWorkspaceDropIndex(event.clientX, event.clientY));
     }
   };
@@ -717,6 +852,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleWorkspaceDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
     const nextTarget = event.relatedTarget;
     if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setWorkspaceDropIndex(null);
+    setWorkspaceSnapTarget(null);
+  };
+
+  const getWorkspaceSnapTemplate = (templateId: string) => {
+    return WORKSPACE_SNAP_TEMPLATES.find(template => template.id === templateId) || null;
+  };
+
+  const handleWorkspaceSnapDragOver = (
+    event: React.DragEvent<HTMLButtonElement>,
+    target: WorkspaceSnapTarget
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = workspaceDragKind === 'move' ? 'move' : 'copy';
+    setWorkspaceSnapTarget(target);
     setWorkspaceDropIndex(null);
   };
 
@@ -743,8 +894,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (movedTileId) {
       event.preventDefault();
       setIsWorkspaceDragActive(false);
+      setWorkspaceDragKind(null);
+      const snapTarget = workspaceSnapTarget;
+      setWorkspaceSnapTarget(null);
       setWorkspaceDropIndex(null);
-      const dropIndex = getWorkspaceDropIndex(event.clientX, event.clientY);
+      const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
+      const dropIndex = snapTarget ? snapTarget.zoneIndex : getWorkspaceDropIndex(event.clientX, event.clientY);
       setWorkspaceTileOrder(prevOrder => {
         const currentOrder = normalizeWorkspaceTileOrder(prevOrder, workspacePanels.map(panel => panel.id));
         const fromIndex = currentOrder.indexOf(movedTileId);
@@ -754,9 +909,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         const [movedId] = nextOrder.splice(fromIndex, 1);
         const adjustedDropIndex = dropIndex > fromIndex ? dropIndex - 1 : dropIndex;
         nextOrder.splice(clamp(adjustedDropIndex, 0, nextOrder.length), 0, movedId);
+        if (snapTemplate) {
+          setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder.length));
+        }
         return nextOrder;
       });
-      resetWorkspaceLayout();
+      if (!snapTemplate) {
+        resetWorkspaceLayout();
+      }
       return;
     }
 
@@ -765,13 +925,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     event.preventDefault();
     setIsWorkspaceDragActive(false);
+    setWorkspaceDragKind(null);
+    const snapTarget = workspaceSnapTarget;
+    setWorkspaceSnapTarget(null);
     setWorkspaceDropIndex(null);
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
       if (!['camera', '3d', 'pad', 'behaviorTree'].includes(draft.type)) return;
 
-      const tileIndex = getWorkspaceDropIndex(event.clientX, event.clientY);
-      handleAddWorkspacePanel(draft.type, tileIndex);
+      const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
+      const tileIndex = snapTarget ? snapTarget.zoneIndex : getWorkspaceDropIndex(event.clientX, event.clientY);
+      handleAddWorkspacePanel(draft.type, tileIndex, snapTemplate || undefined);
     } catch (error) {
       console.error('Failed to add dropped workspace panel:', error);
     }
@@ -1257,6 +1421,58 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     );
   };
 
+  const renderWorkspaceSnapAssistant = () => {
+    if (!isWorkspaceDragActive || workspaceSnapTemplates.length === 0) return null;
+
+    return (
+      <div className="workspace-snap-assistant" aria-label="Snap layouts">
+        {workspaceSnapTemplates.map(template => {
+          let zoneIndex = 0;
+
+          return (
+            <div className="workspace-snap-template" key={template.id}>
+              <span className="workspace-snap-template-title">{template.title}</span>
+              <div className="workspace-snap-template-grid">
+                {template.rowSizes.map((rowSize, rowIndex) => (
+                  <div
+                    className="workspace-snap-template-row"
+                    key={`${template.id}-row-${rowIndex}`}
+                    style={{ flex: template.rowRatios?.[rowIndex] || 1 }}
+                  >
+                    {Array.from({ length: rowSize }).map(() => {
+                      const currentZoneIndex = zoneIndex;
+                      zoneIndex += 1;
+                      const isActiveSnapZone = workspaceSnapTarget?.templateId === template.id &&
+                        workspaceSnapTarget.zoneIndex === currentZoneIndex;
+
+                      return (
+                        <button
+                          type="button"
+                          className={`workspace-snap-zone ${isActiveSnapZone ? 'active' : ''}`}
+                          key={`${template.id}-zone-${currentZoneIndex}`}
+                          onDragEnter={(event) => handleWorkspaceSnapDragOver(event, {
+                            templateId: template.id,
+                            zoneIndex: currentZoneIndex,
+                          })}
+                          onDragOver={(event) => handleWorkspaceSnapDragOver(event, {
+                            templateId: template.id,
+                            zoneIndex: currentZoneIndex,
+                          })}
+                          title={`Snap to ${template.title}`}
+                          aria-label={`Snap to ${template.title} zone ${currentZoneIndex + 1}`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderStandardSplitLayout = (className = 'standard-stack-layout') => (
     <div className={className} ref={containerRef}>
       <div className="view-panel-container" style={{ height: `calc(${topHeight}% - 8px)` }}>
@@ -1415,6 +1631,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             onPointerUp={handleWorkspacePointerEnd}
             onPointerCancel={handleWorkspacePointerEnd}
           >
+            {renderWorkspaceSnapAssistant()}
             <div className="workspace-grid">
               {workspaceRows.map((row, rowIndex) => (
                 <React.Fragment key={`workspace-row-${rowIndex}`}>
