@@ -34,6 +34,19 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
   toJSON: () => ({}),
 } as DOMRect);
 
+const createMatchMedia =
+  (matches: boolean) =>
+  (query: string): MediaQueryList => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  } as MediaQueryList);
+
 const firePointerEvent = (
   element: Element,
   type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
@@ -256,6 +269,7 @@ describe('BehaviorTreePanel', () => {
     reactFlowMock.setCenter.mockReset();
     reactFlowMock.fitView.mockReset();
     executorMock.instances = [];
+    window.matchMedia = createMatchMedia(false);
     window.confirm = vi.fn(() => true);
     localStorage.clear();
   });
@@ -288,6 +302,92 @@ describe('BehaviorTreePanel', () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
 
     expect(screen.getByRole('button', { name: 'Arrange tree' })).toBeInTheDocument();
+  });
+
+  it('places contextual node actions below the selected node on mobile when there is room', async () => {
+    window.matchMedia = createMatchMedia(true);
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'mobile-actions-tree',
+            name: 'Mobile Actions Tree',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+    reactFlowMock.nodeRects = {
+      'node-a': createRect(120, 140, 165, 82),
+    };
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    const canvas = document.querySelector('.bt-canvas') as HTMLElement;
+    canvas.getBoundingClientRect = () => createRect(0, 0, 375, 640);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Mobile Actions Tree'));
+
+    fireEvent.click(await screen.findByTestId('rf-node-node-a'));
+
+    const actions = await screen.findByTestId('bt-selection-actions');
+    expect(actions).toHaveClass('placement-below');
+    expect(parseFloat(actions.style.top)).toBe(236);
+  });
+
+  it('places contextual node actions above a selected node near the bottom on mobile', async () => {
+    window.matchMedia = createMatchMedia(true);
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'mobile-bottom-actions-tree',
+            name: 'Mobile Bottom Actions Tree',
+            nodes: [
+              {
+                id: 'node-a',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Node A', actionName: '/a', actionType: 'example/A' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+    reactFlowMock.nodeRects = {
+      'node-a': createRect(120, 220, 165, 70),
+    };
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    const canvas = document.querySelector('.bt-canvas') as HTMLElement;
+    canvas.getBoundingClientRect = () => createRect(0, 0, 375, 300);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Mobile Bottom Actions Tree'));
+
+    fireEvent.click(await screen.findByTestId('rf-node-node-a'));
+
+    const actions = await screen.findByTestId('bt-selection-actions');
+    expect(actions).toHaveClass('placement-above');
+    expect(parseFloat(actions.style.top)).toBe(206);
   });
 
   it('switches between pan and box-select canvas modes', () => {

@@ -514,6 +514,27 @@
   color: #ffffff;
 }
 
+@media (pointer: coarse), (max-width: 768px) {
+  .bt-selection-actions {
+    max-width: min(340px, calc(100% - 20px));
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .bt-selection-actions.placement-above {
+    transform: translate(-50%, -100%);
+  }
+
+  .bt-selection-actions.placement-below {
+    transform: translateX(-50%);
+  }
+
+  .bt-selection-action {
+    height: 40px;
+    padding: 0 12px;
+  }
+}
+
 .bt-subtree-parent-action {
   position: absolute;
   z-index: 24;

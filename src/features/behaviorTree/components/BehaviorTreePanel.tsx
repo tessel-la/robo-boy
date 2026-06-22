@@ -150,9 +150,18 @@ interface ManualEdgeSelection {
   expiresAt: number;
 }
 
+interface SelectionActionAnchor {
+  x: number;
+  y: number;
+  placement: 'inline' | 'above' | 'below';
+}
+
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 const MAX_UNDO_HISTORY = 80;
 const SELECTION_ACTIONS_MAX_WIDTH = 360;
+const SELECTION_ACTIONS_MOBILE_MARGIN = 10;
+const SELECTION_ACTIONS_MOBILE_GAP = 14;
+const SELECTION_ACTIONS_MOBILE_ESTIMATED_HEIGHT = 110;
 const BOX_SELECTION_CLEAR_SUPPRESSION_MS = 120;
 const BOX_SELECTION_DRAG_THRESHOLD = 4;
 const PALETTE_ADD_NODE_X_GAP = 190;
@@ -206,6 +215,8 @@ const createViewportRect = (left: number, top: number, right: number, bottom: nu
   bottom,
   toJSON: () => ({}),
 } as DOMRect);
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const findOpenPaletteAddPosition = (
   position: { x: number; y: number },
@@ -453,7 +464,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
-  const [selectionActionAnchor, setSelectionActionAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [selectionActionAnchor, setSelectionActionAnchor] = useState<SelectionActionAnchor | null>(null);
   const [customBoxSelection, setCustomBoxSelection] = useState<CustomBoxSelectionBox | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -2276,6 +2287,38 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       },
       { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
     );
+    if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
+      const menuWidth = Math.min(
+        SELECTION_ACTIONS_MAX_WIDTH,
+        Math.max(canvasRect.width - SELECTION_ACTIONS_MOBILE_MARGIN * 2, 0)
+      );
+      const minCenterX = SELECTION_ACTIONS_MOBILE_MARGIN + menuWidth / 2;
+      const maxCenterX = Math.max(
+        canvasRect.width - SELECTION_ACTIONS_MOBILE_MARGIN - menuWidth / 2,
+        minCenterX
+      );
+      const belowSpace = canvasRect.bottom - selectionRect.bottom - SELECTION_ACTIONS_MOBILE_GAP;
+      const aboveSpace = selectionRect.top - canvasRect.top - SELECTION_ACTIONS_MOBILE_GAP;
+      const placement =
+        belowSpace >= SELECTION_ACTIONS_MOBILE_ESTIMATED_HEIGHT || belowSpace >= aboveSpace
+          ? 'below'
+          : 'above';
+
+      setSelectionActionAnchor({
+        x: clamp(
+          (selectionRect.left + selectionRect.right) / 2 - canvasRect.left,
+          minCenterX,
+          maxCenterX
+        ),
+        y:
+          placement === 'below'
+            ? selectionRect.bottom - canvasRect.top + SELECTION_ACTIONS_MOBILE_GAP
+            : selectionRect.top - canvasRect.top - SELECTION_ACTIONS_MOBILE_GAP,
+        placement,
+      });
+      return;
+    }
+
     setSelectionActionAnchor({
       x: Math.min(
         Math.max(selectionRect.right - canvasRect.left + 10, 8),
@@ -2285,6 +2328,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         Math.max(selectionRect.top - canvasRect.top, 8),
         Math.max(canvasRect.height - 48, 8)
       ),
+      placement: 'inline',
     });
   }, [edges, nodes, selectedEdges, selectedNodes]);
 
@@ -2647,7 +2691,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           )}
           {selectionActionAnchor && (selectedNodes.length > 0 || selectedEdges.length > 0) && (
             <div
-              className="bt-selection-actions"
+              className={`bt-selection-actions placement-${selectionActionAnchor.placement}`}
               style={{
                 left: selectionActionAnchor.x,
                 top: selectionActionAnchor.y,
