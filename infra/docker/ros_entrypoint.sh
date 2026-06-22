@@ -2,9 +2,28 @@
 set -e
 
 ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}"
+
+export RMW_IMPLEMENTATION
+export ROS_LOCALHOST_ONLY
+
+if [ "${RMW_IMPLEMENTATION}" = "rmw_fastrtps_cpp" ]; then
+    export FASTDDS_BUILTIN_TRANSPORTS="${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
+fi
+
+if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ] && [ -z "${CYCLONEDDS_URI:-}" ] && [ -f /etc/cyclonedds/config.xml ]; then
+    export CYCLONEDDS_URI="file:///etc/cyclonedds/config.xml"
+fi
 
 echo "--- Sourcing ROS ${ROS_DISTRO} ---"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
+
+echo "--- DDS middleware: ${RMW_IMPLEMENTATION} ---"
+echo "--- ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}; ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY} ---"
+if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ]; then
+    echo "--- CYCLONEDDS_URI: ${CYCLONEDDS_URI:-<unset>} ---"
+fi
 
 # Source republisher workspace if built
 if [ -f /republisher_ws/install/setup.bash ]; then

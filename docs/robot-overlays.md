@@ -21,6 +21,27 @@ After changing overlays, recreate the ROS service:
 docker compose up -d --build --force-recreate ros-stack
 ```
 
+## DDS Middleware
+
+Robo-Boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, `ROS_LOCALHOST_ONLY`, and DDS middleware settings.
+
+Fast DDS default:
+
+```dotenv
+RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+```
+
+Cyclone DDS:
+
+```dotenv
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+CYCLONEDDS_CONFIG_PATH=./config/cyclonedds/default.xml
+CYCLONEDDS_URI=file:///etc/cyclonedds/config.xml
+```
+
+`CYCLONEDDS_CONFIG_PATH` is a host path mounted into the ROS container at `/etc/cyclonedds/config.xml`. Point it at a custom XML file when the robot or simulator needs fixed interfaces, peers, multicast policy, or other Cyclone-specific settings. Use an absolute path when sharing one custom file across multiple Compose projects.
+
 ## Aerostack
 
 The Aerostack override mounts `~/.aerostack2_install` at `/overlay_ws/aerostack2` by default.
@@ -43,6 +64,16 @@ docker compose up -d --build
 
 cd /path/to/robo-boy
 cp config/env/manipulator.env.example .env
+docker compose up -d --build
+```
+
+Use the same DDS values for the manipulator simulation and Robo-Boy. With the updated manipulator simulation Compose file, you can pass the shared settings from this repo:
+
+```bash
+cd /path/to/manipulator-sim
+docker compose --env-file ../robo-boy/.env -f docker-compose.yml up -d --build
+
+cd /path/to/robo-boy
 docker compose up -d --build
 ```
 
@@ -95,7 +126,7 @@ If generated hooks require the original build path, mount the referenced build/s
 
 ## Compatibility And Diagnosis
 
-The simulation and `ros-stack` must use compatible `ROS_DISTRO` and `ROS_DOMAIN_ID` values. The workspace must be built before it is mounted.
+The simulation and `ros-stack` must use compatible `ROS_DISTRO`, `ROS_DOMAIN_ID`, `ROS_LOCALHOST_ONLY`, and `RMW_IMPLEMENTATION` values. The workspace must be built before it is mounted.
 
 Confirm activation and inspect errors with:
 
