@@ -132,6 +132,8 @@ export interface ExecutionContext {
 // Event types for execution engine
 export type ExecutionEventType = 
   | 'started'
+  | 'paused'
+  | 'resumed'
   | 'nodeEntered'
   | 'nodeSuccess'
   | 'nodeFailure'
