@@ -71,6 +71,18 @@ describe('tfTreeModel', () => {
     expect(state.transformsByChild.get('child')?.receivedAtMs).toBe(32_000);
   });
 
+  it('uses receive order when only one transform has a usable stamp', () => {
+    let state = consumeTfMessage(
+      createEmptyTfTreeState(),
+      { transforms: [transform('static-parent', 'child', 0)] },
+      'static',
+      100_000
+    );
+    state = consumeTfMessage(state, { transforms: [transform('dynamic-parent', 'child', 20)] }, 'dynamic', 101_000);
+
+    expect(state.transformsByChild.get('child')?.parentFrame).toBe('dynamic-parent');
+  });
+
   it('finds every disconnected component', () => {
     const state = consumeTfMessage(
       createEmptyTfTreeState(),

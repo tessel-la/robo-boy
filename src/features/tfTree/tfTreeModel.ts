@@ -104,7 +104,13 @@ export const consumeTfMessage = (
     const orderTimestampMs = messageTimestampMs ?? receivedAtMs;
     const current = transformsByChild.get(childFrame);
 
-    if (current && orderTimestampMs < current.orderTimestampMs) continue;
+    if (current) {
+      const isOlder =
+        messageTimestampMs !== null && current.messageTimestampMs !== null
+          ? messageTimestampMs < current.messageTimestampMs
+          : receivedAtMs < current.receivedAtMs;
+      if (isOlder) continue;
+    }
 
     const nextRecord: TfTransformRecord = {
       parentFrame,

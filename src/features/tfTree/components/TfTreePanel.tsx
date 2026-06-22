@@ -15,7 +15,13 @@ import 'reactflow/dist/style.css';
 import type { Ros } from 'roslib';
 import { FaExclamationTriangle, FaExpand, FaFilter, FaPause, FaPlay, FaSearch } from 'react-icons/fa';
 
-import { TfTransformRecord, getTfGraphDiagnostics, getTransformAgeMs, isTransformStale } from '../tfTreeModel';
+import {
+  TfTransformRecord,
+  computeConnectedComponents,
+  getTfGraphDiagnostics,
+  getTransformAgeMs,
+  isTransformStale,
+} from '../tfTreeModel';
 import { layoutTfTree } from '../tfTreeLayout';
 import { useTfTree } from '../useTfTree';
 import './TfTreePanel.css';
@@ -73,12 +79,29 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
 
   const visibleFrames = useMemo(() => {
     const frames = new Set<string>();
+    if (showStatic && !normalizedFilter) {
+      state.knownFrames.forEach(frame => frames.add(frame));
+    } else if (normalizedFilter) {
+      state.knownFrames.forEach(frame => {
+        if (frame.toLowerCase().includes(normalizedFilter)) frames.add(frame);
+      });
+    }
     visibleTransforms.forEach(transform => {
       frames.add(transform.parentFrame);
       frames.add(transform.childFrame);
     });
     return frames;
-  }, [visibleTransforms]);
+  }, [normalizedFilter, showStatic, state.knownFrames, visibleTransforms]);
+
+  const visibleComponentCount = useMemo(
+    () =>
+      computeConnectedComponents({
+        transformsByChild: new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
+        observedParentsByChild: new Map(),
+        knownFrames: visibleFrames,
+      }).length,
+    [visibleFrames, visibleTransforms]
+  );
 
   const incomingByFrame = useMemo(
     () => new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
@@ -208,7 +231,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         <div className="tf-tree-summary" aria-label="TF graph summary">
           <span>{visibleFrames.size} frames</span>
           <span>{visibleTransforms.length} transforms</span>
-          <span>{diagnostics.components.length} trees</span>
+          <span>{visibleComponentCount} trees</span>
         </div>
       </header>
 
