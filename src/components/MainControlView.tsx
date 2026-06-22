@@ -19,6 +19,7 @@ import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
   BehaviorTreeExecutionSnapshot,
 } from '../features/behaviorTree/components/BehaviorTreePanel';
+import TfTreePanel from '../features/tfTree/components/TfTreePanel';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -45,6 +46,15 @@ const IconMCVBT = () => (
     <line x1="20" y1="10" x2="20" y2="14"/>
     <rect x="1" y="14" width="6" height="4.5" rx="1.2"/>
     <rect x="17" y="14" width="6" height="4.5" rx="1.2"/>
+  </svg>
+);
+const IconMCVTF = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="6" cy="5" r="2.25"/>
+    <circle cx="17.5" cy="11.5" r="2.25"/>
+    <circle cx="8" cy="19" r="2.25"/>
+    <path d="M7.9 6.2l7.7 4.1M15.7 13l-5.8 4.5"/>
+    <path d="M10.5 5.8l2.3-1.3M17.7 7.5l.1-2.7" opacity=".55"/>
   </svg>
 );
 const IconMCVLink = () => (
@@ -76,6 +86,7 @@ const icons = {
   camera: <IconMCVCamera />,
   view3d: <IconMCV3d />,
   bt: <IconMCVBT />,
+  tf: <IconMCVTF />,
   connected: <IconMCVLink />,
   disconnected: <IconMCVUnlink />,
   disconnect: <IconMCVDisconnect />,
@@ -96,7 +107,7 @@ interface MainControlViewProps {
   onDisconnect: () => void;
 }
 
-type ViewMode = 'camera' | '3d' | 'behaviorTree';
+type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
 type GamepadEditorSession = {
   mode: GamepadSaveMode;
   initialLayout: CustomGamepadLayout | null;
@@ -106,6 +117,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
+  // Keep TF subscriptions and graph history alive after the panel is first opened.
+  const [tfEverMounted, setTfEverMounted] = useState(false);
   const [btExecution, setBtExecution] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
     treeName: '',
@@ -201,9 +214,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     // Only re-run effect if connect/disconnect functions or connectionParams change
   }, [connect, disconnect, connectionParams]);
 
-  // Lazy-mount BT panel on first visit; trigger 3D resize on switch
+  // Lazy-mount graph panels on first visit; trigger 3D resize on switch
   useEffect(() => {
     if (viewMode === 'behaviorTree') setBtEverMounted(true);
+    if (viewMode === 'tfTree') setTfEverMounted(true);
     if (viewMode === '3d') {
       // ResizeObserver needs a tick after display change to read correct dimensions
       const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
@@ -359,7 +373,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     currentView.parentElement?.appendChild(currentViewClone);
 
     // Determine animation direction based on view order
-    const viewOrder = ['camera', '3d', 'behaviorTree'];
+    const viewOrder: ViewMode[] = ['camera', '3d', 'tfTree', 'behaviorTree'];
     const currentIndex = viewOrder.indexOf(viewMode);
     const newIndex = viewOrder.indexOf(newViewMode);
     const direction = newIndex > currentIndex ? 1 : -1;
@@ -417,6 +431,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             aria-label="Switch to 3D View"
           >
             {icons.view3d}
+          </button>
+          <button
+            onClick={() => handleViewToggle('tfTree')}
+            className={viewMode === 'tfTree' ? 'active' : ''}
+            title="TF Tree"
+            aria-label="Switch to TF Tree"
+          >
+            {icons.tf}
           </button>
           {btExecution.isExecuting ? (
             <div
@@ -524,6 +546,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               </div>
             )}
             {viewMode === 'behaviorTree' && !btEverMounted && (
+              <div className="placeholder">Loading…</div>
+            )}
+            {tfEverMounted && (
+              <div className="view-slot" style={viewMode !== 'tfTree' ? { display: 'none' } : undefined}>
+                {isConnected && ros ? (
+                  <TfTreePanel ros={ros} isActive={viewMode === 'tfTree'} />
+                ) : (
+                  <div className="placeholder">Connect to ROS to view TF</div>
+                )}
+              </div>
+            )}
+            {viewMode === 'tfTree' && !tfEverMounted && (
               <div className="placeholder">Loading…</div>
             )}
           </div>
