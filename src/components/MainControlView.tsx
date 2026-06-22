@@ -101,6 +101,27 @@ const IconMCVSplit = () => (
     <rect x="4" y="14" width="16" height="6" rx="1.5"/>
   </svg>
 );
+const IconMCVSaveLayout = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 4h11l3 3v13H5z"/>
+    <path d="M8 4v6h8V4"/>
+    <path d="M8 16h8"/>
+  </svg>
+);
+const IconMCVDownload = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v12"/>
+    <path d="m7 10 5 5 5-5"/>
+    <path d="M5 21h14"/>
+  </svg>
+);
+const IconMCVUpload = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 21V9"/>
+    <path d="m7 14 5-5 5 5"/>
+    <path d="M5 3h14"/>
+  </svg>
+);
 // --- End Top Bar Icons ---
 
 // Use Icon components
@@ -117,6 +138,9 @@ const icons = {
   grip: <IconMCVGrip />,
   tile: <IconMCVTile />,
   split: <IconMCVSplit />,
+  saveLayout: <IconMCVSaveLayout />,
+  download: <IconMCVDownload />,
+  upload: <IconMCVUpload />,
 };
 
 // Define Panel Types
@@ -156,6 +180,7 @@ type WorkspaceTile =
 const WORKSPACE_PANELS_KEY = 'robo-boy-desktop-workspace-panels-v1';
 const WORKSPACE_LAYOUT_KEY = 'robo-boy-desktop-workspace-layout-v1';
 const WORKSPACE_TILE_ORDER_KEY = 'robo-boy-desktop-workspace-tile-order-v1';
+const WORKSPACE_CUSTOM_TEMPLATES_KEY = 'robo-boy-desktop-workspace-custom-templates-v1';
 const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
@@ -266,6 +291,7 @@ type WorkspaceSnapTemplate = {
   rowSizes: number[];
   rowRatios?: number[];
   columnRatiosByRow?: Record<number, number[]>;
+  isCustom?: boolean;
 };
 
 const normalizeRatios = (ratios: unknown, length: number): number[] => {
@@ -301,6 +327,56 @@ const loadWorkspaceLayout = (): WorkspaceLayoutState => {
   } catch (error) {
     console.error('Failed to load desktop workspace layout:', error);
     return { rowRatios: [], columnRatiosByRow: {} };
+  }
+};
+
+const normalizeWorkspaceSnapTemplate = (template: unknown): WorkspaceSnapTemplate | null => {
+  if (!template || typeof template !== 'object') return null;
+  const candidate = template as Partial<WorkspaceSnapTemplate>;
+  if (
+    typeof candidate.id !== 'string' ||
+    !candidate.id.startsWith('custom-') ||
+    typeof candidate.title !== 'string' ||
+    !Array.isArray(candidate.rowSizes) ||
+    candidate.rowSizes.length === 0 ||
+    !candidate.rowSizes.every(value => Number.isInteger(value) && value > 0)
+  ) {
+    return null;
+  }
+
+  const columnRatiosByRow = candidate.columnRatiosByRow && typeof candidate.columnRatiosByRow === 'object'
+    ? Object.entries(candidate.columnRatiosByRow).reduce<Record<number, number[]>>((ratios, [key, value]) => {
+      if (Array.isArray(value)) {
+        const numericRatios = value.filter(item => typeof item === 'number' && Number.isFinite(item) && item > 0);
+        if (numericRatios.length > 0) ratios[Number(key)] = numericRatios;
+      }
+      return ratios;
+    }, {})
+    : undefined;
+
+  return {
+    id: candidate.id,
+    title: candidate.title.trim() || 'Custom layout',
+    rowSizes: candidate.rowSizes,
+    rowRatios: Array.isArray(candidate.rowRatios)
+      ? candidate.rowRatios.filter(value => typeof value === 'number' && Number.isFinite(value) && value > 0)
+      : undefined,
+    columnRatiosByRow,
+    isCustom: true,
+  };
+};
+
+const loadWorkspaceCustomTemplates = (): WorkspaceSnapTemplate[] => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_CUSTOM_TEMPLATES_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.map(template => normalizeWorkspaceSnapTemplate(template)).filter((template): template is WorkspaceSnapTemplate => template !== null)
+      : [];
+  } catch (error) {
+    console.error('Failed to load workspace custom templates:', error);
+    return [];
   }
 };
 
@@ -398,8 +474,8 @@ const WORKSPACE_SNAP_TEMPLATES: WorkspaceSnapTemplate[] = [
   },
 ];
 
-const getWorkspaceSnapTemplates = (tileCount: number) => {
-  return WORKSPACE_SNAP_TEMPLATES.filter(template => (
+const getWorkspaceSnapTemplates = (tileCount: number, templates: WorkspaceSnapTemplate[]) => {
+  return templates.filter(template => (
     template.rowSizes.reduce((total, size) => total + size, 0) <= tileCount
   ));
 };
@@ -440,7 +516,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadWorkspacePanels);
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
+  const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(loadWorkspaceCustomTemplates);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
+  const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
+  const [workspaceTemplateName, setWorkspaceTemplateName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
   const [workspaceDragKind, setWorkspaceDragKind] = useState<'new' | 'move' | null>(null);
   const [workspaceSnapTarget, setWorkspaceSnapTarget] = useState<WorkspaceSnapTarget | null>(null);
@@ -484,6 +563,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workspaceInteractionRef = useRef<WorkspaceInteraction | null>(null);
+  const templateImportInputRef = useRef<HTMLInputElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
@@ -520,9 +600,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       .reduce((total, row) => total + row.length, columnIndex);
   };
   const workspaceSnapTileCount = workspaceTiles.length + (workspaceDragKind === 'new' ? 1 : 0);
+  const allWorkspaceSnapTemplates = useMemo(
+    () => [...WORKSPACE_SNAP_TEMPLATES, ...customWorkspaceSnapTemplates],
+    [customWorkspaceSnapTemplates]
+  );
   const workspaceSnapTemplates = useMemo(
-    () => getWorkspaceSnapTemplates(workspaceSnapTileCount),
-    [workspaceSnapTileCount]
+    () => getWorkspaceSnapTemplates(workspaceSnapTileCount, allWorkspaceSnapTemplates),
+    [allWorkspaceSnapTemplates, workspaceSnapTileCount]
   );
 
   // Resizable panels hook
@@ -540,6 +624,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   useEffect(() => {
     localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
   }, [workspaceLayout]);
+
+  useEffect(() => {
+    localStorage.setItem(WORKSPACE_CUSTOM_TEMPLATES_KEY, JSON.stringify(customWorkspaceSnapTemplates));
+  }, [customWorkspaceSnapTemplates]);
 
   useEffect(() => {
     const normalizedOrder = normalizeWorkspaceTileOrder(
@@ -796,11 +884,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       resetWorkspaceLayout();
     }
     setIsWorkspaceAddMenuOpen(false);
+    setIsWorkspaceTemplateMenuOpen(false);
   };
 
   const handleReturnToSplitView = () => {
     setIsWorkspaceOpen(false);
     setIsWorkspaceAddMenuOpen(false);
+    setIsWorkspaceTemplateMenuOpen(false);
     setIsWorkspaceDragActive(false);
     setWorkspaceDragKind(null);
     setWorkspaceSnapTarget(null);
@@ -857,7 +947,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const getWorkspaceSnapTemplate = (templateId: string) => {
-    return WORKSPACE_SNAP_TEMPLATES.find(template => template.id === templateId) || null;
+    return allWorkspaceSnapTemplates.find(template => template.id === templateId) || null;
   };
 
   const handleWorkspaceSnapDragOver = (
@@ -1099,12 +1189,91 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     handleOpenCustomEditor();
   };
 
+  const handleSaveWorkspaceTemplate = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (workspaceTiles.length === 0 || workspaceRows.length === 0) return;
+
+    const title = workspaceTemplateName.trim() || `Custom ${customWorkspaceSnapTemplates.length + 1}`;
+    const rowSizes = workspaceRows.map(row => row.length);
+    const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, rowIndex) => {
+      ratiosByRow[rowIndex] = workspaceColumnRatiosByRow[rowIndex]?.length === rowSize
+        ? workspaceColumnRatiosByRow[rowIndex]
+        : Array.from({ length: rowSize }, () => 1);
+      return ratiosByRow;
+    }, {});
+
+    const newTemplate: WorkspaceSnapTemplate = {
+      id: `custom-${Date.now()}`,
+      title,
+      rowSizes,
+      rowRatios: workspaceRowRatios.length === rowSizes.length
+        ? workspaceRowRatios
+        : Array.from({ length: rowSizes.length }, () => 1),
+      columnRatiosByRow,
+      isCustom: true,
+    };
+
+    setCustomWorkspaceSnapTemplates(prev => [...prev, newTemplate]);
+    setWorkspaceTemplateName('');
+  };
+
+  const handleDeleteWorkspaceTemplate = (templateId: string) => {
+    setCustomWorkspaceSnapTemplates(prev => prev.filter(template => template.id !== templateId));
+  };
+
+  const handleExportWorkspaceTemplates = () => {
+    if (customWorkspaceSnapTemplates.length === 0) return;
+
+    const blob = new Blob([
+      JSON.stringify({
+        version: 1,
+        templates: customWorkspaceSnapTemplates,
+      }, null, 2),
+    ], { type: 'application/json' });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = 'robo-boy-workspace-templates.json';
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const handleImportWorkspaceTemplates = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || ''));
+        const candidates = Array.isArray(parsed) ? parsed : parsed?.templates;
+        if (!Array.isArray(candidates)) return;
+
+        const importedTemplates = candidates
+          .map(template => normalizeWorkspaceSnapTemplate(template))
+          .filter((template): template is WorkspaceSnapTemplate => template !== null)
+          .map(template => ({
+            ...template,
+            id: `custom-${Date.now()}-${template.id}`,
+          }));
+
+        if (importedTemplates.length === 0) return;
+        setCustomWorkspaceSnapTemplates(prev => [...prev, ...importedTemplates]);
+      } catch (error) {
+        console.error('Failed to import workspace templates:', error);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleAutoTileWorkspacePanels = () => {
     setIsWorkspaceOpen(true);
     setIsWorkspaceDragActive(false);
     setWorkspaceDropIndex(null);
     resetWorkspaceLayout();
     setIsWorkspaceAddMenuOpen(false);
+    setIsWorkspaceTemplateMenuOpen(false);
   };
 
   // Memoize the selected panel component to prevent unnecessary re-renders
@@ -1421,6 +1590,79 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     );
   };
 
+  const renderWorkspaceTemplateMenu = () => {
+    if (!isWorkspaceTemplateMenuOpen) return null;
+
+    return (
+      <div className="workspace-template-menu">
+        <form className="workspace-template-form" onSubmit={handleSaveWorkspaceTemplate}>
+          <label htmlFor="workspace-template-name">Name</label>
+          <div className="workspace-template-form-row">
+            <input
+              id="workspace-template-name"
+              value={workspaceTemplateName}
+              onChange={(event) => setWorkspaceTemplateName(event.target.value)}
+              placeholder={`Custom ${customWorkspaceSnapTemplates.length + 1}`}
+              maxLength={28}
+            />
+            <button
+              type="submit"
+              disabled={workspaceTiles.length === 0}
+              title="Save current template"
+              aria-label="Save current template"
+            >
+              {icons.saveLayout}
+            </button>
+          </div>
+        </form>
+        <div className="workspace-template-transfer-row">
+          <button
+            type="button"
+            onClick={() => templateImportInputRef.current?.click()}
+            title="Import templates"
+            aria-label="Import templates"
+          >
+            {icons.upload}
+            <span>Import</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportWorkspaceTemplates}
+            disabled={customWorkspaceSnapTemplates.length === 0}
+            title="Export templates"
+            aria-label="Export templates"
+          >
+            {icons.download}
+            <span>Export</span>
+          </button>
+          <input
+            ref={templateImportInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImportWorkspaceTemplates}
+          />
+        </div>
+        {customWorkspaceSnapTemplates.length > 0 && (
+          <div className="workspace-template-list">
+            {customWorkspaceSnapTemplates.map(template => (
+              <div className="workspace-template-item" key={template.id}>
+                <span>{template.title}</span>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteWorkspaceTemplate(template.id)}
+                  title={`Delete ${template.title}`}
+                  aria-label={`Delete ${template.title}`}
+                >
+                  {icons.trash}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderWorkspaceSnapAssistant = () => {
     if (!isWorkspaceDragActive || workspaceSnapTemplates.length === 0) return null;
 
@@ -1570,30 +1812,52 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 {icons.tile}
               </button>
               {isDesktopWorkspace && (
-                <button
-                  type="button"
-                  className="workspace-split-button"
-                  onClick={handleReturnToSplitView}
-                  title="Return to split view"
-                  aria-label="Return to split view"
-                >
-                  {icons.split}
-                </button>
+                <>
+                  <div className="workspace-template-control">
+                    <button
+                      type="button"
+                      className="workspace-template-button"
+                      onClick={() => {
+                        setIsWorkspaceTemplateMenuOpen(prev => !prev);
+                        setIsWorkspaceAddMenuOpen(false);
+                      }}
+                      title="Manage snap templates"
+                      aria-label="Manage snap templates"
+                    >
+                      {icons.saveLayout}
+                    </button>
+                    {renderWorkspaceTemplateMenu()}
+                  </div>
+                  <button
+                    type="button"
+                    className="workspace-split-button"
+                    onClick={handleReturnToSplitView}
+                    title="Return to split view"
+                    aria-label="Return to split view"
+                  >
+                    {icons.split}
+                  </button>
+                </>
               )}
             </>
           )}
-          <div className="workspace-add-control">
-            <button
-              type="button"
-              className="workspace-add-button"
-              onClick={() => setIsWorkspaceAddMenuOpen(prev => !prev)}
-              title="Add workspace panel"
-              aria-label="Add workspace panel"
-            >
-              {icons.add}
-            </button>
-            {renderWorkspaceAddMenu()}
-          </div>
+          {isDesktopWorkspace && (
+            <div className="workspace-add-control">
+              <button
+                type="button"
+                className="workspace-add-button"
+                onClick={() => {
+                  setIsWorkspaceAddMenuOpen(prev => !prev);
+                  setIsWorkspaceTemplateMenuOpen(false);
+                }}
+                title="Add workspace panel"
+                aria-label="Add workspace panel"
+              >
+                {icons.add}
+              </button>
+              {renderWorkspaceAddMenu()}
+            </div>
+          )}
         </div>
         <div className="status-controls">
           <div

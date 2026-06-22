@@ -350,7 +350,14 @@
     align-items: center;
 }
 
+.workspace-template-control {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .workspace-add-button,
+.workspace-template-button,
 .workspace-tile-button,
 .workspace-split-button {
     background: transparent;
@@ -367,6 +374,7 @@
 }
 
 .workspace-add-button svg,
+.workspace-template-button svg,
 .workspace-tile-button svg,
 .workspace-split-button svg {
     width: 18px;
@@ -374,6 +382,7 @@
 }
 
 .workspace-add-button:hover:not(:disabled),
+.workspace-template-button:hover,
 .workspace-tile-button:hover,
 .workspace-split-button:hover {
     background: rgba(255, 255, 255, 0.18);
@@ -386,6 +395,7 @@
 }
 
 .workspace-add-button,
+.workspace-template-button,
 .workspace-tile-button,
 .workspace-split-button {
     height: 32px;
@@ -396,6 +406,129 @@
 .workspace-add-button:disabled {
     opacity: 0.42;
     cursor: not-allowed;
+}
+
+.workspace-template-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(320px, calc(100vw - 24px));
+    max-height: min(520px, calc(100vh - 64px));
+    overflow: auto;
+    z-index: 1200;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+.workspace-template-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.workspace-template-form label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.workspace-template-form-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.workspace-template-form-row input {
+    min-width: 0;
+    flex: 1 1 auto;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--background-secondary);
+    color: var(--text-color);
+}
+
+.workspace-template-form-row button,
+.workspace-template-item button,
+.workspace-template-transfer-row button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--background-secondary);
+    color: var(--text-color);
+}
+
+.workspace-template-form-row button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.workspace-template-form-row button svg,
+.workspace-template-item button svg,
+.workspace-template-transfer-row button svg {
+    width: 15px;
+    height: 15px;
+}
+
+.workspace-template-transfer-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.workspace-template-transfer-row button {
+    width: 100%;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.workspace-template-transfer-row button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.workspace-template-transfer-row input {
+    display: none;
+}
+
+.workspace-template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.workspace-template-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.workspace-template-item span {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    color: var(--text-color);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .workspace-add-menu {
