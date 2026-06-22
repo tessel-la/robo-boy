@@ -36,6 +36,8 @@ RUN apt-get update && apt-get install -y \
 # Install necessary dependencies (ensure git is included)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ros-base \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \

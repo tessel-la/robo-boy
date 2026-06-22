@@ -55,14 +55,18 @@ services:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
     environment:
       - DISPLAY=${DISPLAY}
-      # FastDDS shared-memory transport can deadlock action calls across
-      # host-networked containers running as different users. Use UDP for
-      # cross-container ROS traffic while keeping DDS discovery intact.
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
+      # Switch between Fast DDS and Cyclone DDS by setting RMW_IMPLEMENTATION.
+      # Fast DDS keeps UDP transport by default to avoid shared-memory issues
+      # across host-networked containers running as different users.
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - FASTDDS_BUILTIN_TRANSPORTS=${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
+      - CYCLONEDDS_URI=${CYCLONEDDS_URI:-file:///etc/cyclonedds/config.xml}
 
 volumes:
   caddy-data:
