@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ConnectionParams } from '../App'; // Import types
 import { useRos } from '../hooks/useRos'; // Import the hook
 import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
@@ -13,7 +13,7 @@ import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
-import { cloneGamepadTemplate, getGamepadLayout } from '../features/customGamepad/gamepadStorage';
+import { cloneGamepadTemplate, getGamepadLayout, loadGamepadLibrary } from '../features/customGamepad/gamepadStorage';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
@@ -69,6 +69,38 @@ const IconMCVStop = () => (
     <rect x="7" y="7" width="10" height="10" rx="2"/>
   </svg>
 );
+const IconMCVAdd = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14"/>
+  </svg>
+);
+const IconMCVTrash = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>
+  </svg>
+);
+const IconMCVGrip = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="9" cy="9" r="1.4"/>
+    <circle cx="15" cy="9" r="1.4"/>
+    <circle cx="9" cy="15" r="1.4"/>
+    <circle cx="15" cy="15" r="1.4"/>
+  </svg>
+);
+const IconMCVTile = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="8" height="8" rx="1.5"/>
+    <rect x="13" y="3" width="8" height="8" rx="1.5"/>
+    <rect x="3" y="13" width="8" height="8" rx="1.5"/>
+    <rect x="13" y="13" width="8" height="8" rx="1.5"/>
+  </svg>
+);
+const IconMCVSplit = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="8" rx="1.5"/>
+    <rect x="4" y="14" width="16" height="6" rx="1.5"/>
+  </svg>
+);
 // --- End Top Bar Icons ---
 
 // Use Icon components
@@ -80,6 +112,11 @@ const icons = {
   disconnected: <IconMCVUnlink />,
   disconnect: <IconMCVDisconnect />,
   stop: <IconMCVStop />,
+  add: <IconMCVAdd />,
+  trash: <IconMCVTrash />,
+  grip: <IconMCVGrip />,
+  tile: <IconMCVTile />,
+  split: <IconMCVSplit />,
 };
 
 // Define Panel Types
@@ -97,13 +134,210 @@ interface MainControlViewProps {
 }
 
 type ViewMode = 'camera' | '3d' | 'behaviorTree';
+type WorkspacePanelType = 'camera' | '3d' | 'pad' | 'behaviorTree';
 type GamepadEditorSession = {
   mode: GamepadSaveMode;
   initialLayout: CustomGamepadLayout | null;
 };
 
+interface WorkspacePanel {
+  id: string;
+  type: WorkspacePanelType;
+  title: string;
+  cameraTopic?: string;
+  layoutId?: string;
+}
+
+type WorkspaceTile =
+  | { kind: 'view'; id: 'base-view' }
+  | { kind: 'pads'; id: 'base-pads' }
+  | { kind: 'panel'; id: string; panel: WorkspacePanel };
+
+const WORKSPACE_PANELS_KEY = 'robo-boy-desktop-workspace-panels-v1';
+const WORKSPACE_LAYOUT_KEY = 'robo-boy-desktop-workspace-layout-v1';
+const WORKSPACE_TILE_ORDER_KEY = 'robo-boy-desktop-workspace-tile-order-v1';
+const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
+const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
+const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
+const MIN_WORKSPACE_TILE_RATIO = 0.24;
+
+type WorkspaceDraft = {
+  type: WorkspacePanelType;
+};
+
+type WorkspaceInteraction =
+  | {
+    mode: 'row';
+    index: number;
+    startClientX: number;
+    startClientY: number;
+    containerSize: number;
+    startRatios: number[];
+  }
+  | {
+    mode: 'column';
+    rowIndex: number;
+    index: number;
+    startClientX: number;
+    startClientY: number;
+    containerSize: number;
+    startRatios: number[];
+  };
+
+const clamp = (value: number, min: number, max: number) => {
+  return Math.max(min, Math.min(max, value));
+};
+
+const getWorkspaceTitle = (type: WorkspacePanelType) => {
+  if (type === 'camera') return 'Camera';
+  if (type === '3d') return '3D view';
+  if (type === 'behaviorTree') return 'Behavior tree';
+  return 'Pad controls';
+};
+
+const createWorkspacePanel = (
+  draft: WorkspaceDraft,
+  options: {
+    cameraTopic?: string;
+    layoutId?: string;
+  }
+): WorkspacePanel => {
+  return {
+    id: generateUniqueId('workspace-panel'),
+    title: getWorkspaceTitle(draft.type),
+    type: draft.type,
+    cameraTopic: draft.type === 'camera' ? options.cameraTopic : undefined,
+    layoutId: draft.type === 'pad' ? options.layoutId : undefined,
+  };
+};
+
+const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
+  if (!panel || typeof panel !== 'object') return null;
+  const candidate = panel as Partial<WorkspacePanel>;
+  if (
+    typeof candidate.id !== 'string' ||
+    !['camera', '3d', 'pad', 'behaviorTree'].includes(candidate.type || '') ||
+    typeof candidate.title !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    type: candidate.type as WorkspacePanelType,
+    title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
+    cameraTopic: candidate.cameraTopic,
+    layoutId: candidate.layoutId,
+  };
+};
+
+const isWorkspacePanel = (panel: unknown): panel is WorkspacePanel => {
+  return normalizeWorkspacePanel(panel) !== null;
+};
+
+const loadWorkspacePanels = (): WorkspacePanel[] => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_PANELS_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel)
+      : [];
+  } catch (error) {
+    console.error('Failed to load desktop workspace panels:', error);
+    return [];
+  }
+};
+
+type WorkspaceLayoutState = {
+  rowRatios: number[];
+  columnRatiosByRow: Record<number, number[]>;
+};
+
+const normalizeRatios = (ratios: unknown, length: number): number[] => {
+  if (length <= 0) return [];
+  if (!Array.isArray(ratios) || ratios.length !== length) {
+    return Array.from({ length }, () => 1);
+  }
+
+  const numericRatios = ratios.map(value => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
+  ));
+  const minRatio = MIN_WORKSPACE_TILE_RATIO;
+  const clampedRatios = numericRatios.map(value => Math.max(minRatio, value));
+  const total = clampedRatios.reduce((sum, value) => sum + value, 0);
+  return total > 0 ? clampedRatios.map(value => value / total) : Array.from({ length }, () => 1);
+};
+
+const loadWorkspaceLayout = (): WorkspaceLayoutState => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_LAYOUT_KEY);
+    if (!stored) return { rowRatios: [], columnRatiosByRow: {} };
+
+    const parsed = JSON.parse(stored) as Partial<WorkspaceLayoutState>;
+    return {
+      rowRatios: Array.isArray(parsed.rowRatios) ? parsed.rowRatios : [],
+      columnRatiosByRow: parsed.columnRatiosByRow && typeof parsed.columnRatiosByRow === 'object'
+        ? parsed.columnRatiosByRow
+        : {},
+    };
+  } catch (error) {
+    console.error('Failed to load desktop workspace layout:', error);
+    return { rowRatios: [], columnRatiosByRow: {} };
+  }
+};
+
+const BASE_WORKSPACE_TILE_IDS = ['base-view', 'base-pads'];
+
+const loadWorkspaceTileOrder = (): string[] => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_TILE_ORDER_KEY);
+    if (!stored) return BASE_WORKSPACE_TILE_IDS;
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : BASE_WORKSPACE_TILE_IDS;
+  } catch (error) {
+    console.error('Failed to load desktop workspace tile order:', error);
+    return BASE_WORKSPACE_TILE_IDS;
+  }
+};
+
+const normalizeWorkspaceTileOrder = (order: string[], panelIds: string[]) => {
+  const validIds = [...BASE_WORKSPACE_TILE_IDS, ...panelIds];
+  const orderedIds = order.filter((id, index) => (
+    validIds.includes(id) && order.indexOf(id) === index
+  ));
+  const missingIds = validIds.filter(id => !orderedIds.includes(id));
+  return [...orderedIds, ...missingIds];
+};
+
+const getWorkspaceColumnCount = (panelCount: number) => {
+  if (panelCount <= 1) return 1;
+  if (panelCount === 2) return 2;
+  return Math.ceil(Math.sqrt(panelCount));
+};
+
+const buildWorkspaceRows = <T,>(items: T[]) => {
+  const columnCount = getWorkspaceColumnCount(items.length);
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += columnCount) {
+    rows.push(items.slice(index, index + columnCount));
+  }
+  return rows;
+};
+
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadWorkspacePanels);
+  const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
+  const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
+  const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
+  const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
+  const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return true;
+    return window.matchMedia(DESKTOP_WORKSPACE_QUERY).matches;
+  });
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
   const [btExecution, setBtExecution] = useState<BehaviorTreeExecutionSnapshot>({
@@ -122,6 +356,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   // State to trigger refresh of custom gamepads in AddPanelMenu
   const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
+  const gamepadLibrary = useMemo(
+    () => loadGamepadLibrary(),
+    [customGamepadRefreshKey]
+  );
   // Ref for the Add Panel button (+) 
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -130,7 +368,35 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const _isConnecting = useRef(false);
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workspaceInteractionRef = useRef<WorkspaceInteraction | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
+  const normalizedWorkspaceTileOrder = useMemo(
+    () => normalizeWorkspaceTileOrder(workspaceTileOrder, workspacePanels.map(panel => panel.id)),
+    [workspacePanels, workspaceTileOrder]
+  );
+  const workspaceTiles = useMemo<WorkspaceTile[]>(() => {
+    const panelById = new Map(workspacePanels.map(panel => [panel.id, panel]));
+    return normalizedWorkspaceTileOrder.flatMap<WorkspaceTile>(id => {
+      if (id === 'base-view') return [{ kind: 'view' as const, id }];
+      if (id === 'base-pads') return [{ kind: 'pads' as const, id }];
+      const panel = panelById.get(id);
+      return panel ? [{ kind: 'panel' as const, id, panel }] : [];
+    });
+  }, [normalizedWorkspaceTileOrder, workspacePanels]);
+  const workspaceRows = useMemo(() => buildWorkspaceRows(workspaceTiles), [workspaceTiles]);
+  const workspaceRowRatios = useMemo(
+    () => normalizeRatios(workspaceLayout.rowRatios, workspaceRows.length),
+    [workspaceLayout.rowRatios, workspaceRows.length]
+  );
+  const workspaceColumnRatiosByRow = useMemo(() => (
+    workspaceRows.map((row, rowIndex) => normalizeRatios(
+      workspaceLayout.columnRatiosByRow[rowIndex],
+      row.length
+    ))
+  ), [workspaceLayout.columnRatiosByRow, workspaceRows]);
 
   // Resizable panels hook
   const { topHeight, bottomHeight, handleMouseDown, handleTouchStart, containerRef, isDragging } = useResizablePanels({
@@ -139,6 +405,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     minBottomHeight: 20,
     storageKey: 'robo-boy-panel-split',
   });
+
+  useEffect(() => {
+    localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels));
+  }, [workspacePanels]);
+
+  useEffect(() => {
+    localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
+  }, [workspaceLayout]);
+
+  useEffect(() => {
+    const normalizedOrder = normalizeWorkspaceTileOrder(
+      workspaceTileOrder,
+      workspacePanels.map(panel => panel.id)
+    );
+    if (normalizedOrder.join('|') !== workspaceTileOrder.join('|')) {
+      setWorkspaceTileOrder(normalizedOrder);
+      return;
+    }
+    localStorage.setItem(WORKSPACE_TILE_ORDER_KEY, JSON.stringify(normalizedOrder));
+  }, [workspacePanels, workspaceTileOrder]);
+
+  useEffect(() => {
+    if (!window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia(DESKTOP_WORKSPACE_QUERY);
+    const handleMediaChange = (event: MediaQueryListEvent) => {
+      setIsLargeScreen(event.matches);
+    };
+
+    setIsLargeScreen(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleMediaChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleMediaChange);
+    };
+  }, []);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -318,6 +620,282 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
   // --- End Panel Handlers ---
 
+  const resetWorkspaceLayout = () => {
+    setWorkspaceLayout({ rowRatios: [], columnRatiosByRow: {} });
+  };
+
+  const handleAddWorkspacePanel = (type: WorkspacePanelType, insertIndex?: number) => {
+    setIsWorkspaceOpen(true);
+    setWorkspacePanels(prev => {
+      const selectedPadPanel = selectedPanelId
+        ? activePanels.find(panel => panel.id === selectedPanelId)
+        : null;
+      const newPanel = createWorkspacePanel(
+        { type },
+        {
+          cameraTopic: selectedCameraTopic || availableCameraTopics[0],
+          layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+        }
+      );
+      const nextPanels = [...prev];
+      nextPanels.push(newPanel);
+      setWorkspaceTileOrder(prevOrder => {
+        const nextOrder = normalizeWorkspaceTileOrder(prevOrder, prev.map(panel => panel.id));
+        nextOrder.splice(
+          typeof insertIndex === 'number' ? clamp(insertIndex, 0, nextOrder.length) : nextOrder.length,
+          0,
+          newPanel.id
+        );
+        return nextOrder;
+      });
+      setLastAddedWorkspacePanelId(newPanel.id);
+      return nextPanels;
+    });
+    resetWorkspaceLayout();
+    setIsWorkspaceAddMenuOpen(false);
+  };
+
+  const handleReturnToSplitView = () => {
+    setIsWorkspaceOpen(false);
+    setIsWorkspaceAddMenuOpen(false);
+  };
+
+  const handleWorkspaceDragStart = (
+    event: React.DragEvent<HTMLButtonElement>,
+    type: WorkspacePanelType
+  ) => {
+    const payload: WorkspaceDraft = { type };
+    event.dataTransfer.setData(WORKSPACE_DRAG_FORMAT, JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = 'copy';
+    setIsWorkspaceOpen(true);
+    setIsWorkspaceDragActive(true);
+  };
+
+  const handleWorkspaceTileDragStart = (
+    event: React.DragEvent<HTMLElement>,
+    tileId: string
+  ) => {
+    event.dataTransfer.setData(WORKSPACE_TILE_DRAG_FORMAT, tileId);
+    event.dataTransfer.effectAllowed = 'move';
+    setIsWorkspaceDragActive(true);
+  };
+
+  const handleWorkspaceDragEnd = () => {
+    setIsWorkspaceDragActive(false);
+  };
+
+  const handleWorkspaceDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (
+      event.dataTransfer.types.includes(WORKSPACE_DRAG_FORMAT) ||
+      event.dataTransfer.types.includes(WORKSPACE_TILE_DRAG_FORMAT)
+    ) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = event.dataTransfer.types.includes(WORKSPACE_TILE_DRAG_FORMAT) ? 'move' : 'copy';
+    }
+  };
+
+  const getWorkspaceDropIndex = (clientX: number, clientY: number) => {
+    if (!workspaceRef.current) return workspaceTiles.length;
+
+    const cards = Array.from(workspaceRef.current.querySelectorAll<HTMLElement>('.workspace-card'));
+    for (let index = 0; index < cards.length; index += 1) {
+      const rect = cards[index].getBoundingClientRect();
+      const isAboveCardCenter = clientY < rect.top + rect.height / 2;
+      const isWithinCardRow = clientY >= rect.top && clientY <= rect.bottom;
+      const isBeforeCardCenter = clientX < rect.left + rect.width / 2;
+
+      if (isAboveCardCenter || (isWithinCardRow && isBeforeCardCenter)) {
+        return index;
+      }
+    }
+
+    return workspaceTiles.length;
+  };
+
+  const handleWorkspaceDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    const movedTileId = event.dataTransfer.getData(WORKSPACE_TILE_DRAG_FORMAT);
+    if (movedTileId) {
+      event.preventDefault();
+      setIsWorkspaceDragActive(false);
+      const dropIndex = getWorkspaceDropIndex(event.clientX, event.clientY);
+      setWorkspaceTileOrder(prevOrder => {
+        const currentOrder = normalizeWorkspaceTileOrder(prevOrder, workspacePanels.map(panel => panel.id));
+        const fromIndex = currentOrder.indexOf(movedTileId);
+        if (fromIndex === -1) return currentOrder;
+
+        const nextOrder = [...currentOrder];
+        const [movedId] = nextOrder.splice(fromIndex, 1);
+        const adjustedDropIndex = dropIndex > fromIndex ? dropIndex - 1 : dropIndex;
+        nextOrder.splice(clamp(adjustedDropIndex, 0, nextOrder.length), 0, movedId);
+        return nextOrder;
+      });
+      resetWorkspaceLayout();
+      return;
+    }
+
+    const payload = event.dataTransfer.getData(WORKSPACE_DRAG_FORMAT);
+    if (!payload) return;
+
+    event.preventDefault();
+    setIsWorkspaceDragActive(false);
+    try {
+      const draft = JSON.parse(payload) as WorkspaceDraft;
+      if (!['camera', '3d', 'pad', 'behaviorTree'].includes(draft.type)) return;
+
+      const tileIndex = getWorkspaceDropIndex(event.clientX, event.clientY);
+      handleAddWorkspacePanel(draft.type, tileIndex);
+    } catch (error) {
+      console.error('Failed to add dropped workspace panel:', error);
+    }
+  };
+
+  const updateAdjacentRatios = (
+    ratios: number[],
+    index: number,
+    deltaPixels: number,
+    containerSize: number
+  ) => {
+    if (index < 0 || index >= ratios.length - 1 || containerSize <= 0) return ratios;
+
+    const nextRatios = [...ratios];
+    const combinedRatio = nextRatios[index] + nextRatios[index + 1];
+    const minRatio = Math.min(MIN_WORKSPACE_TILE_RATIO, combinedRatio / 2);
+    const deltaRatio = deltaPixels / containerSize;
+    const leftRatio = clamp(nextRatios[index] + deltaRatio, minRatio, combinedRatio - minRatio);
+    nextRatios[index] = leftRatio;
+    nextRatios[index + 1] = combinedRatio - leftRatio;
+    return nextRatios;
+  };
+
+  const handleWorkspaceRowResizeStart = (
+    event: React.PointerEvent<HTMLDivElement>,
+    index: number
+  ) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    workspaceInteractionRef.current = {
+      mode: 'row',
+      index,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      containerSize: workspaceRef.current?.clientHeight || 1,
+      startRatios: workspaceRowRatios,
+    };
+  };
+
+  const handleWorkspaceColumnResizeStart = (
+    event: React.PointerEvent<HTMLDivElement>,
+    rowIndex: number,
+    index: number
+  ) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const rowElement = event.currentTarget.closest<HTMLElement>('.workspace-tile-row');
+    workspaceInteractionRef.current = {
+      mode: 'column',
+      rowIndex,
+      index,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      containerSize: rowElement?.clientWidth || 1,
+      startRatios: workspaceColumnRatiosByRow[rowIndex] || [],
+    };
+  };
+
+  const updateWorkspaceInteraction = useCallback((clientX: number, clientY: number) => {
+    const interaction = workspaceInteractionRef.current;
+    if (!interaction) return;
+
+    const deltaX = clientX - interaction.startClientX;
+    const deltaY = clientY - interaction.startClientY;
+
+    if (interaction.mode === 'row') {
+      setWorkspaceLayout(prev => ({
+        ...prev,
+        rowRatios: updateAdjacentRatios(
+          interaction.startRatios,
+          interaction.index,
+          deltaY,
+          interaction.containerSize
+        ),
+      }));
+      return;
+    }
+
+    setWorkspaceLayout(prev => ({
+      ...prev,
+      columnRatiosByRow: {
+        ...prev.columnRatiosByRow,
+        [interaction.rowIndex]: updateAdjacentRatios(
+          interaction.startRatios,
+          interaction.index,
+          deltaX,
+          interaction.containerSize
+        ),
+      },
+    }));
+  }, []);
+
+  const handleWorkspacePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    updateWorkspaceInteraction(event.clientX, event.clientY);
+  };
+
+  const handleWorkspacePointerEnd = () => {
+    workspaceInteractionRef.current = null;
+  };
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      updateWorkspaceInteraction(event.clientX, event.clientY);
+    };
+    const handleMouseMove = (event: MouseEvent) => {
+      updateWorkspaceInteraction(event.clientX, event.clientY);
+    };
+    const handlePointerEnd = () => {
+      workspaceInteractionRef.current = null;
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerEnd);
+    document.addEventListener('pointercancel', handlePointerEnd);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handlePointerEnd);
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerEnd);
+      document.removeEventListener('pointercancel', handlePointerEnd);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handlePointerEnd);
+    };
+  }, [updateWorkspaceInteraction]);
+
+  const handleRemoveWorkspacePanel = (panelId: string) => {
+    setWorkspacePanels(prev => prev.filter(panel => panel.id !== panelId));
+    setWorkspaceTileOrder(prev => prev.filter(id => id !== panelId));
+    resetWorkspaceLayout();
+  };
+
+  const handleWorkspaceCameraTopicChange = (panelId: string, cameraTopic: string) => {
+    setWorkspacePanels(prev => prev.map(panel =>
+      panel.id === panelId ? { ...panel, cameraTopic } : panel
+    ));
+  };
+
+  const handleWorkspacePadLayoutChange = (panelId: string, layoutId: string) => {
+    setWorkspacePanels(prev => prev.map(panel =>
+      panel.id === panelId ? { ...panel, layoutId } : panel
+    ));
+  };
+
+  const handleAutoTileWorkspacePanels = () => {
+    if (workspacePanels.length > 0) {
+      setIsWorkspaceOpen(true);
+    }
+    resetWorkspaceLayout();
+    setIsWorkspaceAddMenuOpen(false);
+  };
+
   // Memoize the selected panel component to prevent unnecessary re-renders
   const SelectedPanelComponent = useMemo(() => {
     if (!selectedPanelId) return null;
@@ -397,10 +975,247 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     btExecutionControls.current?.stop();
   };
 
+  const renderPadControls = (showPadAddButton: boolean, style?: React.CSSProperties) => (
+    <div className="control-panel-container" style={style}>
+      <ControlPanelTabs
+        panels={activePanels}
+        selectedPanelId={selectedPanelId}
+        onSelectPanel={handleSelectPanel}
+        onAddPanelToggle={handleAddPanelToggle}
+        onRemovePanel={handleRemovePanel}
+        addButtonRef={showPadAddButton ? addButtonRef : undefined}
+        showAddButton={showPadAddButton}
+      />
+      <div className="control-panel card">
+        {isConnected && ros ? (
+          SelectedPanelComponent ?? (
+            <div className="pad-empty-state">
+              <div className="pad-empty-state-content">
+                <span className="pad-empty-state-kicker">Custom controls</span>
+                <h2>Start by creating your pad</h2>
+                <p>Build one from scratch or begin with a ready-made template.</p>
+                <button type="button" onClick={() => handleOpenCustomEditor()}>
+                  Create your pad
+                </button>
+              </div>
+            </div>
+          )
+        ) : (
+          <div>Connecting to ROS...</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderViewContent = () => (
+    <div className="view-panel card" ref={viewPanelRef}>
+      {viewMode === 'camera' ? (
+        isConnected && ros && selectedCameraTopic ? (
+          <CameraView
+            ros={ros}
+            cameraTopic={selectedCameraTopic}
+            availableTopics={availableCameraTopics}
+            onTopicChange={setSelectedCameraTopic}
+          />
+        ) : (
+          <div className="placeholder">
+            {isConnected ? (availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found') : 'Connecting to ROS...'}
+          </div>
+        )
+      ) : viewMode === '3d' ? (
+        isConnected && ros ? (
+          <VisualizationPanel ros={ros} key="visualization-panel" />
+        ) : (
+          <div className="placeholder">Connecting to ROS...</div>
+        )
+      ) : null}
+      {btEverMounted && (
+        <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
+          {isConnected && ros ? (
+            <BehaviorTreePanel
+              ros={ros}
+              isConnected={isConnected}
+              isActive={viewMode === 'behaviorTree'}
+              onExecutionChange={setBtExecution}
+              onExecutionControlsChange={(controls) => {
+                btExecutionControls.current = controls;
+              }}
+            />
+          ) : (
+            <div className="placeholder">Connect to ROS to use Behavior Trees</div>
+          )}
+        </div>
+      )}
+      {viewMode === 'behaviorTree' && !btEverMounted && (
+        <div className="placeholder">Loading...</div>
+      )}
+    </div>
+  );
+
+  const renderWorkspacePadControls = (panel: WorkspacePanel) => {
+    const selectedLayoutId = panel.layoutId || gamepadLibrary[0]?.id || '';
+
+    return (
+      <div className="workspace-pad-component">
+        {gamepadLibrary.length > 0 ? (
+          <div className="workspace-pad-selector">
+            <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad</label>
+            <select
+              id={`workspace-pad-select-${panel.id}`}
+              value={selectedLayoutId}
+              onChange={(event) => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
+            >
+              {gamepadLibrary.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        <div className="workspace-pad-body">
+          {isConnected && ros && selectedLayoutId ? (
+            <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} />
+          ) : (
+            <div className="pad-empty-state">
+              <div className="pad-empty-state-content">
+                <span className="pad-empty-state-kicker">Custom controls</span>
+                <h2>No pads available</h2>
+                <p>Create a pad from the main pad controls.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderWorkspacePanelContent = (panel: WorkspacePanel) => {
+    if (!isConnected || !ros) {
+      return <div className="placeholder">Connecting to ROS...</div>;
+    }
+
+    if (panel.type === 'camera') {
+      const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
+      return cameraTopic ? (
+        <CameraView
+          ros={ros}
+          cameraTopic={cameraTopic}
+          availableTopics={availableCameraTopics}
+          onTopicChange={(newTopic) => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
+          selectId={`camera-topic-select-${panel.id}`}
+        />
+      ) : (
+        <div className="placeholder">
+          {availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found'}
+        </div>
+      );
+    }
+
+    if (panel.type === '3d') {
+      return (
+        <VisualizationPanel
+          ros={ros}
+          storageKey={`roboboy_3d_visualization_state_${panel.id}`}
+        />
+      );
+    }
+
+    if (panel.type === 'behaviorTree') {
+      return (
+        <BehaviorTreePanel
+          ros={ros}
+          isConnected={isConnected}
+          isActive={isDesktopWorkspace}
+          onExecutionChange={setBtExecution}
+          onExecutionControlsChange={(controls) => {
+            btExecutionControls.current = controls;
+          }}
+        />
+      );
+    }
+
+    if (panel.type === 'pad') {
+      return renderWorkspacePadControls(panel);
+    }
+
+    return <div className="placeholder">Choose a component</div>;
+  };
+
+  const renderWorkspaceAddMenu = () => {
+    if (!isWorkspaceAddMenuOpen) return null;
+
+    return (
+      <div className="workspace-add-menu" role="menu">
+        <div className="workspace-add-menu-section">
+          <span className="workspace-add-menu-title">Components</span>
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => handleWorkspaceDragStart(event, 'camera')}
+            onDragEnd={handleWorkspaceDragEnd}
+            onClick={() => handleAddWorkspacePanel('camera')}
+          >
+            {icons.camera}
+            <span>Camera</span>
+          </button>
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => handleWorkspaceDragStart(event, '3d')}
+            onDragEnd={handleWorkspaceDragEnd}
+            onClick={() => handleAddWorkspacePanel('3d')}
+          >
+            {icons.view3d}
+            <span>3D panel</span>
+          </button>
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => handleWorkspaceDragStart(event, 'behaviorTree')}
+            onDragEnd={handleWorkspaceDragEnd}
+            onClick={() => handleAddWorkspacePanel('behaviorTree')}
+          >
+            {icons.bt}
+            <span>Behavior tree</span>
+          </button>
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => handleWorkspaceDragStart(event, 'pad')}
+            onDragEnd={handleWorkspaceDragEnd}
+            onClick={() => handleAddWorkspacePanel('pad')}
+          >
+            {icons.grip}
+            <span>Pad controls</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStandardSplitLayout = (className = 'standard-stack-layout') => (
+    <div className={className} ref={containerRef}>
+      <div className="view-panel-container" style={{ height: `calc(${topHeight}% - 8px)` }}>
+        {renderViewContent()}
+      </div>
+
+      <div
+        className={`resize-handle ${isDragging ? 'dragging' : ''}`}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+      >
+        <div className="resize-handle-bar" />
+      </div>
+
+      {renderPadControls(true, { height: `calc(${bottomHeight}% - 8px)` })}
+    </div>
+  );
+
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
-      <div className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''}`}>
+      <div className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''} ${isDesktopWorkspace ? 'workspace-active' : ''}`}>
         <div className="view-toggle">
           <button
             onClick={() => handleViewToggle('camera')}
@@ -461,6 +1276,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
           )}
         </div>
+        <div className="layout-controls">
+          {isDesktopWorkspace && (
+            <>
+              <button
+                type="button"
+                className="workspace-split-button"
+                onClick={handleReturnToSplitView}
+                title="Return to split view"
+                aria-label="Return to split view"
+              >
+                {icons.split}
+              </button>
+              <button
+                type="button"
+                className="workspace-tile-button"
+                onClick={handleAutoTileWorkspacePanels}
+                title="Auto-arrange workspace panels"
+                aria-label="Auto-arrange workspace panels"
+              >
+                {icons.tile}
+              </button>
+            </>
+          )}
+          <div className="workspace-add-control">
+            <button
+              type="button"
+              className="workspace-add-button"
+              onClick={() => setIsWorkspaceAddMenuOpen(prev => !prev)}
+              title="Add workspace panel"
+              aria-label="Add workspace panel"
+            >
+              {icons.add}
+            </button>
+            {renderWorkspaceAddMenu()}
+          </div>
+        </div>
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
@@ -482,91 +1333,139 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       </div>
 
       {/* Main Content Area - ensure it starts below the top bar */}
-      <div className="main-content-area" ref={containerRef}>
-        <div className="view-panel-container" style={{ height: `calc(${topHeight}% - 8px)` }}>
-          <div className="view-panel card" ref={viewPanelRef}>
-            {viewMode === 'camera' ? (
-              isConnected && ros && selectedCameraTopic ? (
-                <CameraView
-                  ros={ros}
-                  cameraTopic={selectedCameraTopic}
-                  availableTopics={availableCameraTopics}
-                  onTopicChange={setSelectedCameraTopic}
-                />
-              ) : (
-                <div className="placeholder">
-                  {isConnected ? (availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found') : 'Connecting to ROS...'}
-                </div>
-              )
-            ) : viewMode === '3d' ? (
-              isConnected && ros ? (
-                <VisualizationPanel ros={ros} key="visualization-panel" />
-              ) : (
-                <div className="placeholder">Connecting to ROS...</div>
-              )
-            ) : null}
-            {/* BT: lazy-mount once, kept alive with display:none to preserve nodes/executor */}
-            {btEverMounted && (
-              <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
-                {isConnected && ros ? (
-                  <BehaviorTreePanel
-                    ros={ros}
-                    isConnected={isConnected}
-                    isActive={viewMode === 'behaviorTree'}
-                    onExecutionChange={setBtExecution}
-                    onExecutionControlsChange={(controls) => {
-                      btExecutionControls.current = controls;
-                    }}
-                  />
-                ) : (
-                  <div className="placeholder">Connect to ROS to use Behavior Trees</div>
-                )}
-              </div>
-            )}
-            {viewMode === 'behaviorTree' && !btEverMounted && (
-              <div className="placeholder">Loading…</div>
-            )}
-          </div>
-        </div>
+      <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
+        {!isDesktopWorkspace && renderStandardSplitLayout()}
 
-        {/* Resizable Handle */}
-        <div
-          className={`resize-handle ${isDragging ? 'dragging' : ''}`}
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-        >
-          <div className="resize-handle-bar" />
-        </div>
-
-        <div className="control-panel-container" style={{ height: `calc(${bottomHeight}% - 8px)` }}>
-          <ControlPanelTabs
-            panels={activePanels}
-            selectedPanelId={selectedPanelId}
-            onSelectPanel={handleSelectPanel}
-            onAddPanelToggle={handleAddPanelToggle}
-            onRemovePanel={handleRemovePanel}
-            addButtonRef={addButtonRef}
-          />
-          <div className="control-panel card">
-            {/* Render the selected panel component */}
-            {isConnected && ros ? (
-              SelectedPanelComponent ?? (
-                <div className="pad-empty-state">
-                  <div className="pad-empty-state-content">
-                    <span className="pad-empty-state-kicker">Custom controls</span>
-                    <h2>Start by creating your pad</h2>
-                    <p>Build one from scratch or begin with a ready-made template.</p>
-                    <button type="button" onClick={() => handleOpenCustomEditor()}>
-                      Create your pad
-                    </button>
+        {isDesktopWorkspace && (
+          <div
+            className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''}`}
+            aria-label="Desktop workspace"
+            ref={workspaceRef}
+            onDragOver={handleWorkspaceDragOver}
+            onDrop={handleWorkspaceDrop}
+            onPointerMove={handleWorkspacePointerMove}
+            onPointerUp={handleWorkspacePointerEnd}
+            onPointerCancel={handleWorkspacePointerEnd}
+          >
+            <div className="workspace-grid">
+              {workspaceRows.map((row, rowIndex) => (
+                <React.Fragment key={`workspace-row-${rowIndex}`}>
+                  <div
+                    className="workspace-tile-row"
+                    style={{ flex: workspaceRowRatios[rowIndex] || 1 }}
+                  >
+                    {row.map((tile, columnIndex) => (
+                      <React.Fragment key={tile.id}>
+                        {tile.kind === 'view' ? (
+                          <section
+                            className="workspace-card workspace-card-view"
+                            aria-label="View component"
+                            data-workspace-card-id={tile.id}
+                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                          >
+                            <header
+                              className="workspace-card-header"
+                              draggable
+                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                              onDragEnd={handleWorkspaceDragEnd}
+                            >
+                              <div className="workspace-card-title">
+                                <span className="workspace-card-dot workspace-card-dot-view" aria-hidden="true" />
+                                <span>View</span>
+                              </div>
+                            </header>
+                            <div className="workspace-card-content workspace-card-content-view">
+                              {renderViewContent()}
+                            </div>
+                          </section>
+                        ) : tile.kind === 'pads' ? (
+                          <section
+                            className="workspace-card workspace-card-pads"
+                            aria-label="Pad controls component"
+                            data-workspace-card-id={tile.id}
+                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                          >
+                            <header
+                              className="workspace-card-header"
+                              draggable
+                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                              onDragEnd={handleWorkspaceDragEnd}
+                            >
+                              <div className="workspace-card-title">
+                                <span className="workspace-card-dot workspace-card-dot-pad" aria-hidden="true" />
+                                <span>Pad controls</span>
+                              </div>
+                            </header>
+                            <div className="workspace-card-content">
+                              {renderPadControls(true)}
+                            </div>
+                          </section>
+                        ) : (
+                          <section
+                            className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}`}
+                            aria-label={tile.panel.title}
+                            data-workspace-card-id={tile.panel.id}
+                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                            onAnimationEnd={() => {
+                              setLastAddedWorkspacePanelId(prev => prev === tile.panel.id ? null : prev);
+                            }}
+                          >
+                            <header
+                              className="workspace-card-header"
+                              draggable
+                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                              onDragEnd={handleWorkspaceDragEnd}
+                            >
+                              <div className="workspace-card-title">
+                                <span className={`workspace-card-dot workspace-card-dot-${tile.panel.type}`} aria-hidden="true" />
+                                <span>{tile.panel.title}</span>
+                              </div>
+                              <div className="workspace-card-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveWorkspacePanel(tile.panel.id)}
+                                  title="Remove panel"
+                                  aria-label={`Remove ${tile.panel.title}`}
+                                >
+                                  {icons.trash}
+                                </button>
+                              </div>
+                            </header>
+                            <div className="workspace-card-content">
+                              {renderWorkspacePanelContent(tile.panel)}
+                            </div>
+                          </section>
+                        )}
+                        {columnIndex < row.length - 1 && (
+                          <div
+                            className="workspace-column-resize-handle"
+                            onPointerDown={(event) => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize workspace columns"
+                          >
+                            <div className="workspace-resize-handle-bar" />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </div>
-                </div>
-              )
-            ) : (
-              <div>Connecting to ROS...</div>
-            )}
+                  {rowIndex < workspaceRows.length - 1 && (
+                    <div
+                      className="workspace-row-resize-handle"
+                      onPointerDown={(event) => handleWorkspaceRowResizeStart(event, rowIndex)}
+                      role="separator"
+                      aria-orientation="horizontal"
+                      aria-label="Resize workspace rows"
+                    >
+                      <div className="workspace-resize-handle-bar" />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Render AddPanelMenu using Portal outside main flow */}
