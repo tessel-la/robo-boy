@@ -834,6 +834,10 @@ body.no-scroll {
     transition: flex 0.22s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
+.desktop-workspace.is-resizing .workspace-card {
+    transition: none;
+}
+
 .workspace-card.is-settling {
     animation: workspace-card-settle 360ms cubic-bezier(0.2, 1.42, 0.36, 1);
 }

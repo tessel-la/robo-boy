@@ -333,6 +333,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
+  const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
   const [workspaceDropIndex, setWorkspaceDropIndex] = useState<number | null>(null);
   const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(() => {
@@ -673,6 +674,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsWorkspaceOpen(false);
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceDragActive(false);
+    setIsWorkspaceResizing(false);
     setWorkspaceDropIndex(null);
   };
 
@@ -799,6 +801,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   ) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    setIsWorkspaceResizing(true);
     workspaceInteractionRef.current = {
       mode: 'row',
       index,
@@ -816,6 +819,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   ) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    setIsWorkspaceResizing(true);
     const rowElement = event.currentTarget.closest<HTMLElement>('.workspace-tile-row');
     workspaceInteractionRef.current = {
       mode: 'column',
@@ -868,6 +872,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const handleWorkspacePointerEnd = () => {
     workspaceInteractionRef.current = null;
+    setIsWorkspaceResizing(false);
   };
 
   useEffect(() => {
@@ -879,6 +884,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     };
     const handlePointerEnd = () => {
       workspaceInteractionRef.current = null;
+      setIsWorkspaceResizing(false);
     };
 
     document.addEventListener('pointermove', handlePointerMove);
@@ -1399,7 +1405,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
         {isDesktopWorkspace && (
           <div
-            className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''}`}
+            className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''} ${isWorkspaceResizing ? 'is-resizing' : ''}`}
             aria-label="Desktop workspace"
             ref={workspaceRef}
             onDragOver={handleWorkspaceDragOver}
