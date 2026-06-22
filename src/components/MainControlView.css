@@ -380,6 +380,11 @@
     color: #fff;
 }
 
+.workspace-tile-button.active {
+    background: var(--primary-color, #4285f4);
+    color: #fff;
+}
+
 .workspace-add-button,
 .workspace-tile-button,
 .workspace-split-button {
@@ -759,6 +764,61 @@ body.no-scroll {
     flex: 1 1 0;
 }
 
+.workspace-empty-drop-zone {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px dashed color-mix(in srgb, var(--primary-color) 44%, var(--border-color));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--background-secondary) 54%, transparent);
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.desktop-workspace.is-drop-active .workspace-empty-drop-zone {
+    border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--background-secondary));
+}
+
+.workspace-empty-drop-line {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--primary-color);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color) 14%, transparent);
+}
+
+.workspace-drop-indicator {
+    flex: 0 0 8px;
+    align-self: stretch;
+    min-height: 40px;
+    border-radius: 999px;
+    background: var(--primary-color);
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--primary-color) 18%, transparent),
+        0 0 18px color-mix(in srgb, var(--primary-color) 36%, transparent);
+    animation: workspace-drop-indicator-pop 150ms ease-out;
+}
+
+.workspace-drop-indicator-end {
+    margin-left: 0;
+}
+
+@keyframes workspace-drop-indicator-pop {
+    from {
+        transform: scaleX(0.58);
+        opacity: 0.42;
+    }
+    to {
+        transform: scaleX(1);
+        opacity: 1;
+    }
+}
+
 .workspace-card {
     position: relative;
     flex: 1 1 0;
@@ -930,26 +990,66 @@ body.no-scroll {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px;
+    gap: 6px;
+    min-height: 34px;
+    padding: 4px 6px;
     border-bottom: 1px solid var(--border-color);
     background: var(--background-secondary);
 }
 
 .workspace-pad-selector label {
     color: var(--text-secondary);
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
+    line-height: 1;
 }
 
 .workspace-pad-selector select {
     min-width: 0;
     flex: 1 1 auto;
-    height: 30px;
+    height: 26px;
+    padding: 0 6px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background: var(--background-color);
     color: var(--text-color);
+    font-size: 0.78rem;
+}
+
+.workspace-pad-selector-empty {
+    min-width: 0;
+    flex: 1 1 auto;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-pad-create-button {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--background-color);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.workspace-pad-create-button:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.workspace-pad-create-button svg {
+    width: 14px;
+    height: 14px;
 }
 
 .workspace-pad-body {

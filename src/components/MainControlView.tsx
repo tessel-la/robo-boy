@@ -306,8 +306,8 @@ const normalizeWorkspaceTileOrder = (order: string[], panelIds: string[]) => {
   const orderedIds = order.filter((id, index) => (
     validIds.includes(id) && order.indexOf(id) === index
   ));
-  const missingIds = validIds.filter(id => !orderedIds.includes(id));
-  return [...orderedIds, ...missingIds];
+  const missingPanelIds = panelIds.filter(id => !orderedIds.includes(id));
+  return [...orderedIds, ...missingPanelIds];
 };
 
 const getWorkspaceColumnCount = (panelCount: number) => {
@@ -333,6 +333,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
+  const [workspaceDropIndex, setWorkspaceDropIndex] = useState<number | null>(null);
   const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -354,6 +355,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
+  const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   // State to trigger refresh of custom gamepads in AddPanelMenu
   const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   const gamepadLibrary = useMemo(
@@ -397,6 +399,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       row.length
     ))
   ), [workspaceLayout.columnRatiosByRow, workspaceRows]);
+  const getWorkspaceTileIndex = (rowIndex: number, columnIndex: number) => {
+    return workspaceRows
+      .slice(0, rowIndex)
+      .reduce((total, row) => total + row.length, columnIndex);
+  };
 
   // Resizable panels hook
   const { topHeight, bottomHeight, handleMouseDown, handleTouchStart, containerRef, isDragging } = useResizablePanels({
@@ -582,6 +589,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const handleCloseCustomEditor = () => {
     setEditorSession(null);
+    setWorkspacePadEditorTargetId(null);
   };
 
   const handleSaveCustomGamepad = (layout: CustomGamepadLayout) => {
@@ -602,7 +610,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       setSelectedPanelId(result.selectedPanelId);
       return result.panels;
     });
+    if (workspacePadEditorTargetId) {
+      setWorkspacePanels(prev => prev.map(panel =>
+        panel.id === workspacePadEditorTargetId ? { ...panel, layoutId: layout.id } : panel
+      ));
+    }
     setIsAddPanelMenuOpen(false);
+    setWorkspacePadEditorTargetId(null);
     // Trigger refresh of custom gamepad list in AddPanelMenu
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
@@ -658,6 +672,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleReturnToSplitView = () => {
     setIsWorkspaceOpen(false);
     setIsWorkspaceAddMenuOpen(false);
+    setIsWorkspaceDragActive(false);
+    setWorkspaceDropIndex(null);
   };
 
   const handleWorkspaceDragStart = (
@@ -682,6 +698,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const handleWorkspaceDragEnd = () => {
     setIsWorkspaceDragActive(false);
+    setWorkspaceDropIndex(null);
   };
 
   const handleWorkspaceDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -691,7 +708,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     ) {
       event.preventDefault();
       event.dataTransfer.dropEffect = event.dataTransfer.types.includes(WORKSPACE_TILE_DRAG_FORMAT) ? 'move' : 'copy';
+      setWorkspaceDropIndex(getWorkspaceDropIndex(event.clientX, event.clientY));
     }
+  };
+
+  const handleWorkspaceDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setWorkspaceDropIndex(null);
   };
 
   const getWorkspaceDropIndex = (clientX: number, clientY: number) => {
@@ -717,6 +741,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (movedTileId) {
       event.preventDefault();
       setIsWorkspaceDragActive(false);
+      setWorkspaceDropIndex(null);
       const dropIndex = getWorkspaceDropIndex(event.clientX, event.clientY);
       setWorkspaceTileOrder(prevOrder => {
         const currentOrder = normalizeWorkspaceTileOrder(prevOrder, workspacePanels.map(panel => panel.id));
@@ -738,6 +763,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     event.preventDefault();
     setIsWorkspaceDragActive(false);
+    setWorkspaceDropIndex(null);
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
       if (!['camera', '3d', 'pad', 'behaviorTree'].includes(draft.type)) return;
@@ -876,6 +902,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     resetWorkspaceLayout();
   };
 
+  const handleRemoveWorkspaceTile = (tile: WorkspaceTile) => {
+    if (tile.kind === 'panel') {
+      handleRemoveWorkspacePanel(tile.panel.id);
+      return;
+    }
+
+    setWorkspaceTileOrder(prev => prev.filter(id => id !== tile.id));
+    resetWorkspaceLayout();
+  };
+
   const handleWorkspaceCameraTopicChange = (panelId: string, cameraTopic: string) => {
     setWorkspacePanels(prev => prev.map(panel =>
       panel.id === panelId ? { ...panel, cameraTopic } : panel
@@ -888,10 +924,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     ));
   };
 
+  const handleOpenWorkspacePadEditor = (panelId: string) => {
+    setWorkspacePadEditorTargetId(panelId);
+    handleOpenCustomEditor();
+  };
+
   const handleAutoTileWorkspacePanels = () => {
-    if (workspacePanels.length > 0) {
-      setIsWorkspaceOpen(true);
-    }
+    setIsWorkspaceOpen(true);
+    setIsWorkspaceDragActive(false);
+    setWorkspaceDropIndex(null);
     resetWorkspaceLayout();
     setIsWorkspaceAddMenuOpen(false);
   };
@@ -910,12 +951,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   // View state management with animation
   const handleViewToggle = (mode: ViewMode) => {
     if (isTransitioning || viewMode === mode) return;
+
+    const currentView = viewPanelRef.current;
+    if (!currentView) {
+      setViewMode(mode);
+      setIsTransitioning(false);
+      return;
+    }
+
     setIsTransitioning(true);
 
     const newViewMode = mode;
-
-    const currentView = viewPanelRef.current;
-    if (!currentView) return;
 
     // Create timeline for the animation
     const timeline = anime.timeline({
@@ -1057,9 +1103,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     return (
       <div className="workspace-pad-component">
-        {gamepadLibrary.length > 0 ? (
-          <div className="workspace-pad-selector">
-            <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad</label>
+        <div className="workspace-pad-selector">
+          <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad</label>
+          {gamepadLibrary.length > 0 ? (
             <select
               id={`workspace-pad-select-${panel.id}`}
               value={selectedLayoutId}
@@ -1071,8 +1117,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 </option>
               ))}
             </select>
-          </div>
-        ) : null}
+          ) : (
+            <span className="workspace-pad-selector-empty">No pads</span>
+          )}
+          <button
+            type="button"
+            className="workspace-pad-create-button"
+            onClick={() => handleOpenWorkspacePadEditor(panel.id)}
+            title="Create pad for this component"
+            aria-label="Create pad for this component"
+          >
+            {icons.add}
+          </button>
+        </div>
         <div className="workspace-pad-body">
           {isConnected && ros && selectedLayoutId ? (
             <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} />
@@ -1081,7 +1138,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               <div className="pad-empty-state-content">
                 <span className="pad-empty-state-kicker">Custom controls</span>
                 <h2>No pads available</h2>
-                <p>Create a pad from the main pad controls.</p>
+                <p>Create a pad from this component.</p>
               </div>
             </div>
           )}
@@ -1216,87 +1273,91 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     <div className="main-control-view">
       {/* Unified Top Bar */}
       <div className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''} ${isDesktopWorkspace ? 'workspace-active' : ''}`}>
-        <div className="view-toggle">
-          <button
-            onClick={() => handleViewToggle('camera')}
-            className={viewMode === 'camera' ? 'active' : ''}
-            title="Camera View"
-            aria-label="Switch to Camera View"
-          >
-            {icons.camera}
-          </button>
-          <button
-            onClick={() => handleViewToggle('3d')}
-            className={viewMode === '3d' ? 'active' : ''}
-            title="3D View"
-            aria-label="Switch to 3D View"
-          >
-            {icons.view3d}
-          </button>
-          {btExecution.isExecuting ? (
-            <div
-              className={`bt-execution-island ${viewMode === 'behaviorTree' ? 'active' : ''}`}
-              role="status"
-              aria-live="polite"
+        {!isDesktopWorkspace && (
+          <div className="view-toggle">
+            <button
+              onClick={() => handleViewToggle('camera')}
+              className={viewMode === 'camera' ? 'active' : ''}
+              title="Camera View"
+              aria-label="Switch to Camera View"
             >
+              {icons.camera}
+            </button>
+            <button
+              onClick={() => handleViewToggle('3d')}
+              className={viewMode === '3d' ? 'active' : ''}
+              title="3D View"
+              aria-label="Switch to 3D View"
+            >
+              {icons.view3d}
+            </button>
+            {btExecution.isExecuting ? (
+              <div
+                className={`bt-execution-island ${viewMode === 'behaviorTree' ? 'active' : ''}`}
+                role="status"
+                aria-live="polite"
+              >
+                <button
+                  className="bt-execution-return"
+                  onClick={handleReturnToBehaviorTree}
+                  title="Open behavior tree"
+                  aria-label="Open behavior tree"
+                >
+                  {icons.bt}
+                  <span className="bt-execution-pulse" aria-hidden="true" />
+                  <span className="bt-execution-copy">
+                    <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
+                      {btExecution.treeName || 'Behavior tree'}
+                    </span>
+                    <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
+                      {btExecution.activeNodeLabel || 'Running'}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className="bt-execution-stop"
+                  onClick={handleStopBehaviorTree}
+                  title="Stop behavior tree"
+                  aria-label="Stop behavior tree"
+                >
+                  {icons.stop}
+                </button>
+              </div>
+            ) : (
               <button
-                className="bt-execution-return"
-                onClick={handleReturnToBehaviorTree}
-                title="Open behavior tree"
-                aria-label="Open behavior tree"
+                onClick={() => handleViewToggle('behaviorTree')}
+                className={viewMode === 'behaviorTree' ? 'active' : ''}
+                title="Behavior Tree"
+                aria-label="Switch to Behavior Tree"
               >
                 {icons.bt}
-                <span className="bt-execution-pulse" aria-hidden="true" />
-                <span className="bt-execution-copy">
-                  <span className="bt-execution-tree" title={btExecution.treeName || 'Behavior tree'}>
-                    {btExecution.treeName || 'Behavior tree'}
-                  </span>
-                  <span className="bt-execution-node" title={btExecution.activeNodeLabel || 'Running'}>
-                    {btExecution.activeNodeLabel || 'Running'}
-                  </span>
-                </span>
               </button>
-              <button
-                className="bt-execution-stop"
-                onClick={handleStopBehaviorTree}
-                title="Stop behavior tree"
-                aria-label="Stop behavior tree"
-              >
-                {icons.stop}
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => handleViewToggle('behaviorTree')}
-              className={viewMode === 'behaviorTree' ? 'active' : ''}
-              title="Behavior Tree"
-              aria-label="Switch to Behavior Tree"
-            >
-              {icons.bt}
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         <div className="layout-controls">
-          {isDesktopWorkspace && (
+          {isLargeScreen && (
             <>
               <button
                 type="button"
-                className="workspace-split-button"
-                onClick={handleReturnToSplitView}
-                title="Return to split view"
-                aria-label="Return to split view"
-              >
-                {icons.split}
-              </button>
-              <button
-                type="button"
-                className="workspace-tile-button"
+                className={`workspace-tile-button ${isDesktopWorkspace ? 'active' : ''}`}
                 onClick={handleAutoTileWorkspacePanels}
-                title="Auto-arrange workspace panels"
-                aria-label="Auto-arrange workspace panels"
+                title={isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace'}
+                aria-label={isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace'}
               >
                 {icons.tile}
               </button>
+              {isDesktopWorkspace && (
+                <button
+                  type="button"
+                  className="workspace-split-button"
+                  onClick={handleReturnToSplitView}
+                  title="Return to split view"
+                  aria-label="Return to split view"
+                >
+                  {icons.split}
+                </button>
+              )}
             </>
           )}
           <div className="workspace-add-control">
@@ -1342,6 +1403,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             aria-label="Desktop workspace"
             ref={workspaceRef}
             onDragOver={handleWorkspaceDragOver}
+            onDragLeave={handleWorkspaceDragLeave}
             onDrop={handleWorkspaceDrop}
             onPointerMove={handleWorkspacePointerMove}
             onPointerUp={handleWorkspacePointerEnd}
@@ -1354,101 +1416,130 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                     className="workspace-tile-row"
                     style={{ flex: workspaceRowRatios[rowIndex] || 1 }}
                   >
-                    {row.map((tile, columnIndex) => (
-                      <React.Fragment key={tile.id}>
-                        {tile.kind === 'view' ? (
-                          <section
-                            className="workspace-card workspace-card-view"
-                            aria-label="View component"
-                            data-workspace-card-id={tile.id}
-                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
-                          >
-                            <header
-                              className="workspace-card-header"
-                              draggable
-                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
-                              onDragEnd={handleWorkspaceDragEnd}
+                    {row.map((tile, columnIndex) => {
+                      const tileIndex = getWorkspaceTileIndex(rowIndex, columnIndex);
+                      return (
+                        <React.Fragment key={tile.id}>
+                          {workspaceDropIndex === tileIndex && (
+                            <div className="workspace-drop-indicator" aria-hidden="true" />
+                          )}
+                          {tile.kind === 'view' ? (
+                            <section
+                              className="workspace-card workspace-card-view"
+                              aria-label="View component"
+                              data-workspace-card-id={tile.id}
+                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
-                              <div className="workspace-card-title">
-                                <span className="workspace-card-dot workspace-card-dot-view" aria-hidden="true" />
-                                <span>View</span>
+                              <header
+                                className="workspace-card-header"
+                                draggable
+                                onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                                onDragEnd={handleWorkspaceDragEnd}
+                              >
+                                <div className="workspace-card-title">
+                                  <span className="workspace-card-dot workspace-card-dot-view" aria-hidden="true" />
+                                  <span>View</span>
+                                </div>
+                                <div className="workspace-card-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    title="Remove view tile"
+                                    aria-label="Remove view tile"
+                                  >
+                                    {icons.trash}
+                                  </button>
+                                </div>
+                              </header>
+                              <div className="workspace-card-content workspace-card-content-view">
+                                {renderViewContent()}
                               </div>
-                            </header>
-                            <div className="workspace-card-content workspace-card-content-view">
-                              {renderViewContent()}
-                            </div>
-                          </section>
-                        ) : tile.kind === 'pads' ? (
-                          <section
-                            className="workspace-card workspace-card-pads"
-                            aria-label="Pad controls component"
-                            data-workspace-card-id={tile.id}
-                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
-                          >
-                            <header
-                              className="workspace-card-header"
-                              draggable
-                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
-                              onDragEnd={handleWorkspaceDragEnd}
+                            </section>
+                          ) : tile.kind === 'pads' ? (
+                            <section
+                              className="workspace-card workspace-card-pads"
+                              aria-label="Pad controls component"
+                              data-workspace-card-id={tile.id}
+                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
-                              <div className="workspace-card-title">
-                                <span className="workspace-card-dot workspace-card-dot-pad" aria-hidden="true" />
-                                <span>Pad controls</span>
+                              <header
+                                className="workspace-card-header"
+                                draggable
+                                onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                                onDragEnd={handleWorkspaceDragEnd}
+                              >
+                                <div className="workspace-card-title">
+                                  <span className="workspace-card-dot workspace-card-dot-pad" aria-hidden="true" />
+                                  <span>Pad controls</span>
+                                </div>
+                                <div className="workspace-card-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    title="Remove pad controls tile"
+                                    aria-label="Remove pad controls tile"
+                                  >
+                                    {icons.trash}
+                                  </button>
+                                </div>
+                              </header>
+                              <div className="workspace-card-content">
+                                {renderPadControls(true)}
                               </div>
-                            </header>
-                            <div className="workspace-card-content">
-                              {renderPadControls(true)}
-                            </div>
-                          </section>
-                        ) : (
-                          <section
-                            className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}`}
-                            aria-label={tile.panel.title}
-                            data-workspace-card-id={tile.panel.id}
-                            style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
-                            onAnimationEnd={() => {
-                              setLastAddedWorkspacePanelId(prev => prev === tile.panel.id ? null : prev);
-                            }}
-                          >
-                            <header
-                              className="workspace-card-header"
-                              draggable
-                              onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
-                              onDragEnd={handleWorkspaceDragEnd}
+                            </section>
+                          ) : (
+                            <section
+                              className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}`}
+                              aria-label={tile.panel.title}
+                              data-workspace-card-id={tile.panel.id}
+                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              onAnimationEnd={() => {
+                                setLastAddedWorkspacePanelId(prev => prev === tile.panel.id ? null : prev);
+                              }}
                             >
-                              <div className="workspace-card-title">
-                                <span className={`workspace-card-dot workspace-card-dot-${tile.panel.type}`} aria-hidden="true" />
-                                <span>{tile.panel.title}</span>
+                              <header
+                                className="workspace-card-header"
+                                draggable
+                                onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
+                                onDragEnd={handleWorkspaceDragEnd}
+                              >
+                                <div className="workspace-card-title">
+                                  <span className={`workspace-card-dot workspace-card-dot-${tile.panel.type}`} aria-hidden="true" />
+                                  <span>{tile.panel.title}</span>
+                                </div>
+                                <div className="workspace-card-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    title="Remove panel"
+                                    aria-label={`Remove ${tile.panel.title}`}
+                                  >
+                                    {icons.trash}
+                                  </button>
+                                </div>
+                              </header>
+                              <div className="workspace-card-content">
+                                {renderWorkspacePanelContent(tile.panel)}
                               </div>
-                              <div className="workspace-card-actions">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveWorkspacePanel(tile.panel.id)}
-                                  title="Remove panel"
-                                  aria-label={`Remove ${tile.panel.title}`}
-                                >
-                                  {icons.trash}
-                                </button>
-                              </div>
-                            </header>
-                            <div className="workspace-card-content">
-                              {renderWorkspacePanelContent(tile.panel)}
+                            </section>
+                          )}
+                          {columnIndex < row.length - 1 && (
+                            <div
+                              className="workspace-column-resize-handle"
+                              onPointerDown={(event) => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label="Resize workspace columns"
+                            >
+                              <div className="workspace-resize-handle-bar" />
                             </div>
-                          </section>
-                        )}
-                        {columnIndex < row.length - 1 && (
-                          <div
-                            className="workspace-column-resize-handle"
-                            onPointerDown={(event) => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
-                            role="separator"
-                            aria-orientation="vertical"
-                            aria-label="Resize workspace columns"
-                          >
-                            <div className="workspace-resize-handle-bar" />
-                          </div>
-                        )}
-                      </React.Fragment>
-                    ))}
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                    {rowIndex === workspaceRows.length - 1 && workspaceDropIndex === workspaceTiles.length && (
+                      <div className="workspace-drop-indicator workspace-drop-indicator-end" aria-hidden="true" />
+                    )}
                   </div>
                   {rowIndex < workspaceRows.length - 1 && (
                     <div
@@ -1463,6 +1554,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   )}
                 </React.Fragment>
               ))}
+              {workspaceTiles.length === 0 && (
+                <div className="workspace-empty-drop-zone">
+                  <div className="workspace-empty-drop-line" aria-hidden="true" />
+                  <span>Workspace empty</span>
+                </div>
+              )}
             </div>
           </div>
         )}
