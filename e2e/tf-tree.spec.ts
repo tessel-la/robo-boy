@@ -85,18 +85,20 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await page.locator('.tf-frame-node').filter({ hasText: 'laser' }).click();
   await expect(details).toContainText('laser');
 
-  await expect.poll(async () => {
-    const panelBox = await panel.boundingBox();
-    const canvasBox = await canvas.boundingBox();
-    const detailsBox = await details.boundingBox();
-    if (!panelBox || !canvasBox || !detailsBox) return false;
+  await expect
+    .poll(async () => {
+      const panelBox = await panel.boundingBox();
+      const canvasBox = await canvas.boundingBox();
+      const detailsBox = await details.boundingBox();
+      if (!panelBox || !canvasBox || !detailsBox) return false;
 
-    return (
-      panelBox.x >= 0 &&
-      panelBox.x + panelBox.width <= 390 &&
-      canvasBox.height > 220 &&
-      detailsBox.height > 90 &&
-      detailsBox.y > canvasBox.y
-    );
-  }).toBe(true);
+      return (
+        panelBox.x >= 0 &&
+        panelBox.x + panelBox.width <= 390 &&
+        canvasBox.height > 220 &&
+        detailsBox.height > 90 &&
+        detailsBox.y > canvasBox.y
+      );
+    })
+    .toBe(true);
 });
