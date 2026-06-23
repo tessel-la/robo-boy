@@ -855,13 +855,13 @@ test.describe('Behavior Tree panel', () => {
     await page.getByRole('button', { name: 'Run' }).click();
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
     await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeEnabled();
+    await expect(page.getByTestId('bt-stop')).toBeEnabled();
     await expect(page.getByTestId('bt-menu-button')).toBeDisabled();
     await expect(page.getByTestId('bt-palette-toggle')).toBeDisabled();
 
     await page.getByRole('button', { name: 'Pause' }).click();
     await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeEnabled();
+    await expect(page.getByTestId('bt-stop')).toBeEnabled();
     await expect(page.getByTestId('bt-menu-button')).toBeDisabled();
 
     await page.getByRole('button', { name: 'Resume' }).click();
