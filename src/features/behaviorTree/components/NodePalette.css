@@ -17,6 +17,12 @@
   transform-origin: top left;
 }
 
+.node-palette.disabled .palette-node {
+  cursor: default;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .palette-body {
   flex: 1;
   min-height: 0;

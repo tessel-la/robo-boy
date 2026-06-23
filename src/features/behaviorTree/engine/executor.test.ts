@@ -86,6 +86,27 @@ const treeWithControl = (root: BehaviorTreeNode, child: BehaviorTreeNode): Behav
   updatedAt: 1,
 });
 
+const sequenceTree = (): BehaviorTree => ({
+  id: 'sequence-tree',
+  name: 'Sequence Tree',
+  nodes: [
+    {
+      id: 'sequence',
+      type: BehaviorNodeType.Sequence,
+      position: { x: 0, y: 0 },
+      data: { label: 'Sequence', type: 'sequence' },
+    },
+    topicNode('topic-one'),
+    topicNode('topic-two'),
+  ],
+  edges: [
+    { id: 'edge-one', source: 'sequence', target: 'topic-one' },
+    { id: 'edge-two', source: 'sequence', target: 'topic-two' },
+  ],
+  createdAt: 1,
+  updatedAt: 1,
+});
+
 const executeTree = async (tree: BehaviorTree) => {
   const events: ExecutionEvent[] = [];
   const executor = new BehaviorTreeExecutor(tree, {} as Ros, (event) => {
@@ -195,5 +216,50 @@ describe('BehaviorTreeExecutor retry and repeat nodes', () => {
       type: 'completed',
       data: { result: ExecutionStatus.Failure },
     });
+  });
+});
+
+describe('BehaviorTreeExecutor pause and resume', () => {
+  beforeEach(() => {
+    roslibMocks.topicPublish.mockReset();
+    roslibMocks.topicUnadvertise.mockReset();
+  });
+
+  it('does not advance to the next node until resumed', async () => {
+    const events: ExecutionEvent[] = [];
+    let executor!: BehaviorTreeExecutor;
+    executor = new BehaviorTreeExecutor(sequenceTree(), {} as Ros, (event) => {
+      events.push(event);
+      if (event.type === 'nodeSuccess' && event.nodeId === 'topic-one') executor.pause();
+    });
+
+    const execution = executor.start();
+    await vi.waitFor(() => expect(roslibMocks.topicPublish).toHaveBeenCalledTimes(1));
+    expect(events.some((event) => event.type === 'paused')).toBe(true);
+
+    executor.resume();
+    await execution;
+
+    expect(roslibMocks.topicPublish).toHaveBeenCalledTimes(2);
+    expect(events.some((event) => event.type === 'resumed')).toBe(true);
+    expect(events[events.length - 1]).toMatchObject({ type: 'completed' });
+  });
+
+  it('stops cleanly while paused without advancing', async () => {
+    const events: ExecutionEvent[] = [];
+    let executor!: BehaviorTreeExecutor;
+    executor = new BehaviorTreeExecutor(sequenceTree(), {} as Ros, (event) => {
+      events.push(event);
+      if (event.type === 'nodeSuccess' && event.nodeId === 'topic-one') executor.pause();
+    });
+
+    const execution = executor.start();
+    await vi.waitFor(() => expect(events.some((event) => event.type === 'paused')).toBe(true));
+    executor.stop();
+    await execution;
+
+    expect(roslibMocks.topicPublish).toHaveBeenCalledTimes(1);
+    expect(events.some((event) => event.type === 'stopped')).toBe(true);
+    expect(events.some((event) => event.type === 'completed')).toBe(false);
   });
 });

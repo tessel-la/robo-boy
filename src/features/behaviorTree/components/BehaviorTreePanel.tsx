@@ -99,10 +99,11 @@ interface BehaviorTreePanelProps {
 
 export interface BehaviorTreeExecutionSnapshot {
   isExecuting: boolean;
+  isPaused?: boolean;
   treeName: string;
   activeNodeId?: string;
   activeNodeLabel?: string;
-  status?: ExecutionStatus | 'completed' | 'stopped' | 'error';
+  status?: ExecutionStatus | 'paused' | 'completed' | 'stopped' | 'error';
   startedAt?: number;
 }
 
@@ -461,6 +462,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [rootTree, setRootTree] = useState<BehaviorTree | null>(null);
   const [treePath, setTreePath] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
@@ -852,9 +854,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (isExecuting) return;
       persistEditorTree(nodes, addEdge(normalizeEdge(connection), edges));
     },
-    [edges, nodes, persistEditorTree]
+    [edges, isExecuting, nodes, persistEditorTree]
   );
 
   const getCurrentSelectionRect = useCallback((): DOMRect | null => {
@@ -1035,6 +1038,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         return;
       }
 
+      if (isExecuting) return;
       persistEditorTree(nextNodes, edges);
     },
     [
@@ -1043,6 +1047,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       getManualEdgeSelectionOverride,
       getBoxSelectionEdgeIds,
       getBoxSelectionNodeIds,
+      isExecuting,
       nodes,
       persistEditorTree,
       shouldIgnoreRecentBoxSelectionReduction,
@@ -1069,6 +1074,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         return;
       }
 
+      if (isExecuting) return;
       persistEditorTree(nodes, nextEdges);
     },
     [
@@ -1076,6 +1082,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       edges,
       getManualEdgeSelectionOverride,
       getBoxSelectionEdgeIds,
+      isExecuting,
       nodes,
       persistEditorTree,
       shouldIgnoreRecentBoxSelectionReduction,
@@ -1090,6 +1097,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
+      if (isExecuting) return;
 
       const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!reactFlowBounds) return;
@@ -1113,7 +1121,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
       addNodeAtPosition(data.nodeType, position, data.item);
     },
-    [addNodeAtPosition, screenToFlowPosition]
+    [addNodeAtPosition, isExecuting, screenToFlowPosition]
   );
 
   const onNodesDelete = useCallback(
@@ -1302,18 +1310,20 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [nodes, openSubtreeNode, selectedNodes]);
 
   const openNodeEditor = useCallback((node: Node) => {
-    if (node.type === BehaviorNodeType.Action) {
+    if (isSubtreeNode(node as BehaviorTreeNode)) {
+      openSubtreeNode(node.id);
+    } else if (isExecuting) {
+      return;
+    } else if (node.type === BehaviorNodeType.Action) {
       setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
     } else if (node.type === BehaviorNodeType.Service) {
       setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
-    } else if (isSubtreeNode(node as BehaviorTreeNode)) {
-      openSubtreeNode(node.id);
     } else if (isIteratingControlNode(node)) {
       setEditingIterationNodeId(node.id);
     } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
       setOrderingParentId(node.id);
     }
-  }, [openSubtreeNode]);
+  }, [isExecuting, openSubtreeNode]);
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -1644,18 +1654,37 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       }
 
       if (event.type === 'started') {
+        setIsPaused(false);
         setExecutionSnapshot((prev) => ({
           ...prev,
           isExecuting: true,
           status: ExecutionStatus.Running,
           startedAt: executionStartedAt.current,
         }));
+      } else if (event.type === 'paused') {
+        setIsPaused(true);
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: true,
+          isPaused: true,
+          status: 'paused',
+        }));
+      } else if (event.type === 'resumed') {
+        setIsPaused(false);
+        setExecutionSnapshot((prev) => ({
+          ...prev,
+          isExecuting: true,
+          isPaused: false,
+          status: ExecutionStatus.Running,
+        }));
       } else if (event.type === 'completed' || event.type === 'stopped' || event.type === 'error') {
         const status = event.type;
         setIsExecuting(false);
+        setIsPaused(false);
         setExecutionSnapshot((prev) => ({
           ...prev,
           isExecuting: false,
+          isPaused: false,
           status,
         }));
         setTimeout(() => {
@@ -1709,8 +1738,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     executionStartedAt.current = Date.now();
     executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     setIsExecuting(true);
+    setIsPaused(false);
     setExecutionSnapshot({
       isExecuting: true,
+      isPaused: false,
       treeName: treeToExecute.name,
       activeNodeLabel: 'Starting',
       status: ExecutionStatus.Running,
@@ -1719,9 +1750,18 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     executorRef.current.start();
   }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
 
+  const handlePause = useCallback(() => {
+    executorRef.current?.pause();
+  }, []);
+
+  const handleResume = useCallback(() => {
+    executorRef.current?.resume();
+  }, []);
+
   const handleStop = useCallback(() => {
     if (executorRef.current) executorRef.current.stop();
     setIsExecuting(false);
+    setIsPaused(false);
     setRootTree((previousRootTree) => {
       if (!previousRootTree) return previousRootTree;
 
@@ -1750,6 +1790,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     setExecutionSnapshot((prev) => ({
       ...prev,
       isExecuting: false,
+      isPaused: false,
       status: 'stopped',
     }));
   }, [resetTransientEdgeState, resetTransientNodeState]);
@@ -1814,7 +1855,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
       if (isEditableTarget) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      if (!isExecuting && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         if (event.shiftKey) {
           handleRedo();
@@ -1826,7 +1867,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRedo, handleUndo]);
+  }, [handleRedo, handleUndo, isExecuting]);
 
   useEffect(() => {
     onExecutionControlsChange?.({ stop: handleStop });
@@ -1936,6 +1977,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       nodeType: BehaviorNodeType,
       item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
     ) => {
+      if (isExecuting) return;
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
 
@@ -1951,7 +1993,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         setIsPaletteCollapsed(true);
       }
     },
-    [addNodeAtPosition, screenToFlowPosition]
+    [addNodeAtPosition, isExecuting, screenToFlowPosition]
   );
 
   const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
@@ -2525,6 +2567,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       <BehaviorTreeToolbar
         currentTree={currentTree}
         isExecuting={isExecuting}
+        isPaused={isPaused}
+        isEditingLocked={isExecuting}
         isPaletteCollapsed={isPaletteCollapsed}
         nodeCount={nodes.length}
         canUndo={canUndo}
@@ -2535,6 +2579,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onLoad={handleLoad}
         onNew={handleNew}
         onExecute={handleExecute}
+        onPause={handlePause}
+        onResume={handleResume}
         onStop={handleStop}
         onExport={handleExport}
         onArrange={handleArrange}
@@ -2600,6 +2646,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           isConnected={isConnected}
           isCollapsed={isPaletteCollapsed}
+          isDisabled={isExecuting}
           onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
           onAddNode={handleAddNode}
         />
@@ -2634,13 +2681,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             connectionMode={ConnectionMode.Loose}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={['Control', 'Meta']}
+            nodesDraggable={!isExecuting}
+            nodesConnectable={!isExecuting}
             panOnDrag={canvasInteractionMode === 'pan'}
             selectionOnDrag={false}
             connectionRadius={48}
             fitView
             minZoom={0.1}
             maxZoom={2}
-            deleteKeyCode={['Backspace', 'Delete']}
+            deleteKeyCode={isExecuting ? null : ['Backspace', 'Delete']}
             defaultEdgeOptions={{
               animated: true,
               style: { stroke: 'var(--primary-color, #4285f4)', strokeWidth: 2 },
@@ -2689,7 +2738,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               <span>Parent</span>
             </button>
           )}
-          {selectionActionAnchor && (selectedNodes.length > 0 || selectedEdges.length > 0) && (
+          {!isExecuting &&
+            selectionActionAnchor &&
+            (selectedNodes.length > 0 || selectedEdges.length > 0) && (
             <div
               className={`bt-selection-actions placement-${selectionActionAnchor.placement}`}
               style={{

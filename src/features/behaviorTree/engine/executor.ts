@@ -236,10 +236,13 @@ export class BehaviorTreeExecutor {
   private tree: BehaviorTree;
   private nodeStatuses: Map<string, ExecutionStatus>;
   private isRunning: boolean;
+  private isPaused: boolean;
   private callback: ExecutionCallback;
   private abortController: AbortController | null;
   private activeActions: Map<string, ActiveAction>;
   private readonly rootPath: string[];
+  private pausePromise: Promise<void> | null;
+  private resolvePause: (() => void) | null;
 
   constructor(tree: BehaviorTree, ros: Ros, callback: ExecutionCallback) {
     this.tree = tree;
@@ -247,9 +250,12 @@ export class BehaviorTreeExecutor {
     this.callback = callback;
     this.nodeStatuses = new Map();
     this.isRunning = false;
+    this.isPaused = false;
     this.abortController = null;
     this.activeActions = new Map();
     this.rootPath = [];
+    this.pausePromise = null;
+    this.resolvePause = null;
 
     // Initialize all nodes to idle status
     tree.nodes.forEach(node => {
@@ -267,6 +273,7 @@ export class BehaviorTreeExecutor {
     }
 
     this.isRunning = true;
+    this.isPaused = false;
     this.abortController = new AbortController();
 
     this.emitEvent({
@@ -284,11 +291,13 @@ export class BehaviorTreeExecutor {
       // Execute from root
       const result = await this.executeNode(rootNode, this.tree, this.rootPath);
 
-      this.emitEvent({
-        type: 'completed',
-        timestamp: Date.now(),
-        data: { result },
-      });
+      if (this.isRunning) {
+        this.emitEvent({
+          type: 'completed',
+          timestamp: Date.now(),
+          data: { result },
+        });
+      }
     } catch (error) {
       this.emitEvent({
         type: 'error',
@@ -297,6 +306,8 @@ export class BehaviorTreeExecutor {
       });
     } finally {
       this.isRunning = false;
+      this.isPaused = false;
+      this.releasePauseWaiters();
       this.abortController = null;
     }
   }
@@ -318,11 +329,43 @@ export class BehaviorTreeExecutor {
     }
 
     this.isRunning = false;
+    this.isPaused = false;
+    this.releasePauseWaiters();
 
     this.emitEvent({
       type: 'stopped',
       timestamp: Date.now(),
     });
+  }
+
+  public pause(): void {
+    if (!this.isRunning || this.isPaused) return;
+
+    this.isPaused = true;
+    this.pausePromise = new Promise<void>((resolve) => {
+      this.resolvePause = resolve;
+    });
+    this.emitEvent({ type: 'paused', timestamp: Date.now() });
+  }
+
+  public resume(): void {
+    if (!this.isRunning || !this.isPaused) return;
+
+    this.isPaused = false;
+    this.releasePauseWaiters();
+    this.emitEvent({ type: 'resumed', timestamp: Date.now() });
+  }
+
+  private releasePauseWaiters(): void {
+    this.resolvePause?.();
+    this.resolvePause = null;
+    this.pausePromise = null;
+  }
+
+  private async waitWhilePaused(): Promise<void> {
+    if (this.isPaused && this.pausePromise) {
+      await this.pausePromise;
+    }
   }
 
   /**
@@ -395,6 +438,7 @@ export class BehaviorTreeExecutor {
     tree: BehaviorTree = this.tree,
     treePath: string[] = this.rootPath
   ): Promise<ExecutionStatus> {
+    await this.waitWhilePaused();
     if (!this.isRunning) {
       return ExecutionStatus.Failure;
     }
@@ -437,6 +481,8 @@ export class BehaviorTreeExecutor {
           result = ExecutionStatus.Failure;
       }
 
+      await this.waitWhilePaused();
+      if (!this.isRunning) return ExecutionStatus.Failure;
       this.setNodeStatus(node.id, result, treePath);
       return result;
     } catch (error) {
@@ -668,7 +714,11 @@ export class BehaviorTreeExecutor {
               ? normalizeActionGoalPayload(rawGoal, details.fields, details.defaults)
               : rawGoal;
 
-          if (settled || !this.isRunning) return;
+          await this.waitWhilePaused();
+          if (settled || !this.isRunning) {
+            settle(ExecutionStatus.Failure);
+            return;
+          }
 
           console.log(`[BT] send_action_goal payload for "${data.actionName}":`, JSON.stringify(goal));
 
