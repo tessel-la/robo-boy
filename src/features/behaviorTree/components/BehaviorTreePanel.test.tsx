@@ -17,6 +17,8 @@ const reactFlowMock = vi.hoisted(() => ({
 const executorMock = vi.hoisted(() => ({
   instances: [] as Array<{
     start: ReturnType<typeof vi.fn>;
+    pause: ReturnType<typeof vi.fn>;
+    resume: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     callback: (event: Record<string, unknown>) => void;
   }>,
@@ -94,6 +96,8 @@ vi.mock('../engine/executor', () => ({
     function MockBehaviorTreeExecutor(
       this: {
         start: ReturnType<typeof vi.fn>;
+        pause: ReturnType<typeof vi.fn>;
+        resume: ReturnType<typeof vi.fn>;
         stop: ReturnType<typeof vi.fn>;
         callback: (event: Record<string, unknown>) => void;
       },
@@ -103,11 +107,15 @@ vi.mock('../engine/executor', () => ({
     ) {
       const instance = {
         start: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
         stop: vi.fn(),
         callback,
       };
       executorMock.instances.push(instance);
       this.start = instance.start;
+      this.pause = instance.pause;
+      this.resume = instance.resume;
       this.stop = instance.stop;
       this.callback = instance.callback;
       return instance;
@@ -476,6 +484,38 @@ describe('BehaviorTreePanel', () => {
         expect.objectContaining({ zoom: 1, duration: 360 })
       );
     });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+    expect(screen.getByTestId('bt-menu-button')).toBeDisabled();
+    expect(screen.getByTestId('bt-palette-toggle')).toBeDisabled();
+    expect(reactFlowMock.render.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        nodesDraggable: false,
+        nodesConnectable: false,
+        deleteKeyCode: null,
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(executorMock.instances[0].pause).toHaveBeenCalledOnce();
+    act(() => {
+      executorMock.instances[0].callback({ type: 'paused', timestamp: Date.now() });
+    });
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(executorMock.instances[0].resume).toHaveBeenCalledOnce();
+    act(() => {
+      executorMock.instances[0].callback({ type: 'resumed', timestamp: Date.now() });
+    });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(executorMock.instances[0].stop).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
+    expect(screen.getByTestId('bt-menu-button')).toBeEnabled();
+
   });
 
   it('handles an edge click without crashing', () => {

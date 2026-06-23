@@ -14,6 +14,8 @@ export type BehaviorTreeInteractionMode = 'pan' | 'select';
 interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
+  isPaused: boolean;
+  isEditingLocked: boolean;
   isPaletteCollapsed: boolean;
   nodeCount: number;
   canUndo: boolean;
@@ -24,6 +26,8 @@ interface BehaviorTreeToolbarProps {
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
   onExecute: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
   onExport: () => void;
   onArrange: () => void;
@@ -38,6 +42,8 @@ interface BehaviorTreeToolbarProps {
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
+  isPaused,
+  isEditingLocked,
   isPaletteCollapsed,
   nodeCount,
   canUndo,
@@ -48,6 +54,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onLoad,
   onNew,
   onExecute,
+  onPause,
+  onResume,
   onStop,
   onExport,
   onArrange,
@@ -68,6 +76,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   useEffect(() => {
     setNameValue(currentTree?.name ?? '');
   }, [currentTree?.id, currentTree?.name]);
+
+  useEffect(() => {
+    if (!isEditingLocked) return;
+    setPendingDelete(null);
+    setMenuOpen(false);
+  }, [isEditingLocked]);
 
   useEffect(() => {
     const handleSavedTreesChanged = () => setSavedTrees(listBehaviorTrees());
@@ -158,6 +172,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className="bt-float-menu-btn"
           onClick={openMenu}
+          disabled={isEditingLocked}
           title="Menu: save, load, rename"
           aria-label="Open menu"
           data-testid="bt-menu-button"
@@ -174,6 +189,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className={`bt-float-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
           onClick={onTogglePalette}
+          disabled={isEditingLocked}
           title={isPaletteCollapsed ? 'Show node palette' : 'Hide node palette'}
           aria-label="Toggle node palette"
           data-testid="bt-palette-toggle"
@@ -184,7 +200,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className="bt-float-icon-btn bt-arrange-tree-btn"
           onClick={onArrange}
-          disabled={nodeCount === 0}
+          disabled={isEditingLocked || nodeCount === 0}
           title="Arrange tree"
           aria-label="Arrange tree"
           data-testid="bt-arrange-tree"
@@ -228,7 +244,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className="bt-float-icon-btn bt-undo-tree-btn"
           onClick={onUndo}
-          disabled={!canUndo}
+          disabled={isEditingLocked || !canUndo}
           title="Undo last behavior tree change"
           aria-label="Undo last behavior tree change"
           data-testid="bt-undo"
@@ -241,7 +257,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className="bt-float-icon-btn bt-redo-tree-btn"
           onClick={onRedo}
-          disabled={!canRedo}
+          disabled={isEditingLocked || !canRedo}
           title="Redo last behavior tree change"
           aria-label="Redo last behavior tree change"
           data-testid="bt-redo"
@@ -269,21 +285,40 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
-        {isExecuting ? (
-          <button className="bt-float-stop-btn" onClick={onStop} title="Stop execution">
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
-              <rect x="0" y="0" width="11" height="11" rx="2"/>
+        <button
+          className={isExecuting && !isPaused ? 'bt-float-pause-btn' : 'bt-float-run-btn'}
+          onClick={isExecuting ? (isPaused ? onResume : onPause) : onExecute}
+          title={isExecuting ? (isPaused ? 'Resume execution' : 'Pause execution') : 'Execute tree'}
+          aria-label={isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          data-testid="bt-run-pause"
+        >
+          {isExecuting && !isPaused ? (
+            <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="1" width="3" height="11" rx="1"/>
+              <rect x="7" y="1" width="3" height="11" rx="1"/>
             </svg>
-            <span className="bt-float-btn-label">Stop</span>
-          </button>
-        ) : (
-          <button className="bt-float-run-btn" onClick={onExecute} title="Execute tree">
+          ) : (
             <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
               <path d="M1 1l9 5.5L1 12V1z"/>
             </svg>
-            <span className="bt-float-btn-label">Run</span>
-          </button>
-        )}
+          )}
+          <span className="bt-float-btn-label">
+            {isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          </span>
+        </button>
+        <button
+          className="bt-float-stop-btn"
+          onClick={onStop}
+          disabled={!isExecuting}
+          title="Stop execution"
+          aria-label="Stop"
+          data-testid="bt-stop"
+        >
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
+            <rect x="0" y="0" width="11" height="11" rx="2"/>
+          </svg>
+          <span className="bt-float-btn-label">Stop</span>
+        </button>
       </div>
 
       {/* ── Slide-in menu panel ──────────────────────────────────── */}

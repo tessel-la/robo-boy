@@ -139,6 +139,7 @@ interface NodePaletteProps {
   ros: Ros | null;
   isConnected: boolean;
   isCollapsed: boolean;
+  isDisabled?: boolean;
   onToggleCollapse: () => void;
   onAddNode?: (
     type: BehaviorNodeType,
@@ -162,6 +163,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   ros,
   isConnected,
   isCollapsed,
+  isDisabled = false,
   onToggleCollapse,
   onAddNode,
 }) => {
@@ -371,6 +373,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     nodeType: BehaviorNodeType,
     item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
   ) => {
+    if (isDisabled) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, item }));
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -387,9 +393,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   return (
     <div
-      className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}
+      className={`node-palette${isMobile ? ' mobile-sheet' : ''}${isDisabled ? ' disabled' : ''}`}
       ref={paletteRef}
       data-testid="bt-node-palette"
+      aria-disabled={isDisabled}
       style={isMobile && sheetHeight !== null ? { height: sheetHeight } : undefined}
     >
       {isMobile && (
@@ -467,9 +474,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
               <div
                 key={node.type}
                 className="palette-node"
-                draggable
+                draggable={!isDisabled}
                 onDragStart={(e) => handleDragStart(e, node.type)}
-                onClick={() => onAddNode?.(node.type, undefined)}
+                onClick={() => !isDisabled && onAddNode?.(node.type, undefined)}
               >
                 <span className="palette-node-icon">{CONTROL_ICONS[node.label]}</span>
                 <span className="palette-node-label">{node.label}</span>
@@ -496,9 +503,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <div
                   key={tree.id}
                   className="palette-node palette-node-ros"
-                  draggable
+                  draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Subtree, tree)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Subtree, tree)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Subtree, tree)}
                   title={`Insert "${tree.name}" as a subtree`}
                 >
                   <span className="palette-node-icon">
@@ -544,9 +551,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   <div
                     key={`${action.name}-${index}`}
                     className="palette-node palette-node-ros"
-                    draggable
+                    draggable={!isDisabled}
                     onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, action)}
-                    onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
+                    onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Action, action)}
                     title={`${action.name} (${action.type})`}
                   >
                     <span className="palette-node-icon">
@@ -591,9 +598,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <div
                   key={`${service.name}-${index}`}
                   className="palette-node palette-node-ros"
-                  draggable
+                  draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Service, service)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Service, service)}
                   title={`${service.name} (${service.type})`}
                 >
                   <span className="palette-node-icon">
@@ -638,9 +645,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <div
                   key={`${topic.name}-${index}`}
                   className="palette-node palette-node-ros"
-                  draggable
+                  draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Topic, topic)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Topic, topic)}
                   title={`${topic.name} (${topic.type})`}
                 >
                   <span className="palette-node-icon">
