@@ -54,6 +54,6 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await expect(page.getByText('6 frames')).toBeVisible();
 
   await page.getByLabel('Static TF').uncheck();
-  await expect(page.getByText('3 frames')).toBeVisible();
+  await expect(page.getByText('4 frames')).toBeVisible();
   await page.getByLabel('Fit TF graph to view').click();
 });
