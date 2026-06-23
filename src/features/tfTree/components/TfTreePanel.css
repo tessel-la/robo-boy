@@ -12,6 +12,10 @@
   background: var(--card-background, #151a21);
 }
 
+.tf-tree-panel * {
+  box-sizing: border-box;
+}
+
 .tf-tree-toolbar {
   display: flex;
   align-items: center;
@@ -26,6 +30,7 @@
 .tf-tree-toolbar__group {
   display: flex;
   gap: 6px;
+  flex: 0 0 auto;
 }
 
 .tf-tree-toolbar button {
@@ -52,6 +57,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   height: 34px;
   padding: 0 9px;
   border: 1px solid rgba(146, 164, 184, 0.28);
@@ -68,6 +74,7 @@
 .tf-tree-filter input {
   width: 132px;
   min-width: 0;
+  max-width: 100%;
   border: 0;
   outline: 0;
   color: inherit;
@@ -89,6 +96,7 @@
 
 .tf-tree-summary {
   display: flex;
+  flex: 0 0 auto;
   gap: 10px;
   margin-left: auto;
   color: #9eacbc;
@@ -124,6 +132,12 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.tf-tree-canvas .react-flow {
+  width: 100%;
+  height: 100%;
 }
 
 .tf-tree-empty {
@@ -138,10 +152,12 @@
 
 .tf-tree-details {
   min-width: 0;
+  min-height: 0;
   padding: 14px;
   overflow: auto;
   border-left: 1px solid rgba(146, 164, 184, 0.22);
   background: #171d24;
+  scrollbar-width: thin;
 }
 
 .tf-tree-details h2 {
@@ -251,32 +267,167 @@
 }
 
 @media (max-width: 900px) {
+  .tf-tree-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .tf-tree-toolbar__group {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .tf-tree-search {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .tf-tree-filter {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .tf-tree-toggle {
+    grid-row: 3;
+  }
+
   .tf-tree-workspace {
     grid-template-columns: minmax(0, 1fr) 190px;
   }
 
   .tf-tree-summary {
+    grid-column: 1 / -1;
+    grid-row: 4;
     width: 100%;
     margin-left: 0;
-  }
-}
-
-@media (max-width: 620px) {
-  .tf-tree-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .tf-tree-details {
-    display: none;
-  }
-
-  .tf-tree-search,
-  .tf-tree-filter {
-    flex: 1 1 145px;
+    flex-wrap: wrap;
   }
 
   .tf-tree-search input,
   .tf-tree-filter input {
     width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .tf-tree-panel {
+    min-height: 0;
+  }
+
+  .tf-tree-toolbar {
+    gap: 8px;
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .tf-tree-toolbar button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .tf-tree-search,
+  .tf-tree-filter {
+    height: 40px;
+  }
+
+  .tf-tree-toggle {
+    min-height: 32px;
+    font-size: 0.76rem;
+  }
+
+  .tf-tree-summary {
+    gap: 8px;
+    font-size: 0.7rem;
+  }
+
+  .tf-tree-warnings {
+    max-height: 86px;
+    overflow: auto;
+  }
+
+  .tf-tree-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(116px, 28dvh);
+  }
+
+  .tf-tree-details {
+    padding: 10px 12px;
+    border-top: 1px solid rgba(146, 164, 184, 0.22);
+    border-left: 0;
+  }
+
+  .tf-tree-details h2 {
+    margin-bottom: 8px;
+    font-size: 0.84rem;
+  }
+
+  .tf-tree-details dt {
+    margin-top: 7px;
+    font-size: 0.62rem;
+  }
+
+  .tf-tree-details dd,
+  .tf-tree-details__empty {
+    font-size: 0.74rem;
+  }
+
+  .tf-tree-panel .react-flow__minimap {
+    display: none;
+  }
+
+  .tf-tree-panel .react-flow__controls {
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .tf-tree-panel .react-flow__controls-button {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 460px) {
+  .tf-tree-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .tf-tree-toolbar__group {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .tf-tree-search {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .tf-tree-filter {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .tf-tree-toggle {
+    grid-row: auto;
+  }
+
+  .tf-tree-workspace {
+    grid-template-rows: minmax(0, 1fr) minmax(104px, 24dvh);
+  }
+
+  .tf-tree-summary {
+    justify-content: space-between;
+  }
+
+  .tf-tree-summary span {
+    min-width: max-content;
+  }
+
+  .tf-tree-panel .react-flow__node-default {
+    width: 154px;
+    min-height: 44px;
+    padding: 6px 8px;
+    font-size: 0.74rem;
   }
 }
