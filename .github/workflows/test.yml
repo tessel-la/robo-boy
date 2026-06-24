@@ -10,6 +10,11 @@ jobs:
   test:
     name: Run Tests with Coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+      pull-requests: write
 
     steps:
     - name: Checkout code
@@ -41,7 +46,7 @@ jobs:
           STATEMENTS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.statements.pct)")
           BRANCHES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.branches.pct)")
           FUNCTIONS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.functions.pct)")
-          
+
           echo "### 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
@@ -68,16 +73,16 @@ jobs:
           if (fs.existsSync('coverage/coverage-summary.json')) {
             const coverage = require('./coverage/coverage-summary.json');
             const body = `## 📊 Test Coverage Report
-            
+
             | Metric | Coverage |
             |--------|----------|
             | Lines | ${coverage.total.lines.pct}% |
             | Statements | ${coverage.total.statements.pct}% |
             | Branches | ${coverage.total.branches.pct}% |
             | Functions | ${coverage.total.functions.pct}% |
-            
+
             [View full report](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -85,6 +90,16 @@ jobs:
               body
             });
           }
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        files: ./coverage/lcov.info
+        flags: unit
+        name: unit-tests
+        fail_ci_if_error: true
+        disable_search: true
+        use_oidc: true
 
   e2e:
     name: E2E Tests

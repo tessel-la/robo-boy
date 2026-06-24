@@ -1,7 +1,10 @@
 # Robo-Boy
 
-[![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
-[![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
+[![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
+[![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
+[![Coverage](https://codecov.io/gh/tessel-la/robo-boy/branch/main/graph/badge.svg)](https://codecov.io/gh/tessel-la/robo-boy)
+[![Version](https://img.shields.io/github/v/tag/tessel-la/robo-boy?sort=semver&label=version)](https://github.com/tessel-la/robo-boy/tags)
+[![License](https://img.shields.io/github/license/tessel-la/robo-boy)](https://github.com/tessel-la/robo-boy/blob/main/LICENSE)
 
 <p align="center">
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
