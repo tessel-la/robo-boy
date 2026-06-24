@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
-[![Coverage](https://codecov.io/gh/tessel-la/robo-boy/branch/gennscar%2Ftes-33-add-banners-to-readme/graph/badge.svg)](https://codecov.io/gh/tessel-la/robo-boy/tree/gennscar/tes-33-add-banners-to-readme)
+[![Coverage](https://codecov.io/gh/tessel-la/robo-boy/branch/main/graph/badge.svg)](https://codecov.io/gh/tessel-la/robo-boy)
 [![Version](https://img.shields.io/github/v/tag/tessel-la/robo-boy?sort=semver&label=version)](https://github.com/tessel-la/robo-boy/tags)
 [![License](https://img.shields.io/github/license/tessel-la/robo-boy)](https://github.com/tessel-la/robo-boy/blob/main/LICENSE)
 
