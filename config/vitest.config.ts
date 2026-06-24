@@ -11,7 +11,7 @@ export default defineConfig({
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
     coverage: {
       provider: 'istanbul',
-      reporter: ['text', 'text-summary', 'json', 'lcov', 'html'],
+      reporter: ['text', 'text-summary', 'json', 'json-summary', 'lcov', 'html'],
       reportsDirectory: './coverage',
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
@@ -35,5 +35,4 @@ export default defineConfig({
     reporters: ['verbose'],
   },
 })
-
 
