@@ -84,3 +84,21 @@ npm run test:run
 npm run build
 npm run e2e
 ```
+
+## Releases
+
+Official releases are created from `main` only. Feature work should continue to land in `dev` first; after `dev` is promoted into `main`, the Release Please workflow scans the commits on `main` and creates or updates a release pull request.
+
+Do not create official releases directly from `dev`.
+
+Release Please uses Conventional Commits to choose the next SemVer version:
+
+| Commit message | Release type |
+| -------------- | ------------ |
+| `fix: correct login redirect` | Patch |
+| `feat: add export endpoint` | Minor |
+| `feat!: change public API response format` | Major |
+
+Breaking changes can also be marked with a `BREAKING CHANGE:` footer in the commit body. Commits such as `docs:`, `test:`, `chore:`, and `refactor:` can appear in history, but they do not create a release by themselves unless they include a breaking-change marker.
+
+When the Release Please pull request is merged into `main`, the workflow creates the Git tag and GitHub Release, and updates the package version and `CHANGELOG.md` as part of the release pull request.

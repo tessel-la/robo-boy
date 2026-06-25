@@ -25,9 +25,10 @@ export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
   tfAxesScale: 0.5,
 };
 
+const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
+
 // Keep an explicit flag because an empty visualization list is still valid saved state.
-let hasSavedStateInMemory = false;
-let savedState: VisualizationPanelState = { ...DEFAULT_VISUALIZATION_STATE };
+const inMemoryState = new Map<string, VisualizationPanelState>();
 
 const normalizeVisualizationState = (
   state: Partial<VisualizationPanelState> | null | undefined
@@ -46,12 +47,16 @@ const normalizeVisualizationState = (
  * @param state Current visualization panel state
  */
 export const saveVisualizationState = (state: VisualizationPanelState): void => {
-  savedState = normalizeVisualizationState(state);
-  hasSavedStateInMemory = true;
+  saveVisualizationStateForKey(DEFAULT_STORAGE_KEY, state);
+};
+
+export const saveVisualizationStateForKey = (storageKey: string, state: VisualizationPanelState): void => {
+  const normalizedState = normalizeVisualizationState(state);
+  inMemoryState.set(storageKey, normalizedState);
   
   // Also save to localStorage for persistence across sessions
   try {
-    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(savedState));
+    localStorage.setItem(storageKey, JSON.stringify(normalizedState));
   } catch (error) {
     console.error('Failed to save visualization state to localStorage:', error);
   }
@@ -62,18 +67,22 @@ export const saveVisualizationState = (state: VisualizationPanelState): void => 
  * @returns The saved visualization panel state
  */
 export const getVisualizationState = (): VisualizationPanelState => {
+  return getVisualizationStateForKey(DEFAULT_STORAGE_KEY);
+};
+
+export const getVisualizationStateForKey = (storageKey: string): VisualizationPanelState => {
   // If we have in-memory state, return that
-  if (hasSavedStateInMemory) {
+  const savedState = inMemoryState.get(storageKey);
+  if (savedState) {
     return { ...savedState };
   }
   
   // Otherwise try to load from localStorage
   try {
-    const savedStateStr = localStorage.getItem('roboboy_3d_visualization_state');
+    const savedStateStr = localStorage.getItem(storageKey);
     if (savedStateStr) {
       const parsedState = normalizeVisualizationState(JSON.parse(savedStateStr));
-      savedState = parsedState; // Update in-memory state
-      hasSavedStateInMemory = true;
+      inMemoryState.set(storageKey, parsedState);
       return parsedState;
     }
   } catch (error) {
@@ -88,11 +97,14 @@ export const getVisualizationState = (): VisualizationPanelState => {
  * Clear the saved visualization state
  */
 export const clearVisualizationState = (): void => {
-  savedState = { ...DEFAULT_VISUALIZATION_STATE };
-  hasSavedStateInMemory = false;
+  clearVisualizationStateForKey(DEFAULT_STORAGE_KEY);
+};
+
+export const clearVisualizationStateForKey = (storageKey: string): void => {
+  inMemoryState.delete(storageKey);
   
   try {
-    localStorage.removeItem('roboboy_3d_visualization_state');
+    localStorage.removeItem(storageKey);
   } catch (error) {
     console.error('Failed to clear visualization state from localStorage:', error);
   }

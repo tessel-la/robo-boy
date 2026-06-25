@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import './Navbar.css'; // We'll create this CSS file next
 
 type Section = 'entry' | 'simple' | '3d';
@@ -13,11 +13,11 @@ const Navbar: React.FC<NavbarProps> = ({ currentSection, setCurrentSection }) =>
   const navRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
-  const sections: { id: Section; label: string }[] = [
+  const sections: { id: Section; label: string }[] = useMemo(() => [
     { id: 'entry', label: 'Entry' },
     { id: 'simple', label: 'Simple Control' },
     { id: '3d', label: '3D View' },
-  ];
+  ], []);
 
   useEffect(() => {
     const currentItemIndex = sections.findIndex(sec => sec.id === currentSection);

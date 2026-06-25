@@ -68,21 +68,24 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
   await page.getByLabel('Switch to TF Tree').click();
-  await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101)]);
-  await publishTf(page, '/tf_static', [transform('world', 'camera_mount', 1)]);
 
   const panel = page.getByTestId('tf-tree-panel');
   const canvas = page.getByTestId('tf-tree-canvas');
   const details = page.getByLabel('TF selection details');
 
   await expect(panel).toBeVisible();
+  await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101)]);
+  await publishTf(page, '/tf_static', [transform('world', 'camera_mount', 1)]);
+
   await expect(page.getByLabel('Pause live TF updates')).toBeVisible();
   await expect(page.getByLabel('Fit TF graph to view')).toBeVisible();
   await expect(page.getByLabel('Search TF frame')).toBeVisible();
   await expect(page.getByLabel('Filter TF frames')).toBeVisible();
   await expect(details).toBeVisible();
 
-  await page.locator('.tf-frame-node').filter({ hasText: 'laser' }).click();
+  const laserNode = page.locator('.tf-frame-node').filter({ hasText: 'laser' });
+  await expect(laserNode).toBeVisible();
+  await laserNode.click();
   await expect(details).toContainText('laser');
 
   await expect
