@@ -15,6 +15,7 @@ interface CameraViewProps {
   // Add new props for topic selection
   availableTopics: string[];
   onTopicChange: (newTopic: string) => void;
+  selectId?: string;
 }
 
 const CameraView: React.FC<CameraViewProps> = ({
@@ -27,6 +28,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   // Destructure new props
   availableTopics,
   onTopicChange,
+  selectId = 'camera-topic-select',
 }) => {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +85,7 @@ const CameraView: React.FC<CameraViewProps> = ({
           <div className="camera-topic-selector overlay">
             {/* <label htmlFor="camera-topic-select">Topic:</label> */}
             <select
-              id="camera-topic-select"
+              id={selectId}
               value={cameraTopic} // Use current cameraTopic prop
               onChange={(e) => onTopicChange(e.target.value)} // Use handler prop
             >
