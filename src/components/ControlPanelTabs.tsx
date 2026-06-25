@@ -14,7 +14,8 @@ interface ControlPanelTabsProps {
   onSelectPanel: (id: string) => void;
   onAddPanelToggle: () => void; // Simple toggle handler
   onRemovePanel: (id: string) => void;
-  addButtonRef: RefObject<HTMLButtonElement>; // Need the ref prop
+  addButtonRef?: RefObject<HTMLButtonElement>; // Need the ref prop
+  showAddButton?: boolean;
 }
 
 const ControlPanelTabs: React.FC<ControlPanelTabsProps> = ({
@@ -24,6 +25,7 @@ const ControlPanelTabs: React.FC<ControlPanelTabsProps> = ({
   onAddPanelToggle, // Simple toggle
   onRemovePanel,
   addButtonRef, // Use the ref
+  showAddButton = true,
 }) => {
 
   const handleRemoveClick = (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
@@ -55,15 +57,17 @@ const ControlPanelTabs: React.FC<ControlPanelTabsProps> = ({
             </button>
           </div>
         ))}
-        <button 
-          ref={addButtonRef} // Attach the ref
-          className="tab-add-button" 
-          onClick={onAddPanelToggle} // Call the toggle
-          aria-label="Add Panel"
-          title="Add Panel"
-        >
-          <IconAdd />
-        </button>
+        {showAddButton && (
+          <button
+            ref={addButtonRef} // Attach the ref
+            className="tab-add-button"
+            onClick={onAddPanelToggle} // Call the toggle
+            aria-label="Add Panel"
+            title="Add Panel"
+          >
+            <IconAdd />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -61,6 +61,16 @@
   opacity: 0.95;
 }
 
+.bt-palette-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 .bt-float-icon-btn {
   width: 36px;
   height: 36px;
@@ -92,17 +102,51 @@
   color: #fff;
 }
 
-.bt-arrange-tree-btn {
-  width: 44px;
-  height: 44px;
+.bt-arrange-tree-btn,
+.bt-interaction-mode-btn,
+.bt-follow-mode-btn,
+.bt-undo-tree-btn,
+.bt-redo-tree-btn {
+  width: 48px;
+  height: 48px;
 }
 
+.bt-interaction-mode-btn.active,
+.bt-follow-mode-btn.active {
+  background: var(--primary-color, #4285f4);
+  border-color: var(--primary-color, #4285f4);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(66, 133, 244, 0.25);
+}
+
+.bt-select-tool-icon,
+.bt-pan-tool-icon {
+  width: 31px;
+  height: 31px;
+  display: block;
+}
+
+.bt-pan-tool-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.bt-follow-tool-icon {
+  width: 27px;
+  height: 27px;
+  display: block;
+}
+
+.bt-undo-tree-btn:disabled,
+.bt-redo-tree-btn:disabled,
 .bt-arrange-tree-btn:disabled {
   cursor: default;
   opacity: 0.45;
   box-shadow: none;
 }
 
+.bt-undo-tree-btn:disabled:hover,
+.bt-redo-tree-btn:disabled:hover,
 .bt-arrange-tree-btn:disabled:hover {
   box-shadow: none;
 }
@@ -123,6 +167,7 @@
 .bt-float-actions > * { pointer-events: auto; }
 
 .bt-float-run-btn,
+.bt-float-pause-btn,
 .bt-float-stop-btn {
   display: flex;
   align-items: center;
@@ -148,6 +193,15 @@
 .bt-float-run-btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
 .bt-float-run-btn:active { transform: scale(0.96); }
 
+.bt-float-pause-btn {
+  background: #f59e0b;
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.35);
+}
+
+.bt-float-pause-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.bt-float-pause-btn:active { transform: scale(0.96); }
+
 .bt-float-stop-btn {
   background: var(--error-color, #f44336);
   color: #fff;
@@ -156,6 +210,16 @@
 
 .bt-float-stop-btn:hover  { filter: brightness(1.08); }
 .bt-float-stop-btn:active { transform: scale(0.96); }
+
+.bt-float-stop-btn:disabled,
+.bt-float-menu-btn:disabled,
+.bt-palette-toggle:disabled {
+  cursor: default;
+  opacity: 0.45;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
 
 .bt-float-delete-btn,
 .bt-float-duplicate-btn,
@@ -660,6 +724,7 @@
   .bt-float-btn-label { display: none; }
 
   .bt-float-run-btn,
+  .bt-float-pause-btn,
   .bt-float-stop-btn {
     width: 36px;
     padding: 0;

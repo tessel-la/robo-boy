@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { saveVisualizationState, getVisualizationState, clearVisualizationState } from './visualizationState';
+import {
+  clearVisualizationState,
+  clearVisualizationStateForKey,
+  getVisualizationState,
+  getVisualizationStateForKey,
+  saveVisualizationState,
+  saveVisualizationStateForKey,
+} from './visualizationState';
 
 describe('visualizationState', () => {
   beforeEach(() => {
@@ -7,6 +14,8 @@ describe('visualizationState', () => {
     localStorage.clear();
     // Clear internal state by calling clear
     clearVisualizationState();
+    clearVisualizationStateForKey('panel-a');
+    clearVisualizationStateForKey('panel-b');
   });
 
   const mockState = {
@@ -95,6 +104,19 @@ describe('visualizationState', () => {
 
     expect(getVisualizationState()).toEqual(urdfState);
     expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!)).toEqual(urdfState);
+  });
+
+  it('should keep keyed visualization states independent', () => {
+    const panelAState = { ...mockState, fixedFrame: 'map' };
+    const panelBState = { ...mockState, fixedFrame: 'base_link' };
+
+    saveVisualizationStateForKey('panel-a', panelAState);
+    saveVisualizationStateForKey('panel-b', panelBState);
+
+    expect(getVisualizationStateForKey('panel-a')).toEqual(panelAState);
+    expect(getVisualizationStateForKey('panel-b')).toEqual(panelBState);
+    expect(JSON.parse(localStorage.getItem('panel-a')!)).toEqual(panelAState);
+    expect(JSON.parse(localStorage.getItem('panel-b')!)).toEqual(panelBState);
   });
 
   it('should clear state', () => {

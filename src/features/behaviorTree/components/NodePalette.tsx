@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Ros } from 'roslib';
+import { discoverAllROSResources } from '../services/rosDiscovery';
+import {
+  BEHAVIOR_TREE_STORAGE_EVENT,
+  listBehaviorTrees,
+} from '../storage/treeStorage';
+import {
+  BehaviorTree,
+  ROSDiscoveryResult,
+  BehaviorNodeType,
+  NodePaletteItem,
+  ROSActionInfo,
+  ROSServiceInfo,
+  ROSTopicInfo,
+} from '../types';
+import './NodePalette.css';
 
 // ─── Palette icons ────────────────────────────────────────────────────────────
 
@@ -96,23 +111,40 @@ const IconParallel = () => (
     <polyline points="6,7 7.5,9 9,7"/>
   </svg>
 );
-import { discoverAllROSResources } from '../services/rosDiscovery';
-import {
-  ROSDiscoveryResult,
-  BehaviorNodeType,
-  NodePaletteItem,
-  ROSActionInfo,
-  ROSServiceInfo,
-  ROSTopicInfo,
-} from '../types';
-import './NodePalette.css';
+
+const IconRetry = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.5 4.7A4.4 4.4 0 1 0 11 7" />
+    <polyline points="10.5,1.6 10.5,4.7 7.4,4.7" />
+  </svg>
+);
+
+const IconRepeat = () => (
+  <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2.2 4.5A4 4 0 0 1 5.9 2h5.3" />
+    <polyline points="9.2,0.5 11.2,2 9.2,3.5" />
+    <path d="M11.8 7.5A4 4 0 0 1 8.1 10H2.8" />
+    <polyline points="4.8,8.5 2.8,10 4.8,11.5" />
+  </svg>
+);
+
+const IconSubtree = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="11" height="11" rx="2" />
+    <path d="M4.5 4.5h5M4.5 7h5M4.5 9.5h3" />
+  </svg>
+);
 
 interface NodePaletteProps {
   ros: Ros | null;
   isConnected: boolean;
   isCollapsed: boolean;
+  isDisabled?: boolean;
   onToggleCollapse: () => void;
-  onAddNode?: (type: BehaviorNodeType, rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo) => void;
+  onAddNode?: (
+    type: BehaviorNodeType,
+    item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
+  ) => void;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
@@ -131,6 +163,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   ros,
   isConnected,
   isCollapsed,
+  isDisabled = false,
   onToggleCollapse,
   onAddNode,
 }) => {
@@ -144,10 +177,12 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const hasDiscovered = React.useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     control: true,
+    saved: true,
     actions: false,
     services: false,
     topics: false,
   });
+  const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
 
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
@@ -259,6 +294,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     Sequence: <IconSequence />,
     Selector: <IconSelector />,
     Parallel: <IconParallel />,
+    Retry: <IconRetry />,
+    Repeat: <IconRepeat />,
   };
 
   // Control flow nodes (always available)
@@ -266,6 +303,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     { type: BehaviorNodeType.Sequence, label: 'Sequence', icon: '→', category: 'control' },
     { type: BehaviorNodeType.Selector, label: 'Selector', icon: '?', category: 'control' },
     { type: BehaviorNodeType.Parallel, label: 'Parallel', icon: '∥', category: 'control' },
+    { type: BehaviorNodeType.Retry, label: 'Retry', icon: '↻', category: 'control' },
+    { type: BehaviorNodeType.Repeat, label: 'Repeat', icon: '⟳', category: 'control' },
   ];
 
   const resourceSearchTerms = useMemo(
@@ -303,6 +342,15 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     }
   }, [isConnected, ros]);
 
+  useEffect(() => {
+    const handleSavedTreesChanged = () => {
+      setSavedTrees(listBehaviorTrees());
+    };
+
+    window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+    return () => window.removeEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+  }, []);
+
   const handleDiscover = async () => {
     if (!ros) return;
     setIsDiscovering(true);
@@ -323,9 +371,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const handleDragStart = (
     e: React.DragEvent,
     nodeType: BehaviorNodeType,
-    rosInfo?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo
+    item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
   ) => {
-    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, rosInfo }));
+    if (isDisabled) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, item }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -341,9 +393,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   return (
     <div
-      className={`node-palette${isMobile ? ' mobile-sheet' : ''}`}
+      className={`node-palette${isMobile ? ' mobile-sheet' : ''}${isDisabled ? ' disabled' : ''}`}
       ref={paletteRef}
       data-testid="bt-node-palette"
+      aria-disabled={isDisabled}
       style={isMobile && sheetHeight !== null ? { height: sheetHeight } : undefined}
     >
       {isMobile && (
@@ -421,14 +474,52 @@ const NodePalette: React.FC<NodePaletteProps> = ({
               <div
                 key={node.type}
                 className="palette-node"
-                draggable
+                draggable={!isDisabled}
                 onDragStart={(e) => handleDragStart(e, node.type)}
-                onClick={() => onAddNode?.(node.type, undefined)}
+                onClick={() => !isDisabled && onAddNode?.(node.type, undefined)}
               >
                 <span className="palette-node-icon">{CONTROL_ICONS[node.label]}</span>
                 <span className="palette-node-label">{node.label}</span>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="palette-section">
+        <div className="palette-section-header" onClick={() => toggleSection('saved')}>
+          <span className="palette-section-icon">
+            {expandedSections.saved ? <IconChevronDown /> : <IconChevronRight />}
+          </span>
+          <span className="palette-section-title">Saved Trees</span>
+          <span className="palette-section-count">{savedTrees.length}</span>
+        </div>
+        {expandedSections.saved && (
+          <div className="palette-section-content">
+            {savedTrees.length === 0 ? (
+              <div className="palette-empty">Save a tree to reuse it as a subtree</div>
+            ) : (
+              savedTrees.map(({ tree }) => (
+                <div
+                  key={tree.id}
+                  className="palette-node palette-node-ros"
+                  draggable={!isDisabled}
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Subtree, tree)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Subtree, tree)}
+                  title={`Insert "${tree.name}" as a subtree`}
+                >
+                  <span className="palette-node-icon">
+                    <IconSubtree />
+                  </span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">{tree.name}</span>
+                    <span className="palette-node-detail">
+                      {tree.nodes.length} node{tree.nodes.length === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -460,9 +551,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                   <div
                     key={`${action.name}-${index}`}
                     className="palette-node palette-node-ros"
-                    draggable
+                    draggable={!isDisabled}
                     onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Action, action)}
-                    onClick={() => onAddNode?.(BehaviorNodeType.Action, action)}
+                    onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Action, action)}
                     title={`${action.name} (${action.type})`}
                   >
                     <span className="palette-node-icon">
@@ -507,9 +598,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <div
                   key={`${service.name}-${index}`}
                   className="palette-node palette-node-ros"
-                  draggable
+                  draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Service, service)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Service, service)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Service, service)}
                   title={`${service.name} (${service.type})`}
                 >
                   <span className="palette-node-icon">
@@ -554,9 +645,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 <div
                   key={`${topic.name}-${index}`}
                   className="palette-node palette-node-ros"
-                  draggable
+                  draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Topic, topic)}
-                  onClick={() => onAddNode?.(BehaviorNodeType.Topic, topic)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Topic, topic)}
                   title={`${topic.name} (${topic.type})`}
                 >
                   <span className="palette-node-icon">

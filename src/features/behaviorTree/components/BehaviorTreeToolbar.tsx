@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BehaviorTree } from '../types';
+import { BehaviorNodeType, BehaviorTree } from '../types';
 import {
+  BEHAVIOR_TREE_STORAGE_EVENT,
   listBehaviorTrees,
   loadBehaviorTree,
   deleteBehaviorTree,
@@ -8,43 +9,61 @@ import {
 } from '../storage/treeStorage';
 import './BehaviorTreeToolbar.css';
 
+export type BehaviorTreeInteractionMode = 'pan' | 'select';
+
 interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
+  isPaused: boolean;
+  isEditingLocked: boolean;
   isPaletteCollapsed: boolean;
   nodeCount: number;
-  selectedNodeCount: number;
+  canUndo: boolean;
+  canRedo: boolean;
+  interactionMode: BehaviorTreeInteractionMode;
+  isFollowMode: boolean;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
   onExecute: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
   onExport: () => void;
   onArrange: () => void;
   onTogglePalette: () => void;
-  onDeleteSelected: () => void;
-  onDuplicateSelected: () => void;
-  onRenameSelected: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
+  onToggleFollowMode: () => void;
   onRename: (name: string) => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   currentTree,
   isExecuting,
+  isPaused,
+  isEditingLocked,
   isPaletteCollapsed,
   nodeCount,
-  selectedNodeCount,
+  canUndo,
+  canRedo,
+  interactionMode,
+  isFollowMode,
   onSave,
   onLoad,
   onNew,
   onExecute,
+  onPause,
+  onResume,
   onStop,
   onExport,
   onArrange,
   onTogglePalette,
-  onDeleteSelected,
-  onDuplicateSelected,
-  onRenameSelected,
+  onUndo,
+  onRedo,
+  onInteractionModeChange,
+  onToggleFollowMode,
   onRename,
 }) => {
   const [menuOpen, setMenuOpen]       = useState(false);
@@ -57,6 +76,18 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   useEffect(() => {
     setNameValue(currentTree?.name ?? '');
   }, [currentTree?.id, currentTree?.name]);
+
+  useEffect(() => {
+    if (!isEditingLocked) return;
+    setPendingDelete(null);
+    setMenuOpen(false);
+  }, [isEditingLocked]);
+
+  useEffect(() => {
+    const handleSavedTreesChanged = () => setSavedTrees(listBehaviorTrees());
+    window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+    return () => window.removeEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
+  }, []);
 
   const openMenu = () => {
     setSavedTrees(listBehaviorTrees());
@@ -76,6 +107,17 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const handleLoad = (treeId: string) => {
     const tree = loadBehaviorTree(treeId);
     if (tree) { onLoad(tree); closeMenu(); }
+  };
+
+  const handleTreeDragStart = (event: React.DragEvent, tree: BehaviorTree) => {
+    event.dataTransfer.setData(
+      'application/reactflow',
+      JSON.stringify({
+        nodeType: BehaviorNodeType.Subtree,
+        item: tree,
+      })
+    );
+    event.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDelete = (tree: BehaviorTree, e: React.MouseEvent) => {
@@ -130,6 +172,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className="bt-float-menu-btn"
           onClick={openMenu}
+          disabled={isEditingLocked}
           title="Menu: save, load, rename"
           aria-label="Open menu"
           data-testid="bt-menu-button"
@@ -146,23 +189,18 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         <button
           className={`bt-float-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
           onClick={onTogglePalette}
+          disabled={isEditingLocked}
           title={isPaletteCollapsed ? 'Show node palette' : 'Hide node palette'}
           aria-label="Toggle node palette"
           data-testid="bt-palette-toggle"
         >
-          <svg width="28" height="26" viewBox="0 0 28 26" fill="currentColor" aria-hidden="true">
-            <circle cx="14" cy="4" r="3.5"/>
-            <circle cx="5" cy="21" r="3.5"/>
-            <circle cx="23" cy="21" r="3.5"/>
-            <line x1="12.4" y1="7.2" x2="6.8" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
-            <line x1="15.6" y1="7.2" x2="21.2" y2="17.7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
-          </svg>
+          <span className="bt-palette-plus" aria-hidden="true">+</span>
         </button>
 
         <button
           className="bt-float-icon-btn bt-arrange-tree-btn"
           onClick={onArrange}
-          disabled={nodeCount === 0}
+          disabled={isEditingLocked || nodeCount === 0}
           title="Arrange tree"
           aria-label="Arrange tree"
           data-testid="bt-arrange-tree"
@@ -174,70 +212,113 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
           </svg>
         </button>
+        <button
+          className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'select' ? ' active' : ''}`}
+          onClick={() => onInteractionModeChange('select')}
+          title="Select nodes by dragging"
+          aria-label="Select nodes by dragging"
+          aria-pressed={interactionMode === 'select'}
+          data-testid="bt-select-mode"
+        >
+          <svg className="bt-select-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="11.5" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3.4 2.6" />
+            <path d="M12.7 12.7l7.1 7.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M16.6 20.2l3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'pan' ? ' active' : ''}`}
+          onClick={() => onInteractionModeChange('pan')}
+          title="Pan canvas"
+          aria-label="Pan canvas"
+          aria-pressed={interactionMode === 'pan'}
+          data-testid="bt-pan-mode"
+        >
+          <svg className="bt-pan-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M8.4 12.2V7.1a1.55 1.55 0 0 1 3.1 0v4.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M11.5 11.6V5.7a1.55 1.55 0 0 1 3.1 0v6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14.6 12.1V7.5a1.55 1.55 0 0 1 3.1 0v7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8.4 12.2l-1.2-1.2a1.8 1.8 0 0 0-2.55 2.55l4.75 4.75A6.2 6.2 0 0 0 13.8 20h.85a5.05 5.05 0 0 0 5.05-5.05v-2.2a1.5 1.5 0 0 0-3 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button
+          className="bt-float-icon-btn bt-undo-tree-btn"
+          onClick={onUndo}
+          disabled={isEditingLocked || !canUndo}
+          title="Undo last behavior tree change"
+          aria-label="Undo last behavior tree change"
+          data-testid="bt-undo"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M7.5 6H3.5V2" />
+            <path d="M3.8 6A7 7 0 1 1 5 15" />
+          </svg>
+        </button>
+        <button
+          className="bt-float-icon-btn bt-redo-tree-btn"
+          onClick={onRedo}
+          disabled={isEditingLocked || !canRedo}
+          title="Redo last behavior tree change"
+          aria-label="Redo last behavior tree change"
+          data-testid="bt-redo"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12.5 6h4V2" />
+            <path d="M16.2 6A7 7 0 1 0 15 15" />
+          </svg>
+        </button>
       </div>
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
-        {selectedNodeCount > 0 && (
-          <>
-            {selectedNodeCount === 1 && (
-              <button
-                className="bt-float-rename-btn"
-                onClick={onRenameSelected}
-                title="Rename selected node"
-                aria-label="Rename selected node"
-                data-testid="bt-rename-selected"
-              >
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10.8 1.5l2.7 2.7-8.2 8.2-3.6.9.9-3.6 8.2-8.2z"/>
-                  <path d="M9.2 3.1l2.7 2.7"/>
-                </svg>
-                <span className="bt-float-btn-label">Rename</span>
-              </button>
-            )}
-            <button
-              className="bt-float-duplicate-btn"
-              onClick={onDuplicateSelected}
-              title={`Duplicate ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-              aria-label="Duplicate selected nodes"
-              data-testid="bt-duplicate-selected"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="5" y="5" width="8" height="8" rx="1.2"/>
-                <path d="M2 10V3.2A1.2 1.2 0 0 1 3.2 2H10"/>
-              </svg>
-              <span className="bt-float-btn-label">Duplicate</span>
-            </button>
-            <button
-              className="bt-float-delete-btn"
-              onClick={onDeleteSelected}
-              title={`Delete ${selectedNodeCount} selected node${selectedNodeCount > 1 ? 's' : ''}`}
-            >
-              <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="0.5,3.5 12.5,3.5"/>
-                <path d="M4 3.5V2a0.8 0.8 0 0 1 0.8-0.8h3.4a0.8 0.8 0 0 1 0.8 0.8v1.5"/>
-                <path d="M2 3.5l0.8 9a0.8 0.8 0 0 0 0.8 0.8h5.8a0.8 0.8 0 0 0 0.8-0.8l0.8-9"/>
-              </svg>
-              <span className="bt-float-count">{selectedNodeCount}</span>
-            </button>
-          </>
-        )}
-
-        {isExecuting ? (
-          <button className="bt-float-stop-btn" onClick={onStop} title="Stop execution">
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
-              <rect x="0" y="0" width="11" height="11" rx="2"/>
+        <button
+          className={`bt-float-icon-btn bt-follow-mode-btn${isFollowMode ? ' active' : ''}`}
+          onClick={onToggleFollowMode}
+          title={isFollowMode ? 'Disable follow mode' : 'Enable follow mode'}
+          aria-label={isFollowMode ? 'Disable follow mode' : 'Enable follow mode'}
+          aria-pressed={isFollowMode}
+          data-testid="bt-follow-mode"
+        >
+          <svg className="bt-follow-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" />
+            <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+            <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          className={isExecuting && !isPaused ? 'bt-float-pause-btn' : 'bt-float-run-btn'}
+          onClick={isExecuting ? (isPaused ? onResume : onPause) : onExecute}
+          title={isExecuting ? (isPaused ? 'Resume execution' : 'Pause execution') : 'Execute tree'}
+          aria-label={isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          data-testid="bt-run-pause"
+        >
+          {isExecuting && !isPaused ? (
+            <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="1" width="3" height="11" rx="1"/>
+              <rect x="7" y="1" width="3" height="11" rx="1"/>
             </svg>
-            <span className="bt-float-btn-label">Stop</span>
-          </button>
-        ) : (
-          <button className="bt-float-run-btn" onClick={onExecute} title="Execute tree">
+          ) : (
             <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
               <path d="M1 1l9 5.5L1 12V1z"/>
             </svg>
-            <span className="bt-float-btn-label">Run</span>
-          </button>
-        )}
+          )}
+          <span className="bt-float-btn-label">
+            {isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          </span>
+        </button>
+        <button
+          className="bt-float-stop-btn"
+          onClick={onStop}
+          disabled={!isExecuting}
+          title="Stop execution"
+          aria-label="Stop"
+          data-testid="bt-stop"
+        >
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
+            <rect x="0" y="0" width="11" height="11" rx="2"/>
+          </svg>
+          <span className="bt-float-btn-label">Stop</span>
+        </button>
       </div>
 
       {/* ── Slide-in menu panel ──────────────────────────────────── */}
@@ -321,6 +402,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                     <div
                       key={tree.id}
                       className={`bt-menu-tree-row${tree.id === currentTree?.id ? ' active' : ''}`}
+                      draggable
+                      onDragStart={(event) => handleTreeDragStart(event, tree)}
                       onClick={() => handleLoad(tree.id)}
                       role="button"
                       tabIndex={0}

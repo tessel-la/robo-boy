@@ -38,12 +38,13 @@ import PoseStampedViz from './visualizers/PoseStampedViz'; // Import PoseStamped
 import { PoseStampedOptions } from '../hooks/usePoseStampedClient'; // Import PoseStampedOptions
 
 import {
-  saveVisualizationState,
-  getVisualizationState
+  getVisualizationStateForKey,
+  saveVisualizationStateForKey
 } from '../utils/visualizationState';
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
+  storageKey?: string;
 }
 
 // Define the structure for a visualization configuration
@@ -84,12 +85,17 @@ const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
   'posestamped',
 ];
 
-const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: VisualizationPanelProps) => {
+const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
+
+const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
+  ros,
+  storageKey = DEFAULT_STORAGE_KEY,
+}: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
   const viewerRef = useRef<HTMLDivElement>(null);
   const [initialState] = useState(() => {
-    const savedState = getVisualizationState();
+    const savedState = getVisualizationStateForKey(storageKey);
     return {
       ...savedState,
       visualizations: savedState.visualizations.filter((viz) =>
@@ -143,10 +149,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({ ros }: Vis
         showTfFrameLabels,
         tfAxesScale,
       };
-      saveVisualizationState(stateToSave);
+      saveVisualizationStateForKey(storageKey, stateToSave);
       console.log('Saved visualization state:', stateToSave);
     }
-  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, tfAxesScale, isRosConnected]);
+  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, tfAxesScale, isRosConnected, storageKey]);
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
