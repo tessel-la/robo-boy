@@ -1,15 +1,74 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   push:
     branches: ['*']  # Run on all branches
   pull_request:
     branches: ['*']  # Run on PRs to all branches
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check changed paths
+      id: filter
+      uses: dorny/paths-filter@v4
+      with:
+        base: ${{ github.ref_name }}
+        filters: |
+          frontend:
+            - 'src/**'
+            - 'config/**'
+            - 'public/**'
+            - 'scripts/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - 'index.html'
+            - 'tsconfig.json'
+            - '.eslintrc.cjs'
+            - '.prettierrc'
+            - 'codecov.yml'
+            - '.github/workflows/test.yml'
+            - '.github/scripts/**'
+          e2e:
+            - 'e2e/**'
+            - 'config/playwright.config.ts'
+            - '.github/workflows/test.yml'
+            - '.github/scripts/**'
+
+    - name: Write CI plan
+      run: |
+        {
+          echo "### CI Plan"
+          echo ""
+          echo "| Area | Changed | Action |"
+          echo "| ---- | ------- | ------ |"
+          echo "| Frontend, unit, build | ${{ steps.filter.outputs.frontend }} | $([ '${{ steps.filter.outputs.frontend }}' = 'true' ] && echo 'Run' || echo 'Skip unless manually triggered') |"
+          echo "| E2E | ${{ steps.filter.outputs.e2e }} | $([ '${{ steps.filter.outputs.frontend }}' = 'true' ] || [ '${{ steps.filter.outputs.e2e }}' = 'true' ] && echo 'Run' || echo 'Skip unless manually triggered') |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
   test:
     name: Run Tests with Coverage
     runs-on: ubuntu-latest
+    needs: changes
     permissions:
       contents: read
       id-token: write
@@ -17,29 +76,66 @@ jobs:
       pull-requests: write
 
     steps:
+    - name: Skip app test suite
+      if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend != 'true' && needs.changes.outputs.e2e != 'true'
+      run: |
+        {
+          echo "### App Test Suite"
+          echo ""
+          echo "No frontend, E2E, package, or test workflow inputs changed. Skipping lint, build, unit tests, coverage, and Codecov."
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: Checkout code
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/checkout@v4
 
     - name: Setup Node.js
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
 
     - name: Install dependencies
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npm ci
 
     - name: Run linter
-      run: npm run lint
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      id: lint
+      run: |
+        set +e
+        npm run lint 2>&1 | tee lint-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Lint" "${status}" lint-output.log "npm run lint" 120
+        exit "${status}"
       continue-on-error: true
 
     - name: Build application
-      run: npm run build
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      id: build
+      run: |
+        set +e
+        npm run build 2>&1 | tee build-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Build" "${status}" build-output.log "npm run build" 160
+        exit "${status}"
 
     - name: Run tests with coverage
-      run: npm run test:coverage
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      id: unit_tests
+      run: |
+        set +e
+        npm run test:coverage 2>&1 | tee vitest-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Unit Tests" "${status}" vitest-output.log "npm run test:coverage" 220
+        exit 0
 
     - name: Generate coverage summary
+      if: always() && steps.unit_tests.outputs.status != ''
       run: |
         if [ -f coverage/coverage-summary.json ]; then
           LINES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)")
@@ -47,17 +143,20 @@ jobs:
           BRANCHES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.branches.pct)")
           FUNCTIONS=$(node -e "console.log(require('./coverage/coverage-summary.json').total.functions.pct)")
 
-          echo "### 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Lines | ${LINES}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Statements | ${STATEMENTS}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branches | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Functions | ${FUNCTIONS}% |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Coverage Report"
+            echo ""
+            echo "| Metric | Coverage |"
+            echo "|--------|----------|"
+            echo "| Lines | ${LINES}% |"
+            echo "| Statements | ${STATEMENTS}% |"
+            echo "| Branches | ${BRANCHES}% |"
+            echo "| Functions | ${FUNCTIONS}% |"
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Upload coverage report
+      if: always() && steps.unit_tests.outputs.status != ''
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
@@ -65,14 +164,16 @@ jobs:
         retention-days: 30
 
     - name: Coverage comment on PR
-      if: github.event_name == 'pull_request'
+      if: always() && github.event_name == 'pull_request' && steps.unit_tests.outputs.status != ''
       uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
           if (fs.existsSync('coverage/coverage-summary.json')) {
             const coverage = require('./coverage/coverage-summary.json');
-            const body = `## 📊 Test Coverage Report
+            const marker = '<!-- robo-boy-coverage-report -->';
+            const body = `${marker}
+            ## Test Coverage Report
 
             | Metric | Coverage |
             |--------|----------|
@@ -81,17 +182,38 @@ jobs:
             | Branches | ${coverage.total.branches.pct}% |
             | Functions | ${coverage.total.functions.pct}% |
 
-            [View full report](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
+            [View workflow summary](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
 
-            github.rest.issues.createComment({
+            const {data: comments} = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body
+              per_page: 100
             });
+
+            const previous = comments.find(comment =>
+              comment.user.type === 'Bot' && comment.body.includes(marker)
+            );
+
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
           }
 
     - name: Upload coverage to Codecov
+      if: steps.unit_tests.outputs.status == '0'
       uses: codecov/codecov-action@v5
       with:
         files: ./coverage/lcov.info
@@ -101,34 +223,71 @@ jobs:
         disable_search: true
         use_oidc: true
 
+    - name: Fail if unit tests failed
+      if: steps.unit_tests.outputs.status != '' && steps.unit_tests.outputs.status != '0'
+      run: exit 1
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: test  # Run after unit tests pass
+    needs: [changes, test]  # Run after unit tests pass
 
     steps:
+    - name: Skip E2E suite
+      if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.frontend != 'true' && needs.changes.outputs.e2e != 'true'
+      run: |
+        {
+          echo "### E2E Suite"
+          echo ""
+          echo "No frontend, E2E, package, or test workflow inputs changed. Skipping Playwright."
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: Checkout code
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/checkout@v4
 
     - name: Setup Node.js
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
 
     - name: Install dependencies
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npm ci
 
     - name: Install Playwright browsers
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npx playwright install --with-deps chromium
 
     - name: Run E2E tests
-      run: npm run e2e
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      id: e2e_tests
+      run: |
+        set +e
+        npm run e2e 2>&1 | tee playwright-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "npm run e2e" 260
+        exit 0
 
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && steps.e2e_tests.outputs.status != ''
       with:
         name: playwright-report
         path: playwright-report/
         retention-days: 30
+
+    - name: Upload Playwright test results
+      uses: actions/upload-artifact@v4
+      if: always() && steps.e2e_tests.outputs.status != ''
+      with:
+        name: playwright-test-results
+        path: test-results/
+        retention-days: 30
+
+    - name: Fail if E2E tests failed
+      if: steps.e2e_tests.outputs.status != '' && steps.e2e_tests.outputs.status != '0'
+      run: exit 1
