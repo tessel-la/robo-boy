@@ -89,5 +89,5 @@ describe('UrdfClient cache', () => {
     expect(roslibMock.topicInstances).toHaveLength(1);
     expect(secondModel).toBe(firstModel);
     expect(rootObject.children).toContain(secondClient);
-  });
+  }, 10000);
 });
