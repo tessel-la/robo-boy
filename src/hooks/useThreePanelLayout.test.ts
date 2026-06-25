@@ -54,7 +54,7 @@ describe('useThreePanelLayout', () => {
     }));
 
     act(() => {
-      result.current.containerRef.current = container;
+      (result.current.containerRef as any).current = container;
       result.current.handleBtViewMouseDown(createMouseEvent());
     });
 
@@ -93,7 +93,7 @@ describe('useThreePanelLayout', () => {
     }));
 
     act(() => {
-      result.current.containerRef.current = container;
+      (result.current.containerRef as any).current = container;
       result.current.handleViewControlTouchStart(createTouchEvent());
     });
 

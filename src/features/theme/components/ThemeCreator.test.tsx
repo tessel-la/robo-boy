@@ -64,7 +64,7 @@ describe('ThemeCreator', () => {
           name: 'Existing',
           iconId: 'moon',
           fontFamily: DEFAULT_THEME_FONT_FAMILY,
-          colors: { primary: '#000001', secondary: '#000002' },
+          colors: { primary: '#000001', secondary: '#000002', background: '#ffffff' },
         }}
       />
     );
