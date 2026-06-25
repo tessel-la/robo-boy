@@ -30,16 +30,38 @@ jobs:
       run: npm ci
 
     - name: Run linter
-      run: npm run lint
+      id: lint
+      run: |
+        set +e
+        npm run lint 2>&1 | tee lint-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Lint" "${status}" lint-output.log "npm run lint" 120
+        exit "${status}"
       continue-on-error: true
 
     - name: Build application
-      run: npm run build
+      id: build
+      run: |
+        set +e
+        npm run build 2>&1 | tee build-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Build" "${status}" build-output.log "npm run build" 160
+        exit "${status}"
 
     - name: Run tests with coverage
-      run: npm run test:coverage
+      id: unit_tests
+      run: |
+        set +e
+        npm run test:coverage 2>&1 | tee vitest-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "Unit Tests" "${status}" vitest-output.log "npm run test:coverage" 220
+        exit 0
 
     - name: Generate coverage summary
+      if: always()
       run: |
         if [ -f coverage/coverage-summary.json ]; then
           LINES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)")
@@ -58,6 +80,7 @@ jobs:
         fi
 
     - name: Upload coverage report
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
@@ -65,7 +88,7 @@ jobs:
         retention-days: 30
 
     - name: Coverage comment on PR
-      if: github.event_name == 'pull_request'
+      if: always() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
@@ -92,6 +115,7 @@ jobs:
           }
 
     - name: Upload coverage to Codecov
+      if: steps.unit_tests.outputs.status == '0'
       uses: codecov/codecov-action@v5
       with:
         files: ./coverage/lcov.info
@@ -100,6 +124,10 @@ jobs:
         fail_ci_if_error: true
         disable_search: true
         use_oidc: true
+
+    - name: Fail if unit tests failed
+      if: steps.unit_tests.outputs.status != '0'
+      run: exit "${{ steps.unit_tests.outputs.status }}"
 
   e2e:
     name: E2E Tests
@@ -123,7 +151,14 @@ jobs:
       run: npx playwright install --with-deps chromium
 
     - name: Run E2E tests
-      run: npm run e2e
+      id: e2e_tests
+      run: |
+        set +e
+        npm run e2e 2>&1 | tee playwright-output.log
+        status=${PIPESTATUS[0]}
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "npm run e2e" 260
+        exit 0
 
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
@@ -132,3 +167,15 @@ jobs:
         name: playwright-report
         path: playwright-report/
         retention-days: 30
+
+    - name: Upload Playwright test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-test-results
+        path: test-results/
+        retention-days: 30
+
+    - name: Fail if E2E tests failed
+      if: steps.e2e_tests.outputs.status != '0'
+      run: exit "${{ steps.e2e_tests.outputs.status }}"
