@@ -12,9 +12,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check changed paths
+      id: filter
+      uses: dorny/paths-filter@v4
+      with:
+        base: ${{ github.ref_name }}
+        filters: |
+          frontend:
+            - 'src/**'
+            - 'config/**'
+            - 'public/**'
+            - 'scripts/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - 'index.html'
+            - 'tsconfig.json'
+            - '.eslintrc.cjs'
+            - '.prettierrc'
+            - 'codecov.yml'
+            - '.github/workflows/test.yml'
+            - '.github/scripts/**'
+          e2e:
+            - 'e2e/**'
+            - 'config/playwright.config.ts'
+            - '.github/workflows/test.yml'
+            - '.github/scripts/**'
+
+    - name: Write CI plan
+      run: |
+        {
+          echo "### CI Plan"
+          echo ""
+          echo "| Area | Changed | Action |"
+          echo "| ---- | ------- | ------ |"
+          echo "| Frontend, unit, build | ${{ steps.filter.outputs.frontend }} | $([ '${{ steps.filter.outputs.frontend }}' = 'true' ] && echo 'Run' || echo 'Skip unless manually triggered') |"
+          echo "| E2E | ${{ steps.filter.outputs.e2e }} | $([ '${{ steps.filter.outputs.frontend }}' = 'true' ] || [ '${{ steps.filter.outputs.e2e }}' = 'true' ] && echo 'Run' || echo 'Skip unless manually triggered') |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
   test:
     name: Run Tests with Coverage
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
     permissions:
       contents: read
       id-token: write
@@ -159,7 +214,10 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: test  # Run after unit tests pass
+    needs: [changes, test]  # Run after unit tests pass
+    if: |
+      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true') &&
+      needs.test.result == 'success'
 
     steps:
     - name: Checkout code
