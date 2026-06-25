@@ -1815,24 +1815,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return (
       <div className="workspace-pad-component">
         <div className="workspace-pad-selector">
-          <div className="workspace-pad-select-field">
-            <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad layout</label>
-            {gamepadLibrary.length > 0 ? (
-              <select
-                id={`workspace-pad-select-${panel.id}`}
-                value={selectedLayoutId}
-                onChange={(event) => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
-              >
-                {gamepadLibrary.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="workspace-pad-selector-empty">No pads</span>
-            )}
-          </div>
+          <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad layout</label>
+          {gamepadLibrary.length > 0 ? (
+            <select
+              id={`workspace-pad-select-${panel.id}`}
+              value={selectedLayoutId}
+              onChange={(event) => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
+            >
+              {gamepadLibrary.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="workspace-pad-selector-empty">No pads</span>
+          )}
           <button
             type="button"
             className="workspace-pad-create-button"
