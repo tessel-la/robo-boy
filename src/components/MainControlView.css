@@ -356,6 +356,22 @@
     align-items: center;
 }
 
+.workspace-active-layout-name {
+    max-width: 180px;
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-active-layout-name.dirty {
+    color: #fff;
+}
+
 .workspace-add-button,
 .workspace-template-button,
 .workspace-tile-button,
@@ -475,6 +491,11 @@
     cursor: not-allowed;
 }
 
+.workspace-template-item button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
 .workspace-template-form-row button svg,
 .workspace-template-item button svg,
 .workspace-template-transfer-row button svg {
@@ -520,7 +541,28 @@
     gap: 8px;
 }
 
-.workspace-template-item span {
+.workspace-template-item .workspace-template-load-row {
+    flex: 1 1 auto;
+    width: auto;
+    height: 34px;
+    min-height: 34px;
+    min-width: 0;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 9px;
+    text-align: left;
+}
+
+.workspace-template-item .workspace-template-load-row:hover {
+    border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--background-secondary));
+}
+
+.workspace-template-item.active .workspace-template-load-row {
+    border-color: color-mix(in srgb, var(--primary-color) 72%, var(--border-color));
+}
+
+.workspace-template-title {
     min-width: 0;
     flex: 1 1 auto;
     overflow: hidden;
@@ -529,6 +571,27 @@
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.workspace-template-current {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.workspace-template-delete-button {
+    flex: 0 0 32px;
+}
+
+.workspace-template-empty {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 700;
 }
 
 .workspace-add-menu {
@@ -1008,6 +1071,13 @@ body.no-scroll {
     animation: workspace-drop-indicator-pop 150ms ease-out;
 }
 
+.workspace-drop-indicator-row {
+    width: 100%;
+    min-height: 8px;
+    flex-basis: 8px;
+    align-self: auto;
+}
+
 .workspace-drop-indicator-end {
     margin-left: 0;
 }
@@ -1094,6 +1164,10 @@ body.no-scroll {
 }
 
 .workspace-card-header[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.desktop-workspace.is-drop-active .workspace-card-header[draggable="true"] {
     cursor: grabbing;
 }
 
@@ -1198,30 +1272,41 @@ body.no-scroll {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-height: 34px;
-    padding: 4px 6px;
+    gap: 8px;
+    min-height: 42px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--border-color);
     background: var(--background-secondary);
 }
 
-.workspace-pad-selector label {
+.workspace-pad-select-field {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.workspace-pad-select-field label {
     color: var(--text-secondary);
     font-size: 0.72rem;
     font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
 }
 
-.workspace-pad-selector select {
+.workspace-pad-select-field select {
     min-width: 0;
-    flex: 1 1 auto;
-    height: 26px;
-    padding: 0 6px;
+    width: 100%;
+    height: 30px;
+    padding: 0 28px 0 8px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background: var(--background-color);
     color: var(--text-color);
     font-size: 0.78rem;
+    font-weight: 700;
 }
 
 .workspace-pad-selector-empty {
@@ -1236,9 +1321,9 @@ body.no-scroll {
 }
 
 .workspace-pad-create-button {
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1248,10 +1333,12 @@ body.no-scroll {
     background: var(--background-color);
     color: var(--text-color);
     cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .workspace-pad-create-button:hover {
     border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--background-color));
     color: var(--primary-color);
 }
 

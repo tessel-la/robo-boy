@@ -181,6 +181,8 @@ const WORKSPACE_PANELS_KEY = 'robo-boy-desktop-workspace-panels-v1';
 const WORKSPACE_LAYOUT_KEY = 'robo-boy-desktop-workspace-layout-v1';
 const WORKSPACE_TILE_ORDER_KEY = 'robo-boy-desktop-workspace-tile-order-v1';
 const WORKSPACE_CUSTOM_TEMPLATES_KEY = 'robo-boy-desktop-workspace-custom-templates-v1';
+const WORKSPACE_SAVED_LAYOUTS_KEY = 'robo-boy-desktop-workspace-saved-layouts-v1';
+const WORKSPACE_ACTIVE_LAYOUT_KEY = 'robo-boy-desktop-workspace-active-layout-v1';
 const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
@@ -194,6 +196,11 @@ type WorkspaceSnapTarget = {
   templateId: string;
   zoneIndex: number;
 };
+
+type WorkspaceDropPlacement =
+  | { mode: 'column'; targetTileId: string; edge: 'before' | 'after' }
+  | { mode: 'row'; targetTileId: string; edge: 'before' | 'after' }
+  | { mode: 'end' };
 
 type WorkspaceInteraction =
   | {
@@ -285,6 +292,16 @@ type WorkspaceLayoutState = {
   rowSizes?: number[];
 };
 
+type SavedWorkspaceLayout = {
+  id: string;
+  title: string;
+  panels: WorkspacePanel[];
+  tileOrder: string[];
+  layout: WorkspaceLayoutState;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type WorkspaceSnapTemplate = {
   id: string;
   title: string;
@@ -327,6 +344,81 @@ const loadWorkspaceLayout = (): WorkspaceLayoutState => {
   } catch (error) {
     console.error('Failed to load desktop workspace layout:', error);
     return { rowRatios: [], columnRatiosByRow: {} };
+  }
+};
+
+const normalizeWorkspaceLayoutState = (layout: unknown): WorkspaceLayoutState => {
+  if (!layout || typeof layout !== 'object') {
+    return { rowRatios: [], columnRatiosByRow: {} };
+  }
+
+  const candidate = layout as Partial<WorkspaceLayoutState>;
+  return {
+    rowRatios: Array.isArray(candidate.rowRatios)
+      ? candidate.rowRatios.filter(value => typeof value === 'number' && Number.isFinite(value) && value > 0)
+      : [],
+    columnRatiosByRow: candidate.columnRatiosByRow && typeof candidate.columnRatiosByRow === 'object'
+      ? Object.entries(candidate.columnRatiosByRow).reduce<Record<number, number[]>>((ratiosByRow, [key, value]) => {
+        if (Array.isArray(value)) {
+          const numericRatios = value.filter(item => typeof item === 'number' && Number.isFinite(item) && item > 0);
+          if (numericRatios.length > 0) ratiosByRow[Number(key)] = numericRatios;
+        }
+        return ratiosByRow;
+      }, {})
+      : {},
+    rowSizes: Array.isArray(candidate.rowSizes)
+      ? candidate.rowSizes.filter(value => Number.isInteger(value) && value > 0)
+      : undefined,
+  };
+};
+
+const normalizeSavedWorkspaceLayout = (layout: unknown): SavedWorkspaceLayout | null => {
+  if (!layout || typeof layout !== 'object') return null;
+  const candidate = layout as Partial<SavedWorkspaceLayout>;
+  if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return null;
+
+  const panels = Array.isArray(candidate.panels)
+    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel)
+    : [];
+  const tileOrder = normalizeWorkspaceTileOrder(
+    Array.isArray(candidate.tileOrder)
+      ? candidate.tileOrder.filter(item => typeof item === 'string')
+      : BASE_WORKSPACE_TILE_IDS,
+    panels.map(panel => panel.id)
+  );
+
+  return {
+    id: candidate.id,
+    title: candidate.title.trim() || 'Workspace layout',
+    panels,
+    tileOrder,
+    layout: normalizeWorkspaceLayoutState(candidate.layout),
+    createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
+  };
+};
+
+const loadSavedWorkspaceLayouts = (): SavedWorkspaceLayout[] => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_SAVED_LAYOUTS_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.map(layout => normalizeSavedWorkspaceLayout(layout)).filter((layout): layout is SavedWorkspaceLayout => layout !== null)
+      : [];
+  } catch (error) {
+    console.error('Failed to load saved desktop workspace layouts:', error);
+    return [];
+  }
+};
+
+const loadActiveWorkspaceLayoutId = (): string | null => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_ACTIVE_LAYOUT_KEY);
+    return stored || null;
+  } catch (error) {
+    console.error('Failed to load active desktop workspace layout:', error);
+    return null;
   }
 };
 
@@ -480,6 +572,30 @@ const getWorkspaceSnapTemplates = (tileCount: number, templates: WorkspaceSnapTe
   ));
 };
 
+const getWorkspaceLayoutSignature = (
+  panels: WorkspacePanel[],
+  tileOrder: string[],
+  layout: WorkspaceLayoutState
+) => {
+  const normalizedTileOrder = normalizeWorkspaceTileOrder(tileOrder, panels.map(panel => panel.id));
+  const normalizedLayout = normalizeWorkspaceLayoutState(layout);
+  const rowSizes = buildWorkspaceRows(normalizedTileOrder, normalizedLayout.rowSizes).map(row => row.length);
+  const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, rowIndex) => {
+    ratiosByRow[rowIndex] = normalizeRatios(normalizedLayout.columnRatiosByRow[rowIndex], rowSize);
+    return ratiosByRow;
+  }, {});
+
+  return JSON.stringify({
+    panels,
+    tileOrder: normalizedTileOrder,
+    layout: {
+      rowSizes,
+      rowRatios: normalizeRatios(normalizedLayout.rowRatios, rowSizes.length),
+      columnRatiosByRow,
+    },
+  });
+};
+
 const createWorkspaceLayoutFromTemplate = (
   template: WorkspaceSnapTemplate,
   tileCount: number
@@ -510,6 +626,55 @@ const createWorkspaceLayoutFromTemplate = (
   };
 };
 
+const createWorkspaceLayoutFromRows = (rows: string[][]): WorkspaceLayoutState => ({
+  rowSizes: rows.map(row => row.length),
+  rowRatios: Array.from({ length: rows.length }, () => 1),
+  columnRatiosByRow: rows.reduce<Record<number, number[]>>((ratiosByRow, row, rowIndex) => {
+    ratiosByRow[rowIndex] = Array.from({ length: row.length }, () => 1);
+    return ratiosByRow;
+  }, {}),
+});
+
+const applyWorkspaceDropPlacement = (
+  currentOrder: string[],
+  rowSizes: number[] | undefined,
+  tileId: string,
+  placement: WorkspaceDropPlacement,
+  movedTileId?: string
+) => {
+  const sourceRows = buildWorkspaceRows(currentOrder, rowSizes).map(row => [...row]);
+  const rows = sourceRows
+    .map(row => row.filter(id => id !== movedTileId && id !== tileId))
+    .filter(row => row.length > 0);
+
+  if (placement.mode === 'end' || rows.length === 0) {
+    rows.push([tileId]);
+  } else {
+    const targetRowIndex = rows.findIndex(row => row.includes(placement.targetTileId));
+    if (targetRowIndex === -1) {
+      rows.push([tileId]);
+    } else if (placement.mode === 'row') {
+      rows.splice(
+        placement.edge === 'before' ? targetRowIndex : targetRowIndex + 1,
+        0,
+        [tileId]
+      );
+    } else {
+      const targetColumnIndex = rows[targetRowIndex].indexOf(placement.targetTileId);
+      rows[targetRowIndex].splice(
+        placement.edge === 'before' ? targetColumnIndex : targetColumnIndex + 1,
+        0,
+        tileId
+      );
+    }
+  }
+
+  return {
+    order: rows.flat(),
+    layout: createWorkspaceLayoutFromRows(rows),
+  };
+};
+
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
@@ -517,14 +682,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
   const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(loadWorkspaceCustomTemplates);
+  const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(loadSavedWorkspaceLayouts);
+  const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(loadActiveWorkspaceLayoutId);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
-  const [workspaceTemplateName, setWorkspaceTemplateName] = useState('');
+  const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
   const [workspaceDragKind, setWorkspaceDragKind] = useState<'new' | 'move' | null>(null);
   const [workspaceSnapTarget, setWorkspaceSnapTarget] = useState<WorkspaceSnapTarget | null>(null);
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
-  const [workspaceDropIndex, setWorkspaceDropIndex] = useState<number | null>(null);
+  const [workspaceDropPlacement, setWorkspaceDropPlacement] = useState<WorkspaceDropPlacement | null>(null);
   const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -564,6 +731,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workspaceInteractionRef = useRef<WorkspaceInteraction | null>(null);
   const templateImportInputRef = useRef<HTMLInputElement>(null);
+  const workspaceTemplateControlRef = useRef<HTMLDivElement>(null);
+  const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
@@ -594,6 +763,40 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       row.length
     ))
   ), [workspaceLayout.columnRatiosByRow, workspaceRows]);
+  const capturedWorkspaceLayout = useMemo<WorkspaceLayoutState>(() => {
+    const rowSizes = workspaceRows.map(row => row.length);
+    const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, rowIndex) => {
+      ratiosByRow[rowIndex] = workspaceColumnRatiosByRow[rowIndex]?.length === rowSize
+        ? workspaceColumnRatiosByRow[rowIndex]
+        : Array.from({ length: rowSize }, () => 1);
+      return ratiosByRow;
+    }, {});
+
+    return {
+      rowSizes,
+      rowRatios: workspaceRowRatios.length === rowSizes.length
+        ? workspaceRowRatios
+        : Array.from({ length: rowSizes.length }, () => 1),
+      columnRatiosByRow,
+    };
+  }, [workspaceColumnRatiosByRow, workspaceRowRatios, workspaceRows]);
+  const activeWorkspaceLayout = useMemo(
+    () => savedWorkspaceLayouts.find(layout => layout.id === activeWorkspaceLayoutId) || null,
+    [activeWorkspaceLayoutId, savedWorkspaceLayouts]
+  );
+  const currentWorkspaceLayoutSignature = useMemo(
+    () => getWorkspaceLayoutSignature(workspacePanels, normalizedWorkspaceTileOrder, capturedWorkspaceLayout),
+    [capturedWorkspaceLayout, normalizedWorkspaceTileOrder, workspacePanels]
+  );
+  const activeWorkspaceLayoutSignature = useMemo(
+    () => activeWorkspaceLayout
+      ? getWorkspaceLayoutSignature(activeWorkspaceLayout.panels, activeWorkspaceLayout.tileOrder, activeWorkspaceLayout.layout)
+      : null,
+    [activeWorkspaceLayout]
+  );
+  const isActiveWorkspaceLayoutDirty = Boolean(
+    activeWorkspaceLayout && activeWorkspaceLayoutSignature !== currentWorkspaceLayoutSignature
+  );
   const getWorkspaceTileIndex = (rowIndex: number, columnIndex: number) => {
     return workspaceRows
       .slice(0, rowIndex)
@@ -630,6 +833,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [customWorkspaceSnapTemplates]);
 
   useEffect(() => {
+    localStorage.setItem(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts));
+  }, [savedWorkspaceLayouts]);
+
+  useEffect(() => {
+    if (activeWorkspaceLayoutId) {
+      localStorage.setItem(WORKSPACE_ACTIVE_LAYOUT_KEY, activeWorkspaceLayoutId);
+    } else {
+      localStorage.removeItem(WORKSPACE_ACTIVE_LAYOUT_KEY);
+    }
+  }, [activeWorkspaceLayoutId]);
+
+  useEffect(() => {
+    if (activeWorkspaceLayoutId && !savedWorkspaceLayouts.some(layout => layout.id === activeWorkspaceLayoutId)) {
+      setActiveWorkspaceLayoutId(null);
+    }
+  }, [activeWorkspaceLayoutId, savedWorkspaceLayouts]);
+
+  useEffect(() => {
     const normalizedOrder = normalizeWorkspaceTileOrder(
       workspaceTileOrder,
       workspacePanels.map(panel => panel.id)
@@ -656,6 +877,46 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       mediaQuery.removeEventListener('change', handleMediaChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isWorkspaceTemplateMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        workspaceTemplateControlRef.current &&
+        !workspaceTemplateControlRef.current.contains(target)
+      ) {
+        setIsWorkspaceTemplateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [isWorkspaceTemplateMenuOpen]);
+
+  useEffect(() => {
+    if (!isWorkspaceAddMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        workspaceAddControlRef.current &&
+        !workspaceAddControlRef.current.contains(target)
+      ) {
+        setIsWorkspaceAddMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [isWorkspaceAddMenuOpen]);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -895,7 +1156,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setWorkspaceDragKind(null);
     setWorkspaceSnapTarget(null);
     setIsWorkspaceResizing(false);
-    setWorkspaceDropIndex(null);
+    setWorkspaceDropPlacement(null);
   };
 
   const handleWorkspaceDragStart = (
@@ -924,7 +1185,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsWorkspaceDragActive(false);
     setWorkspaceDragKind(null);
     setWorkspaceSnapTarget(null);
-    setWorkspaceDropIndex(null);
+    setWorkspaceDropPlacement(null);
   };
 
   const handleWorkspaceDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -935,14 +1196,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       event.preventDefault();
       event.dataTransfer.dropEffect = event.dataTransfer.types.includes(WORKSPACE_TILE_DRAG_FORMAT) ? 'move' : 'copy';
       setWorkspaceSnapTarget(null);
-      setWorkspaceDropIndex(getWorkspaceDropIndex(event.clientX, event.clientY));
+      setWorkspaceDropPlacement(getWorkspaceDropPlacement(event.clientX, event.clientY));
     }
   };
 
   const handleWorkspaceDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
     const nextTarget = event.relatedTarget;
     if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-    setWorkspaceDropIndex(null);
+    setWorkspaceDropPlacement(null);
     setWorkspaceSnapTarget(null);
   };
 
@@ -958,25 +1219,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     event.stopPropagation();
     event.dataTransfer.dropEffect = workspaceDragKind === 'move' ? 'move' : 'copy';
     setWorkspaceSnapTarget(target);
-    setWorkspaceDropIndex(null);
+    setWorkspaceDropPlacement(null);
   };
 
-  const getWorkspaceDropIndex = (clientX: number, clientY: number) => {
-    if (!workspaceRef.current) return workspaceTiles.length;
+  const getWorkspaceDropPlacement = (clientX: number, clientY: number): WorkspaceDropPlacement => {
+    if (!workspaceRef.current) return { mode: 'end' };
 
     const cards = Array.from(workspaceRef.current.querySelectorAll<HTMLElement>('.workspace-card'));
-    for (let index = 0; index < cards.length; index += 1) {
-      const rect = cards[index].getBoundingClientRect();
-      const isAboveCardCenter = clientY < rect.top + rect.height / 2;
-      const isWithinCardRow = clientY >= rect.top && clientY <= rect.bottom;
-      const isBeforeCardCenter = clientX < rect.left + rect.width / 2;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      const targetTileId = card.dataset.workspaceCardId;
+      if (!targetTileId) continue;
 
-      if (isAboveCardCenter || (isWithinCardRow && isBeforeCardCenter)) {
-        return index;
+      const isWithinCard = (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      );
+      if (!isWithinCard) continue;
+
+      const verticalRatio = (clientY - rect.top) / rect.height;
+      if (verticalRatio < 0.28) {
+        return { mode: 'row', targetTileId, edge: 'before' };
       }
+      if (verticalRatio > 0.72) {
+        return { mode: 'row', targetTileId, edge: 'after' };
+      }
+
+      return {
+        mode: 'column',
+        targetTileId,
+        edge: clientX < rect.left + rect.width / 2 ? 'before' : 'after',
+      };
     }
 
-    return workspaceTiles.length;
+    return { mode: 'end' };
   };
 
   const handleWorkspaceDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -987,26 +1265,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       setWorkspaceDragKind(null);
       const snapTarget = workspaceSnapTarget;
       setWorkspaceSnapTarget(null);
-      setWorkspaceDropIndex(null);
+      const dropPlacement = workspaceDropPlacement || getWorkspaceDropPlacement(event.clientX, event.clientY);
+      setWorkspaceDropPlacement(null);
       const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
-      const dropIndex = snapTarget ? snapTarget.zoneIndex : getWorkspaceDropIndex(event.clientX, event.clientY);
+      const snapZoneIndex = snapTarget?.zoneIndex;
       setWorkspaceTileOrder(prevOrder => {
         const currentOrder = normalizeWorkspaceTileOrder(prevOrder, workspacePanels.map(panel => panel.id));
         const fromIndex = currentOrder.indexOf(movedTileId);
         if (fromIndex === -1) return currentOrder;
 
-        const nextOrder = [...currentOrder];
-        const [movedId] = nextOrder.splice(fromIndex, 1);
-        const adjustedDropIndex = dropIndex > fromIndex ? dropIndex - 1 : dropIndex;
-        nextOrder.splice(clamp(adjustedDropIndex, 0, nextOrder.length), 0, movedId);
         if (snapTemplate) {
+          const nextOrder = [...currentOrder];
+          const [movedId] = nextOrder.splice(fromIndex, 1);
+          const targetIndex = snapZoneIndex ?? nextOrder.length;
+          const adjustedDropIndex = targetIndex > fromIndex ? targetIndex - 1 : targetIndex;
+          nextOrder.splice(clamp(adjustedDropIndex, 0, nextOrder.length), 0, movedId);
           setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder.length));
+          return nextOrder;
         }
-        return nextOrder;
+
+        if (
+          dropPlacement.mode !== 'end' &&
+          dropPlacement.targetTileId === movedTileId
+        ) {
+          return currentOrder;
+        }
+
+        const result = applyWorkspaceDropPlacement(
+          currentOrder,
+          capturedWorkspaceLayout.rowSizes,
+          movedTileId,
+          dropPlacement,
+          movedTileId
+        );
+        setWorkspaceLayout(result.layout);
+        return result.order;
       });
-      if (!snapTemplate) {
-        resetWorkspaceLayout();
-      }
       return;
     }
 
@@ -1018,14 +1312,47 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setWorkspaceDragKind(null);
     const snapTarget = workspaceSnapTarget;
     setWorkspaceSnapTarget(null);
-    setWorkspaceDropIndex(null);
+    const dropPlacement = workspaceDropPlacement || getWorkspaceDropPlacement(event.clientX, event.clientY);
+    setWorkspaceDropPlacement(null);
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
       if (!['camera', '3d', 'pad', 'behaviorTree'].includes(draft.type)) return;
 
       const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
-      const tileIndex = snapTarget ? snapTarget.zoneIndex : getWorkspaceDropIndex(event.clientX, event.clientY);
-      handleAddWorkspacePanel(draft.type, tileIndex, snapTemplate || undefined);
+      const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
+      const selectedPadPanel = selectedPanelId
+        ? activePanels.find(panel => panel.id === selectedPanelId)
+        : null;
+      const newPanel = createWorkspacePanel(
+        { type: draft.type },
+        {
+          cameraTopic: selectedCameraTopic || availableCameraTopics[0],
+          layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+        }
+      );
+
+      setWorkspacePanels(prev => [...prev, newPanel]);
+      setWorkspaceTileOrder(prevOrder => {
+        const currentOrder = normalizeWorkspaceTileOrder(prevOrder, workspacePanels.map(panel => panel.id));
+        if (snapTemplate && typeof tileIndex === 'number') {
+          const nextOrder = [...currentOrder];
+          nextOrder.splice(clamp(tileIndex, 0, nextOrder.length), 0, newPanel.id);
+          setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder.length));
+          return nextOrder;
+        }
+
+        const result = applyWorkspaceDropPlacement(
+          currentOrder,
+          capturedWorkspaceLayout.rowSizes,
+          newPanel.id,
+          dropPlacement
+        );
+        setWorkspaceLayout(result.layout);
+        return result.order;
+      });
+      setLastAddedWorkspacePanelId(newPanel.id);
+      setIsWorkspaceAddMenuOpen(false);
+      setIsWorkspaceTemplateMenuOpen(false);
     } catch (error) {
       console.error('Failed to add dropped workspace panel:', error);
     }
@@ -1189,56 +1516,96 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     handleOpenCustomEditor();
   };
 
-  const handleSaveWorkspaceTemplate = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (workspaceTiles.length === 0 || workspaceRows.length === 0) return;
+  const createSavedWorkspaceSnapshot = (
+    title: string,
+    existingLayout?: SavedWorkspaceLayout
+  ): SavedWorkspaceLayout => {
+    const now = new Date().toISOString();
+    const panels = workspacePanels.map(panel => ({ ...panel }));
+    const tileOrder = normalizeWorkspaceTileOrder(
+      normalizedWorkspaceTileOrder,
+      panels.map(panel => panel.id)
+    );
 
-    const title = workspaceTemplateName.trim() || `Custom ${customWorkspaceSnapTemplates.length + 1}`;
-    const rowSizes = workspaceRows.map(row => row.length);
-    const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, rowIndex) => {
-      ratiosByRow[rowIndex] = workspaceColumnRatiosByRow[rowIndex]?.length === rowSize
-        ? workspaceColumnRatiosByRow[rowIndex]
-        : Array.from({ length: rowSize }, () => 1);
-      return ratiosByRow;
-    }, {});
-
-    const newTemplate: WorkspaceSnapTemplate = {
-      id: `custom-${Date.now()}`,
+    return {
+      id: existingLayout?.id || `workspace-layout-${Date.now()}`,
       title,
-      rowSizes,
-      rowRatios: workspaceRowRatios.length === rowSizes.length
-        ? workspaceRowRatios
-        : Array.from({ length: rowSizes.length }, () => 1),
-      columnRatiosByRow,
-      isCustom: true,
+      panels,
+      tileOrder,
+      layout: capturedWorkspaceLayout,
+      createdAt: existingLayout?.createdAt || now,
+      updatedAt: now,
     };
-
-    setCustomWorkspaceSnapTemplates(prev => [...prev, newTemplate]);
-    setWorkspaceTemplateName('');
   };
 
-  const handleDeleteWorkspaceTemplate = (templateId: string) => {
-    setCustomWorkspaceSnapTemplates(prev => prev.filter(template => template.id !== templateId));
+  const getNextWorkspaceLayoutTitle = () => `Workspace ${savedWorkspaceLayouts.length + 1}`;
+
+  const handleSaveWorkspaceLayout = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (workspaceTiles.length === 0) return;
+
+    const existingLayout = activeWorkspaceLayout || undefined;
+    const title = workspaceLayoutName.trim() || existingLayout?.title || getNextWorkspaceLayoutTitle();
+    const savedLayout = createSavedWorkspaceSnapshot(title, existingLayout);
+
+    setSavedWorkspaceLayouts(prev => {
+      if (!existingLayout) return [...prev, savedLayout];
+      return prev.map(layout => layout.id === existingLayout.id ? savedLayout : layout);
+    });
+    setActiveWorkspaceLayoutId(savedLayout.id);
+    setWorkspaceLayoutName('');
   };
 
-  const handleExportWorkspaceTemplates = () => {
-    if (customWorkspaceSnapTemplates.length === 0) return;
+  const handleSaveWorkspaceLayoutAsNew = () => {
+    if (workspaceTiles.length === 0) return;
+
+    const title = workspaceLayoutName.trim() || getNextWorkspaceLayoutTitle();
+    const savedLayout = createSavedWorkspaceSnapshot(title);
+    setSavedWorkspaceLayouts(prev => [...prev, savedLayout]);
+    setActiveWorkspaceLayoutId(savedLayout.id);
+    setWorkspaceLayoutName('');
+  };
+
+  const handleDeleteSavedWorkspaceLayout = (layoutId: string) => {
+    setSavedWorkspaceLayouts(prev => prev.filter(layout => layout.id !== layoutId));
+    if (activeWorkspaceLayoutId === layoutId) {
+      setActiveWorkspaceLayoutId(null);
+    }
+  };
+
+  const handleLoadSavedWorkspaceLayout = (layout: SavedWorkspaceLayout) => {
+    const normalizedTileOrder = normalizeWorkspaceTileOrder(
+      layout.tileOrder,
+      layout.panels.map(panel => panel.id)
+    );
+    setWorkspacePanels(layout.panels.map(panel => ({ ...panel })));
+    setWorkspaceTileOrder(normalizedTileOrder);
+    setWorkspaceLayout(layout.layout);
+    setActiveWorkspaceLayoutId(layout.id);
+    setWorkspaceLayoutName('');
+    setIsWorkspaceOpen(true);
+    setIsWorkspaceTemplateMenuOpen(false);
+    setIsWorkspaceAddMenuOpen(false);
+  };
+
+  const handleExportWorkspaceLayouts = () => {
+    if (savedWorkspaceLayouts.length === 0) return;
 
     const blob = new Blob([
       JSON.stringify({
         version: 1,
-        templates: customWorkspaceSnapTemplates,
+        layouts: savedWorkspaceLayouts,
       }, null, 2),
     ], { type: 'application/json' });
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = 'robo-boy-workspace-templates.json';
+    link.download = 'robo-boy-workspace-layouts.json';
     link.click();
     URL.revokeObjectURL(objectUrl);
   };
 
-  const handleImportWorkspaceTemplates = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportWorkspaceLayouts = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -1247,21 +1614,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || ''));
-        const candidates = Array.isArray(parsed) ? parsed : parsed?.templates;
+        const candidates = Array.isArray(parsed) ? parsed : parsed?.layouts;
         if (!Array.isArray(candidates)) return;
 
-        const importedTemplates = candidates
-          .map(template => normalizeWorkspaceSnapTemplate(template))
-          .filter((template): template is WorkspaceSnapTemplate => template !== null)
-          .map(template => ({
-            ...template,
-            id: `custom-${Date.now()}-${template.id}`,
+        const importedLayouts = candidates
+          .map(layout => normalizeSavedWorkspaceLayout(layout))
+          .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
+          .map(layout => ({
+            ...layout,
+            id: `workspace-layout-${Date.now()}-${layout.id}`,
+            title: layout.title,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           }));
 
-        if (importedTemplates.length === 0) return;
-        setCustomWorkspaceSnapTemplates(prev => [...prev, ...importedTemplates]);
+        if (importedLayouts.length === 0) return;
+        setSavedWorkspaceLayouts(prev => [...prev, ...importedLayouts]);
       } catch (error) {
-        console.error('Failed to import workspace templates:', error);
+        console.error('Failed to import workspace layouts:', error);
       }
     };
     reader.readAsText(file);
@@ -1270,8 +1640,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleAutoTileWorkspacePanels = () => {
     setIsWorkspaceOpen(true);
     setIsWorkspaceDragActive(false);
-    setWorkspaceDropIndex(null);
-    resetWorkspaceLayout();
+    setWorkspaceDropPlacement(null);
+    if (isDesktopWorkspace) {
+      resetWorkspaceLayout();
+    }
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceTemplateMenuOpen(false);
   };
@@ -1443,28 +1815,30 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return (
       <div className="workspace-pad-component">
         <div className="workspace-pad-selector">
-          <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad</label>
-          {gamepadLibrary.length > 0 ? (
-            <select
-              id={`workspace-pad-select-${panel.id}`}
-              value={selectedLayoutId}
-              onChange={(event) => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
-            >
-              {gamepadLibrary.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="workspace-pad-selector-empty">No pads</span>
-          )}
+          <div className="workspace-pad-select-field">
+            <label htmlFor={`workspace-pad-select-${panel.id}`}>Pad layout</label>
+            {gamepadLibrary.length > 0 ? (
+              <select
+                id={`workspace-pad-select-${panel.id}`}
+                value={selectedLayoutId}
+                onChange={(event) => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
+              >
+                {gamepadLibrary.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="workspace-pad-selector-empty">No pads</span>
+            )}
+          </div>
           <button
             type="button"
             className="workspace-pad-create-button"
             onClick={() => handleOpenWorkspacePadEditor(panel.id)}
-            title="Create pad for this component"
-            aria-label="Create pad for this component"
+            title="Create new pad"
+            aria-label="Create new pad"
           >
             {icons.add}
           </button>
@@ -1595,42 +1969,53 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     return (
       <div className="workspace-template-menu">
-        <form className="workspace-template-form" onSubmit={handleSaveWorkspaceTemplate}>
-          <label htmlFor="workspace-template-name">Name</label>
+        <form className="workspace-template-form" onSubmit={handleSaveWorkspaceLayout}>
+          <label htmlFor="workspace-layout-name">Layout name</label>
           <div className="workspace-template-form-row">
             <input
-              id="workspace-template-name"
-              value={workspaceTemplateName}
-              onChange={(event) => setWorkspaceTemplateName(event.target.value)}
-              placeholder={`Custom ${customWorkspaceSnapTemplates.length + 1}`}
+              id="workspace-layout-name"
+              value={workspaceLayoutName}
+              onChange={(event) => setWorkspaceLayoutName(event.target.value)}
+              placeholder={activeWorkspaceLayout?.title || getNextWorkspaceLayoutTitle()}
               maxLength={28}
             />
             <button
               type="submit"
               disabled={workspaceTiles.length === 0}
-              title="Save current template"
-              aria-label="Save current template"
+              title={activeWorkspaceLayout ? 'Update current layout' : 'Save current layout'}
+              aria-label={activeWorkspaceLayout ? 'Update current layout' : 'Save current layout'}
             >
               {icons.saveLayout}
             </button>
+            {activeWorkspaceLayout && (
+              <button
+                type="button"
+                onClick={handleSaveWorkspaceLayoutAsNew}
+                disabled={workspaceTiles.length === 0}
+                title="Save as new layout"
+                aria-label="Save as new layout"
+              >
+                {icons.add}
+              </button>
+            )}
           </div>
         </form>
         <div className="workspace-template-transfer-row">
           <button
             type="button"
             onClick={() => templateImportInputRef.current?.click()}
-            title="Import templates"
-            aria-label="Import templates"
+            title="Import layouts"
+            aria-label="Import layouts"
           >
             {icons.upload}
             <span>Import</span>
           </button>
           <button
             type="button"
-            onClick={handleExportWorkspaceTemplates}
-            disabled={customWorkspaceSnapTemplates.length === 0}
-            title="Export templates"
-            aria-label="Export templates"
+            onClick={handleExportWorkspaceLayouts}
+            disabled={savedWorkspaceLayouts.length === 0}
+            title="Export layouts"
+            aria-label="Export layouts"
           >
             {icons.download}
             <span>Export</span>
@@ -1639,25 +2024,44 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             ref={templateImportInputRef}
             type="file"
             accept="application/json,.json"
-            onChange={handleImportWorkspaceTemplates}
+            onChange={handleImportWorkspaceLayouts}
           />
         </div>
-        {customWorkspaceSnapTemplates.length > 0 && (
+        {savedWorkspaceLayouts.length > 0 ? (
           <div className="workspace-template-list">
-            {customWorkspaceSnapTemplates.map(template => (
-              <div className="workspace-template-item" key={template.id}>
-                <span>{template.title}</span>
+            {savedWorkspaceLayouts.map(layout => (
+              <div
+                className={`workspace-template-item ${layout.id === activeWorkspaceLayoutId ? 'active' : ''}`}
+                key={layout.id}
+              >
                 <button
                   type="button"
-                  onClick={() => handleDeleteWorkspaceTemplate(template.id)}
-                  title={`Delete ${template.title}`}
-                  aria-label={`Delete ${template.title}`}
+                  className="workspace-template-load-row"
+                  onClick={() => handleLoadSavedWorkspaceLayout(layout)}
+                  title={`Load ${layout.title}`}
+                  aria-label={`Load ${layout.title}`}
+                >
+                  <span className="workspace-template-title" title={layout.title}>{layout.title}</span>
+                  {layout.id === activeWorkspaceLayoutId && (
+                    <span className="workspace-template-current">
+                      {isActiveWorkspaceLayoutDirty ? 'Edited' : 'Current'}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="workspace-template-delete-button"
+                  onClick={() => handleDeleteSavedWorkspaceLayout(layout.id)}
+                  title={`Delete ${layout.title}`}
+                  aria-label={`Delete ${layout.title}`}
                 >
                   {icons.trash}
                 </button>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="workspace-template-empty">No saved layouts yet</div>
         )}
       </div>
     );
@@ -1813,7 +2217,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               </button>
               {isDesktopWorkspace && (
                 <>
-                  <div className="workspace-template-control">
+                  <span
+                    className={`workspace-active-layout-name ${isActiveWorkspaceLayoutDirty ? 'dirty' : ''}`}
+                    title={activeWorkspaceLayout
+                      ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? ' (edited)' : ''}`
+                      : 'Unsaved workspace layout'}
+                  >
+                    {activeWorkspaceLayout
+                      ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? '*' : ''}`
+                      : 'Unsaved layout'}
+                  </span>
+                  <div className="workspace-template-control" ref={workspaceTemplateControlRef}>
                     <button
                       type="button"
                       className="workspace-template-button"
@@ -1821,8 +2235,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                         setIsWorkspaceTemplateMenuOpen(prev => !prev);
                         setIsWorkspaceAddMenuOpen(false);
                       }}
-                      title="Manage snap templates"
-                      aria-label="Manage snap templates"
+                      title="Manage workspace layouts"
+                      aria-label="Manage workspace layouts"
                     >
                       {icons.saveLayout}
                     </button>
@@ -1842,7 +2256,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </>
           )}
           {isDesktopWorkspace && (
-            <div className="workspace-add-control">
+            <div className="workspace-add-control" ref={workspaceAddControlRef}>
               <button
                 type="button"
                 className="workspace-add-button"
@@ -1899,15 +2313,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             <div className="workspace-grid">
               {workspaceRows.map((row, rowIndex) => (
                 <React.Fragment key={`workspace-row-${rowIndex}`}>
+                  {workspaceDropPlacement?.mode === 'row' &&
+                    workspaceDropPlacement.edge === 'before' &&
+                    row.some(tile => tile.id === workspaceDropPlacement.targetTileId) && (
+                      <div className="workspace-drop-indicator workspace-drop-indicator-row" aria-hidden="true" />
+                    )}
                   <div
                     className="workspace-tile-row"
                     style={{ flex: workspaceRowRatios[rowIndex] || 1 }}
                   >
                     {row.map((tile, columnIndex) => {
                       const tileIndex = getWorkspaceTileIndex(rowIndex, columnIndex);
+                      const showColumnDropBefore = workspaceDropPlacement?.mode === 'column' &&
+                        workspaceDropPlacement.edge === 'before' &&
+                        workspaceDropPlacement.targetTileId === tile.id;
+                      const showColumnDropAfter = workspaceDropPlacement?.mode === 'column' &&
+                        workspaceDropPlacement.edge === 'after' &&
+                        workspaceDropPlacement.targetTileId === tile.id;
                       return (
                         <React.Fragment key={tile.id}>
-                          {workspaceDropIndex === tileIndex && (
+                          {showColumnDropBefore && (
                             <div className="workspace-drop-indicator" aria-hidden="true" />
                           )}
                           {tile.kind === 'view' ? (
@@ -1915,6 +2340,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               className="workspace-card workspace-card-view"
                               aria-label="View component"
                               data-workspace-card-id={tile.id}
+                              data-workspace-row-index={rowIndex}
+                              data-workspace-column-index={columnIndex}
                               style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
                               <header
@@ -1947,6 +2374,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               className="workspace-card workspace-card-pads"
                               aria-label="Pad controls component"
                               data-workspace-card-id={tile.id}
+                              data-workspace-row-index={rowIndex}
+                              data-workspace-column-index={columnIndex}
                               style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
                               <header
@@ -1979,6 +2408,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}`}
                               aria-label={tile.panel.title}
                               data-workspace-card-id={tile.panel.id}
+                              data-workspace-row-index={rowIndex}
+                              data-workspace-column-index={columnIndex}
                               style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                               onAnimationEnd={() => {
                                 setLastAddedWorkspacePanelId(prev => prev === tile.panel.id ? null : prev);
@@ -2010,6 +2441,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               </div>
                             </section>
                           )}
+                          {showColumnDropAfter && (
+                            <div className="workspace-drop-indicator" aria-hidden="true" />
+                          )}
                           {columnIndex < row.length - 1 && (
                             <div
                               className="workspace-column-resize-handle"
@@ -2024,10 +2458,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                         </React.Fragment>
                       );
                     })}
-                    {rowIndex === workspaceRows.length - 1 && workspaceDropIndex === workspaceTiles.length && (
+                    {rowIndex === workspaceRows.length - 1 && workspaceDropPlacement?.mode === 'end' && (
                       <div className="workspace-drop-indicator workspace-drop-indicator-end" aria-hidden="true" />
                     )}
                   </div>
+                  {workspaceDropPlacement?.mode === 'row' &&
+                    workspaceDropPlacement.edge === 'after' &&
+                    row.some(tile => tile.id === workspaceDropPlacement.targetTileId) && (
+                      <div className="workspace-drop-indicator workspace-drop-indicator-row" aria-hidden="true" />
+                    )}
                   {rowIndex < workspaceRows.length - 1 && (
                     <div
                       className="workspace-row-resize-handle"
