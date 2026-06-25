@@ -183,6 +183,7 @@ const WORKSPACE_TILE_ORDER_KEY = 'robo-boy-desktop-workspace-tile-order-v1';
 const WORKSPACE_CUSTOM_TEMPLATES_KEY = 'robo-boy-desktop-workspace-custom-templates-v1';
 const WORKSPACE_SAVED_LAYOUTS_KEY = 'robo-boy-desktop-workspace-saved-layouts-v1';
 const WORKSPACE_ACTIVE_LAYOUT_KEY = 'robo-boy-desktop-workspace-active-layout-v1';
+const WORKSPACE_OPEN_KEY = 'robo-boy-desktop-workspace-open-v1';
 const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
@@ -419,6 +420,15 @@ const loadActiveWorkspaceLayoutId = (): string | null => {
   } catch (error) {
     console.error('Failed to load active desktop workspace layout:', error);
     return null;
+  }
+};
+
+const loadWorkspaceOpenPreference = (): boolean => {
+  try {
+    return localStorage.getItem(WORKSPACE_OPEN_KEY) === 'true';
+  } catch (error) {
+    console.error('Failed to load desktop workspace open preference:', error);
+    return false;
   }
 };
 
@@ -677,7 +687,7 @@ const applyWorkspaceDropPlacement = (
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadWorkspacePanels);
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
@@ -827,6 +837,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   useEffect(() => {
     localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
   }, [workspaceLayout]);
+
+  useEffect(() => {
+    localStorage.setItem(WORKSPACE_OPEN_KEY, String(isWorkspaceOpen));
+  }, [isWorkspaceOpen]);
 
   useEffect(() => {
     localStorage.setItem(WORKSPACE_CUSTOM_TEMPLATES_KEY, JSON.stringify(customWorkspaceSnapTemplates));
