@@ -1,10 +1,15 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   push:
     branches: ['*']  # Run on all branches
   pull_request:
     branches: ['*']  # Run on PRs to all branches
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -95,7 +100,9 @@ jobs:
           const fs = require('fs');
           if (fs.existsSync('coverage/coverage-summary.json')) {
             const coverage = require('./coverage/coverage-summary.json');
-            const body = `## 📊 Test Coverage Report
+            const marker = '<!-- robo-boy-coverage-report -->';
+            const body = `${marker}
+            ## Test Coverage Report
 
             | Metric | Coverage |
             |--------|----------|
@@ -104,14 +111,34 @@ jobs:
             | Branches | ${coverage.total.branches.pct}% |
             | Functions | ${coverage.total.functions.pct}% |
 
-            [View full report](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
+            [View workflow summary](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})`;
 
-            github.rest.issues.createComment({
+            const {data: comments} = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body
+              per_page: 100
             });
+
+            const previous = comments.find(comment =>
+              comment.user.type === 'Bot' && comment.body.includes(marker)
+            );
+
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
           }
 
     - name: Upload coverage to Codecov
