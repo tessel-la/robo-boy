@@ -185,7 +185,20 @@
 
 @media (max-width: 600px) {
   .bt-node-search {
-    top: auto;
-    bottom: 12px;
+    top: calc(12px + 48px + 7px + 42px + 7px + 42px + 7px);
+    right: 12px;
+    bottom: auto;
+    left: auto;
+    width: 42px;
+  }
+
+  .bt-node-search-field {
+    height: 42px;
+    border-radius: 21px;
+  }
+
+  .bt-node-search:focus-within,
+  .bt-node-search.has-query {
+    width: calc(100% - 24px);
   }
 }
