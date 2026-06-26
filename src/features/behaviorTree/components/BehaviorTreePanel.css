@@ -6,6 +6,7 @@
   background: var(--background-color, #fafafa);
   overflow: hidden;
   position: relative; /* anchor for parameter editor overlay */
+  container-type: inline-size;
 }
 
 .bt-content {
@@ -25,7 +26,7 @@
   position: absolute;
   top: 58px;
   left: 50%;
-  z-index: 360;
+  z-index: 460;
   transform: translateX(-50%);
   display: flex;
   align-items: center;

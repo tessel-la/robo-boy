@@ -11,6 +11,15 @@ import './BehaviorTreeToolbar.css';
 
 export type BehaviorTreeInteractionMode = 'pan' | 'select';
 
+type MenuResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
+
+interface MenuFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 interface BehaviorTreeToolbarProps {
   currentTree: BehaviorTree | null;
   isExecuting: boolean;
@@ -70,7 +79,11 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const [savedTrees, setSavedTrees]   = useState(listBehaviorTrees());
   const [nameValue, setNameValue]     = useState(currentTree?.name ?? '');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [menuFrame, setMenuFrame] = useState<MenuFrame | null>(null);
+  const [activeResizeCorner, setActiveResizeCorner] = useState<MenuResizeCorner | null>(null);
   const fileInputRef                  = useRef<HTMLInputElement>(null);
+  const menuOverlayRef                = useRef<HTMLDivElement>(null);
+  const menuPanelRef                  = useRef<HTMLDivElement>(null);
 
   // Sync local name whenever the active tree changes
   useEffect(() => {
@@ -91,12 +104,97 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   const openMenu = () => {
     setSavedTrees(listBehaviorTrees());
+    setMenuFrame(null);
     setMenuOpen(true);
   };
 
   const closeMenu = () => {
     setPendingDelete(null);
+    setActiveResizeCorner(null);
     setMenuOpen(false);
+  };
+
+  const getConstrainedMenuFrame = (frame: MenuFrame, overlayRect: DOMRect): MenuFrame => {
+    const margin = 8;
+    const availableWidth = Math.max(180, overlayRect.width - margin * 2);
+    const availableHeight = Math.max(220, overlayRect.height - margin * 2);
+    const minWidth = Math.min(240, availableWidth);
+    const minHeight = Math.min(220, availableHeight);
+    const width = Math.min(Math.max(frame.width, minWidth), availableWidth);
+    const height = Math.min(Math.max(frame.height, minHeight), availableHeight);
+    const left = Math.min(Math.max(frame.left, margin), overlayRect.width - width - margin);
+    const top = Math.min(Math.max(frame.top, margin), overlayRect.height - height - margin);
+
+    return {
+      left: Math.max(margin, left),
+      top: Math.max(margin, top),
+      width,
+      height,
+    };
+  };
+
+  const handleMenuResizeStart = (
+    corner: MenuResizeCorner,
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (!menuOverlayRef.current || !menuPanelRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const overlayRect = menuOverlayRef.current.getBoundingClientRect();
+    const panelRect = menuPanelRef.current.getBoundingClientRect();
+    const startFrame: MenuFrame = {
+      left: panelRect.left - overlayRect.left,
+      top: panelRect.top - overlayRect.top,
+      width: panelRect.width,
+      height: panelRect.height,
+    };
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const movesLeft = corner.includes('w');
+    const movesUp = corner.includes('n');
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setActiveResizeCorner(corner);
+    setMenuFrame(startFrame);
+    document.body.style.cursor = `${corner}-resize`;
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      let nextFrame: MenuFrame = {
+        left: movesLeft ? startFrame.left + deltaX : startFrame.left,
+        top: movesUp ? startFrame.top + deltaY : startFrame.top,
+        width: movesLeft ? startFrame.width - deltaX : startFrame.width + deltaX,
+        height: movesUp ? startFrame.height - deltaY : startFrame.height + deltaY,
+      };
+
+      const constrained = getConstrainedMenuFrame(nextFrame, overlayRect);
+      if (movesLeft && constrained.width !== nextFrame.width) {
+        nextFrame.left = startFrame.left + startFrame.width - constrained.width;
+      }
+      if (movesUp && constrained.height !== nextFrame.height) {
+        nextFrame.top = startFrame.top + startFrame.height - constrained.height;
+      }
+
+      setMenuFrame(getConstrainedMenuFrame(nextFrame, overlayRect));
+    };
+
+    const handlePointerUp = () => {
+      setActiveResizeCorner(null);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
   };
 
   const handleSave = () => {
@@ -323,8 +421,14 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       {/* ── Slide-in menu panel ──────────────────────────────────── */}
       {menuOpen && (
-        <div className="bt-menu-overlay" onClick={closeMenu}>
-          <div className="bt-menu-panel" onClick={(e) => e.stopPropagation()} data-testid="bt-menu-panel">
+        <div className="bt-menu-overlay" onClick={closeMenu} ref={menuOverlayRef}>
+          <div
+            className={`bt-menu-panel${activeResizeCorner ? ' is-resizing' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="bt-menu-panel"
+            ref={menuPanelRef}
+            style={menuFrame ?? undefined}
+          >
 
             {/* Name editor + close */}
             <div className="bt-menu-section">
@@ -436,6 +540,15 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />
+            {(['nw', 'ne', 'sw', 'se'] as const).map((corner) => (
+              <div
+                key={corner}
+                className={`bt-menu-resize-handle ${corner}`}
+                role="separator"
+                aria-label={`Resize menu from ${corner} corner`}
+                onPointerDown={(event) => handleMenuResizeStart(corner, event)}
+              />
+            ))}
           </div>
         </div>
       )}
