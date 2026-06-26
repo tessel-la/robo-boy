@@ -82,6 +82,24 @@ const firePointerEvent = (
   fireEvent(element, event);
 };
 
+const dispatchWindowPointerEvent = (
+  type: 'pointermove' | 'pointerup' | 'pointercancel',
+  init: { clientX: number; clientY: number; pointerId?: number }
+) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.entries({
+    pointerId: 1,
+    ...init,
+  }).forEach(([key, value]) => {
+    Object.defineProperty(event, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+    });
+  });
+  window.dispatchEvent(event);
+};
+
 const ctrlClickNode = (element: Element) => {
   firePointerEvent(element, 'pointerdown', {
     clientX: 0,
@@ -427,6 +445,32 @@ describe('BehaviorTreePanel', () => {
       })
     );
     expect(screen.getByTestId('bt-pan-mode')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('resizes the behavior tree menu from a corner', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+
+    const overlay = document.querySelector('.bt-menu-overlay') as HTMLElement;
+    const menuPanel = screen.getByTestId('bt-menu-panel');
+    overlay.getBoundingClientRect = () => createRect(0, 0, 600, 500);
+    menuPanel.getBoundingClientRect = () => createRect(12, 56, 280, 300);
+
+    firePointerEvent(screen.getByLabelText('Resize menu from se corner'), 'pointerdown', {
+      clientX: 292,
+      clientY: 356,
+    });
+
+    act(() => {
+      dispatchWindowPointerEvent('pointermove', { clientX: 352, clientY: 396 });
+    });
+
+    expect(menuPanel).toHaveStyle({ width: '340px', height: '340px' });
+
+    act(() => {
+      dispatchWindowPointerEvent('pointerup', { clientX: 352, clientY: 396 });
+    });
   });
 
   it('toggles follow mode and centers the running node while executing', async () => {
