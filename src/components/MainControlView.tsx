@@ -19,6 +19,7 @@ import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
   BehaviorTreeExecutionSnapshot,
 } from '../features/behaviorTree/components/BehaviorTreePanel';
+import TfTreePanel from '../features/tfTree/components/TfTreePanel';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -45,6 +46,14 @@ const IconMCVBT = () => (
     <line x1="20" y1="10" x2="20" y2="14"/>
     <rect x="1" y="14" width="6" height="4.5" rx="1.2"/>
     <rect x="17" y="14" width="6" height="4.5" rx="1.2"/>
+  </svg>
+);
+const IconMCVTF = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="6" cy="18" r="1.6" fill="currentColor" stroke="none"/>
+    <path d="M6 18h14M16.5 14.5 20 18l-3.5 3.5"/>
+    <path d="M6 18V4M2.5 7.5 6 4l3.5 3.5"/>
+    <path d="m7.2 16.8 7.6-7.6M10.8 9.2h4v4" opacity=".72"/>
   </svg>
 );
 const IconMCVLink = () => (
@@ -129,6 +138,7 @@ const icons = {
   camera: <IconMCVCamera />,
   view3d: <IconMCV3d />,
   bt: <IconMCVBT />,
+  tf: <IconMCVTF />,
   connected: <IconMCVLink />,
   disconnected: <IconMCVUnlink />,
   disconnect: <IconMCVDisconnect />,
@@ -157,8 +167,8 @@ interface MainControlViewProps {
   onDisconnect: () => void;
 }
 
-type ViewMode = 'camera' | '3d' | 'behaviorTree';
-type WorkspacePanelType = 'camera' | '3d' | 'pad' | 'behaviorTree';
+type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
+type WorkspacePanelType = 'camera' | '3d' | 'pad' | 'tfTree' | 'behaviorTree';
 type GamepadEditorSession = {
   mode: GamepadSaveMode;
   initialLayout: CustomGamepadLayout | null;
@@ -229,6 +239,7 @@ const clamp = (value: number, min: number, max: number) => {
 const getWorkspaceTitle = (type: WorkspacePanelType) => {
   if (type === 'camera') return 'Camera';
   if (type === '3d') return '3D view';
+  if (type === 'tfTree') return 'TF tree';
   if (type === 'behaviorTree') return 'Behavior tree';
   return 'Pad controls';
 };
@@ -254,7 +265,7 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
   const candidate = panel as Partial<WorkspacePanel>;
   if (
     typeof candidate.id !== 'string' ||
-    !['camera', '3d', 'pad', 'behaviorTree'].includes(candidate.type || '') ||
+    !['camera', '3d', 'pad', 'tfTree', 'behaviorTree'].includes(candidate.type || '') ||
     typeof candidate.title !== 'string'
   ) {
     return null;
@@ -709,6 +720,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   });
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
+  const [tfEverMounted, setTfEverMounted] = useState(false);
   const [btExecution, setBtExecution] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
     treeName: '',
@@ -996,6 +1008,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   // Lazy-mount BT panel on first visit; trigger 3D resize on switch
   useEffect(() => {
     if (viewMode === 'behaviorTree') setBtEverMounted(true);
+    if (viewMode === 'tfTree') setTfEverMounted(true);
     if (viewMode === '3d') {
       // ResizeObserver needs a tick after display change to read correct dimensions
       const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
@@ -1708,7 +1721,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     currentView.parentElement?.appendChild(currentViewClone);
 
     // Determine animation direction based on view order
-    const viewOrder = ['camera', '3d', 'behaviorTree'];
+    const viewOrder: ViewMode[] = ['camera', '3d', 'tfTree', 'behaviorTree'];
     const currentIndex = viewOrder.indexOf(viewMode);
     const newIndex = viewOrder.indexOf(newViewMode);
     const direction = newIndex > currentIndex ? 1 : -1;
@@ -1800,6 +1813,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <div className="placeholder">Connecting to ROS...</div>
         )
       ) : null}
+      {tfEverMounted && (
+        <div className="view-slot" style={viewMode !== 'tfTree' ? { display: 'none' } : undefined}>
+          {isConnected && ros ? (
+            <TfTreePanel ros={ros} isActive={viewMode === 'tfTree'} />
+          ) : (
+            <div className="placeholder">Connect to ROS to view TF</div>
+          )}
+        </div>
+      )}
+      {viewMode === 'tfTree' && !tfEverMounted && (
+        <div className="placeholder">Loading...</div>
+      )}
       {btEverMounted && (
         <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
           {isConnected && ros ? (
@@ -1917,6 +1942,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       );
     }
 
+    if (panel.type === 'tfTree') {
+      return <TfTreePanel ros={ros} isActive={isDesktopWorkspace} />;
+    }
+
     if (panel.type === 'pad') {
       return renderWorkspacePadControls(panel);
     }
@@ -1960,6 +1989,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           >
             {icons.bt}
             <span>Behavior tree</span>
+          </button>
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => handleWorkspaceDragStart(event, 'tfTree')}
+            onDragEnd={handleWorkspaceDragEnd}
+            onClick={() => handleAddWorkspacePanel('tfTree')}
+          >
+            {icons.tf}
+            <span>TF tree</span>
           </button>
           <button
             type="button"
@@ -2133,19 +2172,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const renderStandardSplitLayout = (className = 'standard-stack-layout') => (
     <div className={className} ref={containerRef}>
-      <div className="view-panel-container" style={{ height: `calc(${topHeight}% - 8px)` }}>
+      <div className="view-panel-container" style={{ height: viewMode === 'tfTree' ? '100%' : `calc(${topHeight}% - 8px)` }}>
         {renderViewContent()}
       </div>
 
-      <div
-        className={`resize-handle ${isDragging ? 'dragging' : ''}`}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-      >
-        <div className="resize-handle-bar" />
-      </div>
+      {viewMode !== 'tfTree' && (
+        <>
+          <div
+            className={`resize-handle ${isDragging ? 'dragging' : ''}`}
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+          >
+            <div className="resize-handle-bar" />
+          </div>
 
-      {renderPadControls(true, { height: `calc(${bottomHeight}% - 8px)` })}
+          {renderPadControls(true, { height: `calc(${bottomHeight}% - 8px)` })}
+        </>
+      )}
     </div>
   );
 
@@ -2170,6 +2213,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               aria-label="Switch to 3D View"
             >
               {icons.view3d}
+            </button>
+            <button
+              onClick={() => handleViewToggle('tfTree')}
+              className={viewMode === 'tfTree' ? 'active' : ''}
+              title="TF Tree"
+              aria-label="Switch to TF Tree"
+            >
+              {icons.tf}
             </button>
             {btExecution.isExecuting ? (
               <div
