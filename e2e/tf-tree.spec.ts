@@ -6,7 +6,7 @@ const transform = (parent: string, child: string, sec: number) => ({
   header: { frame_id: parent, stamp: { sec, nanosec: 0 } },
   child_frame_id: child,
   transform: {
-    translation: { x: 0, y: 0, z: 0 },
+    translation: { x: 1, y: 2, z: 3 },
     rotation: { x: 0, y: 0, z: 0, w: 1 },
   },
 });
@@ -43,8 +43,10 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await expect(summary).toContainText('5 frames');
   await expect(summary).toContainText('3 transforms');
   await expect(summary).toContainText('2 trees');
+  await expect(page.locator('.tf-transform-edge--dynamic').first()).toContainText('DYNAMIC');
   await expect(page.locator('.tf-transform-edge--static')).toHaveCount(1);
   await page.getByLabel('Close TF tree menu').click();
+  await page.getByLabel('Arrange TF tree').click();
 
   for (const theme of ['light', 'dark', 'solarized']) {
     await page.evaluate(themeName => {
@@ -187,6 +189,12 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await laserNode.click();
   await expect(details).toBeVisible();
   await expect(details).toContainText('laser');
+
+  await page.locator('.tf-transform-edge--dynamic').last().click({ force: true });
+  await expect(details).toContainText('Translation XYZ (m)');
+  await expect(details).toContainText('1.0000, 2.0000, 3.0000');
+  await expect(details).toContainText('Quaternion XYZW');
+  await expect(details).toContainText('Euler RPY (deg)');
 
   await expect
     .poll(async () => {

@@ -100,6 +100,11 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
+.tf-tree-icon-button > svg {
+  width: 18px;
+  height: 18px;
+}
+
 .tf-tree-live-button {
   min-width: 92px;
   height: clamp(36px, 8cqw, 44px);
@@ -462,8 +467,10 @@
     0 5px 16px rgba(0, 0, 0, 0.14);
 }
 .tf-tree-panel .react-flow__node.selected {
-  border-color: var(--primary-color, #32cd32);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 26%, transparent);
+  border-color: #ffb300;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #ffb300 32%, transparent),
+    0 8px 20px color-mix(in srgb, #ffb300 16%, transparent);
 }
 
 .tf-tree-panel .react-flow__edge-path {
@@ -478,9 +485,13 @@
   stroke: var(--tf-stale);
 }
 .tf-tree-panel .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--primary-color, #32cd32);
+  stroke: #ffb300;
   stroke-width: 4;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary-color, #32cd32) 55%, transparent));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, #ffb300 60%, transparent));
+}
+.tf-tree-panel .react-flow__edge.selected .react-flow__edge-text {
+  fill: #ffb300;
+  font-weight: 700;
 }
 .tf-tree-panel .react-flow__edge-text {
   fill: var(--text-color, #212529);

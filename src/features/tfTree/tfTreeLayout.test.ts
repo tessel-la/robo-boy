@@ -35,4 +35,30 @@ describe('layoutTfTree', () => {
 
     expect([...layoutTfTree(state).keys()].sort()).toEqual(['a', 'b']);
   });
+
+  it('allocates branch width recursively and centers parents over their descendants', () => {
+    const state = consumeTfMessage(
+      createEmptyTfTreeState(),
+      {
+        transforms: [
+          transform('root', 'left'),
+          transform('root', 'right'),
+          transform('left', 'left-a'),
+          transform('left', 'left-b'),
+          transform('right', 'right-a'),
+        ],
+      },
+      'dynamic',
+      2_000
+    );
+    const positions = layoutTfTree(state);
+    const center = (frame: string) => positions.get(frame)!.x + 86;
+
+    expect(center('left-a')).toBeLessThan(center('left-b'));
+    expect(center('left-b')).toBeLessThan(center('right-a'));
+    expect(center('left')).toBeGreaterThan(center('left-a'));
+    expect(center('left')).toBeLessThan(center('left-b'));
+    expect(center('root')).toBeGreaterThan(center('left'));
+    expect(center('root')).toBeLessThan(center('right'));
+  });
 });

@@ -1,5 +1,21 @@
 export type TfSource = 'dynamic' | 'static';
 
+export interface TfVector3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface TfQuaternion extends TfVector3 {
+  w: number;
+}
+
+export interface TfEulerRpy {
+  roll: number;
+  pitch: number;
+  yaw: number;
+}
+
 export interface TfTransformRecord {
   parentFrame: string;
   childFrame: string;
@@ -7,6 +23,8 @@ export interface TfTransformRecord {
   messageTimestampMs: number | null;
   receivedAtMs: number;
   orderTimestampMs: number;
+  translation: TfVector3 | null;
+  rotation: TfQuaternion | null;
 }
 
 export interface TfTreeState {
@@ -36,6 +54,10 @@ type TransformStamped = {
     stamp?: unknown;
   };
   child_frame_id?: unknown;
+  transform?: {
+    translation?: unknown;
+    rotation?: unknown;
+  };
 };
 
 export const createEmptyTfTreeState = (): TfTreeState => ({
@@ -53,6 +75,40 @@ export const normalizeFrameId = (value: unknown): string | null => {
 const finiteNumber = (value: unknown): number | null => {
   const numberValue = typeof value === 'string' ? Number(value) : value;
   return typeof numberValue === 'number' && Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const parseVector3 = (value: unknown): TfVector3 | null => {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  const x = finiteNumber(candidate.x);
+  const y = finiteNumber(candidate.y);
+  const z = finiteNumber(candidate.z);
+  return x === null || y === null || z === null ? null : { x, y, z };
+};
+
+const parseQuaternion = (value: unknown): TfQuaternion | null => {
+  const vector = parseVector3(value);
+  if (!vector || !value || typeof value !== 'object') return null;
+  const w = finiteNumber((value as Record<string, unknown>).w);
+  return w === null ? null : { ...vector, w };
+};
+
+export const quaternionToEulerRpy = (rotation: TfQuaternion | null): TfEulerRpy | null => {
+  if (!rotation) return null;
+  const norm = Math.hypot(rotation.x, rotation.y, rotation.z, rotation.w);
+  if (!Number.isFinite(norm) || norm === 0) return null;
+
+  const x = rotation.x / norm;
+  const y = rotation.y / norm;
+  const z = rotation.z / norm;
+  const w = rotation.w / norm;
+  const sinPitch = Math.max(-1, Math.min(1, 2 * (w * y - z * x)));
+
+  return {
+    roll: Math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)),
+    pitch: Math.asin(sinPitch),
+    yaw: Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)),
+  };
 };
 
 export const stampToMilliseconds = (stamp: unknown): number | null => {
@@ -119,6 +175,8 @@ export const consumeTfMessage = (
       messageTimestampMs,
       receivedAtMs,
       orderTimestampMs,
+      translation: parseVector3(transform.transform?.translation),
+      rotation: parseQuaternion(transform.transform?.rotation),
     };
 
     if (transformsByChild === state.transformsByChild) {

@@ -21,6 +21,7 @@ import {
   getTfGraphDiagnostics,
   getTransformAgeMs,
   isTransformStale,
+  quaternionToEulerRpy,
 } from '../tfTreeModel';
 import { layoutTfTree } from '../tfTreeLayout';
 import { useTfTree } from '../useTfTree';
@@ -46,6 +47,8 @@ const formatAge = (ageMs: number) => {
 const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
   new Date(timestampMs ?? fallbackMs).toLocaleString();
 
+const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
+
 const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const { state, isPaused, pause, resume } = useTfTree(ros);
   const { fitView, setCenter } = useReactFlow();
@@ -56,6 +59,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const [showStatic, setShowStatic] = useState(true);
   const [highlightStale, setHighlightStale] = useState(true);
   const [selection, setSelection] = useState<Selection>(null);
+  const [layoutRevision, setLayoutRevision] = useState(0);
 
   useEffect(() => {
     if (!isActive) return;
@@ -107,7 +111,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     }),
     [visibleFrames, visibleTransforms]
   );
-  const positions = useMemo(() => layoutTfTree(visibleState), [visibleState]);
+  const positions = useMemo(() => layoutTfTree(visibleState), [layoutRevision, visibleState]);
   const incomingByFrame = visibleState.transformsByChild;
 
   const visibleTrees = useMemo<TfVisibleTree[]>(() => {
@@ -154,14 +158,21 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
       visibleTransforms.map(transform => {
         const stale = isTransformStale(transform, nowMs, STALE_AFTER_MS);
         const selected = selection?.type === 'edge' && selection.childFrame === transform.childFrame;
+        const edgeColor = selected
+          ? '#ffb300'
+          : stale && highlightStale
+            ? 'var(--tf-stale)'
+            : transform.source === 'static'
+              ? 'var(--tf-static)'
+              : 'var(--tf-healthy)';
         return {
           id: `tf:${transform.parentFrame}:${transform.childFrame}`,
           source: transform.parentFrame,
           target: transform.childFrame,
-          label: transform.source === 'static' ? 'STATIC' : formatAge(getTransformAgeMs(transform, nowMs)),
+          label: transform.source === 'static' ? 'STATIC' : 'DYNAMIC',
           selected,
           animated: transform.source === 'dynamic' && !isPaused,
-          markerEnd: { type: MarkerType.ArrowClosed },
+          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 18, height: 18 },
           className: `tf-transform-edge tf-transform-edge--${transform.source}${stale && highlightStale ? ' tf-transform-edge--stale' : ''}`,
           data: transform,
           labelBgPadding: [5, 3] as [number, number],
@@ -208,6 +219,12 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
 
   const selectedTransform: TfTransformRecord | undefined =
     selection?.type === 'edge' ? state.transformsByChild.get(selection.childFrame) : undefined;
+  const selectedEuler = quaternionToEulerRpy(selectedTransform?.rotation ?? null);
+
+  const handleArrange = () => {
+    setLayoutRevision(revision => revision + 1);
+    fitView({ padding: 0.18, duration: 450, maxZoom: 1.25 });
+  };
 
   return (
     <section className="tf-tree-panel" data-testid="tf-tree-panel">
@@ -248,6 +265,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         isPaused={isPaused}
         onPause={pause}
         onResume={resume}
+        onArrange={handleArrange}
         onFitAll={() => fitView({ padding: 0.15, duration: 350 })}
         onFocusTree={handleFocusTree}
         visibleTrees={visibleTrees}
@@ -322,6 +340,44 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
                   : isTransformStale(selectedTransform, nowMs, STALE_AFTER_MS)
                     ? 'Stale'
                     : 'Healthy'}
+              </dd>
+              <dt>Translation XYZ (m)</dt>
+              <dd>
+                {selectedTransform.translation
+                  ? formatVector([
+                      selectedTransform.translation.x,
+                      selectedTransform.translation.y,
+                      selectedTransform.translation.z,
+                    ])
+                  : 'Unavailable'}
+              </dd>
+              <dt>Quaternion XYZW</dt>
+              <dd>
+                {selectedTransform.rotation
+                  ? formatVector([
+                      selectedTransform.rotation.x,
+                      selectedTransform.rotation.y,
+                      selectedTransform.rotation.z,
+                      selectedTransform.rotation.w,
+                    ])
+                  : 'Unavailable'}
+              </dd>
+              <dt>Euler RPY (rad)</dt>
+              <dd>
+                {selectedEuler
+                  ? formatVector([selectedEuler.roll, selectedEuler.pitch, selectedEuler.yaw])
+                  : 'Unavailable'}
+              </dd>
+              <dt>Euler RPY (deg)</dt>
+              <dd>
+                {selectedEuler
+                  ? formatVector(
+                      [selectedEuler.roll, selectedEuler.pitch, selectedEuler.yaw].map(
+                        value => (value * 180) / Math.PI
+                      ),
+                      2
+                    )
+                  : 'Unavailable'}
               </dd>
             </dl>
           )}

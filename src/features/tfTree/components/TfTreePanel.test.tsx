@@ -38,6 +38,7 @@ vi.mock('reactflow', () => ({
           key={node.id}
           data-testid={`tf-node-${node.id}`}
           data-class={node.className}
+          data-selected={node.selected}
           onClick={event => props.onNodeClick?.(event, node)}
         >
           {node.data.label}
@@ -49,6 +50,8 @@ vi.mock('reactflow', () => ({
           key={edge.id}
           data-testid={`tf-edge-${edge.target}`}
           data-class={edge.className}
+          data-selected={edge.selected}
+          data-marker-color={edge.markerEnd?.color}
           onClick={event => props.onEdgeClick?.(event, edge)}
         >
           {edge.label}
@@ -73,6 +76,10 @@ vi.mock('reactflow', () => ({
 const transform = (parent: string, child: string, sec = 10) => ({
   header: { frame_id: parent, stamp: { sec, nanosec: 0 } },
   child_frame_id: child,
+  transform: {
+    translation: { x: 1, y: 2, z: 3 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+  },
 });
 
 const buildState = () => {
@@ -104,6 +111,7 @@ describe('TfTreePanel', () => {
     expect(summary).toHaveTextContent('4 frames');
     expect(summary).toHaveTextContent('2 transforms');
     expect(summary).toHaveTextContent('2 trees');
+    expect(screen.getByTestId('tf-edge-base')).toHaveTextContent('DYNAMIC');
     expect(screen.getByTestId('tf-edge-camera')).toHaveTextContent('STATIC');
     expect(screen.getByTestId('tf-node-map')).toBeInTheDocument();
     expect(screen.getByTestId('tf-node-world')).toBeInTheDocument();
@@ -116,6 +124,8 @@ describe('TfTreePanel', () => {
     expect(panelMock.pause).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByLabelText('Fit TF graph to view'));
     expect(panelMock.fitView).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByLabelText('Arrange TF tree'));
+    expect(panelMock.fitView).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
     fireEvent.click(screen.getByLabelText('Static TF'));
@@ -134,6 +144,10 @@ describe('TfTreePanel', () => {
     fireEvent.click(screen.getByTestId('tf-edge-camera'));
     expect(screen.getByText('/tf_static')).toBeInTheDocument();
     expect(screen.getAllByText('Static', { selector: 'dd' })).toHaveLength(2);
+    expect(screen.getByText('1.0000, 2.0000, 3.0000')).toBeInTheDocument();
+    expect(screen.getByText('0.0000, 0.0000, 0.0000, 1.0000')).toBeInTheDocument();
+    expect(screen.getByTestId('tf-edge-camera')).toHaveAttribute('data-selected', 'true');
+    expect(screen.getByTestId('tf-edge-camera')).toHaveAttribute('data-marker-color', '#ffb300');
     fireEvent.click(screen.getByLabelText('Close TF details'));
     expect(screen.queryByLabelText('TF selection details')).not.toBeInTheDocument();
 

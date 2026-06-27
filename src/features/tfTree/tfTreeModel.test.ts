@@ -6,6 +6,7 @@ import {
   createEmptyTfTreeState,
   getTfGraphDiagnostics,
   isTransformStale,
+  quaternionToEulerRpy,
   stampToMilliseconds,
 } from './tfTreeModel';
 
@@ -40,7 +41,22 @@ describe('tfTreeModel', () => {
       childFrame: 'base_link',
       source: 'dynamic',
       messageTimestampMs: 10_000,
+      translation: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
     });
+  });
+
+  it('stores transform pose and converts quaternion rotation to Euler RPY', () => {
+    const candidate = transform('map', 'sensor');
+    candidate.transform.translation = { x: 1.25, y: -2, z: 0.5 };
+    candidate.transform.rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
+    const state = consumeTfMessage(createEmptyTfTreeState(), { transforms: [candidate] }, 'dynamic', 20_000);
+    const record = state.transformsByChild.get('sensor')!;
+
+    expect(record.translation).toEqual({ x: 1.25, y: -2, z: 0.5 });
+    expect(record.rotation).toEqual(candidate.transform.rotation);
+    expect(quaternionToEulerRpy(record.rotation)).toMatchObject({ roll: 0, pitch: 0 });
+    expect(quaternionToEulerRpy(record.rotation)?.yaw).toBeCloseTo(Math.PI / 2);
   });
 
   it('ignores malformed transforms without discarding valid transforms', () => {

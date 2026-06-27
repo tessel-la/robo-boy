@@ -19,6 +19,7 @@ interface TfTreeControlsProps {
   onPause: () => void;
   onResume: () => void;
   onFitAll: () => void;
+  onArrange: () => void;
   onFocusTree: (tree: TfVisibleTree) => void;
   visibleTrees: TfVisibleTree[];
   frameCount: number;
@@ -45,6 +46,7 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
   onPause,
   onResume,
   onFitAll,
+  onArrange,
   onFocusTree,
   visibleTrees,
   frameCount,
@@ -177,15 +179,40 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
         triggerBarClassName="tf-tree-float-bar"
         triggerContent={<span className="tf-tree-menu-title">TF Tree</span>}
         triggerAfter={
-          <button
-            type="button"
-            className="tf-tree-icon-button"
-            onClick={onFitAll}
-            title="Fit TF graph to view"
-            aria-label="Fit TF graph to view"
-          >
-            <FaExpand aria-hidden="true" />
-          </button>
+          <>
+            <button
+              type="button"
+              className="tf-tree-icon-button tf-tree-arrange-button"
+              onClick={onArrange}
+              title="Arrange TF tree"
+              aria-label="Arrange TF tree"
+              data-testid="tf-tree-arrange"
+            >
+              <svg
+                viewBox="0 0 22 22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="7.5" y="1.5" width="7" height="5" rx="1.5" />
+                <rect x="1.5" y="15.5" width="7" height="5" rx="1.5" />
+                <rect x="13.5" y="15.5" width="7" height="5" rx="1.5" />
+                <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="tf-tree-icon-button"
+              onClick={onFitAll}
+              title="Fit TF graph to view"
+              aria-label="Fit TF graph to view"
+            >
+              <FaExpand aria-hidden="true" />
+            </button>
+          </>
         }
         buttonLabel="Open TF tree menu"
         buttonTitle="TF tree controls and visible trees"

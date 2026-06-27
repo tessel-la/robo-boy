@@ -1,4 +1,4 @@
-import { TfTreeState, computeConnectedComponents } from './tfTreeModel';
+import { TfTreeState } from './tfTreeModel';
 
 export interface TfNodePosition {
   x: number;
@@ -7,76 +7,59 @@ export interface TfNodePosition {
 
 const NODE_WIDTH = 172;
 const NODE_HEIGHT = 48;
-const COLUMN_GAP = 72;
-const ROW_GAP = 58;
+const HORIZONTAL_GAP = 72;
+const VERTICAL_GAP = 58;
 const COMPONENT_GAP = 110;
 
+/** Arranges TF frames as a top-down forest using the same subtree allocation as BT. */
 export const layoutTfTree = (state: TfTreeState): Map<string, TfNodePosition> => {
   const positions = new Map<string, TfNodePosition>();
-  let componentOffsetX = 0;
+  const frames = [...state.knownFrames].sort();
+  if (frames.length === 0) return positions;
 
-  computeConnectedComponents(state).forEach(component => {
-    const componentSet = new Set(component);
-    const childrenByParent = new Map<string, string[]>();
-    const children = new Set<string>();
+  const frameSet = new Set(frames);
+  const incomingCount = new Map(frames.map(frame => [frame, 0]));
+  const childrenByFrame = new Map(frames.map(frame => [frame, [] as string[]]));
 
-    state.transformsByChild.forEach(transform => {
-      if (!componentSet.has(transform.parentFrame) || !componentSet.has(transform.childFrame)) return;
-      const siblings = childrenByParent.get(transform.parentFrame) ?? [];
-      siblings.push(transform.childFrame);
-      childrenByParent.set(transform.parentFrame, siblings);
-      children.add(transform.childFrame);
+  state.transformsByChild.forEach(transform => {
+    if (!frameSet.has(transform.parentFrame) || !frameSet.has(transform.childFrame)) return;
+    childrenByFrame.get(transform.parentFrame)?.push(transform.childFrame);
+    incomingCount.set(transform.childFrame, (incomingCount.get(transform.childFrame) ?? 0) + 1);
+  });
+  childrenByFrame.forEach(children => children.sort());
+
+  const roots = frames.filter(frame => (incomingCount.get(frame) ?? 0) === 0);
+  const traversalStarts = [...roots, ...frames];
+  const visited = new Set<string>();
+  let nextLeafX = 0;
+
+  const layoutSubtree = (frame: string, depth: number, ancestors: Set<string>): number => {
+    visited.add(frame);
+    const nextAncestors = new Set(ancestors).add(frame);
+    const children = Array.from(new Set(childrenByFrame.get(frame) ?? [])).filter(
+      child => !visited.has(child) && !nextAncestors.has(child)
+    );
+
+    let centerX: number;
+    if (children.length === 0) {
+      centerX = nextLeafX + NODE_WIDTH / 2;
+      nextLeafX += NODE_WIDTH + HORIZONTAL_GAP;
+    } else {
+      const childCenters = children.map(child => layoutSubtree(child, depth + 1, nextAncestors));
+      centerX = (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+    }
+
+    positions.set(frame, {
+      x: centerX - NODE_WIDTH / 2,
+      y: depth * (NODE_HEIGHT + VERTICAL_GAP),
     });
-    childrenByParent.forEach(siblings => siblings.sort());
+    return centerX;
+  };
 
-    const roots = component.filter(frame => !children.has(frame));
-    const depthByFrame = new Map<string, number>();
-    const visitFrom = (startFrames: string[]) => {
-      const queue = startFrames.map(frame => ({ frame, depth: 0 }));
-      while (queue.length > 0) {
-        const { frame, depth } = queue.shift()!;
-        if (depthByFrame.has(frame)) continue;
-        depthByFrame.set(frame, depth);
-        (childrenByParent.get(frame) ?? []).forEach(child => {
-          queue.push({ frame: child, depth: depth + 1 });
-        });
-      }
-    };
-
-    visitFrom(roots.length > 0 ? roots : [component[0]]);
-    component.forEach(frame => {
-      if (!depthByFrame.has(frame)) visitFrom([frame]);
-    });
-
-    const framesByDepth = new Map<number, string[]>();
-    component.forEach(frame => {
-      const depth = depthByFrame.get(frame) ?? 0;
-      const frames = framesByDepth.get(depth) ?? [];
-      frames.push(frame);
-      framesByDepth.set(depth, frames);
-    });
-
-    let componentWidth = NODE_WIDTH;
-    framesByDepth.forEach(frames => {
-      frames.sort();
-      componentWidth = Math.max(
-        componentWidth,
-        frames.length * NODE_WIDTH + Math.max(0, frames.length - 1) * COLUMN_GAP
-      );
-    });
-
-    framesByDepth.forEach((frames, depth) => {
-      const rowWidth = frames.length * NODE_WIDTH + Math.max(0, frames.length - 1) * COLUMN_GAP;
-      const rowOffset = componentOffsetX + (componentWidth - rowWidth) / 2;
-      frames.forEach((frame, index) => {
-        positions.set(frame, {
-          x: rowOffset + index * (NODE_WIDTH + COLUMN_GAP),
-          y: depth * (NODE_HEIGHT + ROW_GAP),
-        });
-      });
-    });
-
-    componentOffsetX += componentWidth + COMPONENT_GAP;
+  traversalStarts.forEach(frame => {
+    if (visited.has(frame)) return;
+    layoutSubtree(frame, 0, new Set());
+    nextLeafX += COMPONENT_GAP;
   });
 
   return positions;
