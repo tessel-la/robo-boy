@@ -61,4 +61,23 @@ describe('layoutTfTree', () => {
     expect(center('root')).toBeGreaterThan(center('left'));
     expect(center('root')).toBeLessThan(center('right'));
   });
+
+  it('uses tighter branches and stacks disconnected trees in compact panels', () => {
+    const state = consumeTfMessage(
+      createEmptyTfTreeState(),
+      {
+        transforms: [transform('map', 'left'), transform('map', 'right'), transform('world', 'camera')],
+      },
+      'dynamic',
+      2_000
+    );
+    const regular = layoutTfTree(state);
+    const compact = layoutTfTree(state, { compact: true });
+
+    expect(compact.get('right')!.x - compact.get('left')!.x).toBeLessThan(
+      regular.get('right')!.x - regular.get('left')!.x
+    );
+    expect(compact.get('world')!.x).toBe(0);
+    expect(compact.get('world')!.y).toBeGreaterThan(compact.get('left')!.y);
+  });
 });

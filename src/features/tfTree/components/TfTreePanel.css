@@ -449,6 +449,13 @@
   letter-spacing: 0;
 }
 
+.tf-tree-panel.is-compact .react-flow__node-default {
+  width: 154px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
 .tf-tree-panel .tf-frame-node--healthy {
   border-color: var(--tf-healthy);
 }

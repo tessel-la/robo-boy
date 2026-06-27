@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -30,6 +30,7 @@ import type { TreePanelSearchResult } from '../../treePanel/components/TreePanel
 import './TfTreePanel.css';
 
 const STALE_AFTER_MS = 5_000;
+const COMPACT_PANEL_WIDTH = 520;
 
 interface TfTreePanelProps {
   ros: Ros | null;
@@ -52,6 +53,7 @@ const formatVector = (values: number[], digits = 4) => values.map(value => value
 const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const { state, isPaused, pause, resume } = useTfTree(ros);
   const { fitView, setCenter } = useReactFlow();
+  const panelRef = useRef<HTMLElement>(null);
   const [nowMs, setNowMs] = useState(Date.now());
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +62,11 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const [highlightStale, setHighlightStale] = useState(true);
   const [selection, setSelection] = useState<Selection>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
+  const [panelWidth, setPanelWidth] = useState(0);
+  const compactByViewport =
+    typeof window !== 'undefined' && window.matchMedia?.(`(max-width: ${COMPACT_PANEL_WIDTH}px)`).matches;
+  const isCompact = panelWidth > 0 ? panelWidth <= COMPACT_PANEL_WIDTH : compactByViewport;
+  const hasMeasuredPanel = panelWidth > 0;
 
   useEffect(() => {
     if (!isActive) return;
@@ -71,6 +78,23 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   useEffect(() => {
     if (!isActive) setMenuOpen(false);
   }, [isActive]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || typeof ResizeObserver === 'undefined') return;
+    const updateWidth = (width: number) => {
+      if (width > 0) setPanelWidth(width);
+    };
+    updateWidth(panel.getBoundingClientRect().width);
+    const observer = new ResizeObserver(entries => updateWidth(entries[0]?.contentRect.width ?? 0));
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!hasMeasuredPanel) return;
+    fitView({ padding: 0.18, duration: 250, maxZoom: 1.2 });
+  }, [fitView, hasMeasuredPanel, isCompact]);
 
   const diagnostics = useMemo(() => getTfGraphDiagnostics(state), [state]);
   const normalizedFilter = filterQuery.trim().toLowerCase();
@@ -111,7 +135,12 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     }),
     [visibleFrames, visibleTransforms]
   );
-  const positions = useMemo(() => layoutTfTree(visibleState), [layoutRevision, visibleState]);
+  const nodeWidth = isCompact ? 154 : 172;
+  const nodeHeight = isCompact ? 44 : 48;
+  const positions = useMemo(
+    () => layoutTfTree(visibleState, { compact: isCompact }),
+    [isCompact, layoutRevision, visibleState]
+  );
   const incomingByFrame = visibleState.transformsByChild;
 
   const visibleTrees = useMemo<TfVisibleTree[]>(() => {
@@ -147,11 +176,11 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         targetPosition: Position.Top,
         draggable: false,
         selectable: true,
-        width: 172,
-        height: 48,
+        width: nodeWidth,
+        height: nodeHeight,
       };
     });
-  }, [highlightStale, incomingByFrame, nowMs, positions, searchMatch, selection, visibleFrames]);
+  }, [highlightStale, incomingByFrame, nodeHeight, nodeWidth, nowMs, positions, searchMatch, selection, visibleFrames]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -172,7 +201,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           label: transform.source === 'static' ? 'STATIC' : 'DYNAMIC',
           selected,
           animated: transform.source === 'dynamic' && !isPaused,
-          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 18, height: 18 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
           className: `tf-transform-edge tf-transform-edge--${transform.source}${stale && highlightStale ? ' tf-transform-edge--stale' : ''}`,
           data: transform,
           labelBgPadding: [5, 3] as [number, number],
@@ -207,7 +236,12 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const handleSelectFrame = (frame: string) => {
     const position = positions.get(frame);
     setSelection({ type: 'node', frame });
-    if (position) setCenter(position.x + 86, position.y + 24, { zoom: 1.35, duration: 450 });
+    if (position) {
+      setCenter(position.x + nodeWidth / 2, position.y + nodeHeight / 2, {
+        zoom: 1.35,
+        duration: 450,
+      });
+    }
   };
 
   const handleFocusTree = (tree: TfVisibleTree) => {
@@ -227,7 +261,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   };
 
   return (
-    <section className="tf-tree-panel" data-testid="tf-tree-panel">
+    <section ref={panelRef} className={`tf-tree-panel${isCompact ? ' is-compact' : ''}`} data-testid="tf-tree-panel">
       <div className="tf-tree-canvas" data-testid="tf-tree-canvas">
         {nodes.length === 0 && (
           <div className="tf-tree-empty">

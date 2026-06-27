@@ -50,11 +50,10 @@ const IconMCVBT = () => (
 );
 const IconMCVTF = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="6" cy="5" r="2.25"/>
-    <circle cx="17.5" cy="11.5" r="2.25"/>
-    <circle cx="8" cy="19" r="2.25"/>
-    <path d="M7.9 6.2l7.7 4.1M15.7 13l-5.8 4.5"/>
-    <path d="M10.5 5.8l2.3-1.3M17.7 7.5l.1-2.7" opacity=".55"/>
+    <circle cx="6" cy="18" r="1.6" fill="currentColor" stroke="none"/>
+    <path d="M6 18h14M16.5 14.5 20 18l-3.5 3.5"/>
+    <path d="M6 18V4M2.5 7.5 6 4l3.5 3.5"/>
+    <path d="m7.2 16.8 7.6-7.6M10.8 9.2h4v4" opacity=".72"/>
   </svg>
 );
 const IconMCVLink = () => (
