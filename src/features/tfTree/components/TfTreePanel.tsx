@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -13,7 +13,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import type { Ros } from 'roslib';
-import { FaExclamationTriangle, FaExpand, FaFilter, FaPause, FaPlay, FaSearch } from 'react-icons/fa';
+import { FaTimes } from 'react-icons/fa';
 
 import {
   TfTransformRecord,
@@ -24,6 +24,8 @@ import {
 } from '../tfTreeModel';
 import { layoutTfTree } from '../tfTreeLayout';
 import { useTfTree } from '../useTfTree';
+import TfTreeControls, { TfVisibleTree } from './TfTreeControls';
+import type { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
 import './TfTreePanel.css';
 
 const STALE_AFTER_MS = 5_000;
@@ -48,6 +50,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const { state, isPaused, pause, resume } = useTfTree(ros);
   const { fitView, setCenter } = useReactFlow();
   const [nowMs, setNowMs] = useState(Date.now());
+  const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
   const [showStatic, setShowStatic] = useState(true);
@@ -61,8 +64,11 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     return () => window.clearInterval(interval);
   }, [isActive]);
 
+  useEffect(() => {
+    if (!isActive) setMenuOpen(false);
+  }, [isActive]);
+
   const diagnostics = useMemo(() => getTfGraphDiagnostics(state), [state]);
-  const positions = useMemo(() => layoutTfTree(state), [state]);
   const normalizedFilter = filterQuery.trim().toLowerCase();
 
   const visibleTransforms = useMemo(() => {
@@ -93,20 +99,29 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     return frames;
   }, [normalizedFilter, showStatic, state.knownFrames, visibleTransforms]);
 
-  const visibleComponentCount = useMemo(
-    () =>
-      computeConnectedComponents({
-        transformsByChild: new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
-        observedParentsByChild: new Map(),
-        knownFrames: visibleFrames,
-      }).length,
+  const visibleState = useMemo(
+    () => ({
+      transformsByChild: new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
+      observedParentsByChild: new Map<string, Set<string>>(),
+      knownFrames: visibleFrames,
+    }),
     [visibleFrames, visibleTransforms]
   );
+  const positions = useMemo(() => layoutTfTree(visibleState), [visibleState]);
+  const incomingByFrame = visibleState.transformsByChild;
 
-  const incomingByFrame = useMemo(
-    () => new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
-    [visibleTransforms]
-  );
+  const visibleTrees = useMemo<TfVisibleTree[]>(() => {
+    return computeConnectedComponents(visibleState).map(frames => {
+      const frameSet = new Set(frames);
+      const childFrames = new Set(
+        visibleTransforms
+          .filter(transform => frameSet.has(transform.parentFrame) && frameSet.has(transform.childFrame))
+          .map(transform => transform.childFrame)
+      );
+      const rootFrame = frames.find(frame => !childFrames.has(frame)) ?? frames[0];
+      return { id: frames.join('\u0000'), rootFrame, frames };
+    });
+  }, [visibleState, visibleTransforms]);
 
   const searchMatch = searchQuery.trim().toLowerCase();
   const nodes = useMemo<Node[]>(() => {
@@ -139,13 +154,11 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
       visibleTransforms.map(transform => {
         const stale = isTransformStale(transform, nowMs, STALE_AFTER_MS);
         const selected = selection?.type === 'edge' && selection.childFrame === transform.childFrame;
-        const ageLabel = transform.source === 'static' ? 'STATIC' : formatAge(getTransformAgeMs(transform, nowMs));
-
         return {
           id: `tf:${transform.parentFrame}:${transform.childFrame}`,
           source: transform.parentFrame,
           target: transform.childFrame,
-          label: ageLabel,
+          label: transform.source === 'static' ? 'STATIC' : formatAge(getTransformAgeMs(transform, nowMs)),
           selected,
           animated: transform.source === 'dynamic' && !isPaused,
           markerEnd: { type: MarkerType.ArrowClosed },
@@ -158,134 +171,119 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     [highlightStale, isPaused, nowMs, selection, visibleTransforms]
   );
 
-  const selectedTransform: TfTransformRecord | undefined =
-    selection?.type === 'edge' ? state.transformsByChild.get(selection.childFrame) : undefined;
+  useEffect(() => {
+    if (selection?.type === 'node' && !visibleFrames.has(selection.frame)) setSelection(null);
+    if (selection?.type === 'edge' && !incomingByFrame.has(selection.childFrame)) setSelection(null);
+  }, [incomingByFrame, selection, visibleFrames]);
 
-  const handleSearch = (event: FormEvent) => {
-    event.preventDefault();
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return;
-    const frame =
-      [...visibleFrames].sort().find(candidate => candidate.toLowerCase() === query) ??
-      [...visibleFrames].sort().find(candidate => candidate.toLowerCase().includes(query));
-    if (!frame) return;
+  const searchResults = useMemo<TreePanelSearchResult<string>[]>(() => {
+    if (!searchMatch) return [];
+    return [...visibleFrames]
+      .filter(frame => frame.toLowerCase().includes(searchMatch))
+      .sort()
+      .map(frame => {
+        const incoming = incomingByFrame.get(frame);
+        return {
+          id: frame,
+          label: frame,
+          value: frame,
+          detail: incoming ? `Parent: ${incoming.parentFrame}` : 'Root frame',
+          badge: incoming?.source === 'static' ? 'Static' : incoming ? 'Dynamic' : 'Root',
+        };
+      });
+  }, [incomingByFrame, searchMatch, visibleFrames]);
+
+  const handleSelectFrame = (frame: string) => {
     const position = positions.get(frame);
     setSelection({ type: 'node', frame });
     if (position) setCenter(position.x + 86, position.y + 24, { zoom: 1.35, duration: 450 });
   };
 
-  const warningCount = diagnostics.cycles.length + diagnostics.multipleParents.length;
+  const handleFocusTree = (tree: TfVisibleTree) => {
+    const frameSet = new Set(tree.frames);
+    const treeNodes = nodes.filter(node => frameSet.has(node.id));
+    setMenuOpen(false);
+    fitView({ nodes: treeNodes, padding: 0.22, duration: 400, maxZoom: 1.4 });
+  };
+
+  const selectedTransform: TfTransformRecord | undefined =
+    selection?.type === 'edge' ? state.transformsByChild.get(selection.childFrame) : undefined;
 
   return (
     <section className="tf-tree-panel" data-testid="tf-tree-panel">
-      <header className="tf-tree-toolbar">
-        <div className="tf-tree-toolbar__group">
-          <button
-            type="button"
-            className={isPaused ? 'active' : ''}
-            onClick={isPaused ? resume : pause}
-            title={isPaused ? 'Resume live TF updates' : 'Pause live TF updates'}
-            aria-label={isPaused ? 'Resume live TF updates' : 'Pause live TF updates'}
-          >
-            {isPaused ? <FaPlay /> : <FaPause />}
-          </button>
-          <button
-            type="button"
-            onClick={() => fitView({ padding: 0.15, duration: 350 })}
-            title="Fit TF graph to view"
-            aria-label="Fit TF graph to view"
-          >
-            <FaExpand />
-          </button>
-        </div>
-
-        <form className="tf-tree-search" onSubmit={handleSearch}>
-          <FaSearch aria-hidden="true" />
-          <input
-            value={searchQuery}
-            onChange={event => setSearchQuery(event.target.value)}
-            placeholder="Search frame"
-            aria-label="Search TF frame"
-          />
-        </form>
-
-        <label className="tf-tree-filter">
-          <FaFilter aria-hidden="true" />
-          <input
-            value={filterQuery}
-            onChange={event => setFilterQuery(event.target.value)}
-            placeholder="Filter frames"
-            aria-label="Filter TF frames"
-          />
-        </label>
-
-        <label className="tf-tree-toggle">
-          <input type="checkbox" checked={highlightStale} onChange={event => setHighlightStale(event.target.checked)} />
-          Highlight stale
-        </label>
-        <label className="tf-tree-toggle">
-          <input type="checkbox" checked={showStatic} onChange={event => setShowStatic(event.target.checked)} />
-          Static TF
-        </label>
-
-        <div className="tf-tree-summary" aria-label="TF graph summary">
-          <span>{visibleFrames.size} frames</span>
-          <span>{visibleTransforms.length} transforms</span>
-          <span>{visibleComponentCount} trees</span>
-        </div>
-      </header>
-
-      {warningCount > 0 && (
-        <div className="tf-tree-warnings" role="alert">
-          <FaExclamationTriangle aria-hidden="true" />
-          <div>
-            {diagnostics.multipleParents.map(warning => (
-              <span key={`parents:${warning.childFrame}`}>
-                {warning.childFrame} has multiple observed parents: {warning.parentFrames.join(', ')}
-              </span>
-            ))}
-            {diagnostics.cycles.map(cycle => (
-              <span key={`cycle:${cycle.join(':')}`}>{`Cycle detected: ${cycle.join(' -> ')} -> ${cycle[0]}`}</span>
-            ))}
+      <div className="tf-tree-canvas" data-testid="tf-tree-canvas">
+        {nodes.length === 0 && (
+          <div className="tf-tree-empty">
+            {state.transformsByChild.size === 0
+              ? 'Waiting for /tf and /tf_static...'
+              : 'No transforms match this filter'}
           </div>
-        </div>
-      )}
+        )}
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          minZoom={0.08}
+          maxZoom={2.5}
+          nodesConnectable={false}
+          nodesDraggable={false}
+          elementsSelectable
+          onNodeClick={(_event, node) => setSelection({ type: 'node', frame: node.id })}
+          onEdgeClick={(_event, edge) => {
+            const transform = edge.data as TfTransformRecord | undefined;
+            if (transform) setSelection({ type: 'edge', childFrame: transform.childFrame });
+          }}
+          onPaneClick={() => setSelection(null)}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <MiniMap pannable zoomable nodeStrokeWidth={3} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
 
-      <div className="tf-tree-workspace">
-        <div className="tf-tree-canvas" data-testid="tf-tree-canvas">
-          {nodes.length === 0 && (
-            <div className="tf-tree-empty">
-              {state.transformsByChild.size === 0
-                ? 'Waiting for /tf and /tf_static…'
-                : 'No transforms match this filter'}
+      <TfTreeControls
+        menuOpen={menuOpen}
+        onMenuOpen={() => setMenuOpen(true)}
+        onMenuClose={() => setMenuOpen(false)}
+        isPaused={isPaused}
+        onPause={pause}
+        onResume={resume}
+        onFitAll={() => fitView({ padding: 0.15, duration: 350 })}
+        onFocusTree={handleFocusTree}
+        visibleTrees={visibleTrees}
+        frameCount={visibleFrames.size}
+        transformCount={visibleTransforms.length}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        searchResults={searchResults}
+        onSelectFrame={handleSelectFrame}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+        showStatic={showStatic}
+        onShowStaticChange={setShowStatic}
+        highlightStale={highlightStale}
+        onHighlightStaleChange={setHighlightStale}
+        cycles={diagnostics.cycles}
+        multipleParents={diagnostics.multipleParents}
+      />
+
+      {selection && (
+        <aside className="tf-tree-details" aria-label="TF selection details" data-testid="tf-tree-details">
+          <div className="tf-tree-details-heading">
+            <div>
+              <span>Selection</span>
+              <h2>{selection.type === 'node' ? selection.frame : selectedTransform?.childFrame}</h2>
             </div>
-          )}
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            fitView
-            minZoom={0.08}
-            maxZoom={2.5}
-            nodesConnectable={false}
-            nodesDraggable={false}
-            elementsSelectable
-            onNodeClick={(_event, node) => setSelection({ type: 'node', frame: node.id })}
-            onEdgeClick={(_event, edge) => {
-              const transform = edge.data as TfTransformRecord | undefined;
-              if (transform) setSelection({ type: 'edge', childFrame: transform.childFrame });
-            }}
-            onPaneClick={() => setSelection(null)}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
-            <MiniMap pannable zoomable />
-            <Controls showInteractive={false} />
-          </ReactFlow>
-        </div>
-
-        <aside className="tf-tree-details" aria-label="TF selection details">
-          <h2>Details</h2>
-          {!selection && <p className="tf-tree-details__empty">Select a frame or transform.</p>}
-          {selection?.type === 'node' && (
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              title="Close details"
+              aria-label="Close TF details"
+            >
+              <FaTimes aria-hidden="true" />
+            </button>
+          </div>
+          {selection.type === 'node' && (
             <dl>
               <dt>Frame</dt>
               <dd>{selection.frame}</dd>
@@ -328,7 +326,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
             </dl>
           )}
         </aside>
-      </div>
+      )}
     </section>
   );
 };

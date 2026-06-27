@@ -99,9 +99,11 @@ describe('TfTreePanel', () => {
   it('renders disconnected dynamic and static TF trees with summary metadata', () => {
     render(<TfTreePanel ros={{} as never} isActive />);
 
-    expect(screen.getByText('4 frames')).toBeInTheDocument();
-    expect(screen.getByText('2 transforms')).toBeInTheDocument();
-    expect(screen.getByText('2 trees')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
+    const summary = screen.getByLabelText('TF graph summary');
+    expect(summary).toHaveTextContent('4 frames');
+    expect(summary).toHaveTextContent('2 transforms');
+    expect(summary).toHaveTextContent('2 trees');
     expect(screen.getByTestId('tf-edge-camera')).toHaveTextContent('STATIC');
     expect(screen.getByTestId('tf-node-map')).toBeInTheDocument();
     expect(screen.getByTestId('tf-node-world')).toBeInTheDocument();
@@ -115,22 +117,27 @@ describe('TfTreePanel', () => {
     fireEvent.click(screen.getByLabelText('Fit TF graph to view'));
     expect(panelMock.fitView).toHaveBeenCalledOnce();
 
+    fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
     fireEvent.click(screen.getByLabelText('Static TF'));
     expect(screen.queryByTestId('tf-edge-camera')).not.toBeInTheDocument();
-    expect(screen.getByText('2 frames')).toBeInTheDocument();
+    expect(screen.getByLabelText('TF graph summary')).toHaveTextContent('2 frames');
   });
 
   it('searches and centers a frame, filters graph context, and shows edge details', () => {
     render(<TfTreePanel ros={{} as never} isActive />);
 
-    fireEvent.change(screen.getByLabelText('Search TF frame'), { target: { value: 'camera' } });
-    fireEvent.submit(screen.getByLabelText('Search TF frame').closest('form')!);
+    const search = screen.getByLabelText('Search TF frame');
+    fireEvent.change(search, { target: { value: 'camera' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
     expect(panelMock.setCenter).toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId('tf-edge-camera'));
     expect(screen.getByText('/tf_static')).toBeInTheDocument();
     expect(screen.getAllByText('Static', { selector: 'dd' })).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText('Close TF details'));
+    expect(screen.queryByLabelText('TF selection details')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
     fireEvent.change(screen.getByLabelText('Filter TF frames'), { target: { value: 'base' } });
     expect(screen.getByTestId('tf-node-map')).toBeInTheDocument();
     expect(screen.getByTestId('tf-node-base')).toBeInTheDocument();
@@ -154,8 +161,20 @@ describe('TfTreePanel', () => {
 
     render(<TfTreePanel ros={{} as never} isActive />);
 
+    fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
     expect(screen.getByRole('alert')).toHaveTextContent('multiple observed parents');
     expect(screen.getByRole('alert')).toHaveTextContent('Cycle detected');
     expect(screen.getByTestId('tf-edge-b').getAttribute('data-class')).toContain('stale');
+  });
+
+  it('lists visible TF components and fits only the selected tree', () => {
+    render(<TfTreePanel ros={{} as never} isActive />);
+
+    fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
+    fireEvent.click(screen.getByTestId('tf-tree-component-0'));
+
+    const options = panelMock.fitView.mock.calls[0][0];
+    expect(options.nodes.map((node: { id: string }) => node.id)).toEqual(['base', 'map']);
+    expect(screen.queryByTestId('tf-tree-menu-panel')).not.toBeInTheDocument();
   });
 });

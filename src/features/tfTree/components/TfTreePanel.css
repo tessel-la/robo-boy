@@ -1,143 +1,36 @@
 .tf-tree-panel {
-  --tf-healthy: #31b67a;
-  --tf-stale: #e05252;
-  --tf-static: #4f8ee8;
-  --tf-selected: #f0ad3d;
-  display: flex;
-  flex-direction: column;
+  --tf-healthy: var(--primary-color, #32cd32);
+  --tf-static: var(--secondary-color, #6c757d);
+  --tf-stale: var(--error-color, #dc3545);
+  --tf-warning: var(--warning-color, #f59e0b);
+  position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
-  color: var(--text-color, #e7edf5);
-  background: var(--card-background, #151a21);
+  overflow: hidden;
+  container-type: inline-size;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
 }
 
 .tf-tree-panel * {
   box-sizing: border-box;
 }
 
-.tf-tree-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(146, 164, 184, 0.22);
-  background: rgba(20, 25, 32, 0.98);
-  flex-wrap: wrap;
-}
-
-.tf-tree-toolbar__group {
-  display: flex;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-
-.tf-tree-toolbar button {
-  display: inline-grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid rgba(146, 164, 184, 0.28);
-  border-radius: 5px;
-  color: #dce5ef;
-  background: #222a34;
-  cursor: pointer;
-}
-
-.tf-tree-toolbar button:hover,
-.tf-tree-toolbar button.active {
-  border-color: #6ba5eb;
-  background: #2d3d50;
-}
-
-.tf-tree-search,
-.tf-tree-filter {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid rgba(146, 164, 184, 0.28);
-  border-radius: 5px;
-  background: #11161c;
-}
-
-.tf-tree-search:focus-within,
-.tf-tree-filter:focus-within {
-  border-color: #6ba5eb;
-}
-
-.tf-tree-search input,
-.tf-tree-filter input {
-  width: 132px;
-  min-width: 0;
-  max-width: 100%;
-  border: 0;
-  outline: 0;
-  color: inherit;
-  background: transparent;
-}
-
-.tf-tree-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  font-size: 0.78rem;
-  white-space: nowrap;
-}
-
-.tf-tree-toggle input {
-  accent-color: #4f8ee8;
-}
-
-.tf-tree-summary {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 10px;
-  margin-left: auto;
-  color: #9eacbc;
-  font-size: 0.73rem;
-  white-space: nowrap;
-}
-
-.tf-tree-warnings {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(240, 173, 61, 0.35);
-  color: #ffd68d;
-  background: #352919;
-  font-size: 0.77rem;
-}
-
-.tf-tree-warnings > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.tf-tree-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 230px;
-  min-height: 0;
-  flex: 1;
-}
-
 .tf-tree-canvas {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--background-color, #ffffff);
 }
 
 .tf-tree-canvas .react-flow {
   width: 100%;
   height: 100%;
+  background: var(--background-color, #ffffff);
 }
 
 .tf-tree-empty {
@@ -146,63 +39,409 @@
   inset: 0;
   display: grid;
   place-items: center;
-  color: #8996a5;
+  padding: 72px 24px 24px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 13px;
+  text-align: center;
   pointer-events: none;
 }
 
-.tf-tree-details {
+.tf-tree-float-bar,
+.tf-tree-float-actions {
+  position: absolute;
+  top: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.tf-tree-float-bar {
+  left: 12px;
+  max-width: calc(100% - 136px);
+}
+.tf-tree-float-actions {
+  right: 12px;
+}
+.tf-tree-float-bar > *,
+.tf-tree-float-actions > * {
+  pointer-events: auto;
+}
+
+.tf-tree-menu-button {
+  max-width: min(180px, 42cqw);
+}
+.tf-tree-menu-title {
   min-width: 0;
-  min-height: 0;
-  padding: 14px;
-  overflow: auto;
-  border-left: 1px solid rgba(146, 164, 184, 0.22);
-  background: #171d24;
-  scrollbar-width: thin;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.tf-tree-details h2 {
-  margin: 0 0 14px;
-  color: #e7edf5;
-  font-size: 0.95rem;
+.tf-tree-icon-button {
+  width: clamp(36px, 8cqw, 44px);
+  height: clamp(36px, 8cqw, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 50%;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
 }
 
-.tf-tree-details__empty {
-  color: #8996a5;
-  font-size: 0.8rem;
+.tf-tree-icon-button:hover {
+  color: var(--primary-color, #32cd32);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
-.tf-tree-details dl {
-  margin: 0;
+.tf-tree-live-button {
+  min-width: 92px;
+  height: clamp(36px, 8cqw, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--tf-warning);
+  color: #ffffff;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-warning) 36%, transparent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.tf-tree-details dt {
-  margin-top: 11px;
-  color: #8996a5;
-  font-size: 0.68rem;
+.tf-tree-live-button.paused {
+  background: var(--tf-healthy);
+  color: var(--button-text-color, #ffffff);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-healthy) 32%, transparent);
+}
+
+.tf-tree-live-button:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.tf-tree-live-button:active {
+  transform: scale(0.96);
+}
+
+.tf-tree-search {
+  position: absolute;
+  top: 66px;
+  right: 12px;
+  z-index: 35;
+  width: min(270px, calc(100% - 24px));
+}
+
+.tf-tree-menu-panel {
+  width: min(320px, calc(100% - 24px));
+}
+
+.tf-tree-menu-section {
+  flex: 0 0 auto;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tf-tree-menu-list-section {
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0 0;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tf-tree-menu-list-section > .tf-tree-menu-label {
+  padding: 0 15px 8px;
+}
+
+.tf-tree-menu-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tf-tree-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
+.tf-tree-menu-count {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #ffffff);
+  font-size: 10px;
+}
+
+.tf-tree-menu-close,
+.tf-tree-details-heading button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  cursor: pointer;
+}
+
+.tf-tree-menu-close:hover,
+.tf-tree-details-heading button:hover {
+  background: var(--background-color, #f8f9fa);
+  color: var(--text-color, #212529);
+}
+
+.tf-tree-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tf-tree-metrics span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 5px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 18%, var(--border-color, #dee2e6));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, var(--card-bg, #ffffff));
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  text-align: center;
+}
+
+.tf-tree-metrics strong {
+  color: var(--text-color, #212529);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.tf-tree-filter-field {
+  display: block;
+  margin: 10px 0 9px;
+}
+.tf-tree-filter-field > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 11px;
+}
+.tf-tree-filter-field input[type='search'] {
+  width: 100%;
+  height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  outline: none;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+}
+.tf-tree-filter-field input:focus {
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
+}
+
+.tf-tree-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tf-tree-toggle-row {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+}
+.tf-tree-toggle-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-color, #32cd32);
+}
+
+.tf-tree-component-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.tf-tree-component-row {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 15px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 70%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-color, #212529);
+  text-align: left;
+}
+.tf-tree-component-row:hover {
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, transparent);
+  color: var(--primary-color, #32cd32);
+}
+.tf-tree-component-index {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #ffffff);
+  font-size: 10px;
+  font-weight: 800;
+}
+.tf-tree-component-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tf-tree-component-copy strong,
+.tf-tree-component-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tf-tree-component-copy strong {
+  font-size: 12px;
+}
+.tf-tree-component-copy span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+}
+.tf-tree-component-row > svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tf-tree-menu-empty {
+  padding: 24px 15px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 12px;
+  text-align: center;
+}
+.tf-tree-diagnostics {
+  max-height: 150px;
+  overflow: auto;
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--tf-warning) 9%, var(--card-bg, #ffffff));
+}
+.tf-tree-diagnostics p {
+  margin: 8px 0 0;
+  color: var(--text-color, #212529);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.tf-tree-details {
+  position: absolute;
+  z-index: 40;
+  top: 116px;
+  right: 12px;
+  width: min(270px, calc(100% - 24px));
+  max-height: calc(100% - 128px);
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg, #ffffff) 96%, transparent);
+  color: var(--text-color, #212529);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.tf-tree-details-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tf-tree-details-heading span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.tf-tree-details h2 {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-color, #212529);
+  font-size: 15px;
+  line-height: 1.2;
+}
+.tf-tree-details dl {
+  margin: 0;
+}
+.tf-tree-details dt {
+  margin-top: 10px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .tf-tree-details dd {
   margin: 3px 0 0;
   overflow-wrap: anywhere;
-  color: #e7edf5;
-  font-size: 0.8rem;
+  color: var(--text-color, #212529);
+  font-size: 12px;
 }
 
 .tf-tree-panel .react-flow__node-default {
-  display: grid;
-  place-items: center;
   width: 172px;
   min-height: 48px;
+  display: grid;
+  place-items: center;
   padding: 7px 10px;
   overflow-wrap: anywhere;
-  border: 2px solid #718093;
-  border-radius: 6px;
-  color: #eef3f8;
-  background: #252d37;
-  font-size: 0.78rem;
+  border: 2px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
   letter-spacing: 0;
-  box-shadow: 0 4px 13px rgba(0, 0, 0, 0.25);
 }
 
 .tf-tree-panel .tf-frame-node--healthy {
@@ -214,220 +453,183 @@
 .tf-tree-panel .tf-frame-node--static {
   border-color: var(--tf-static);
 }
+.tf-tree-panel .tf-frame-node--root {
+  border-color: var(--border-color-light, var(--border-color, #adb5bd));
+}
 .tf-tree-panel .tf-frame-node--match {
-  box-shadow: 0 0 0 3px rgba(240, 173, 61, 0.55);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--primary-color, #32cd32) 28%, transparent),
+    0 5px 16px rgba(0, 0, 0, 0.14);
 }
 .tf-tree-panel .react-flow__node.selected {
-  border-color: var(--tf-selected);
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 26%, transparent);
 }
 
 .tf-tree-panel .react-flow__edge-path {
   stroke: var(--tf-healthy);
   stroke-width: 2;
 }
-
 .tf-tree-panel .tf-transform-edge--static .react-flow__edge-path {
   stroke: var(--tf-static);
   stroke-dasharray: 7 5;
 }
-
 .tf-tree-panel .tf-transform-edge--stale .react-flow__edge-path {
   stroke: var(--tf-stale);
 }
-
 .tf-tree-panel .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--tf-selected);
-  stroke-width: 3;
+  stroke: var(--primary-color, #32cd32);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary-color, #32cd32) 55%, transparent));
 }
-
 .tf-tree-panel .react-flow__edge-text {
-  fill: #e7edf5;
+  fill: var(--text-color, #212529);
+  stroke: none;
   font-size: 10px;
 }
-
 .tf-tree-panel .react-flow__edge-textbg {
-  fill: #1c232c;
+  fill: var(--card-bg, #ffffff);
   fill-opacity: 0.95;
 }
 
 .tf-tree-panel .react-flow__controls,
 .tf-tree-panel .react-flow__minimap {
-  border: 1px solid rgba(146, 164, 184, 0.25);
-  background: #202730;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
-
 .tf-tree-panel .react-flow__controls-button {
-  border-bottom-color: rgba(146, 164, 184, 0.2);
-  color: #dce5ef;
-  background: #202730;
+  border-bottom-color: var(--border-color, #dee2e6);
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
 }
-
+.tf-tree-panel .react-flow__controls-button:hover {
+  background: var(--background-secondary, #f8f9fa);
+}
+.tf-tree-panel .react-flow__controls-button svg {
+  fill: var(--text-color, #212529);
+}
+.tf-tree-panel .react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--primary-color, #32cd32) 12%, transparent);
+}
+.tf-tree-panel .react-flow__minimap-node {
+  fill: var(--border-color, #dee2e6);
+  stroke: var(--border-color-light, #adb5bd);
+}
+.tf-tree-panel .react-flow__background {
+  background: var(--background-color, #ffffff);
+}
 .tf-tree-panel .react-flow__background circle {
-  fill: rgba(146, 164, 184, 0.3);
+  fill: var(--border-color, #dee2e6);
 }
 
-@media (max-width: 900px) {
-  .tf-tree-toolbar {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
+@container (max-width: 700px) {
+  .tf-tree-float-bar {
+    max-width: calc(100% - 76px);
   }
-
-  .tf-tree-toolbar__group {
-    grid-column: 1;
-    grid-row: 1;
+  .tf-tree-live-button {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+  }
+  .tf-tree-live-button span {
+    display: none;
   }
 
   .tf-tree-search {
-    grid-column: 2;
-    grid-row: 1;
+    width: 42px;
+    transition: width 0.18s ease;
   }
-
-  .tf-tree-filter {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .tf-tree-search:focus-within,
+  .tf-tree-search.has-query {
+    width: calc(100% - 24px);
   }
-
-  .tf-tree-toggle {
-    grid-row: 3;
+  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-field {
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 21px;
   }
-
-  .tf-tree-workspace {
-    grid-template-columns: minmax(0, 1fr) 190px;
-  }
-
-  .tf-tree-summary {
-    grid-column: 1 / -1;
-    grid-row: 4;
+  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-input {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
-
-  .tf-tree-search input,
-  .tf-tree-filter input {
-    width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .tf-tree-panel {
-    min-height: 0;
-  }
-
-  .tf-tree-toolbar {
-    gap: 8px;
-    min-height: 0;
-    padding: 8px;
-  }
-
-  .tf-tree-toolbar button {
-    width: 40px;
-    height: 40px;
-  }
-
-  .tf-tree-search,
-  .tf-tree-filter {
-    height: 40px;
-  }
-
-  .tf-tree-toggle {
-    min-height: 32px;
-    font-size: 0.76rem;
-  }
-
-  .tf-tree-summary {
-    gap: 8px;
-    font-size: 0.7rem;
-  }
-
-  .tf-tree-warnings {
-    max-height: 86px;
-    overflow: auto;
-  }
-
-  .tf-tree-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(116px, 28dvh);
+    cursor: pointer;
+    opacity: 0;
   }
 
   .tf-tree-details {
-    padding: 10px 12px;
-    border-top: 1px solid rgba(146, 164, 184, 0.22);
-    border-left: 0;
-  }
-
-  .tf-tree-details h2 {
-    margin-bottom: 8px;
-    font-size: 0.84rem;
-  }
-
-  .tf-tree-details dt {
-    margin-top: 7px;
-    font-size: 0.62rem;
-  }
-
-  .tf-tree-details dd,
-  .tf-tree-details__empty {
-    font-size: 0.74rem;
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    max-height: min(42%, 300px);
+    border-radius: 8px;
   }
 
   .tf-tree-panel .react-flow__minimap {
     display: none;
   }
-
   .tf-tree-panel .react-flow__controls {
     bottom: 10px;
     left: 10px;
   }
-
   .tf-tree-panel .react-flow__controls-button {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
   }
 }
 
-@media (max-width: 460px) {
-  .tf-tree-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+@container (max-width: 460px) {
+  .tf-tree-float-bar,
+  .tf-tree-float-actions {
+    top: 10px;
   }
-
-  .tf-tree-toolbar__group {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
+  .tf-tree-float-bar {
+    left: 10px;
+    gap: 6px;
   }
-
+  .tf-tree-float-actions {
+    right: 10px;
+  }
+  .tf-tree-menu-button {
+    max-width: min(154px, 46cqw);
+    height: 42px;
+  }
+  .tf-tree-icon-button,
+  .tf-tree-live-button {
+    width: 44px;
+    height: 44px;
+  }
   .tf-tree-search {
-    grid-column: 1;
-    grid-row: 1;
+    top: 64px;
+    right: 10px;
   }
-
-  .tf-tree-filter {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .tf-tree-search:focus-within,
+  .tf-tree-search.has-query {
+    width: calc(100% - 20px);
   }
-
-  .tf-tree-toggle {
-    grid-row: auto;
+  .tf-tree-details {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    max-height: min(40%, 280px);
+    padding: 12px;
   }
-
-  .tf-tree-workspace {
-    grid-template-rows: minmax(0, 1fr) minmax(104px, 24dvh);
+  .tf-tree-metrics span {
+    font-size: 8px;
   }
+}
 
-  .tf-tree-summary {
-    justify-content: space-between;
+@media (pointer: coarse) {
+  .tf-tree-component-row {
+    min-height: 52px;
   }
-
-  .tf-tree-summary span {
-    min-width: max-content;
-  }
-
-  .tf-tree-panel .react-flow__node-default {
-    width: 154px;
-    min-height: 44px;
-    padding: 6px 8px;
-    font-size: 0.74rem;
+  .tf-tree-menu-close,
+  .tf-tree-details-heading button {
+    width: 40px;
+    height: 40px;
   }
 }
