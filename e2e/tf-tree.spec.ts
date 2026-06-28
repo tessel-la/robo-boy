@@ -114,6 +114,12 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
       })
     )
     .toBe(true);
+
+  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
+  await page.getByLabel('Switch to Behavior Tree').click();
+  const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
+  expect(tfControlBox?.width).toBe(btControlBox?.width);
+  expect(tfControlBox?.height).toBe(btControlBox?.height);
 });
 
 test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) => {

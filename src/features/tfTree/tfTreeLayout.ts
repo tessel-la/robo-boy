@@ -7,9 +7,9 @@ export interface TfNodePosition {
 
 const NODE_WIDTH = 172;
 const NODE_HEIGHT = 48;
-const HORIZONTAL_GAP = 56;
-const VERTICAL_GAP = 68;
-const COMPONENT_GAP = 72;
+const HORIZONTAL_GAP = 38;
+const VERTICAL_GAP = 82;
+const COMPONENT_GAP = 44;
 
 export interface TfTreeLayoutOptions {
   compact?: boolean;
@@ -22,9 +22,9 @@ export const layoutTfTree = (state: TfTreeState, options: TfTreeLayoutOptions = 
   if (frames.length === 0) return positions;
   const nodeWidth = options.compact ? 154 : NODE_WIDTH;
   const nodeHeight = options.compact ? 44 : NODE_HEIGHT;
-  const horizontalGap = options.compact ? 16 : HORIZONTAL_GAP;
-  const verticalGap = options.compact ? 84 : VERTICAL_GAP;
-  const componentGap = options.compact ? 40 : COMPONENT_GAP;
+  const horizontalGap = options.compact ? 10 : HORIZONTAL_GAP;
+  const verticalGap = options.compact ? 94 : VERTICAL_GAP;
+  const componentGap = options.compact ? 28 : COMPONENT_GAP;
 
   const frameSet = new Set(frames);
   const incomingCount = new Map(frames.map(frame => [frame, 0]));

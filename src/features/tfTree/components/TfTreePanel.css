@@ -710,6 +710,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .tf-tree-panel .react-flow__node {
+    transform-origin: center center;
     transition:
       scale 0.16s ease,
       filter 0.16s ease;
@@ -718,8 +719,8 @@
 
   .tf-tree-panel .react-flow__node:hover {
     z-index: 5;
-    scale: 1.035;
-    filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.14));
+    scale: 1.003;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
   }
 }
 .tf-tree-panel .tf-transform-edge--static .react-flow__edge-path {
@@ -756,6 +757,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .tf-tree-panel .react-flow__controls-button {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 5px;
   border-bottom-color: var(--border-color, #dee2e6);
   background: var(--card-bg, #ffffff);
   color: var(--text-color, #212529);
@@ -767,7 +772,7 @@
   fill: var(--text-color, #212529);
 }
 .tf-tree-panel .react-flow__minimap-mask {
-  fill: color-mix(in srgb, var(--primary-color, #32cd32) 12%, transparent);
+  fill: rgba(66, 133, 244, 0.1);
 }
 .tf-tree-panel .react-flow__minimap-node {
   fill: var(--border-color, #dee2e6);
