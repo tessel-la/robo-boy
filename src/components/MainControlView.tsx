@@ -83,6 +83,12 @@ const IconMCVAdd = () => (
     <path d="M12 5v14M5 12h14"/>
   </svg>
 );
+const IconMCVEdit = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>
+  </svg>
+);
 const IconMCVTrash = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>
@@ -150,6 +156,7 @@ const icons = {
   disconnect: <IconMCVDisconnect />,
   stop: <IconMCVStop />,
   add: <IconMCVAdd />,
+  edit: <IconMCVEdit />,
   trash: <IconMCVTrash />,
   grip: <IconMCVGrip />,
   tile: <IconMCVTile />,
@@ -1641,9 +1648,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     ));
   };
 
-  const handleOpenWorkspacePadEditor = (panelId: string) => {
+  const handleOpenWorkspacePadEditor = (panelId: string, layoutId?: string) => {
     setWorkspacePadEditorTargetId(panelId);
-    handleOpenCustomEditor();
+    if (!layoutId) {
+      handleOpenCustomEditor();
+      return;
+    }
+
+    const gamepad = gamepadLibrary.find(item => item.id === layoutId || item.layout.id === layoutId);
+    if (gamepad?.isDefault) {
+      handleOpenTemplate(gamepad.id);
+      return;
+    }
+
+    handleOpenCustomEditor(layoutId);
   };
 
   const createSavedWorkspaceSnapshot = (
@@ -2008,6 +2026,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const renderWorkspacePadControls = (panel: WorkspacePanel) => {
     const selectedLayoutId = panel.layoutId || gamepadLibrary[0]?.id || '';
+    const selectedGamepad = gamepadLibrary.find(item => (
+      item.id === selectedLayoutId || item.layout.id === selectedLayoutId
+    ));
 
     return (
       <div className="workspace-pad-component">
@@ -2030,7 +2051,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           )}
           <button
             type="button"
-            className="workspace-pad-create-button"
+            className="workspace-pad-action-button workspace-pad-edit-button"
+            onClick={() => handleOpenWorkspacePadEditor(panel.id, selectedLayoutId)}
+            disabled={!selectedGamepad}
+            title={selectedGamepad?.isDefault ? 'Customize selected pad' : 'Edit selected pad'}
+            aria-label={selectedGamepad
+              ? `${selectedGamepad.isDefault ? 'Customize' : 'Edit'} ${selectedGamepad.name}`
+              : 'Edit selected pad'}
+          >
+            {icons.edit}
+          </button>
+          <button
+            type="button"
+            className="workspace-pad-action-button workspace-pad-create-button"
             onClick={() => handleOpenWorkspacePadEditor(panel.id)}
             title="Create new pad"
             aria-label="Create new pad"

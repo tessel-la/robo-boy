@@ -27,6 +27,7 @@ interface SettingsPopupProps {
   allTopics: TopicInfo[]; // Add allTopics to get available topics for type
   tfAxesScale: number; // Add TF axes scale prop
   onTfAxesScaleChange: (newScale: number) => void; // Add TF axes scale change handler
+  toggleButtonRef?: React.RefObject<HTMLButtonElement>;
 }
 
 // Type for section visibility state
@@ -60,6 +61,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     allTopics = [], // Default to empty array if not provided
     tfAxesScale, // Add TF axes scale prop
     onTfAxesScaleChange, // Add TF axes scale change handler
+    toggleButtonRef,
   } = props;
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     const handleClickOutside = (event: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
         // Check if the click target is the toggle button itself to prevent immediate reopening
-        const toggleButton = document.getElementById('viz-settings-button'); // Use correct button ID
+        const toggleButton = toggleButtonRef?.current;
         if (!toggleButton || !toggleButton.contains(event.target as Node)) {
           onClose();
         }
@@ -109,7 +111,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
       clearTimeout(timerId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [onClose]);
+  }, [onClose, toggleButtonRef]);
 
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const frameName = event.target.value;

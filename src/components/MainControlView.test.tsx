@@ -243,6 +243,12 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByTestId('visualization-panel')).toHaveTextContent('roboboy_3d_visualization_state_');
 
     fireEvent.click(screen.getByLabelText('Add workspace panel'));
+    fireEvent.click(screen.getByText('3D panel'));
+    const visualizationPanels = screen.getAllByTestId('visualization-panel');
+    expect(visualizationPanels).toHaveLength(2);
+    expect(visualizationPanels[0]).not.toHaveTextContent(visualizationPanels[1].textContent || '');
+
+    fireEvent.click(screen.getByLabelText('Add workspace panel'));
     fireEvent.click(screen.getByText('Behavior tree'));
     expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
     expect(screen.getByTestId('behavior-tree-panel')).toBeInTheDocument();
@@ -343,6 +349,44 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Return to split view'));
     expect(screen.getByLabelText('Open grid workspace')).toBeInTheDocument();
     expect(screen.queryByLabelText('Desktop workspace')).not.toBeInTheDocument();
+  });
+
+  it('edits the pad selected in an integrated workspace control', async () => {
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-pad', 'pad', 'Pad controls'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByLabelText('Edit Drive Pad'));
+
+    expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Drive Pad');
+    fireEvent.click(screen.getByText('Save pad'));
+    expect(saveGamepadFromEditor).toHaveBeenCalled();
+  });
+
+  it('customizes a built-in workspace pad as a new editable copy', async () => {
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'template-drive', name: 'Template Pad', layout: { id: 'template-layout' }, isDefault: true },
+    ]);
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      { ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'template-drive' },
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByLabelText('Customize Template Pad'));
+
+    expect(cloneGamepadTemplate).toHaveBeenCalledWith('template-drive');
+    expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Template Copy');
+    fireEvent.click(screen.getByText('Save pad'));
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('saved-pad');
   });
 
   it('uses persistent single and split panels directly in the mobile view', async () => {
