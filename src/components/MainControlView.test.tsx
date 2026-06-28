@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
@@ -118,14 +118,29 @@ vi.mock('../features/customGamepad/components/GamepadEditor', () => ({
 }));
 
 vi.mock('../features/behaviorTree/components/BehaviorTreePanel', () => ({
-  default: ({ onExecutionChange, onExecutionControlsChange, isActive }: any) => {
+  default: function MockBehaviorTreePanel({ onExecutionChange, onExecutionControlsChange, isActive }: any) {
+    const [localState, setLocalState] = useState('Initial tree state');
+
     useEffect(() => {
-      onExecutionControlsChange?.({ stop: stopBehaviorTree });
+      onExecutionControlsChange?.({
+        stop: () => {
+          stopBehaviorTree();
+          onExecutionChange?.({ isExecuting: false, treeName: '' });
+        },
+      });
     }, []);
 
     return (
       <div data-testid="behavior-tree-panel">
         <span>{isActive ? 'active behavior tree' : 'inactive behavior tree'}</span>
+        <label>
+          Tree state
+          <input
+            aria-label="Behavior tree local state"
+            value={localState}
+            onChange={(event) => setLocalState(event.target.value)}
+          />
+        </label>
         <button
           type="button"
           onClick={() => onExecutionChange?.({
@@ -147,6 +162,8 @@ const workspaceTileOrderKey = 'robo-boy-desktop-workspace-tile-order-v1';
 const workspaceSavedLayoutsKey = 'robo-boy-desktop-workspace-saved-layouts-v1';
 const workspaceActiveLayoutKey = 'robo-boy-desktop-workspace-active-layout-v1';
 const workspaceOpenKey = 'robo-boy-desktop-workspace-open-v1';
+const mobileWorkspacePanelsKey = 'robo-boy-mobile-workspace-panels-v1';
+const mobileSplitViewKey = 'robo-boy-mobile-split-view-v1';
 const customTemplatesKey = 'robo-boy-desktop-workspace-custom-templates-v1';
 
 const connectionParams = {
@@ -199,7 +216,7 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('opens the grid workspace and adds each workspace panel type', async () => {
-    renderMainControlView();
+    const firstRender = renderMainControlView();
 
     await screen.findByTestId('camera-view');
     fireEvent.click(screen.getByLabelText('Open grid workspace'));
@@ -320,6 +337,71 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Return to split view'));
     expect(screen.getByLabelText('Open grid workspace')).toBeInTheDocument();
     expect(screen.queryByLabelText('Desktop workspace')).not.toBeInTheDocument();
+  });
+
+  it('uses persistent single and split panels directly in the mobile view', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(mobileWorkspacePanelsKey, JSON.stringify([
+      makePanel('persisted-camera', 'camera', 'Camera'),
+      makePanel('persisted-pad', 'pad', 'Pad controls'),
+      makePanel('ignored-third', 'behaviorTree', 'Behavior tree'),
+    ]));
+
+    const firstRender = renderMainControlView();
+
+    await screen.findByTestId('camera-view');
+    expect(screen.getByLabelText('Mobile panels')).toBeInTheDocument();
+    expect(screen.getByLabelText('Top mobile window')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Bottom mobile window')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+    expect(screen.getByTestId('visualization-panel')).toHaveTextContent('roboboy_3d_visualization_state_');
+
+    fireEvent.click(screen.getByLabelText('Split mobile view'));
+    expect(screen.getAllByLabelText(/mobile window$/i)).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText('Select bottom window'));
+    fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    fireEvent.change(screen.getByLabelText('Behavior tree local state'), {
+      target: { value: 'Edited tree state' },
+    });
+    fireEvent.click(screen.getByText('Start mocked tree'));
+    expect(screen.getByText('Move arm')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+    expect(screen.getByText('Move arm')).toBeInTheDocument();
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('inactive behavior tree');
+    fireEvent.click(screen.getByLabelText('Open behavior tree'));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Edited tree state');
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    fireEvent.click(screen.getByLabelText('Stop behavior tree'));
+
+    fireEvent.click(screen.getByLabelText('Swap mobile windows'));
+    expect(screen.getByLabelText('Select top window')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Switch to Behavior Tree')).toHaveClass('active');
+    expect(localStorage.getItem(mobileSplitViewKey)).toBe('true');
+
+    fireEvent.click(screen.getByLabelText('Use one mobile panel'));
+    expect(screen.getByLabelText('Bottom mobile window')).not.toBeVisible();
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    expect(localStorage.getItem(mobileSplitViewKey)).toBe('false');
+
+    firstRender.unmount();
+    renderMainControlView();
+    expect(screen.queryByLabelText('Bottom mobile window')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Switch to Behavior Tree')).toHaveClass('active');
   });
 
   it('opens standard pad flows and stops running behavior trees', async () => {
