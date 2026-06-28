@@ -1,0 +1,911 @@
+.tf-tree-panel {
+  --tf-healthy: var(--primary-color, #32cd32);
+  --tf-static: var(--secondary-color, #6c757d);
+  --tf-stale: var(--error-color, #dc3545);
+  --tf-warning: var(--warning-color, #f59e0b);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+}
+
+.tf-tree-panel * {
+  box-sizing: border-box;
+}
+
+.tf-tree-canvas {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background-color, #ffffff);
+}
+
+.tf-tree-canvas .react-flow {
+  width: 100%;
+  height: 100%;
+  background: var(--background-color, #ffffff);
+}
+
+.tf-tree-empty {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 72px 24px 24px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tf-tree-float-bar,
+.tf-tree-float-actions {
+  position: absolute;
+  top: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.tf-tree-float-bar {
+  left: 12px;
+  max-width: calc(100% - 136px);
+}
+.tf-tree-float-actions {
+  right: 12px;
+}
+.tf-tree-float-bar > *,
+.tf-tree-float-actions > * {
+  pointer-events: auto;
+}
+
+.tf-tree-menu-button {
+  max-width: min(180px, 42cqw);
+}
+.tf-tree-menu-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-tree-icon-button {
+  width: clamp(36px, 8cqw, 44px);
+  height: clamp(36px, 8cqw, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 50%;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.tf-tree-icon-button:hover {
+  color: var(--primary-color, #32cd32);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+
+.tf-tree-icon-button.active {
+  border-color: var(--primary-color, #32cd32);
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 12%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+}
+
+.tf-tree-icon-button > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tf-tree-live-button {
+  min-width: 92px;
+  height: clamp(36px, 8cqw, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--tf-warning);
+  color: #ffffff;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-warning) 36%, transparent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tf-tree-live-button.paused {
+  background: var(--tf-healthy);
+  color: var(--button-text-color, #ffffff);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-healthy) 32%, transparent);
+}
+
+.tf-tree-live-button:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.tf-tree-live-button:active {
+  transform: scale(0.96);
+}
+
+.tf-tree-search {
+  position: absolute;
+  top: 66px;
+  right: 12px;
+  z-index: 35;
+  width: min(270px, calc(100% - 24px));
+}
+
+.tf-tree-menu-panel {
+  width: min(320px, calc(100% - 24px));
+}
+
+.tf-tree-menu-section {
+  flex: 0 0 auto;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tf-tree-menu-list-section {
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0 0;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tf-tree-menu-list-section > .tf-tree-menu-label {
+  padding: 0 15px 8px;
+}
+
+.tf-tree-menu-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tf-tree-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.tf-tree-menu-count {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #ffffff);
+  font-size: 10px;
+}
+
+.tf-tree-menu-close,
+.tf-tree-details-heading button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  cursor: pointer;
+}
+
+.tf-tree-menu-close:hover,
+.tf-tree-details-heading button:hover {
+  background: var(--background-color, #f8f9fa);
+  color: var(--text-color, #212529);
+}
+
+.tf-tree-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tf-tree-metrics span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 5px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 18%, var(--border-color, #dee2e6));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, var(--card-bg, #ffffff));
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  text-align: center;
+}
+
+.tf-tree-metrics strong {
+  color: var(--text-color, #212529);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.tf-tree-filter-field {
+  display: block;
+  margin: 10px 0 9px;
+}
+.tf-tree-filter-field > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 11px;
+}
+.tf-tree-filter-field input[type='search'] {
+  width: 100%;
+  height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  outline: none;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+}
+.tf-tree-filter-field input:focus {
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
+}
+
+.tf-tree-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tf-tree-toggle-row {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+}
+.tf-tree-toggle-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-color, #32cd32);
+}
+
+.tf-tree-component-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.tf-tree-component-row {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 15px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 70%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-color, #212529);
+  text-align: left;
+}
+.tf-tree-component-row:hover {
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, transparent);
+  color: var(--primary-color, #32cd32);
+}
+.tf-tree-component-index {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #ffffff);
+  font-size: 10px;
+  font-weight: 800;
+}
+.tf-tree-component-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tf-tree-component-copy strong,
+.tf-tree-component-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tf-tree-component-copy strong {
+  font-size: 12px;
+}
+.tf-tree-component-copy span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+}
+.tf-tree-component-row > svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tf-tree-menu-empty {
+  padding: 24px 15px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 12px;
+  text-align: center;
+}
+.tf-tree-diagnostics {
+  max-height: 150px;
+  overflow: auto;
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--tf-warning) 9%, var(--card-bg, #ffffff));
+}
+.tf-tree-diagnostics p {
+  margin: 8px 0 0;
+  color: var(--text-color, #212529);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.tf-tree-details {
+  position: absolute;
+  z-index: 40;
+  top: 116px;
+  right: 12px;
+  width: min(270px, calc(100% - 24px));
+  max-height: calc(100% - 128px);
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg, #ffffff) 96%, transparent);
+  color: var(--text-color, #212529);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.tf-tree-details-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tf-tree-details-heading span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.tf-tree-details h2 {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-color, #212529);
+  font-size: 15px;
+  line-height: 1.2;
+}
+.tf-tree-details dl {
+  margin: 0;
+}
+.tf-tree-details dt {
+  margin-top: 10px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.tf-tree-details dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+}
+
+.tf-calculator {
+  position: absolute;
+  z-index: 45;
+  top: 56px;
+  left: 12px;
+  width: min(320px, calc(100% - 24px));
+  max-height: calc(100% - 80px);
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-bg, #ffffff) 97%, transparent);
+  color: var(--text-color, #212529);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.tf-calculator-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tf-calculator-heading span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tf-calculator-heading h2 {
+  margin: 3px 0 0;
+  color: var(--text-color, #212529);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.tf-calculator-heading button,
+.tf-calculator-pick,
+.tf-calculator-swap {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  cursor: pointer;
+}
+
+.tf-calculator-heading button {
+  width: 30px;
+  height: 30px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.tf-calculator-heading button:hover,
+.tf-calculator-pick:hover,
+.tf-calculator-swap:hover {
+  border-color: color-mix(in srgb, var(--primary-color, #32cd32) 55%, var(--border-color, #dee2e6));
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+}
+
+.tf-calculator-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tf-calculator-field > label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tf-calculator-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: start;
+  gap: 7px;
+}
+
+.tf-calculator-combobox {
+  min-width: 0;
+}
+
+.tf-calculator-combobox .tree-panel-search-field {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.tf-calculator-combobox .tree-panel-search-menu {
+  position: relative;
+  z-index: 2;
+}
+
+.tf-calculator-swap {
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.tf-calculator-swap svg {
+  transform: rotate(90deg);
+}
+
+.tf-calculator-result {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #dee2e6);
+}
+
+.tf-calculator-empty {
+  margin: 4px 0;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tf-calculator-result-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.tf-calculator-result-title strong {
+  color: var(--text-color, #212529);
+  font-size: 13px;
+}
+
+.tf-calculator-result-title span {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 11px;
+}
+
+.tf-calculator-result dl {
+  margin: 0;
+}
+
+.tf-calculator-result dt {
+  margin-top: 9px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tf-calculator-result dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+}
+
+.tf-calculator-matrix {
+  display: grid;
+  gap: 2px;
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-tree-pick-frame {
+  position: absolute;
+  z-index: 46;
+  top: 66px;
+  left: 50%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 7px 6px 14px;
+  border: 1px solid var(--primary-color, #32cd32);
+  border-radius: 22px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.16);
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tf-tree-pick-frame button {
+  min-width: 64px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #ffffff);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tf-tree-panel .react-flow__node-default {
+  width: 172px;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 7px 10px;
+  overflow-wrap: anywhere;
+  border: 2px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.tf-tree-panel.is-compact .react-flow__node-default {
+  width: 154px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.tf-tree-panel .tf-frame-node--healthy {
+  border-color: var(--tf-healthy);
+}
+.tf-tree-panel .tf-frame-node--stale {
+  border-color: var(--tf-stale);
+}
+.tf-tree-panel .tf-frame-node--static {
+  border-color: var(--tf-static);
+}
+.tf-tree-panel .tf-frame-node--root {
+  border-color: var(--border-color-light, var(--border-color, #adb5bd));
+}
+.tf-tree-panel .tf-frame-node--match {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--primary-color, #32cd32) 28%, transparent),
+    0 5px 16px rgba(0, 0, 0, 0.14);
+}
+.tf-tree-panel .react-flow__node.selected {
+  border-color: #ffb300;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #ffb300 32%, transparent),
+    0 8px 20px color-mix(in srgb, #ffb300 16%, transparent);
+}
+
+.tf-tree-panel .react-flow__edge-path {
+  stroke: var(--tf-healthy);
+  stroke-width: 2;
+}
+
+.tf-tree-refresh-icon {
+  animation: tf-tree-refresh-spin 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tf-tree-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tf-tree-panel .react-flow__node {
+    transform-origin: center center;
+    transition:
+      scale 0.16s ease,
+      filter 0.16s ease;
+    will-change: scale;
+  }
+
+  .tf-tree-panel .react-flow__node:hover {
+    z-index: 5;
+    scale: 1.003;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+  }
+}
+.tf-tree-panel .tf-transform-edge--static .react-flow__edge-path {
+  stroke: var(--tf-static);
+  stroke-dasharray: 7 5;
+}
+.tf-tree-panel .tf-transform-edge--stale .react-flow__edge-path {
+  stroke: var(--tf-stale);
+}
+.tf-tree-panel .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #ffb300;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, #ffb300 60%, transparent));
+}
+.tf-tree-panel .react-flow__edge.selected .react-flow__edge-text {
+  fill: #ffb300;
+  font-weight: 700;
+}
+.tf-tree-panel .react-flow__edge-text {
+  fill: var(--text-color, #212529);
+  stroke: none;
+  font-size: 10px;
+}
+.tf-tree-panel .react-flow__edge-textbg {
+  fill: var(--card-bg, #ffffff);
+  fill-opacity: 0.95;
+}
+
+.tf-tree-panel .react-flow__controls,
+.tf-tree-panel .react-flow__minimap {
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.tf-tree-panel .react-flow__controls-button {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 5px;
+  border-bottom-color: var(--border-color, #dee2e6);
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+}
+.tf-tree-panel .react-flow__controls-button:hover {
+  background: var(--background-secondary, #f8f9fa);
+}
+.tf-tree-panel .react-flow__controls-button svg {
+  fill: var(--text-color, #212529);
+}
+.tf-tree-panel .react-flow__minimap-mask {
+  fill: rgba(66, 133, 244, 0.1);
+}
+.tf-tree-panel .react-flow__minimap-node {
+  fill: var(--border-color, #dee2e6);
+  stroke: var(--border-color-light, #adb5bd);
+}
+.tf-tree-panel .react-flow__background {
+  background: var(--background-color, #ffffff);
+}
+.tf-tree-panel .react-flow__background circle {
+  fill: var(--border-color, #dee2e6);
+}
+
+@container (max-width: 700px) {
+  .tf-tree-float-bar {
+    max-width: calc(100% - 124px);
+  }
+  .tf-tree-live-button {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+  }
+  .tf-tree-live-button span {
+    display: none;
+  }
+
+  .tf-tree-search {
+    width: 42px;
+    transition: width 0.18s ease;
+  }
+  .tf-tree-search:focus-within,
+  .tf-tree-search.has-query {
+    width: calc(100% - 24px);
+  }
+  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-field {
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 21px;
+  }
+  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    cursor: pointer;
+    opacity: 0;
+  }
+
+  .tf-tree-details {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    max-height: min(42%, 300px);
+    border-radius: 8px;
+  }
+
+  .tf-tree-panel .react-flow__minimap {
+    display: none;
+  }
+  .tf-tree-panel .react-flow__controls {
+    display: none;
+  }
+
+  .tf-tree-panel.has-calculator .tf-tree-search {
+    display: none;
+  }
+
+  .tf-calculator {
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+    max-height: none;
+    padding: 14px;
+  }
+
+  .tf-tree-pick-frame {
+    top: 64px;
+    width: max-content;
+    max-width: calc(100% - 20px);
+  }
+}
+
+@container (max-width: 460px) {
+  .tf-tree-float-bar,
+  .tf-tree-float-actions {
+    top: 10px;
+  }
+  .tf-tree-float-bar {
+    left: 10px;
+    gap: 6px;
+  }
+  .tf-tree-float-actions {
+    right: 10px;
+  }
+  .tf-tree-menu-button {
+    max-width: min(96px, 32cqw);
+    height: 42px;
+  }
+  .tf-tree-icon-button,
+  .tf-tree-live-button {
+    width: 44px;
+    height: 44px;
+  }
+  .tf-tree-search {
+    top: 64px;
+    right: 10px;
+  }
+  .tf-tree-search:focus-within,
+  .tf-tree-search.has-query {
+    width: calc(100% - 20px);
+  }
+  .tf-tree-details {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    max-height: min(40%, 280px);
+    padding: 12px;
+  }
+  .tf-tree-metrics span {
+    font-size: 8px;
+  }
+}
+
+@media (pointer: coarse) {
+  .tf-tree-component-row {
+    min-height: 52px;
+  }
+  .tf-tree-menu-close,
+  .tf-tree-details-heading button {
+    width: 40px;
+    height: 40px;
+  }
+}
