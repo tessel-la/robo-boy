@@ -78,6 +78,12 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
       .toBe(true);
   }
 
+  await page.getByLabel('Open TF calculator').click();
+  const calculatorBox = await page.getByTestId('tf-calculator').boundingBox();
+  const panelBox = await page.getByTestId('tf-tree-panel').boundingBox();
+  expect(calculatorBox && panelBox && calculatorBox.x - panelBox.x < 20).toBe(true);
+  await page.getByLabel('Close TF calculator').click();
+
   await page.getByLabel('Search TF frame').fill('laser');
   await page.getByLabel('Search TF frame').press('Enter');
   await expect(page.locator('.tf-frame-node--match')).toHaveCount(1);
@@ -189,6 +195,7 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await publishTf(page, '/tf_static', [transform('world', 'camera_mount', 1)]);
 
   await expect(page.getByLabel('Pause live TF updates')).toBeVisible();
+  await expect(page.getByLabel('Refresh TF subscriptions')).toBeVisible();
   await expect(page.getByLabel('Arrange TF tree')).toBeVisible();
   await expect(page.getByLabel('Search TF frame')).toBeVisible();
   await expect(page.locator('.tf-tree-panel .react-flow__controls')).toBeHidden();
@@ -197,6 +204,10 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await expect(page.getByTestId('tf-tree-menu-panel')).toBeVisible();
   await page.getByLabel('Close TF tree menu').click();
   await expect(details).toHaveCount(0);
+
+  await page.getByLabel('Refresh TF subscriptions').click();
+  await publishTf(page, '/tf', [transform('base_link', 'imu', 102)]);
+  await expect(page.locator('.tf-frame-node').filter({ hasText: 'imu' })).toBeVisible();
 
   const laserNode = page.locator('.tf-frame-node').filter({ hasText: 'laser' });
   await expect(laserNode).toBeVisible();

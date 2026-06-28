@@ -53,7 +53,7 @@ const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
 const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
 
 const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
-  const { state, isPaused, pause, resume } = useTfTree(ros);
+  const { state, isPaused, pause, resume, refresh } = useTfTree(ros);
   const { fitView, setCenter } = useReactFlow();
   const panelRef = useRef<HTMLElement>(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -176,7 +176,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         id: frame,
         data: { label: frame },
         position: positions.get(frame) ?? { x: 0, y: 0 },
-        className: `tf-frame-node tf-frame-node--${stateClass}${isSearchMatch ? ' tf-frame-node--match' : ''}${calculatorSource === frame ? ' tf-frame-node--calculator-source' : ''}${calculatorTarget === frame ? ' tf-frame-node--calculator-target' : ''}`,
+        className: `tf-frame-node tf-frame-node--${stateClass}${isSearchMatch ? ' tf-frame-node--match' : ''}`,
         selected,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
@@ -186,19 +186,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         height: nodeHeight,
       };
     });
-  }, [
-    calculatorSource,
-    calculatorTarget,
-    highlightStale,
-    incomingByFrame,
-    nodeHeight,
-    nodeWidth,
-    nowMs,
-    positions,
-    searchMatch,
-    selection,
-    visibleFrames,
-  ]);
+  }, [highlightStale, incomingByFrame, nodeHeight, nodeWidth, nowMs, positions, searchMatch, selection, visibleFrames]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -360,6 +348,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         isPaused={isPaused}
         onPause={pause}
         onResume={resume}
+        onRefresh={refresh}
         onArrange={handleArrange}
         calculatorOpen={calculatorOpen}
         onToggleCalculator={handleToggleCalculator}

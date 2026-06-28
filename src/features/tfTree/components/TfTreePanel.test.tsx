@@ -10,6 +10,7 @@ const panelMock = vi.hoisted(() => ({
   isPaused: false,
   pause: vi.fn(),
   resume: vi.fn(),
+  refresh: vi.fn(),
   fitView: vi.fn(),
   setCenter: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock('../useTfTree', () => ({
     isPaused: panelMock.isPaused,
     pause: panelMock.pause,
     resume: panelMock.resume,
+    refresh: panelMock.refresh,
   }),
 }));
 
@@ -100,6 +102,7 @@ describe('TfTreePanel', () => {
     panelMock.isPaused = false;
     panelMock.pause.mockReset();
     panelMock.resume.mockReset();
+    panelMock.refresh.mockReset();
     panelMock.fitView.mockReset();
     panelMock.setCenter.mockReset();
   });
@@ -123,6 +126,10 @@ describe('TfTreePanel', () => {
 
     fireEvent.click(screen.getByLabelText('Pause live TF updates'));
     expect(panelMock.pause).toHaveBeenCalledOnce();
+    const refreshButton = screen.getByLabelText('Refresh TF subscriptions');
+    fireEvent.click(refreshButton);
+    expect(panelMock.refresh).toHaveBeenCalledOnce();
+    expect(refreshButton.querySelector('svg')).toHaveClass('tf-tree-refresh-icon');
     fireEvent.click(screen.getByLabelText('Arrange TF tree'));
     expect(panelMock.fitView).toHaveBeenCalledOnce();
 
@@ -206,6 +213,7 @@ describe('TfTreePanel', () => {
     expect(screen.getByTestId('tf-calculator')).toHaveTextContent('1.0000, 2.0000, 3.0000');
     expect(screen.getByTestId('tf-calculator')).toHaveTextContent('Euler RPY (deg)');
     expect(screen.getByTestId('tf-calculator')).toHaveTextContent('Rotation matrix');
+    expect(screen.getByTestId('tf-node-map').getAttribute('data-class')).not.toContain('calculator');
 
     fireEvent.click(screen.getByLabelText('Pick source frame from tree'));
     expect(screen.queryByTestId('tf-calculator')).not.toBeInTheDocument();
@@ -215,6 +223,7 @@ describe('TfTreePanel', () => {
     expect(screen.getByTestId('tf-calculator')).toBeInTheDocument();
     expect(screen.getByLabelText('TF calculator source frame')).toHaveValue('world');
     expect(screen.getByTestId('tf-calculator')).toHaveTextContent('No connected TF path');
+    expect(screen.getByTestId('tf-node-world').getAttribute('data-class')).not.toContain('calculator');
 
     fireEvent.click(screen.getByLabelText('Close TF calculator'));
     expect(screen.queryByTestId('tf-calculator')).not.toBeInTheDocument();

@@ -442,10 +442,10 @@
 .tf-calculator {
   position: absolute;
   z-index: 45;
-  top: 116px;
-  right: 12px;
-  width: min(350px, calc(100% - 24px));
-  max-height: calc(100% - 128px);
+  top: 56px;
+  left: 12px;
+  width: min(320px, calc(100% - 24px));
+  max-height: calc(100% - 80px);
   padding: 14px;
   overflow: auto;
   border: 1px solid var(--border-color, #dee2e6);
@@ -693,17 +693,34 @@
     0 8px 20px color-mix(in srgb, #ffb300 16%, transparent);
 }
 
-.tf-tree-panel .tf-frame-node--calculator-source {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 32%, transparent);
-}
-
-.tf-tree-panel .tf-frame-node--calculator-target {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tf-warning) 34%, transparent);
-}
-
 .tf-tree-panel .react-flow__edge-path {
   stroke: var(--tf-healthy);
   stroke-width: 2;
+}
+
+.tf-tree-refresh-icon {
+  animation: tf-tree-refresh-spin 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tf-tree-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tf-tree-panel .react-flow__node {
+    transition:
+      scale 0.16s ease,
+      filter 0.16s ease;
+    will-change: scale;
+  }
+
+  .tf-tree-panel .react-flow__node:hover {
+    z-index: 5;
+    scale: 1.035;
+    filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.14));
+  }
 }
 .tf-tree-panel .tf-transform-edge--static .react-flow__edge-path {
   stroke: var(--tf-static);
@@ -765,7 +782,7 @@
 
 @container (max-width: 700px) {
   .tf-tree-float-bar {
-    max-width: calc(100% - 76px);
+    max-width: calc(100% - 124px);
   }
   .tf-tree-live-button {
     min-width: 44px;
@@ -820,10 +837,10 @@
   }
 
   .tf-calculator {
-    top: 64px;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
     width: auto;
     max-height: none;
     padding: 14px;
@@ -849,7 +866,7 @@
     right: 10px;
   }
   .tf-tree-menu-button {
-    max-width: min(154px, 46cqw);
+    max-width: min(96px, 32cqw);
     height: 42px;
   }
   .tf-tree-icon-button,

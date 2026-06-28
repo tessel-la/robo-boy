@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FaCrosshairs, FaExchangeAlt, FaTimes } from 'react-icons/fa';
+import { FaExchangeAlt, FaMousePointer, FaTimes } from 'react-icons/fa';
 
 import TreePanelSearch, { type TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
 import { calculateTfBetweenFrames, quaternionToRotationMatrix } from '../tfTreeCalculator';
@@ -85,7 +85,7 @@ const TfCalculator: React.FC<TfCalculatorProps> = ({
               title="Pick source frame from tree"
               aria-label="Pick source frame from tree"
             >
-              <FaCrosshairs aria-hidden="true" />
+              <FaMousePointer aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -127,7 +127,7 @@ const TfCalculator: React.FC<TfCalculatorProps> = ({
               title="Pick target frame from tree"
               aria-label="Pick target frame from tree"
             >
-              <FaCrosshairs aria-hidden="true" />
+              <FaMousePointer aria-hidden="true" />
             </button>
           </div>
         </div>
