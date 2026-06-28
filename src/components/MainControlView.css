@@ -1275,7 +1275,7 @@ body.no-scroll {
 .workspace-pad-selector {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 34px;
+    grid-template-columns: auto minmax(0, 1fr) 34px 34px;
     align-items: center;
     column-gap: 10px;
     min-height: 48px;
@@ -1340,7 +1340,7 @@ body.no-scroll {
     white-space: nowrap;
 }
 
-.workspace-pad-create-button {
+.workspace-pad-action-button {
     width: 34px;
     height: 34px;
     min-width: 34px;
@@ -1358,19 +1358,24 @@ body.no-scroll {
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.workspace-pad-create-button:hover {
+.workspace-pad-action-button:hover:not(:disabled) {
     border-color: var(--primary-color);
     background: color-mix(in srgb, var(--primary-color) 10%, var(--background-color));
     color: var(--primary-color);
 }
 
-.workspace-pad-create-button:focus-visible {
+.workspace-pad-action-button:focus-visible {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
-.workspace-pad-create-button svg {
+.workspace-pad-action-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.workspace-pad-action-button svg {
     display: block;
     width: 15px;
     height: 15px;
