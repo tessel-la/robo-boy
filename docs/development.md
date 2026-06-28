@@ -87,7 +87,9 @@ npm run e2e
 
 ## Releases
 
-Official releases are created from `main` only. Feature work should continue to land in `dev` first; after `dev` is promoted into `main`, the Release Please workflow scans the commits on `main` and creates or updates a release pull request.
+Feature pull requests target `dev`. The only development promotion into `main` should be a pull request from `dev`; feature branches should not target `main` directly.
+
+Official releases are created from `main` only. After `dev` is promoted into `main`, the Release Please workflow scans the commits on `main` and creates or updates a release pull request.
 
 Do not create official releases directly from `dev`.
 
@@ -102,3 +104,5 @@ Release Please uses Conventional Commits to choose the next SemVer version:
 Breaking changes can also be marked with a `BREAKING CHANGE:` footer in the commit body. Commits such as `docs:`, `test:`, `chore:`, and `refactor:` can appear in history, but they do not create a release by themselves unless they include a breaking-change marker.
 
 When the Release Please pull request is merged into `main`, the workflow creates the Git tag and GitHub Release, and updates the package version and `CHANGELOG.md` as part of the release pull request.
+
+Every push to `main`, including a development promotion or merged Release Please pull request, runs the `Sync main to dev` workflow. It merges `main` back into `dev` so release versions and changelog updates remain in both branches. If that workflow reports a merge conflict, reconcile `main` into a branch based on the latest `dev` and merge that fix before the next promotion.
