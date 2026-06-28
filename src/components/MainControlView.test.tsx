@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import React, { useEffect, useState } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
 
@@ -74,6 +74,12 @@ vi.mock('./VisualizationPanel', () => ({
   ),
 }));
 
+vi.mock('../features/tfTree/components/TfTreePanel', () => ({
+  default: ({ isActive }: any) => (
+    <div data-testid="tf-tree-panel">{isActive ? 'active tf tree' : 'inactive tf tree'}</div>
+  ),
+}));
+
 vi.mock('./gamepads/custom/CustomGamepadWrapper', () => ({
   default: ({ layoutId }: any) => <div data-testid="custom-gamepad">{layoutId}</div>,
 }));
@@ -118,14 +124,29 @@ vi.mock('../features/customGamepad/components/GamepadEditor', () => ({
 }));
 
 vi.mock('../features/behaviorTree/components/BehaviorTreePanel', () => ({
-  default: ({ onExecutionChange, onExecutionControlsChange, isActive }: any) => {
+  default: function MockBehaviorTreePanel({ onExecutionChange, onExecutionControlsChange, isActive }: any) {
+    const [localState, setLocalState] = useState('Initial tree state');
+
     useEffect(() => {
-      onExecutionControlsChange?.({ stop: stopBehaviorTree });
+      onExecutionControlsChange?.({
+        stop: () => {
+          stopBehaviorTree();
+          onExecutionChange?.({ isExecuting: false, treeName: '' });
+        },
+      });
     }, []);
 
     return (
       <div data-testid="behavior-tree-panel">
         <span>{isActive ? 'active behavior tree' : 'inactive behavior tree'}</span>
+        <label>
+          Tree state
+          <input
+            aria-label="Behavior tree local state"
+            value={localState}
+            onChange={(event) => setLocalState(event.target.value)}
+          />
+        </label>
         <button
           type="button"
           onClick={() => onExecutionChange?.({
@@ -147,6 +168,8 @@ const workspaceTileOrderKey = 'robo-boy-desktop-workspace-tile-order-v1';
 const workspaceSavedLayoutsKey = 'robo-boy-desktop-workspace-saved-layouts-v1';
 const workspaceActiveLayoutKey = 'robo-boy-desktop-workspace-active-layout-v1';
 const workspaceOpenKey = 'robo-boy-desktop-workspace-open-v1';
+const mobileWorkspacePanelsKey = 'robo-boy-mobile-workspace-panels-v1';
+const mobileSplitViewKey = 'robo-boy-mobile-split-view-v1';
 const customTemplatesKey = 'robo-boy-desktop-workspace-custom-templates-v1';
 
 const connectionParams = {
@@ -199,7 +222,7 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('opens the grid workspace and adds each workspace panel type', async () => {
-    renderMainControlView();
+    const firstRender = renderMainControlView();
 
     await screen.findByTestId('camera-view');
     fireEvent.click(screen.getByLabelText('Open grid workspace'));
@@ -320,6 +343,168 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Return to split view'));
     expect(screen.getByLabelText('Open grid workspace')).toBeInTheDocument();
     expect(screen.queryByLabelText('Desktop workspace')).not.toBeInTheDocument();
+  });
+
+  it('uses persistent single and split panels directly in the mobile view', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(mobileWorkspacePanelsKey, JSON.stringify([
+      makePanel('persisted-camera', 'camera', 'Camera'),
+      makePanel('persisted-pad', 'pad', 'Pad controls'),
+      makePanel('ignored-third', 'behaviorTree', 'Behavior tree'),
+    ]));
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
+      { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
+    ]);
+    getTopics.mockImplementation((success: any) => {
+      success({
+        topics: ['/camera/image_raw', '/camera/alternate'],
+        types: ['sensor_msgs/Image', 'sensor_msgs/Image'],
+      });
+    });
+
+    const firstRender = renderMainControlView();
+
+    await screen.findByTestId('camera-view');
+    expect(screen.getByLabelText('Mobile panels')).toBeInTheDocument();
+    expect(screen.getByLabelText('Top mobile window')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Bottom mobile window')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Camera topic'), {
+      target: { value: '/camera/alternate' },
+    });
+
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+    expect(screen.getByTestId('visualization-panel')).toHaveTextContent('roboboy_3d_visualization_state_');
+    fireEvent.click(screen.getByLabelText('Switch to Camera View'));
+    expect(screen.getByLabelText('Camera topic')).toHaveValue('/camera/alternate');
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+
+    fireEvent.click(screen.getByLabelText('Split mobile view'));
+    expect(screen.getAllByLabelText(/mobile window$/i)).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText('Select bottom window'));
+    fireEvent.change(screen.getByLabelText('Pad layout'), {
+      target: { value: 'custom-arm' },
+    });
+    fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    fireEvent.change(screen.getByLabelText('Behavior tree local state'), {
+      target: { value: 'Edited tree state' },
+    });
+    fireEvent.click(screen.getByText('Start mocked tree'));
+    expect(screen.getByText('Move arm')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Switch to TF Tree'));
+    expect(screen.getByText('Move arm')).toBeInTheDocument();
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('inactive behavior tree');
+    expect(screen.getByTestId('tf-tree-panel')).toHaveTextContent('active tf tree');
+    fireEvent.click(screen.getByLabelText('Open behavior tree'));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Edited tree state');
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    fireEvent.click(screen.getByLabelText('Stop behavior tree'));
+    fireEvent.click(screen.getByLabelText('Switch to Pad controls'));
+    expect(screen.getByLabelText('Pad layout')).toHaveValue('custom-arm');
+    fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
+
+    fireEvent.click(screen.getByLabelText('Swap mobile windows'));
+    expect(screen.getByLabelText('Select top window')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Switch to Behavior Tree')).toHaveClass('active');
+    expect(localStorage.getItem(mobileSplitViewKey)).toBe('true');
+
+    fireEvent.click(screen.getByLabelText('Use one mobile panel'));
+    expect(screen.getByLabelText('Bottom mobile window')).not.toBeVisible();
+    expect(screen.getByTestId('behavior-tree-panel')).toHaveTextContent('active behavior tree');
+    expect(localStorage.getItem(mobileSplitViewKey)).toBe('false');
+
+    firstRender.unmount();
+    renderMainControlView();
+    expect(screen.queryByLabelText('Bottom mobile window')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Switch to Behavior Tree')).toHaveClass('active');
+  });
+
+  it('retains the standard behavior tree when a running desktop session becomes mobile', async () => {
+    let mediaChangeListener: ((event: { matches: boolean }) => void) | undefined;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query.includes('1024px'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn((_event: string, listener: (event: { matches: boolean }) => void) => {
+          mediaChangeListener = listener;
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    renderMainControlView();
+    await screen.findByTestId('camera-view');
+    fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
+    fireEvent.change(screen.getByLabelText('Behavior tree local state'), {
+      target: { value: 'Desktop tree state' },
+    });
+    fireEvent.click(screen.getByText('Start mocked tree'));
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+
+    act(() => mediaChangeListener?.({ matches: false }));
+    expect(screen.getByLabelText('Open behavior tree')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Split mobile view')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Open behavior tree'));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Desktop tree state');
+
+    fireEvent.click(screen.getByLabelText('Switch to 3D View'));
+    fireEvent.click(screen.getByLabelText('Stop behavior tree'));
+    expect(screen.queryByLabelText('Split mobile view')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Desktop tree state');
+
+    act(() => mediaChangeListener?.({ matches: true }));
+    expect(screen.getByLabelText('Open grid workspace')).toBeInTheDocument();
+  });
+
+  it('falls back safely when persisted mobile panels are malformed', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.setItem(mobileWorkspacePanelsKey, '{malformed');
+    localStorage.setItem(mobileSplitViewKey, 'true');
+
+    renderMainControlView();
+
+    expect(await screen.findByLabelText('Top mobile window')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bottom mobile window')).toBeInTheDocument();
+    expect(screen.getByTestId('camera-view')).toBeVisible();
+    expect(screen.getByTestId('custom-gamepad')).toBeVisible();
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to load mobile workspace panels:',
+      expect.any(SyntaxError)
+    );
+    consoleError.mockRestore();
   });
 
   it('opens standard pad flows and stops running behavior trees', async () => {

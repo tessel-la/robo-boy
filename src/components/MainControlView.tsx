@@ -110,6 +110,12 @@ const IconMCVSplit = () => (
     <rect x="4" y="14" width="16" height="6" rx="1.5"/>
   </svg>
 );
+const IconMCVSwap = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 7h11l-3-3M18 7l-3 3"/>
+    <path d="M17 17H6l3 3M6 17l3-3"/>
+  </svg>
+);
 const IconMCVSaveLayout = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 4h11l3 3v13H5z"/>
@@ -148,6 +154,7 @@ const icons = {
   grip: <IconMCVGrip />,
   tile: <IconMCVTile />,
   split: <IconMCVSplit />,
+  swap: <IconMCVSwap />,
   saveLayout: <IconMCVSaveLayout />,
   download: <IconMCVDownload />,
   upload: <IconMCVUpload />,
@@ -194,6 +201,8 @@ const WORKSPACE_CUSTOM_TEMPLATES_KEY = 'robo-boy-desktop-workspace-custom-templa
 const WORKSPACE_SAVED_LAYOUTS_KEY = 'robo-boy-desktop-workspace-saved-layouts-v1';
 const WORKSPACE_ACTIVE_LAYOUT_KEY = 'robo-boy-desktop-workspace-active-layout-v1';
 const WORKSPACE_OPEN_KEY = 'robo-boy-desktop-workspace-open-v1';
+const MOBILE_WORKSPACE_PANELS_KEY = 'robo-boy-mobile-workspace-panels-v1';
+const MOBILE_SPLIT_VIEW_KEY = 'robo-boy-mobile-split-view-v1';
 const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
@@ -278,6 +287,48 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
   };
+};
+
+const createDefaultMobileWorkspacePanels = (): WorkspacePanel[] => [
+  {
+    id: 'mobile-window-primary',
+    type: 'camera',
+    title: getWorkspaceTitle('camera'),
+  },
+  {
+    id: 'mobile-window-secondary',
+    type: 'pad',
+    title: getWorkspaceTitle('pad'),
+  },
+];
+
+const loadMobileWorkspacePanels = (): WorkspacePanel[] => {
+  const defaults = createDefaultMobileWorkspacePanels();
+
+  try {
+    const stored = localStorage.getItem(MOBILE_WORKSPACE_PANELS_KEY);
+    if (!stored) return defaults;
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return defaults;
+
+    return defaults.map((fallback, index) => {
+      const panel = normalizeWorkspacePanel(parsed[index]);
+      return panel ? { ...panel, id: fallback.id, title: getWorkspaceTitle(panel.type) } : fallback;
+    });
+  } catch (error) {
+    console.error('Failed to load mobile workspace panels:', error);
+    return defaults;
+  }
+};
+
+const loadMobileSplitViewPreference = (): boolean => {
+  try {
+    return localStorage.getItem(MOBILE_SPLIT_VIEW_KEY) === 'true';
+  } catch (error) {
+    console.error('Failed to load mobile split view preference:', error);
+    return false;
+  }
 };
 
 const isWorkspacePanel = (panel: unknown): panel is WorkspacePanel => {
@@ -699,7 +750,17 @@ const applyWorkspaceDropPlacement = (
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
+  const [isMobileSplitView, setIsMobileSplitView] = useState(loadMobileSplitViewPreference);
+  const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadWorkspacePanels);
+  const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(loadMobileWorkspacePanels);
+  const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() => (
+    mobileWorkspacePanels.reduce<Record<string, WorkspacePanelType[]>>((mountedTypes, panel) => {
+      mountedTypes[panel.id] = [panel.type];
+      return mountedTypes;
+    }, {})
+  ));
+  const [mobileSecondaryEverMounted, setMobileSecondaryEverMounted] = useState(isMobileSplitView);
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
   const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(loadWorkspaceCustomTemplates);
@@ -725,6 +786,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     isExecuting: false,
     treeName: '',
   });
+  const [isStandardBtExecuting, setIsStandardBtExecuting] = useState(false);
+  const [retainStandardMobileLayout, setRetainStandardMobileLayout] = useState(false);
   const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
@@ -758,6 +821,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
+  const useStandardMobileExecutionLayout = !isLargeScreen && (
+    isStandardBtExecuting || retainStandardMobileLayout
+  );
+  const activeMobilePanel = mobileWorkspacePanels[isMobileSplitView ? activeMobileWindowIndex : 0];
   const normalizedWorkspaceTileOrder = useMemo(
     () => normalizeWorkspaceTileOrder(workspaceTileOrder, workspacePanels.map(panel => panel.id)),
     [workspacePanels, workspaceTileOrder]
@@ -845,6 +912,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   useEffect(() => {
     localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels));
   }, [workspacePanels]);
+
+  useEffect(() => {
+    localStorage.setItem(MOBILE_WORKSPACE_PANELS_KEY, JSON.stringify(mobileWorkspacePanels.slice(0, 2)));
+  }, [mobileWorkspacePanels]);
+
+  useEffect(() => {
+    localStorage.setItem(MOBILE_SPLIT_VIEW_KEY, String(isMobileSplitView));
+  }, [isMobileSplitView]);
+
+  useEffect(() => {
+    if (isLargeScreen) {
+      setRetainStandardMobileLayout(false);
+    } else if (isStandardBtExecuting) {
+      setRetainStandardMobileLayout(true);
+    }
+  }, [isLargeScreen, isStandardBtExecuting]);
 
   useEffect(() => {
     localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
@@ -1016,6 +1099,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
   }, [viewMode]);
 
+  useEffect(() => {
+    if (isLargeScreen) return;
+    const hasVisible3dPanel = mobileWorkspacePanels[0]?.type === '3d' || (
+      isMobileSplitView && mobileWorkspacePanels[1]?.type === '3d'
+    );
+    if (!hasVisible3dPanel) return;
+
+    const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+    return () => clearTimeout(id);
+  }, [isLargeScreen, isMobileSplitView, mobileWorkspacePanels]);
+
   const handleInternalDisconnect = () => {
     btExecutionControls.current?.stop();
     disconnect(); // Disconnect ROS
@@ -1108,6 +1202,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     });
     if (workspacePadEditorTargetId) {
       setWorkspacePanels(prev => prev.map(panel =>
+        panel.id === workspacePadEditorTargetId ? { ...panel, layoutId: layout.id } : panel
+      ));
+      setMobileWorkspacePanels(prev => prev.map(panel =>
         panel.id === workspacePadEditorTargetId ? { ...panel, layoutId: layout.id } : panel
       ));
     }
@@ -1530,10 +1627,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setWorkspacePanels(prev => prev.map(panel =>
       panel.id === panelId ? { ...panel, cameraTopic } : panel
     ));
+    setMobileWorkspacePanels(prev => prev.map(panel =>
+      panel.id === panelId ? { ...panel, cameraTopic } : panel
+    ));
   };
 
   const handleWorkspacePadLayoutChange = (panelId: string, layoutId: string) => {
     setWorkspacePanels(prev => prev.map(panel =>
+      panel.id === panelId ? { ...panel, layoutId } : panel
+    ));
+    setMobileWorkspacePanels(prev => prev.map(panel =>
       panel.id === panelId ? { ...panel, layoutId } : panel
     ));
   };
@@ -1675,6 +1778,46 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsWorkspaceTemplateMenuOpen(false);
   };
 
+  const handleChangeMobileWorkspacePanel = (panelId: string, type: WorkspacePanelType) => {
+    setMountedMobilePanelTypes(prev => {
+      const mountedTypes = prev[panelId] || [];
+      return mountedTypes.includes(type)
+        ? prev
+        : { ...prev, [panelId]: [...mountedTypes, type] };
+    });
+    setMobileWorkspacePanels(prev => prev.slice(0, 2).map(panel => (
+      panel.id === panelId
+        ? {
+          ...panel,
+          type,
+          title: getWorkspaceTitle(type),
+          cameraTopic: type === 'camera'
+            ? (panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0])
+            : panel.cameraTopic,
+          layoutId: type === 'pad' ? (panel.layoutId || gamepadLibrary[0]?.id) : panel.layoutId,
+        }
+        : panel
+    )));
+  };
+
+  const handleSwapMobileWorkspacePanels = () => {
+    setMobileWorkspacePanels(prev => prev.length === 2 ? [prev[1], prev[0]] : prev);
+    setActiveMobileWindowIndex(prev => prev === 0 ? 1 : 0);
+  };
+
+  const handleToggleMobileSplitView = () => {
+    setIsMobileSplitView(prev => {
+      if (prev) setActiveMobileWindowIndex(0);
+      else setMobileSecondaryEverMounted(true);
+      return !prev;
+    });
+  };
+
+  const handleMobilePanelTypeChange = (type: WorkspacePanelType) => {
+    const panel = mobileWorkspacePanels[isMobileSplitView ? activeMobileWindowIndex : 0];
+    if (panel) handleChangeMobileWorkspacePanel(panel.id, type);
+  };
+
   // Memoize the selected panel component to prevent unnecessary re-renders
   const SelectedPanelComponent = useMemo(() => {
     if (!selectedPanelId) return null;
@@ -1688,6 +1831,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   // View state management with animation
   const handleViewToggle = (mode: ViewMode) => {
+    if (!isLargeScreen && !useStandardMobileExecutionLayout) {
+      handleMobilePanelTypeChange(mode === '3d' ? '3d' : mode);
+      return;
+    }
+
     if (isTransitioning || viewMode === mode) return;
 
     const currentView = viewPanelRef.current;
@@ -1749,6 +1897,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleReturnToBehaviorTree = () => {
+    if (!isLargeScreen && !useStandardMobileExecutionLayout) {
+      handleMobilePanelTypeChange('behaviorTree');
+      return;
+    }
+
     if (viewMode === 'behaviorTree') return;
     setBtEverMounted(true);
     setViewMode('behaviorTree');
@@ -1757,6 +1910,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const handleStopBehaviorTree = () => {
     btExecutionControls.current?.stop();
+  };
+
+  const handleStandardBtExecutionChange = (snapshot: BehaviorTreeExecutionSnapshot) => {
+    setBtExecution(snapshot);
+    setIsStandardBtExecuting(snapshot.isExecuting);
   };
 
   const renderPadControls = (showPadAddButton: boolean, style?: React.CSSProperties) => (
@@ -1832,7 +1990,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               ros={ros}
               isConnected={isConnected}
               isActive={viewMode === 'behaviorTree'}
-              onExecutionChange={setBtExecution}
+              onExecutionChange={handleStandardBtExecutionChange}
               onExecutionControlsChange={(controls) => {
                 btExecutionControls.current = controls;
               }}
@@ -1897,7 +2055,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     );
   };
 
-  const renderWorkspacePanelContent = (panel: WorkspacePanel) => {
+  const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
     if (!isConnected || !ros) {
       return <div className="placeholder">Connecting to ROS...</div>;
     }
@@ -1933,7 +2091,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         <BehaviorTreePanel
           ros={ros}
           isConnected={isConnected}
-          isActive={isDesktopWorkspace}
+          isActive={isPanelActive}
           onExecutionChange={setBtExecution}
           onExecutionControlsChange={(controls) => {
             btExecutionControls.current = controls;
@@ -1943,7 +2101,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel ros={ros} isActive={isDesktopWorkspace} />;
+      return <TfTreePanel ros={ros} isActive={isPanelActive} />;
     }
 
     if (panel.type === 'pad') {
@@ -1952,6 +2110,87 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     return <div className="placeholder">Choose a component</div>;
   };
+
+  const renderMobileWorkspaceWindow = (panel: WorkspacePanel, index: number) => {
+    const mountedTypes = mountedMobilePanelTypes[panel.id] || [panel.type];
+    const panelTypes = mountedTypes.includes(panel.type) ? mountedTypes : [...mountedTypes, panel.type];
+    const isVisible = index === 0 || isMobileSplitView;
+
+    return (
+      <section
+        key={panel.id}
+        className={`workspace-card mobile-workspace-window workspace-card-${panel.type} ${activeMobileWindowIndex === index ? 'is-active' : ''}`}
+        aria-label={`${index === 0 ? 'Top' : 'Bottom'} mobile window`}
+        aria-hidden={!isVisible}
+        style={{
+          display: isVisible ? undefined : 'none',
+          height: isMobileSplitView ? `calc(${index === 0 ? topHeight : bottomHeight}% - 8px)` : '100%',
+        }}
+      >
+        {isMobileSplitView && (
+          <header className="workspace-card-header mobile-workspace-window-header">
+            <button
+              type="button"
+              className="mobile-workspace-window-selector"
+              onClick={() => setActiveMobileWindowIndex(index)}
+              aria-pressed={activeMobileWindowIndex === index}
+              aria-label={`Select ${index === 0 ? 'top' : 'bottom'} window`}
+            >
+              <span className={`workspace-card-dot workspace-card-dot-${panel.type}`} aria-hidden="true" />
+              <span>{panel.title}</span>
+              {activeMobileWindowIndex === index && <span className="mobile-workspace-active-label">Active</span>}
+            </button>
+            {index === 0 && (
+              <button
+                type="button"
+                className="mobile-workspace-swap-button"
+                onClick={handleSwapMobileWorkspacePanels}
+                title="Swap mobile windows"
+                aria-label="Swap mobile windows"
+              >
+                {icons.swap}
+              </button>
+            )}
+          </header>
+        )}
+        <div className="workspace-card-content">
+          {panelTypes.map(type => {
+            const isPanelActive = panel.type === type && isVisible;
+            const typedPanel = { ...panel, type, title: getWorkspaceTitle(type) };
+            return (
+              <div
+                key={type}
+                className={`mobile-workspace-panel-slot ${isPanelActive ? 'is-active' : 'is-hidden'}`}
+                aria-hidden={!isPanelActive}
+                style={{ display: isPanelActive ? undefined : 'none' }}
+              >
+                {renderWorkspacePanelContent(typedPanel, isPanelActive)}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  const renderMobileWorkspace = () => (
+    <div className={`mobile-workspace ${isMobileSplitView ? 'is-split' : 'is-single'}`} aria-label="Mobile panels" ref={containerRef}>
+      {renderMobileWorkspaceWindow(mobileWorkspacePanels[0], 0)}
+      {isMobileSplitView && (
+        <div
+          className={`resize-handle ${isDragging ? 'dragging' : ''}`}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize mobile windows"
+        >
+          <div className="resize-handle-bar" />
+        </div>
+      )}
+      {mobileSecondaryEverMounted && renderMobileWorkspaceWindow(mobileWorkspacePanels[1], 1)}
+    </div>
+  );
 
   const renderWorkspaceAddMenu = () => {
     if (!isWorkspaceAddMenuOpen) return null;
@@ -2200,7 +2439,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <div className="view-toggle">
             <button
               onClick={() => handleViewToggle('camera')}
-              className={viewMode === 'camera' ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'camera' : activeMobilePanel?.type === 'camera') ? 'active' : ''}
               title="Camera View"
               aria-label="Switch to Camera View"
             >
@@ -2208,7 +2447,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             <button
               onClick={() => handleViewToggle('3d')}
-              className={viewMode === '3d' ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === '3d' : activeMobilePanel?.type === '3d') ? 'active' : ''}
               title="3D View"
               aria-label="Switch to 3D View"
             >
@@ -2216,7 +2455,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             <button
               onClick={() => handleViewToggle('tfTree')}
-              className={viewMode === 'tfTree' ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'tfTree' : activeMobilePanel?.type === 'tfTree') ? 'active' : ''}
               title="TF Tree"
               aria-label="Switch to TF Tree"
             >
@@ -2224,7 +2463,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             {btExecution.isExecuting ? (
               <div
-                className={`bt-execution-island ${viewMode === 'behaviorTree' ? 'active' : ''}`}
+                className={`bt-execution-island ${(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}`}
                 role="status"
                 aria-live="polite"
               >
@@ -2257,29 +2496,41 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             ) : (
               <button
                 onClick={() => handleViewToggle('behaviorTree')}
-                className={viewMode === 'behaviorTree' ? 'active' : ''}
+                className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}
                 title="Behavior Tree"
                 aria-label="Switch to Behavior Tree"
               >
                 {icons.bt}
               </button>
             )}
+            {!isLargeScreen && !useStandardMobileExecutionLayout && (
+              <button
+                onClick={() => handleMobilePanelTypeChange('pad')}
+                className={activeMobilePanel?.type === 'pad' ? 'active' : ''}
+                title="Pad controls"
+                aria-label="Switch to Pad controls"
+              >
+                {icons.grip}
+              </button>
+            )}
           </div>
         )}
-        <div className="layout-controls">
-          {isLargeScreen && (
+        {(isLargeScreen || (!btExecution.isExecuting && !useStandardMobileExecutionLayout)) && <div className="layout-controls">
+          <button
+            type="button"
+            className={`workspace-tile-button ${isDesktopWorkspace || (!isLargeScreen && isMobileSplitView) ? 'active' : ''}`}
+            onClick={isLargeScreen ? handleAutoTileWorkspacePanels : handleToggleMobileSplitView}
+            title={isLargeScreen
+              ? (isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace')
+              : (isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view')}
+            aria-label={isLargeScreen
+              ? (isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace')
+              : (isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view')}
+          >
+            {isLargeScreen ? icons.tile : icons.split}
+          </button>
+          {isDesktopWorkspace && (
             <>
-              <button
-                type="button"
-                className={`workspace-tile-button ${isDesktopWorkspace ? 'active' : ''}`}
-                onClick={handleAutoTileWorkspacePanels}
-                title={isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace'}
-                aria-label={isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace'}
-              >
-                {icons.tile}
-              </button>
-              {isDesktopWorkspace && (
-                <>
                   <span
                     className={`workspace-active-layout-name ${isActiveWorkspaceLayoutDirty ? 'dirty' : ''}`}
                     title={activeWorkspaceLayout
@@ -2314,8 +2565,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   >
                     {icons.split}
                   </button>
-                </>
-              )}
             </>
           )}
           {isDesktopWorkspace && (
@@ -2335,7 +2584,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               {renderWorkspaceAddMenu()}
             </div>
           )}
-        </div>
+        </div>}
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
@@ -2358,7 +2607,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
-        {!isDesktopWorkspace && renderStandardSplitLayout()}
+        {!isDesktopWorkspace && (
+          isLargeScreen || useStandardMobileExecutionLayout
+            ? renderStandardSplitLayout()
+            : renderMobileWorkspace()
+        )}
 
         {isDesktopWorkspace && (
           <div
