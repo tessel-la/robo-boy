@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaExpand, FaPause, FaPlay } from 'react-icons/fa';
+import { FaCalculator, FaExpand, FaPause, FaPlay } from 'react-icons/fa';
 
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import TreePanelSearch, { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
@@ -18,8 +18,9 @@ interface TfTreeControlsProps {
   isPaused: boolean;
   onPause: () => void;
   onResume: () => void;
-  onFitAll: () => void;
   onArrange: () => void;
+  calculatorOpen: boolean;
+  onToggleCalculator: () => void;
   onFocusTree: (tree: TfVisibleTree) => void;
   visibleTrees: TfVisibleTree[];
   frameCount: number;
@@ -45,8 +46,9 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
   isPaused,
   onPause,
   onResume,
-  onFitAll,
   onArrange,
+  calculatorOpen,
+  onToggleCalculator,
   onFocusTree,
   visibleTrees,
   frameCount,
@@ -205,12 +207,14 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
             </button>
             <button
               type="button"
-              className="tf-tree-icon-button"
-              onClick={onFitAll}
-              title="Fit TF graph to view"
-              aria-label="Fit TF graph to view"
+              className={`tf-tree-icon-button${calculatorOpen ? ' active' : ''}`}
+              onClick={onToggleCalculator}
+              title={calculatorOpen ? 'Hide TF calculator' : 'Open TF calculator'}
+              aria-label={calculatorOpen ? 'Hide TF calculator' : 'Open TF calculator'}
+              aria-pressed={calculatorOpen}
+              data-testid="tf-tree-calculator-button"
             >
-              <FaExpand aria-hidden="true" />
+              <FaCalculator aria-hidden="true" />
             </button>
           </>
         }

@@ -25,6 +25,7 @@ import {
 } from '../tfTreeModel';
 import { layoutTfTree } from '../tfTreeLayout';
 import { useTfTree } from '../useTfTree';
+import TfCalculator from './TfCalculator';
 import TfTreeControls, { TfVisibleTree } from './TfTreeControls';
 import type { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
 import './TfTreePanel.css';
@@ -38,6 +39,7 @@ interface TfTreePanelProps {
 }
 
 type Selection = { type: 'node'; frame: string } | { type: 'edge'; childFrame: string } | null;
+type CalculatorPick = 'source' | 'target' | null;
 
 const formatAge = (ageMs: number) => {
   if (ageMs < 1_000) return `${Math.round(ageMs)} ms`;
@@ -62,6 +64,10 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   const [highlightStale, setHighlightStale] = useState(true);
   const [selection, setSelection] = useState<Selection>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calculatorSource, setCalculatorSource] = useState('');
+  const [calculatorTarget, setCalculatorTarget] = useState('');
+  const [calculatorPick, setCalculatorPick] = useState<CalculatorPick>(null);
   const [panelWidth, setPanelWidth] = useState(0);
   const compactByViewport =
     typeof window !== 'undefined' && window.matchMedia?.(`(max-width: ${COMPACT_PANEL_WIDTH}px)`).matches;
@@ -170,7 +176,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         id: frame,
         data: { label: frame },
         position: positions.get(frame) ?? { x: 0, y: 0 },
-        className: `tf-frame-node tf-frame-node--${stateClass}${isSearchMatch ? ' tf-frame-node--match' : ''}`,
+        className: `tf-frame-node tf-frame-node--${stateClass}${isSearchMatch ? ' tf-frame-node--match' : ''}${calculatorSource === frame ? ' tf-frame-node--calculator-source' : ''}${calculatorTarget === frame ? ' tf-frame-node--calculator-target' : ''}`,
         selected,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
@@ -180,7 +186,19 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         height: nodeHeight,
       };
     });
-  }, [highlightStale, incomingByFrame, nodeHeight, nodeWidth, nowMs, positions, searchMatch, selection, visibleFrames]);
+  }, [
+    calculatorSource,
+    calculatorTarget,
+    highlightStale,
+    incomingByFrame,
+    nodeHeight,
+    nodeWidth,
+    nowMs,
+    positions,
+    searchMatch,
+    selection,
+    visibleFrames,
+  ]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -201,7 +219,12 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           label: transform.source === 'static' ? 'STATIC' : 'DYNAMIC',
           selected,
           animated: transform.source === 'dynamic' && !isPaused,
-          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: edgeColor,
+            width: selected ? 12 : 16,
+            height: selected ? 12 : 16,
+          },
           className: `tf-transform-edge tf-transform-edge--${transform.source}${stale && highlightStale ? ' tf-transform-edge--stale' : ''}`,
           data: transform,
           labelBgPadding: [5, 3] as [number, number],
@@ -260,8 +283,38 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
     fitView({ padding: 0.18, duration: 450, maxZoom: 1.25 });
   };
 
+  const handleNodeClick = (frame: string) => {
+    if (calculatorPick === 'source') {
+      setCalculatorSource(frame);
+      setCalculatorPick(null);
+      return;
+    }
+    if (calculatorPick === 'target') {
+      setCalculatorTarget(frame);
+      setCalculatorPick(null);
+      return;
+    }
+    setSelection({ type: 'node', frame });
+  };
+
+  const handleToggleCalculator = () => {
+    setMenuOpen(false);
+    setSelection(null);
+    setCalculatorPick(null);
+    setCalculatorOpen(open => !open);
+  };
+
+  const handleCloseCalculator = () => {
+    setCalculatorOpen(false);
+    setCalculatorPick(null);
+  };
+
   return (
-    <section ref={panelRef} className={`tf-tree-panel${isCompact ? ' is-compact' : ''}`} data-testid="tf-tree-panel">
+    <section
+      ref={panelRef}
+      className={`tf-tree-panel${isCompact ? ' is-compact' : ''}${calculatorOpen ? ' has-calculator' : ''}`}
+      data-testid="tf-tree-panel"
+    >
       <div className="tf-tree-canvas" data-testid="tf-tree-canvas">
         {nodes.length === 0 && (
           <div className="tf-tree-empty">
@@ -279,7 +332,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           nodesConnectable={false}
           nodesDraggable={false}
           elementsSelectable
-          onNodeClick={(_event, node) => setSelection({ type: 'node', frame: node.id })}
+          onNodeClick={(_event, node) => handleNodeClick(node.id)}
           onEdgeClick={(_event, edge) => {
             const transform = edge.data as TfTransformRecord | undefined;
             if (transform) setSelection({ type: 'edge', childFrame: transform.childFrame });
@@ -287,7 +340,15 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           onPaneClick={() => setSelection(null)}
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <MiniMap pannable zoomable nodeStrokeWidth={3} />
+          <MiniMap
+            pannable
+            zoomable
+            nodeStrokeWidth={3}
+            style={{
+              background: 'var(--card-bg, #ffffff)',
+              border: '1px solid var(--border-color, #e0e0e0)',
+            }}
+          />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
@@ -300,7 +361,8 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         onPause={pause}
         onResume={resume}
         onArrange={handleArrange}
-        onFitAll={() => fitView({ padding: 0.15, duration: 350 })}
+        calculatorOpen={calculatorOpen}
+        onToggleCalculator={handleToggleCalculator}
         onFocusTree={handleFocusTree}
         visibleTrees={visibleTrees}
         frameCount={visibleFrames.size}
@@ -318,6 +380,27 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         cycles={diagnostics.cycles}
         multipleParents={diagnostics.multipleParents}
       />
+
+      {calculatorOpen && calculatorPick === null && (
+        <TfCalculator
+          state={state}
+          sourceFrame={calculatorSource}
+          targetFrame={calculatorTarget}
+          onSourceFrameChange={setCalculatorSource}
+          onTargetFrameChange={setCalculatorTarget}
+          onPickFrame={setCalculatorPick}
+          onClose={handleCloseCalculator}
+        />
+      )}
+
+      {calculatorPick && (
+        <div className="tf-tree-pick-frame" role="status" data-testid="tf-tree-pick-frame">
+          <span>Select the {calculatorPick} frame</span>
+          <button type="button" onClick={() => setCalculatorPick(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {selection && (
         <aside className="tf-tree-details" aria-label="TF selection details" data-testid="tf-tree-details">

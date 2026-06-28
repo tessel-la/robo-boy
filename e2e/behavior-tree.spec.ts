@@ -298,6 +298,7 @@ test.describe('Behavior Tree panel', () => {
     await openBehaviorTree(page);
 
     await expect(page.getByTestId('bt-node-palette')).toHaveCount(0);
+    await expect(page.locator('.behavior-tree-panel .react-flow__controls')).toBeHidden();
 
     await page.getByTestId('bt-palette-toggle').click();
     await expect(page.getByTestId('bt-node-palette')).toBeVisible();
