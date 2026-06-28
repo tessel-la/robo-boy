@@ -786,6 +786,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     isExecuting: false,
     treeName: '',
   });
+  const [isStandardBtExecuting, setIsStandardBtExecuting] = useState(false);
+  const [retainStandardMobileLayout, setRetainStandardMobileLayout] = useState(false);
   const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
@@ -819,6 +821,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
+  const useStandardMobileExecutionLayout = !isLargeScreen && (
+    isStandardBtExecuting || retainStandardMobileLayout
+  );
   const activeMobilePanel = mobileWorkspacePanels[isMobileSplitView ? activeMobileWindowIndex : 0];
   const normalizedWorkspaceTileOrder = useMemo(
     () => normalizeWorkspaceTileOrder(workspaceTileOrder, workspacePanels.map(panel => panel.id)),
@@ -915,6 +920,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   useEffect(() => {
     localStorage.setItem(MOBILE_SPLIT_VIEW_KEY, String(isMobileSplitView));
   }, [isMobileSplitView]);
+
+  useEffect(() => {
+    if (isLargeScreen) {
+      setRetainStandardMobileLayout(false);
+    } else if (isStandardBtExecuting) {
+      setRetainStandardMobileLayout(true);
+    }
+  }, [isLargeScreen, isStandardBtExecuting]);
 
   useEffect(() => {
     localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
@@ -1818,7 +1831,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   // View state management with animation
   const handleViewToggle = (mode: ViewMode) => {
-    if (!isLargeScreen) {
+    if (!isLargeScreen && !useStandardMobileExecutionLayout) {
       handleMobilePanelTypeChange(mode === '3d' ? '3d' : mode);
       return;
     }
@@ -1884,7 +1897,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleReturnToBehaviorTree = () => {
-    if (!isLargeScreen) {
+    if (!isLargeScreen && !useStandardMobileExecutionLayout) {
       handleMobilePanelTypeChange('behaviorTree');
       return;
     }
@@ -1897,6 +1910,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const handleStopBehaviorTree = () => {
     btExecutionControls.current?.stop();
+  };
+
+  const handleStandardBtExecutionChange = (snapshot: BehaviorTreeExecutionSnapshot) => {
+    setBtExecution(snapshot);
+    setIsStandardBtExecuting(snapshot.isExecuting);
   };
 
   const renderPadControls = (showPadAddButton: boolean, style?: React.CSSProperties) => (
@@ -1972,7 +1990,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               ros={ros}
               isConnected={isConnected}
               isActive={viewMode === 'behaviorTree'}
-              onExecutionChange={setBtExecution}
+              onExecutionChange={handleStandardBtExecutionChange}
               onExecutionControlsChange={(controls) => {
                 btExecutionControls.current = controls;
               }}
@@ -2421,7 +2439,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <div className="view-toggle">
             <button
               onClick={() => handleViewToggle('camera')}
-              className={(isLargeScreen ? viewMode === 'camera' : activeMobilePanel?.type === 'camera') ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'camera' : activeMobilePanel?.type === 'camera') ? 'active' : ''}
               title="Camera View"
               aria-label="Switch to Camera View"
             >
@@ -2429,7 +2447,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             <button
               onClick={() => handleViewToggle('3d')}
-              className={(isLargeScreen ? viewMode === '3d' : activeMobilePanel?.type === '3d') ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === '3d' : activeMobilePanel?.type === '3d') ? 'active' : ''}
               title="3D View"
               aria-label="Switch to 3D View"
             >
@@ -2437,7 +2455,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             <button
               onClick={() => handleViewToggle('tfTree')}
-              className={(isLargeScreen ? viewMode === 'tfTree' : activeMobilePanel?.type === 'tfTree') ? 'active' : ''}
+              className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'tfTree' : activeMobilePanel?.type === 'tfTree') ? 'active' : ''}
               title="TF Tree"
               aria-label="Switch to TF Tree"
             >
@@ -2445,7 +2463,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </button>
             {btExecution.isExecuting ? (
               <div
-                className={`bt-execution-island ${(isLargeScreen ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}`}
+                className={`bt-execution-island ${(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}`}
                 role="status"
                 aria-live="polite"
               >
@@ -2478,14 +2496,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             ) : (
               <button
                 onClick={() => handleViewToggle('behaviorTree')}
-                className={(isLargeScreen ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}
+                className={(isLargeScreen || useStandardMobileExecutionLayout ? viewMode === 'behaviorTree' : activeMobilePanel?.type === 'behaviorTree') ? 'active' : ''}
                 title="Behavior Tree"
                 aria-label="Switch to Behavior Tree"
               >
                 {icons.bt}
               </button>
             )}
-            {!isLargeScreen && (
+            {!isLargeScreen && !useStandardMobileExecutionLayout && (
               <button
                 onClick={() => handleMobilePanelTypeChange('pad')}
                 className={activeMobilePanel?.type === 'pad' ? 'active' : ''}
@@ -2497,7 +2515,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             )}
           </div>
         )}
-        <div className="layout-controls">
+        {(isLargeScreen || (!btExecution.isExecuting && !useStandardMobileExecutionLayout)) && <div className="layout-controls">
           <button
             type="button"
             className={`workspace-tile-button ${isDesktopWorkspace || (!isLargeScreen && isMobileSplitView) ? 'active' : ''}`}
@@ -2566,7 +2584,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               {renderWorkspaceAddMenu()}
             </div>
           )}
-        </div>
+        </div>}
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
@@ -2589,7 +2607,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
-        {!isDesktopWorkspace && (isLargeScreen ? renderStandardSplitLayout() : renderMobileWorkspace())}
+        {!isDesktopWorkspace && (
+          isLargeScreen || useStandardMobileExecutionLayout
+            ? renderStandardSplitLayout()
+            : renderMobileWorkspace()
+        )}
 
         {isDesktopWorkspace && (
           <div
