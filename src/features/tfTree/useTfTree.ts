@@ -9,11 +9,13 @@ interface UseTfTreeResult {
   isPaused: boolean;
   pause: () => void;
   resume: () => void;
+  refresh: () => void;
 }
 
 export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
   const [state, setState] = useState<TfTreeState>(createEmptyTfTreeState);
   const [isPaused, setIsPaused] = useState(false);
+  const [subscriptionRevision, setSubscriptionRevision] = useState(0);
   const stateRef = useRef(state);
   const pausedRef = useRef(false);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,7 +68,7 @@ export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
       if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     };
-  }, [consume, ros]);
+  }, [consume, ros, subscriptionRevision]);
 
   const pause = useCallback(() => {
     pausedRef.current = true;
@@ -81,5 +83,12 @@ export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
     flush();
   }, [flush]);
 
-  return { state, isPaused, pause, resume };
+  const refresh = useCallback(() => {
+    pausedRef.current = false;
+    setIsPaused(false);
+    flush();
+    setSubscriptionRevision(revision => revision + 1);
+  }, [flush]);
+
+  return { state, isPaused, pause, resume, refresh };
 };

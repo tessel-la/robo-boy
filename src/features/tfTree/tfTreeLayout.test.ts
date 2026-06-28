@@ -9,7 +9,7 @@ const transform = (parent: string, child: string) => ({
 });
 
 describe('layoutTfTree', () => {
-  it('places descendants below their parent and separates disconnected trees', () => {
+  it('places descendants below their parent and keeps disconnected trees aligned', () => {
     const state = consumeTfMessage(
       createEmptyTfTreeState(),
       {
@@ -22,6 +22,7 @@ describe('layoutTfTree', () => {
 
     expect(positions.get('base')!.y).toBeGreaterThan(positions.get('map')!.y);
     expect(positions.get('laser')!.y).toBeGreaterThan(positions.get('base')!.y);
+    expect(positions.get('world')!.y).toBe(positions.get('map')!.y);
     expect(positions.get('world')!.x).toBeGreaterThan(positions.get('map')!.x);
   });
 

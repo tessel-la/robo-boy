@@ -78,6 +78,12 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
       .toBe(true);
   }
 
+  await page.getByLabel('Open TF calculator').click();
+  const calculatorBox = await page.getByTestId('tf-calculator').boundingBox();
+  const panelBox = await page.getByTestId('tf-tree-panel').boundingBox();
+  expect(calculatorBox && panelBox && calculatorBox.x - panelBox.x < 20).toBe(true);
+  await page.getByLabel('Close TF calculator').click();
+
   await page.getByLabel('Search TF frame').fill('laser');
   await page.getByLabel('Search TF frame').press('Enter');
   await expect(page.locator('.tf-frame-node--match')).toHaveCount(1);
@@ -94,7 +100,26 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await page.getByLabel('Static TF').uncheck();
   await expect(summary).toContainText('4 frames');
   await page.getByLabel('Close TF tree menu').click();
-  await page.getByLabel('Fit TF graph to view').click();
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const minimap = document.querySelector<HTMLElement>('.tf-tree-panel .react-flow__minimap');
+        const probe = document.createElement('span');
+        probe.style.background = 'var(--card-bg)';
+        document.body.appendChild(probe);
+        const expected = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return minimap ? getComputedStyle(minimap).backgroundColor === expected : false;
+      })
+    )
+    .toBe(true);
+
+  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
+  await page.getByLabel('Switch to Behavior Tree').click();
+  const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
+  expect(tfControlBox?.width).toBe(btControlBox?.width);
+  expect(tfControlBox?.height).toBe(btControlBox?.height);
 });
 
 test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) => {
@@ -176,13 +201,19 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await publishTf(page, '/tf_static', [transform('world', 'camera_mount', 1)]);
 
   await expect(page.getByLabel('Pause live TF updates')).toBeVisible();
-  await expect(page.getByLabel('Fit TF graph to view')).toBeVisible();
+  await expect(page.getByLabel('Refresh TF subscriptions')).toBeVisible();
+  await expect(page.getByLabel('Arrange TF tree')).toBeVisible();
   await expect(page.getByLabel('Search TF frame')).toBeVisible();
+  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toBeHidden();
   await page.getByTestId('tf-tree-menu-button').click();
   await expect(page.getByLabel('Filter TF frames')).toBeVisible();
   await expect(page.getByTestId('tf-tree-menu-panel')).toBeVisible();
   await page.getByLabel('Close TF tree menu').click();
   await expect(details).toHaveCount(0);
+
+  await page.getByLabel('Refresh TF subscriptions').click();
+  await publishTf(page, '/tf', [transform('base_link', 'imu', 102)]);
+  await expect(page.locator('.tf-frame-node').filter({ hasText: 'imu' })).toBeVisible();
 
   const laserNode = page.locator('.tf-frame-node').filter({ hasText: 'laser' });
   await expect(laserNode).toBeVisible();
@@ -196,20 +227,30 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await expect(details).toContainText('Quaternion XYZW');
   await expect(details).toContainText('Euler RPY (deg)');
 
+  await page.getByLabel('Close TF details').click();
+  await page.getByLabel('Open TF calculator').click();
+  await page.getByLabel('TF calculator source frame').fill('map');
+  await page.getByLabel('TF calculator target frame').fill('laser');
+  const calculator = page.getByTestId('tf-calculator');
+  await expect(calculator).toContainText('laser');
+  await expect(calculator).toContainText('relative to map');
+  await expect(calculator).toContainText('Translation XYZ (m)');
+  await expect(calculator).toContainText('Quaternion XYZW');
+  await expect(calculator).toContainText('Rotation matrix');
+
+  await page.getByLabel('Pick target frame from tree').click();
+  await expect(page.getByTestId('tf-tree-pick-frame')).toContainText('Select the target frame');
+  await page.locator('.tf-frame-node').filter({ hasText: 'base_link' }).click();
+  await expect(page.getByLabel('TF calculator target frame')).toHaveValue('base_link');
+  await page.getByLabel('Close TF calculator').click();
+
   await expect
     .poll(async () => {
       const panelBox = await panel.boundingBox();
       const canvasBox = await canvas.boundingBox();
-      const detailsBox = await details.boundingBox();
-      if (!panelBox || !canvasBox || !detailsBox) return false;
+      if (!panelBox || !canvasBox) return false;
 
-      return (
-        panelBox.x >= 0 &&
-        panelBox.x + panelBox.width <= 390 &&
-        canvasBox.height > 220 &&
-        detailsBox.height > 90 &&
-        detailsBox.y > canvasBox.y
-      );
+      return panelBox.x >= 0 && panelBox.x + panelBox.width <= 390 && canvasBox.height > 220;
     })
     .toBe(true);
 });

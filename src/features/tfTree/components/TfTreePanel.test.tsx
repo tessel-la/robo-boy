@@ -10,6 +10,7 @@ const panelMock = vi.hoisted(() => ({
   isPaused: false,
   pause: vi.fn(),
   resume: vi.fn(),
+  refresh: vi.fn(),
   fitView: vi.fn(),
   setCenter: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock('../useTfTree', () => ({
     isPaused: panelMock.isPaused,
     pause: panelMock.pause,
     resume: panelMock.resume,
+    refresh: panelMock.refresh,
   }),
 }));
 
@@ -52,6 +54,7 @@ vi.mock('reactflow', () => ({
           data-class={edge.className}
           data-selected={edge.selected}
           data-marker-color={edge.markerEnd?.color}
+          data-marker-width={edge.markerEnd?.width}
           onClick={event => props.onEdgeClick?.(event, edge)}
         >
           {edge.label}
@@ -99,6 +102,7 @@ describe('TfTreePanel', () => {
     panelMock.isPaused = false;
     panelMock.pause.mockReset();
     panelMock.resume.mockReset();
+    panelMock.refresh.mockReset();
     panelMock.fitView.mockReset();
     panelMock.setCenter.mockReset();
   });
@@ -117,15 +121,17 @@ describe('TfTreePanel', () => {
     expect(screen.getByTestId('tf-node-world')).toBeInTheDocument();
   });
 
-  it('pauses updates, fits the graph, and hides static transforms', () => {
+  it('pauses updates, arranges the graph, and hides static transforms', () => {
     render(<TfTreePanel ros={{} as never} isActive />);
 
     fireEvent.click(screen.getByLabelText('Pause live TF updates'));
     expect(panelMock.pause).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByLabelText('Fit TF graph to view'));
-    expect(panelMock.fitView).toHaveBeenCalledOnce();
+    const refreshButton = screen.getByLabelText('Refresh TF subscriptions');
+    fireEvent.click(refreshButton);
+    expect(panelMock.refresh).toHaveBeenCalledOnce();
+    expect(refreshButton.querySelector('svg')).toHaveClass('tf-tree-refresh-icon');
     fireEvent.click(screen.getByLabelText('Arrange TF tree'));
-    expect(panelMock.fitView).toHaveBeenCalledTimes(2);
+    expect(panelMock.fitView).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByTestId('tf-tree-menu-button'));
     fireEvent.click(screen.getByLabelText('Static TF'));
@@ -148,6 +154,7 @@ describe('TfTreePanel', () => {
     expect(screen.getByText('0.0000, 0.0000, 0.0000, 1.0000')).toBeInTheDocument();
     expect(screen.getByTestId('tf-edge-camera')).toHaveAttribute('data-selected', 'true');
     expect(screen.getByTestId('tf-edge-camera')).toHaveAttribute('data-marker-color', '#ffb300');
+    expect(screen.getByTestId('tf-edge-camera')).toHaveAttribute('data-marker-width', '12');
     fireEvent.click(screen.getByLabelText('Close TF details'));
     expect(screen.queryByLabelText('TF selection details')).not.toBeInTheDocument();
 
@@ -190,5 +197,35 @@ describe('TfTreePanel', () => {
     const options = panelMock.fitView.mock.calls[0][0];
     expect(options.nodes.map((node: { id: string }) => node.id)).toEqual(['base', 'map']);
     expect(screen.queryByTestId('tf-tree-menu-panel')).not.toBeInTheDocument();
+  });
+
+  it('calculates between autocompleted frames and supports picking frames from the tree', () => {
+    render(<TfTreePanel ros={{} as never} isActive />);
+
+    fireEvent.click(screen.getByLabelText('Open TF calculator'));
+    const source = screen.getByLabelText('TF calculator source frame');
+    const target = screen.getByLabelText('TF calculator target frame');
+    fireEvent.change(source, { target: { value: 'map' } });
+    fireEvent.change(target, { target: { value: 'base' } });
+
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('base');
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('relative to map');
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('1.0000, 2.0000, 3.0000');
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('Euler RPY (deg)');
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('Rotation matrix');
+    expect(screen.getByTestId('tf-node-map').getAttribute('data-class')).not.toContain('calculator');
+
+    fireEvent.click(screen.getByLabelText('Pick source frame from tree'));
+    expect(screen.queryByTestId('tf-calculator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tf-tree-pick-frame')).toHaveTextContent('Select the source frame');
+    fireEvent.click(screen.getByTestId('tf-node-world'));
+
+    expect(screen.getByTestId('tf-calculator')).toBeInTheDocument();
+    expect(screen.getByLabelText('TF calculator source frame')).toHaveValue('world');
+    expect(screen.getByTestId('tf-calculator')).toHaveTextContent('No connected TF path');
+    expect(screen.getByTestId('tf-node-world').getAttribute('data-class')).not.toContain('calculator');
+
+    fireEvent.click(screen.getByLabelText('Close TF calculator'));
+    expect(screen.queryByTestId('tf-calculator')).not.toBeInTheDocument();
   });
 });

@@ -22,6 +22,7 @@ interface TreePanelSearchProps<T> {
   className?: string;
   testId?: string;
   listboxId: string;
+  inputId?: string;
 }
 
 const TreePanelSearch = <T,>({
@@ -36,6 +37,7 @@ const TreePanelSearch = <T,>({
   className,
   testId,
   listboxId,
+  inputId,
 }: TreePanelSearchProps<T>) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -97,6 +99,7 @@ const TreePanelSearch = <T,>({
           <line x1="10" y1="10" x2="14" y2="14" />
         </svg>
         <input
+          id={inputId}
           className="tree-panel-search-input"
           type="search"
           value={query}

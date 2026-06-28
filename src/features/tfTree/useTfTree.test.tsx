@@ -84,4 +84,22 @@ describe('useTfTree', () => {
     expect(result.current.state.transformsByChild.has('base')).toBe(true);
     expect(result.current.isPaused).toBe(false);
   });
+
+  it('rebuilds both subscriptions without clearing the known TF tree', () => {
+    const ros = {} as never;
+    const { result } = renderHook(() => useTfTree(ros));
+
+    act(() => {
+      topicMock.instances[0].callback?.(message('map', 'base'));
+      vi.advanceTimersByTime(50);
+    });
+    const originalTopics = [...topicMock.instances];
+
+    act(() => result.current.refresh());
+
+    expect(originalTopics.every(instance => instance.unsubscribe.mock.calls.length === 1)).toBe(true);
+    expect(topicMock.instances.slice(2).map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
+    expect(result.current.state.transformsByChild.has('base')).toBe(true);
+    expect(result.current.isPaused).toBe(false);
+  });
 });

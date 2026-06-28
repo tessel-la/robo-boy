@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaExpand, FaPause, FaPlay } from 'react-icons/fa';
+import { FaCalculator, FaExpand, FaPause, FaPlay, FaSyncAlt } from 'react-icons/fa';
 
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import TreePanelSearch, { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
@@ -18,8 +18,10 @@ interface TfTreeControlsProps {
   isPaused: boolean;
   onPause: () => void;
   onResume: () => void;
-  onFitAll: () => void;
+  onRefresh: () => void;
   onArrange: () => void;
+  calculatorOpen: boolean;
+  onToggleCalculator: () => void;
   onFocusTree: (tree: TfVisibleTree) => void;
   visibleTrees: TfVisibleTree[];
   frameCount: number;
@@ -45,8 +47,10 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
   isPaused,
   onPause,
   onResume,
-  onFitAll,
+  onRefresh,
   onArrange,
+  calculatorOpen,
+  onToggleCalculator,
   onFocusTree,
   visibleTrees,
   frameCount,
@@ -64,6 +68,7 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
   cycles,
   multipleParents,
 }) => {
+  const [refreshAnimation, setRefreshAnimation] = React.useState(0);
   const warningCount = cycles.length + multipleParents.length;
   const menuContent = (
     <>
@@ -188,29 +193,18 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
               aria-label="Arrange TF tree"
               data-testid="tf-tree-arrange"
             >
-              <svg
-                viewBox="0 0 22 22"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect x="7.5" y="1.5" width="7" height="5" rx="1.5" />
-                <rect x="1.5" y="15.5" width="7" height="5" rx="1.5" />
-                <rect x="13.5" y="15.5" width="7" height="5" rx="1.5" />
-                <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
-              </svg>
+              <FaExpand aria-hidden="true" />
             </button>
             <button
               type="button"
-              className="tf-tree-icon-button"
-              onClick={onFitAll}
-              title="Fit TF graph to view"
-              aria-label="Fit TF graph to view"
+              className={`tf-tree-icon-button${calculatorOpen ? ' active' : ''}`}
+              onClick={onToggleCalculator}
+              title={calculatorOpen ? 'Hide TF calculator' : 'Open TF calculator'}
+              aria-label={calculatorOpen ? 'Hide TF calculator' : 'Open TF calculator'}
+              aria-pressed={calculatorOpen}
+              data-testid="tf-tree-calculator-button"
             >
-              <FaExpand aria-hidden="true" />
+              <FaCalculator aria-hidden="true" />
             </button>
           </>
         }
@@ -225,6 +219,23 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
       />
 
       <div className="tf-tree-float-actions">
+        <button
+          type="button"
+          className="tf-tree-icon-button tf-tree-refresh-button"
+          onClick={() => {
+            setRefreshAnimation(animation => animation + 1);
+            onRefresh();
+          }}
+          title="Refresh TF subscriptions"
+          aria-label="Refresh TF subscriptions"
+          data-testid="tf-tree-refresh"
+        >
+          <FaSyncAlt
+            key={refreshAnimation}
+            className={refreshAnimation > 0 ? 'tf-tree-refresh-icon' : undefined}
+            aria-hidden="true"
+          />
+        </button>
         <button
           type="button"
           className={`tf-tree-live-button${isPaused ? ' paused' : ''}`}
