@@ -296,6 +296,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     Parallel: <IconParallel />,
     Retry: <IconRetry />,
     Repeat: <IconRepeat />,
+    Timeout: <span aria-hidden="true">T</span>,
+    'If / Else': <span aria-hidden="true">?</span>,
   };
 
   // Control flow nodes (always available)
@@ -305,6 +307,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     { type: BehaviorNodeType.Parallel, label: 'Parallel', icon: '∥', category: 'control' },
     { type: BehaviorNodeType.Retry, label: 'Retry', icon: '↻', category: 'control' },
     { type: BehaviorNodeType.Repeat, label: 'Repeat', icon: '⟳', category: 'control' },
+    { type: BehaviorNodeType.Timeout, label: 'Timeout', icon: 'T', category: 'control' },
+    { type: BehaviorNodeType.IfElse, label: 'If / Else', icon: '?', category: 'control' },
   ];
 
   const resourceSearchTerms = useMemo(
@@ -641,24 +645,36 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 {isConnected ? 'No topics found' : 'Connect to ROS first'}
               </div>
             ) : (
-              filteredTopics.map((topic, index) => (
+              filteredTopics.flatMap((topic, index) => ([
                 <div
-                  key={`${topic.name}-${index}`}
+                  key={`${topic.name}-${index}-publisher`}
                   className="palette-node palette-node-ros"
                   draggable={!isDisabled}
                   onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Topic, topic)}
                   onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Topic, topic)}
-                  title={`${topic.name} (${topic.type})`}
+                  title={`Publish ${topic.name} (${topic.type})`}
                 >
-                  <span className="palette-node-icon">
-                    <IconTopic />
-                  </span>
+                  <span className="palette-node-icon"><IconTopic /></span>
                   <span className="palette-node-copy">
-                    <span className="palette-node-label">{topic.name}</span>
+                    <span className="palette-node-label">Publish {topic.name}</span>
                     <span className="palette-node-detail">{topic.type}</span>
                   </span>
-                </div>
-              ))
+                </div>,
+                <div
+                  key={`${topic.name}-${index}-subscriber`}
+                  className="palette-node palette-node-ros"
+                  draggable={!isDisabled}
+                  onDragStart={(e) => handleDragStart(e, BehaviorNodeType.Subscriber, topic)}
+                  onClick={() => !isDisabled && onAddNode?.(BehaviorNodeType.Subscriber, topic)}
+                  title={`Subscribe to ${topic.name} (${topic.type})`}
+                >
+                  <span className="palette-node-icon" aria-hidden="true">IN</span>
+                  <span className="palette-node-copy">
+                    <span className="palette-node-label">Subscribe {topic.name}</span>
+                    <span className="palette-node-detail">{topic.type}</span>
+                  </span>
+                </div>,
+              ]))
             )}
           </div>
         )}

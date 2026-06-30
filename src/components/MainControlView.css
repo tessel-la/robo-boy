@@ -1059,6 +1059,58 @@ body.no-scroll {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color) 14%, transparent);
 }
 
+.workspace-empty-add-button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    border: 1px solid var(--primary-color);
+    border-radius: 7px;
+    background: var(--primary-color);
+    color: var(--button-text-color);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.workspace-empty-add-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+.workspace-card-header.is-selected {
+    box-shadow: inset 0 -2px 0 var(--primary-color);
+}
+
+@media (max-width: 767px) {
+    .desktop-workspace {
+        padding: 4px;
+        overflow-y: auto;
+    }
+
+    .workspace-grid {
+        height: auto;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    .workspace-tile-row {
+        min-height: 420px;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .workspace-column-resize-handle,
+    .workspace-row-resize-handle {
+        display: none;
+    }
+
+    .workspace-card {
+        min-height: 400px;
+    }
+}
+
 .workspace-drop-indicator {
     flex: 0 0 8px;
     align-self: stretch;

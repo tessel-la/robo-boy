@@ -15,6 +15,8 @@ const roslibMocks = vi.hoisted(() => ({
   serviceCall: vi.fn(),
   topicPublish: vi.fn(),
   topicUnadvertise: vi.fn(),
+  topicSubscribe: vi.fn(),
+  topicUnsubscribe: vi.fn(),
 }));
 
 vi.mock('roslib', () => ({
@@ -31,6 +33,8 @@ vi.mock('roslib', () => ({
       return {
         publish: roslibMocks.topicPublish,
         unadvertise: roslibMocks.topicUnadvertise,
+        subscribe: roslibMocks.topicSubscribe,
+        unsubscribe: roslibMocks.topicUnsubscribe,
       };
     }),
     Message: vi.fn(function (value: Record<string, unknown>) {
@@ -261,5 +265,59 @@ describe('BehaviorTreeExecutor pause and resume', () => {
     expect(roslibMocks.topicPublish).toHaveBeenCalledTimes(1);
     expect(events.some((event) => event.type === 'stopped')).toBe(true);
     expect(events.some((event) => event.type === 'completed')).toBe(false);
+  });
+});
+
+describe('BehaviorTreeExecutor blackboard nodes', () => {
+  beforeEach(() => {
+    roslibMocks.topicPublish.mockReset();
+    roslibMocks.topicSubscribe.mockReset();
+    roslibMocks.topicUnsubscribe.mockReset();
+  });
+
+  it('captures a subscriber message and publishes a blackboard-bound payload', async () => {
+    let subscriber: ((message: unknown) => void) | undefined;
+    roslibMocks.topicSubscribe.mockImplementation(callback => { subscriber = callback; });
+    const tree: BehaviorTree = {
+      id: 'blackboard', name: 'Blackboard', createdAt: 1, updatedAt: 1,
+      nodes: [
+        { id: 'sequence', type: BehaviorNodeType.Sequence, position: { x: 0, y: 0 }, data: { label: 'Sequence', type: 'sequence' } },
+        { id: 'subscriber', type: BehaviorNodeType.Subscriber, position: { x: 0, y: 1 }, data: { label: 'Subscriber', topicName: '/state', messageType: 'example/msg/State', timeout: 1000, outputBindings: [{ sourcePath: 'value', variable: 'state' }] } },
+        { id: 'publisher', type: BehaviorNodeType.Topic, position: { x: 0, y: 2 }, data: { label: 'Publisher', topicName: '/command', messageType: 'example/msg/Command', message: { value: 0 }, inputBindings: [{ variable: 'state', targetPath: 'value' }] } },
+      ],
+      edges: [
+        { id: 'one', source: 'sequence', target: 'subscriber' },
+        { id: 'two', source: 'sequence', target: 'publisher' },
+      ],
+    };
+    const events: ExecutionEvent[] = [];
+    const executor = new BehaviorTreeExecutor(tree, {} as Ros, event => events.push(event));
+    const execution = executor.start();
+    await vi.waitFor(() => expect(subscriber).toBeTypeOf('function'));
+    subscriber?.({ value: 42 });
+    await execution;
+
+    expect(roslibMocks.topicUnsubscribe).toHaveBeenCalledOnce();
+    expect(roslibMocks.topicPublish).toHaveBeenCalledWith({ value: 42 });
+    expect(executor.getBlackboard()).toEqual({ state: 42 });
+    expect(events.some(event => event.type === 'blackboardUpdated')).toBe(true);
+  });
+
+  it('selects the Then and Else handles using typed comparisons', async () => {
+    const makeTree = (value: number): BehaviorTree => ({
+      id: `if-${value}`, name: 'If', createdAt: 1, updatedAt: 1, blackboardDefaults: { value },
+      nodes: [
+        { id: 'if', type: BehaviorNodeType.IfElse, position: { x: 0, y: 0 }, data: { label: 'If', variable: 'value', operator: 'greaterThan', expectedValue: 3 } },
+        { ...topicNode('then'), data: { ...topicNode('then').data, message: { branch: 'then' } } },
+        { ...topicNode('else'), data: { ...topicNode('else').data, message: { branch: 'else' } } },
+      ],
+      edges: [
+        { id: 'then-edge', source: 'if', sourceHandle: 'then', target: 'then' },
+        { id: 'else-edge', source: 'if', sourceHandle: 'else', target: 'else' },
+      ],
+    });
+    await executeTree(makeTree(5));
+    await executeTree(makeTree(1));
+    expect(roslibMocks.topicPublish.mock.calls.map(([message]) => message.branch)).toEqual(['then', 'else']);
   });
 });

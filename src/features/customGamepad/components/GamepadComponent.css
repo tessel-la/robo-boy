@@ -19,6 +19,19 @@
   max-height: 100%;
 }
 
+.component-operation-status {
+  min-height: 1em;
+  margin-left: 6px;
+  font-size: 0.66em;
+  font-weight: 600;
+  opacity: 0.82;
+}
+
+.operation-error {
+  outline: 2px solid var(--error-color, #d32f2f);
+  outline-offset: -2px;
+}
+
 .gamepad-component.editing {
   border-color: var(--border-color, #ddd);
   cursor: pointer;

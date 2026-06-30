@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Ros } from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import type { RosOperation } from '../../../utils/rosOperations';
+import RosEventOperationsEditor from './RosEventOperationsEditor';
 import RangeSlider from './RangeSlider';
 import ValueControl from './ValueControl';
 import { getDynamicRangeStep, roundToStepPrecision } from '../rangeUtils';
@@ -235,6 +237,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // Button-specific settings
   const [buttonIndex, setButtonIndex] = useState(0);
   const [momentary, setMomentary] = useState(true);
+  const [eventOperations, setEventOperations] = useState<Partial<Record<'press' | 'release' | 'on' | 'off', RosOperation>>>({});
 
   // Camera-specific settings
   const [cameraTransport, setCameraTransport] = useState<'proxy' | 'ros'>('proxy');
@@ -316,6 +319,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   useEffect(() => {
     if (component) {
       setLabel(component.label || '');
+      setEventOperations(component.eventOperations || {});
 
       const action = component.action as ROSTopicConfig;
 
@@ -614,8 +618,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const handleSave = () => {
     if (!component) return;
 
+    const savedEventOperations = Object.keys(eventOperations).length > 0 ? eventOperations : undefined;
+
     // Additional validation for toggle components
-    if (component.type === 'toggle') {
+    if (component.type === 'toggle' && !savedEventOperations) {
       if (!['std_msgs/Bool', 'std_msgs/msg/Bool'].includes(messageType)) {
         setErrorMessage('Toggle components can only use Boolean message types (std_msgs/Bool).');
         return;
@@ -811,6 +817,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       ...component,
       label,
       action,
+      eventOperations: savedEventOperations,
       config: updatedConfig
     };
 
@@ -864,6 +871,20 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               />
             </div>
           </div>
+
+          {(component.type === 'button' || component.type === 'toggle') && (
+            <div className="settings-section">
+              <h4>ROS Event Operations</h4>
+              <div className="setting-group">
+                <RosEventOperationsEditor
+                  events={component.type === 'button' ? ['press', 'release'] : ['on', 'off']}
+                  value={eventOperations}
+                  ros={ros || null}
+                  onChange={setEventOperations}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Topic Configuration */}
           <div className="settings-section">

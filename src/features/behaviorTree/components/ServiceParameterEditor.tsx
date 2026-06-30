@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { ROSServiceNodeData } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, ROSServiceNodeData } from '../types';
 import { fetchServiceRequestSchema, ActionFieldSchema } from '../services/rosDiscovery';
 import { SERVICE_TEMPLATES } from '../serviceTemplates';
 import './ActionParameterEditor.css';
@@ -8,7 +8,7 @@ import './ActionParameterEditor.css';
 interface ServiceParameterEditorProps {
   nodeData: ROSServiceNodeData;
   ros: Ros | null;
-  onSave: (request: Record<string, any>) => void;
+  onSave: (request: Record<string, any>, input?: BlackboardInputBinding[], output?: BlackboardOutputBinding[]) => void;
   onClose: () => void;
 }
 
@@ -272,6 +272,8 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({ nodeDat
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('{}');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [inputBindings, setInputBindings] = useState(() => (nodeData.inputBindings || []).map(binding => `${binding.targetPath}=${binding.variable}`).join('\n'));
+  const [outputBindings, setOutputBindings] = useState(() => (nodeData.outputBindings || []).map(binding => `${binding.sourcePath}=${binding.variable}`).join('\n'));
   const [isLoading, setIsLoading] = useState(false);
   const [navStack, setNavStack] = useState<NavFrame[]>([{ kind: 'list', path: [] }]);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
@@ -351,15 +353,21 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({ nodeDat
   };
 
   const handleSave = () => {
+    const pairs = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+      const [path, variable] = line.split('=').map(value => value.trim());
+      return { path, variable };
+    }).filter(binding => binding.path && binding.variable);
+    const parsedInput: BlackboardInputBinding[] = pairs(inputBindings).map(binding => ({ targetPath: binding.path, variable: binding.variable }));
+    const parsedOutput: BlackboardOutputBinding[] = pairs(outputBindings).map(binding => ({ sourcePath: binding.path, variable: binding.variable }));
     if (viewMode === 'json') {
       try {
-        onSave(JSON.parse(jsonText));
+        onSave(JSON.parse(jsonText), parsedInput, parsedOutput);
         onClose();
       } catch {
         setJsonError('Invalid JSON — fix before saving');
       }
     } else {
-      onSave(values);
+      onSave(values, parsedInput, parsedOutput);
       onClose();
     }
   };
@@ -458,6 +466,12 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({ nodeDat
 
         {/* Body */}
         <div className="ape-body">
+          {!canGoBack && (
+            <div className="ape-binding-grid">
+              <label>Request path = variable<textarea value={inputBindings} onChange={event => setInputBindings(event.target.value)} placeholder="enabled=should_enable" /></label>
+              <label>Response path = variable<textarea value={outputBindings} onChange={event => setOutputBindings(event.target.value)} placeholder="success=service_ok" /></label>
+            </div>
+          )}
           {viewMode === 'json' ? (
             <div className="ape-json-view">
               <textarea

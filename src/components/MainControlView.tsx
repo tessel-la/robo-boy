@@ -13,7 +13,12 @@ import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
 import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
-import { cloneGamepadTemplate, getGamepadLayout, loadGamepadLibrary } from '../features/customGamepad/gamepadStorage';
+import {
+  cloneGamepadTemplate,
+  getGamepadLayout,
+  importGamepadLayouts,
+  loadGamepadLibrary,
+} from '../features/customGamepad/gamepadStorage';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
@@ -356,6 +361,25 @@ const loadWorkspacePanels = (): WorkspacePanel[] => {
   }
 };
 
+const loadUnifiedWorkspacePanels = (): WorkspacePanel[] => {
+  const desktopPanels = loadWorkspacePanels();
+  if (desktopPanels.length > 0) return desktopPanels;
+
+  try {
+    const stored = localStorage.getItem(MOBILE_WORKSPACE_PANELS_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(panel => normalizeWorkspacePanel(panel))
+      .filter(isWorkspacePanel)
+      .map(panel => ({ ...panel, id: generateUniqueId('workspace-panel') }));
+  } catch (error) {
+    console.error('Failed to migrate mobile workspace panels:', error);
+    return [];
+  }
+};
+
 type WorkspaceLayoutState = {
   rowRatios: number[];
   columnRatiosByRow: Record<number, number[]>;
@@ -370,6 +394,14 @@ type SavedWorkspaceLayout = {
   layout: WorkspaceLayoutState;
   createdAt: string;
   updatedAt: string;
+};
+
+type WorkspaceBundleV2 = {
+  version: 2;
+  exportedAt: string;
+  currentWorkspace: Omit<SavedWorkspaceLayout, 'id' | 'title' | 'createdAt' | 'updatedAt'>;
+  layouts: SavedWorkspaceLayout[];
+  gamepads: CustomGamepadLayout[];
 };
 
 type WorkspaceSnapTemplate = {
@@ -551,22 +583,24 @@ const loadWorkspaceCustomTemplates = (): WorkspaceSnapTemplate[] => {
   }
 };
 
-const BASE_WORKSPACE_TILE_IDS = ['base-view', 'base-pads'];
+const BASE_WORKSPACE_TILE_IDS: string[] = [];
 
 const loadWorkspaceTileOrder = (): string[] => {
   try {
     const stored = localStorage.getItem(WORKSPACE_TILE_ORDER_KEY);
-    if (!stored) return BASE_WORKSPACE_TILE_IDS;
+    if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : BASE_WORKSPACE_TILE_IDS;
+    return Array.isArray(parsed)
+      ? parsed.filter(item => typeof item === 'string' && item !== 'base-view' && item !== 'base-pads')
+      : [];
   } catch (error) {
     console.error('Failed to load desktop workspace tile order:', error);
-    return BASE_WORKSPACE_TILE_IDS;
+    return [];
   }
 };
 
 const normalizeWorkspaceTileOrder = (order: string[], panelIds: string[]) => {
-  const validIds = [...BASE_WORKSPACE_TILE_IDS, ...panelIds];
+  const validIds = panelIds;
   const orderedIds = order.filter((id, index) => (
     validIds.includes(id) && order.indexOf(id) === index
   ));
@@ -759,7 +793,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
   const [isMobileSplitView, setIsMobileSplitView] = useState(loadMobileSplitViewPreference);
   const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
-  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadWorkspacePanels);
+  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadUnifiedWorkspacePanels);
   const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(loadMobileWorkspacePanels);
   const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() => (
     mobileWorkspacePanels.reduce<Record<string, WorkspacePanelType[]>>((mountedTypes, panel) => {
@@ -774,6 +808,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(loadSavedWorkspaceLayouts);
   const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(loadActiveWorkspaceLayoutId);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
+  const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
   const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
@@ -827,7 +862,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const isDesktopWorkspace = isLargeScreen && isWorkspaceOpen;
+  const isDesktopWorkspace = true;
   const useStandardMobileExecutionLayout = !isLargeScreen && (
     isStandardBtExecuting || retainStandardMobileLayout
   );
@@ -839,8 +874,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspaceTiles = useMemo<WorkspaceTile[]>(() => {
     const panelById = new Map(workspacePanels.map(panel => [panel.id, panel]));
     return normalizedWorkspaceTileOrder.flatMap<WorkspaceTile>(id => {
-      if (id === 'base-view') return [{ kind: 'view' as const, id }];
-      if (id === 'base-pads') return [{ kind: 'pads' as const, id }];
       const panel = panelById.get(id);
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
@@ -1244,6 +1277,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     snapTemplate?: WorkspaceSnapTemplate
   ) => {
     setIsWorkspaceOpen(true);
+    if (workspaceReplacementPanelId) {
+      setWorkspacePanels(prev => prev.map(panel => panel.id === workspaceReplacementPanelId
+        ? {
+          ...panel,
+          type,
+          title: getWorkspaceTitle(type),
+          cameraTopic: type === 'camera' ? (selectedCameraTopic || availableCameraTopics[0]) : undefined,
+          layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
+        }
+        : panel));
+      setWorkspaceReplacementPanelId(null);
+      setIsWorkspaceAddMenuOpen(false);
+      setIsWorkspaceTemplateMenuOpen(false);
+      return;
+    }
     setWorkspacePanels(prev => {
       const selectedPadPanel = selectedPanelId
         ? activePanels.find(panel => panel.id === selectedPanelId)
@@ -1447,7 +1495,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setWorkspaceDropPlacement(null);
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
-      if (!['camera', '3d', 'pad', 'behaviorTree'].includes(draft.type)) return;
+      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree'].includes(draft.type)) return;
 
       const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
       const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
@@ -1737,13 +1785,33 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleExportWorkspaceLayouts = () => {
-    if (savedWorkspaceLayouts.length === 0) return;
+    if (savedWorkspaceLayouts.length === 0 && workspacePanels.length === 0) return;
+
+    const referencedLayoutIds = new Set(
+      [workspacePanels, ...savedWorkspaceLayouts.map(layout => layout.panels)]
+        .flat()
+        .filter(panel => panel.type === 'pad' && panel.layoutId)
+        .map(panel => panel.layoutId as string)
+    );
+    const gamepads = gamepadLibrary
+      .filter(item => !item.isDefault && (
+        referencedLayoutIds.has(item.id) || referencedLayoutIds.has(item.layout.id)
+      ))
+      .map(item => item.layout);
+    const bundle: WorkspaceBundleV2 = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      currentWorkspace: {
+        panels: workspacePanels,
+        tileOrder: normalizedWorkspaceTileOrder,
+        layout: capturedWorkspaceLayout,
+      },
+      layouts: savedWorkspaceLayouts,
+      gamepads,
+    };
 
     const blob = new Blob([
-      JSON.stringify({
-        version: 1,
-        layouts: savedWorkspaceLayouts,
-      }, null, 2),
+      JSON.stringify(bundle, null, 2),
     ], { type: 'application/json' });
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1762,6 +1830,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || ''));
+        const gamepadResult = Array.isArray(parsed?.gamepads)
+          ? importGamepadLayouts(JSON.stringify({ layouts: parsed.gamepads }))
+          : { idMap: {} as Record<string, string> };
+        const remapPanels = (panels: WorkspacePanel[]) => panels.map(panel => ({
+          ...panel,
+          layoutId: panel.layoutId ? (gamepadResult.idMap[panel.layoutId] || panel.layoutId) : undefined,
+        }));
         const candidates = Array.isArray(parsed) ? parsed : parsed?.layouts;
         if (!Array.isArray(candidates)) return;
 
@@ -1770,14 +1845,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
           .map(layout => ({
             ...layout,
+            panels: remapPanels(layout.panels),
             id: `workspace-layout-${Date.now()}-${layout.id}`,
             title: layout.title,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           }));
 
+        if (parsed?.version === 2 && parsed.currentWorkspace) {
+          const current = normalizeSavedWorkspaceLayout({
+            ...parsed.currentWorkspace,
+            id: `workspace-layout-${Date.now()}-current`,
+            title: 'Imported workspace',
+          });
+          if (current) importedLayouts.unshift({ ...current, panels: remapPanels(current.panels) });
+        }
         if (importedLayouts.length === 0) return;
         setSavedWorkspaceLayouts(prev => [...prev, ...importedLayouts]);
+        setCustomGamepadRefreshKey(prev => prev + 1);
       } catch (error) {
         console.error('Failed to import workspace layouts:', error);
       }
@@ -2231,7 +2316,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return (
       <div className="workspace-add-menu" role="menu">
         <div className="workspace-add-menu-section">
-          <span className="workspace-add-menu-title">Components</span>
+          <span className="workspace-add-menu-title">
+            {workspaceReplacementPanelId ? 'Replace panel' : 'Components'}
+          </span>
           <button
             type="button"
             draggable
@@ -2336,7 +2423,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <button
             type="button"
             onClick={handleExportWorkspaceLayouts}
-            disabled={savedWorkspaceLayouts.length === 0}
+            disabled={savedWorkspaceLayouts.length === 0 && workspacePanels.length === 0}
             title="Export layouts"
             aria-label="Export layouts"
           >
@@ -2548,19 +2635,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             )}
           </div>
         )}
-        {(isLargeScreen || (!btExecution.isExecuting && !useStandardMobileExecutionLayout)) && <div className="layout-controls">
+        <div className="layout-controls">
           <button
             type="button"
             className={`workspace-tile-button ${isDesktopWorkspace || (!isLargeScreen && isMobileSplitView) ? 'active' : ''}`}
-            onClick={isLargeScreen ? handleAutoTileWorkspacePanels : handleToggleMobileSplitView}
-            title={isLargeScreen
-              ? (isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace')
-              : (isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view')}
-            aria-label={isLargeScreen
-              ? (isDesktopWorkspace ? 'Auto-arrange workspace panels' : 'Open grid workspace')
-              : (isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view')}
+            onClick={handleAutoTileWorkspacePanels}
+            title="Auto-arrange workspace panels"
+            aria-label="Auto-arrange workspace panels"
           >
-            {isLargeScreen ? icons.tile : icons.split}
+            {icons.tile}
           </button>
           {isDesktopWorkspace && (
             <>
@@ -2589,15 +2672,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                     </button>
                     {renderWorkspaceTemplateMenu()}
                   </div>
-                  <button
-                    type="button"
-                    className="workspace-split-button"
-                    onClick={handleReturnToSplitView}
-                    title="Return to split view"
-                    aria-label="Return to split view"
-                  >
-                    {icons.split}
-                  </button>
             </>
           )}
           {isDesktopWorkspace && (
@@ -2617,7 +2691,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               {renderWorkspaceAddMenu()}
             </div>
           )}
-        </div>}
+        </div>
         <div className="status-controls">
           <div
             className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
@@ -2640,12 +2714,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
-        {!isDesktopWorkspace && (
-          isLargeScreen || useStandardMobileExecutionLayout
-            ? renderStandardSplitLayout()
-            : renderMobileWorkspace()
-        )}
-
         {isDesktopWorkspace && (
           <div
             className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''} ${isWorkspaceResizing ? 'is-resizing' : ''}`}
@@ -2706,7 +2774,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                 <div className="workspace-card-actions">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleRemoveWorkspaceTile(tile);
+                                    }}
                                     title="Remove view tile"
                                     aria-label="Remove view tile"
                                   >
@@ -2740,7 +2811,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                 <div className="workspace-card-actions">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleRemoveWorkspaceTile(tile);
+                                    }}
                                     title="Remove pad controls tile"
                                     aria-label="Remove pad controls tile"
                                   >
@@ -2765,8 +2839,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               }}
                             >
                               <header
-                                className="workspace-card-header"
+                                className={`workspace-card-header ${workspaceReplacementPanelId === tile.panel.id ? 'is-selected' : ''}`}
                                 draggable
+                                onClick={() => setWorkspaceReplacementPanelId(tile.panel.id)}
                                 onDragStart={(event) => handleWorkspaceTileDragStart(event, tile.id)}
                                 onDragEnd={handleWorkspaceDragEnd}
                               >
@@ -2777,7 +2852,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                 <div className="workspace-card-actions">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveWorkspaceTile(tile)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setWorkspaceReplacementPanelId(tile.panel.id);
+                                      setIsWorkspaceAddMenuOpen(true);
+                                      setIsWorkspaceTemplateMenuOpen(false);
+                                    }}
+                                    title="Replace panel"
+                                    aria-label={`Replace ${tile.panel.title}`}
+                                  >
+                                    {icons.swap}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleRemoveWorkspaceTile(tile);
+                                    }}
                                     title="Remove panel"
                                     aria-label={`Remove ${tile.panel.title}`}
                                   >
@@ -2831,8 +2922,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               ))}
               {workspaceTiles.length === 0 && (
                 <div className="workspace-empty-drop-zone">
-                  <div className="workspace-empty-drop-line" aria-hidden="true" />
-                  <span>Workspace empty</span>
+                  <button
+                    type="button"
+                    className="workspace-empty-add-button"
+                    onClick={() => {
+                      setWorkspaceReplacementPanelId(null);
+                      setIsWorkspaceAddMenuOpen(true);
+                    }}
+                    aria-label="Add workspace panel"
+                  >
+                    {icons.add}
+                    <span>Add panel</span>
+                  </button>
                 </div>
               )}
             </div>

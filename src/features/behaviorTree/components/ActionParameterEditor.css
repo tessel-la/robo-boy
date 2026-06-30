@@ -672,3 +672,7 @@
     padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
   }
 }
+.ape-binding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: 7px; }
+.ape-binding-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--text-color-secondary); font-size: 10px; font-weight: 700; }
+.ape-binding-grid textarea { min-height: 48px; resize: vertical; border: 1px solid var(--border-color); border-radius: 5px; padding: 5px; background: var(--background-color); color: var(--text-color); font: 10px/1.3 monospace; }
+@media (max-width: 520px) { .ape-binding-grid { grid-template-columns: 1fr; } }

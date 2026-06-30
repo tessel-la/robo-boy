@@ -24,6 +24,11 @@ async function publishTf(page: Page, topic: '/tf' | '/tf_static', transforms: un
   );
 }
 
+async function addPanel(page: Page, name: string) {
+  await page.getByLabel('Add workspace panel').first().click();
+  await page.getByRole('button', { name, exact: true }).click();
+}
+
 test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await installRosMock(page);
   await page.goto('/');
@@ -32,7 +37,7 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
-  await page.getByLabel('Switch to TF Tree').click();
+  await addPanel(page, 'TF tree');
   await expect(page.getByTestId('tf-tree-panel')).toBeVisible();
 
   await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101)]);
@@ -116,7 +121,7 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
     .toBe(true);
 
   const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
-  await page.getByLabel('Switch to Behavior Tree').click();
+  await addPanel(page, 'Behavior tree');
   const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
   expect(tfControlBox?.width).toBe(btControlBox?.width);
   expect(tfControlBox?.height).toBe(btControlBox?.height);
@@ -190,7 +195,7 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
-  await page.getByLabel('Switch to TF Tree').click();
+  await addPanel(page, 'TF tree');
 
   const panel = page.getByTestId('tf-tree-panel');
   const canvas = page.getByTestId('tf-tree-canvas');

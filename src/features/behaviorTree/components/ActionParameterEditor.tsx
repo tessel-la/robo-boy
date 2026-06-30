@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { ROSActionNodeData } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, ROSActionNodeData } from '../types';
 import { fetchActionGoalDetails, ActionFieldSchema } from '../services/rosDiscovery';
 import { ACTION_TEMPLATES } from '../actionTemplates';
 import './ActionParameterEditor.css';
@@ -8,7 +8,7 @@ import './ActionParameterEditor.css';
 interface ActionParameterEditorProps {
   nodeData: ROSActionNodeData;
   ros: Ros | null;
-  onSave: (parameters: Record<string, any>) => void;
+  onSave: (parameters: Record<string, any>, input?: BlackboardInputBinding[], output?: BlackboardOutputBinding[]) => void;
   onClose: () => void;
 }
 
@@ -272,6 +272,8 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('{}');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [inputBindings, setInputBindings] = useState(() => (nodeData.inputBindings || []).map(binding => `${binding.targetPath}=${binding.variable}`).join('\n'));
+  const [outputBindings, setOutputBindings] = useState(() => (nodeData.outputBindings || []).map(binding => `${binding.sourcePath}=${binding.variable}`).join('\n'));
   const [isLoading, setIsLoading] = useState(false);
   const [navStack, setNavStack] = useState<NavFrame[]>([{ kind: 'list', path: [] }]);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
@@ -348,15 +350,21 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
   };
 
   const handleSave = () => {
+    const pairs = (text: string) => text.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+      const [path, variable] = line.split('=').map(value => value.trim());
+      return { path, variable };
+    }).filter(binding => binding.path && binding.variable);
+    const parsedInput: BlackboardInputBinding[] = pairs(inputBindings).map(binding => ({ targetPath: binding.path, variable: binding.variable }));
+    const parsedOutput: BlackboardOutputBinding[] = pairs(outputBindings).map(binding => ({ sourcePath: binding.path, variable: binding.variable }));
     if (viewMode === 'json') {
       try {
-        onSave(JSON.parse(jsonText));
+        onSave(JSON.parse(jsonText), parsedInput, parsedOutput);
         onClose();
       } catch {
         setJsonError('Invalid JSON — fix before saving');
       }
     } else {
-      onSave(values);
+      onSave(values, parsedInput, parsedOutput);
       onClose();
     }
   };
@@ -455,6 +463,12 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
 
         {/* Body */}
         <div className="ape-body">
+          {!canGoBack && (
+            <div className="ape-binding-grid">
+              <label>Goal path = variable<textarea value={inputBindings} onChange={event => setInputBindings(event.target.value)} placeholder="target.x=goal_x" /></label>
+              <label>Result path = variable<textarea value={outputBindings} onChange={event => setOutputBindings(event.target.value)} placeholder="result.ok=completed" /></label>
+            </div>
+          )}
           {viewMode === 'json' ? (
             <div className="ape-json-view">
               <textarea

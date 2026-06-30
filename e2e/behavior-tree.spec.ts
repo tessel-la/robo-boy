@@ -17,7 +17,10 @@ async function connectWithMockRos(page: Page) {
 }
 
 async function openBehaviorTree(page: Page) {
-  await page.getByLabel('Switch to Behavior Tree').click();
+  if (await page.getByTestId('behavior-tree-panel').count() === 0) {
+    await page.getByLabel('Add workspace panel').first().click();
+    await page.getByRole('button', { name: 'Behavior tree', exact: true }).click();
+  }
   await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();
   await expect(page.getByTestId('bt-canvas')).toBeVisible();
 }
@@ -845,7 +848,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.ape-overlay')).toBeVisible();
   });
 
-  test('keeps execution alive in 3D view and exposes top-bar controls', async ({ page }) => {
+  test('keeps execution alive beside a 3D panel across responsive layouts', async ({ page }) => {
     await openBehaviorTree(page);
     await seedRunningActionTree(page);
 
@@ -869,34 +872,18 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
 
 
-    await page.getByLabel('Switch to 3D View').click();
-    const island = page.locator('.bt-execution-island');
-    await expect(island).toBeVisible();
-    await expect(island).toContainText('Long Action Tree');
-    await expect(island).toContainText('Navigate');
+    await page.getByLabel('Add workspace panel').first().click();
+    await page.getByRole('button', { name: '3D panel', exact: true }).click();
+    await expect(page.getByTestId('visualization-panel')).toBeVisible();
+    await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(island.locator('.bt-execution-pulse')).toBeVisible();
-    await expect(island.locator('.bt-execution-node')).toBeVisible();
-    const mobileIslandBox = await island.boundingBox();
-    const mobileReturnBox = await page.getByLabel('Open behavior tree').boundingBox();
-    const mobileToggleBox = await page.locator('.view-toggle').boundingBox();
-    expect(mobileIslandBox?.width).toBeGreaterThan(88);
-    expect(mobileIslandBox?.width).toBeLessThan(160);
-    expect(mobileReturnBox?.width).toBeGreaterThan(52);
-    expect(mobileReturnBox?.width).toBeLessThan(122);
-    expect(mobileToggleBox?.width).toBeLessThan(250);
-
-    await page.getByLabel('Open behavior tree').click();
     await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
     await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-    await page.getByLabel('Switch to 3D View').click();
-    await page.getByLabel('Stop behavior tree').click();
-    await expect(island).toHaveCount(0);
-
-    await page.getByLabel('Switch to Behavior Tree').click();
+    await page.getByTestId('bt-stop').click();
     await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).not.toHaveClass(/status-running/);
   });
