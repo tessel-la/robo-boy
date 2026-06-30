@@ -19,6 +19,7 @@ import {
   BehaviorTreeAgentSettings,
   BehaviorTreeResourceSchemas,
 } from '../agent/types';
+import BehaviorTreeAgentPreview from './BehaviorTreeAgentPreview';
 import './BehaviorTreeAgentPanel.css';
 
 interface BehaviorTreeAgentPanelProps {
@@ -93,6 +94,16 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     setProgress([]);
     setError('');
     setPrompt('');
+  };
+
+  const handleRejectProposal = () => {
+    setGeneratedTree(null);
+    setRawOutput('');
+    setProgress(previous => [...previous, 'Proposal rejected. Ready for your revision.']);
+    setConversation(previous => [
+      ...previous,
+      { role: 'assistant', content: 'Changes rejected. Tell me what to adjust and I’ll create a new proposal.' },
+    ]);
   };
 
   const handleDiscover = async () => {
@@ -288,15 +299,12 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
         {isGenerating && rawOutput && <pre className="bt-agent-stream" aria-label="Live model output">{rawOutput.slice(-1800)}</pre>}
 
-        {generatedTree && (
-          <div className="bt-agent-result">
-            <div><strong>{generatedTree.name}</strong><span>{generatedTree.nodes.length} nodes · {generatedTree.edges.length} connections</span></div>
-            <div>
-              <button type="button" className="secondary" onClick={() => onApply(generatedTree, 'subtree')}>Insert as subtree</button>
-              <button type="button" onClick={() => onApply(generatedTree, 'replace')}>Replace current tree</button>
-            </div>
-          </div>
-        )}
+        {generatedTree && <BehaviorTreeAgentPreview
+          tree={generatedTree}
+          baseline={currentTree}
+          onReject={handleRejectProposal}
+          onAccept={mode => onApply(generatedTree, mode)}
+        />}
       </section>
     </div>
   );
