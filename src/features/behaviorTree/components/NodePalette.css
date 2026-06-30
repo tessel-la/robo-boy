@@ -17,6 +17,83 @@
   transform-origin: top left;
 }
 
+.node-palette.is-resizing {
+  animation: none;
+  user-select: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 14%, transparent),
+    0 8px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.node-palette-resize-handle {
+  position: absolute;
+  z-index: 4;
+  width: 24px;
+  height: 24px;
+  border-color: color-mix(in srgb, var(--primary-color, #4285f4) 62%, transparent);
+  opacity: 0.48;
+  touch-action: none;
+  transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+}
+
+.node-palette-resize-handle::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: inherit;
+}
+
+.node-palette-resize-handle.nw { top: 0; left: 0; cursor: nw-resize; }
+.node-palette-resize-handle.ne { top: 0; right: 0; cursor: ne-resize; }
+.node-palette-resize-handle.sw { bottom: 0; left: 0; cursor: sw-resize; }
+.node-palette-resize-handle.se { right: 0; bottom: 0; cursor: se-resize; }
+
+.node-palette-resize-handle.nw::after {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-top-left-radius: 11px;
+}
+
+.node-palette-resize-handle.ne::after {
+  top: 0;
+  right: 0;
+  border-top: 2px solid;
+  border-right: 2px solid;
+  border-top-right-radius: 11px;
+}
+
+.node-palette-resize-handle.sw::after {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid;
+  border-left: 2px solid;
+  border-bottom-left-radius: 11px;
+}
+
+.node-palette-resize-handle.se::after {
+  right: 0;
+  bottom: 0;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+  border-bottom-right-radius: 11px;
+}
+
+.node-palette:hover .node-palette-resize-handle,
+.node-palette:focus-within .node-palette-resize-handle,
+.node-palette.is-resizing .node-palette-resize-handle {
+  opacity: 0.9;
+}
+
+.node-palette-resize-handle:hover {
+  border-color: var(--primary-color, #4285f4);
+  opacity: 1;
+  transform: scale(1.18);
+}
+
 .node-palette.disabled .palette-node {
   cursor: default;
   opacity: 0.45;
