@@ -98,11 +98,14 @@ State is intentionally local to the browser:
 | ---------------------------- | ------------------------- | --------------------------------- |
 | Active ROS connection        | `useRos`                  | Memory only                       |
 | Current view and open panels | `MainControlView`         | Memory only                       |
+| Mobile single/split panels   | `MainControlView`         | `localStorage`                    |
 | Panel split                  | `useResizablePanels`      | `localStorage`                    |
 | Themes                       | `App` and theme utilities | `localStorage`                    |
 | Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON |
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
+
+Visited mobile panel types remain mounted while hidden so transient editor and runtime state survives panel switches. Live ROS clients and executions are still session-only and are not serialized across app reloads.
 
 Persist domain definitions, not live ROS clients, Three.js objects, React state, or callbacks. Parse stored data defensively and provide defaults for newly introduced fields.
 

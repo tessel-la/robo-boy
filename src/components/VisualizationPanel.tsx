@@ -93,7 +93,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const viewerIdRef = useRef(`ros3d-viewer-${uuidv4()}`);
   const [initialState] = useState(() => {
     const savedState = getVisualizationStateForKey(storageKey);
     return {
@@ -384,21 +387,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // Effect to handle clicks outside the popups
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const settingsPopupElement = document.querySelector('.settings-popup');
-      const settingsButton = document.getElementById('viz-settings-button');
+      const settingsPopupElement = panelRef.current?.querySelector('.settings-popup');
+      const settingsButton = settingsButtonRef.current;
       if (isSettingsPopupOpen && settingsPopupElement && !settingsPopupElement.contains(event.target as Node) &&
         (!settingsButton || !settingsButton.contains(event.target as Node))) {
         setIsSettingsPopupOpen(false);
       }
-      const addVizModalElement = document.querySelector('.add-viz-modal');
-      const addVizButton = document.getElementById('add-viz-button');
+      const addVizModalElement = panelRef.current?.querySelector('.add-viz-modal');
+      const addVizButton = panelRef.current?.querySelector('#add-viz-button');
       if (isAddVizModalOpen && addVizModalElement && !addVizModalElement.contains(event.target as Node) &&
         (!addVizButton || !addVizButton.contains(event.target as Node))) {
         setIsAddVizModalOpen(false);
       }
 
       // Handle clicks outside the pointcloud settings popup
-      const pcSettingsElement = document.querySelector('.point-cloud-settings-popup');
+      const pcSettingsElement = panelRef.current?.querySelector('.point-cloud-settings-popup');
       if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
         setActiveSettingsVizId(null);
       }
@@ -474,7 +477,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // console.log(`--- VisualizationPanel Render End ---`);
 
   return (
-    <div className="visualization-panel">
+    <div className="visualization-panel" ref={panelRef}>
       {/* Render Visualization Wrapper Components */}
       {visualizations.map((viz: VisualizationConfig) => {
         if (viz.type === 'pointcloud') {
@@ -557,11 +560,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
       })}
 
       {/* Main Viewer Div */}
-      <div ref={viewerRef} className="viewer-container" id="ros3d-viewer-container"></div>
+      <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
 
       {/* Settings Button */}
       <button
-        id="viz-settings-button"
+        ref={settingsButtonRef}
         className="icon-button visualization-settings-button"
         onClick={toggleSettingsPopup}
         title="Settings"
@@ -592,6 +595,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           allTopics={allTopics}
           tfAxesScale={tfAxesScale}
           onTfAxesScaleChange={(newScale: number) => setTfAxesScale(newScale)}
+          toggleButtonRef={settingsButtonRef}
         />
       )}
 

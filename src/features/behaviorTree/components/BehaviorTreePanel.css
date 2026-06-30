@@ -6,6 +6,7 @@
   background: var(--background-color, #fafafa);
   overflow: hidden;
   position: relative; /* anchor for parameter editor overlay */
+  container-type: inline-size;
 }
 
 .bt-content {
@@ -25,7 +26,7 @@
   position: absolute;
   top: 58px;
   left: 50%;
-  z-index: 360;
+  z-index: 460;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -35,7 +36,9 @@
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.08);
   color: var(--text-color, #333333);
   pointer-events: auto;
   animation: bt-save-toast-in 0.22s ease-out;
@@ -134,7 +137,9 @@
 
 .react-flow__edge-path {
   stroke: var(--primary-color, #4285f4);
-  transition: stroke-width 0.16s ease, filter 0.16s ease;
+  transition:
+    stroke-width 0.16s ease,
+    filter 0.16s ease;
 }
 
 .react-flow__edge-interaction {
@@ -144,9 +149,7 @@
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: #ffb300 !important;
   stroke-width: 5 !important;
-  filter: drop-shadow(
-    0 0 5px color-mix(in srgb, #ffb300 72%, transparent)
-  );
+  filter: drop-shadow(0 0 5px color-mix(in srgb, #ffb300 72%, transparent));
 }
 
 .react-flow__edge.selected .react-flow__edge-text {
@@ -487,7 +490,10 @@
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .bt-selection-action svg {
@@ -554,7 +560,10 @@
   font-size: 12px;
   font-weight: 800;
   backdrop-filter: blur(10px);
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .bt-subtree-parent-action svg {
@@ -791,10 +800,14 @@
     display: none;
   }
 
-  /* Controls stay in default bottom-left — palette sheet floats above */
   .react-flow__controls {
-    bottom: 10px;
-    left: 10px;
+    display: none;
+  }
+}
+
+@container (max-width: 700px) {
+  .behavior-tree-panel .react-flow__controls {
+    display: none;
   }
 }
 

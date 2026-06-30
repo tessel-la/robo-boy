@@ -57,4 +57,25 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.getByLabelText('Show frame labels')).not.toBeChecked();
     expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!)).toEqual(savedState);
   });
+
+  it('gives every mounted viewer its own DOM target', () => {
+    const ros = {
+      isConnected: true,
+      getTopics: (onSuccess: (response: { topics: string[]; types: string[] }) => void) => {
+        onSuccess({ topics: [], types: [] });
+      },
+    };
+
+    const { container } = render(
+      <>
+        <VisualizationPanel ros={ros as any} storageKey="viewer-one" />
+        <VisualizationPanel ros={ros as any} storageKey="viewer-two" />
+      </>
+    );
+    const viewerIds = Array.from(container.querySelectorAll('.viewer-container')).map(element => element.id);
+
+    expect(viewerIds).toHaveLength(2);
+    expect(new Set(viewerIds).size).toBe(2);
+    expect(viewerIds.every(id => id.startsWith('ros3d-viewer-'))).toBe(true);
+  });
 });

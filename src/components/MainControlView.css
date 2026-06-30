@@ -1211,6 +1211,10 @@ body.no-scroll {
     background: #a78bfa;
 }
 
+.workspace-card-dot-tfTree {
+    background: #14b8a6;
+}
+
 .workspace-card-dot-view {
     background: #22c55e;
 }
@@ -1271,7 +1275,7 @@ body.no-scroll {
 .workspace-pad-selector {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 34px;
+    grid-template-columns: auto minmax(0, 1fr) 34px 34px;
     align-items: center;
     column-gap: 10px;
     min-height: 48px;
@@ -1336,7 +1340,7 @@ body.no-scroll {
     white-space: nowrap;
 }
 
-.workspace-pad-create-button {
+.workspace-pad-action-button {
     width: 34px;
     height: 34px;
     min-width: 34px;
@@ -1354,19 +1358,24 @@ body.no-scroll {
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.workspace-pad-create-button:hover {
+.workspace-pad-action-button:hover:not(:disabled) {
     border-color: var(--primary-color);
     background: color-mix(in srgb, var(--primary-color) 10%, var(--background-color));
     color: var(--primary-color);
 }
 
-.workspace-pad-create-button:focus-visible {
+.workspace-pad-action-button:focus-visible {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
-.workspace-pad-create-button svg {
+.workspace-pad-action-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.workspace-pad-action-button svg {
     display: block;
     width: 15px;
     height: 15px;
@@ -1445,6 +1454,152 @@ body.no-scroll {
     padding: 0;
 }
 
+/* Touch-first mobile single/split panels */
+.mobile-workspace {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.mobile-workspace-window {
+    width: 100%;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+}
+
+.mobile-workspace.is-split .mobile-workspace-window.is-active {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 38%, transparent);
+}
+
+.mobile-workspace-window-header {
+    height: 34px;
+    min-height: 34px;
+    box-sizing: border-box;
+    padding: 2px 4px;
+}
+
+.mobile-workspace-window-selector {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: left;
+}
+
+.mobile-workspace-window-selector > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-workspace-window-selector[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}
+
+.mobile-workspace-active-label {
+    margin-left: auto;
+    color: var(--primary-color);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.mobile-workspace-window-selector:focus-visible,
+.mobile-workspace-swap-button:focus-visible {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.mobile-workspace-swap-button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--background-color);
+    color: var(--text-secondary);
+}
+
+.mobile-workspace-swap-button:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.mobile-workspace-swap-button svg {
+    width: 15px;
+    height: 15px;
+    transform: rotate(90deg);
+}
+
+.mobile-workspace .camera-stream-container .error-message {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+}
+
+.mobile-workspace .workspace-pad-body {
+    box-sizing: border-box;
+    padding: 0 8px 6px;
+    overflow: hidden;
+}
+
+.mobile-workspace .custom-gamepad-layout,
+.mobile-workspace .custom-gamepad-layout > div {
+    overflow: visible !important;
+}
+
+.mobile-workspace .custom-gamepad-layout {
+    width: calc(100% - 24px);
+    margin-inline: auto;
+}
+
+.mobile-workspace-window .workspace-card-content > .camera-view,
+.mobile-workspace-window .workspace-card-content > .visualization-panel,
+.mobile-workspace-window .workspace-card-content > .tf-tree-panel,
+.mobile-workspace-window .workspace-card-content > .behavior-tree-panel {
+    width: 100%;
+    height: 100%;
+}
+
+.mobile-workspace-panel-slot {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    overflow: hidden;
+}
+
+.mobile-workspace-panel-slot > .camera-view,
+.mobile-workspace-panel-slot > .visualization-panel,
+.mobile-workspace-panel-slot > .tf-tree-panel,
+.mobile-workspace-panel-slot > .behavior-tree-panel,
+.mobile-workspace-panel-slot > .workspace-pad-component {
+    width: 100%;
+    height: 100%;
+}
+
 /* Responsive Adjustments for new layout */
 @media (max-width: 768px) { 
     .main-content-area {
@@ -1477,8 +1632,44 @@ body.no-scroll {
 }
 
 @media (max-width: 1023px) {
+    .top-bar .view-toggle {
+        gap: 1px;
+        padding: 3px;
+    }
+
+    .top-bar .view-toggle > button {
+        padding: 3px 4px;
+    }
+
+    .top-bar .view-toggle > button svg {
+        width: 16px;
+        height: 16px;
+    }
+
     .layout-controls {
+        display: flex;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .layout-controls .workspace-tile-button {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        padding: 4px;
+    }
+}
+
+@media (max-width: 420px) {
+    .mobile-workspace-active-label {
         display: none;
+    }
+}
+
+@media (max-width: 350px) {
+    .mobile-workspace .joystick-component {
+        transform: scale(0.82);
     }
 }
 
