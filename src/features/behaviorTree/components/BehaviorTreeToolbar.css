@@ -331,6 +331,12 @@
   transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
 }
 
+/* The shared tree menu hides resize handles in narrow containers. BT menus
+   remain resizable at every panel size, including the mobile layout. */
+.tree-panel-menu-resize-handle.bt-menu-resize-handle {
+  display: block;
+}
+
 .bt-menu-resize-handle::after {
   content: "";
   position: absolute;

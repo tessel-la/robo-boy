@@ -16,6 +16,15 @@ import {
 } from '../types';
 import './NodePalette.css';
 
+type PaletteResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
+
+interface PaletteFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 // ─── Palette icons ────────────────────────────────────────────────────────────
 
 const IconChevronDown = () => (
@@ -187,6 +196,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
+  const [paletteFrame, setPaletteFrame] = useState<PaletteFrame | null>(null);
+  const [activeResizeCorner, setActiveResizeCorner] = useState<PaletteResizeCorner | null>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
   // Use a ref for drag state — avoids the async gap where state update +
@@ -198,7 +209,11 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   React.useEffect(() => {
     const mq = window.matchMedia(MOBILE_BREAKPOINT);
     setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    const handler = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+      setPaletteFrame(null);
+      setSheetHeight(null);
+    };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
@@ -289,6 +304,83 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       handle.removeEventListener('touchstart', onTouchStart);
     };
   }, [isMobile, isCollapsed]);
+
+  const handleCornerResizeStart = (
+    corner: PaletteResizeCorner,
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    const palette = paletteRef.current;
+    const parent = palette?.parentElement;
+    if (!palette || !parent) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const parentRect = parent.getBoundingClientRect();
+    const paletteRect = palette.getBoundingClientRect();
+    const startFrame: PaletteFrame = {
+      left: paletteRect.left - parentRect.left,
+      top: paletteRect.top - parentRect.top,
+      width: paletteRect.width,
+      height: paletteRect.height,
+    };
+    const startRight = startFrame.left + startFrame.width;
+    const startBottom = startFrame.top + startFrame.height;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const margin = 12;
+    const minWidth = Math.min(240, Math.max(0, parentRect.width - margin * 2));
+    const minHeight = Math.min(180, Math.max(0, parentRect.height - margin * 2));
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setPaletteFrame(startFrame);
+    setActiveResizeCorner(corner);
+    document.body.style.cursor = `${corner}-resize`;
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      let left = startFrame.left;
+      let right = startRight;
+      let top = startFrame.top;
+      let bottom = startBottom;
+
+      if (corner.includes('w')) {
+        left = Math.min(Math.max(startFrame.left + deltaX, margin), startRight - minWidth);
+      } else {
+        right = Math.max(
+          Math.min(startRight + deltaX, parentRect.width - margin),
+          startFrame.left + minWidth
+        );
+      }
+
+      if (corner.includes('n')) {
+        top = Math.min(Math.max(startFrame.top + deltaY, margin), startBottom - minHeight);
+      } else {
+        bottom = Math.max(
+          Math.min(startBottom + deltaY, parentRect.height - margin),
+          startFrame.top + minHeight
+        );
+      }
+
+      setPaletteFrame({ left, top, width: right - left, height: bottom - top });
+    };
+
+    const handlePointerUp = () => {
+      setActiveResizeCorner(null);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
 
   const CONTROL_ICONS: Record<string, React.ReactNode> = {
     Sequence: <IconSequence />,
@@ -397,11 +489,17 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   return (
     <div
-      className={`node-palette${isMobile ? ' mobile-sheet' : ''}${isDisabled ? ' disabled' : ''}`}
+      className={`node-palette${isMobile ? ' mobile-sheet' : ''}${isDisabled ? ' disabled' : ''}${activeResizeCorner ? ' is-resizing' : ''}`}
       ref={paletteRef}
       data-testid="bt-node-palette"
       aria-disabled={isDisabled}
-      style={isMobile && sheetHeight !== null ? { height: sheetHeight } : undefined}
+      style={
+        paletteFrame
+          ? { ...paletteFrame, right: 'auto', bottom: 'auto', maxWidth: 'none', maxHeight: 'none' }
+          : isMobile && sheetHeight !== null
+            ? { height: sheetHeight }
+            : undefined
+      }
     >
       {isMobile && (
         <div
@@ -681,6 +779,15 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         </div>
       )}
       </div>{/* end palette-body */}
+      {(['nw', 'ne', 'sw', 'se'] as const).map(corner => (
+        <div
+          key={corner}
+          className={`node-palette-resize-handle ${corner}`}
+          role="separator"
+          aria-label={`Resize available nodes from ${corner} corner`}
+          onPointerDown={event => handleCornerResizeStart(corner, event)}
+        />
+      ))}
     </div>
   );
 };

@@ -13,6 +13,17 @@ vi.mock('../services/rosDiscovery', () => ({
   discoverAllROSResources: discoveryMock,
 }));
 
+const firePointerAt = (target: Element | Window, type: string, clientX: number, clientY: number) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    pointerId: { value: 1 },
+    pointerType: { value: 'mouse' },
+  });
+  fireEvent(target, event);
+};
+
 describe('NodePalette', () => {
   const defaultProps = {
     ros: null,
@@ -60,6 +71,26 @@ describe('NodePalette', () => {
   it('does not throw when onAddNode is not provided and item is clicked', () => {
     render(<NodePalette {...defaultProps} />);
     expect(() => fireEvent.click(screen.getByText('Sequence'))).not.toThrow();
+  });
+
+  it('resizes the available nodes palette from its corners', () => {
+    render(<NodePalette {...defaultProps} />);
+
+    const palette = screen.getByTestId('bt-node-palette');
+    const parent = palette.parentElement as HTMLElement;
+    parent.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 600, bottom: 500, width: 600, height: 500 } as DOMRect);
+    palette.getBoundingClientRect = () =>
+      ({ left: 12, top: 62, right: 292, bottom: 362, width: 280, height: 300 } as DOMRect);
+
+    expect(screen.getAllByLabelText(/Resize available nodes from .* corner/)).toHaveLength(4);
+    firePointerAt(screen.getByLabelText('Resize available nodes from se corner'), 'pointerdown', 292, 362);
+    firePointerAt(window, 'pointermove', 352, 402);
+
+    expect(palette).toHaveStyle({ width: '340px', height: '340px' });
+
+    firePointerAt(window, 'pointerup', 352, 402);
+    expect(document.body.style.cursor).toBe('');
   });
 
   it('uses one search to filter actions, services, and topics by name and type', async () => {
