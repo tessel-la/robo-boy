@@ -18,6 +18,15 @@
 .bt-agent-context-row { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--text-secondary, #68707c); font-size: 11px; }
 .bt-agent-context-row button, .bt-agent-form button, .bt-agent-result button { border: 0; border-radius: 8px; padding: 9px 12px; background: var(--primary-color, #4285f4); color: #fff; font-weight: 700; cursor: pointer; }
 .bt-agent-context-row button { background: color-mix(in srgb, var(--primary-color, #4285f4) 12%, transparent); color: var(--primary-color, #4285f4); }
+.bt-agent-tree-context { margin: 14px 0; padding: 12px; border: 1px solid var(--border-color, #dfe3e8); border-radius: 10px; }
+.bt-agent-context-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 9px; font-size: 12px; }
+.bt-agent-context-heading span, .bt-agent-tree-context p { color: var(--text-secondary, #68707c); font-size: 10px; }
+.bt-agent-context-options { display: flex; gap: 6px; }
+.bt-agent-context-options button { flex: 1; padding: 8px; border: 1px solid var(--border-color, #dfe3e8); border-radius: 8px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.bt-agent-context-options button.active { border-color: var(--primary-color, #4285f4); background: color-mix(in srgb, var(--primary-color, #4285f4) 10%, transparent); color: var(--primary-color, #4285f4); font-weight: 700; }
+.bt-agent-context-options button:disabled { opacity: .35; }
+.bt-agent-context-options button span { display: inline-flex; justify-content: center; min-width: 17px; margin-left: 3px; padding: 1px 4px; border-radius: 9px; background: var(--hover-bg, #eef1f5); }
+.bt-agent-tree-context p { margin: 8px 0 0; }
 .bt-agent-chat { display: grid; gap: 10px; margin: 14px 0; }
 .bt-agent-message { max-width: 88%; }
 .bt-agent-message.user { justify-self: end; text-align: right; }
@@ -30,6 +39,7 @@
 .bt-agent-form { display: grid; gap: 8px; }
 .bt-agent-form textarea { min-height: 112px; font-size: 14px; line-height: 1.45; }
 .bt-agent-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.bt-agent-gate { align-self: center; margin-right: auto; color: var(--text-secondary, #68707c); font-size: 10px; }
 .bt-agent-panel button.secondary { background: transparent; color: var(--text-color, #333); border: 1px solid var(--border-color, #ddd); }
 .bt-agent-process { margin-top: 16px; padding: 13px; border-radius: 10px; background: var(--hover-bg, #f5f7fa); font-size: 12px; }
 .bt-agent-process > div { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-secondary, #68707c); }

@@ -316,6 +316,7 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByTestId('bt-open-agent'));
     expect(screen.getByTestId('bt-agent-panel')).toBeInTheDocument();
     expect(screen.getByLabelText('Describe the behavior')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();

@@ -30,7 +30,7 @@ export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest):
     `Available ROS resources:\n${JSON.stringify(resourceContext)}`,
     `Action and service input schemas (keyed by ROS type):\n${JSON.stringify(request.resourceSchemas)}`,
     request.settings.includeCurrentTree && request.currentTree
-      ? `Current tree to improve or use as context:\n${JSON.stringify(request.currentTree)}`
+      ? `Behavior-tree context selected by the user:\n${JSON.stringify(request.currentTree)}`
       : '',
     request.conversation?.length
       ? `Conversation so far:\n${request.conversation.map(message => `${message.role}: ${message.content}`).join('\n')}`

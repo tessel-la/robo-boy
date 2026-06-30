@@ -2047,6 +2047,21 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
+  const selectedTreeContext = useMemo<BehaviorTree | null>(() => {
+    if (!currentTree || selectedNodes.length === 0) return null;
+    const selectedIds = new Set(selectedNodes.map(node => node.id));
+    const contextNodes = behaviorNodes.filter(node => selectedIds.has(node.id));
+    if (contextNodes.length === 0) return null;
+
+    return {
+      ...currentTree,
+      id: `${currentTree.id}-selection`,
+      name: `${currentTree.name} — selected part`,
+      description: `Selected context from ${currentTree.name}`,
+      nodes: contextNodes,
+      edges: edges.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)),
+    };
+  }, [behaviorNodes, currentTree, edges, selectedNodes]);
   const displayedEdges = useMemo(() => {
     const nodeStatusById = new Map(
       behaviorNodes.map((node) => [node.id, node.data.status ?? ExecutionStatus.Idle])
@@ -2923,6 +2938,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         ros={ros}
         isConnected={isConnected}
         currentTree={currentTree}
+        selectedTreeContext={selectedTreeContext}
         onClose={() => setIsAgentOpen(false)}
         onApply={(tree, mode) => {
           if (mode === 'replace') {

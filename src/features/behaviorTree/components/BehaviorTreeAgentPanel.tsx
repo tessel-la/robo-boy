@@ -26,6 +26,7 @@ interface BehaviorTreeAgentPanelProps {
   ros: Ros | null;
   isConnected: boolean;
   currentTree: BehaviorTree | null;
+  selectedTreeContext: BehaviorTree | null;
   onClose: () => void;
   onApply: (tree: BehaviorTree, mode: 'replace' | 'subtree') => void;
 }
@@ -39,6 +40,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   ros,
   isConnected,
   currentTree,
+  selectedTreeContext,
   onClose,
   onApply,
 }) => {
@@ -55,12 +57,18 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [treeContextMode, setTreeContextMode] = useState<'open' | 'selection' | 'none'>('open');
   const abortRef = useRef<AbortController | null>(null);
   const outputRef = useRef('');
 
   useEffect(() => {
     if (!open) abortRef.current?.abort();
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTreeContextMode(selectedTreeContext?.nodes.length ? 'selection' : currentTree ? 'open' : 'none');
+  }, [currentTree, open, selectedTreeContext]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -122,6 +130,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       setError(`Add an API key for ${settings.provider} before generating.`);
       return;
     }
+    const actionableResourceCount = resources.actions.length + resources.services.length;
+    if (actionableResourceCount === 0) {
+      setError('Scan ROS first. At least one action or service must be available before generation.');
+      return;
+    }
     const userMessage = prompt.trim();
     const previousConversation = conversation;
     setConversation(previous => [...previous, { role: 'user', content: userMessage }]);
@@ -140,8 +153,8 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       const result = await generateBehaviorTree({
         prompt: userMessage,
         conversation: previousConversation,
-        settings,
-        currentTree,
+        settings: { ...settings, includeCurrentTree: treeContextMode !== 'none' },
+        currentTree: treeContextMode === 'selection' ? selectedTreeContext : treeContextMode === 'open' ? currentTree : null,
         rosResources: resources,
         resourceSchemas,
         signal: controller.signal,
@@ -176,7 +189,9 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
   if (!open) return null;
   const resourceCount = resources.actions.length + resources.services.length + resources.topics.length;
+  const actionableResourceCount = resources.actions.length + resources.services.length;
   const schemaCount = Object.keys(resourceSchemas.actions).length + Object.keys(resourceSchemas.services).length;
+  const canGenerate = Boolean(prompt.trim()) && !isGenerating && actionableResourceCount > 0;
 
   return (
     <div className="bt-agent-overlay" role="dialog" aria-modal="true" aria-label="AI behavior tree agent">
@@ -211,13 +226,29 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
             <p className="bt-agent-key-note">Settings stay in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.</p>
             <label className="bt-agent-wide">Agent instructions<textarea rows={2} value={settings.systemContext} onChange={event => updateSettings({ systemContext: event.target.value })} placeholder="Safety constraints, preferred BT conventions…" /></label>
             <label className="bt-agent-wide">Robot / mission context<textarea rows={3} value={settings.robotContext} onChange={event => updateSettings({ robotContext: event.target.value })} placeholder="Robot capabilities, frames, operational rules…" /></label>
-            <label className="bt-agent-check bt-agent-wide"><input type="checkbox" checked={settings.includeCurrentTree} onChange={event => updateSettings({ includeCurrentTree: event.target.checked })} /> Include the current tree as context</label>
           </div>
         )}
 
         <div className="bt-agent-context-row">
           <button type="button" onClick={handleDiscover} disabled={!isConnected || isDiscovering}>{isDiscovering ? 'Reading action inputs…' : 'Scan ROS actions'}</button>
           <span>{resourceCount > 0 ? `${resourceCount} resources · ${schemaCount} input schemas` : isConnected ? 'No ROS resources scanned' : 'Connect ROS to scan resources'}</span>
+        </div>
+
+        <div className="bt-agent-tree-context">
+          <div className="bt-agent-context-heading">
+            <strong>Tree context</strong>
+            <span>Choose what the agent can see</span>
+          </div>
+          <div className="bt-agent-context-options" role="group" aria-label="Behavior tree context">
+            <button type="button" className={treeContextMode === 'open' ? 'active' : ''} onClick={() => setTreeContextMode('open')} disabled={!currentTree} aria-pressed={treeContextMode === 'open'}>
+              Open tree <span>{currentTree?.nodes.length ?? 0}</span>
+            </button>
+            <button type="button" className={treeContextMode === 'selection' ? 'active' : ''} onClick={() => setTreeContextMode('selection')} disabled={!selectedTreeContext?.nodes.length} aria-pressed={treeContextMode === 'selection'}>
+              Selected part <span>{selectedTreeContext?.nodes.length ?? 0}</span>
+            </button>
+            <button type="button" className={treeContextMode === 'none' ? 'active' : ''} onClick={() => setTreeContextMode('none')} aria-pressed={treeContextMode === 'none'}>None</button>
+          </div>
+          {treeContextMode === 'selection' && selectedTreeContext && <p>Using only the {selectedTreeContext.nodes.length} selected node{selectedTreeContext.nodes.length === 1 ? ' and its' : 's and their'} internal connections.</p>}
         </div>
 
         {conversation.length > 0 && (
@@ -241,8 +272,9 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           <label htmlFor="bt-agent-prompt">{clarification ? 'Your answer' : conversation.length > 0 ? 'Continue the conversation' : 'Describe the behavior'}</label>
           <textarea id="bt-agent-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} rows={clarification ? 3 : 5} autoFocus placeholder={clarification ? 'For example: relative x 0.5 m, y -0.2 m, keep current yaw.' : 'Example: Move 0.5 m forward and 0.2 m left, then capture an image. Retry movement twice.'} />
           <div className="bt-agent-form-actions">
+            {actionableResourceCount === 0 && <span className="bt-agent-gate">Scan at least one action or service to continue.</span>}
             {isGenerating && <button type="button" className="secondary" onClick={() => abortRef.current?.abort()}>Stop</button>}
-            <button type="submit" disabled={!prompt.trim() || isGenerating}>{isGenerating ? 'Thinking…' : clarification ? 'Send answer' : 'Generate tree'}</button>
+            <button type="submit" disabled={!canGenerate}>{isGenerating ? 'Thinking…' : clarification ? 'Send answer' : 'Generate tree'}</button>
           </div>
         </form>
 
