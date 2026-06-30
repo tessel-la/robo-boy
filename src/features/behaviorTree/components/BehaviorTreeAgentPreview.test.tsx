@@ -29,6 +29,13 @@ describe('BehaviorTreeAgentPreview', () => {
     expect(screen.getByText('Assumes relative movement.')).toBeInTheDocument();
     expect(screen.getByText('/move')).toBeInTheDocument();
     expect(screen.getByText('/capture')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move, changed' }));
+    expect(screen.getByText('changed · action')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Current' }));
+    expect(screen.getByRole('button', { name: 'Current' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('requires an explicit accept mode or rejection', () => {
