@@ -1005,3 +1005,5 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }
+.bt-blackboard-editor { width: 100%; min-height: 110px; box-sizing: border-box; resize: vertical; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--background-color); color: var(--text-color); font: 0.72rem/1.4 monospace; }
+.bt-blackboard-error { margin-top: 4px; color: var(--error-color, #d32f2f); font-size: 0.7rem; }

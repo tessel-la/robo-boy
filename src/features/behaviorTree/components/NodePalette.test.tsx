@@ -127,6 +127,28 @@ describe('NodePalette', () => {
 
     expect(onAddNode).toHaveBeenCalledWith(BehaviorNodeType.Action, action);
   });
+
+  it('offers discovered topics as separate publisher and subscriber nodes', async () => {
+    const topic = { name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' };
+    const onAddNode = vi.fn();
+    discoveryMock.mockResolvedValue({ actions: [], services: [], topics: [topic] });
+    render(
+      <NodePalette
+        {...defaultProps}
+        ros={{} as Ros}
+        isConnected
+        onAddNode={onAddNode}
+      />
+    );
+
+    fireEvent.click(await screen.findByText('ROS Topics'));
+    expect(screen.getByText('Publisher - geometry_msgs/msg/Twist')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('/cmd_vel'));
+    fireEvent.click(screen.getByText('Subscribe /cmd_vel'));
+
+    expect(onAddNode).toHaveBeenNthCalledWith(1, BehaviorNodeType.Topic, topic);
+    expect(onAddNode).toHaveBeenNthCalledWith(2, BehaviorNodeType.Subscriber, topic);
+  });
 });
 
 describe('NodePalette mobile sheet', () => {

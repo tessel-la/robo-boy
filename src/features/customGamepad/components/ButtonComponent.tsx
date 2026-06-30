@@ -4,6 +4,7 @@ import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import { buildTwistPayload } from '../rosMessageUtils';
+import { executeRosOperation } from '../../../utils/rosOperations';
 
 interface ButtonComponentProps {
   config: GamepadComponentConfig;
@@ -18,6 +19,29 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
   const topicRef = useRef<Topic | null>(null);
   const [isPressed, setIsPressed] = useState(false);
   const [toggleState, setToggleState] = useState(false);
+  const [operationStatus, setOperationStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const operationControllers = useRef(new Map<'press' | 'release', AbortController>());
+
+  const runOperation = useCallback(async (event: 'press' | 'release') => {
+    const operation = config.eventOperations?.[event];
+    if (!operation || isEditing || operationControllers.current.has(event)) return;
+    const controller = new AbortController();
+    operationControllers.current.set(event, controller);
+    setOperationStatus('pending');
+    try {
+      await executeRosOperation(ros, operation, controller.signal);
+      setOperationStatus('success');
+    } catch {
+      if (!controller.signal.aborted) setOperationStatus('error');
+    } finally {
+      operationControllers.current.delete(event);
+    }
+  }, [config.eventOperations, isEditing, ros]);
+
+  useEffect(() => () => {
+    operationControllers.current.forEach(controller => controller.abort());
+    operationControllers.current.clear();
+  }, []);
 
   const publishMessage = useCallback((pressed: boolean) => {
     if (!topicRef.current || isEditing) return;
@@ -77,7 +101,7 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
   );
 
   useEffect(() => {
-    if (!config.action || isEditing) return;
+    if (!config.action || config.eventOperations || isEditing) return;
 
     const action = config.action as ROSTopicConfig;
     if (!action.topic || !action.messageType) return;
@@ -94,7 +118,7 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, isEditing, publishThrottled]);
+  }, [ros, config.action, config.eventOperations, isEditing, publishThrottled]);
 
   const handlePointerDown = useCallback(() => {
     if (isEditing) return;
@@ -103,14 +127,16 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     
     if (isMomentary) {
       setIsPressed(true);
-      publishThrottled(true);
+      if (config.eventOperations) void runOperation('press');
+      else publishThrottled(true);
     } else {
       // Toggle behavior
       const newState = !toggleState;
       setToggleState(newState);
-      publishThrottled(newState);
+      if (config.eventOperations) void runOperation(newState ? 'press' : 'release');
+      else publishThrottled(newState);
     }
-  }, [config.config?.momentary, toggleState, publishThrottled, isEditing]);
+  }, [config.config?.momentary, config.eventOperations, toggleState, publishThrottled, runOperation, isEditing]);
 
   const handlePointerUp = useCallback(() => {
     if (isEditing) return;
@@ -119,10 +145,11 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     
     if (isMomentary) {
       setIsPressed(false);
-      publishThrottled(false);
+      if (config.eventOperations) void runOperation('release');
+      else publishThrottled(false);
     }
     // For toggle buttons, we don't do anything on pointer up
-  }, [config.config?.momentary, publishThrottled, isEditing]);
+  }, [config.config?.momentary, config.eventOperations, publishThrottled, runOperation, isEditing]);
 
   const handlePointerLeave = useCallback(() => {
     if (isEditing) return;
@@ -131,9 +158,10 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     
     if (isMomentary && isPressed) {
       setIsPressed(false);
-      publishThrottled(false);
+      if (config.eventOperations) void runOperation('release');
+      else publishThrottled(false);
     }
-  }, [config.config?.momentary, isPressed, publishThrottled, isEditing]);
+  }, [config.config?.momentary, config.eventOperations, isPressed, publishThrottled, runOperation, isEditing]);
 
   const isMomentary = config.config?.momentary !== false;
   const isActive = isMomentary ? isPressed : toggleState;
@@ -165,14 +193,17 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
 
   return (
     <button
-      className={`button-component ${isMomentary ? 'momentary' : 'toggle'} ${isActive ? 'active' : ''}`}
+      className={`button-component ${isMomentary ? 'momentary' : 'toggle'} ${isActive ? 'active' : ''} operation-${operationStatus}`}
       style={buttonStyle}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerLeave}
       disabled={isEditing}
     >
-      {config.label || 'Button'}
+      <span>{config.label || 'Button'}</span>
+      <span className="component-operation-status" role="status" aria-live="polite">
+        {operationStatus === 'pending' ? 'Calling' : operationStatus === 'error' ? 'Failed' : ''}
+      </span>
     </button>
   );
 };

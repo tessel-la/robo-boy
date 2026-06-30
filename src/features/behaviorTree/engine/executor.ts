@@ -11,9 +11,19 @@ import {
   ROSServiceNodeData,
   SubtreeNodeData,
   ROSTopicNodeData,
+  ROSSubscriberNodeData,
+  TimeoutNodeData,
+  IfElseNodeData,
 } from '../types';
 import { ACTION_TEMPLATES } from '../actionTemplates';
 import { ActionFieldSchema, fetchActionGoalDetails } from '../services/rosDiscovery';
+import {
+  Blackboard,
+  applyInputBindings,
+  applyOutputBindings,
+  createBlackboard,
+  evaluateBlackboardValue,
+} from '../blackboard';
 
 // Tracks an in-flight ROS2 action goal so stop()/timeout can cancel it via
 // rosbridge's action protocol.
@@ -243,6 +253,7 @@ export class BehaviorTreeExecutor {
   private readonly rootPath: string[];
   private pausePromise: Promise<void> | null;
   private resolvePause: (() => void) | null;
+  private blackboard: Blackboard;
 
   constructor(tree: BehaviorTree, ros: Ros, callback: ExecutionCallback) {
     this.tree = tree;
@@ -256,6 +267,7 @@ export class BehaviorTreeExecutor {
     this.rootPath = [];
     this.pausePromise = null;
     this.resolvePause = null;
+    this.blackboard = createBlackboard(tree.blackboardDefaults);
 
     // Initialize all nodes to idle status
     tree.nodes.forEach(node => {
@@ -275,6 +287,7 @@ export class BehaviorTreeExecutor {
     this.isRunning = true;
     this.isPaused = false;
     this.abortController = new AbortController();
+    this.blackboard = createBlackboard(this.tree.blackboardDefaults);
 
     this.emitEvent({
       type: 'started',
@@ -382,6 +395,19 @@ export class BehaviorTreeExecutor {
     return new Map(this.nodeStatuses);
   }
 
+  public getBlackboard(): Record<string, unknown> {
+    return Object.fromEntries(this.blackboard);
+  }
+
+  private emitBlackboardUpdate(changedVariables: string[]): void {
+    if (changedVariables.length === 0) return;
+    this.emitEvent({
+      type: 'blackboardUpdated',
+      timestamp: Date.now(),
+      data: { changedVariables, blackboard: this.getBlackboard() },
+    });
+  }
+
   private getExecutionNodeKey(nodeId: string, treePath: string[]): string {
     return `${treePath.join('/') || 'root'}::${nodeId}`;
   }
@@ -406,6 +432,8 @@ export class BehaviorTreeExecutor {
         n.type === BehaviorNodeType.Parallel ||
         n.type === BehaviorNodeType.Retry ||
         n.type === BehaviorNodeType.Repeat
+        || n.type === BehaviorNodeType.Timeout
+        || n.type === BehaviorNodeType.IfElse
     );
     return controlRoot ?? roots[0] ?? null;
   }
@@ -436,10 +464,11 @@ export class BehaviorTreeExecutor {
   private async executeNode(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal: AbortSignal | undefined = this.abortController?.signal
   ): Promise<ExecutionStatus> {
     await this.waitWhilePaused();
-    if (!this.isRunning) {
+    if (!this.isRunning || signal?.aborted) {
       return ExecutionStatus.Failure;
     }
 
@@ -450,31 +479,40 @@ export class BehaviorTreeExecutor {
 
       switch (node.type) {
         case BehaviorNodeType.Sequence:
-          result = await this.executeSequence(node, tree, treePath);
+          result = await this.executeSequence(node, tree, treePath, signal);
           break;
         case BehaviorNodeType.Selector:
-          result = await this.executeSelector(node, tree, treePath);
+          result = await this.executeSelector(node, tree, treePath, signal);
           break;
         case BehaviorNodeType.Parallel:
-          result = await this.executeParallel(node, tree, treePath);
+          result = await this.executeParallel(node, tree, treePath, signal);
           break;
         case BehaviorNodeType.Retry:
-          result = await this.executeRetry(node, tree, treePath);
+          result = await this.executeRetry(node, tree, treePath, signal);
           break;
         case BehaviorNodeType.Repeat:
-          result = await this.executeRepeat(node, tree, treePath);
+          result = await this.executeRepeat(node, tree, treePath, signal);
+          break;
+        case BehaviorNodeType.Timeout:
+          result = await this.executeTimeout(node, tree, treePath, signal);
+          break;
+        case BehaviorNodeType.IfElse:
+          result = await this.executeIfElse(node, tree, treePath, signal);
           break;
         case BehaviorNodeType.Subtree:
-          result = await this.executeSubtreeNode(node, treePath);
+          result = await this.executeSubtreeNode(node, treePath, signal);
           break;
         case BehaviorNodeType.Action:
-          result = await this.executeActionNode(node);
+          result = await this.executeActionNode(node, signal);
           break;
         case BehaviorNodeType.Service:
-          result = await this.executeServiceNode(node);
+          result = await this.executeServiceNode(node, signal);
           break;
         case BehaviorNodeType.Topic:
-          result = await this.executeTopicNode(node);
+          result = await this.executeTopicNode(node, signal);
+          break;
+        case BehaviorNodeType.Subscriber:
+          result = await this.executeSubscriberNode(node, signal);
           break;
         default:
           console.warn(`Unknown node type: ${node.type}`);
@@ -482,7 +520,7 @@ export class BehaviorTreeExecutor {
       }
 
       await this.waitWhilePaused();
-      if (!this.isRunning) return ExecutionStatus.Failure;
+      if (!this.isRunning || signal?.aborted) return ExecutionStatus.Failure;
       this.setNodeStatus(node.id, result, treePath);
       return result;
     } catch (error) {
@@ -498,12 +536,13 @@ export class BehaviorTreeExecutor {
   private async executeSequence(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id, tree);
 
     for (const child of children) {
-      const result = await this.executeNode(child, tree, treePath);
+      const result = await this.executeNode(child, tree, treePath, signal);
 
       if (result === ExecutionStatus.Failure) {
         return ExecutionStatus.Failure;
@@ -527,12 +566,13 @@ export class BehaviorTreeExecutor {
   private async executeChildrenAsSequence(
     children: BehaviorTreeNode[],
     tree: BehaviorTree,
-    treePath: string[]
+    treePath: string[],
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     if (children.length === 0) return ExecutionStatus.Failure;
 
     for (const child of children) {
-      const result = await this.executeNode(child, tree, treePath);
+      const result = await this.executeNode(child, tree, treePath, signal);
       if (result === ExecutionStatus.Failure || !this.isRunning) {
         return ExecutionStatus.Failure;
       }
@@ -552,15 +592,16 @@ export class BehaviorTreeExecutor {
   private async executeRetry(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id, tree);
     const limit = this.getIterationLimit(node);
     let attempt = 0;
 
-    while (this.isRunning && (limit === -1 || attempt < limit)) {
+    while (this.isRunning && !signal?.aborted && (limit === -1 || attempt < limit)) {
       attempt += 1;
-      const result = await this.executeChildrenAsSequence(children, tree, treePath);
+      const result = await this.executeChildrenAsSequence(children, tree, treePath, signal);
       if (result === ExecutionStatus.Success) return ExecutionStatus.Success;
       await this.yieldBetweenIterations();
     }
@@ -576,14 +617,15 @@ export class BehaviorTreeExecutor {
   private async executeRepeat(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id, tree);
     const limit = this.getIterationLimit(node);
     let completedRepeats = 0;
 
-    while (this.isRunning && (limit === -1 || completedRepeats < limit)) {
-      const result = await this.executeChildrenAsSequence(children, tree, treePath);
+    while (this.isRunning && !signal?.aborted && (limit === -1 || completedRepeats < limit)) {
+      const result = await this.executeChildrenAsSequence(children, tree, treePath, signal);
       if (result === ExecutionStatus.Failure) return ExecutionStatus.Failure;
       completedRepeats += 1;
       if (limit === -1 || completedRepeats < limit) {
@@ -600,12 +642,13 @@ export class BehaviorTreeExecutor {
   private async executeSelector(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id, tree);
 
     for (const child of children) {
-      const result = await this.executeNode(child, tree, treePath);
+      const result = await this.executeNode(child, tree, treePath, signal);
 
       if (result === ExecutionStatus.Success) {
         return ExecutionStatus.Success;
@@ -625,20 +668,81 @@ export class BehaviorTreeExecutor {
   private async executeParallel(
     node: BehaviorTreeNode,
     tree: BehaviorTree = this.tree,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const children = this.getChildNodes(node.id, tree);
 
-    const results = await Promise.all(children.map(child => this.executeNode(child, tree, treePath)));
+    const results = await Promise.all(children.map(child => this.executeNode(child, tree, treePath, signal)));
 
     // Success if all children succeed
     const allSuccess = results.every(r => r === ExecutionStatus.Success);
     return allSuccess ? ExecutionStatus.Success : ExecutionStatus.Failure;
   }
 
+  private async executeTimeout(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree,
+    treePath: string[],
+    parentSignal?: AbortSignal
+  ): Promise<ExecutionStatus> {
+    const child = this.getChildNodes(node.id, tree)[0];
+    if (!child) return ExecutionStatus.Failure;
+
+    const timeout = Math.max(1, Math.trunc((node.data as TimeoutNodeData).timeout || 10000));
+    const controller = new AbortController();
+    const abortChild = () => controller.abort();
+    parentSignal?.addEventListener('abort', abortChild, { once: true });
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<ExecutionStatus>(resolve => {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        resolve(ExecutionStatus.Failure);
+      }, timeout);
+    });
+
+    try {
+      return await Promise.race([
+        this.executeNode(child, tree, treePath, controller.signal),
+        deadline,
+      ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      parentSignal?.removeEventListener('abort', abortChild);
+    }
+  }
+
+  private async executeIfElse(
+    node: BehaviorTreeNode,
+    tree: BehaviorTree,
+    treePath: string[],
+    signal?: AbortSignal
+  ): Promise<ExecutionStatus> {
+    const data = node.data as IfElseNodeData;
+    const exists = this.blackboard.has(data.variable);
+    const condition = evaluateBlackboardValue(
+      this.blackboard.get(data.variable),
+      data.operator,
+      data.expectedValue,
+      exists
+    );
+    const branchHandle = condition ? 'then' : 'else';
+    const branchEdge = tree.edges.find(edge => edge.source === node.id && edge.sourceHandle === branchHandle);
+    const fallbackChildren = this.getChildNodes(node.id, tree);
+    const fallbackChild = fallbackChildren[condition ? 0 : 1];
+    const child = branchEdge
+      ? tree.nodes.find(candidate => candidate.id === branchEdge.target)
+      : fallbackChild;
+    return child
+      ? this.executeNode(child, tree, treePath, signal)
+      : ExecutionStatus.Failure;
+  }
+
   private async executeSubtreeNode(
     node: BehaviorTreeNode,
-    treePath: string[] = this.rootPath
+    treePath: string[] = this.rootPath,
+    signal?: AbortSignal
   ): Promise<ExecutionStatus> {
     const data = node.data as SubtreeNodeData;
     const subtreeRoot = this.findRootNode(data.tree);
@@ -648,7 +752,10 @@ export class BehaviorTreeExecutor {
       return ExecutionStatus.Failure;
     }
 
-    return this.executeNode(subtreeRoot, data.tree, [...treePath, node.id]);
+    Object.entries(data.tree.blackboardDefaults || {}).forEach(([key, value]) => {
+      if (!this.blackboard.has(key)) this.blackboard.set(key, value);
+    });
+    return this.executeNode(subtreeRoot, data.tree, [...treePath, node.id], signal);
   }
 
   /**
@@ -659,7 +766,7 @@ export class BehaviorTreeExecutor {
    * send goals with `send_action_goal` and listen for its `action_result`
    * websocket response.
    */
-  private async executeActionNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
+  private async executeActionNode(node: BehaviorTreeNode, signal?: AbortSignal): Promise<ExecutionStatus> {
     const data = node.data as ROSActionNodeData;
 
     return new Promise(resolve => {
@@ -675,6 +782,7 @@ export class BehaviorTreeExecutor {
       const requestId = createActionRequestId(node.id);
       let settled = false;
       let removeActionListener: (() => void) | null = null;
+      let onAbort = () => {};
 
       const settle = (status: ExecutionStatus) => {
         if (settled) return;
@@ -683,6 +791,7 @@ export class BehaviorTreeExecutor {
         clearTimeout(timeoutId);
         removeActionListener?.();
         removeActionListener = null;
+        signal?.removeEventListener('abort', onAbort);
         resolve(status);
       };
 
@@ -693,12 +802,22 @@ export class BehaviorTreeExecutor {
         this.cancelActionGoal(data.actionName, requestId);
         settle(ExecutionStatus.Failure);
       }, timeout);
+      onAbort = () => {
+        this.cancelActionGoal(data.actionName, requestId);
+        settle(ExecutionStatus.Failure);
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
 
       void (async () => {
         try {
           // Use saved parameters; fall back to the hardcoded template.
           const hasParams = data.parameters && Object.keys(data.parameters).length > 0;
-          const rawGoal = hasParams ? data.parameters : (ACTION_TEMPLATES[data.actionType] ?? {});
+          const staticGoal = hasParams ? data.parameters : (ACTION_TEMPLATES[data.actionType] ?? {});
+          const rawGoal = applyInputBindings(staticGoal || {}, data.inputBindings, this.blackboard);
 
           if (!hasParams) {
             console.warn(
@@ -739,6 +858,9 @@ export class BehaviorTreeExecutor {
 
             if (message.status === GOAL_STATUS_SUCCEEDED) {
               console.log(`[BT] Action "${data.actionName}" succeeded`);
+              this.emitBlackboardUpdate(
+                applyOutputBindings(message.values, data.outputBindings, this.blackboard)
+              );
               settle(ExecutionStatus.Success);
             } else if (message.status === GOAL_STATUS_CANCELED || message.status === GOAL_STATUS_ABORTED) {
               console.warn(`[BT] Action "${data.actionName}" ended with status ${message.status}`);
@@ -785,7 +907,7 @@ export class BehaviorTreeExecutor {
   /**
    * Execute ROS service node
    */
-  private async executeServiceNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
+  private async executeServiceNode(node: BehaviorTreeNode, signal?: AbortSignal): Promise<ExecutionStatus> {
     const data = node.data as ROSServiceNodeData;
 
     return new Promise(resolve => {
@@ -796,24 +918,40 @@ export class BehaviorTreeExecutor {
           serviceType: data.serviceType,
         });
 
-        const request = new ROSLIB.ServiceRequest(data.request || {});
+        const request = new ROSLIB.ServiceRequest(
+          applyInputBindings(data.request || {}, data.inputBindings, this.blackboard)
+        );
 
         const timeout = data.timeout || 10000; // Default 10 seconds
+        let settled = false;
+        const settle = (status: ExecutionStatus) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          signal?.removeEventListener('abort', onAbort);
+          resolve(status);
+        };
+        const onAbort = () => settle(ExecutionStatus.Failure);
         const timeoutId = setTimeout(() => {
-          resolve(ExecutionStatus.Failure);
+          settle(ExecutionStatus.Failure);
         }, timeout);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) {
+          settle(ExecutionStatus.Failure);
+          return;
+        }
 
         service.callService(
           request,
           result => {
-            clearTimeout(timeoutId);
-            // Service call succeeded
-            resolve(ExecutionStatus.Success);
+            this.emitBlackboardUpdate(
+              applyOutputBindings(result, data.outputBindings, this.blackboard)
+            );
+            settle(ExecutionStatus.Success);
           },
           error => {
-            clearTimeout(timeoutId);
             console.error('Service call failed:', error);
-            resolve(ExecutionStatus.Failure);
+            settle(ExecutionStatus.Failure);
           }
         );
       } catch (error) {
@@ -826,7 +964,7 @@ export class BehaviorTreeExecutor {
   /**
    * Execute ROS topic publish node
    */
-  private async executeTopicNode(node: BehaviorTreeNode): Promise<ExecutionStatus> {
+  private async executeTopicNode(node: BehaviorTreeNode, signal?: AbortSignal): Promise<ExecutionStatus> {
     const data = node.data as ROSTopicNodeData;
 
     return new Promise(resolve => {
@@ -837,21 +975,93 @@ export class BehaviorTreeExecutor {
           messageType: data.messageType,
         });
 
-        const message = new ROSLIB.Message(data.message || {});
-
-        topic.publish(message);
-
-        // Publishing is fire-and-forget, consider it successful immediately
-        resolve(ExecutionStatus.Success);
-
-        // Unadvertise if publish once
-        if (data.publishOnce !== false) {
+        const payload = applyInputBindings(data.message || {}, data.inputBindings, this.blackboard);
+        const message = new ROSLIB.Message(payload);
+        const frequencyHz = Number(data.frequencyHz || 0);
+        if (!(frequencyHz > 0)) {
+          topic.publish(message);
           topic.unadvertise();
+          resolve(ExecutionStatus.Success);
+          return;
         }
+
+        const intervalMs = Math.max(10, 1000 / frequencyHz);
+        const durationMs = Math.max(0, Number(data.durationMs ?? 1000));
+        const startedAt = Date.now();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let settled = false;
+        const finish = (status: ExecutionStatus) => {
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+          topic.unadvertise();
+          resolve(status);
+        };
+        const onAbort = () => finish(ExecutionStatus.Failure);
+        const publishNext = async () => {
+          if (signal?.aborted || !this.isRunning) {
+            finish(ExecutionStatus.Failure);
+            return;
+          }
+          await this.waitWhilePaused();
+          if (signal?.aborted || !this.isRunning) {
+            finish(ExecutionStatus.Failure);
+            return;
+          }
+          if (durationMs > 0 && Date.now() - startedAt >= durationMs) {
+            finish(ExecutionStatus.Success);
+            return;
+          }
+          topic.publish(message);
+          timer = setTimeout(publishNext, intervalMs);
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        void publishNext();
       } catch (error) {
         console.error('Error executing topic node:', error);
         resolve(ExecutionStatus.Failure);
       }
+    });
+  }
+
+  private async executeSubscriberNode(
+    node: BehaviorTreeNode,
+    signal?: AbortSignal
+  ): Promise<ExecutionStatus> {
+    const data = node.data as ROSSubscriberNodeData;
+    return new Promise(resolve => {
+      const topic = new ROSLIB.Topic({
+        ros: this.ros,
+        name: data.topicName,
+        messageType: data.messageType,
+      });
+      let settled = false;
+      const finish = (status: ExecutionStatus) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
+        topic.unsubscribe();
+        resolve(status);
+      };
+      const onMessage = (message: unknown) => {
+        this.emitBlackboardUpdate(
+          applyOutputBindings(message, data.outputBindings, this.blackboard)
+        );
+        finish(ExecutionStatus.Success);
+      };
+      const onAbort = () => finish(ExecutionStatus.Failure);
+      const timeoutId = setTimeout(
+        () => finish(ExecutionStatus.Failure),
+        Math.max(1, Math.trunc(data.timeout || 10000))
+      );
+      signal?.addEventListener('abort', onAbort, { once: true });
+      if (signal?.aborted) {
+        finish(ExecutionStatus.Failure);
+        return;
+      }
+      topic.subscribe(onMessage);
     });
   }
 

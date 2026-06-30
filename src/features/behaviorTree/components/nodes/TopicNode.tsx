@@ -16,7 +16,7 @@ const TopicNode: React.FC<NodeProps<ROSTopicNodeData>> = ({ data, selected }) =>
       
       <div className="bt-node-header">
         <span className="bt-node-icon">📡</span>
-        <span className="bt-node-type">Topic</span>
+        <span className="bt-node-type">Publisher</span>
       </div>
       
       <div className="bt-node-content">
@@ -33,7 +33,6 @@ const TopicNode: React.FC<NodeProps<ROSTopicNodeData>> = ({ data, selected }) =>
         </div>
       )}
       
-      {/* Topic nodes are leaves — no outgoing connections */}
     </div>
   );
 };

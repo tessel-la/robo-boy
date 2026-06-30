@@ -11,6 +11,9 @@ import {
   ROSServiceNodeData,
   ROSTopicInfo,
   ROSTopicNodeData,
+  ROSSubscriberNodeData,
+  TimeoutNodeData,
+  IfElseNodeData,
 } from './types';
 
 export type ROSNodeInfo = ROSActionInfo | ROSServiceInfo | ROSTopicInfo;
@@ -81,6 +84,14 @@ export const createBehaviorNodeData = (
         description: 'Repeat children on success',
         iterationLimit: 3,
       } as ControlFlowNodeData;
+    case BehaviorNodeType.Timeout:
+      return { label: 'Timeout', timeout: 10000 } as TimeoutNodeData;
+    case BehaviorNodeType.IfElse:
+      return {
+        label: 'If / Else',
+        variable: '',
+        operator: 'truthy',
+      } as IfElseNodeData;
     case BehaviorNodeType.Action:
       return {
         label: rosInfo?.name || 'Action',
@@ -95,10 +106,18 @@ export const createBehaviorNodeData = (
       } as ROSServiceNodeData;
     case BehaviorNodeType.Topic:
       return {
-        label: rosInfo?.name || 'Topic',
+        label: rosInfo?.name || 'Publisher',
         topicName: rosInfo?.name || '',
         messageType: rosInfo?.type || '',
       } as ROSTopicNodeData;
+    case BehaviorNodeType.Subscriber:
+      return {
+        label: rosInfo?.name || 'Subscriber',
+        topicName: rosInfo?.name || '',
+        messageType: rosInfo?.type || '',
+        timeout: 10000,
+        outputBindings: [],
+      } as ROSSubscriberNodeData;
     default:
       return null;
   }

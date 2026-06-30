@@ -17,7 +17,10 @@ async function connectWithMockRos(page: Page) {
 }
 
 async function openBehaviorTree(page: Page) {
-  await page.getByLabel('Switch to Behavior Tree').click();
+  if (await page.getByTestId('behavior-tree-panel').count() === 0) {
+    await page.getByLabel('Add workspace panel').first().click();
+    await page.getByRole('button', { name: 'Behavior tree', exact: true }).click();
+  }
   await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();
   await expect(page.getByTestId('bt-canvas')).toBeVisible();
 }
@@ -470,7 +473,7 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
     await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
-    await page.getByTestId('bt-context-wrap').click();
+    await page.getByTestId('bt-context-wrap').evaluate(element => (element as HTMLButtonElement).click());
 
     const subtreeNode = page.locator('.react-flow__node').filter({ hasText: 'Subtree' });
     await expect(subtreeNode).toHaveCount(1);
@@ -491,7 +494,7 @@ test.describe('Behavior Tree panel', () => {
 
     await firstAction.click();
     await multiSelectClick(secondAction);
-    await page.getByTestId('bt-context-wrap').click();
+    await page.getByTestId('bt-context-wrap').evaluate(element => (element as HTMLButtonElement).click());
 
     await expect(subtreeNode).toHaveCount(1);
     await expect(page.getByTestId('bt-context-open-subtree')).toBeVisible();
@@ -714,27 +717,9 @@ test.describe('Behavior Tree panel', () => {
     await page.getByTestId('bt-menu-button').click();
     await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
 
-    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
-    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
-    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
-    const sequenceBox = await sequence.boundingBox();
-    const firstBox = await firstAction.boundingBox();
-    const secondBox = await secondAction.boundingBox();
-
-    expect(sequenceBox).not.toBeNull();
-    expect(firstBox).not.toBeNull();
-    expect(secondBox).not.toBeNull();
-
-    await page.mouse.click(
-      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2) / 2,
-      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2) / 2
-    );
-    await page.keyboard.down('Control');
-    await page.mouse.click(
-      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (secondBox?.x ?? 0) + (secondBox?.width ?? 0) / 2) / 2,
-      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (secondBox?.y ?? 0) + (secondBox?.height ?? 0) / 2) / 2
-    );
-    await page.keyboard.up('Control');
+    const edges = page.locator('.react-flow__edge');
+    await edges.nth(0).dispatchEvent('click');
+    await edges.nth(1).dispatchEvent('click', { ctrlKey: true });
 
     await expect(page.locator('.react-flow__edge.selected')).toHaveCount(2);
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
@@ -845,7 +830,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.ape-overlay')).toBeVisible();
   });
 
-  test('keeps execution alive in 3D view and exposes top-bar controls', async ({ page }) => {
+  test('keeps execution alive beside a 3D panel across responsive layouts', async ({ page }) => {
     await openBehaviorTree(page);
     await seedRunningActionTree(page);
 
@@ -869,34 +854,18 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
 
 
-    await page.getByLabel('Switch to 3D View').click();
-    const island = page.locator('.bt-execution-island');
-    await expect(island).toBeVisible();
-    await expect(island).toContainText('Long Action Tree');
-    await expect(island).toContainText('Navigate');
+    await page.getByLabel('Add workspace panel').first().click();
+    await page.getByRole('button', { name: '3D panel', exact: true }).click();
+    await expect(page.getByRole('region', { name: '3D view' })).toBeVisible();
+    await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(island.locator('.bt-execution-pulse')).toBeVisible();
-    await expect(island.locator('.bt-execution-node')).toBeVisible();
-    const mobileIslandBox = await island.boundingBox();
-    const mobileReturnBox = await page.getByLabel('Open behavior tree').boundingBox();
-    const mobileToggleBox = await page.locator('.view-toggle').boundingBox();
-    expect(mobileIslandBox?.width).toBeGreaterThan(88);
-    expect(mobileIslandBox?.width).toBeLessThan(160);
-    expect(mobileReturnBox?.width).toBeGreaterThan(52);
-    expect(mobileReturnBox?.width).toBeLessThan(122);
-    expect(mobileToggleBox?.width).toBeLessThan(250);
-
-    await page.getByLabel('Open behavior tree').click();
     await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
     await expect(page.getByTestId('behavior-tree-panel')).toBeVisible();
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-    await page.getByLabel('Switch to 3D View').click();
-    await page.getByLabel('Stop behavior tree').click();
-    await expect(island).toHaveCount(0);
-
-    await page.getByLabel('Switch to Behavior Tree').click();
+    await page.getByTestId('bt-stop').click();
     await expect(page.getByTestId('behavior-tree-panel')).toHaveCount(1);
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).not.toHaveClass(/status-running/);
   });

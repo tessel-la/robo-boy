@@ -37,6 +37,12 @@ export interface GamepadComponentConfig {
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
+  eventOperations?: {
+    press?: RosOperation;
+    release?: RosOperation;
+    on?: RosOperation;
+    off?: RosOperation;
+  };
   style?: {
     color?: string;
     size?: 'small' | 'medium' | 'large';
@@ -165,3 +171,4 @@ export interface EditorState {
   showGrid: boolean;
   snapToGrid: boolean;
 } 
+import type { RosOperation } from '../../utils/rosOperations';

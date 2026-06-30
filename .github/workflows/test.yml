@@ -213,7 +213,11 @@ jobs:
           }
 
     - name: Upload coverage to Codecov
-      if: steps.unit_tests.outputs.status == '0'
+      if: >-
+        steps.unit_tests.outputs.status == '0' &&
+        (github.event_name == 'pull_request' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/dev'))
       uses: codecov/codecov-action@v5
       with:
         files: ./coverage/lcov.info

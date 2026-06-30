@@ -24,6 +24,11 @@ async function publishTf(page: Page, topic: '/tf' | '/tf_static', transforms: un
   );
 }
 
+async function addPanel(page: Page, name: string) {
+  await page.getByLabel('Add workspace panel').first().click();
+  await page.getByRole('button', { name, exact: true }).click();
+}
+
 test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await installRosMock(page);
   await page.goto('/');
@@ -32,7 +37,7 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
-  await page.getByLabel('Switch to TF Tree').click();
+  await addPanel(page, 'TF tree');
   await expect(page.getByTestId('tf-tree-panel')).toBeVisible();
 
   await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101)]);
@@ -115,8 +120,8 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
     )
     .toBe(true);
 
+  await addPanel(page, 'Behavior tree');
   const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
-  await page.getByLabel('Switch to Behavior Tree').click();
   const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
   expect(tfControlBox?.width).toBe(btControlBox?.width);
   expect(tfControlBox?.height).toBe(btControlBox?.height);
@@ -131,18 +136,19 @@ test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) =
       JSON.stringify([
         { id: 'tf-panel', type: 'tfTree', title: 'TF tree' },
         { id: 'bt-panel', type: 'behaviorTree', title: 'Behavior tree' },
+        { id: 'camera-panel', type: 'camera', title: 'Camera' },
       ])
     );
     localStorage.setItem(
       'robo-boy-desktop-workspace-tile-order-v1',
-      JSON.stringify(['base-view', 'base-pads', 'tf-panel', 'bt-panel'])
+      JSON.stringify(['tf-panel', 'bt-panel', 'camera-panel'])
     );
     localStorage.setItem(
       'robo-boy-desktop-workspace-layout-v1',
       JSON.stringify({
-        rowSizes: [1, 3],
-        rowRatios: [1, 1],
-        columnRatiosByRow: { 0: [1], 1: [1, 1, 1] },
+        rowSizes: [3],
+        rowRatios: [1],
+        columnRatiosByRow: { 0: [1, 1, 1] },
       })
     );
   });
@@ -190,7 +196,7 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
-  await page.getByLabel('Switch to TF Tree').click();
+  await addPanel(page, 'TF tree');
 
   const panel = page.getByTestId('tf-tree-panel');
   const canvas = page.getByTestId('tf-tree-canvas');

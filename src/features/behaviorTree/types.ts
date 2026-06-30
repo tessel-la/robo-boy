@@ -16,12 +16,15 @@ export enum BehaviorNodeType {
   Parallel = 'parallel',
   Retry = 'retry',
   Repeat = 'repeat',
+  Timeout = 'timeout',
+  IfElse = 'ifElse',
   Subtree = 'subtree',
   
   // ROS nodes
   Action = 'action',
   Service = 'service',
   Topic = 'topic',
+  Subscriber = 'subscriber',
   
   // Utility nodes
   Condition = 'condition',
@@ -57,11 +60,25 @@ export interface BaseNodeData {
   isHighlighted?: boolean;
 }
 
+export type BlackboardValue = unknown;
+
+export interface BlackboardInputBinding {
+  variable: string;
+  targetPath: string;
+}
+
+export interface BlackboardOutputBinding {
+  sourcePath: string;
+  variable: string;
+}
+
 export interface ROSActionNodeData extends BaseNodeData {
   actionName: string;
   actionType: string;
   parameters?: Record<string, any>;
   timeout?: number;
+  inputBindings?: BlackboardInputBinding[];
+  outputBindings?: BlackboardOutputBinding[];
 }
 
 export interface ROSServiceNodeData extends BaseNodeData {
@@ -69,6 +86,8 @@ export interface ROSServiceNodeData extends BaseNodeData {
   serviceType: string;
   request?: Record<string, any>;
   timeout?: number;
+  inputBindings?: BlackboardInputBinding[];
+  outputBindings?: BlackboardOutputBinding[];
 }
 
 export interface ROSTopicNodeData extends BaseNodeData {
@@ -76,6 +95,16 @@ export interface ROSTopicNodeData extends BaseNodeData {
   messageType: string;
   message?: Record<string, any>;
   publishOnce?: boolean;
+  frequencyHz?: number;
+  durationMs?: number;
+  inputBindings?: BlackboardInputBinding[];
+}
+
+export interface ROSSubscriberNodeData extends BaseNodeData {
+  topicName: string;
+  messageType: string;
+  timeout?: number;
+  outputBindings: BlackboardOutputBinding[];
 }
 
 export interface ControlFlowNodeData extends BaseNodeData {
@@ -83,6 +112,27 @@ export interface ControlFlowNodeData extends BaseNodeData {
   description?: string;
   generatedBySubtreeWrap?: boolean;
   iterationLimit?: number;
+}
+
+export interface TimeoutNodeData extends BaseNodeData {
+  timeout: number;
+}
+
+export type BlackboardComparisonOperator =
+  | 'truthy'
+  | 'falsy'
+  | 'equals'
+  | 'notEquals'
+  | 'greaterThan'
+  | 'greaterThanOrEqual'
+  | 'lessThan'
+  | 'lessThanOrEqual'
+  | 'exists';
+
+export interface IfElseNodeData extends BaseNodeData {
+  variable: string;
+  operator: BlackboardComparisonOperator;
+  expectedValue?: BlackboardValue;
 }
 
 export interface SubtreeNodeData extends BaseNodeData {
@@ -101,7 +151,10 @@ export type BehaviorNodeData =
   | ROSActionNodeData
   | ROSServiceNodeData
   | ROSTopicNodeData
+  | ROSSubscriberNodeData
   | ControlFlowNodeData
+  | TimeoutNodeData
+  | IfElseNodeData
   | SubtreeNodeData
   | ConditionNodeData;
 
@@ -117,6 +170,7 @@ export interface BehaviorTree {
   edges: Edge[];
   createdAt: number;
   updatedAt: number;
+  blackboardDefaults?: Record<string, BlackboardValue>;
 }
 
 // Execution context
@@ -138,6 +192,7 @@ export type ExecutionEventType =
   | 'nodeSuccess'
   | 'nodeFailure'
   | 'nodeRunning'
+  | 'blackboardUpdated'
   | 'completed'
   | 'stopped'
   | 'error';

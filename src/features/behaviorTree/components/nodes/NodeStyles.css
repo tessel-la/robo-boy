@@ -180,6 +180,15 @@
   color: #795548;
 }
 
+.bt-timeout-node .bt-node-header { color: #00897b; }
+.bt-if-else-node .bt-node-header { color: #c2185b; }
+.bt-subscriber-node .bt-node-header { color: #1565c0; }
+
+.bt-if-else-node { position: relative; padding-bottom: 18px; }
+.bt-branch-label { position: absolute; bottom: 1px; font-size: 9px; color: var(--text-color-secondary); }
+.bt-branch-label-then { left: 14%; }
+.bt-branch-label-else { right: 14%; }
+
 /* React Flow handles */
 .bt-handle {
   width: 22px;

@@ -40,6 +40,7 @@ import type { BehaviorTreeInteractionMode } from './BehaviorTreeToolbar';
 import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
+import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import {
@@ -73,6 +74,8 @@ import {
   ROSActionInfo,
   ROSServiceInfo,
   ROSTopicInfo,
+  BlackboardInputBinding,
+  BlackboardOutputBinding,
 } from '../types';
 import {
   areTreePathsEqual,
@@ -482,6 +485,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   >(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [editingIterationNodeId, setEditingIterationNodeId] = useState<string | null>(null);
+  const [editingConfigNodeId, setEditingConfigNodeId] = useState<string | null>(null);
+  const [liveBlackboard, setLiveBlackboard] = useState<Record<string, unknown>>({});
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
   const [subtreeReturnAnchor, setSubtreeReturnAnchor] = useState<{ x: number; y: number } | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
@@ -855,6 +860,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const onConnect = useCallback(
     (connection: Connection) => {
       if (isExecuting) return;
+      const source = nodes.find(node => node.id === connection.source);
+      if (!source) return;
+      if (source.type === BehaviorNodeType.Timeout && edges.some(edge => edge.source === source.id)) return;
+      if (source.type === BehaviorNodeType.IfElse) {
+        const handle = connection.sourceHandle;
+        if (!handle || !['then', 'else'].includes(handle)) return;
+        if (edges.some(edge => edge.source === source.id && edge.sourceHandle === handle)) return;
+        persistEditorTree(nodes, addEdge(connection, edges));
+        return;
+      }
       persistEditorTree(nodes, addEdge(normalizeEdge(connection), edges));
     },
     [edges, isExecuting, nodes, persistEditorTree]
@@ -1318,6 +1333,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
     } else if (node.type === BehaviorNodeType.Service) {
       setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
+    } else if (
+      node.type === BehaviorNodeType.Topic ||
+      node.type === BehaviorNodeType.Subscriber ||
+      node.type === BehaviorNodeType.Timeout ||
+      node.type === BehaviorNodeType.IfElse
+    ) {
+      setEditingConfigNodeId(node.id);
     } else if (isIteratingControlNode(node)) {
       setEditingIterationNodeId(node.id);
     } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
@@ -1365,6 +1387,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (
         node.type !== BehaviorNodeType.Action &&
         node.type !== BehaviorNodeType.Service &&
+        node.type !== BehaviorNodeType.Topic &&
+        node.type !== BehaviorNodeType.Subscriber &&
+        node.type !== BehaviorNodeType.Timeout &&
+        node.type !== BehaviorNodeType.IfElse &&
         node.type !== BehaviorNodeType.Subtree &&
         !isIteratingControlNode(node) &&
         !isOrderedControlNode(node as BehaviorTreeNode)
@@ -1412,13 +1438,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [commitSelectionState]);
 
   const handleSaveActionParameters = useCallback(
-    (parameters: Record<string, any>) => {
+    (parameters: Record<string, any>, inputBindings: BlackboardInputBinding[] = [], outputBindings: BlackboardOutputBinding[] = []) => {
       if (!editingAction) return;
       const { nodeId } = editingAction;
       persistEditorTree(
         nodes.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, parameters } };
+          return { ...node, data: { ...node.data, parameters, inputBindings, outputBindings } };
         }),
         edges
       );
@@ -1427,19 +1453,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const handleSaveServiceRequest = useCallback(
-    (request: Record<string, any>) => {
+    (request: Record<string, any>, inputBindings: BlackboardInputBinding[] = [], outputBindings: BlackboardOutputBinding[] = []) => {
       if (!editingService) return;
       const { nodeId } = editingService;
       persistEditorTree(
         nodes.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, request } };
+          return { ...node, data: { ...node.data, request, inputBindings, outputBindings } };
         }),
         edges
       );
     },
     [editingService, edges, nodes, persistEditorTree]
   );
+
+  const editingConfigNode = useMemo(
+    () => (nodes as BehaviorTreeNode[]).find(node => node.id === editingConfigNodeId) ?? null,
+    [nodes, editingConfigNodeId]
+  );
+
+  const handleSaveNodeConfig = useCallback((data: BehaviorTreeNode['data']) => {
+    if (!editingConfigNodeId) return;
+    persistEditorTree(
+      nodes.map(node => node.id === editingConfigNodeId ? { ...node, data } : node),
+      edges
+    );
+  }, [editingConfigNodeId, edges, nodes, persistEditorTree]);
+
+  const handleBlackboardDefaultsChange = useCallback((defaults: Record<string, unknown>) => {
+    persistEditorTree(nodes, edges, { blackboardDefaults: defaults });
+  }, [edges, nodes, persistEditorTree]);
 
   const handleSave = useCallback(() => {
     const activeTree = currentTreeRef.current;
@@ -1653,6 +1696,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }
       }
 
+      if (event.type === 'blackboardUpdated' && event.data?.blackboard) {
+        setLiveBlackboard(event.data.blackboard as Record<string, unknown>);
+      }
+
       if (event.type === 'started') {
         setIsPaused(false);
         setExecutionSnapshot((prev) => ({
@@ -1736,6 +1783,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     };
     executionNodeLabels.current = collectExecutionNodeLabels(treeToExecute);
     executionStartedAt.current = Date.now();
+    setLiveBlackboard(treeToExecute.blackboardDefaults || {});
     executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     setIsExecuting(true);
     setIsPaused(false);
@@ -2596,6 +2644,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           })
         }
         onRename={handleRename}
+        blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
+        onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
       />
 
       {saveNotice && (
@@ -2894,6 +2944,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           node={editingIterationNode}
           onSave={handleSaveIterationLimit}
           onClose={() => setEditingIterationNodeId(null)}
+        />
+      )}
+      {editingConfigNode && (
+        <BehaviorNodeConfigEditor
+          node={editingConfigNode}
+          blackboardVariables={Object.keys(currentTree?.blackboardDefaults || {})}
+          onSave={handleSaveNodeConfig}
+          onClose={() => setEditingConfigNodeId(null)}
         />
       )}
     </div>

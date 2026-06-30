@@ -857,3 +857,10 @@
     border-color: var(--border-color, #404040);
   }
 }
+.bt-config-panel { width: min(440px, 100%); }
+.bt-config-body { display: flex; flex-direction: column; gap: 14px; }
+.bt-config-field { display: flex; flex-direction: column; gap: 6px; color: var(--text-color); font-size: 0.78rem; font-weight: 700; }
+.bt-config-field input,
+.bt-config-field select,
+.bt-config-field textarea { width: 100%; min-height: 38px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--background-color); color: var(--text-color); font: inherit; }
+.bt-config-field textarea { min-height: 100px; resize: vertical; font-family: monospace; }
