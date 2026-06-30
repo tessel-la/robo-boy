@@ -120,8 +120,8 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
     )
     .toBe(true);
 
-  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
   await addPanel(page, 'Behavior tree');
+  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
   const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
   expect(tfControlBox?.width).toBe(btControlBox?.width);
   expect(tfControlBox?.height).toBe(btControlBox?.height);
@@ -136,18 +136,19 @@ test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) =
       JSON.stringify([
         { id: 'tf-panel', type: 'tfTree', title: 'TF tree' },
         { id: 'bt-panel', type: 'behaviorTree', title: 'Behavior tree' },
+        { id: 'camera-panel', type: 'camera', title: 'Camera' },
       ])
     );
     localStorage.setItem(
       'robo-boy-desktop-workspace-tile-order-v1',
-      JSON.stringify(['base-view', 'base-pads', 'tf-panel', 'bt-panel'])
+      JSON.stringify(['tf-panel', 'bt-panel', 'camera-panel'])
     );
     localStorage.setItem(
       'robo-boy-desktop-workspace-layout-v1',
       JSON.stringify({
-        rowSizes: [1, 3],
-        rowRatios: [1, 1],
-        columnRatiosByRow: { 0: [1], 1: [1, 1, 1] },
+        rowSizes: [3],
+        rowRatios: [1],
+        columnRatiosByRow: { 0: [1, 1, 1] },
       })
     );
   });

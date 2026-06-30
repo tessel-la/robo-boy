@@ -2680,6 +2680,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 type="button"
                 className="workspace-add-button"
                 onClick={() => {
+                  setWorkspaceReplacementPanelId(null);
                   setIsWorkspaceAddMenuOpen(prev => !prev);
                   setIsWorkspaceTemplateMenuOpen(false);
                 }}

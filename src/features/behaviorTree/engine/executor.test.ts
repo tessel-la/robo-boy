@@ -271,6 +271,7 @@ describe('BehaviorTreeExecutor pause and resume', () => {
 describe('BehaviorTreeExecutor blackboard nodes', () => {
   beforeEach(() => {
     roslibMocks.topicPublish.mockReset();
+    roslibMocks.topicUnadvertise.mockReset();
     roslibMocks.topicSubscribe.mockReset();
     roslibMocks.topicUnsubscribe.mockReset();
   });
@@ -319,5 +320,79 @@ describe('BehaviorTreeExecutor blackboard nodes', () => {
     await executeTree(makeTree(5));
     await executeTree(makeTree(1));
     expect(roslibMocks.topicPublish.mock.calls.map(([message]) => message.branch)).toEqual(['then', 'else']);
+  });
+
+  it('fails a subscriber when no message arrives before its timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const tree: BehaviorTree = {
+        id: 'subscriber-timeout', name: 'Subscriber timeout', createdAt: 1, updatedAt: 1,
+        nodes: [{
+          id: 'subscriber', type: BehaviorNodeType.Subscriber, position: { x: 0, y: 0 },
+          data: { label: 'Subscriber', topicName: '/state', messageType: 'example/msg/State', timeout: 50, outputBindings: [] },
+        }],
+        edges: [],
+      };
+      const events: ExecutionEvent[] = [];
+      const executor = new BehaviorTreeExecutor(tree, {} as Ros, event => events.push(event));
+      const execution = executor.start();
+      await vi.advanceTimersByTimeAsync(60);
+      await execution;
+
+      expect(roslibMocks.topicUnsubscribe).toHaveBeenCalledOnce();
+      expect(events).toContainEqual(expect.objectContaining({ type: 'nodeFailure', nodeId: 'subscriber' }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops a continuous publisher when its timeout decorator expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const publisher = topicNode('publisher');
+      publisher.data = { ...publisher.data, frequencyHz: 20, durationMs: 0 };
+      const tree: BehaviorTree = {
+        id: 'publisher-timeout', name: 'Publisher timeout', createdAt: 1, updatedAt: 1,
+        nodes: [
+          { id: 'timeout', type: BehaviorNodeType.Timeout, position: { x: 0, y: 0 }, data: { label: 'Timeout', timeout: 120 } },
+          publisher,
+        ],
+        edges: [{ id: 'timeout-child', source: 'timeout', target: 'publisher' }],
+      };
+      const events: ExecutionEvent[] = [];
+      const executor = new BehaviorTreeExecutor(tree, {} as Ros, event => events.push(event));
+      const execution = executor.start();
+      await vi.advanceTimersByTimeAsync(150);
+      await execution;
+
+      expect(roslibMocks.topicPublish).toHaveBeenCalled();
+      expect(roslibMocks.topicUnadvertise).toHaveBeenCalledOnce();
+      expect(events).toContainEqual(expect.objectContaining({ type: 'nodeFailure', nodeId: 'timeout' }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('completes repeated publishing after its configured duration', async () => {
+    vi.useFakeTimers();
+    try {
+      const publisher = topicNode('publisher');
+      publisher.data = { ...publisher.data, frequencyHz: 10, durationMs: 220 };
+      const tree: BehaviorTree = {
+        id: 'repeated-publisher', name: 'Repeated publisher', createdAt: 1, updatedAt: 1,
+        nodes: [publisher], edges: [],
+      };
+      const executor = new BehaviorTreeExecutor(tree, {} as Ros, vi.fn());
+      const execution = executor.start();
+      for (let elapsed = 0; elapsed < 400; elapsed += 100) {
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      await execution;
+
+      expect(roslibMocks.topicPublish.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(roslibMocks.topicUnadvertise).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

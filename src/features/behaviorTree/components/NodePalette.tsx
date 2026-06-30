@@ -656,8 +656,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                 >
                   <span className="palette-node-icon"><IconTopic /></span>
                   <span className="palette-node-copy">
-                    <span className="palette-node-label">Publish {topic.name}</span>
-                    <span className="palette-node-detail">{topic.type}</span>
+                    <span className="palette-node-label">{topic.name}</span>
+                    <span className="palette-node-detail">Publisher - {topic.type}</span>
                   </span>
                 </div>,
                 <div

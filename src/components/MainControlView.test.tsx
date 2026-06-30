@@ -253,6 +253,26 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
+  it('adds from the global control after selecting a tile header', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-camera', 'camera', 'Camera'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    renderMainControlView();
+
+    const camera = await screen.findByLabelText('Camera');
+    fireEvent.click(camera.querySelector('.workspace-card-header')!);
+    fireEvent.click(screen.getByLabelText('Add workspace panel'));
+    fireEvent.click(screen.getByRole('button', { name: 'TF tree' }));
+
+    expect(screen.getByTestId('camera-view')).toBeInTheDocument();
+    expect(await screen.findByLabelText('TF tree')).toBeInTheDocument();
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
+      expect(stored).toHaveLength(2);
+    });
+  });
+
   it('migrates legacy mobile panels only when the unified workspace is empty', async () => {
     localStorage.setItem(mobileWorkspacePanelsKey, JSON.stringify([
       makePanel('legacy-camera', 'camera', 'Camera'),

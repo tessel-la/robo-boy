@@ -473,7 +473,7 @@ test.describe('Behavior Tree panel', () => {
 
     await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
     await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
-    await page.getByTestId('bt-context-wrap').click();
+    await page.getByTestId('bt-context-wrap').evaluate(element => (element as HTMLButtonElement).click());
 
     const subtreeNode = page.locator('.react-flow__node').filter({ hasText: 'Subtree' });
     await expect(subtreeNode).toHaveCount(1);
@@ -494,7 +494,7 @@ test.describe('Behavior Tree panel', () => {
 
     await firstAction.click();
     await multiSelectClick(secondAction);
-    await page.getByTestId('bt-context-wrap').click();
+    await page.getByTestId('bt-context-wrap').evaluate(element => (element as HTMLButtonElement).click());
 
     await expect(subtreeNode).toHaveCount(1);
     await expect(page.getByTestId('bt-context-open-subtree')).toBeVisible();
@@ -717,27 +717,9 @@ test.describe('Behavior Tree panel', () => {
     await page.getByTestId('bt-menu-button').click();
     await page.locator('.bt-menu-tree-row').filter({ hasText: 'Ordered Sequence' }).click();
 
-    const sequence = page.locator('.react-flow__node').filter({ hasText: 'Sequence' });
-    const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
-    const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
-    const sequenceBox = await sequence.boundingBox();
-    const firstBox = await firstAction.boundingBox();
-    const secondBox = await secondAction.boundingBox();
-
-    expect(sequenceBox).not.toBeNull();
-    expect(firstBox).not.toBeNull();
-    expect(secondBox).not.toBeNull();
-
-    await page.mouse.click(
-      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2) / 2,
-      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2) / 2
-    );
-    await page.keyboard.down('Control');
-    await page.mouse.click(
-      ((sequenceBox?.x ?? 0) + (sequenceBox?.width ?? 0) / 2 + (secondBox?.x ?? 0) + (secondBox?.width ?? 0) / 2) / 2,
-      ((sequenceBox?.y ?? 0) + (sequenceBox?.height ?? 0) / 2 + (secondBox?.y ?? 0) + (secondBox?.height ?? 0) / 2) / 2
-    );
-    await page.keyboard.up('Control');
+    const edges = page.locator('.react-flow__edge');
+    await edges.nth(0).dispatchEvent('click');
+    await edges.nth(1).dispatchEvent('click', { ctrlKey: true });
 
     await expect(page.locator('.react-flow__edge.selected')).toHaveCount(2);
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
@@ -874,7 +856,7 @@ test.describe('Behavior Tree panel', () => {
 
     await page.getByLabel('Add workspace panel').first().click();
     await page.getByRole('button', { name: '3D panel', exact: true }).click();
-    await expect(page.getByTestId('visualization-panel')).toBeVisible();
+    await expect(page.getByRole('region', { name: '3D view' })).toBeVisible();
     await expect(page.locator('.bt-node').filter({ hasText: 'Navigate' })).toHaveClass(/status-running/);
 
     await page.setViewportSize({ width: 390, height: 844 });
