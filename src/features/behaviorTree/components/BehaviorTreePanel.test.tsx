@@ -310,6 +310,17 @@ describe('BehaviorTreePanel', () => {
     expect(screen.getByTestId('bt-node-palette')).toBeInTheDocument();
   });
 
+  it('opens and closes the AI behavior tree agent', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    expect(screen.getByTestId('bt-agent-panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Describe the behavior')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+  });
+
   it('uses a touch-friendly connection radius', () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
 

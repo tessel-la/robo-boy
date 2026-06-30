@@ -1,0 +1,273 @@
+import React, { useEffect, useRef, useState } from 'react';
+import type { Ros } from 'roslib';
+import {
+  discoverAllROSResources,
+  fetchActionGoalDetails,
+  fetchServiceRequestSchema,
+} from '../services/rosDiscovery';
+import { BehaviorTree, ROSDiscoveryResult } from '../types';
+import { generateBehaviorTree } from '../agent/agentClient';
+import {
+  getProviderDefaults,
+  loadAgentSettings,
+  saveAgentSettings,
+} from '../agent/agentStorage';
+import { parseGeneratedAgentResponse } from '../agent/treeGeneration';
+import {
+  AgentClarification,
+  AgentProvider,
+  BehaviorTreeAgentSettings,
+  BehaviorTreeResourceSchemas,
+} from '../agent/types';
+import './BehaviorTreeAgentPanel.css';
+
+interface BehaviorTreeAgentPanelProps {
+  open: boolean;
+  ros: Ros | null;
+  isConnected: boolean;
+  currentTree: BehaviorTree | null;
+  onClose: () => void;
+  onApply: (tree: BehaviorTree, mode: 'replace' | 'subtree') => void;
+}
+
+const EMPTY_RESOURCES: ROSDiscoveryResult = { actions: [], services: [], topics: [] };
+const EMPTY_SCHEMAS: BehaviorTreeResourceSchemas = { actions: {}, services: {} };
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
+  open,
+  ros,
+  isConnected,
+  currentTree,
+  onClose,
+  onApply,
+}) => {
+  const [settings, setSettings] = useState<BehaviorTreeAgentSettings>(loadAgentSettings);
+  const [prompt, setPrompt] = useState('');
+  const [resources, setResources] = useState<ROSDiscoveryResult>(EMPTY_RESOURCES);
+  const [resourceSchemas, setResourceSchemas] = useState<BehaviorTreeResourceSchemas>(EMPTY_SCHEMAS);
+  const [conversation, setConversation] = useState<ChatMessage[]>([]);
+  const [clarification, setClarification] = useState<AgentClarification | null>(null);
+  const [generatedTree, setGeneratedTree] = useState<BehaviorTree | null>(null);
+  const [rawOutput, setRawOutput] = useState('');
+  const [progress, setProgress] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const outputRef = useRef('');
+
+  useEffect(() => {
+    if (!open) abortRef.current?.abort();
+  }, [open]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const updateSettings = (patch: Partial<BehaviorTreeAgentSettings>) => {
+    setSettings(previous => {
+      const next = { ...previous, ...patch };
+      saveAgentSettings(next);
+      return next;
+    });
+  };
+
+  const handleProviderChange = (provider: AgentProvider) => {
+    updateSettings({ provider, apiKey: '', ...getProviderDefaults(provider) });
+  };
+
+  const handleNewConversation = () => {
+    abortRef.current?.abort();
+    setConversation([]);
+    setClarification(null);
+    setGeneratedTree(null);
+    setRawOutput('');
+    setProgress([]);
+    setError('');
+    setPrompt('');
+  };
+
+  const handleDiscover = async () => {
+    if (!ros || !isConnected) return;
+    setIsDiscovering(true);
+    setError('');
+    try {
+      const discovered = await discoverAllROSResources(ros);
+      setResources(discovered);
+      const schemas: BehaviorTreeResourceSchemas = { actions: {}, services: {} };
+      for (const actionType of Array.from(new Set(discovered.actions.map(action => action.type).filter(Boolean)))) {
+        const details = await fetchActionGoalDetails(ros, actionType);
+        if (details) schemas.actions[actionType] = details;
+      }
+      for (const serviceType of Array.from(new Set(discovered.services.map(service => service.type).filter(Boolean)))) {
+        const details = await fetchServiceRequestSchema(ros, serviceType);
+        if (details) schemas.services[serviceType] = details;
+      }
+      setResourceSchemas(schemas);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ROS resource discovery failed.');
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  const handleGenerate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!prompt.trim() || isGenerating) return;
+    if (!settings.baseUrl.trim() || !settings.model.trim()) {
+      setError('Set both a base URL and model before generating.');
+      return;
+    }
+    if (settings.provider !== 'openai-compatible' && !settings.apiKey.trim()) {
+      setError(`Add an API key for ${settings.provider} before generating.`);
+      return;
+    }
+    const userMessage = prompt.trim();
+    const previousConversation = conversation;
+    setConversation(previous => [...previous, { role: 'user', content: userMessage }]);
+    setPrompt('');
+    setClarification(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    outputRef.current = '';
+    setRawOutput('');
+    setGeneratedTree(null);
+    setError('');
+    setProgress(['Preparing BT schema and context…']);
+    setIsGenerating(true);
+
+    try {
+      const result = await generateBehaviorTree({
+        prompt: userMessage,
+        conversation: previousConversation,
+        settings,
+        currentTree,
+        rosResources: resources,
+        resourceSchemas,
+        signal: controller.signal,
+        onProgress: message => setProgress(previous => [...previous, message]),
+        onToken: token => {
+          outputRef.current += token;
+          setRawOutput(outputRef.current);
+        },
+      });
+      setProgress(previous => [...previous, 'Checking the response and required inputs…']);
+      const response = parseGeneratedAgentResponse(result, resourceSchemas);
+      if (response.kind === 'clarification') {
+        setClarification(response);
+        setConversation(previous => [...previous, { role: 'assistant', content: response.question }]);
+        setProgress(previous => [...previous, 'Waiting for one detail from you.']);
+      } else {
+        setGeneratedTree(response.tree);
+        setConversation(previous => [...previous, { role: 'assistant', content: `Built “${response.tree.name}” with complete action inputs.` }]);
+        setProgress(previous => [...previous, `Ready: ${response.tree.nodes.length} nodes, ${response.tree.edges.length} connections.`]);
+      }
+    } catch (cause) {
+      if (controller.signal.aborted) {
+        setProgress(previous => [...previous, 'Generation stopped.']);
+      } else {
+        setError(cause instanceof Error ? cause.message : 'Tree generation failed.');
+      }
+    } finally {
+      setIsGenerating(false);
+      abortRef.current = null;
+    }
+  };
+
+  if (!open) return null;
+  const resourceCount = resources.actions.length + resources.services.length + resources.topics.length;
+  const schemaCount = Object.keys(resourceSchemas.actions).length + Object.keys(resourceSchemas.services).length;
+
+  return (
+    <div className="bt-agent-overlay" role="dialog" aria-modal="true" aria-label="AI behavior tree agent">
+      <section className="bt-agent-panel" data-testid="bt-agent-panel">
+        <header className="bt-agent-header">
+          <div>
+            <span className="bt-agent-kicker">AI architect</span>
+            <h2>Create a behavior tree</h2>
+          </div>
+          <div className="bt-agent-header-actions">
+            {conversation.length > 0 && <button type="button" className="bt-agent-new" onClick={handleNewConversation}>New chat</button>}
+            <button type="button" className="bt-agent-close" onClick={onClose} aria-label="Close AI agent">×</button>
+          </div>
+        </header>
+
+        <button type="button" className="bt-agent-settings-toggle" onClick={() => setShowSettings(value => !value)} aria-expanded={showSettings}>
+          <span>{settings.provider} · {settings.model}</span><span>{showSettings ? 'Hide settings' : 'Provider settings'}</span>
+        </button>
+
+        {showSettings && (
+          <div className="bt-agent-settings">
+            <label>Provider
+              <select value={settings.provider} onChange={event => handleProviderChange(event.target.value as AgentProvider)}>
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="openai-compatible">OpenAI-compatible / local</option>
+              </select>
+            </label>
+            <label>Model<input value={settings.model} onChange={event => updateSettings({ model: event.target.value })} /></label>
+            <label>Base URL<input value={settings.baseUrl} onChange={event => updateSettings({ baseUrl: event.target.value })} /></label>
+            <label>API key<input type="password" autoComplete="off" value={settings.apiKey} onChange={event => updateSettings({ apiKey: event.target.value })} placeholder={settings.provider === 'openai-compatible' ? 'Optional for local models' : 'Required'} /></label>
+            <p className="bt-agent-key-note">Settings stay in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.</p>
+            <label className="bt-agent-wide">Agent instructions<textarea rows={2} value={settings.systemContext} onChange={event => updateSettings({ systemContext: event.target.value })} placeholder="Safety constraints, preferred BT conventions…" /></label>
+            <label className="bt-agent-wide">Robot / mission context<textarea rows={3} value={settings.robotContext} onChange={event => updateSettings({ robotContext: event.target.value })} placeholder="Robot capabilities, frames, operational rules…" /></label>
+            <label className="bt-agent-check bt-agent-wide"><input type="checkbox" checked={settings.includeCurrentTree} onChange={event => updateSettings({ includeCurrentTree: event.target.checked })} /> Include the current tree as context</label>
+          </div>
+        )}
+
+        <div className="bt-agent-context-row">
+          <button type="button" onClick={handleDiscover} disabled={!isConnected || isDiscovering}>{isDiscovering ? 'Reading action inputs…' : 'Scan ROS actions'}</button>
+          <span>{resourceCount > 0 ? `${resourceCount} resources · ${schemaCount} input schemas` : isConnected ? 'No ROS resources scanned' : 'Connect ROS to scan resources'}</span>
+        </div>
+
+        {conversation.length > 0 && (
+          <div className="bt-agent-chat" aria-live="polite">
+            {conversation.map((message, index) => (
+              <div key={`${index}-${message.role}`} className={`bt-agent-message ${message.role}`}>
+                <span>{message.role === 'assistant' ? 'Agent' : 'You'}</span>
+                <p>{message.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {clarification?.suggestions && clarification.suggestions.length > 0 && (
+          <div className="bt-agent-suggestions">
+            {clarification.suggestions.map(suggestion => <button type="button" key={suggestion} onClick={() => setPrompt(suggestion)}>{suggestion}</button>)}
+          </div>
+        )}
+
+        <form className="bt-agent-form" onSubmit={handleGenerate}>
+          <label htmlFor="bt-agent-prompt">{clarification ? 'Your answer' : conversation.length > 0 ? 'Continue the conversation' : 'Describe the behavior'}</label>
+          <textarea id="bt-agent-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} rows={clarification ? 3 : 5} autoFocus placeholder={clarification ? 'For example: relative x 0.5 m, y -0.2 m, keep current yaw.' : 'Example: Move 0.5 m forward and 0.2 m left, then capture an image. Retry movement twice.'} />
+          <div className="bt-agent-form-actions">
+            {isGenerating && <button type="button" className="secondary" onClick={() => abortRef.current?.abort()}>Stop</button>}
+            <button type="submit" disabled={!prompt.trim() || isGenerating}>{isGenerating ? 'Thinking…' : clarification ? 'Send answer' : 'Generate tree'}</button>
+          </div>
+        </form>
+
+        {(progress.length > 0 || error) && (
+          <div className="bt-agent-process" aria-live="polite">
+            <strong>Process</strong>
+            {progress.map((message, index) => <div key={`${index}-${message}`} className={index === progress.length - 1 && isGenerating ? 'active' : ''}><span />{message}</div>)}
+            {error && <p role="alert">{error}</p>}
+          </div>
+        )}
+
+        {isGenerating && rawOutput && <pre className="bt-agent-stream" aria-label="Live model output">{rawOutput.slice(-1800)}</pre>}
+
+        {generatedTree && (
+          <div className="bt-agent-result">
+            <div><strong>{generatedTree.name}</strong><span>{generatedTree.nodes.length} nodes · {generatedTree.edges.length} connections</span></div>
+            <div>
+              <button type="button" className="secondary" onClick={() => onApply(generatedTree, 'subtree')}>Insert as subtree</button>
+              <button type="button" onClick={() => onApply(generatedTree, 'replace')}>Replace current tree</button>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
+export default BehaviorTreeAgentPanel;

@@ -41,6 +41,7 @@ import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
 import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
+import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import {
@@ -467,6 +468,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
   const [selectionActionAnchor, setSelectionActionAnchor] = useState<SelectionActionAnchor | null>(null);
@@ -2643,6 +2645,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             return nextEnabled;
           })
         }
+        onOpenAgent={() => setIsAgentOpen(true)}
         onRename={handleRename}
         blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
         onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
@@ -2914,6 +2917,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           )}
         </div>
       </div>
+
+      <BehaviorTreeAgentPanel
+        open={isAgentOpen}
+        ros={ros}
+        isConnected={isConnected}
+        currentTree={currentTree}
+        onClose={() => setIsAgentOpen(false)}
+        onApply={(tree, mode) => {
+          if (mode === 'replace') {
+            persistEditorTree(tree.nodes, tree.edges, {
+              name: tree.name,
+              description: tree.description,
+            });
+          } else {
+            const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+            if (!bounds) return;
+            addNodeAtPosition(
+              BehaviorNodeType.Subtree,
+              screenToFlowPosition({
+                x: bounds.left + bounds.width / 2,
+                y: bounds.top + bounds.height / 2,
+              }),
+              tree,
+              { avoidOverlap: true }
+            );
+          }
+          setIsAgentOpen(false);
+          window.requestAnimationFrame(() => centerTreeInView());
+        }}
+      />
 
       {editingAction && (
         <ActionParameterEditor
