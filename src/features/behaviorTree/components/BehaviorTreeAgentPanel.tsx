@@ -73,6 +73,15 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose, open]);
+
   const updateSettings = (patch: Partial<BehaviorTreeAgentSettings>) => {
     setSettings(previous => {
       const next = { ...previous, ...patch };
@@ -205,12 +214,18 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const canGenerate = Boolean(prompt.trim()) && !isGenerating && actionableResourceCount > 0;
 
   return (
-    <div className="bt-agent-overlay" role="dialog" aria-modal="true" aria-label="AI behavior tree agent">
-      <section className="bt-agent-panel" data-testid="bt-agent-panel">
+    <div className="bt-agent-overlay" onPointerDown={event => event.target === event.currentTarget && onClose()}>
+      <section className="bt-agent-panel" data-testid="bt-agent-panel" role="dialog" aria-modal="true" aria-labelledby="bt-agent-title" onPointerDown={event => event.stopPropagation()}>
+        <div className="bt-agent-sheet-handle" aria-hidden="true" />
         <header className="bt-agent-header">
-          <div>
-            <span className="bt-agent-kicker">AI architect</span>
-            <h2>Create a behavior tree</h2>
+          <div className="bt-agent-title">
+            <span className="bt-agent-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l1.3 4.2 4.2 1.3-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3zM18.5 14l.7 2.2 2.3.8-2.3.7-.7 2.3-.8-2.3-2.2-.7 2.2-.8.8-2.2z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
+            </span>
+            <div>
+              <span className="bt-agent-kicker">Robo Boy AI</span>
+              <h2 id="bt-agent-title">Build with an agent</h2>
+            </div>
           </div>
           <div className="bt-agent-header-actions">
             {conversation.length > 0 && <button type="button" className="bt-agent-new" onClick={handleNewConversation}>New chat</button>}
