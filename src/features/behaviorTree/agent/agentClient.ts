@@ -92,6 +92,76 @@ const checkedFetch = async (url: string, init: RequestInit): Promise<Response> =
   throw new Error(`${response.status} ${response.statusText}${message ? `: ${message.slice(0, 500)}` : ''}`);
 };
 
+const blobToBase64 = async (blob: Blob): Promise<string> => {
+  const buffer = typeof blob.arrayBuffer === 'function'
+    ? await blob.arrayBuffer()
+    : await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error ?? new Error('Could not read recorded audio.'));
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.readAsArrayBuffer(blob);
+      });
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+};
+
+export const transcribeAgentAudio = async (
+  audio: Blob,
+  settings: BehaviorTreeAgentRequest['settings'],
+  signal?: AbortSignal
+): Promise<string> => {
+  if (!settings.baseUrl.trim()) {
+    throw new Error('Set a base URL before using voice input.');
+  }
+  if (settings.provider !== 'openai-compatible' && !settings.apiKey.trim()) {
+    throw new Error(`Add an API key for ${settings.provider} before using voice input.`);
+  }
+
+  if (settings.provider === 'gemini') {
+    const url = `${settings.baseUrl.replace(/\/$/, '')}/models/${encodeURIComponent(settings.model)}:generateContent`;
+    const response = await checkedFetch(url, {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Transcribe this audio exactly. Return only the transcript without commentary.' },
+            { inlineData: { mimeType: audio.type || 'audio/webm', data: await blobToBase64(audio) } },
+          ],
+        }],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+    const payload = await response.json();
+    const transcript = payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? '').join('').trim();
+    if (!transcript) throw new Error('The speech model returned an empty transcript.');
+    return transcript;
+  }
+
+  const form = new FormData();
+  const extension = audio.type.includes('ogg') ? 'ogg' : audio.type.includes('mp4') ? 'm4a' : 'webm';
+  form.append('file', audio, `instruction.${extension}`);
+  form.append('model', settings.provider === 'openai' ? 'gpt-4o-mini-transcribe' : 'whisper-1');
+  const headers: Record<string, string> = {};
+  if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+  const response = await checkedFetch(`${settings.baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+    method: 'POST',
+    signal,
+    headers,
+    body: form,
+  });
+  const payload = await response.json();
+  const transcript = typeof payload.text === 'string' ? payload.text.trim() : '';
+  if (!transcript) throw new Error('The speech model returned an empty transcript.');
+  return transcript;
+};
+
 export const generateBehaviorTree = async (request: BehaviorTreeAgentRequest): Promise<string> => {
   const { settings, signal, onProgress, onToken } = request;
   const prompt = buildBehaviorTreeAgentPrompt(request);

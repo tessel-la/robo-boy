@@ -481,6 +481,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const [inlineAgentPosition, setInlineAgentPosition] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
   const [agentPreviewTree, setAgentPreviewTree] = useState<BehaviorTree | null>(null);
   const [agentPreviewDimensions, setAgentPreviewDimensions] = useState<
     Record<string, { width: number; height: number }>
@@ -513,6 +518,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     treeName: '',
   });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
@@ -1960,12 +1966,44 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     onExecutionChange?.(executionSnapshot);
   }, [executionSnapshot, onExecutionChange]);
 
+  const openInlineAgentPrompt = useCallback(() => {
+    const panel = reactFlowWrapper.current?.closest('.behavior-tree-panel');
+    if (!(panel instanceof HTMLElement)) return;
+    const bounds = panel.getBoundingClientRect();
+    const pointer = lastCanvasPointerRef.current ?? {
+      x: bounds.left + bounds.width / 2,
+      y: bounds.top + bounds.height / 2,
+    };
+    const localX = Number.isFinite(pointer.x) ? pointer.x - bounds.left : bounds.width / 2;
+    const localY = Number.isFinite(pointer.y) ? pointer.y - bounds.top : bounds.height / 2;
+    const width = Math.min(360, Math.max(180, bounds.width - 24));
+    const left = localX + width + 24 <= bounds.width
+      ? localX + 12
+      : Math.max(12, localX - width - 12);
+    const top = localY + 66 <= bounds.height
+      ? Math.max(62, localY + 12)
+      : Math.max(62, localY - 58);
+
+    setIsAgentOpen(false);
+    setInlineAgentPosition({ left, top, width });
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
         target instanceof HTMLElement &&
         (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+      if (
+        isActive &&
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'i'
+      ) {
+        event.preventDefault();
+        openInlineAgentPrompt();
+        return;
+      }
 
       if (isEditableTarget) return;
 
@@ -1981,7 +2019,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRedo, handleUndo, isExecuting]);
+  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt]);
 
   useEffect(() => {
     onExecutionControlsChange?.({ stop: handleStop });
@@ -2456,6 +2494,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleCanvasPointerMoveCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      lastCanvasPointerRef.current = { x: event.clientX, y: event.clientY };
       const gesture = customBoxSelectionGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
@@ -2875,7 +2914,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             return nextEnabled;
           })
         }
-        onOpenAgent={() => setIsAgentOpen(true)}
+        onOpenAgent={() => {
+          setInlineAgentPosition(null);
+          setIsAgentOpen(true);
+        }}
         onRename={handleRename}
         blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
         onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
@@ -3182,6 +3224,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         currentTree={currentTree}
         selectedTreeContext={selectedTreeContext}
         previewTree={agentPreviewTree}
+        inlinePosition={inlineAgentPosition}
+        onOpen={() => setIsAgentOpen(true)}
+        onInlineClose={() => setInlineAgentPosition(null)}
         onClose={() => {
           setIsAgentOpen(false);
           clearAgentPreview();

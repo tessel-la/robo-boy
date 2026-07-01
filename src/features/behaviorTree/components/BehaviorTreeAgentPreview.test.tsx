@@ -91,6 +91,34 @@ describe('BehaviorTreeAgentPreview', () => {
     expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
   });
 
+  it('keeps new connections visible when sequence and action signatures are duplicated', () => {
+    const current: BehaviorTree = {
+      ...baseline,
+      nodes: [
+        { id: 'sequence-a', type: BehaviorNodeType.Sequence, position: { x: 0, y: 0 }, data: { label: 'Sequence', type: 'sequence' } },
+        { id: 'sequence-b', type: BehaviorNodeType.Sequence, position: { x: 180, y: 0 }, data: { label: 'Sequence', type: 'sequence' } },
+        { id: 'stop-a', type: BehaviorNodeType.Action, position: { x: 0, y: 120 }, data: { label: 'Stop', actionName: '/stop', actionType: 'robot/action/Stop', parameters: {} } },
+      ],
+      edges: [{ id: 'existing-edge', source: 'sequence-a', target: 'stop-a' }],
+    };
+    const proposed: BehaviorTree = {
+      ...current,
+      nodes: [
+        ...current.nodes,
+        { id: 'stop-b', type: BehaviorNodeType.Action, position: { x: 180, y: 120 }, data: { label: 'Stop', actionName: '/stop', actionType: 'robot/action/Stop', parameters: {} } },
+      ],
+      edges: [
+        ...current.edges,
+        { id: 'new-edge', source: 'sequence-b', target: 'stop-b' },
+      ],
+    };
+
+    const diff = buildTreeDiff(current, proposed);
+
+    expect(diff.proposedEdges.get('existing-edge')).toBe('unchanged');
+    expect(diff.proposedEdges.get('new-edge')).toBe('added');
+  });
+
   it('renders compact canvas notice without duplicate review actions', () => {
     render(<BehaviorTreeAgentPreview tree={proposal} baseline={baseline} onReject={vi.fn()} onAccept={vi.fn()} compact showActions={false} />);
 

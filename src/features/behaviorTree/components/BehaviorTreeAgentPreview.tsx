@@ -64,8 +64,15 @@ const comparableData = (node: BehaviorTreeNode): string => {
   return JSON.stringify(data);
 };
 
-const edgeSignature = (edge: Edge, nodes: Map<string, BehaviorTreeNode>): string =>
-  `${nodeSignature(nodes.get(edge.source) ?? ({ id: edge.source, type: 'unknown', data: { label: edge.source }, position: { x: 0, y: 0 } } as BehaviorTreeNode))}->${nodeSignature(nodes.get(edge.target) ?? ({ id: edge.target, type: 'unknown', data: { label: edge.target }, position: { x: 0, y: 0 } } as BehaviorTreeNode))}`;
+const edgeIdentity = (
+  edge: Edge,
+  normalizeNodeId: (nodeId: string) => string = nodeId => nodeId
+): string => [
+  normalizeNodeId(edge.source),
+  edge.sourceHandle ?? '',
+  normalizeNodeId(edge.target),
+  edge.targetHandle ?? '',
+].join('|');
 
 export const buildTreeDiff = (baseline: BehaviorTree | null, proposed: BehaviorTree): TreeDiff => {
   const proposedNodes = new Map(proposed.nodes.map(node => [node.id, 'added' as ChangeKind]));
@@ -84,12 +91,27 @@ export const buildTreeDiff = (baseline: BehaviorTree | null, proposed: BehaviorT
     proposedNodes.set(match.id, state);
   });
 
-  const currentNodeById = new Map((baseline?.nodes ?? []).map(node => [node.id, node]));
-  const proposedNodeById = new Map(proposed.nodes.map(node => [node.id, node]));
-  const currentEdgeSignatures = new Set((baseline?.edges ?? []).map(edge => edgeSignature(edge, currentNodeById)));
-  const proposedEdgeSignatures = new Set(proposed.edges.map(edge => edgeSignature(edge, proposedNodeById)));
-  const proposedEdges = new Map(proposed.edges.map(edge => [edge.id, currentEdgeSignatures.has(edgeSignature(edge, proposedNodeById)) ? 'unchanged' as ChangeKind : 'added' as ChangeKind]));
-  const currentEdges = new Map((baseline?.edges ?? []).map(edge => [edge.id, proposedEdgeSignatures.has(edgeSignature(edge, currentNodeById)) ? 'unchanged' as ChangeKind : 'removed' as ChangeKind]));
+  const proposedToCurrent = new Map(
+    Array.from(currentToProposed.entries()).map(([currentId, proposedId]) => [proposedId, currentId])
+  );
+  const normalizeProposedId = (nodeId: string) =>
+    proposedToCurrent.get(nodeId) ?? `proposed:${nodeId}`;
+  const currentEdgeIdentities = new Set((baseline?.edges ?? []).map(edge => edgeIdentity(edge)));
+  const proposedEdgeIdentities = new Set(
+    proposed.edges.map(edge => edgeIdentity(edge, normalizeProposedId))
+  );
+  const proposedEdges = new Map(proposed.edges.map(edge => [
+    edge.id,
+    currentEdgeIdentities.has(edgeIdentity(edge, normalizeProposedId))
+      ? 'unchanged' as ChangeKind
+      : 'added' as ChangeKind,
+  ]));
+  const currentEdges = new Map((baseline?.edges ?? []).map(edge => [
+    edge.id,
+    proposedEdgeIdentities.has(edgeIdentity(edge))
+      ? 'unchanged' as ChangeKind
+      : 'removed' as ChangeKind,
+  ]));
   return { proposedNodes, currentNodes, proposedEdges, currentEdges, currentToProposed };
 };
 

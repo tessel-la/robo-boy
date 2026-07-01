@@ -79,6 +79,21 @@ describe('BehaviorTreeAgentPanel', () => {
     expect(screen.getByText('Scan at least one action or service to continue.')).toBeInTheDocument();
   });
 
+  it('offers voice input for instructions, mission context, and behavior description', () => {
+    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Start voice input for Describe the behavior' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start voice input for Agent instructions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start voice input for Robot / mission context' })).toBeInTheDocument();
+  });
+
+  it('renders desktop resize handles without changing the canvas layout', () => {
+    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+
+    expect(screen.getAllByRole('separator', { name: /Resize AI agent/ })).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Scan ROS resources' }).querySelector('svg')).toBeInTheDocument();
+  });
+
   it('keeps proposal decisions on the canvas controls', () => {
     render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={tree} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
@@ -118,7 +133,7 @@ describe('BehaviorTreeAgentPanel', () => {
 
     render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={onPreviewChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('3 resources · 2 input schemas');
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move forward' } });
@@ -155,7 +170,7 @@ describe('BehaviorTreeAgentPanel', () => {
     render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'No BT' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Make a fresh tree' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -183,7 +198,7 @@ describe('BehaviorTreeAgentPanel', () => {
 
     render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move somewhere' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -199,7 +214,7 @@ describe('BehaviorTreeAgentPanel', () => {
 
     render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('ROS unavailable');
 
     fireEvent.click(screen.getByRole('button', { name: /Provider settings/ }));
@@ -209,7 +224,7 @@ describe('BehaviorTreeAgentPanel', () => {
       services: [],
       topics: [],
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -231,8 +246,9 @@ describe('BehaviorTreeAgentPanel', () => {
     fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } });
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.openai.com/v1');
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-4.1-mini');
+    expect(screen.queryByLabelText('Speech model')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));

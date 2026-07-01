@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BehaviorNodeType, BehaviorTree } from '../types';
-import { buildBehaviorTreeAgentPrompt, generateBehaviorTree } from './agentClient';
+import { buildBehaviorTreeAgentPrompt, generateBehaviorTree, transcribeAgentAudio } from './agentClient';
 import { getDefaultAgentSettings } from './agentStorage';
 
 const tree: BehaviorTree = {
@@ -159,5 +159,69 @@ describe('buildBehaviorTreeAgentPrompt', () => {
       rosResources: { actions: [], services: [], topics: [] },
       resourceSchemas: { actions: {}, services: {} },
     })).rejects.toThrow('400 Bad Request: Bad model');
+  });
+});
+
+describe('transcribeAgentAudio', () => {
+  it('sends recorded audio to an OpenAI-compatible transcription endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      JSON.stringify({ text: 'move to the charging station' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    ));
+    const settings = { ...getDefaultAgentSettings(), apiKey: 'local-key' };
+
+    await expect(transcribeAgentAudio(new Blob(['audio'], { type: 'audio/webm' }), settings))
+      .resolves.toBe('move to the charging station');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:11434/v1/audio/transcriptions',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer local-key' } })
+    );
+    const form = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[1]?.body as FormData;
+    expect(form.get('model')).toBe('whisper-1');
+    expect(form.get('file')).toBeInstanceOf(Blob);
+  });
+
+  it('selects the OpenAI transcription model internally', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      JSON.stringify({ text: 'stop the robot' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    ));
+    const settings = {
+      ...getDefaultAgentSettings(),
+      provider: 'openai' as const,
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'openai-key',
+    };
+
+    await transcribeAgentAudio(new Blob(['audio'], { type: 'audio/webm' }), settings);
+
+    const form = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[1]?.body as FormData;
+    expect(form.get('model')).toBe('gpt-4o-mini-transcribe');
+  });
+
+  it('uses the configured Gemini model for audio instead of an OpenAI model name', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: 'move forward' }] } }] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    ));
+    const settings = {
+      ...getDefaultAgentSettings(),
+      provider: 'gemini' as const,
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      model: 'gemini-2.5-flash',
+      apiKey: 'gemini-key',
+    };
+
+    await expect(transcribeAgentAudio(new Blob(['audio'], { type: 'audio/webm' }), settings))
+      .resolves.toBe('move forward');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('requires provider credentials for cloud transcription', async () => {
+    const settings = { ...getDefaultAgentSettings(), provider: 'openai' as const, baseUrl: 'https://api.openai.com/v1' };
+    await expect(transcribeAgentAudio(new Blob(['audio']), settings)).rejects.toThrow('Add an API key for openai');
   });
 });

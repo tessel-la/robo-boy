@@ -824,6 +824,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
   const [isMobileSplitView, setIsMobileSplitView] = useState(loadMobileSplitViewPreference);
   const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
+  const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadUnifiedWorkspacePanels);
   const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(loadMobileWorkspacePanels);
   const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() => (
@@ -849,6 +850,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isWorkspaceResizing, setIsWorkspaceResizing] = useState(false);
   const [workspaceDropPlacement, setWorkspaceDropPlacement] = useState<WorkspaceDropPlacement | null>(null);
   const [lastAddedWorkspacePanelId, setLastAddedWorkspacePanelId] = useState<string | null>(null);
+  const [executionJumpPanelId, setExecutionJumpPanelId] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
     return window.matchMedia(DESKTOP_WORKSPACE_QUERY).matches;
@@ -2210,6 +2212,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleSwapMobileWorkspacePanels = () => {
+    if (isMobileSwapAnimating || mobileWorkspacePanels.length !== 2) return;
+    setIsMobileSwapAnimating(true);
     setMobileWorkspacePanels(prev => prev.length === 2 ? [prev[1], prev[0]] : prev);
     setActiveMobileWindowIndex(prev => prev === 0 ? 1 : 0);
   };
@@ -2306,6 +2310,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleReturnToBehaviorTree = () => {
+    if (isDesktopWorkspace) {
+      const behaviorTreePanel = workspacePanels.find(panel => panel.type === 'behaviorTree');
+      if (!behaviorTreePanel) return;
+      setExecutionJumpPanelId(behaviorTreePanel.id);
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(`[data-workspace-card-id="${behaviorTreePanel.id}"]`)
+          ?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
+      });
+      return;
+    }
+
     if (!isLargeScreen && !useStandardMobileExecutionLayout) {
       handleMobilePanelTypeChange('behaviorTree');
       return;
@@ -2652,12 +2667,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return (
       <section
         key={panel.id}
-        className={`workspace-card mobile-workspace-window workspace-card-${panel.type} ${activeMobileWindowIndex === index ? 'is-active' : ''}`}
+        className={`workspace-card mobile-workspace-window workspace-card-${panel.type} ${activeMobileWindowIndex === index ? 'is-active' : ''}${isMobileSwapAnimating ? ` is-swapping is-swapping-${index === 0 ? 'up' : 'down'}` : ''}`}
         aria-label={`${index === 0 ? 'Top' : 'Bottom'} mobile window`}
         aria-hidden={!isVisible}
         style={{
           display: isVisible ? undefined : 'none',
           height: isMobileSplitView ? `calc(${index === 0 ? topHeight : bottomHeight}% - 8px)` : '100%',
+        }}
+        onAnimationEnd={(event) => {
+          if (event.target === event.currentTarget && index === 0) setIsMobileSwapAnimating(false);
         }}
       >
         {isMobileSplitView && (
@@ -2678,6 +2696,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 type="button"
                 className="mobile-workspace-swap-button"
                 onClick={handleSwapMobileWorkspacePanels}
+                disabled={isMobileSwapAnimating}
                 title="Swap mobile windows"
                 aria-label="Swap mobile windows"
               >
@@ -3059,6 +3078,31 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </div>
         )}
         <div className="layout-controls">
+          {isDesktopWorkspace && btExecution.isExecuting && (
+            <div className="bt-execution-island workspace-bt-execution-island" role="status" aria-live="polite">
+              <button
+                className="bt-execution-return"
+                onClick={handleReturnToBehaviorTree}
+                title="Jump to running behavior tree"
+                aria-label="Jump to running behavior tree"
+              >
+                {icons.bt}
+                <span className="bt-execution-pulse" aria-hidden="true" />
+                <span className="bt-execution-copy">
+                  <span className="bt-execution-tree">{btExecution.treeName || 'Behavior tree'}</span>
+                  <span className="bt-execution-node">{btExecution.activeNodeLabel || 'Running'}</span>
+                </span>
+              </button>
+              <button
+                className="bt-execution-stop"
+                onClick={handleStopBehaviorTree}
+                title="Stop behavior tree"
+                aria-label="Stop behavior tree"
+              >
+                {icons.stop}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className={`workspace-tile-button ${isDesktopWorkspace || isMobileSplitView ? 'active' : ''}`}
@@ -3257,7 +3301,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                             </section>
                           ) : (
                             <section
-                              className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}`}
+                              className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}${executionJumpPanelId === tile.panel.id ? ' is-execution-jump' : ''}`}
                               aria-label={tile.panel.title}
                               data-workspace-card-id={tile.panel.id}
                               data-workspace-row-index={rowIndex}
@@ -3265,6 +3309,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                               onAnimationEnd={() => {
                                 setLastAddedWorkspacePanelId(prev => prev === tile.panel.id ? null : prev);
+                                setExecutionJumpPanelId(prev => prev === tile.panel.id ? null : prev);
                               }}
                             >
                               <header
