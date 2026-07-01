@@ -109,4 +109,67 @@ describe('parseGeneratedBehaviorTree', () => {
     expect(tree.nodes.find(node => node.id === 'continue')?.data).toMatchObject({ timeout: 2500 });
     expect(tree.edges.map(edge => edge.sourceHandle)).toEqual([null, 'then', 'else']);
   });
+
+  it('normalizes fallback ids, labels, control defaults, and raw runtime fields', () => {
+    const tree = parseGeneratedBehaviorTree(JSON.stringify({
+      id: '',
+      nodes: [
+        { type: 'retry', config: { description: 'try again' } },
+        { id: 'node-0', type: 'repeat', label: 'Loop', config: { iterationLimit: 4 } },
+        { id: 'wait', type: 'timeout', config: { timeout: 'bad' } },
+        { id: 'branch', type: 'ifElse', variable: 'ready', operator: 'exists', expectedValue: true },
+        { id: 'service', type: 'service', serviceName: '/capture', serviceType: 'camera/srv/Capture', request: { quality: 80 } },
+        { id: 'topic', type: 'topic', config: { topicName: '/cmd', messageType: 'std_msgs/msg/String', message: { data: 'go' }, inputBindings: [{ variable: 'speed', targetPath: 'linear.x' }] } },
+      ],
+      edges: [],
+    }), {
+      actions: {},
+      services: {
+        'camera/srv/Capture': {
+          fields: [],
+          defaults: { quality: 50, format: 'jpg' },
+        },
+      },
+    });
+
+    expect(tree.name).toBe('AI generated tree');
+    expect(tree.nodes.map(node => node.id)).toEqual(['node-0', 'node-0-1', 'wait', 'branch', 'service', 'topic']);
+    expect(tree.nodes[0].data).toMatchObject({ label: 'retry', iterationLimit: 3, description: 'try again' });
+    expect(tree.nodes[1].data).toMatchObject({ label: 'Loop', iterationLimit: 4 });
+    expect(tree.nodes[2].data).toMatchObject({ timeout: 10000 });
+    expect(tree.nodes[3].data).toMatchObject({ variable: 'ready', operator: 'exists', expectedValue: true });
+    expect(tree.nodes[4].data).toMatchObject({ request: { quality: 80, format: 'jpg' } });
+    expect(tree.nodes[5].data).toMatchObject({ inputBindings: [{ variable: 'speed', targetPath: 'linear.x' }] });
+  });
+
+  it('rejects malformed agent responses with actionable errors', () => {
+    expect(() => parseGeneratedBehaviorTree('not json')).toThrow('valid JSON');
+    expect(() => parseGeneratedBehaviorTree(JSON.stringify({ nodes: [] }))).toThrow('nodes and edges arrays');
+    expect(() => parseGeneratedBehaviorTree(JSON.stringify({
+      nodes: [{ id: 'bad', type: 'condition' }],
+      edges: [],
+    }))).toThrow('unsupported type "condition"');
+    expect(() => parseGeneratedBehaviorTree(JSON.stringify({
+      nodes: [{ id: 'a', type: 'sequence' }],
+      edges: [{ source: 'a', target: 'a' }],
+    }))).toThrow('no root node');
+    expect(() => parseGeneratedAgentResponse(JSON.stringify({
+      kind: 'clarification',
+      question: '   ',
+    }))).toThrow('empty clarification question');
+  });
+
+  it('limits clarification suggestions and coerces missing fields to strings', () => {
+    expect(parseGeneratedAgentResponse(JSON.stringify({
+      kind: 'clarification',
+      question: 'Which frame?',
+      missing: ['frame', 42],
+      suggestions: ['map', 'odom', 'base_link', 'camera', 'too many'],
+    }))).toEqual({
+      kind: 'clarification',
+      question: 'Which frame?',
+      missing: ['frame', '42'],
+      suggestions: ['map', 'odom', 'base_link', 'camera'],
+    });
+  });
 });

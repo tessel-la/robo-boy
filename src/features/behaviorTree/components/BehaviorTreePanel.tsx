@@ -3168,7 +3168,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
                   type="button"
                   className="accept"
                   onClick={() => applyAgentPreview('replace')}
-                >Replace</button>
+                >Accept</button>
               </div>
             </div>
           )}

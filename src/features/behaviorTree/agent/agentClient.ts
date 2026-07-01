@@ -25,6 +25,11 @@ export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest):
     services: resources.services,
     topics: resources.topics,
   };
+  const treeContext = request.treeContext ?? (request.currentTree ? {
+    mode: 'open' as const,
+    openTree: request.currentTree,
+    note: 'The user shared the currently open behavior tree.',
+  } : null);
   const parts = [
     'You are a robotics behavior-tree architect. Build an executable behavior tree for the request.',
     SCHEMA,
@@ -32,8 +37,8 @@ export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest):
     request.settings.robotContext && `Robot and mission context:\n${request.settings.robotContext}`,
     `Available ROS resources:\n${JSON.stringify(resourceContext)}`,
     `Action and service input schemas (keyed by ROS type):\n${JSON.stringify(request.resourceSchemas)}`,
-    request.settings.includeCurrentTree && request.currentTree
-      ? `Behavior-tree context selected by the user:\n${JSON.stringify(request.currentTree)}`
+    request.settings.includeCurrentTree && treeContext
+      ? `Behavior-tree context selected by the user:\n${JSON.stringify(treeContext)}`
       : '',
     request.conversation?.length
       ? `Conversation so far:\n${request.conversation.map(message => `${message.role}: ${message.content}`).join('\n')}`

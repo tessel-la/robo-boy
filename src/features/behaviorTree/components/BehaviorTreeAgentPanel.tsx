@@ -17,6 +17,7 @@ import {
   AgentClarification,
   AgentProvider,
   BehaviorTreeAgentSettings,
+  BehaviorTreeAgentTreeContext,
   BehaviorTreeResourceSchemas,
 } from '../agent/types';
 import BehaviorTreeAgentPreview from './BehaviorTreeAgentPreview';
@@ -36,6 +37,47 @@ interface BehaviorTreeAgentPanelProps {
 const EMPTY_RESOURCES: ROSDiscoveryResult = { actions: [], services: [], topics: [] };
 const EMPTY_SCHEMAS: BehaviorTreeResourceSchemas = { actions: {}, services: {} };
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type TreeContextMode = 'open' | 'selection' | 'open-and-selection' | 'none';
+
+const getInitialTreeContextMode = (
+  currentTree: BehaviorTree | null,
+  selectedTreeContext: BehaviorTree | null
+): TreeContextMode => {
+  if (currentTree && selectedTreeContext?.nodes.length) return 'open-and-selection';
+  if (currentTree) return 'open';
+  if (selectedTreeContext?.nodes.length) return 'selection';
+  return 'none';
+};
+
+const getTreeContext = (
+  mode: TreeContextMode,
+  currentTree: BehaviorTree | null,
+  selectedTreeContext: BehaviorTree | null
+): BehaviorTreeAgentTreeContext | null => {
+  if (mode === 'open' && currentTree) {
+    return {
+      mode: 'open',
+      openTree: currentTree,
+      note: 'Use the whole currently open behavior tree as context.',
+    };
+  }
+  if (mode === 'selection' && selectedTreeContext?.nodes.length) {
+    return {
+      mode: 'selection',
+      selectedTree: selectedTreeContext,
+      note: 'Use only the selected behavior-tree nodes and their internal edges as focus context.',
+    };
+  }
+  if (mode === 'open-and-selection' && currentTree && selectedTreeContext?.nodes.length) {
+    return {
+      mode: 'open-and-selection',
+      openTree: currentTree,
+      selectedTree: selectedTreeContext,
+      note: 'Use the full open tree for global structure and the selected tree fragment as the edit focus.',
+    };
+  }
+  return null;
+};
 
 const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   open,
@@ -59,17 +101,36 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [treeContextMode, setTreeContextMode] = useState<'open' | 'selection' | 'none'>('open');
+  const [treeContextMode, setTreeContextMode] = useState<TreeContextMode>('open');
   const abortRef = useRef<AbortController | null>(null);
   const outputRef = useRef('');
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     if (!open) abortRef.current?.abort();
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-    setTreeContextMode(selectedTreeContext?.nodes.length ? 'selection' : currentTree ? 'open' : 'none');
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (!wasOpenRef.current) {
+      setTreeContextMode(getInitialTreeContextMode(currentTree, selectedTreeContext));
+      wasOpenRef.current = true;
+      return;
+    }
+    setTreeContextMode(previous => {
+      if (previous === 'none') return previous;
+      if (previous === 'open' && !currentTree) return selectedTreeContext?.nodes.length ? 'selection' : 'none';
+      if (previous === 'selection' && !selectedTreeContext?.nodes.length) return currentTree ? 'open' : 'none';
+      if (previous === 'open-and-selection' && (!currentTree || !selectedTreeContext?.nodes.length)) {
+        if (currentTree) return 'open';
+        if (selectedTreeContext?.nodes.length) return 'selection';
+        return 'none';
+      }
+      return previous;
+    });
   }, [currentTree, open, selectedTreeContext]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -161,11 +222,13 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     setIsGenerating(true);
 
     try {
+      const treeContext = getTreeContext(treeContextMode, currentTree, selectedTreeContext);
       const result = await generateBehaviorTree({
         prompt: userMessage,
         conversation: previousConversation,
-        settings: { ...settings, includeCurrentTree: treeContextMode !== 'none' },
-        currentTree: treeContextMode === 'selection' ? selectedTreeContext : treeContextMode === 'open' ? currentTree : null,
+        settings: { ...settings, includeCurrentTree: Boolean(treeContext) },
+        currentTree: treeContext?.openTree ?? treeContext?.selectedTree ?? null,
+        treeContext,
         rosResources: resources,
         resourceSchemas,
         signal: controller.signal,
@@ -258,14 +321,20 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           </div>
           <div className="bt-agent-context-options" role="group" aria-label="Behavior tree context">
             <button type="button" className={treeContextMode === 'open' ? 'active' : ''} onClick={() => setTreeContextMode('open')} disabled={!currentTree} aria-pressed={treeContextMode === 'open'}>
-              Open tree <span>{currentTree?.nodes.length ?? 0}</span>
+              Full BT <span>{currentTree?.nodes.length ?? 0}</span>
             </button>
             <button type="button" className={treeContextMode === 'selection' ? 'active' : ''} onClick={() => setTreeContextMode('selection')} disabled={!selectedTreeContext?.nodes.length} aria-pressed={treeContextMode === 'selection'}>
-              Selected part <span>{selectedTreeContext?.nodes.length ?? 0}</span>
+              Selection <span>{selectedTreeContext?.nodes.length ?? 0}</span>
             </button>
-            <button type="button" className={treeContextMode === 'none' ? 'active' : ''} onClick={() => setTreeContextMode('none')} aria-pressed={treeContextMode === 'none'}>None</button>
+            <button type="button" className={treeContextMode === 'open-and-selection' ? 'active' : ''} onClick={() => setTreeContextMode('open-and-selection')} disabled={!currentTree || !selectedTreeContext?.nodes.length} aria-pressed={treeContextMode === 'open-and-selection'}>
+              Full + selection <span>{selectedTreeContext?.nodes.length ?? 0}</span>
+            </button>
+            <button type="button" className={treeContextMode === 'none' ? 'active' : ''} onClick={() => setTreeContextMode('none')} aria-pressed={treeContextMode === 'none'}>No BT</button>
           </div>
+          {treeContextMode === 'open' && currentTree && <p>Using the full open tree with {currentTree.nodes.length} node{currentTree.nodes.length === 1 ? '' : 's'} as context.</p>}
           {treeContextMode === 'selection' && selectedTreeContext && <p>Using only the {selectedTreeContext.nodes.length} selected node{selectedTreeContext.nodes.length === 1 ? ' and its' : 's and their'} internal connections.</p>}
+          {treeContextMode === 'open-and-selection' && currentTree && selectedTreeContext && <p>Using the full {currentTree.nodes.length}-node tree, with {selectedTreeContext.nodes.length} selected node{selectedTreeContext.nodes.length === 1 ? '' : 's'} called out as the edit focus.</p>}
+          {treeContextMode === 'none' && <p>No behavior-tree structure will be sent. The agent will use only your text, robot context, and scanned ROS resources.</p>}
         </div>
 
         {conversation.length > 0 && (

@@ -13,11 +13,21 @@ export interface BehaviorTreeAgentSettings {
   includeCurrentTree: boolean;
 }
 
+export type BehaviorTreeAgentTreeContextMode = 'open' | 'selection' | 'open-and-selection';
+
+export interface BehaviorTreeAgentTreeContext {
+  mode: BehaviorTreeAgentTreeContextMode;
+  openTree?: BehaviorTree;
+  selectedTree?: BehaviorTree;
+  note?: string;
+}
+
 export interface BehaviorTreeAgentRequest {
   prompt: string;
   conversation?: Array<{ role: 'user' | 'assistant'; content: string }>;
   settings: BehaviorTreeAgentSettings;
   currentTree: BehaviorTree | null;
+  treeContext?: BehaviorTreeAgentTreeContext | null;
   rosResources: ROSDiscoveryResult;
   resourceSchemas: BehaviorTreeResourceSchemas;
   signal?: AbortSignal;

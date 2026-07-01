@@ -100,7 +100,7 @@
 .bt-agent-tree-context { margin: 12px 0; padding: 12px; border: 1px solid var(--border-color, #dfe3e8); border-radius: 14px; }
 .bt-agent-context-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 11px; }
 .bt-agent-context-heading span, .bt-agent-tree-context p { color: var(--text-secondary, #68707c); font-size: 10px; }
-.bt-agent-context-options { display: grid; grid-template-columns: 1fr 1fr .62fr; gap: 7px; }
+.bt-agent-context-options { display: grid; grid-template-columns: 1fr 1fr 1.08fr .72fr; gap: 7px; }
 .bt-agent-context-options button { min-height: 42px; padding: 8px; border: 1px solid var(--border-color, #dfe3e8); border-radius: 10px; background: transparent; color: inherit; font-size: 10px; cursor: pointer; }
 .bt-agent-context-options button.active { border-color: var(--primary-color, #4285f4); background: color-mix(in srgb, var(--primary-color, #4285f4) 10%, transparent); color: var(--primary-color, #4285f4); font-weight: 750; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color, #4285f4) 8%, transparent); }
 .bt-agent-context-options button:disabled { opacity: .34; }
@@ -148,7 +148,7 @@
   .bt-agent-context-row { grid-template-columns: 1fr; }
   .bt-agent-context-row button { width: 100%; min-height: 44px; }
   .bt-agent-context-options { grid-template-columns: 1fr 1fr; }
-  .bt-agent-context-options button:last-child { grid-column: 1 / -1; min-height: 38px; }
+  .bt-agent-context-options button { min-height: 38px; }
   .bt-agent-form { padding: 11px; }
   .bt-agent-form textarea { min-height: 92px; }
   .bt-agent-form-actions { flex-wrap: wrap; }
