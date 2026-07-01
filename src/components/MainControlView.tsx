@@ -127,6 +127,15 @@ const IconMCVSwap = () => (
     <path d="M17 17H6l3 3M6 17l3-3"/>
   </svg>
 );
+const IconMCVReplacePanel = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="2.5"/>
+    <path d="M8 9h7.5l-2-2"/>
+    <path d="m15.5 9-2 2"/>
+    <path d="M16 15H8.5l2 2"/>
+    <path d="m8.5 15 2-2"/>
+  </svg>
+);
 const IconMCVSaveLayout = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 4h11l3 3v13H5z"/>
@@ -167,6 +176,7 @@ const icons = {
   tile: <IconMCVTile />,
   split: <IconMCVSplit />,
   swap: <IconMCVSwap />,
+  replacePanel: <IconMCVReplacePanel />,
   saveLayout: <IconMCVSaveLayout />,
   download: <IconMCVDownload />,
   upload: <IconMCVUpload />,
@@ -809,6 +819,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(loadActiveWorkspaceLayoutId);
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
+  const [workspaceReplaceMenuStyle, setWorkspaceReplaceMenuStyle] = useState<React.CSSProperties | null>(null);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
   const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
@@ -860,6 +871,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const templateImportInputRef = useRef<HTMLInputElement>(null);
   const workspaceTemplateControlRef = useRef<HTMLDivElement>(null);
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
+  const workspaceReplaceMenuRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const isDesktopWorkspace = isLargeScreen;
@@ -1052,12 +1064,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target;
-      if (
-        target instanceof Node &&
-        workspaceAddControlRef.current &&
-        !workspaceAddControlRef.current.contains(target)
-      ) {
+      const clickedToolbarMenu = target instanceof Node && Boolean(workspaceAddControlRef.current?.contains(target));
+      const clickedReplaceMenu = target instanceof Node && Boolean(workspaceReplaceMenuRef.current?.contains(target));
+      if (target instanceof Node && !clickedToolbarMenu && !clickedReplaceMenu) {
         setIsWorkspaceAddMenuOpen(false);
+        setWorkspaceReplaceMenuStyle(null);
+        if (workspaceReplacementPanelId) setWorkspaceReplacementPanelId(null);
       }
     };
 
@@ -1065,7 +1077,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [isWorkspaceAddMenuOpen]);
+  }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+
+  useEffect(() => {
+    if (!workspaceReplacementPanelId) return;
+
+    const closeReplacementMenu = () => {
+      setIsWorkspaceAddMenuOpen(false);
+      setWorkspaceReplacementPanelId(null);
+      setWorkspaceReplaceMenuStyle(null);
+    };
+
+    window.addEventListener('resize', closeReplacementMenu);
+    window.addEventListener('scroll', closeReplacementMenu, true);
+    return () => {
+      window.removeEventListener('resize', closeReplacementMenu);
+      window.removeEventListener('scroll', closeReplacementMenu, true);
+    };
+  }, [workspaceReplacementPanelId]);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -1288,6 +1317,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         }
         : panel));
       setWorkspaceReplacementPanelId(null);
+      setWorkspaceReplaceMenuStyle(null);
       setIsWorkspaceAddMenuOpen(false);
       setIsWorkspaceTemplateMenuOpen(false);
       return;
@@ -1325,6 +1355,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceTemplateMenuOpen(false);
+    setWorkspaceReplaceMenuStyle(null);
   };
 
   const handleReturnToSplitView = () => {
@@ -1890,6 +1921,39 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     handleToggleMobileSplitView();
   };
 
+  const handleOpenWorkspaceReplacementMenu = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    panelId: string
+  ) => {
+    event.stopPropagation();
+
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 12;
+    const gap = 8;
+    const menuWidth = Math.min(300, viewportWidth - margin * 2);
+    const spaceBelow = viewportHeight - buttonRect.bottom - margin - gap;
+    const spaceAbove = buttonRect.top - margin - gap;
+    const openUpward = spaceBelow < 260 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(180, Math.min(380, openUpward ? spaceAbove : spaceBelow));
+    const left = clamp(buttonRect.right - menuWidth, margin, viewportWidth - menuWidth - margin);
+    const top = openUpward ? buttonRect.top - gap : buttonRect.bottom + gap;
+
+    setWorkspaceReplacementPanelId(panelId);
+    setWorkspaceReplaceMenuStyle({
+      position: 'fixed',
+      top,
+      left,
+      width: menuWidth,
+      maxHeight,
+      transform: openUpward ? 'translateY(-100%)' : undefined,
+      transformOrigin: openUpward ? 'right bottom' : 'right top',
+    });
+    setIsWorkspaceAddMenuOpen(true);
+    setIsWorkspaceTemplateMenuOpen(false);
+  };
+
   const handleChangeMobileWorkspacePanel = (panelId: string, type: WorkspacePanelType) => {
     setMountedMobilePanelTypes(prev => {
       const mountedTypes = prev[panelId] || [];
@@ -2319,18 +2383,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     </div>
   );
 
-  const renderWorkspaceAddMenu = () => {
+  const renderWorkspaceAddMenu = (placement: 'toolbar' | 'replacement' = 'toolbar') => {
     if (!isWorkspaceAddMenuOpen) return null;
+    if (placement === 'toolbar' && workspaceReplacementPanelId) return null;
+    if (placement === 'replacement' && !workspaceReplacementPanelId) return null;
+    const isReplacementMenu = placement === 'replacement';
 
     return (
-      <div className="workspace-add-menu" role="menu">
+      <div
+        className={`workspace-add-menu ${isReplacementMenu ? 'workspace-add-menu-floating' : ''}`}
+        ref={isReplacementMenu ? workspaceReplaceMenuRef : undefined}
+        role="menu"
+        style={isReplacementMenu ? workspaceReplaceMenuStyle || undefined : undefined}
+      >
         <div className="workspace-add-menu-section">
           <span className="workspace-add-menu-title">
             {workspaceReplacementPanelId ? 'Replace panel' : 'Components'}
           </span>
           <button
             type="button"
-            draggable
+            draggable={!isReplacementMenu}
             onDragStart={(event) => handleWorkspaceDragStart(event, 'camera')}
             onDragEnd={handleWorkspaceDragEnd}
             onClick={() => handleAddWorkspacePanel('camera')}
@@ -2340,7 +2412,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </button>
           <button
             type="button"
-            draggable
+            draggable={!isReplacementMenu}
             onDragStart={(event) => handleWorkspaceDragStart(event, '3d')}
             onDragEnd={handleWorkspaceDragEnd}
             onClick={() => handleAddWorkspacePanel('3d')}
@@ -2350,7 +2422,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </button>
           <button
             type="button"
-            draggable
+            draggable={!isReplacementMenu}
             onDragStart={(event) => handleWorkspaceDragStart(event, 'behaviorTree')}
             onDragEnd={handleWorkspaceDragEnd}
             onClick={() => handleAddWorkspacePanel('behaviorTree')}
@@ -2360,7 +2432,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </button>
           <button
             type="button"
-            draggable
+            draggable={!isReplacementMenu}
             onDragStart={(event) => handleWorkspaceDragStart(event, 'tfTree')}
             onDragEnd={handleWorkspaceDragEnd}
             onClick={() => handleAddWorkspacePanel('tfTree')}
@@ -2370,7 +2442,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           </button>
           <button
             type="button"
-            draggable
+            draggable={!isReplacementMenu}
             onDragStart={(event) => handleWorkspaceDragStart(event, 'pad')}
             onDragEnd={handleWorkspaceDragEnd}
             onClick={() => handleAddWorkspacePanel('pad')}
@@ -2691,18 +2763,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             <div className="workspace-add-control" ref={workspaceAddControlRef}>
               <button
                 type="button"
-                className="workspace-add-button"
-                onClick={() => {
-                  setWorkspaceReplacementPanelId(null);
-                  setIsWorkspaceAddMenuOpen(prev => !prev);
-                  setIsWorkspaceTemplateMenuOpen(false);
-                }}
+                    className="workspace-add-button"
+                    onClick={() => {
+                      setWorkspaceReplacementPanelId(null);
+                      setWorkspaceReplaceMenuStyle(null);
+                      setIsWorkspaceAddMenuOpen(prev => !prev);
+                      setIsWorkspaceTemplateMenuOpen(false);
+                    }}
                 title="Add workspace panel"
                 aria-label="Add workspace panel"
               >
                 {icons.add}
               </button>
-              {renderWorkspaceAddMenu()}
+              {renderWorkspaceAddMenu('toolbar')}
             </div>
           )}
         </div>
@@ -2866,16 +2939,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                 <div className="workspace-card-actions">
                                   <button
                                     type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setWorkspaceReplacementPanelId(tile.panel.id);
-                                      setIsWorkspaceAddMenuOpen(true);
-                                      setIsWorkspaceTemplateMenuOpen(false);
-                                    }}
+                                    className={`workspace-replace-button ${workspaceReplacementPanelId === tile.panel.id && isWorkspaceAddMenuOpen ? 'is-open' : ''}`}
+                                    onClick={(event) => handleOpenWorkspaceReplacementMenu(event, tile.panel.id)}
                                     title="Replace panel"
                                     aria-label={`Replace ${tile.panel.title}`}
                                   >
-                                    {icons.swap}
+                                    {icons.replacePanel}
                                   </button>
                                   <button
                                     type="button"
@@ -2957,6 +3026,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         ) : (
           renderMobileWorkspace()
         )}
+        {renderWorkspaceAddMenu('replacement')}
       </div>
 
       {/* Render AddPanelMenu using Portal outside main flow */}
