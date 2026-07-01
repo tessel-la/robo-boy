@@ -11,6 +11,9 @@ const stopBehaviorTree = vi.fn();
 const loadGamepadLibrary = vi.fn();
 const getGamepadLayout = vi.fn();
 const cloneGamepadTemplate = vi.fn();
+const deleteCustomGamepad = vi.fn();
+const downloadGamepadLayout = vi.fn();
+const importGamepadFile = vi.fn();
 const saveGamepadFromEditor = vi.fn();
 
 vi.mock('../hooks/useRos', () => ({
@@ -48,6 +51,9 @@ vi.mock('../features/customGamepad/gamepadStorage', () => ({
   loadGamepadLibrary: () => loadGamepadLibrary(),
   getGamepadLayout: (layoutId: string) => getGamepadLayout(layoutId),
   cloneGamepadTemplate: (layoutId: string) => cloneGamepadTemplate(layoutId),
+  deleteCustomGamepad: (layoutId: string) => deleteCustomGamepad(layoutId),
+  downloadGamepadLayout: (layoutId: string) => downloadGamepadLayout(layoutId),
+  importGamepadFile: (file: File) => importGamepadFile(file),
 }));
 
 vi.mock('./CameraView', () => ({
@@ -200,6 +206,14 @@ describe('MainControlView desktop workspace', () => {
     ]);
     getGamepadLayout.mockReturnValue({ id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive', name: 'Drive Pad' } });
     cloneGamepadTemplate.mockReturnValue({ id: 'template-copy', name: 'Template Copy' });
+    deleteCustomGamepad.mockReturnValue(true);
+    downloadGamepadLayout.mockReturnValue(true);
+    importGamepadFile.mockResolvedValue({
+      success: true,
+      imported: 1,
+      errors: [],
+      idMap: { 'imported-drive': 'custom-imported-drive' },
+    });
     getTopics.mockImplementation((success: any) => {
       success({
         topics: ['/camera/image_raw', '/status'],
@@ -461,6 +475,57 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Drive Pad');
     fireEvent.click(screen.getByText('Save pad'));
     expect(saveGamepadFromEditor).toHaveBeenCalled();
+  });
+
+  it('imports and exports the pad selected in a workspace control', async () => {
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-pad', 'pad', 'Pad controls'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    const { container } = renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByLabelText('Export Drive Pad'));
+    expect(downloadGamepadLayout).toHaveBeenCalledWith('custom-drive');
+
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"][accept=".json,application/json"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput!, {
+      target: {
+        files: [new File(['{}'], 'pad.json', { type: 'application/json' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(importGamepadFile).toHaveBeenCalled();
+      expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-imported-drive');
+    });
+  });
+
+  it('deletes the pad selected in a workspace control and falls back to another pad', async () => {
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
+      { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
+    ]);
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-pad', 'pad', 'Pad controls'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByLabelText('Delete Drive Pad'));
+
+    expect(deleteCustomGamepad).toHaveBeenCalledWith('custom-drive');
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
+      expect(stored).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'panel-pad', layoutId: 'custom-arm' }),
+      ]));
+    });
   });
 
   it('customizes a built-in workspace pad as a new editable copy', async () => {

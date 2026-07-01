@@ -1372,9 +1372,10 @@ body.no-scroll {
 .workspace-pad-selector {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 34px 34px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 10px;
+    row-gap: 6px;
     min-height: 48px;
     padding: 7px 10px;
     border-bottom: 1px solid var(--border-color);
@@ -1437,6 +1438,14 @@ body.no-scroll {
     white-space: nowrap;
 }
 
+.workspace-pad-selector-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+}
+
 .workspace-pad-action-button {
     width: 34px;
     height: 34px;
@@ -1461,6 +1470,12 @@ body.no-scroll {
     color: var(--primary-color);
 }
 
+.workspace-pad-delete-button:hover:not(:disabled) {
+    border-color: var(--error-color, #dc3545);
+    background: color-mix(in srgb, var(--error-color, #dc3545) 10%, var(--background-color));
+    color: var(--error-color, #dc3545);
+}
+
 .workspace-pad-action-button:focus-visible {
     outline: none;
     border-color: var(--primary-color);
@@ -1476,6 +1491,26 @@ body.no-scroll {
     display: block;
     width: 15px;
     height: 15px;
+}
+
+.workspace-pad-transfer-notice {
+    grid-column: 2 / -1;
+    min-width: 0;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.workspace-pad-transfer-notice.success {
+    color: var(--success-color, #2e7d32);
+    background: color-mix(in srgb, var(--success-color, #2e7d32) 12%, transparent);
+}
+
+.workspace-pad-transfer-notice.error {
+    color: var(--error-color, #dc3545);
+    background: color-mix(in srgb, var(--error-color, #dc3545) 12%, transparent);
 }
 
 .workspace-pad-body {
