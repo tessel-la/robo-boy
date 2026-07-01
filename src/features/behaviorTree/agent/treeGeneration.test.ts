@@ -83,4 +83,30 @@ describe('parseGeneratedBehaviorTree', () => {
       suggestions: ['x 0.5 m, y 0 m'],
     });
   });
+
+  it('preserves dev runtime nodes, blackboard bindings, and if/else handles', () => {
+    const tree = parseGeneratedBehaviorTree(JSON.stringify({
+      name: 'Reactive mission',
+      blackboardDefaults: { obstacle: false },
+      nodes: [
+        { id: 'watch', type: 'subscriber', config: { topicName: '/obstacle', messageType: 'std_msgs/msg/Bool', timeout: 5000, outputBindings: [{ sourcePath: 'data', variable: 'obstacle' }] } },
+        { id: 'branch', type: 'ifElse', config: { variable: 'obstacle', operator: 'truthy' } },
+        { id: 'stop', type: 'topic', config: { topicName: '/cmd', messageType: 'std_msgs/msg/String', message: { data: 'stop' } } },
+        { id: 'continue', type: 'timeout', config: { timeout: 2500 } },
+      ],
+      edges: [
+        { source: 'watch', target: 'branch' },
+        { source: 'branch', target: 'stop', sourceHandle: 'then' },
+        { source: 'branch', target: 'continue', sourceHandle: 'else' },
+      ],
+    }));
+
+    expect(tree.blackboardDefaults).toEqual({ obstacle: false });
+    expect(tree.nodes.find(node => node.id === 'watch')?.data).toMatchObject({
+      timeout: 5000,
+      outputBindings: [{ sourcePath: 'data', variable: 'obstacle' }],
+    });
+    expect(tree.nodes.find(node => node.id === 'continue')?.data).toMatchObject({ timeout: 2500 });
+    expect(tree.edges.map(edge => edge.sourceHandle)).toEqual([null, 'then', 'else']);
+  });
 });

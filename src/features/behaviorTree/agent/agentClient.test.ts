@@ -16,5 +16,8 @@ describe('buildBehaviorTreeAgentPrompt', () => {
     expect(prompt).toContain('set unspecified displacement axes to 0');
     expect(prompt).toContain('Never ask about a field that has a schema default');
     expect(prompt).toContain('Ask at most once in the entire conversation');
+    expect(prompt).toContain('subscriber|subtree');
+    expect(prompt).toContain('blackboardDefaults');
+    expect(prompt).toContain('sourceHandle "then" and "else"');
   });
 });

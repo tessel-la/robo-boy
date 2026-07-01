@@ -1,13 +1,16 @@
 import { BehaviorTreeAgentRequest } from './types';
 
 const SCHEMA = `Default behavior: act autonomously and return a finished tree. Return ONLY one JSON object with this shape:
-{"name":"tree name","description":"short purpose","nodes":[{"id":"unique-id","type":"sequence|selector|parallel|retry|repeat|action|service|topic|subtree","label":"visible label","config":{},"tree":{...only for subtree}}],"edges":[{"source":"parent-id","target":"child-id"}]}
-Action config: {"actionName":"/name","actionType":"pkg/action/Type","parameters":{},"timeout":number}.
-Service config: {"serviceName":"/name","serviceType":"pkg/srv/Type","request":{},"timeout":number}.
-Topic config: {"topicName":"/name","messageType":"pkg/msg/Type","message":{},"publishOnce":true}.
+{"name":"tree name","description":"short purpose","blackboardDefaults":{},"nodes":[{"id":"unique-id","type":"sequence|selector|parallel|retry|repeat|timeout|ifElse|action|service|topic|subscriber|subtree","label":"visible label","config":{},"tree":{...only for subtree}}],"edges":[{"source":"parent-id","target":"child-id","sourceHandle":"then|else only for ifElse"}]}
+Action config: {"actionName":"/name","actionType":"pkg/action/Type","parameters":{},"timeout":number,"inputBindings":[{"variable":"name","targetPath":"field.path"}],"outputBindings":[{"sourcePath":"field.path","variable":"name"}]}.
+Service config: {"serviceName":"/name","serviceType":"pkg/srv/Type","request":{},"timeout":number,"inputBindings":[],"outputBindings":[]}.
+Publisher topic config: {"topicName":"/name","messageType":"pkg/msg/Type","message":{},"publishOnce":true,"frequencyHz":number,"durationMs":number,"inputBindings":[]}.
+Subscriber config: {"topicName":"/name","messageType":"pkg/msg/Type","timeout":10000,"outputBindings":[{"sourcePath":"field.path","variable":"name"}]}.
+Timeout config: {"timeout":10000}. If/else config: {"variable":"blackboardName","operator":"truthy|falsy|equals|notEquals|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|exists","expectedValue":any}; connect its branches with sourceHandle "then" and "else".
 Retry/repeat config: {"iterationLimit":3}. A subtree node must contain a complete nested tree object in "tree".
 Edges are directed parent-to-child. Every non-root node should have one parent. Child edge array order is execution order. Use only resources supplied in context unless the user explicitly asks for placeholders.
 For every action and service, fill the complete parameters/request object from its supplied schema and defaults. Movement values such as x, y, z, yaw, distance, displacement, frame, and relative mode must reflect the user's request; do not silently omit them.
+Use blackboardDefaults and bindings when data must flow between subscriber, action, service, publisher, or if/else nodes. Do not invent bindings when static values are sufficient.
 Make reasonable assumptions instead of asking about routine details. In particular:
 - Map forward/backward to x and left/right to y using the robot context; when none is supplied, use ROS convention (+x forward, +y left, +z up).
 - Treat a requested displacement as relative motion, set unspecified displacement axes to 0, preserve/current-or-default yaw when unspecified, and use every remaining schema default.

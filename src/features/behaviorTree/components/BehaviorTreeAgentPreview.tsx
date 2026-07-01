@@ -107,7 +107,11 @@ const getNodePayload = (node: BehaviorTreeNode): { resource: string; payload: un
   const data = node.data;
   if ('actionName' in data) return { resource: data.actionName, payload: data.parameters ?? {} };
   if ('serviceName' in data) return { resource: data.serviceName, payload: data.request ?? {} };
-  if ('topicName' in data) return { resource: data.topicName, payload: data.message ?? {} };
+  if ('topicName' in data) {
+    return 'outputBindings' in data
+      ? { resource: data.topicName, payload: { timeout: data.timeout, outputBindings: data.outputBindings } }
+      : { resource: data.topicName, payload: data.message ?? {} };
+  }
   return null;
 };
 

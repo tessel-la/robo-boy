@@ -32,4 +32,3 @@ export const loadAgentSettings = (): BehaviorTreeAgentSettings => {
 export const saveAgentSettings = (settings: BehaviorTreeAgentSettings): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 };
-
