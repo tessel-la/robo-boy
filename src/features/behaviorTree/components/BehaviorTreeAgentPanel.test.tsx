@@ -22,7 +22,7 @@ describe('BehaviorTreeAgentPanel', () => {
   beforeEach(() => localStorage.clear());
 
   it('shows explicit open-tree and selected-part context choices', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={selection} onClose={vi.fn()} onApply={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /Selected part/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Using only the 1 selected node and its internal connections.')).toBeInTheDocument();
@@ -32,10 +32,18 @@ describe('BehaviorTreeAgentPanel', () => {
   });
 
   it('keeps generation locked without a discovered action or service', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} onClose={vi.fn()} onApply={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move forward' } });
     expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
     expect(screen.getByText('Scan at least one action or service to continue.')).toBeInTheDocument();
+  });
+
+  it('keeps proposal decisions on the canvas controls', () => {
+    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={tree} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+
+    expect(screen.getByText('Preview active on canvas')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept replacement' })).not.toBeInTheDocument();
   });
 });

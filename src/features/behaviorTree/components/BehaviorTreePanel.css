@@ -99,11 +99,19 @@
 .bt-agent-canvas-preview-banner .added { background: rgba(46, 170, 84, .13); color: #278f48; }
 .bt-agent-canvas-preview-banner .changed { background: rgba(212, 154, 32, .15); color: #9c6900; }
 .bt-agent-canvas-preview-banner .removed { background: rgba(219, 75, 88, .13); color: #c43d49; }
-.bt-agent-canvas-preview-banner button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: var(--primary-color, #4285f4); color: var(--button-text, #fff); font-size: 10px; font-weight: 750; cursor: pointer; }
+.bt-agent-canvas-preview-actions { display: flex; align-items: center; gap: 5px; }
+.bt-agent-canvas-preview-actions button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: var(--primary-color, #4285f4); color: var(--button-text, #fff); font-size: 10px; font-weight: 750; cursor: pointer; }
+.bt-agent-canvas-preview-actions button.fit,
+.bt-agent-canvas-preview-actions button.subtree { border: 1px solid var(--border-color, #dfe3e8); background: var(--card-bg, #fff); color: var(--text-color, #333); }
+.bt-agent-canvas-preview-actions button.reject { border: 1px solid color-mix(in srgb, var(--error-color, #d32f2f) 45%, transparent); background: transparent; color: var(--error-color, #d32f2f); }
 
 @media (max-width: 768px) {
-  .bt-agent-canvas-preview-banner { top: 62px; bottom: auto; max-width: calc(100% - 20px); min-height: 38px; }
-  .bt-agent-canvas-preview-banner strong { display: none; }
+  .bt-agent-canvas-preview-banner { top: 62px; bottom: auto; max-width: calc(100% - 20px); min-height: 38px; padding-left: 8px; }
+  .bt-agent-canvas-preview-banner strong,
+  .bt-agent-canvas-preview-banner > .added,
+  .bt-agent-canvas-preview-banner > .changed,
+  .bt-agent-canvas-preview-banner > .removed { display: none; }
+  .bt-agent-canvas-preview-actions button { min-height: 30px; padding: 0 8px; font-size: 9px; }
 }
 
 .bt-save-toast {

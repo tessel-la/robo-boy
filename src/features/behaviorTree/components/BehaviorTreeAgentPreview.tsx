@@ -9,6 +9,7 @@ interface BehaviorTreeAgentPreviewProps {
   onReject: () => void;
   onAccept: (mode: 'replace' | 'subtree') => void;
   compact?: boolean;
+  showActions?: boolean;
 }
 
 type ChangeKind = 'added' | 'removed' | 'changed' | 'unchanged';
@@ -115,7 +116,7 @@ const getNodePayload = (node: BehaviorTreeNode): { resource: string; payload: un
   return null;
 };
 
-const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tree, baseline, onReject, onAccept, compact = false }) => {
+const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tree, baseline, onReject, onAccept, compact = false, showActions = true }) => {
   const [mode, setMode] = useState<PreviewMode>('changes');
   const [zoom, setZoom] = useState(1);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -222,7 +223,7 @@ const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tre
 
     {payloadNodes.length > 0 && <div className="bt-agent-preview-inputs"><strong>All proposed inputs</strong>{payloadNodes.map(({ node, payload }) => <details key={node.id}><summary><span>{node.data.label}</span><code>{payload?.resource}</code></summary><pre>{JSON.stringify(payload?.payload, null, 2)}</pre></details>)}</div>}
 
-    <div className="bt-agent-review-actions"><button type="button" className="reject" onClick={onReject}>Reject changes</button><button type="button" className="secondary" onClick={() => onAccept('subtree')}>Accept as subtree</button><button type="button" onClick={() => onAccept('replace')}>Accept replacement</button></div>
+    {showActions && <div className="bt-agent-review-actions"><button type="button" className="reject" onClick={onReject}>Reject changes</button><button type="button" className="secondary" onClick={() => onAccept('subtree')}>Accept as subtree</button><button type="button" onClick={() => onAccept('replace')}>Accept replacement</button></div>}
   </section>;
 };
 

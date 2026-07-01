@@ -28,8 +28,8 @@ interface BehaviorTreeAgentPanelProps {
   isConnected: boolean;
   currentTree: BehaviorTree | null;
   selectedTreeContext: BehaviorTree | null;
+  previewTree: BehaviorTree | null;
   onClose: () => void;
-  onApply: (tree: BehaviorTree, mode: 'replace' | 'subtree') => void;
   onPreviewChange: (tree: BehaviorTree | null) => void;
 }
 
@@ -43,8 +43,8 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   isConnected,
   currentTree,
   selectedTreeContext,
+  previewTree,
   onClose,
-  onApply,
   onPreviewChange,
 }) => {
   const [settings, setSettings] = useState<BehaviorTreeAgentSettings>(loadAgentSettings);
@@ -53,7 +53,6 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [resourceSchemas, setResourceSchemas] = useState<BehaviorTreeResourceSchemas>(EMPTY_SCHEMAS);
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [clarification, setClarification] = useState<AgentClarification | null>(null);
-  const [generatedTree, setGeneratedTree] = useState<BehaviorTree | null>(null);
   const [rawOutput, setRawOutput] = useState('');
   const [progress, setProgress] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -100,23 +99,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     abortRef.current?.abort();
     setConversation([]);
     setClarification(null);
-    setGeneratedTree(null);
     setRawOutput('');
     setProgress([]);
     setError('');
     setPrompt('');
     onPreviewChange(null);
-  };
-
-  const handleRejectProposal = () => {
-    setGeneratedTree(null);
-    setRawOutput('');
-    onPreviewChange(null);
-    setProgress(previous => [...previous, 'Proposal rejected. Ready for your revision.']);
-    setConversation(previous => [
-      ...previous,
-      { role: 'assistant', content: 'Changes rejected. Tell me what to adjust and I’ll create a new proposal.' },
-    ]);
   };
 
   const handleDiscover = async () => {
@@ -168,7 +155,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     abortRef.current = controller;
     outputRef.current = '';
     setRawOutput('');
-    setGeneratedTree(null);
+    onPreviewChange(null);
     setError('');
     setProgress(['Preparing BT schema and context…']);
     setIsGenerating(true);
@@ -195,7 +182,6 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
         setConversation(previous => [...previous, { role: 'assistant', content: response.question }]);
         setProgress(previous => [...previous, 'Waiting for one detail from you.']);
       } else {
-        setGeneratedTree(response.tree);
         onPreviewChange(response.tree);
         setConversation(previous => [...previous, { role: 'assistant', content: `Built “${response.tree.name}” with complete action inputs.` }]);
         setProgress(previous => [...previous, `Ready: ${response.tree.nodes.length} nodes, ${response.tree.edges.length} connections.`]);
@@ -319,12 +305,13 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
         {isGenerating && rawOutput && <pre className="bt-agent-stream" aria-label="Live model output">{rawOutput.slice(-1800)}</pre>}
 
-        {generatedTree && <BehaviorTreeAgentPreview
-          tree={generatedTree}
+        {previewTree && <BehaviorTreeAgentPreview
+          tree={previewTree}
           baseline={currentTree}
-          onReject={handleRejectProposal}
-          onAccept={mode => onApply(generatedTree, mode)}
+          onReject={() => onPreviewChange(null)}
+          onAccept={() => undefined}
           compact
+          showActions={false}
         />}
       </section>
     </div>

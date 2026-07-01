@@ -2278,6 +2278,37 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     return [...currentEdges, ...proposedEdges];
   }, [agentPreviewDiff, agentPreviewTree, canvasNodes, displayedEdges]);
 
+  const clearAgentPreview = useCallback(() => {
+    setAgentPreviewTree(null);
+    setAgentPreviewDimensions({});
+  }, []);
+
+  const applyAgentPreview = useCallback((mode: 'replace' | 'subtree') => {
+    if (!agentPreviewTree) return;
+    if (mode === 'replace') {
+      persistEditorTree(agentPreviewTree.nodes, agentPreviewTree.edges, {
+        name: agentPreviewTree.name,
+        description: agentPreviewTree.description,
+        blackboardDefaults: agentPreviewTree.blackboardDefaults,
+      });
+    } else {
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      if (!bounds) return;
+      addNodeAtPosition(
+        BehaviorNodeType.Subtree,
+        screenToFlowPosition({
+          x: bounds.left + bounds.width / 2,
+          y: bounds.top + bounds.height / 2,
+        }),
+        agentPreviewTree,
+        { avoidOverlap: true }
+      );
+    }
+    setIsAgentOpen(false);
+    clearAgentPreview();
+    window.requestAnimationFrame(() => centerTreeInView());
+  }, [addNodeAtPosition, agentPreviewTree, centerTreeInView, clearAgentPreview, persistEditorTree, screenToFlowPosition]);
+
   const updateSubtreeReturnAnchor = useCallback(() => {
     if (treePathRef.current.length === 0) {
       setSubtreeReturnAnchor(null);
@@ -3121,7 +3152,24 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               <span className="added">+{agentPreviewSummary.added}</span>
               <span className="changed">~{agentPreviewSummary.changed}</span>
               <span className="removed">−{agentPreviewSummary.removed}</span>
-              <button type="button" onClick={fitAgentPreviewInView}>Fit changes</button>
+              <div className="bt-agent-canvas-preview-actions">
+                <button type="button" className="fit" onClick={fitAgentPreviewInView}>Fit</button>
+                <button
+                  type="button"
+                  className="reject"
+                  onClick={clearAgentPreview}
+                >Reject</button>
+                <button
+                  type="button"
+                  className="subtree"
+                  onClick={() => applyAgentPreview('subtree')}
+                >Add subtree</button>
+                <button
+                  type="button"
+                  className="accept"
+                  onClick={() => applyAgentPreview('replace')}
+                >Replace</button>
+              </div>
             </div>
           )}
         </div>
@@ -3133,34 +3181,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         isConnected={isConnected}
         currentTree={currentTree}
         selectedTreeContext={selectedTreeContext}
+        previewTree={agentPreviewTree}
         onClose={() => {
           setIsAgentOpen(false);
-          setAgentPreviewTree(null);
-          setAgentPreviewDimensions({});
-        }}
-        onApply={(tree, mode) => {
-          if (mode === 'replace') {
-            persistEditorTree(tree.nodes, tree.edges, {
-              name: tree.name,
-              description: tree.description,
-            });
-          } else {
-            const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-            if (!bounds) return;
-            addNodeAtPosition(
-              BehaviorNodeType.Subtree,
-              screenToFlowPosition({
-                x: bounds.left + bounds.width / 2,
-                y: bounds.top + bounds.height / 2,
-              }),
-              tree,
-              { avoidOverlap: true }
-            );
-          }
-          setIsAgentOpen(false);
-          setAgentPreviewTree(null);
-          setAgentPreviewDimensions({});
-          window.requestAnimationFrame(() => centerTreeInView());
+          clearAgentPreview();
         }}
         onPreviewChange={tree => {
           setAgentPreviewTree(tree);
