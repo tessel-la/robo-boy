@@ -503,6 +503,25 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
+  it('selects workspace pads from the custom dropdown menu', async () => {
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
+      { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
+    ]);
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-pad', 'pad', 'Pad controls'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad layout Drive Pad' }));
+    fireEvent.click(screen.getByRole('option', { name: /Arm Pad/ }));
+
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
+  });
+
   it('deletes the pad selected in a workspace control and falls back to another pad', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
