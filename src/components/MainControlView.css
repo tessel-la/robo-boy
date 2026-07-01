@@ -608,6 +608,25 @@
     background: var(--card-bg);
     color: var(--text-color);
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+    animation: workspace-menu-enter 150ms ease-out;
+    will-change: opacity, filter, clip-path;
+}
+
+.workspace-add-menu-floating {
+    z-index: 1400;
+}
+
+@keyframes workspace-menu-enter {
+    from {
+        opacity: 0;
+        filter: blur(3px);
+        clip-path: inset(0 0 10px 0 round 8px);
+    }
+    to {
+        opacity: 1;
+        filter: blur(0);
+        clip-path: inset(0 round 8px);
+    }
 }
 
 .workspace-add-menu-section {
@@ -642,6 +661,14 @@
     background: var(--background-secondary);
     color: var(--text-color);
     text-align: left;
+    transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+}
+
+.workspace-add-menu button:hover {
+    border-color: color-mix(in srgb, var(--primary-color) 54%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--background-secondary));
+    color: var(--text-color);
+    transform: translateX(2px);
 }
 
 .workspace-add-menu button svg {
@@ -1290,16 +1317,34 @@ body.no-scroll {
     border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
+    transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
 }
 
 .workspace-card-actions button:hover {
     background: var(--background-dark-transparent);
     color: var(--text-color);
+    transform: translateY(-1px);
+}
+
+.workspace-card-actions button:active {
+    transform: translateY(0);
 }
 
 .workspace-card-actions button svg {
     width: 16px;
     height: 16px;
+    transition: transform 0.16s ease;
+}
+
+.workspace-replace-button:hover svg,
+.workspace-replace-button.is-open svg {
+    transform: translateX(1px);
+}
+
+.workspace-replace-button.is-open {
+    background: color-mix(in srgb, var(--primary-color) 14%, var(--background-dark-transparent));
+    color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 34%, transparent);
 }
 
 .workspace-card-content {
