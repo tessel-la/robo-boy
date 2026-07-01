@@ -14,12 +14,96 @@
   flex: 1;
   overflow: hidden;
   position: relative;
+  transition: margin-right .2s ease, height .2s ease;
+}
+
+@media (min-width: 769px) {
+  .behavior-tree-panel.bt-agent-open .bt-content {
+    margin-right: min(496px, 46%);
+  }
+}
+
+@media (max-width: 768px) {
+  .behavior-tree-panel.bt-agent-open .bt-content {
+    flex: 0 0 auto;
+    width: 100%;
+    height: max(160px, calc(100% - min(58dvh, 560px) - 16px));
+  }
 }
 
 .bt-canvas {
   flex: 1;
   position: relative;
   background: var(--background-color, #fafafa);
+}
+
+.react-flow__node.bt-agent-canvas-proposed {
+  pointer-events: none;
+  opacity: .96;
+  z-index: 5 !important;
+}
+
+.react-flow__node.bt-agent-canvas-added {
+  filter: drop-shadow(0 0 8px rgba(46, 170, 84, .42));
+}
+
+.react-flow__node.bt-agent-canvas-added::after,
+.react-flow__node.bt-agent-canvas-changed::after,
+.react-flow__node.bt-agent-canvas-removed::after {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  z-index: 6;
+  padding: 3px 7px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.react-flow__node.bt-agent-canvas-added::after { content: '+ Added'; background: #2eaa54; }
+.react-flow__node.bt-agent-canvas-changed { border-radius: 12px; box-shadow: 0 0 0 3px #d49a20, 0 0 13px rgba(212, 154, 32, .38); }
+.react-flow__node.bt-agent-canvas-changed::after { content: '~ Modified'; background: #b67b08; }
+.react-flow__node.bt-agent-canvas-removed { border-radius: 12px; box-shadow: 0 0 0 3px #db4b58; opacity: .68; }
+.react-flow__node.bt-agent-canvas-removed::after { content: '− Removed'; background: #c43d49; }
+.react-flow__edge.bt-agent-canvas-edge-added { pointer-events: none; }
+
+.bt-agent-canvas-preview-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 6px 7px 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #4285f4) 26%, var(--border-color, #ddd));
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--card-bg, #fff) 94%, transparent);
+  color: var(--text-color, #333);
+  box-shadow: 0 7px 24px rgba(10, 20, 38, .18);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.bt-agent-canvas-preview-banner .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-color, #4285f4); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color, #4285f4) 14%, transparent); }
+.bt-agent-canvas-preview-banner strong { font-size: 11px; }
+.bt-agent-canvas-preview-banner .added,
+.bt-agent-canvas-preview-banner .changed,
+.bt-agent-canvas-preview-banner .removed { min-width: 23px; padding: 3px 5px; border-radius: 8px; text-align: center; font-size: 9px; font-weight: 800; }
+.bt-agent-canvas-preview-banner .added { background: rgba(46, 170, 84, .13); color: #278f48; }
+.bt-agent-canvas-preview-banner .changed { background: rgba(212, 154, 32, .15); color: #9c6900; }
+.bt-agent-canvas-preview-banner .removed { background: rgba(219, 75, 88, .13); color: #c43d49; }
+.bt-agent-canvas-preview-banner button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: var(--primary-color, #4285f4); color: var(--button-text, #fff); font-size: 10px; font-weight: 750; cursor: pointer; }
+
+@media (max-width: 768px) {
+  .bt-agent-canvas-preview-banner { top: 62px; bottom: auto; max-width: calc(100% - 20px); min-height: 38px; }
+  .bt-agent-canvas-preview-banner strong { display: none; }
 }
 
 .bt-save-toast {

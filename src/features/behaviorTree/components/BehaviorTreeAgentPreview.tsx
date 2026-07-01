@@ -8,6 +8,7 @@ interface BehaviorTreeAgentPreviewProps {
   baseline: BehaviorTree | null;
   onReject: () => void;
   onAccept: (mode: 'replace' | 'subtree') => void;
+  compact?: boolean;
 }
 
 type ChangeKind = 'added' | 'removed' | 'changed' | 'unchanged';
@@ -20,7 +21,7 @@ export interface TreeChangeSummary {
   unchanged: number;
 }
 
-interface TreeDiff {
+export interface TreeDiff {
   proposedNodes: Map<string, ChangeKind>;
   currentNodes: Map<string, ChangeKind>;
   proposedEdges: Map<string, ChangeKind>;
@@ -65,7 +66,7 @@ const comparableData = (node: BehaviorTreeNode): string => {
 const edgeSignature = (edge: Edge, nodes: Map<string, BehaviorTreeNode>): string =>
   `${nodeSignature(nodes.get(edge.source) ?? ({ id: edge.source, type: 'unknown', data: { label: edge.source }, position: { x: 0, y: 0 } } as BehaviorTreeNode))}->${nodeSignature(nodes.get(edge.target) ?? ({ id: edge.target, type: 'unknown', data: { label: edge.target }, position: { x: 0, y: 0 } } as BehaviorTreeNode))}`;
 
-const buildTreeDiff = (baseline: BehaviorTree | null, proposed: BehaviorTree): TreeDiff => {
+export const buildTreeDiff = (baseline: BehaviorTree | null, proposed: BehaviorTree): TreeDiff => {
   const proposedNodes = new Map(proposed.nodes.map(node => [node.id, 'added' as ChangeKind]));
   const currentNodes = new Map((baseline?.nodes ?? []).map(node => [node.id, 'removed' as ChangeKind]));
   const currentToProposed = new Map<string, string>();
@@ -110,7 +111,7 @@ const getNodePayload = (node: BehaviorTreeNode): { resource: string; payload: un
   return null;
 };
 
-const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tree, baseline, onReject, onAccept }) => {
+const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tree, baseline, onReject, onAccept, compact = false }) => {
   const [mode, setMode] = useState<PreviewMode>('changes');
   const [zoom, setZoom] = useState(1);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -174,7 +175,9 @@ const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tre
     </div>
     {tree.description && <p className="bt-agent-preview-description">{tree.description}</p>}
 
-    <div className="bt-agent-preview-toolbar">
+    {compact && <div className="bt-agent-preview-on-canvas"><span aria-hidden="true">◎</span><div><strong>Preview active on canvas</strong><small>Keep editing or inspect the highlighted BT behind this panel.</small></div></div>}
+
+    {!compact && <><div className="bt-agent-preview-toolbar">
       <div className="bt-agent-preview-modes" role="group" aria-label="Preview version">
         <button type="button" className={mode === 'changes' ? 'active' : ''} aria-pressed={mode === 'changes'} onClick={() => { setMode('changes'); setSelectedKey(null); }}>Changes</button>
         <button type="button" className={mode === 'current' ? 'active' : ''} aria-pressed={mode === 'current'} disabled={!baseline} onClick={() => { setMode('current'); setSelectedKey(null); }}>Current</button>
@@ -211,7 +214,7 @@ const BehaviorTreeAgentPreview: React.FC<BehaviorTreeAgentPreviewProps> = ({ tre
     {selected && <div className={`bt-agent-node-inspector ${selected.change}`}>
       <div><strong>{selected.node.data.label}</strong><span>{selected.change} · {selected.node.type}</span></div>
       {selectedPayload ? <><code>{selectedPayload.resource}</code><pre>{JSON.stringify(selectedPayload.payload, null, 2)}</pre></> : <p>No runtime parameters for this control node.</p>}
-    </div>}
+    </div>}</>}
 
     {payloadNodes.length > 0 && <div className="bt-agent-preview-inputs"><strong>All proposed inputs</strong>{payloadNodes.map(({ node, payload }) => <details key={node.id}><summary><span>{node.data.label}</span><code>{payload?.resource}</code></summary><pre>{JSON.stringify(payload?.payload, null, 2)}</pre></details>)}</div>}
 

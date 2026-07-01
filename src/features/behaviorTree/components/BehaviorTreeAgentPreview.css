@@ -8,6 +8,10 @@
 .bt-agent-diff .changed { background: rgba(210, 153, 34, .16); color: #a06c00; }
 .bt-agent-diff .removed { background: rgba(220, 53, 69, .13); color: #c33; }
 .bt-agent-preview-description { margin: 0; color: var(--text-secondary, #68707c); font-size: 11px; line-height: 1.4; }
+.bt-agent-preview-on-canvas { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 11px; background: color-mix(in srgb, var(--primary-color, #4285f4) 9%, transparent); color: var(--primary-color, #4285f4); }
+.bt-agent-preview-on-canvas > span { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--card-bg, #fff); font-size: 18px; }
+.bt-agent-preview-on-canvas div { display: grid; gap: 2px; }
+.bt-agent-preview-on-canvas small { color: var(--text-secondary, #68707c); font-size: 9px; line-height: 1.35; }
 .bt-agent-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bt-agent-preview-modes, .bt-agent-preview-zoom { display: flex; padding: 3px; border-radius: 10px; background: var(--hover-bg, #eef1f5); }
 .bt-agent-preview-modes button, .bt-agent-preview-zoom button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary, #68707c); font-size: 10px; font-weight: 700; cursor: pointer; }

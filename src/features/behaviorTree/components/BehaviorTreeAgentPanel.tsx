@@ -30,6 +30,7 @@ interface BehaviorTreeAgentPanelProps {
   selectedTreeContext: BehaviorTree | null;
   onClose: () => void;
   onApply: (tree: BehaviorTree, mode: 'replace' | 'subtree') => void;
+  onPreviewChange: (tree: BehaviorTree | null) => void;
 }
 
 const EMPTY_RESOURCES: ROSDiscoveryResult = { actions: [], services: [], topics: [] };
@@ -44,6 +45,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   selectedTreeContext,
   onClose,
   onApply,
+  onPreviewChange,
 }) => {
   const [settings, setSettings] = useState<BehaviorTreeAgentSettings>(loadAgentSettings);
   const [prompt, setPrompt] = useState('');
@@ -103,11 +105,13 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     setProgress([]);
     setError('');
     setPrompt('');
+    onPreviewChange(null);
   };
 
   const handleRejectProposal = () => {
     setGeneratedTree(null);
     setRawOutput('');
+    onPreviewChange(null);
     setProgress(previous => [...previous, 'Proposal rejected. Ready for your revision.']);
     setConversation(previous => [
       ...previous,
@@ -192,6 +196,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
         setProgress(previous => [...previous, 'Waiting for one detail from you.']);
       } else {
         setGeneratedTree(response.tree);
+        onPreviewChange(response.tree);
         setConversation(previous => [...previous, { role: 'assistant', content: `Built “${response.tree.name}” with complete action inputs.` }]);
         setProgress(previous => [...previous, `Ready: ${response.tree.nodes.length} nodes, ${response.tree.edges.length} connections.`]);
       }
@@ -215,7 +220,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
   return (
     <div className="bt-agent-overlay" onPointerDown={event => event.target === event.currentTarget && onClose()}>
-      <section className="bt-agent-panel" data-testid="bt-agent-panel" role="dialog" aria-modal="true" aria-labelledby="bt-agent-title" onPointerDown={event => event.stopPropagation()}>
+      <section className="bt-agent-panel" data-testid="bt-agent-panel" role="dialog" aria-labelledby="bt-agent-title" onPointerDown={event => event.stopPropagation()}>
         <div className="bt-agent-sheet-handle" aria-hidden="true" />
         <header className="bt-agent-header">
           <div className="bt-agent-title">
@@ -319,6 +324,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           baseline={currentTree}
           onReject={handleRejectProposal}
           onAccept={mode => onApply(generatedTree, mode)}
+          compact
         />}
       </section>
     </div>

@@ -6,8 +6,8 @@
   align-items: center;
   justify-content: flex-end;
   padding: 16px;
-  background: rgba(9, 16, 28, 0.34);
-  backdrop-filter: blur(5px) saturate(1.08);
+  background: transparent;
+  pointer-events: none;
   animation: bt-agent-fade-in 160ms ease-out;
 }
 
@@ -25,6 +25,7 @@
   color: var(--text-color, #222);
   box-shadow: 0 22px 70px rgba(7, 15, 30, 0.28), 0 4px 14px rgba(7, 15, 30, 0.12);
   scrollbar-width: thin;
+  pointer-events: auto;
   animation: bt-agent-float-in 210ms cubic-bezier(.2, .8, .2, 1);
 }
 
@@ -136,8 +137,8 @@
 @keyframes bt-agent-float-in { from { transform: translateX(18px) scale(.985); opacity: .6; } }
 
 @media (max-width: 768px) {
-  .bt-agent-overlay { align-items: flex-end; justify-content: center; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: rgba(8, 14, 24, .42); }
-  .bt-agent-panel { width: min(430px, 100%); height: min(78vh, 680px); height: min(78dvh, 680px); max-height: calc(100% - 8px); overflow-y: scroll; overflow-x: hidden; padding: 0 14px 14px; border-width: 1px; border-radius: 22px; box-shadow: 0 -12px 45px rgba(7, 15, 30, .28); animation-name: bt-agent-sheet-in; }
+  .bt-agent-overlay { align-items: flex-end; justify-content: center; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: transparent; }
+  .bt-agent-panel { width: min(430px, 100%); height: min(58vh, 560px); height: min(58dvh, 560px); max-height: calc(100% - 8px); overflow-y: scroll; overflow-x: hidden; padding: 0 14px 14px; border-width: 1px; border-radius: 22px; box-shadow: 0 -10px 38px rgba(7, 15, 30, .24); animation-name: bt-agent-sheet-in; }
   .bt-agent-sheet-handle { position: sticky; top: 0; z-index: 7; display: block; width: 38px; height: 5px; margin: 8px auto -1px; border-radius: 4px; background: color-mix(in srgb, var(--text-secondary, #68707c) 30%, transparent); }
   .bt-agent-header { top: 12px; margin: 0 -14px 12px; padding: 11px 14px 12px; border-radius: 0; }
   .bt-agent-avatar { width: 36px; height: 36px; border-radius: 12px; }
