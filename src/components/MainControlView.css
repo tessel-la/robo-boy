@@ -1793,13 +1793,18 @@ body.no-scroll {
 
 @media (max-width: 1023px) {
     .top-bar:not(.workspace-active) {
-        justify-content: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        justify-content: stretch;
         gap: 5px;
         padding-left: 6px;
         padding-right: 6px;
     }
 
     .top-bar .view-toggle {
+        grid-column: 1;
+        justify-self: start;
+        min-width: 0;
         gap: 1px;
         padding: 3px;
     }
@@ -1814,6 +1819,8 @@ body.no-scroll {
     }
 
     .layout-controls {
+        grid-column: 2;
+        justify-self: center;
         display: flex;
         position: static;
         left: auto;
@@ -1829,7 +1836,9 @@ body.no-scroll {
     }
 
     .top-bar:not(.workspace-active) .status-controls {
-        margin-left: auto;
+        grid-column: 3;
+        justify-self: end;
+        margin-left: 0;
     }
 }
 
