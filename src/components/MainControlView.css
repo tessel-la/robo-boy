@@ -1528,8 +1528,8 @@ body.no-scroll {
 }
 
 .mobile-workspace-window-header {
-    height: 34px;
-    min-height: 34px;
+    height: 30px;
+    min-height: 30px;
     box-sizing: border-box;
     padding: 2px 4px;
 }
@@ -1539,13 +1539,13 @@ body.no-scroll {
     flex: 1 1 auto;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 6px;
+    gap: 5px;
+    padding: 2px 6px;
     border: 0;
     border-radius: 6px;
     background: transparent;
     color: var(--text-color);
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-align: left;
 }
@@ -1564,7 +1564,7 @@ body.no-scroll {
 .mobile-workspace-active-label {
     margin-left: auto;
     color: var(--primary-color);
-    font-size: 0.62rem;
+    font-size: 0.58rem;
     font-weight: 800;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1578,9 +1578,9 @@ body.no-scroll {
 }
 
 .mobile-workspace-swap-button {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1681,9 +1681,44 @@ body.no-scroll {
     .control-panel {
         padding: 0px; /* Reduce padding on mobile */
     }
+
+    .workspace-template-menu,
+    .workspace-add-menu {
+        position: fixed;
+        top: 46px;
+        right: 8px;
+        left: 8px;
+        width: auto;
+        max-height: calc(100dvh - 56px);
+    }
+
+    .mobile-workspace .resize-handle {
+        height: 18px;
+        min-height: 18px;
+        max-height: 18px;
+        cursor: row-resize;
+    }
+
+    .mobile-workspace .resize-handle-bar {
+        width: 84px;
+        height: 4px;
+    }
+
+    .mobile-workspace .workspace-card-title,
+    .mobile-workspace-window-selector {
+        font-size: 0.72rem;
+        line-height: 1.1;
+    }
 }
 
 @media (max-width: 1023px) {
+    .top-bar:not(.workspace-active) {
+        justify-content: flex-start;
+        gap: 5px;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
     .top-bar .view-toggle {
         gap: 1px;
         padding: 3px;
@@ -1700,9 +1735,10 @@ body.no-scroll {
 
     .layout-controls {
         display: flex;
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
+        position: static;
+        left: auto;
+        transform: none;
+        gap: 3px;
     }
 
     .layout-controls .workspace-tile-button {
@@ -1710,6 +1746,10 @@ body.no-scroll {
         height: 30px;
         min-width: 30px;
         padding: 4px;
+    }
+
+    .top-bar:not(.workspace-active) .status-controls {
+        margin-left: auto;
     }
 }
 

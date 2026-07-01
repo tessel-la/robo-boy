@@ -862,7 +862,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const isDesktopWorkspace = true;
+  const isDesktopWorkspace = isLargeScreen;
   const useStandardMobileExecutionLayout = !isLargeScreen && (
     isStandardBtExecuting || retainStandardMobileLayout
   );
@@ -1881,6 +1881,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setIsWorkspaceTemplateMenuOpen(false);
   };
 
+  const handleLayoutControlClick = () => {
+    if (isDesktopWorkspace) {
+      handleAutoTileWorkspacePanels();
+      return;
+    }
+
+    handleToggleMobileSplitView();
+  };
+
   const handleChangeMobileWorkspacePanel = (panelId: string, type: WorkspacePanelType) => {
     setMountedMobilePanelTypes(prev => {
       const mountedTypes = prev[panelId] || [];
@@ -2638,12 +2647,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         <div className="layout-controls">
           <button
             type="button"
-            className={`workspace-tile-button ${isDesktopWorkspace || (!isLargeScreen && isMobileSplitView) ? 'active' : ''}`}
-            onClick={handleAutoTileWorkspacePanels}
-            title="Auto-arrange workspace panels"
-            aria-label="Auto-arrange workspace panels"
+            className={`workspace-tile-button ${isDesktopWorkspace || isMobileSplitView ? 'active' : ''}`}
+            onClick={handleLayoutControlClick}
+            title={isDesktopWorkspace
+              ? 'Auto-arrange workspace panels'
+              : isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
+            aria-label={isDesktopWorkspace
+              ? 'Auto-arrange workspace panels'
+              : isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
           >
-            {icons.tile}
+            {isDesktopWorkspace ? icons.tile : icons.split}
           </button>
           {isDesktopWorkspace && (
             <>
@@ -2715,7 +2728,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
-        {isDesktopWorkspace && (
+        {isDesktopWorkspace ? (
           <div
             className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''} ${isWorkspaceResizing ? 'is-resizing' : ''}`}
             aria-label="Desktop workspace"
@@ -2939,6 +2952,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               )}
             </div>
           </div>
+        ) : useStandardMobileExecutionLayout ? (
+          renderStandardSplitLayout()
+        ) : (
+          renderMobileWorkspace()
         )}
       </div>
 
