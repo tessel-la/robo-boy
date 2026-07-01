@@ -37,6 +37,7 @@ interface BehaviorTreeToolbarProps {
   onRedo: () => void;
   onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
   onToggleFollowMode: () => void;
+  onOpenAgent: () => void;
   onRename: (name: string) => void;
   blackboardValues: Record<string, unknown>;
   onBlackboardDefaultsChange: (values: Record<string, unknown>) => void;
@@ -67,6 +68,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onRedo,
   onInteractionModeChange,
   onToggleFollowMode,
+  onOpenAgent,
   onRename,
   blackboardValues,
   onBlackboardDefaultsChange,
@@ -364,6 +366,19 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                 <rect x="1.5" y="15.5" width="7" height="5" rx="1.5" />
                 <rect x="13.5" y="15.5" width="7" height="5" rx="1.5" />
                 <path d="M11 6.5v4M5 15.5v-2.5h12v2.5" />
+              </svg>
+            </button>
+            <button
+              className="bt-float-icon-btn bt-agent-tree-btn"
+              onClick={onOpenAgent}
+              disabled={isEditingLocked}
+              title="Create tree with AI"
+              aria-label="Create tree with AI"
+              data-testid="bt-open-agent"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3z" />
+                <path d="M18.5 13l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2zM5.5 14l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z" />
               </svg>
             </button>
             <button

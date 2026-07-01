@@ -24,6 +24,16 @@ const executorMock = vi.hoisted(() => ({
   }>,
 }));
 
+const rosDiscoveryMock = vi.hoisted(() => ({
+  discoverAllROSResources: vi.fn(),
+  fetchActionGoalDetails: vi.fn(),
+  fetchServiceRequestSchema: vi.fn(),
+}));
+
+const agentClientMock = vi.hoisted(() => ({
+  generateBehaviorTree: vi.fn(),
+}));
+
 const createRect = (x: number, y: number, width: number, height: number): DOMRect => ({
   x,
   y,
@@ -140,6 +150,9 @@ vi.mock('../engine/executor', () => ({
     }
   ),
 }));
+
+vi.mock('../services/rosDiscovery', () => rosDiscoveryMock);
+vi.mock('../agent/agentClient', () => agentClientMock);
 
 vi.mock('reactflow', () => ({
   default: (props: {
@@ -295,6 +308,18 @@ describe('BehaviorTreePanel', () => {
     reactFlowMock.setCenter.mockReset();
     reactFlowMock.fitView.mockReset();
     executorMock.instances = [];
+    rosDiscoveryMock.discoverAllROSResources.mockReset();
+    rosDiscoveryMock.fetchActionGoalDetails.mockReset();
+    rosDiscoveryMock.fetchServiceRequestSchema.mockReset();
+    agentClientMock.generateBehaviorTree.mockReset();
+    rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({ actions: [], services: [], topics: [] });
+    rosDiscoveryMock.fetchActionGoalDetails.mockResolvedValue(null);
+    rosDiscoveryMock.fetchServiceRequestSchema.mockResolvedValue(null);
+    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
+      name: 'Generated',
+      nodes: [{ id: 'generated-root', type: 'sequence', label: 'Generated root' }],
+      edges: [],
+    }));
     window.matchMedia = createMatchMedia(false);
     window.confirm = vi.fn(() => true);
     localStorage.clear();
@@ -308,6 +333,99 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
 
     expect(screen.getByTestId('bt-node-palette')).toBeInTheDocument();
+  });
+
+  it('opens and closes the AI behavior tree agent', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    expect(screen.getByTestId('bt-agent-panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Describe the behavior')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+  });
+
+  it('previews agent changes on the canvas and accepts them from the popup', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'agent-current-tree',
+            name: 'Agent Current Tree',
+            nodes: [
+              {
+                id: 'root',
+                type: 'sequence',
+                position: { x: 0, y: 0 },
+                data: { label: 'Root', type: 'sequence' },
+              },
+              {
+                id: 'move',
+                type: 'action',
+                position: { x: 0, y: 120 },
+                data: { label: 'Move', actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 0 } },
+              },
+            ],
+            edges: [{ id: 'root-move', source: 'root', target: 'move' }],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+    rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({
+      actions: [{ name: '/move', type: 'robot/action/Move', namespace: '/move' }],
+      services: [],
+      topics: [],
+    });
+    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
+      name: 'Accepted Agent Tree',
+      description: 'Move farther',
+      nodes: [
+        { id: 'root', type: 'sequence', label: 'Root' },
+        { id: 'move', type: 'action', label: 'Move', config: { actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1, y: 0 } } },
+        { id: 'wait', type: 'timeout', label: 'Wait', config: { timeout: 500 } },
+      ],
+      edges: [
+        { source: 'root', target: 'move' },
+        { source: 'root', target: 'wait' },
+      ],
+    }));
+
+    render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Agent Current Tree'));
+    await screen.findByTestId('rf-node-move');
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    await screen.findByText('1 resources · 0 input schemas');
+    fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move one meter and wait' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+
+    const banner = await screen.findByTestId('bt-agent-canvas-preview-banner');
+    expect(banner).toHaveTextContent('Agent preview');
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add subtree' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit' }));
+    await waitFor(() => {
+      expect(reactFlowMock.fitView).toHaveBeenCalledWith(expect.objectContaining({ padding: 0.2, maxZoom: 1.15 }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('bt-agent-canvas-preview-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-wait')).toBeInTheDocument();
+    });
   });
 
   it('uses a touch-friendly connection radius', () => {

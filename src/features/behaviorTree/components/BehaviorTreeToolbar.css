@@ -106,6 +106,7 @@
 }
 
 .bt-arrange-tree-btn,
+.bt-agent-tree-btn,
 .bt-interaction-mode-btn,
 .bt-follow-mode-btn,
 .bt-undo-tree-btn,
@@ -142,6 +143,7 @@
 
 .bt-undo-tree-btn:disabled,
 .bt-redo-tree-btn:disabled,
+.bt-agent-tree-btn:disabled,
 .bt-arrange-tree-btn:disabled {
   cursor: default;
   opacity: 0.45;
@@ -150,6 +152,7 @@
 
 .bt-undo-tree-btn:disabled:hover,
 .bt-redo-tree-btn:disabled:hover,
+.bt-agent-tree-btn:disabled:hover,
 .bt-arrange-tree-btn:disabled:hover {
   box-shadow: none;
 }
