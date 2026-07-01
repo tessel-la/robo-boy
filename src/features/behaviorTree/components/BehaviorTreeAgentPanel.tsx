@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FaPaperPlane, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { Ros } from 'roslib';
 import {
   discoverAllROSResources,
@@ -374,7 +374,10 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           autoFocus
         />
         <button type="submit" disabled={!inlinePrompt.trim()} aria-label="Send inline AI instruction" title="Send">
-          <FaPaperPlane aria-hidden="true" />
+          <svg className="bt-agent-inline-ai-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M11.7 3.2l1.25 3.85L16.8 8.3l-3.85 1.25-1.25 3.85-1.25-3.85L6.6 8.3l3.85-1.25L11.7 3.2z" />
+            <path d="M18.2 13.2l.75 2.2 2.2.75-2.2.75-.75 2.2-.75-2.2-2.2-.75 2.2-.75.75-2.2z" />
+          </svg>
         </button>
       </form>
     );

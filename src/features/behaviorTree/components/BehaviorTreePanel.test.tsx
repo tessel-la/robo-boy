@@ -356,6 +356,7 @@ describe('BehaviorTreePanel', () => {
     const prompt = await screen.findByLabelText('Inline AI instruction');
     await waitFor(() => expect(prompt).toHaveFocus());
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Send inline AI instruction').querySelector('.bt-agent-inline-ai-icon')).toBeInTheDocument();
 
     fireEvent.change(prompt, { target: { value: 'Add a stop action to this sequence' } });
     fireEvent.submit(prompt.closest('form')!);

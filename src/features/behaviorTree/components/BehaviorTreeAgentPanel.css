@@ -339,6 +339,7 @@
 .bt-agent-inline-prompt input { min-width: 0; height: 34px; flex: 1; padding: 0 8px; border: 0; outline: 0; background: transparent; color: var(--text-color, #212529); font-family: inherit; font-size: 13px; letter-spacing: 0; }
 .bt-agent-inline-prompt input::placeholder { color: var(--text-secondary, var(--secondary-text-color, #6c757d)); }
 .bt-agent-inline-prompt button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; padding: 0; place-items: center; border: 0; border-radius: 6px; background: var(--primary-color, #4285f4); color: var(--button-text-color, #ffffff); cursor: pointer; }
+.bt-agent-inline-ai-icon { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .bt-agent-inline-prompt button:disabled { opacity: .42; cursor: default; }
 
 @keyframes bt-agent-panel-in { from { opacity: .55; transform: translateY(-6px) scale(.985); } }
