@@ -129,11 +129,11 @@ const IconMCVSwap = () => (
 );
 const IconMCVReplacePanel = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="5" width="16" height="12" rx="2"/>
-    <path d="M8 21h8"/>
-    <path d="M12 17v4"/>
-    <path d="M8 10h7"/>
-    <path d="m12 7 3 3-3 3"/>
+    <rect x="4" y="4" width="16" height="16" rx="2.5"/>
+    <path d="M8 9h7.5l-2-2"/>
+    <path d="m15.5 9-2 2"/>
+    <path d="M16 15H8.5l2 2"/>
+    <path d="m8.5 15 2-2"/>
   </svg>
 );
 const IconMCVSaveLayout = () => (
