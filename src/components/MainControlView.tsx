@@ -910,7 +910,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     Object.values(workspacePadNoticeTimeoutRefs.current).forEach(clearTimeout);
   }, []);
 
-  const isDesktopWorkspace = isLargeScreen;
+  // The unified workspace owns every viewport. Its rows stack responsively on
+  // narrow screens, so changing viewport size must never swap in another tree.
+  const isDesktopWorkspace = true;
   const useStandardMobileExecutionLayout = !isLargeScreen && (
     isStandardBtExecuting || retainStandardMobileLayout
   );

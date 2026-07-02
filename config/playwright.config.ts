@@ -7,6 +7,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const isStackRun = process.env.npm_lifecycle_event === 'e2e:stack';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? (isStackRun ? 'http://127.0.0.1' : 'http://127.0.0.1:5173');
 const skipWebServer = isStackRun || process.env.PLAYWRIGHT_SKIP_WEB_SERVER === '1';
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 const webServer = {
     command: 'VITE_PWA_DEV=false npm run dev',
     cwd: projectRoot,
@@ -46,7 +47,12 @@ export default defineConfig({
     projects: [
         {
             name: 'chromium',
-            use: { ...devices['Desktop Chrome'] },
+            use: {
+                ...devices['Desktop Chrome'],
+                launchOptions: chromiumExecutablePath
+                    ? { executablePath: chromiumExecutablePath }
+                    : undefined,
+            },
         },
     ],
 
