@@ -247,6 +247,7 @@ const WORKSPACE_OPEN_KEY = 'robo-boy-desktop-workspace-open-v1';
 const MOBILE_WORKSPACE_PANELS_KEY = 'robo-boy-mobile-workspace-panels-v1';
 const MOBILE_SPLIT_VIEW_KEY = 'robo-boy-mobile-split-view-v1';
 const DESKTOP_WORKSPACE_QUERY = '(min-width: 1024px)';
+const STACKED_WORKSPACE_QUERY = '(max-width: 767px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
@@ -276,6 +277,7 @@ type WorkspaceInteraction =
   }
   | {
     mode: 'column';
+    axis: 'x' | 'y';
     rowIndex: number;
     index: number;
     startClientX: number;
@@ -855,6 +857,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (typeof window === 'undefined' || !window.matchMedia) return true;
     return window.matchMedia(DESKTOP_WORKSPACE_QUERY).matches;
   });
+  const [isWorkspaceStacked, setIsWorkspaceStacked] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia(STACKED_WORKSPACE_QUERY).matches;
+  });
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
   const [tfEverMounted, setTfEverMounted] = useState(false);
@@ -1075,6 +1081,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       mediaQuery.removeEventListener('change', handleMediaChange);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mediaQuery = window.matchMedia(STACKED_WORKSPACE_QUERY);
+    const handleMediaChange = (event: MediaQueryListEvent) => setIsWorkspaceStacked(event.matches);
+    setIsWorkspaceStacked(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleMediaChange);
+    return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, []);
 
   useEffect(() => {
@@ -1682,13 +1697,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsWorkspaceResizing(true);
     const rowElement = event.currentTarget.closest<HTMLElement>('.workspace-tile-row');
+    const axis = isWorkspaceStacked ? 'y' : 'x';
     workspaceInteractionRef.current = {
       mode: 'column',
+      axis,
       rowIndex,
       index,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      containerSize: rowElement?.clientWidth || 1,
+      containerSize: (axis === 'y' ? rowElement?.clientHeight : rowElement?.clientWidth) || 1,
       startRatios: workspaceColumnRatiosByRow[rowIndex] || [],
     };
   };
@@ -1720,7 +1737,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         [interaction.rowIndex]: updateAdjacentRatios(
           interaction.startRatios,
           interaction.index,
-          deltaX,
+          interaction.axis === 'y' ? deltaY : deltaX,
           interaction.containerSize
         ),
       },
@@ -3361,8 +3378,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               className="workspace-column-resize-handle"
                               onPointerDown={(event) => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
                               role="separator"
-                              aria-orientation="vertical"
-                              aria-label="Resize workspace columns"
+                              aria-orientation={isWorkspaceStacked ? 'horizontal' : 'vertical'}
+                              aria-label={isWorkspaceStacked ? 'Resize stacked workspace tiles' : 'Resize workspace columns'}
                             >
                               <div className="workspace-resize-handle-bar" />
                             </div>

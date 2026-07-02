@@ -13,13 +13,36 @@ export interface BehaviorTreeAgentSettings {
   includeCurrentTree: boolean;
 }
 
-export type BehaviorTreeAgentTreeContextMode = 'open' | 'selection' | 'open-and-selection';
+export type BehaviorTreeAgentTreeContextMode = 'open' | 'selection' | 'open-and-selection' | 'additional';
 
 export interface BehaviorTreeAgentTreeContext {
   mode: BehaviorTreeAgentTreeContextMode;
   openTree?: BehaviorTree;
   selectedTree?: BehaviorTree;
   note?: string;
+  additionalContext?: BehaviorTreeAgentContextItem[];
+}
+
+export interface BehaviorTreeAgentContextItem {
+  id: string;
+  kind: 'tree' | 'node' | 'ros';
+  label: string;
+  value: unknown;
+}
+
+export interface BehaviorTreeAgentAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  kind: 'text' | 'image';
+  content: string;
+}
+
+export interface BehaviorTreeAgentCheckpoint {
+  tree: BehaviorTree;
+  activeTree: BehaviorTree | null;
+  path: string[];
 }
 
 export interface BehaviorTreeAgentRequest {
@@ -30,6 +53,7 @@ export interface BehaviorTreeAgentRequest {
   treeContext?: BehaviorTreeAgentTreeContext | null;
   rosResources: ROSDiscoveryResult;
   resourceSchemas: BehaviorTreeResourceSchemas;
+  attachments?: BehaviorTreeAgentAttachment[];
   signal?: AbortSignal;
   onToken?: (text: string) => void;
   onProgress?: (message: string) => void;

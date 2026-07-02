@@ -30,6 +30,11 @@ export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest):
     openTree: request.currentTree,
     note: 'The user shared the currently open behavior tree.',
   } : null);
+  const attachments = request.attachments ?? [];
+  const attachmentContext = attachments.map(attachment => attachment.kind === 'text'
+    ? `File: ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)\n${attachment.content}`
+    : `Image: ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)`
+  ).join('\n\n');
   const parts = [
     'You are a robotics behavior-tree architect. Build an executable behavior tree for the request.',
     SCHEMA,
@@ -40,6 +45,7 @@ export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest):
     request.settings.includeCurrentTree && treeContext
       ? `Behavior-tree context selected by the user:\n${JSON.stringify(treeContext)}`
       : '',
+    attachmentContext && `User attachments:\n${attachmentContext}`,
     request.conversation?.length
       ? `Conversation so far:\n${request.conversation.map(message => `${message.role}: ${message.content}`).join('\n')}`
       : '',
@@ -165,13 +171,25 @@ export const transcribeAgentAudio = async (
 export const generateBehaviorTree = async (request: BehaviorTreeAgentRequest): Promise<string> => {
   const { settings, signal, onProgress, onToken } = request;
   const prompt = buildBehaviorTreeAgentPrompt(request);
+  const imageAttachments = (request.attachments ?? []).filter(attachment => attachment.kind === 'image');
   onProgress?.(`Contacting ${settings.provider} (${settings.model})…`);
 
   if (settings.provider === 'gemini') {
     const url = `${settings.baseUrl.replace(/\/$/, '')}/models/${encodeURIComponent(settings.model)}:streamGenerateContent?alt=sse`;
     const response = await checkedFetch(url, {
       method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: prompt },
+            ...imageAttachments.map(attachment => ({
+              inlineData: { mimeType: attachment.mimeType, data: attachment.content },
+            })),
+          ],
+        }],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+      }),
     });
     onProgress?.('Receiving and assembling the tree…');
     return readSse(response, payload => payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? '').join(''), onToken);
@@ -182,7 +200,24 @@ export const generateBehaviorTree = async (request: BehaviorTreeAgentRequest): P
   if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
   const response = await checkedFetch(url, {
     method: 'POST', signal, headers,
-    body: JSON.stringify({ model: settings.model, stream: true, temperature: 0.2, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({
+      model: settings.model,
+      stream: true,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'user',
+        content: imageAttachments.length > 0
+          ? [
+              { type: 'text', text: prompt },
+              ...imageAttachments.map(attachment => ({
+                type: 'image_url',
+                image_url: { url: `data:${attachment.mimeType};base64,${attachment.content}` },
+              })),
+            ]
+          : prompt,
+      }],
+    }),
   });
   onProgress?.('Receiving and assembling the tree…');
   return readSse(response, payload => payload.choices?.[0]?.delta?.content, onToken);

@@ -248,6 +248,52 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('resizes vertically stacked mobile workspace tiles by vertical drag', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-camera', 'camera', 'Camera'),
+      makePanel('panel-pad', 'pad', 'Pad controls'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad']));
+    localStorage.setItem(workspaceLayoutKey, JSON.stringify({
+      rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] },
+    }));
+    renderMainControlView();
+
+    const separator = await screen.findByRole('separator', { name: 'Resize stacked workspace tiles' });
+    expect(separator).toHaveAttribute('aria-orientation', 'horizontal');
+    const row = separator.closest('.workspace-tile-row') as HTMLElement;
+    Object.defineProperty(row, 'clientHeight', { configurable: true, value: 800 });
+    Object.defineProperty(separator, 'setPointerCapture', { configurable: true, value: vi.fn() });
+
+    const pointerDown = new MouseEvent('pointerdown', { bubbles: true, clientX: 20, clientY: 100 });
+    Object.defineProperty(pointerDown, 'pointerId', { value: 1 });
+    fireEvent(separator, pointerDown);
+    const pointerMove = new MouseEvent('pointermove', { bubbles: true, clientX: 20, clientY: 300 });
+    Object.defineProperty(pointerMove, 'pointerId', { value: 1 });
+    fireEvent(screen.getByLabelText('Desktop workspace'), pointerMove);
+    const pointerUp = new MouseEvent('pointerup', { bubbles: true, clientX: 20, clientY: 300 });
+    Object.defineProperty(pointerUp, 'pointerId', { value: 1 });
+    fireEvent(screen.getByLabelText('Desktop workspace'), pointerUp);
+
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
+      expect(stored.columnRatiosByRow[0][0]).toBeGreaterThan(stored.columnRatiosByRow[0][1]);
+    });
+  });
+
   it('shows a global running-tree control and highlights its workspace tile', async () => {
     localStorage.setItem(workspacePanelsKey, JSON.stringify([
       makePanel('panel-bt', 'behaviorTree', 'Behavior tree'),

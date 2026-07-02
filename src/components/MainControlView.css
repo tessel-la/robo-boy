@@ -1132,11 +1132,6 @@ body.no-scroll {
         gap: 6px;
     }
 
-    .workspace-column-resize-handle,
-    .workspace-row-resize-handle {
-        display: none;
-    }
-
     .workspace-card {
         min-height: 400px;
     }
@@ -1697,6 +1692,26 @@ body.no-scroll {
 
 .workspace-column-resize-handle:hover .workspace-resize-handle-bar {
     transform: scaleY(1.12);
+}
+
+@media (max-width: 767px) {
+    .desktop-workspace .workspace-row-resize-handle,
+    .desktop-workspace .workspace-column-resize-handle {
+        width: 100%;
+        height: 18px;
+        min-height: 18px;
+        cursor: row-resize;
+    }
+
+    .desktop-workspace .workspace-row-resize-handle .workspace-resize-handle-bar,
+    .desktop-workspace .workspace-column-resize-handle .workspace-resize-handle-bar {
+        width: 64px;
+        height: 3px;
+    }
+
+    .desktop-workspace .workspace-column-resize-handle:hover .workspace-resize-handle-bar {
+        transform: scaleX(1.12);
+    }
 }
 
 .workspace-card-content .camera-view,
