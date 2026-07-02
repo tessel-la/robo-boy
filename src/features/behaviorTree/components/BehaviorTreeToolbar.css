@@ -1016,3 +1016,39 @@
 }
 .bt-blackboard-editor { width: 100%; min-height: 110px; box-sizing: border-box; resize: vertical; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--background-color); color: var(--text-color); font: 0.72rem/1.4 monospace; }
 .bt-blackboard-error { margin-top: 4px; color: var(--error-color, #d32f2f); font-size: 0.7rem; }
+
+/* Keep every primary canvas action on the same mobile touch grid. */
+@media (max-width: 600px) {
+  .bt-float-menu-btn {
+    height: 44px;
+    min-height: 44px;
+    border-radius: 22px;
+  }
+
+  .bt-float-icon-btn,
+  .bt-float-icon-btn.bt-palette-toggle,
+  .bt-arrange-tree-btn,
+  .bt-agent-tree-btn,
+  .bt-interaction-mode-btn,
+  .bt-follow-mode-btn,
+  .bt-undo-tree-btn,
+  .bt-redo-tree-btn,
+  .bt-float-run-btn,
+  .bt-float-pause-btn,
+  .bt-float-stop-btn {
+    box-sizing: border-box;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bt-float-run-btn,
+  .bt-float-pause-btn,
+  .bt-float-stop-btn {
+    border-radius: 22px;
+  }
+}

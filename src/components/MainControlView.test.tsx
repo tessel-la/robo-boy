@@ -248,6 +248,21 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('shows a global running-tree control and highlights its workspace tile', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([
+      makePanel('panel-bt', 'behaviorTree', 'Behavior tree'),
+    ]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
+    renderMainControlView();
+
+    fireEvent.click(await screen.findByText('Start mocked tree'));
+    const jumpButton = screen.getByLabelText('Jump to running behavior tree');
+    expect(jumpButton).toBeInTheDocument();
+
+    fireEvent.click(jumpButton);
+    expect(screen.getByLabelText('Behavior tree')).toHaveClass('is-execution-jump');
+  });
+
   it('replaces a selected panel without changing its tile identity', async () => {
     localStorage.setItem(workspacePanelsKey, JSON.stringify([
       makePanel('panel-camera', 'camera', 'Camera'),
@@ -641,9 +656,13 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Switch to Behavior Tree'));
 
     fireEvent.click(screen.getByLabelText('Swap mobile windows'));
+    const swappedTopWindow = screen.getByLabelText('Top mobile window');
+    expect(swappedTopWindow).toHaveClass('is-swapping-up');
     expect(screen.getByLabelText('Select top window')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText('Switch to Behavior Tree')).toHaveClass('active');
     expect(localStorage.getItem(mobileSplitViewKey)).toBe('true');
+    fireEvent.animationEnd(swappedTopWindow);
+    expect(swappedTopWindow).not.toHaveClass('is-swapping-up');
 
     fireEvent.click(screen.getByLabelText('Use one mobile panel'));
     expect(screen.getByLabelText('Bottom mobile window')).not.toBeVisible();

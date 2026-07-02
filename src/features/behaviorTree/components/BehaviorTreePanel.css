@@ -14,21 +14,7 @@
   flex: 1;
   overflow: hidden;
   position: relative;
-  transition: margin-right .2s ease, height .2s ease;
-}
-
-@media (min-width: 769px) {
-  .behavior-tree-panel.bt-agent-open .bt-content {
-    margin-right: min(496px, 46%);
-  }
-}
-
-@media (max-width: 768px) {
-  .behavior-tree-panel.bt-agent-open .bt-content {
-    flex: 0 0 auto;
-    width: 100%;
-    height: max(160px, calc(100% - min(58dvh, 560px) - 16px));
-  }
+  transition: height .2s ease;
 }
 
 .bt-canvas {

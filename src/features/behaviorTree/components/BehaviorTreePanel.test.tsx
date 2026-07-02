@@ -347,6 +347,24 @@ describe('BehaviorTreePanel', () => {
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
   });
 
+  it('opens a compact inline agent instruction at the canvas pointer with Ctrl+I', async () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.pointerMove(screen.getByTestId('bt-canvas'), { clientX: 240, clientY: 180 });
+    fireEvent.keyDown(window, { key: 'i', ctrlKey: true });
+
+    const prompt = await screen.findByLabelText('Inline AI instruction');
+    await waitFor(() => expect(prompt).toHaveFocus());
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Send inline AI instruction').querySelector('.bt-agent-inline-ai-icon')).toBeInTheDocument();
+
+    fireEvent.change(prompt, { target: { value: 'Add a stop action to this sequence' } });
+    fireEvent.submit(prompt.closest('form')!);
+
+    expect(await screen.findByTestId('bt-agent-panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Describe the behavior')).toHaveValue('Add a stop action to this sequence');
+  });
+
   it('previews agent changes on the canvas and accepts them from the popup', async () => {
     const now = Date.now();
     localStorage.setItem(
@@ -403,7 +421,7 @@ describe('BehaviorTreePanel', () => {
     await screen.findByTestId('rf-node-move');
 
     fireEvent.click(screen.getByTestId('bt-open-agent'));
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
     await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move one meter and wait' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
