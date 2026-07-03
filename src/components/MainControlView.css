@@ -1837,6 +1837,16 @@ body.no-scroll {
   animation: mobile-workspace-swap-down 280ms cubic-bezier(0.22, 0.78, 0.24, 1);
 }
 
+@media (max-width: 767px) {
+  .desktop-workspace .workspace-card.is-mobile-swapping-up {
+    animation: mobile-workspace-swap-up 280ms cubic-bezier(0.22, 0.78, 0.24, 1);
+  }
+
+  .desktop-workspace .workspace-card.is-mobile-swapping-down {
+    animation: mobile-workspace-swap-down 280ms cubic-bezier(0.22, 0.78, 0.24, 1);
+  }
+}
+
 @keyframes mobile-workspace-swap-up {
   0% {
     opacity: 0.68;

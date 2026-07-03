@@ -80,8 +80,8 @@
 }
 
 .tf-tree-icon-button {
-  width: clamp(32px, 7cqw, 36px);
-  height: clamp(32px, 7cqw, 36px);
+  width: clamp(36px, 8cqw, 44px);
+  height: clamp(36px, 8cqw, 44px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -113,7 +113,7 @@
 
 .tf-tree-live-button {
   min-width: 92px;
-  height: clamp(32px, 7cqw, 36px);
+  height: clamp(36px, 8cqw, 44px);
   display: inline-flex;
   align-items: center;
   justify-content: center;

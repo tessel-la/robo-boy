@@ -60,8 +60,8 @@
 /* Palette toggle — always visible */
 .bt-palette-toggle {
   display: flex;
-  width: clamp(32px, 7cqw, 36px);
-  height: clamp(32px, 7cqw, 36px);
+  width: clamp(36px, 8.2cqw, 44px);
+  height: clamp(36px, 8.2cqw, 44px);
 }
 
 .bt-palette-toggle svg {
@@ -97,8 +97,8 @@
 }
 
 .bt-float-icon-btn.bt-palette-toggle {
-  width: clamp(32px, 7cqw, 36px);
-  height: clamp(32px, 7cqw, 36px);
+  width: clamp(36px, 8.2cqw, 44px);
+  height: clamp(36px, 8.2cqw, 44px);
 }
 
 .bt-float-icon-btn:hover {
@@ -117,8 +117,8 @@
 .bt-follow-mode-btn,
 .bt-undo-tree-btn,
 .bt-redo-tree-btn {
-  width: clamp(32px, 7cqw, 36px);
-  height: clamp(32px, 7cqw, 36px);
+  width: clamp(34px, 8.4cqw, 48px);
+  height: clamp(34px, 8.4cqw, 48px);
 }
 
 .bt-interaction-mode-btn.active,
@@ -131,19 +131,19 @@
 
 .bt-select-tool-icon,
 .bt-pan-tool-icon {
-  width: clamp(16px, 4cqw, 19px);
-  height: clamp(16px, 4cqw, 19px);
+  width: clamp(23px, 5.8cqw, 31px);
+  height: clamp(23px, 5.8cqw, 31px);
   display: block;
 }
 
 .bt-pan-tool-icon {
-  width: clamp(17px, 4.2cqw, 20px);
-  height: clamp(17px, 4.2cqw, 20px);
+  width: clamp(24px, 6cqw, 32px);
+  height: clamp(24px, 6cqw, 32px);
 }
 
 .bt-follow-tool-icon {
-  width: clamp(16px, 4cqw, 19px);
-  height: clamp(16px, 4cqw, 19px);
+  width: clamp(21px, 5.4cqw, 27px);
+  height: clamp(21px, 5.4cqw, 27px);
   display: block;
 }
 

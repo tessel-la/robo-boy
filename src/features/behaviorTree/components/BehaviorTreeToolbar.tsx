@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FaMousePointer } from 'react-icons/fa';
+import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import { BehaviorNodeType, BehaviorTree } from '../types';
 import {
@@ -400,7 +400,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               aria-pressed={interactionMode === 'select'}
               data-testid="bt-select-mode"
             >
-              <FaMousePointer className="bt-select-tool-icon" aria-hidden="true" />
+              <MdSelectAll className="bt-select-tool-icon" aria-hidden="true" />
             </button>
             <button
               className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'pan' ? ' active' : ''}`}

@@ -39,7 +39,7 @@ vi.mock('../hooks/useResizablePanels', () => ({
 vi.mock('animejs', () => ({
   default: {
     timeline: vi.fn(() => ({
-      add: vi.fn((options) => {
+      add: vi.fn(options => {
         options?.complete?.();
         return undefined;
       }),
@@ -64,10 +64,12 @@ vi.mock('./CameraView', () => ({
         aria-label="Camera topic"
         id={selectId}
         value={cameraTopic}
-        onChange={(event) => onTopicChange(event.target.value)}
+        onChange={event => onTopicChange(event.target.value)}
       >
         {availableTopics.map((topic: string) => (
-          <option key={topic} value={topic}>{topic}</option>
+          <option key={topic} value={topic}>
+            {topic}
+          </option>
         ))}
       </select>
     </div>
@@ -75,9 +77,7 @@ vi.mock('./CameraView', () => ({
 }));
 
 vi.mock('./VisualizationPanel', () => ({
-  default: ({ storageKey }: any) => (
-    <div data-testid="visualization-panel">{storageKey || 'base-visualization'}</div>
-  ),
+  default: ({ storageKey }: any) => <div data-testid="visualization-panel">{storageKey || 'base-visualization'}</div>,
 }));
 
 vi.mock('../features/tfTree/components/TfTreePanel', () => ({
@@ -91,15 +91,20 @@ vi.mock('./gamepads/custom/CustomGamepadWrapper', () => ({
 }));
 
 vi.mock('./AddPanelMenu', () => ({
-  default: ({ isOpen, onSelectLayout, onOpenTemplate, onOpenCustomEditor }: any) => (
+  default: ({ isOpen, onSelectLayout, onOpenTemplate, onOpenCustomEditor }: any) =>
     isOpen ? (
       <div data-testid="add-panel-menu">
-        <button type="button" onClick={() => onSelectLayout('custom-drive')}>Add custom drive</button>
-        <button type="button" onClick={() => onOpenTemplate('template-drive')}>Open template</button>
-        <button type="button" onClick={() => onOpenCustomEditor()}>Open editor</button>
+        <button type="button" onClick={() => onSelectLayout('custom-drive')}>
+          Add custom drive
+        </button>
+        <button type="button" onClick={() => onOpenTemplate('template-drive')}>
+          Open template
+        </button>
+        <button type="button" onClick={() => onOpenCustomEditor()}>
+          Open editor
+        </button>
       </div>
-    ) : null
-  ),
+    ) : null,
 }));
 
 vi.mock('../features/customGamepad/components/GamepadEditor', () => ({
@@ -124,7 +129,9 @@ vi.mock('../features/customGamepad/components/GamepadEditor', () => ({
       >
         Save pad
       </button>
-      <button type="button" onClick={onClose}>Close editor</button>
+      <button type="button" onClick={onClose}>
+        Close editor
+      </button>
     </div>
   ),
 }));
@@ -150,16 +157,18 @@ vi.mock('../features/behaviorTree/components/BehaviorTreePanel', () => ({
           <input
             aria-label="Behavior tree local state"
             value={localState}
-            onChange={(event) => setLocalState(event.target.value)}
+            onChange={event => setLocalState(event.target.value)}
           />
         </label>
         <button
           type="button"
-          onClick={() => onExecutionChange?.({
-            isExecuting: true,
-            treeName: 'Inspect Tree',
-            activeNodeLabel: 'Move arm',
-          })}
+          onClick={() =>
+            onExecutionChange?.({
+              isExecuting: true,
+              treeName: 'Inspect Tree',
+              activeNodeLabel: 'Move arm',
+            })
+          }
         >
           Start mocked tree
         </button>
@@ -193,9 +202,8 @@ const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree', t
   layoutId: type === 'pad' ? 'custom-drive' : undefined,
 });
 
-const renderMainControlView = () => (
-  render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} />)
-);
+const renderMainControlView = () =>
+  render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} />);
 
 describe('MainControlView desktop workspace', () => {
   beforeEach(() => {
@@ -204,7 +212,11 @@ describe('MainControlView desktop workspace', () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
     ]);
-    getGamepadLayout.mockReturnValue({ id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive', name: 'Drive Pad' } });
+    getGamepadLayout.mockReturnValue({
+      id: 'custom-drive',
+      name: 'Drive Pad',
+      layout: { id: 'custom-drive', name: 'Drive Pad' },
+    });
     cloneGamepadTemplate.mockReturnValue({ id: 'template-copy', name: 'Template Copy' });
     deleteCustomGamepad.mockReturnValue(true);
     downloadGamepadLayout.mockReturnValue(true);
@@ -262,14 +274,19 @@ describe('MainControlView desktop workspace', () => {
         dispatchEvent: vi.fn(),
       })),
     });
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-camera', 'camera', 'Camera'),
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([makePanel('panel-camera', 'camera', 'Camera'), makePanel('panel-pad', 'pad', 'Pad controls')])
+    );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad']));
-    localStorage.setItem(workspaceLayoutKey, JSON.stringify({
-      rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] },
-    }));
+    localStorage.setItem(
+      workspaceLayoutKey,
+      JSON.stringify({
+        rowSizes: [2],
+        rowRatios: [1],
+        columnRatiosByRow: { 0: [1, 1] },
+      })
+    );
     renderMainControlView();
 
     const separator = await screen.findByRole('separator', { name: 'Resize stacked workspace tiles' });
@@ -294,10 +311,54 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
+  it('caps the mobile workspace at two visible panels and swaps them', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        makePanel('panel-camera', 'camera', 'Camera'),
+        makePanel('panel-pad', 'pad', 'Pad controls'),
+        makePanel('panel-bt', 'behaviorTree', 'Behavior tree'),
+      ])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad', 'panel-bt']));
+    renderMainControlView();
+
+    const workspace = await screen.findByLabelText('Desktop workspace');
+    expect(workspace.querySelectorAll('.workspace-card')).toHaveLength(2);
+    expect(screen.queryByLabelText('Behavior tree')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Add workspace panel')).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('Swap mobile panels'));
+    const cards = workspace.querySelectorAll('.workspace-card');
+    expect(cards[0]).toHaveAttribute('aria-label', 'Pad controls');
+    expect(cards[0]).toHaveClass('is-mobile-swapping-up');
+    expect(cards[1]).toHaveAttribute('aria-label', 'Camera');
+
+    fireEvent.animationEnd(cards[0]);
+    expect(cards[0]).not.toHaveClass('is-mobile-swapping-up');
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem(workspaceTileOrderKey) || '[]').slice(0, 2)).toEqual([
+        'panel-pad',
+        'panel-camera',
+      ]);
+    });
+  });
+
   it('shows a global running-tree control and highlights its workspace tile', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-bt', 'behaviorTree', 'Behavior tree'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
     renderMainControlView();
 
@@ -310,9 +371,7 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('replaces a selected panel without changing its tile identity', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-camera', 'camera', 'Camera'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
     renderMainControlView();
 
@@ -322,16 +381,14 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByLabelText('TF tree')).toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
-      expect(stored).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'panel-camera', type: 'tfTree', title: 'TF tree' }),
-      ]));
+      expect(stored).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'panel-camera', type: 'tfTree', title: 'TF tree' })])
+      );
     });
   });
 
   it('adds from the global control after selecting a tile header', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-camera', 'camera', 'Camera'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
     renderMainControlView();
 
@@ -349,10 +406,10 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('migrates legacy mobile panels only when the unified workspace is empty', async () => {
-    localStorage.setItem(mobileWorkspacePanelsKey, JSON.stringify([
-      makePanel('legacy-camera', 'camera', 'Camera'),
-      makePanel('legacy-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(
+      mobileWorkspacePanelsKey,
+      JSON.stringify([makePanel('legacy-camera', 'camera', 'Camera'), makePanel('legacy-pad', 'pad', 'Pad controls')])
+    );
     renderMainControlView();
 
     expect(await screen.findByLabelText('Camera')).toBeInTheDocument();
@@ -361,9 +418,7 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('exports a version 2 portable workspace bundle with referenced pads', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workspace');
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -490,17 +545,29 @@ describe('MainControlView desktop workspace', () => {
 
   it.skip('loads persisted workspace panels, removes tiles, and returns to split view', async () => {
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-camera', 'camera', 'Camera'),
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-      { bad: 'panel' },
-    ]));
-    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['base-view', 'panel-camera', 'panel-pad', 'base-pads']));
-    localStorage.setItem(workspaceLayoutKey, JSON.stringify({ rowSizes: [2, 2], rowRatios: [2, 1], columnRatiosByRow: { 0: [2, 1], 1: [1, 1] } }));
-    localStorage.setItem(customTemplatesKey, JSON.stringify([
-      { id: 'custom-layout', title: 'Custom snap', rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] } },
-      { id: 'bad-layout', title: 'Bad', rowSizes: [] },
-    ]));
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        makePanel('panel-camera', 'camera', 'Camera'),
+        makePanel('panel-pad', 'pad', 'Pad controls'),
+        { bad: 'panel' },
+      ])
+    );
+    localStorage.setItem(
+      workspaceTileOrderKey,
+      JSON.stringify(['base-view', 'panel-camera', 'panel-pad', 'base-pads'])
+    );
+    localStorage.setItem(
+      workspaceLayoutKey,
+      JSON.stringify({ rowSizes: [2, 2], rowRatios: [2, 1], columnRatiosByRow: { 0: [2, 1], 1: [1, 1] } })
+    );
+    localStorage.setItem(
+      customTemplatesKey,
+      JSON.stringify([
+        { id: 'custom-layout', title: 'Custom snap', rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] } },
+        { id: 'bad-layout', title: 'Bad', rowSizes: [] },
+      ])
+    );
 
     renderMainControlView();
 
@@ -523,9 +590,7 @@ describe('MainControlView desktop workspace', () => {
 
   it('edits the pad selected in an integrated workspace control', async () => {
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
 
     renderMainControlView();
@@ -540,9 +605,7 @@ describe('MainControlView desktop workspace', () => {
 
   it('imports and exports the pad selected in a workspace control', async () => {
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
     const { container } = renderMainControlView();
 
@@ -570,9 +633,7 @@ describe('MainControlView desktop workspace', () => {
       { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
     ]);
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
     renderMainControlView();
 
@@ -589,9 +650,7 @@ describe('MainControlView desktop workspace', () => {
       { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
     ]);
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      makePanel('panel-pad', 'pad', 'Pad controls'),
-    ]));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
     renderMainControlView();
 
@@ -602,9 +661,9 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
-      expect(stored).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'panel-pad', layoutId: 'custom-arm' }),
-      ]));
+      expect(stored).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'panel-pad', layoutId: 'custom-arm' })])
+      );
     });
   });
 
@@ -613,9 +672,10 @@ describe('MainControlView desktop workspace', () => {
       { id: 'template-drive', name: 'Template Pad', layout: { id: 'template-layout' }, isDefault: true },
     ]);
     localStorage.setItem(workspaceOpenKey, 'true');
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([
-      { ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'template-drive' },
-    ]));
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'template-drive' }])
+    );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
 
     renderMainControlView();
@@ -643,11 +703,14 @@ describe('MainControlView desktop workspace', () => {
         dispatchEvent: vi.fn(),
       })),
     });
-    localStorage.setItem(mobileWorkspacePanelsKey, JSON.stringify([
-      makePanel('persisted-camera', 'camera', 'Camera'),
-      makePanel('persisted-pad', 'pad', 'Pad controls'),
-      makePanel('ignored-third', 'behaviorTree', 'Behavior tree'),
-    ]));
+    localStorage.setItem(
+      mobileWorkspacePanelsKey,
+      JSON.stringify([
+        makePanel('persisted-camera', 'camera', 'Camera'),
+        makePanel('persisted-pad', 'pad', 'Pad controls'),
+        makePanel('ignored-third', 'behaviorTree', 'Behavior tree'),
+      ])
+    );
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
       { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
@@ -788,10 +851,7 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Bottom mobile window')).toBeInTheDocument();
     expect(screen.getByTestId('camera-view')).toBeVisible();
     expect(screen.getByTestId('custom-gamepad')).toBeVisible();
-    expect(consoleError).toHaveBeenCalledWith(
-      'Failed to load mobile workspace panels:',
-      expect.any(SyntaxError)
-    );
+    expect(consoleError).toHaveBeenCalledWith('Failed to load mobile workspace panels:', expect.any(SyntaxError));
     consoleError.mockRestore();
   });
 
