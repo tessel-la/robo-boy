@@ -1,12 +1,12 @@
 .bt-sketch-overlay {
   position: absolute;
-  inset: 52px 0 0;
-  z-index: 70;
+  inset: 0;
+  z-index: 420;
   display: grid;
   min-width: 0;
   min-height: 0;
-  padding: 10px;
-  background: color-mix(in srgb, var(--card-bg, #ffffff) 94%, transparent);
+  padding: 0;
+  background: var(--card-bg, #ffffff);
 }
 
 .bt-sketch-editor {
@@ -15,15 +15,11 @@
   min-height: 0;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
-  border: 1px solid var(--border-color, #dee2e6);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
   background: var(--card-bg, #ffffff);
   color: var(--text-color, #212529);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-}
-
-.bt-sketch-editor.has-text-tool {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  box-shadow: none;
 }
 
 .bt-sketch-header,
@@ -154,27 +150,8 @@
   accent-color: var(--primary-color, #4285f4);
 }
 
-.bt-sketch-text-input {
-  box-sizing: border-box;
-  width: calc(100% - 14px);
-  min-height: 36px;
-  margin: 7px 7px 0;
-  padding: 6px 9px;
-  border: 1px solid var(--border-color, #dee2e6);
-  border-radius: 5px;
-  outline: none;
-  background: var(--background-color, #ffffff);
-  color: var(--text-color, #212529);
-  font: inherit;
-  font-size: 12px;
-}
-
-.bt-sketch-text-input:focus {
-  border-color: var(--primary-color, #4285f4);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #4285f4) 14%, transparent);
-}
-
 .bt-sketch-canvas-stage {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -183,6 +160,32 @@
   overflow: hidden;
   padding: 8px;
   background: var(--background-secondary, #f4f6f8);
+}
+
+.bt-sketch-inline-text {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  width: min(190px, calc(100% - 16px));
+  min-width: 72px;
+  min-height: 32px;
+  padding: 5px 7px;
+  transform: translateY(-50%);
+  border: 1px solid var(--primary-color, #4285f4);
+  border-radius: 4px;
+  outline: none;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #4285f4) 16%, transparent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.bt-sketch-inline-text.inside-rectangle {
+  transform: translate(-50%, -50%);
+  text-align: center;
 }
 
 .bt-sketch-canvas-stage canvas {
@@ -236,7 +239,7 @@
 
 @media (max-width: 768px) {
   .bt-sketch-overlay {
-    inset: 50px 0 0;
+    inset: 0;
     padding: 0;
     background: var(--card-bg, #ffffff);
   }
@@ -292,7 +295,7 @@
 
 @container (max-width: 700px) {
   .bt-sketch-overlay {
-    inset: 50px 0 0;
+    inset: 0;
     padding: 0;
   }
 

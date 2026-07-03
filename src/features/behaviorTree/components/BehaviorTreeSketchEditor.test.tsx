@@ -12,6 +12,7 @@ const canvasContext = {
   moveTo: vi.fn(),
   lineTo: vi.fn(),
   stroke: vi.fn(),
+  strokeRect: vi.fn(),
   fillText: vi.fn(),
   fillStyle: '',
   strokeStyle: '',
@@ -19,6 +20,7 @@ const canvasContext = {
   lineCap: 'round',
   lineJoin: 'round',
   font: '',
+  textAlign: 'left',
   textBaseline: 'top',
 };
 
@@ -37,7 +39,7 @@ describe('BehaviorTreeSketchEditor', () => {
     vi.restoreAllMocks();
   });
 
-  it('draws with pointer input and attaches a PNG', () => {
+  it('draws with pointer input and attaches a PNG', async () => {
     const onAttach = vi.fn();
     render(<BehaviorTreeSketchEditor onAttach={onAttach} onClose={vi.fn()} />);
     const canvas = screen.getByLabelText('Behavior tree sketch canvas');
@@ -59,18 +61,19 @@ describe('BehaviorTreeSketchEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Attach sketch' }));
 
     expect(canvasContext.stroke).toHaveBeenCalled();
-    expect(onAttach).toHaveBeenCalledWith('data:image/png;base64,c2tldGNo');
+    await waitFor(() => expect(onAttach).toHaveBeenCalledWith('data:image/png;base64,c2tldGNo'));
   });
 
   it('places text, supports undo, and clears the canvas', async () => {
     render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Text' }));
-    fireEvent.change(screen.getByLabelText('Sketch text'), { target: { value: 'Dock here' } });
     fireEvent.pointerDown(screen.getByLabelText('Behavior tree sketch canvas'), {
       pointerId: 2,
       clientX: 100,
       clientY: 80,
     });
+    fireEvent.change(screen.getByLabelText('Sketch text'), { target: { value: 'Dock here' } });
+    fireEvent.keyDown(screen.getByLabelText('Sketch text'), { key: 'Enter' });
 
     await waitFor(() =>
       expect(canvasContext.fillText).toHaveBeenCalledWith('Dock here', expect.any(Number), expect.any(Number))
@@ -79,13 +82,34 @@ describe('BehaviorTreeSketchEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo sketch change' }));
     expect(screen.getByRole('button', { name: 'Attach sketch' })).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText('Sketch text'), { target: { value: 'Retry' } });
     fireEvent.pointerDown(screen.getByLabelText('Behavior tree sketch canvas'), {
       pointerId: 3,
       clientX: 120,
       clientY: 100,
     });
+    fireEvent.change(screen.getByLabelText('Sketch text'), { target: { value: 'Retry' } });
     fireEvent.click(screen.getByRole('button', { name: 'Clear sketch' }));
     expect(screen.getByRole('button', { name: 'Attach sketch' })).toBeDisabled();
+  });
+
+  it('draws a rectangle and places inline text inside it', async () => {
+    render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
+    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }));
+    fireEvent.pointerDown(canvas, { pointerId: 4, clientX: 40, clientY: 40 });
+    fireEvent.pointerMove(canvas, { pointerId: 4, clientX: 260, clientY: 180 });
+    fireEvent.pointerUp(canvas, { pointerId: 4, clientX: 260, clientY: 180 });
+
+    const input = screen.getByLabelText('Rectangle text');
+    fireEvent.change(input, { target: { value: 'Recovery' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(canvasContext.strokeRect).toHaveBeenCalled());
+    expect(canvasContext.fillText).toHaveBeenCalledWith(
+      'Recovery',
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number)
+    );
   });
 });

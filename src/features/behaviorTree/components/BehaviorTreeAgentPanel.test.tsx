@@ -305,6 +305,37 @@ describe('BehaviorTreeAgentPanel', () => {
     expect(screen.getByLabelText('Your answer')).toHaveValue('Use base_link');
   });
 
+  it('shows explanatory answers without creating a tree preview', async () => {
+    const onPreviewChange = vi.fn();
+    agentClientMock.generateBehaviorTree.mockResolvedValueOnce(
+      JSON.stringify({
+        kind: 'explanation',
+        message: 'A selector stops at the first child that succeeds.',
+      })
+    );
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={onPreviewChange}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Describe the behavior'), {
+      target: { value: 'Explain how a selector works' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+
+    expect(await screen.findByText('A selector stops at the first child that succeeds.')).toBeInTheDocument();
+    expect(onPreviewChange).not.toHaveBeenCalledWith(expect.objectContaining({ nodes: expect.any(Array) }));
+    expect(screen.getByText('Answer ready.')).toBeInTheDocument();
+  });
+
   it('surfaces discovery and provider validation errors', async () => {
     rosDiscoveryMock.discoverAllROSResources.mockRejectedValue(new Error('ROS unavailable'));
 
@@ -539,26 +570,31 @@ describe('BehaviorTreeAgentPanel', () => {
       .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
       .mockReturnValue('data:image/png;base64,c2tldGNo');
     render(
-      <BehaviorTreeAgentPanel
-        open
-        ros={null}
-        isConnected={false}
-        currentTree={tree}
-        selectedTreeContext={null}
-        previewTree={null}
-        onClose={vi.fn()}
-        onPreviewChange={vi.fn()}
-      />
+      <div className="behavior-tree-panel">
+        <BehaviorTreeAgentPanel
+          open
+          ros={null}
+          isConnected={false}
+          currentTree={tree}
+          selectedTreeContext={null}
+          previewTree={null}
+          onClose={vi.fn()}
+          onPreviewChange={vi.fn()}
+        />
+      </div>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Create sketch attachment' }));
+    const sketchDialog = screen.getByRole('dialog', { name: 'Sketch attachment' });
+    expect(sketchDialog.closest('.behavior-tree-panel')).toBeInTheDocument();
+    expect(sketchDialog.closest('.bt-agent-panel')).toBeNull();
     const canvas = screen.getByLabelText('Behavior tree sketch canvas');
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole('button', { name: 'Attach sketch' }));
 
-    expect(screen.queryByRole('dialog', { name: 'Sketch attachment' })).not.toBeInTheDocument();
-    expect(screen.getByText(/bt-sketch-\d+\.png/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sketch attachment' })).not.toBeInTheDocument());
+    expect(await screen.findByText(/bt-sketch-\d+\.png/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Build this sketch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
 

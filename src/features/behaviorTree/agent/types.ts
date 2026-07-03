@@ -71,6 +71,9 @@ export interface AgentClarification {
   suggestions?: string[];
 }
 
-export type GeneratedAgentResponse =
-  | { kind: 'tree'; tree: BehaviorTree }
-  | AgentClarification;
+export interface AgentExplanation {
+  kind: 'explanation';
+  message: string;
+}
+
+export type GeneratedAgentResponse = { kind: 'tree'; tree: BehaviorTree } | AgentClarification | AgentExplanation;

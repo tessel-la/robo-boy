@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources, fetchActionGoalDetails, fetchServiceRequestSchema } from '../services/rosDiscovery';
@@ -200,11 +201,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   useEffect(() => {
     if (!open) return;
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !showSketchEditor) onClose();
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose, open]);
+  }, [onClose, open, showSketchEditor]);
 
   const updateSettings = (patch: Partial<BehaviorTreeAgentSettings>) => {
     setError('');
@@ -401,6 +402,19 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           { role: 'assistant', content: response.question, checkpoint, attachments: [] },
         ]);
         setProgress(previous => [...previous, 'Waiting for one detail from you.']);
+      } else if (response.kind === 'explanation') {
+        setConversation(previous => [
+          ...previous,
+          { role: 'assistant', content: response.message, checkpoint, attachments: [] },
+        ]);
+        setProgress(previous => [...previous, 'Answer ready.']);
+        if (!openRef.current) {
+          onNotify({
+            type: 'success',
+            title: 'AI answer ready',
+            message: response.message,
+          });
+        }
       } else {
         onPreviewChange(response.tree);
         setConversation(previous => [
@@ -1095,9 +1109,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
             </div>
           </div>
         </form>
-        {showSketchEditor && (
-          <BehaviorTreeSketchEditor onAttach={handleSketchAttach} onClose={() => setShowSketchEditor(false)} />
-        )}
+        {showSketchEditor &&
+          createPortal(
+            <BehaviorTreeSketchEditor onAttach={handleSketchAttach} onClose={() => setShowSketchEditor(false)} />,
+            panelRef.current?.closest<HTMLElement>('.behavior-tree-panel') ?? document.body
+          )}
         {(['nw', 'ne', 'sw', 'se'] as AgentResizeCorner[]).map(corner => (
           <div
             key={corner}

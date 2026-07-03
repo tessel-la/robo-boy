@@ -1,13 +1,7 @@
 import { Edge } from 'reactflow';
 import { v4 as uuidv4 } from 'uuid';
 import { arrangeBehaviorTree } from '../layoutUtils';
-import {
-  BehaviorNodeData,
-  BehaviorNodeType,
-  BehaviorTree,
-  BehaviorTreeNode,
-  ExecutionStatus,
-} from '../types';
+import { BehaviorNodeData, BehaviorNodeType, BehaviorTree, BehaviorTreeNode, ExecutionStatus } from '../types';
 import { BehaviorTreeResourceSchemas, GeneratedAgentResponse } from './types';
 
 const SUPPORTED_TYPES = new Set<string>([
@@ -64,21 +58,69 @@ const nodeData = (
   const base = { label, status: ExecutionStatus.Idle };
 
   switch (type) {
-    case BehaviorNodeType.Action:
-      { const actionType = String(config.actionType ?? raw.actionType ?? ''); return { ...base, actionName: String(config.actionName ?? raw.actionName ?? ''), actionType, parameters: mergeDefaults(schemas.actions[actionType]?.defaults ?? {}, config.parameters ?? raw.parameters ?? {}), timeout: config.timeout ?? raw.timeout, inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [], outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [] }; }
-    case BehaviorNodeType.Service:
-      { const serviceType = String(config.serviceType ?? raw.serviceType ?? ''); return { ...base, serviceName: String(config.serviceName ?? raw.serviceName ?? ''), serviceType, request: mergeDefaults(schemas.services[serviceType]?.defaults ?? {}, config.request ?? raw.request ?? {}), timeout: config.timeout ?? raw.timeout, inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [], outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [] }; }
+    case BehaviorNodeType.Action: {
+      const actionType = String(config.actionType ?? raw.actionType ?? '');
+      return {
+        ...base,
+        actionName: String(config.actionName ?? raw.actionName ?? ''),
+        actionType,
+        parameters: mergeDefaults(
+          schemas.actions[actionType]?.defaults ?? {},
+          config.parameters ?? raw.parameters ?? {}
+        ),
+        timeout: config.timeout ?? raw.timeout,
+        inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [],
+        outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [],
+      };
+    }
+    case BehaviorNodeType.Service: {
+      const serviceType = String(config.serviceType ?? raw.serviceType ?? '');
+      return {
+        ...base,
+        serviceName: String(config.serviceName ?? raw.serviceName ?? ''),
+        serviceType,
+        request: mergeDefaults(schemas.services[serviceType]?.defaults ?? {}, config.request ?? raw.request ?? {}),
+        timeout: config.timeout ?? raw.timeout,
+        inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [],
+        outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [],
+      };
+    }
     case BehaviorNodeType.Topic:
-      return { ...base, topicName: String(config.topicName ?? raw.topicName ?? ''), messageType: String(config.messageType ?? raw.messageType ?? ''), message: config.message ?? raw.message, publishOnce: config.publishOnce ?? raw.publishOnce, frequencyHz: config.frequencyHz ?? raw.frequencyHz, durationMs: config.durationMs ?? raw.durationMs, inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [] };
+      return {
+        ...base,
+        topicName: String(config.topicName ?? raw.topicName ?? ''),
+        messageType: String(config.messageType ?? raw.messageType ?? ''),
+        message: config.message ?? raw.message,
+        publishOnce: config.publishOnce ?? raw.publishOnce,
+        frequencyHz: config.frequencyHz ?? raw.frequencyHz,
+        durationMs: config.durationMs ?? raw.durationMs,
+        inputBindings: Array.isArray(config.inputBindings) ? config.inputBindings : [],
+      };
     case BehaviorNodeType.Subscriber:
-      return { ...base, topicName: String(config.topicName ?? raw.topicName ?? ''), messageType: String(config.messageType ?? raw.messageType ?? ''), timeout: config.timeout ?? raw.timeout ?? 10000, outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [] };
+      return {
+        ...base,
+        topicName: String(config.topicName ?? raw.topicName ?? ''),
+        messageType: String(config.messageType ?? raw.messageType ?? ''),
+        timeout: config.timeout ?? raw.timeout ?? 10000,
+        outputBindings: Array.isArray(config.outputBindings) ? config.outputBindings : [],
+      };
     case BehaviorNodeType.Timeout:
       return { ...base, timeout: Number.isFinite(config.timeout) ? config.timeout : 10000 };
     case BehaviorNodeType.IfElse:
-      return { ...base, variable: String(config.variable ?? raw.variable ?? ''), operator: config.operator ?? raw.operator ?? 'truthy', expectedValue: config.expectedValue ?? raw.expectedValue } as BehaviorNodeData;
+      return {
+        ...base,
+        variable: String(config.variable ?? raw.variable ?? ''),
+        operator: config.operator ?? raw.operator ?? 'truthy',
+        expectedValue: config.expectedValue ?? raw.expectedValue,
+      } as BehaviorNodeData;
     case BehaviorNodeType.Retry:
     case BehaviorNodeType.Repeat:
-      return { ...base, type, description: config.description, iterationLimit: Number.isFinite(config.iterationLimit) ? config.iterationLimit : 3 };
+      return {
+        ...base,
+        type,
+        description: config.description,
+        iterationLimit: Number.isFinite(config.iterationLimit) ? config.iterationLimit : 3,
+      };
     default:
       return { ...base, type } as BehaviorNodeData;
   }
@@ -124,9 +166,8 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
     if (!usedIds.has(source) || !usedIds.has(target)) {
       throw new Error(`Edge ${index + 1} references a missing node.`);
     }
-    const sourceHandle = candidate.sourceHandle === 'then' || candidate.sourceHandle === 'else'
-      ? candidate.sourceHandle
-      : null;
+    const sourceHandle =
+      candidate.sourceHandle === 'then' || candidate.sourceHandle === 'else' ? candidate.sourceHandle : null;
     return { id: `edge-${index}-${uuidv4()}`, source, target, sourceHandle, targetHandle: null };
   });
 
@@ -141,9 +182,10 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
     id: typeof raw.id === 'string' && raw.id ? raw.id : uuidv4(),
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : 'AI generated tree',
     description: typeof raw.description === 'string' ? raw.description : undefined,
-    blackboardDefaults: raw.blackboardDefaults && typeof raw.blackboardDefaults === 'object' && !Array.isArray(raw.blackboardDefaults)
-      ? raw.blackboardDefaults
-      : undefined,
+    blackboardDefaults:
+      raw.blackboardDefaults && typeof raw.blackboardDefaults === 'object' && !Array.isArray(raw.blackboardDefaults)
+        ? raw.blackboardDefaults
+        : undefined,
     nodes,
     edges,
     createdAt: now,
@@ -161,7 +203,8 @@ export const parseGeneratedBehaviorTree = (
   try {
     return normalizeTree(JSON.parse(stripCodeFence(text)), schemas);
   } catch (error) {
-    if (error instanceof SyntaxError) throw new Error('The model did not return valid JSON. Try again or use a stronger model.');
+    if (error instanceof SyntaxError)
+      throw new Error('The model did not return valid JSON. Try again or use a stronger model.');
     throw error;
   }
 };
@@ -174,7 +217,8 @@ export const parseGeneratedAgentResponse = (
   try {
     value = asRecord(JSON.parse(stripCodeFence(text)), 'Agent response');
   } catch (error) {
-    if (error instanceof SyntaxError) throw new Error('The model did not return valid JSON. Try again or use a stronger model.');
+    if (error instanceof SyntaxError)
+      throw new Error('The model did not return valid JSON. Try again or use a stronger model.');
     throw error;
   }
   if (value.kind === 'clarification') {
@@ -187,6 +231,12 @@ export const parseGeneratedAgentResponse = (
       missing: Array.isArray(value.missing) ? value.missing.map(String) : undefined,
       suggestions: Array.isArray(value.suggestions) ? value.suggestions.map(String).slice(0, 4) : undefined,
     };
+  }
+  if (value.kind === 'explanation') {
+    if (typeof value.message !== 'string' || !value.message.trim()) {
+      throw new Error('The model returned an empty explanation.');
+    }
+    return { kind: 'explanation', message: value.message.trim() };
   }
   return { kind: 'tree', tree: normalizeTree(value, schemas) };
 };
