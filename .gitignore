@@ -168,4 +168,6 @@ CLAUDE.md
 .agents/
 .codex/
 .claude/
+compose/
+.windsurf/
 skills-lock.json
