@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FaCog, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources, fetchActionGoalDetails, fetchServiceRequestSchema } from '../services/rosDiscovery';
 import { BehaviorTree, ROSDiscoveryResult } from '../types';
@@ -18,6 +18,7 @@ import {
   BehaviorTreeResourceSchemas,
 } from '../agent/types';
 import AgentSpeechTextarea from './AgentSpeechTextarea';
+import BehaviorTreeSketchEditor from './BehaviorTreeSketchEditor';
 import './BehaviorTreeAgentPanel.css';
 
 interface BehaviorTreeAgentPanelProps {
@@ -174,6 +175,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
+  const [showSketchEditor, setShowSketchEditor] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [removedContextIds, setRemovedContextIds] = useState<Set<string>>(() => new Set());
@@ -190,6 +192,10 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [resizeCorner, setResizeCorner] = useState<AgentResizeCorner | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!open) setShowSketchEditor(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -496,6 +502,37 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     } catch (cause) {
       setAttachmentError(cause instanceof Error ? cause.message : 'Could not attach that file.');
     }
+  };
+
+  const handleSketchAttach = (dataUrl: string) => {
+    const content = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const size = Math.ceil((content.length * 3) / 4);
+    setAttachmentError('');
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      setAttachmentError(`Attach up to ${MAX_ATTACHMENTS} files per message.`);
+      return;
+    }
+    if (size > MAX_ATTACHMENT_SIZE) {
+      setAttachmentError('The sketch is larger than 5 MB. Clear some detail and try again.');
+      return;
+    }
+    if (attachments.reduce((total, item) => total + item.size, 0) + size > MAX_ATTACHMENT_TOTAL_SIZE) {
+      setAttachmentError('Attachments can use up to 12 MB per message.');
+      return;
+    }
+    const timestamp = Date.now();
+    setAttachments(previous => [
+      ...previous,
+      {
+        id: `sketch:${timestamp}`,
+        name: `bt-sketch-${timestamp}.png`,
+        mimeType: 'image/png',
+        size,
+        kind: 'image',
+        content,
+      },
+    ]);
+    setShowSketchEditor(false);
   };
 
   const addContextItem = (item: BehaviorTreeAgentContextItem) => {
@@ -958,6 +995,19 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                 >
                   <FaPaperclip aria-hidden="true" />
                 </button>
+                <button
+                  type="button"
+                  className="bt-agent-composer-icon"
+                  onClick={() => {
+                    setShowContextPicker(false);
+                    setMentionQuery(null);
+                    setShowSketchEditor(true);
+                  }}
+                  aria-label="Create sketch attachment"
+                  title="Draw"
+                >
+                  <FaPaintBrush aria-hidden="true" />
+                </button>
                 <input
                   ref={attachmentInputRef}
                   className="bt-agent-attachment-input"
@@ -1045,6 +1095,9 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
             </div>
           </div>
         </form>
+        {showSketchEditor && (
+          <BehaviorTreeSketchEditor onAttach={handleSketchAttach} onClose={() => setShowSketchEditor(false)} />
+        )}
         {(['nw', 'ne', 'sw', 'se'] as AgentResizeCorner[]).map(corner => (
           <div
             key={corner}

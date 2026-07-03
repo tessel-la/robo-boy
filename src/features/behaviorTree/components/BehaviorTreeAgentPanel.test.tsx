@@ -522,6 +522,56 @@ describe('BehaviorTreeAgentPanel', () => {
     );
   });
 
+  it('creates a sketch and sends it as an AI image attachment', async () => {
+    const context = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fillText: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context);
+    const toDataUrl = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,c2tldGNo');
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create sketch attachment' }));
+    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach sketch' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Sketch attachment' })).not.toBeInTheDocument();
+    expect(screen.getByText(/bt-sketch-\d+\.png/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Build this sketch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+
+    await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalled());
+    expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [expect.objectContaining({ kind: 'image', mimeType: 'image/png', content: 'c2tldGNo' })],
+      })
+    );
+    getContext.mockRestore();
+    toDataUrl.mockRestore();
+  });
+
   it('rejects unsupported and oversized attachments without losing the prompt', async () => {
     render(
       <BehaviorTreeAgentPanel
