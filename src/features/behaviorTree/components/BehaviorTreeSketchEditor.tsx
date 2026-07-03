@@ -1,16 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FaCheck, FaEraser, FaFont, FaPen, FaRegSquare, FaTimes, FaTrash, FaUndo } from 'react-icons/fa';
+import {
+  FaCheck,
+  FaEraser,
+  FaFont,
+  FaLongArrowAltRight,
+  FaPen,
+  FaRegSquare,
+  FaTimes,
+  FaTrash,
+  FaUndo,
+} from 'react-icons/fa';
 import './BehaviorTreeSketchEditor.css';
 
 const SKETCH_WIDTH = 1200;
 const SKETCH_HEIGHT = 800;
 const COLORS = ['#16181d', '#2563eb', '#dc2626', '#f2b705', '#16a34a'];
 
-type SketchTool = 'pen' | 'eraser' | 'text' | 'rectangle';
+type SketchTool = 'pen' | 'eraser' | 'text' | 'rectangle' | 'arrow';
 type SketchPoint = { x: number; y: number };
 type SketchElement =
   | { id: number; kind: 'stroke'; points: SketchPoint[]; color: string; width: number }
   | { id: number; kind: 'text'; point: SketchPoint; color: string; size: number; value: string }
+  | { id: number; kind: 'arrow'; start: SketchPoint; end: SketchPoint; color: string; width: number }
   | {
       id: number;
       kind: 'rectangle';
@@ -70,6 +81,28 @@ const drawSketch = (context: CanvasRenderingContext2D, elements: SketchElement[]
         context.textBaseline = 'middle';
         context.fillText(element.text, left + width / 2, top + height / 2, Math.max(20, width - 20));
       }
+      return;
+    }
+
+    if (element.kind === 'arrow') {
+      const angle = Math.atan2(element.end.y - element.start.y, element.end.x - element.start.x);
+      const headLength = Math.max(24, element.width * 4);
+      context.beginPath();
+      context.strokeStyle = element.color;
+      context.lineWidth = element.width;
+      context.moveTo(element.start.x, element.start.y);
+      context.lineTo(element.end.x, element.end.y);
+      context.moveTo(element.end.x, element.end.y);
+      context.lineTo(
+        element.end.x - headLength * Math.cos(angle - Math.PI / 6),
+        element.end.y - headLength * Math.sin(angle - Math.PI / 6)
+      );
+      context.moveTo(element.end.x, element.end.y);
+      context.lineTo(
+        element.end.x - headLength * Math.cos(angle + Math.PI / 6),
+        element.end.y - headLength * Math.sin(angle + Math.PI / 6)
+      );
+      context.stroke();
       return;
     }
 
@@ -210,13 +243,15 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
             width: strokeWidth,
             textSize: Math.max(32, strokeWidth * 4),
           }
-        : {
-            id,
-            kind: 'stroke',
-            points: [point],
-            color: tool === 'eraser' ? '#ffffff' : color,
-            width: tool === 'eraser' ? Math.max(28, strokeWidth * 2.5) : strokeWidth,
-          },
+        : tool === 'arrow'
+          ? { id, kind: 'arrow', start: point, end: point, color, width: strokeWidth }
+          : {
+              id,
+              kind: 'stroke',
+              points: [point],
+              color: tool === 'eraser' ? '#ffffff' : color,
+              width: tool === 'eraser' ? Math.max(28, strokeWidth * 2.5) : strokeWidth,
+            },
     ]);
   };
 
@@ -231,6 +266,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
         if (element.id !== activeId) return element;
         if (element.kind === 'stroke') return { ...element, points: [...element.points, point] };
         if (element.kind === 'rectangle') return { ...element, end: point };
+        if (element.kind === 'arrow') return { ...element, end: point };
         return element;
       })
     );
@@ -324,6 +360,15 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
               title="Rectangle"
             >
               <FaRegSquare aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={tool === 'arrow' ? 'active' : ''}
+              onClick={() => selectTool('arrow')}
+              aria-label="Arrow"
+              title="Arrow"
+            >
+              <FaLongArrowAltRight aria-hidden="true" />
             </button>
           </div>
 

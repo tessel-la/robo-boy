@@ -112,4 +112,18 @@ describe('BehaviorTreeSketchEditor', () => {
       expect.any(Number)
     );
   });
+
+  it('draws an arrow with a directional head', async () => {
+    render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
+    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Arrow' }));
+    fireEvent.pointerDown(canvas, { pointerId: 5, clientX: 40, clientY: 60 });
+    fireEvent.pointerMove(canvas, { pointerId: 5, clientX: 280, clientY: 180 });
+    fireEvent.pointerUp(canvas, { pointerId: 5, clientX: 280, clientY: 180 });
+
+    await waitFor(() => expect(canvasContext.stroke).toHaveBeenCalled());
+    expect(canvasContext.moveTo.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(canvasContext.lineTo.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByRole('button', { name: 'Attach sketch' })).toBeEnabled();
+  });
 });

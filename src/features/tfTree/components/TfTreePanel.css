@@ -900,6 +900,16 @@
   }
 }
 
+@media (min-width: 769px) {
+  @container (max-width: 700px) {
+    .tf-tree-live-button {
+      min-width: 44px;
+      width: 44px;
+      height: 44px;
+    }
+  }
+}
+
 @media (pointer: coarse) {
   .tf-tree-component-row {
     min-height: 52px;

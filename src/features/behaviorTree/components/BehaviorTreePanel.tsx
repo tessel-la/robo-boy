@@ -2150,10 +2150,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
       addNodeAtPosition(nodeType, position, item, { avoidOverlap: true });
 
-      // Close palette on mobile after adding
-      if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
-        setIsPaletteCollapsed(true);
-      }
+      setIsPaletteCollapsed(true);
     },
     [addNodeAtPosition, isExecuting, screenToFlowPosition]
   );

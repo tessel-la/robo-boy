@@ -337,6 +337,19 @@ describe('BehaviorTreePanel', () => {
     expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
   });
 
+  it('closes the desktop palette after adding a node', async () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    fireEvent.click(screen.getByText('Sequence'));
+
+    expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as { nodes: Array<Record<string, any>> };
+      expect(latestProps.nodes.some(node => node.type === 'sequence')).toBe(true);
+    });
+  });
+
   it('opens and closes the AI behavior tree agent', () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
 
