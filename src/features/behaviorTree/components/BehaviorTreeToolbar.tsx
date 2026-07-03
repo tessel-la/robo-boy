@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { FaMousePointer } from 'react-icons/fa';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import { BehaviorNodeType, BehaviorTree } from '../types';
 import {
@@ -376,7 +377,17 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               aria-label="Create tree with AI"
               data-testid="bt-open-agent"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
                 <path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3z" />
                 <path d="M18.5 13l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2zM5.5 14l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z" />
               </svg>
@@ -389,20 +400,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               aria-pressed={interactionMode === 'select'}
               data-testid="bt-select-mode"
             >
-              <svg className="bt-select-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect
-                  x="3.5"
-                  y="3.5"
-                  width="11.5"
-                  height="11.5"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeDasharray="3.4 2.6"
-                />
-                <path d="M12.7 12.7l7.1 7.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16.6 20.2l3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
+              <FaMousePointer className="bt-select-tool-icon" aria-hidden="true" />
             </button>
             <button
               className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'pan' ? ' active' : ''}`}

@@ -21,8 +21,18 @@ const tree: BehaviorTree = {
   id: 'tree',
   name: 'Mission',
   nodes: [
-    { id: 'root', type: BehaviorNodeType.Sequence, position: { x: 0, y: 0 }, data: { label: 'Mission', type: 'sequence' } },
-    { id: 'move', type: BehaviorNodeType.Action, position: { x: 0, y: 100 }, data: { label: 'Move', actionName: '/move', actionType: 'robot/action/Move' } },
+    {
+      id: 'root',
+      type: BehaviorNodeType.Sequence,
+      position: { x: 0, y: 0 },
+      data: { label: 'Mission', type: 'sequence' },
+    },
+    {
+      id: 'move',
+      type: BehaviorNodeType.Action,
+      position: { x: 0, y: 100 },
+      data: { label: 'Move', actionName: '/move', actionType: 'robot/action/Move' },
+    },
   ],
   edges: [{ id: 'edge', source: 'root', target: 'move' }],
   createdAt: 1,
@@ -38,15 +48,28 @@ describe('BehaviorTreeAgentPanel', () => {
     rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({ actions: [], services: [], topics: [] });
     rosDiscoveryMock.fetchActionGoalDetails.mockResolvedValue(null);
     rosDiscoveryMock.fetchServiceRequestSchema.mockResolvedValue(null);
-    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
-      name: 'Generated',
-      nodes: [{ id: 'root', type: 'sequence', label: 'Generated root' }],
-      edges: [],
-    }));
+    agentClientMock.generateBehaviorTree.mockResolvedValue(
+      JSON.stringify({
+        name: 'Generated',
+        nodes: [{ id: 'root', type: 'sequence', label: 'Generated root' }],
+        edges: [],
+      })
+    );
   });
 
   it('builds removable automatic context from the open tree, selection, and ROS', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={selection}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     const composer = screen.getByLabelText('Describe the behavior').closest('.bt-agent-composer');
     expect(composer).toHaveTextContent('BT: Mission');
@@ -59,7 +82,18 @@ describe('BehaviorTreeAgentPanel', () => {
   });
 
   it('allows generation before resources have been discovered', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move forward' } });
     expect(screen.getByRole('button', { name: 'Generate tree' })).toBeEnabled();
@@ -68,7 +102,18 @@ describe('BehaviorTreeAgentPanel', () => {
   });
 
   it('offers voice input for instructions, mission context, and behavior description', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     expect(screen.getByRole('button', { name: 'Start voice input for Describe the behavior' })).toBeInTheDocument();
     expect(document.querySelector('.bt-agent-composer-heading label')).not.toBeInTheDocument();
@@ -79,14 +124,36 @@ describe('BehaviorTreeAgentPanel', () => {
   });
 
   it('renders desktop resize handles without changing the canvas layout', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     expect(screen.getAllByRole('separator', { name: /Resize AI agent/ })).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
   });
 
   it('keeps proposal decisions on the canvas controls', () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={tree} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={tree}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     expect(screen.queryByText('Preview active on canvas')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reject changes' })).not.toBeInTheDocument();
@@ -116,13 +183,29 @@ describe('BehaviorTreeAgentPanel', () => {
         description: 'Ready to preview',
         nodes: [
           { id: 'root', type: 'sequence', label: 'Generated root' },
-          { id: 'move', type: 'action', label: 'Move', config: { actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1 } } },
+          {
+            id: 'move',
+            type: 'action',
+            label: 'Move',
+            config: { actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1 } },
+          },
         ],
         edges: [{ source: 'root', target: 'move' }],
       });
     });
 
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={onPreviewChange} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={selection}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={onPreviewChange}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move forward' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -130,18 +213,20 @@ describe('BehaviorTreeAgentPanel', () => {
     await waitFor(() => expect(onPreviewChange).toHaveBeenCalledWith(expect.objectContaining({ name: 'Generated' })));
     expect(rosDiscoveryMock.discoverAllROSResources).toHaveBeenCalledOnce();
     expect(screen.getByText('ROS: 3')).toBeInTheDocument();
-    expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(expect.objectContaining({
-      settings: expect.objectContaining({ includeCurrentTree: true }),
-      treeContext: expect.objectContaining({
-        mode: 'open-and-selection',
-        openTree: expect.objectContaining({ id: 'tree' }),
-        selectedTree: expect.objectContaining({ id: 'selection' }),
-      }),
-      resourceSchemas: {
-        actions: { 'robot/action/Move': { fields: [], defaults: { x: 0, y: 0 } } },
-        services: { 'camera/srv/Capture': { fields: [], defaults: { quality: 80 } } },
-      },
-    }));
+    expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({ includeCurrentTree: true }),
+        treeContext: expect.objectContaining({
+          mode: 'open-and-selection',
+          openTree: expect.objectContaining({ id: 'tree' }),
+          selectedTree: expect.objectContaining({ id: 'selection' }),
+        }),
+        resourceSchemas: {
+          actions: { 'robot/action/Move': { fields: [], defaults: { x: 0, y: 0 } } },
+          services: { 'camera/srv/Capture': { fields: [], defaults: { quality: 80 } } },
+        },
+      })
+    );
     expect(screen.getByText('Built “Generated” with complete action inputs.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
@@ -156,7 +241,18 @@ describe('BehaviorTreeAgentPanel', () => {
       topics: [],
     });
 
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={selection} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={selection}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove BT: Mission from context' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove 1 selected from context' }));
@@ -178,14 +274,27 @@ describe('BehaviorTreeAgentPanel', () => {
       services: [],
       topics: [],
     });
-    agentClientMock.generateBehaviorTree.mockResolvedValueOnce(JSON.stringify({
-      kind: 'clarification',
-      question: 'Which frame should I use?',
-      missing: ['frame'],
-      suggestions: ['Use base_link', 'Use map'],
-    }));
+    agentClientMock.generateBehaviorTree.mockResolvedValueOnce(
+      JSON.stringify({
+        kind: 'clarification',
+        question: 'Which frame should I use?',
+        missing: ['frame'],
+        suggestions: ['Use base_link', 'Use map'],
+      })
+    );
 
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move somewhere' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -199,7 +308,18 @@ describe('BehaviorTreeAgentPanel', () => {
   it('surfaces discovery and provider validation errors', async () => {
     rosDiscoveryMock.discoverAllROSResources.mockRejectedValue(new Error('ROS unavailable'));
 
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
@@ -215,7 +335,9 @@ describe('BehaviorTreeAgentPanel', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Set both a base URL and model before generating.'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Set both a base URL and model before generating.')
+    );
   });
 
   it('updates provider defaults, requires cloud API keys, and closes from escape', async () => {
@@ -226,7 +348,18 @@ describe('BehaviorTreeAgentPanel', () => {
       topics: [],
     });
 
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={tree} onClose={onClose} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={tree}
+        onClose={onClose}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /Agent settings/ }));
     fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } });
@@ -269,20 +402,34 @@ describe('BehaviorTreeAgentPanel', () => {
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
     await waitFor(() => expect(onPreviewChange).toHaveBeenCalledWith(expect.objectContaining({ name: 'Generated' })));
     expect(rosDiscoveryMock.discoverAllROSResources).toHaveBeenCalledOnce();
-    expect(onNotify).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'AI tree ready',
-      message: expect.stringContaining('0 ROS resources'),
-    }));
+    expect(onNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'AI tree ready',
+        message: expect.stringContaining('0 ROS resources'),
+      })
+    );
   });
 
   it('keeps an active generation running after the agent panel closes', async () => {
     let finishGeneration: ((value: string) => void) | undefined;
-    agentClientMock.generateBehaviorTree.mockImplementationOnce(() => new Promise(resolve => {
-      finishGeneration = resolve;
-    }));
+    agentClientMock.generateBehaviorTree.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finishGeneration = resolve;
+        })
+    );
     const onPreviewChange = vi.fn();
     const { rerender } = render(
-      <BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={onPreviewChange} />
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={onPreviewChange}
+      />
     );
 
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Wait for completion' } });
@@ -290,20 +437,41 @@ describe('BehaviorTreeAgentPanel', () => {
     await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledOnce());
 
     rerender(
-      <BehaviorTreeAgentPanel open={false} ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={onPreviewChange} />
+      <BehaviorTreeAgentPanel
+        open={false}
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={onPreviewChange}
+      />
     );
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
 
-    finishGeneration?.(JSON.stringify({
-      name: 'Background result',
-      nodes: [{ id: 'root', type: 'sequence', label: 'Background root' }],
-      edges: [],
-    }));
-    await waitFor(() => expect(onPreviewChange).toHaveBeenCalledWith(expect.objectContaining({ name: 'Background result' })));
+    finishGeneration?.(
+      JSON.stringify({
+        name: 'Background result',
+        nodes: [{ id: 'root', type: 'sequence', label: 'Background root' }],
+        edges: [],
+      })
+    );
+    await waitFor(() =>
+      expect(onPreviewChange).toHaveBeenCalledWith(expect.objectContaining({ name: 'Background result' }))
+    );
   });
 
   it('persists agent instructions and robot context between panel mounts', () => {
-    const props = { ros: null, isConnected: false, currentTree: tree, selectedTreeContext: null, previewTree: null, onClose: vi.fn(), onPreviewChange: vi.fn() };
+    const props = {
+      ros: null,
+      isConnected: false,
+      currentTree: tree,
+      selectedTreeContext: null,
+      previewTree: null,
+      onClose: vi.fn(),
+      onPreviewChange: vi.fn(),
+    };
     const { unmount } = render(<BehaviorTreeAgentPanel open {...props} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Agent settings/ }));
@@ -318,7 +486,18 @@ describe('BehaviorTreeAgentPanel', () => {
   });
 
   it('attaches text and image files in the composer and sends them with the prompt', async () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     const textFile = new File(['max_velocity: 0.4'], 'mission.yaml', { type: 'application/yaml', lastModified: 1 });
     const imageFile = new File(['image-data'], 'map.png', { type: 'image/png', lastModified: 2 });
@@ -330,17 +509,32 @@ describe('BehaviorTreeAgentPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
 
     await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalled());
-    expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: [
-        expect.objectContaining({ name: 'mission.yaml', kind: 'text', content: 'max_velocity: 0.4' }),
-        expect.objectContaining({ name: 'map.png', kind: 'image' }),
-      ],
-    }));
-    expect(screen.getByLabelText('Continue the conversation').closest('.bt-agent-composer')).not.toHaveTextContent('mission.yaml');
+    expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ name: 'mission.yaml', kind: 'text', content: 'max_velocity: 0.4' }),
+          expect.objectContaining({ name: 'map.png', kind: 'image' }),
+        ],
+      })
+    );
+    expect(screen.getByLabelText('Continue the conversation').closest('.bt-agent-composer')).not.toHaveTextContent(
+      'mission.yaml'
+    );
   });
 
   it('rejects unsupported and oversized attachments without losing the prompt', async () => {
-    render(<BehaviorTreeAgentPanel open ros={null} isConnected={false} currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Keep this instruction' } });
     const unsupported = new File(['binary'], 'mission.pdf', { type: 'application/pdf' });
 
@@ -348,6 +542,85 @@ describe('BehaviorTreeAgentPanel', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('not a supported');
     expect(screen.getByLabelText('Describe the behavior')).toHaveValue('Keep this instruction');
+  });
+
+  it('tags structured context by typing an at-mention', async () => {
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Update @mov' } });
+    expect(screen.getByRole('listbox', { name: 'Mention context' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: /Move Current BT node/ }));
+
+    expect(screen.getByLabelText('Describe the behavior')).toHaveValue('Update @Move ');
+    expect(screen.getByText('Node: Move')).toBeInTheDocument();
+  });
+
+  it('selects at-mention context with arrow keys and Enter', () => {
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
+
+    const prompt = screen.getByLabelText('Describe the behavior');
+    fireEvent.change(prompt, { target: { value: 'Update @' } });
+    fireEvent.keyDown(prompt, { key: 'ArrowDown' });
+
+    expect(screen.getByRole('option', { name: /Mission Current BT node/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(prompt, { key: 'Enter' });
+
+    expect(prompt).toHaveValue('Update @Mission ');
+    expect(screen.getByText('Node: Mission')).toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Mention context' })).not.toBeInTheDocument();
+  });
+
+  it('offers whole ROS, current BT with nodes, and all saved BT context', async () => {
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: { ...tree, id: 'saved-tree', name: 'Saved docking tree' },
+        },
+      ])
+    );
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent context' }));
+    expect(screen.getByRole('button', { name: /Current BT \+ all nodes/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Whole ROS context/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /All known BTs/ }));
+
+    expect(screen.getByText('All BTs: 1')).toBeInTheDocument();
   });
 
   it('repeats a command and rewinds both chat and BT checkpoints', async () => {
@@ -378,23 +651,41 @@ describe('BehaviorTreeAgentPanel', () => {
     expect(restoreCheckpoint).toHaveBeenCalledWith(checkpoint);
 
     await screen.findByText('Built “Generated” with complete action inputs.');
-    const goBackButtons = screen.getAllByRole('button', { name: 'Go back here' });
+    const repeatButton = screen.getAllByRole('button', { name: 'Repeat' })[0];
+    expect(repeatButton.textContent).toBe('');
+    const goBackButtons = screen.getAllByRole('button', { name: 'Edit from here' });
+    expect(goBackButtons[0].textContent).toBe('');
     fireEvent.click(goBackButtons[goBackButtons.length - 1]);
     expect(restoreCheckpoint).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Built “Generated” with complete action inputs.')).not.toBeInTheDocument();
   });
 
   it('adds nodes as explicit context tags and closes the picker outside', async () => {
-    render(<BehaviorTreeAgentPanel open ros={{} as any} isConnected currentTree={tree} selectedTreeContext={null} previewTree={null} onClose={vi.fn()} onPreviewChange={vi.fn()} />);
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={{} as any}
+        isConnected
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add agent context' }));
     expect(screen.getByRole('dialog', { name: 'Add context' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Add context' })).toHaveAttribute('aria-busy', 'false'));
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Add context' })).toHaveAttribute('aria-busy', 'false')
+    );
     fireEvent.click(await screen.findByRole('button', { name: /Move Current BT node/ }));
     expect(screen.getByText('Node: Move')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add agent context' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Add context' })).toHaveAttribute('aria-busy', 'false'));
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Add context' })).toHaveAttribute('aria-busy', 'false')
+    );
     fireEvent.pointerDown(screen.getByRole('button', { name: /Agent settings/ }));
     expect(screen.queryByRole('dialog', { name: 'Add context' })).not.toBeInTheDocument();
   });

@@ -1,19 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FaCog, FaHistory, FaPaperclip, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaCog, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { Ros } from 'roslib';
-import {
-  discoverAllROSResources,
-  fetchActionGoalDetails,
-  fetchServiceRequestSchema,
-} from '../services/rosDiscovery';
+import { discoverAllROSResources, fetchActionGoalDetails, fetchServiceRequestSchema } from '../services/rosDiscovery';
 import { BehaviorTree, ROSDiscoveryResult } from '../types';
 import { listBehaviorTrees } from '../storage/treeStorage';
 import { generateBehaviorTree, transcribeAgentAudio } from '../agent/agentClient';
-import {
-  getProviderDefaults,
-  loadAgentSettings,
-  saveAgentSettings,
-} from '../agent/agentStorage';
+import { getProviderDefaults, loadAgentSettings, saveAgentSettings } from '../agent/agentStorage';
 import { parseGeneratedAgentResponse } from '../agent/treeGeneration';
 import {
   AgentClarification,
@@ -53,14 +45,46 @@ type ChatMessage = {
   attachments: BehaviorTreeAgentAttachment[];
 };
 type AgentResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
-interface AgentPanelFrame { left: number; top: number; width: number; height: number }
+interface AgentPanelFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+interface AgentContextOption {
+  id: string;
+  label: string;
+  description: string;
+  item?: BehaviorTreeAgentContextItem;
+  restoreId?: string;
+}
 
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_TOTAL_SIZE = 12 * 1024 * 1024;
 const TEXT_ATTACHMENT_EXTENSIONS = new Set([
-  'txt', 'md', 'json', 'yaml', 'yml', 'xml', 'csv', 'log', 'launch', 'urdf', 'xacro',
-  'py', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'sh', 'toml', 'ini', 'cfg',
+  'txt',
+  'md',
+  'json',
+  'yaml',
+  'yml',
+  'xml',
+  'csv',
+  'log',
+  'launch',
+  'urdf',
+  'xacro',
+  'py',
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'css',
+  'html',
+  'sh',
+  'toml',
+  'ini',
+  'cfg',
 ]);
 const IMAGE_ATTACHMENT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
@@ -78,8 +102,10 @@ const readFile = (file: File, mode: 'text' | 'data-url'): Promise<string> => {
 const createAgentAttachment = async (file: File): Promise<BehaviorTreeAgentAttachment> => {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   const isImage = IMAGE_ATTACHMENT_TYPES.has(file.type);
-  const isText = file.type.startsWith('text/') || TEXT_ATTACHMENT_EXTENSIONS.has(extension)
-    || ['application/json', 'application/xml', 'application/yaml', 'application/x-yaml'].includes(file.type);
+  const isText =
+    file.type.startsWith('text/') ||
+    TEXT_ATTACHMENT_EXTENSIONS.has(extension) ||
+    ['application/json', 'application/xml', 'application/yaml', 'application/x-yaml'].includes(file.type);
   if (!isImage && !isText) {
     throw new Error(`${file.name} is not a supported text, code, configuration, or image file.`);
   }
@@ -107,15 +133,16 @@ const getAutomaticTreeContext = (
   );
   if (!includeOpen && !includeSelection && additionalContext.length === 0) return null;
   return {
-    mode: includeOpen && includeSelection
-      ? 'open-and-selection'
-      : includeSelection
-        ? 'selection'
-        : includeOpen
-          ? 'open'
-          : 'additional',
-    openTree: includeOpen ? currentTree ?? undefined : undefined,
-    selectedTree: includeSelection ? selectedTreeContext ?? undefined : undefined,
+    mode:
+      includeOpen && includeSelection
+        ? 'open-and-selection'
+        : includeSelection
+          ? 'selection'
+          : includeOpen
+            ? 'open'
+            : 'additional',
+    openTree: includeOpen ? (currentTree ?? undefined) : undefined,
+    selectedTree: includeSelection ? (selectedTreeContext ?? undefined) : undefined,
     additionalContext,
     note: 'Context was assembled automatically from the open tree, selection, and user-added tags.',
   };
@@ -147,6 +174,8 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [removedContextIds, setRemovedContextIds] = useState<Set<string>>(() => new Set());
   const [additionalContext, setAdditionalContext] = useState<BehaviorTreeAgentContextItem[]>([]);
   const [attachments, setAttachments] = useState<BehaviorTreeAgentAttachment[]>([]);
@@ -184,10 +213,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     updateSettings({ provider, apiKey: '', ...getProviderDefaults(provider) });
   };
 
-  const handleResizeStart = (
-    corner: AgentResizeCorner,
-    event: React.PointerEvent<HTMLDivElement>
-  ) => {
+  const handleResizeStart = (corner: AgentResizeCorner, event: React.PointerEvent<HTMLDivElement>) => {
     const panel = panelRef.current;
     const parent = panel?.parentElement;
     if (!panel || !parent) return;
@@ -254,6 +280,8 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     setProgress([]);
     setError('');
     setPrompt('');
+    setMentionQuery(null);
+    setShowContextPicker(false);
     setAttachments([]);
     setAttachmentError('');
     onPreviewChange(null);
@@ -305,8 +333,12 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       return;
     }
     const previousConversation = history;
-    setConversation([...previousConversation, { role: 'user', content: userMessage, checkpoint, attachments: promptAttachments }]);
+    setConversation([
+      ...previousConversation,
+      { role: 'user', content: userMessage, checkpoint, attachments: promptAttachments },
+    ]);
     setPrompt('');
+    setMentionQuery(null);
     setAttachments([]);
     setAttachmentError('');
     setClarification(null);
@@ -319,7 +351,8 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
 
     try {
       const discovered = await discoverResources();
-      const discoveredCount = discovered.resources.actions.length + discovered.resources.services.length + discovered.resources.topics.length;
+      const discoveredCount =
+        discovered.resources.actions.length + discovered.resources.services.length + discovered.resources.topics.length;
       setProgress(previous => [
         ...previous,
         `Found ${discoveredCount} ROS resource${discoveredCount === 1 ? '' : 's'}.`,
@@ -357,12 +390,26 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       const response = parseGeneratedAgentResponse(result, discovered.schemas);
       if (response.kind === 'clarification') {
         setClarification(response);
-        setConversation(previous => [...previous, { role: 'assistant', content: response.question, checkpoint, attachments: [] }]);
+        setConversation(previous => [
+          ...previous,
+          { role: 'assistant', content: response.question, checkpoint, attachments: [] },
+        ]);
         setProgress(previous => [...previous, 'Waiting for one detail from you.']);
       } else {
         onPreviewChange(response.tree);
-        setConversation(previous => [...previous, { role: 'assistant', content: `Built “${response.tree.name}” with complete action inputs.`, checkpoint, attachments: [] }]);
-        setProgress(previous => [...previous, `Ready: ${response.tree.nodes.length} nodes, ${response.tree.edges.length} connections.`]);
+        setConversation(previous => [
+          ...previous,
+          {
+            role: 'assistant',
+            content: `Built “${response.tree.name}” with complete action inputs.`,
+            checkpoint,
+            attachments: [],
+          },
+        ]);
+        setProgress(previous => [
+          ...previous,
+          `Ready: ${response.tree.nodes.length} nodes, ${response.tree.edges.length} connections.`,
+        ]);
         if (!openRef.current) {
           onNotify({
             type: 'success',
@@ -405,6 +452,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     abortRef.current?.abort();
     if (message.checkpoint) onRestoreCheckpoint(message.checkpoint);
     setConversation(conversation.slice(0, messageIndex));
+    setMentionQuery(null);
     setClarification(null);
     setProgress([]);
     setError('');
@@ -432,7 +480,10 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       setAttachmentError(`Attach up to ${MAX_ATTACHMENTS} files per message.`);
       return;
     }
-    if (attachments.reduce((total, item) => total + item.size, 0) + files.reduce((total, file) => total + file.size, 0) > MAX_ATTACHMENT_TOTAL_SIZE) {
+    if (
+      attachments.reduce((total, item) => total + item.size, 0) + files.reduce((total, file) => total + file.size, 0) >
+      MAX_ATTACHMENT_TOTAL_SIZE
+    ) {
       setAttachmentError('Attachments can use up to 12 MB per message.');
       return;
     }
@@ -448,14 +499,14 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   };
 
   const addContextItem = (item: BehaviorTreeAgentContextItem) => {
-    setAdditionalContext(previous => previous.some(candidate => candidate.id === item.id)
-      ? previous
-      : [...previous, item]);
-    setShowContextPicker(false);
+    setAdditionalContext(previous =>
+      previous.some(candidate => candidate.id === item.id) ? previous : [...previous, item]
+    );
   };
 
   const openContextPicker = () => {
     setShowContextPicker(true);
+    setMentionQuery(null);
     if (!isDiscovering) {
       void discoverResources().catch(cause => {
         setError(cause instanceof Error ? cause.message : 'ROS resource discovery failed.');
@@ -469,7 +520,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       tags.push({ id: `tree:${currentTree.id}`, label: `BT: ${currentTree.name}`, automatic: true });
     }
     if (selectedTreeContext?.nodes.length && !removedContextIds.has(`selection:${selectedTreeContext.id}`)) {
-      tags.push({ id: `selection:${selectedTreeContext.id}`, label: `${selectedTreeContext.nodes.length} selected`, automatic: true });
+      tags.push({
+        id: `selection:${selectedTreeContext.id}`,
+        label: `${selectedTreeContext.nodes.length} selected`,
+        automatic: true,
+      });
     }
     if (!removedContextIds.has('ros:all')) {
       const count = resources.actions.length + resources.services.length + resources.topics.length;
@@ -484,6 +539,22 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       setRemovedContextIds(previous => new Set(previous).add(id));
     } else {
       setAdditionalContext(previous => previous.filter(item => item.id !== id));
+    }
+  };
+
+  const handlePromptChange = (value: string) => {
+    setPrompt(value);
+    const mentionMatch = value.match(/(?:^|\s)@([^\s@]*)$/);
+    const nextMentionQuery = mentionMatch?.[1] ?? null;
+    setMentionQuery(nextMentionQuery);
+    setMentionActiveIndex(0);
+    if (nextMentionQuery !== null) {
+      setShowContextPicker(false);
+      if (mentionQuery === null && !isDiscovering) {
+        void discoverResources().catch(cause => {
+          setError(cause instanceof Error ? cause.message : 'ROS resource discovery failed.');
+        });
+      }
     }
   };
 
@@ -516,8 +587,120 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     );
   }
   const canGenerate = Boolean(prompt.trim()) && !isGenerating;
-  const savedContextTrees = showContextPicker ? listBehaviorTrees() : [];
-  const promptLabel = clarification ? 'Your answer' : conversation.length > 0 ? 'Continue the conversation' : 'Describe the behavior';
+  const savedContextTrees = showContextPicker || mentionQuery !== null ? listBehaviorTrees() : [];
+  const promptLabel = clarification
+    ? 'Your answer'
+    : conversation.length > 0
+      ? 'Continue the conversation'
+      : 'Describe the behavior';
+  const contextOptions: AgentContextOption[] = [
+    ...(currentTree
+      ? [
+          {
+            id: `current-tree:${currentTree.id}`,
+            label: 'Current BT + all nodes',
+            description: `${currentTree.name} · ${currentTree.nodes.length} nodes`,
+            restoreId: `tree:${currentTree.id}`,
+          },
+        ]
+      : []),
+    ...(currentTree
+      ? currentTree.nodes.map(node => ({
+          id: `node:${currentTree.id}:${node.id}`,
+          label: node.data.label,
+          description: 'Current BT node',
+          item: {
+            id: `node:${currentTree.id}:${node.id}`,
+            kind: 'node' as const,
+            label: `Node: ${node.data.label}`,
+            value: node,
+          },
+        }))
+      : []),
+    {
+      id: 'all-ros',
+      label: 'Whole ROS context',
+      description: `${resources.actions.length + resources.services.length + resources.topics.length} discovered resources`,
+      restoreId: 'ros:all',
+    },
+    ...(savedContextTrees.length > 0
+      ? [
+          {
+            id: 'all-known-trees',
+            label: 'All known BTs',
+            description: `${savedContextTrees.length} saved behavior tree${savedContextTrees.length === 1 ? '' : 's'}`,
+            item: {
+              id: 'trees:all-known',
+              kind: 'tree' as const,
+              label: `All BTs: ${savedContextTrees.length}`,
+              value: savedContextTrees.map(saved => saved.tree),
+            },
+          },
+        ]
+      : []),
+    ...savedContextTrees.map(saved => ({
+      id: `saved:${saved.tree.id}`,
+      label: saved.tree.name,
+      description: 'Saved behavior tree',
+      item: { id: `saved:${saved.tree.id}`, kind: 'tree' as const, label: `BT: ${saved.tree.name}`, value: saved.tree },
+    })),
+    ...[...resources.actions, ...resources.services, ...resources.topics].map(resource => ({
+      id: `ros:${resource.name}:${resource.type}`,
+      label: resource.name,
+      description: resource.type,
+      item: {
+        id: `ros:${resource.name}:${resource.type}`,
+        kind: 'ros' as const,
+        label: `ROS: ${resource.name}`,
+        value: resource,
+      },
+    })),
+  ];
+  const mentionOptions =
+    mentionQuery === null
+      ? []
+      : contextOptions
+          .filter(option =>
+            `${option.label} ${option.description}`.toLocaleLowerCase().includes(mentionQuery.toLocaleLowerCase())
+          )
+          .slice(0, 12);
+  const activeMentionIndex = Math.min(mentionActiveIndex, Math.max(mentionOptions.length - 1, 0));
+  const selectContextOption = (option: AgentContextOption, insertMention: boolean) => {
+    if (option.restoreId) {
+      setRemovedContextIds(previous => {
+        const next = new Set(previous);
+        next.delete(option.restoreId!);
+        return next;
+      });
+    }
+    if (option.item) addContextItem(option.item);
+    if (insertMention) {
+      const mention = option.label.replace(/\s+/g, '_');
+      setPrompt(previous => previous.replace(/@([^\s@]*)$/, `@${mention} `));
+      window.requestAnimationFrame(() => promptRef.current?.focus());
+    }
+    setShowContextPicker(false);
+    setMentionQuery(null);
+  };
+  const handlePromptKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = event => {
+    if (mentionQuery === null || event.nativeEvent.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setMentionQuery(null);
+      return;
+    }
+    if (mentionOptions.length === 0) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      setMentionActiveIndex((activeMentionIndex + direction + mentionOptions.length) % mentionOptions.length);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      selectContextOption(mentionOptions[activeMentionIndex], true);
+    }
+  };
 
   return (
     <div className="bt-agent-overlay" onPointerDown={event => event.target === event.currentTarget && onClose()}>
@@ -545,13 +728,27 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           ) {
             setShowSettings(false);
           }
+          if (
+            mentionQuery !== null &&
+            target instanceof Element &&
+            !target.closest('.bt-agent-mention-picker, .bt-agent-composer-speech')
+          ) {
+            setMentionQuery(null);
+          }
         }}
       >
         <div className="bt-agent-sheet-handle" aria-hidden="true" />
         <header className="bt-agent-header">
           <div className="bt-agent-title">
             <span className="bt-agent-avatar" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l1.3 4.2 4.2 1.3-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3zM18.5 14l.7 2.2 2.3.8-2.3.7-.7 2.3-.8-2.3-2.2-.7 2.2-.8.8-2.2z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3l1.3 4.2 4.2 1.3-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3zM18.5 14l.7 2.2 2.3.8-2.3.7-.7 2.3-.8-2.3-2.2-.7 2.2-.8.8-2.2z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </span>
             <div>
               <span className="bt-agent-kicker">Robo Boy AI</span>
@@ -559,11 +756,28 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
             </div>
           </div>
           <div className="bt-agent-header-actions">
-            {conversation.length > 0 && <button type="button" className="bt-agent-new" onClick={handleNewConversation}>New chat</button>}
-            <button type="button" className="bt-agent-settings-button" onClick={() => setShowSettings(value => !value)} aria-label="Agent settings" title="Agent settings" aria-expanded={showSettings}>
+            {conversation.length > 0 && (
+              <button type="button" className="bt-agent-new" onClick={handleNewConversation}>
+                New chat
+              </button>
+            )}
+            <button
+              type="button"
+              className="bt-agent-settings-button"
+              onClick={() => setShowSettings(value => !value)}
+              aria-label="Agent settings"
+              title="Agent settings"
+              aria-expanded={showSettings}
+            >
               <FaCog aria-hidden="true" />
             </button>
-            <button type="button" className="bt-agent-close" onClick={onClose} aria-label="Close AI agent" title="Close">
+            <button
+              type="button"
+              className="bt-agent-close"
+              onClick={onClose}
+              aria-label="Close AI agent"
+              title="Close"
+            >
               <FaTimes aria-hidden="true" />
             </button>
           </div>
@@ -573,54 +787,100 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
           <div className="bt-agent-settings-popover" role="dialog" aria-label="Agent settings">
             <div className="bt-agent-settings-popover-header">
               <strong>Agent settings</strong>
-              <button type="button" onClick={() => setShowSettings(false)} aria-label="Close agent settings"><FaTimes aria-hidden="true" /></button>
+              <button type="button" onClick={() => setShowSettings(false)} aria-label="Close agent settings">
+                <FaTimes aria-hidden="true" />
+              </button>
             </div>
             <div className="bt-agent-settings">
-            <label>Provider
-              <select value={settings.provider} onChange={event => handleProviderChange(event.target.value as AgentProvider)}>
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Google Gemini</option>
-                <option value="openai-compatible">OpenAI-compatible / local</option>
-              </select>
-            </label>
-            <label>Model<input value={settings.model} onChange={event => updateSettings({ model: event.target.value })} /></label>
-            <label>Base URL<input value={settings.baseUrl} onChange={event => updateSettings({ baseUrl: event.target.value })} /></label>
-            <label>API key<input type="password" autoComplete="off" value={settings.apiKey} onChange={event => updateSettings({ apiKey: event.target.value })} placeholder={settings.provider === 'openai-compatible' ? 'Optional for local models' : 'Required'} /></label>
-            <AgentSpeechTextarea
-              id="bt-agent-system-context"
-              className="bt-agent-wide"
-              label="Agent instructions"
-              rows={2}
-              value={settings.systemContext}
-              onChange={systemContext => updateSettings({ systemContext })}
-              onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
-              placeholder="Safety constraints, preferred BT conventions…"
-            />
-            <AgentSpeechTextarea
-              id="bt-agent-robot-context"
-              className="bt-agent-wide"
-              label="Robot / mission context"
-              rows={3}
-              value={settings.robotContext}
-              onChange={robotContext => updateSettings({ robotContext })}
-              onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
-              placeholder="Robot capabilities, frames, operational rules…"
-            />
-            <p className="bt-agent-key-note">Settings stay in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.</p>
+              <label>
+                Provider
+                <select
+                  value={settings.provider}
+                  onChange={event => handleProviderChange(event.target.value as AgentProvider)}
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai-compatible">OpenAI-compatible / local</option>
+                </select>
+              </label>
+              <label>
+                Model
+                <input value={settings.model} onChange={event => updateSettings({ model: event.target.value })} />
+              </label>
+              <label>
+                Base URL
+                <input value={settings.baseUrl} onChange={event => updateSettings({ baseUrl: event.target.value })} />
+              </label>
+              <label>
+                API key
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={settings.apiKey}
+                  onChange={event => updateSettings({ apiKey: event.target.value })}
+                  placeholder={settings.provider === 'openai-compatible' ? 'Optional for local models' : 'Required'}
+                />
+              </label>
+              <AgentSpeechTextarea
+                id="bt-agent-system-context"
+                className="bt-agent-wide"
+                label="Agent instructions"
+                rows={2}
+                value={settings.systemContext}
+                onChange={systemContext => updateSettings({ systemContext })}
+                onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
+                placeholder="Safety constraints, preferred BT conventions…"
+              />
+              <AgentSpeechTextarea
+                id="bt-agent-robot-context"
+                className="bt-agent-wide"
+                label="Robot / mission context"
+                rows={3}
+                value={settings.robotContext}
+                onChange={robotContext => updateSettings({ robotContext })}
+                onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
+                placeholder="Robot capabilities, frames, operational rules…"
+              />
+              <p className="bt-agent-key-note">
+                Settings stay in this browser. For shared deployments, use a server-side proxy instead of storing
+                production keys here.
+              </p>
             </div>
           </div>
         )}
 
         <div className="bt-agent-body">
-            <div className="bt-agent-chat" aria-live="polite">
+          <div className="bt-agent-chat" aria-live="polite">
             {conversation.map((message, index) => (
               <div key={`${index}-${message.role}`} className={`bt-agent-message ${message.role}`}>
                 <span>{message.role === 'assistant' ? 'Agent' : 'You'}</span>
                 <p>{message.content}</p>
-                {message.attachments.length > 0 && <div className="bt-agent-message-attachments">{message.attachments.map(attachment => <span key={attachment.id}>{attachment.name}</span>)}</div>}
+                {message.attachments.length > 0 && (
+                  <div className="bt-agent-message-attachments">
+                    {message.attachments.map(attachment => (
+                      <span key={attachment.id}>{attachment.name}</span>
+                    ))}
+                  </div>
+                )}
                 <div className="bt-agent-message-actions">
-                  <button type="button" onClick={() => handleRepeat(index)} disabled={isGenerating}><FaRedo aria-hidden="true" />Repeat</button>
-                  <button type="button" onClick={() => handleRewind(index)} disabled={isGenerating}><FaHistory aria-hidden="true" />Go back here</button>
+                  <button
+                    type="button"
+                    onClick={() => handleRepeat(index)}
+                    disabled={isGenerating}
+                    aria-label="Repeat"
+                    title="Repeat"
+                  >
+                    <FaRedo aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRewind(index)}
+                    disabled={isGenerating}
+                    aria-label="Edit from here"
+                    title="Go back and edit from here"
+                  >
+                    <FaPencilAlt aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -632,33 +892,72 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
             )}
             {clarification?.suggestions && clarification.suggestions.length > 0 && (
               <div className="bt-agent-suggestions">
-                {clarification.suggestions.map(suggestion => <button type="button" key={suggestion} onClick={() => setPrompt(suggestion)}>{suggestion}</button>)}
+                {clarification.suggestions.map(suggestion => (
+                  <button type="button" key={suggestion} onClick={() => setPrompt(suggestion)}>
+                    {suggestion}
+                  </button>
+                ))}
               </div>
             )}
-            </div>
+          </div>
         </div>
 
         <form className="bt-agent-form" onSubmit={handleGenerate}>
           <div className="bt-agent-composer">
-            {isDiscovering && <div className="bt-agent-composer-heading"><span role="status"><FaSyncAlt className="spinning" aria-hidden="true" />Scanning ROS…</span></div>}
+            {isDiscovering && (
+              <div className="bt-agent-composer-heading">
+                <span role="status">
+                  <FaSyncAlt className="spinning" aria-hidden="true" />
+                  Scanning ROS…
+                </span>
+              </div>
+            )}
             <div className="bt-agent-composer-context-line">
               <div className="bt-agent-context-tags" aria-label="Agent context">
                 {contextTags.map(tag => (
                   <span className="bt-agent-context-tag" key={tag.id} title={tag.label}>
                     <span>{tag.label}</span>
-                    <button type="button" onClick={() => removeContextTag(tag.id, tag.automatic)} aria-label={`Remove ${tag.label} from context`}><FaTimes aria-hidden="true" /></button>
+                    <button
+                      type="button"
+                      onClick={() => removeContextTag(tag.id, tag.automatic)}
+                      aria-label={`Remove ${tag.label} from context`}
+                    >
+                      <FaTimes aria-hidden="true" />
+                    </button>
                   </span>
                 ))}
                 {attachments.map(attachment => (
                   <span className="bt-agent-context-tag attachment" key={attachment.id} title={attachment.name}>
                     <span>{attachment.name}</span>
-                    <button type="button" onClick={() => setAttachments(previous => previous.filter(item => item.id !== attachment.id))} aria-label={`Remove attachment ${attachment.name}`}><FaTimes aria-hidden="true" /></button>
+                    <button
+                      type="button"
+                      onClick={() => setAttachments(previous => previous.filter(item => item.id !== attachment.id))}
+                      aria-label={`Remove attachment ${attachment.name}`}
+                    >
+                      <FaTimes aria-hidden="true" />
+                    </button>
                   </span>
                 ))}
               </div>
               <div className="bt-agent-composer-tools">
-                <button type="button" className="bt-agent-composer-icon" onClick={openContextPicker} aria-label="Add agent context" title="Add context"><FaPlus aria-hidden="true" /></button>
-                <button type="button" className="bt-agent-composer-icon" onClick={() => attachmentInputRef.current?.click()} aria-label="Attach files" title="Attach files"><FaPaperclip aria-hidden="true" /></button>
+                <button
+                  type="button"
+                  className="bt-agent-composer-icon"
+                  onClick={openContextPicker}
+                  aria-label="Add agent context"
+                  title="Add context"
+                >
+                  <FaPlus aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="bt-agent-composer-icon"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <FaPaperclip aria-hidden="true" />
+                </button>
                 <input
                   ref={attachmentInputRef}
                   className="bt-agent-attachment-input"
@@ -675,17 +974,42 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                 <div className="bt-agent-context-picker-header">
                   <strong>Add context</strong>
                   <span>{isDiscovering && <FaSyncAlt className="spinning" aria-label="Scanning ROS resources" />}</span>
-                  <button type="button" onClick={() => setShowContextPicker(false)} aria-label="Close context picker"><FaTimes aria-hidden="true" /></button>
+                  <button type="button" onClick={() => setShowContextPicker(false)} aria-label="Close context picker">
+                    <FaTimes aria-hidden="true" />
+                  </button>
                 </div>
-                {currentTree?.nodes.map(node => (
-                  <button type="button" key={`node:${currentTree.id}:${node.id}`} onClick={() => addContextItem({ id: `node:${currentTree.id}:${node.id}`, kind: 'node', label: `Node: ${node.data.label}`, value: node })}>{node.data.label}<span>Current BT node</span></button>
+                {contextOptions.map(option => (
+                  <button type="button" key={option.id} onClick={() => selectContextOption(option, false)}>
+                    {option.label}
+                    <span>{option.description}</span>
+                  </button>
                 ))}
-                {savedContextTrees.map(saved => (
-                  <button type="button" key={`saved:${saved.tree.id}`} onClick={() => addContextItem({ id: `saved:${saved.tree.id}`, kind: 'tree', label: `BT: ${saved.tree.name}`, value: saved.tree })}>{saved.tree.name}<span>Saved behavior tree</span></button>
+              </div>
+            )}
+            {mentionQuery !== null && (
+              <div
+                id="bt-agent-mention-options"
+                className="bt-agent-context-picker bt-agent-mention-picker"
+                role="listbox"
+                aria-label="Mention context"
+                aria-busy={isDiscovering}
+              >
+                {mentionOptions.map((option, index) => (
+                  <button
+                    id={`bt-agent-mention-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeMentionIndex}
+                    className={index === activeMentionIndex ? 'active' : undefined}
+                    key={option.id}
+                    onMouseEnter={() => setMentionActiveIndex(index)}
+                    onClick={() => selectContextOption(option, true)}
+                  >
+                    {option.label}
+                    <span>{option.description}</span>
+                  </button>
                 ))}
-                {[...resources.actions, ...resources.services, ...resources.topics].map(resource => (
-                  <button type="button" key={`ros:${resource.name}:${resource.type}`} onClick={() => addContextItem({ id: `ros:${resource.name}:${resource.type}`, kind: 'ros', label: `ROS: ${resource.name}`, value: resource })}>{resource.name}<span>{resource.type}</span></button>
-                ))}
+                {mentionOptions.length === 0 && <span className="bt-agent-context-empty">No matching context</span>}
               </div>
             )}
             <AgentSpeechTextarea
@@ -693,16 +1017,31 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
               className="bt-agent-composer-speech"
               label={promptLabel}
               value={prompt}
-              onChange={setPrompt}
+              onChange={handlePromptChange}
+              onKeyDown={handlePromptKeyDown}
               onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
               rows={clarification ? 3 : 4}
               textareaRef={promptRef}
-              placeholder={clarification ? 'For example: relative x 0.5 m, y -0.2 m, keep current yaw.' : 'Example: Move 0.5 m forward and 0.2 m left, then capture an image. Retry movement twice.'}
+              placeholder={
+                clarification
+                  ? 'For example: relative x 0.5 m, y -0.2 m, keep current yaw.'
+                  : 'Example: Move 0.5 m forward and 0.2 m left, then capture an image. Retry movement twice.'
+              }
             />
-            {attachmentError && <span className="bt-agent-attachment-error" role="alert">{attachmentError}</span>}
+            {attachmentError && (
+              <span className="bt-agent-attachment-error" role="alert">
+                {attachmentError}
+              </span>
+            )}
             <div className="bt-agent-form-actions">
-              {isGenerating && <button type="button" className="secondary" onClick={() => abortRef.current?.abort()}>Stop</button>}
-              <button type="submit" disabled={!canGenerate}>{isGenerating ? 'Thinking…' : clarification ? 'Send answer' : 'Generate tree'}</button>
+              {isGenerating && (
+                <button type="button" className="secondary" onClick={() => abortRef.current?.abort()}>
+                  Stop
+                </button>
+              )}
+              <button type="submit" disabled={!canGenerate}>
+                {isGenerating ? 'Thinking…' : clarification ? 'Send answer' : 'Generate tree'}
+              </button>
             </div>
           </div>
         </form>
