@@ -1780,6 +1780,7 @@ body.no-scroll {
 
   .desktop-workspace .workspace-row-resize-handle,
   .desktop-workspace .workspace-column-resize-handle {
+    position: relative;
     width: 100%;
     height: 18px;
     min-height: 18px;
@@ -1794,6 +1795,42 @@ body.no-scroll {
 
   .desktop-workspace .workspace-column-resize-handle:hover .workspace-resize-handle-bar {
     transform: scaleX(1.12);
+  }
+
+  .workspace-mobile-swap-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    display: inline-grid;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    padding: 0;
+    transform: translate(-50%, -50%);
+    place-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--card-bg, var(--background-color));
+    color: var(--text-secondary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .workspace-mobile-swap-button:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+  }
+
+  .workspace-mobile-swap-button:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .workspace-mobile-swap-button svg {
+    width: 13px;
+    height: 13px;
   }
 }
 
@@ -1958,7 +1995,9 @@ body.no-scroll {
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-workspace-window.is-swapping-up,
-  .mobile-workspace-window.is-swapping-down {
+  .mobile-workspace-window.is-swapping-down,
+  .desktop-workspace .workspace-card.is-mobile-swapping-up,
+  .desktop-workspace .workspace-card.is-mobile-swapping-down {
     animation-duration: 1ms;
   }
 }
@@ -1966,7 +2005,6 @@ body.no-scroll {
 .mobile-workspace-swap-button svg {
   width: 15px;
   height: 15px;
-  transform: rotate(90deg);
 }
 
 .mobile-workspace .camera-stream-container .error-message {

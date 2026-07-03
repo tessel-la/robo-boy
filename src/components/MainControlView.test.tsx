@@ -341,7 +341,10 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByLabelText('Behavior tree')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Add workspace panel')).toBeDisabled();
 
-    fireEvent.click(screen.getByLabelText('Swap mobile panels'));
+    const swapButton = screen.getByLabelText('Swap mobile panels');
+    expect(swapButton.closest('.workspace-column-resize-handle')).toBeInTheDocument();
+    expect(swapButton.closest('.workspace-card-header')).toBeNull();
+    fireEvent.click(swapButton);
     const cards = workspace.querySelectorAll('.workspace-card');
     expect(cards[0]).toHaveAttribute('aria-label', 'Pad controls');
     expect(cards[0]).toHaveClass('is-mobile-swapping-up');

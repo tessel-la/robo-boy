@@ -230,8 +230,8 @@ const IconMCVSwap = () => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <path d="M7 7h11l-3-3M18 7l-3 3" />
-    <path d="M17 17H6l3 3M6 17l3-3" />
+    <path d="M8 4v15m0 0-3-3m3 3 3-3" />
+    <path d="M16 20V5m0 0-3 3m3-3 3 3" />
   </svg>
 );
 const IconMCVReplacePanel = () => (
@@ -3548,21 +3548,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                   <span>{tile.panel.title}</span>
                                 </div>
                                 <div className="workspace-card-actions">
-                                  {isWorkspaceStacked && workspaceTiles.length >= 2 && tileIndex === 0 && (
-                                    <button
-                                      type="button"
-                                      className="workspace-mobile-swap-button"
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        handleSwapUnifiedMobilePanels();
-                                      }}
-                                      disabled={isMobileSwapAnimating}
-                                      title="Swap mobile panels"
-                                      aria-label="Swap mobile panels"
-                                    >
-                                      {icons.swap}
-                                    </button>
-                                  )}
                                   <button
                                     type="button"
                                     className={`workspace-replace-button ${workspaceReplacementPanelId === tile.panel.id && isWorkspaceAddMenuOpen ? 'is-open' : ''}`}
@@ -3600,6 +3585,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               }
                             >
                               <div className="workspace-resize-handle-bar" />
+                              {isWorkspaceStacked && workspaceTiles.length >= 2 && tileIndex === 0 && (
+                                <button
+                                  type="button"
+                                  className="workspace-mobile-swap-button"
+                                  onPointerDown={event => event.stopPropagation()}
+                                  onClick={handleSwapUnifiedMobilePanels}
+                                  disabled={isMobileSwapAnimating}
+                                  title="Swap mobile panels"
+                                  aria-label="Swap mobile panels"
+                                >
+                                  {icons.swap}
+                                </button>
+                              )}
                             </div>
                           )}
                         </React.Fragment>
