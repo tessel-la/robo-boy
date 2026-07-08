@@ -59,6 +59,7 @@ describe('PersistentBehaviorTreeExecutor', () => {
 
     expect(JSON.parse(commandTopic.published[0].data)).toMatchObject({ protocolVersion: 1, command: 'status' });
     const sessionId = client.start({ id: 'tree-1', name: 'Patrol', nodes: [], edges: [], createdAt: 1, updatedAt: 1 });
+    expect(sessionId).toMatch(/^bt-[0-9a-f]{32}$/);
     expect(JSON.parse(commandTopic.published[1].data)).toMatchObject({
       protocolVersion: 1,
       command: 'start',

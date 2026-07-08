@@ -81,6 +81,13 @@ const prepareTreeForRunner = (tree: BehaviorTree): BehaviorTree => ({
   }),
 });
 
+const createSessionId = (): string => {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  const suffix = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  return `bt-${suffix}`;
+};
+
 /** Thin ROS transport for the backend-owned behavior-tree runner. */
 export class PersistentBehaviorTreeExecutor {
   private readonly commandTopic: Topic;
@@ -116,7 +123,7 @@ export class PersistentBehaviorTreeExecutor {
   }
 
   start(tree: BehaviorTree): string {
-    const sessionId = globalThis.crypto?.randomUUID?.() ?? `bt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const sessionId = createSessionId();
     this.send({ command: 'start', sessionId, tree: prepareTreeForRunner(tree) });
     return sessionId;
   }
