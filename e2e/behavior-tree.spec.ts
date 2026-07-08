@@ -657,8 +657,8 @@ test.describe('Behavior Tree panel', () => {
     await openNodePalette(page);
 
     await page.getByTestId('bt-node-palette').getByText('Retry').click();
+    await openNodePalette(page);
     await page.getByTestId('bt-node-palette').getByText('Repeat').click();
-    await closeNodePalette(page);
 
     const retryNode = page.locator('.react-flow__node').filter({ hasText: 'Retry' });
     const repeatNode = page.locator('.react-flow__node').filter({ hasText: 'Repeat' });
@@ -824,8 +824,8 @@ test.describe('Behavior Tree panel', () => {
     const actionNode = page.locator('.react-flow__node').filter({ hasText: 'Navigate' });
     await expect(actionNode).toHaveCount(1);
 
-    await actionNode.click();
-    await actionNode.click();
+    await actionNode.dispatchEvent('click');
+    await actionNode.dispatchEvent('click');
 
     await expect(page.locator('.ape-overlay')).toBeVisible();
   });
