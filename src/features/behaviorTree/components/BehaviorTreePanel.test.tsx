@@ -325,6 +325,17 @@ describe('BehaviorTreePanel', () => {
     localStorage.clear();
   });
 
+  it('persists the keep-running execution preference', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    const toggle = screen.getByRole('checkbox', { name: 'Keep running' });
+
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+
+    expect(toggle).toBeChecked();
+    expect(localStorage.getItem('robo-boy-bt-persistent-execution')).toBe('true');
+  });
+
   it('does not open the node palette until the user toggles it', () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
 

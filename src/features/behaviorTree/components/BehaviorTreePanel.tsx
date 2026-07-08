@@ -44,6 +44,12 @@ import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
 import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
 import { buildTreeDiff, summarizeTreeChanges } from './BehaviorTreeAgentPreview';
 import { BehaviorTreeExecutor } from '../engine/executor';
+import {
+  loadPersistentExecutionPreference,
+  PersistentBehaviorTreeExecutor,
+  PersistentExecutionStatus,
+  savePersistentExecutionPreference,
+} from '../engine/persistentExecutor';
 import type { BehaviorTreeAgentCheckpoint } from '../agent/types';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import {
@@ -111,6 +117,7 @@ export interface BehaviorTreeExecutionSnapshot {
   activeNodeLabel?: string;
   status?: ExecutionStatus | 'paused' | 'completed' | 'stopped' | 'error';
   startedAt?: number;
+  isPersistent?: boolean;
 }
 
 export interface BehaviorTreeExecutionControls {
@@ -500,6 +507,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [canvasInteractionMode, setCanvasInteractionMode] =
     useState<BehaviorTreeInteractionMode>('pan');
   const [isFollowMode, setIsFollowMode] = useState(false);
+  const [persistentExecution, setPersistentExecution] = useState(loadPersistentExecutionPreference);
   // Action node currently being edited via the parameter editor modal.
   const [editingAction, setEditingAction] = useState<
     { nodeId: string; data: ROSActionNodeData } | null
@@ -521,6 +529,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
+  const persistentExecutorRef = useRef<PersistentBehaviorTreeExecutor | null>(null);
+  const persistentSessionIdRef = useRef<string | undefined>(undefined);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
@@ -1857,7 +1867,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     executionNodeLabels.current = collectExecutionNodeLabels(treeToExecute);
     executionStartedAt.current = Date.now();
     setLiveBlackboard(treeToExecute.blackboardDefaults || {});
-    executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
+    if (persistentExecution) {
+      if (!persistentExecutorRef.current) {
+        persistentExecutorRef.current = new PersistentBehaviorTreeExecutor(ros);
+      }
+      persistentSessionIdRef.current = persistentExecutorRef.current.start(treeToExecute);
+    } else {
+      executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
+    }
     setIsExecuting(true);
     setIsPaused(false);
     setExecutionSnapshot({
@@ -1867,20 +1884,34 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       activeNodeLabel: 'Starting',
       status: ExecutionStatus.Running,
       startedAt: executionStartedAt.current,
+      isPersistent: persistentExecution,
     });
-    executorRef.current.start();
-  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
+    if (!persistentExecution) executorRef.current?.start();
+  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent, persistentExecution]);
 
   const handlePause = useCallback(() => {
-    executorRef.current?.pause();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.pause(persistentSessionIdRef.current);
+    } else {
+      executorRef.current?.pause();
+    }
   }, []);
 
   const handleResume = useCallback(() => {
-    executorRef.current?.resume();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.resume(persistentSessionIdRef.current);
+    } else {
+      executorRef.current?.resume();
+    }
   }, []);
 
   const handleStop = useCallback(() => {
-    if (executorRef.current) executorRef.current.stop();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.stop(persistentSessionIdRef.current);
+      persistentSessionIdRef.current = undefined;
+    } else if (executorRef.current) {
+      executorRef.current.stop();
+    }
     setIsExecuting(false);
     setIsPaused(false);
     setRootTree((previousRootTree) => {
@@ -1915,6 +1946,69 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       status: 'stopped',
     }));
   }, [resetTransientEdgeState, resetTransientNodeState]);
+
+  const handlePersistentStatus = useCallback((status: PersistentExecutionStatus) => {
+    const isActiveSession = status.state === 'running' || status.state === 'paused';
+
+    if (isActiveSession && status.sessionId) {
+      persistentSessionIdRef.current = status.sessionId;
+      if (status.tree) {
+        executionNodeLabels.current = collectExecutionNodeLabels(status.tree);
+        if (rootTreeRef.current?.id !== status.tree.id) {
+          loadRootTree(status.tree);
+        }
+      }
+      executionStartedAt.current = status.startedAt;
+      setIsExecuting(true);
+      setIsPaused(status.state === 'paused');
+      setLiveBlackboard(status.blackboard || status.tree?.blackboardDefaults || {});
+      setExecutionSnapshot({
+        isExecuting: true,
+        isPaused: status.state === 'paused',
+        treeName: status.treeName || status.tree?.name || 'Behavior tree',
+        activeNodeId: status.activeNodeId,
+        activeNodeLabel: status.activeNodeLabel || (status.state === 'paused' ? 'Paused' : 'Running'),
+        status: status.state === 'paused' ? 'paused' : ExecutionStatus.Running,
+        startedAt: status.startedAt,
+        isPersistent: true,
+      });
+
+      Object.entries(status.nodeStatuses || {}).forEach(([key, nodeStatus]) => {
+        const separator = key.indexOf('::');
+        const pathText = separator >= 0 ? key.slice(0, separator) : 'root';
+        const nodeId = separator >= 0 ? key.slice(separator + 2) : key;
+        const executionStatus = nodeStatus === 'running'
+          ? ExecutionStatus.Running
+          : nodeStatus === 'success'
+            ? ExecutionStatus.Success
+            : ExecutionStatus.Failure;
+        handleExecutionEvent({
+          type: nodeStatus === 'running' ? 'nodeRunning' : nodeStatus === 'success' ? 'nodeSuccess' : 'nodeFailure',
+          nodeId,
+          timestamp: Date.now(),
+          data: { status: executionStatus, treePath: pathText === 'root' ? [] : pathText.split('/') },
+        });
+      });
+    }
+
+    if (status.event) handleExecutionEvent(status.event);
+    if (status.state === 'idle' && persistentSessionIdRef.current === status.sessionId) {
+      persistentSessionIdRef.current = undefined;
+    }
+  }, [handleExecutionEvent, loadRootTree]);
+
+  useEffect(() => {
+    if (!ros || !isConnected || typeof (ros as any).callOnConnection !== 'function') return;
+    const client = new PersistentBehaviorTreeExecutor(ros);
+    persistentExecutorRef.current = client;
+    const unsubscribe = client.subscribe(handlePersistentStatus);
+
+    return () => {
+      unsubscribe();
+      if (persistentExecutorRef.current === client) persistentExecutorRef.current = null;
+      // Deliberately do not send stop here: the ROS runner owns persistent sessions.
+    };
+  }, [handlePersistentStatus, isConnected, ros]);
 
   const restoreRootTreeSnapshot = useCallback(
     (snapshot: HistorySnapshot) => {
@@ -2903,6 +2997,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         canRedo={canRedo}
         interactionMode={canvasInteractionMode}
         isFollowMode={isFollowMode}
+        persistentExecution={persistentExecution}
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
@@ -2923,6 +3018,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             return nextEnabled;
           })
         }
+        onPersistentExecutionChange={(enabled) => {
+          setPersistentExecution(enabled);
+          savePersistentExecutionPreference(enabled);
+        }}
         onOpenAgent={() => {
           setInlineAgentPosition(null);
           setIsAgentOpen(true);

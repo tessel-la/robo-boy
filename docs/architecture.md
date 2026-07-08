@@ -71,10 +71,11 @@ rosapi provides topic, service, action, and message-schema discovery. Robot-spec
 - `components/`: React Flow editor, toolbar, palette, node renderers, and parameter editors.
 - `services/rosDiscovery.ts`: ROS resource and schema discovery through rosapi.
 - `engine/executor.ts`: sequence, selector, parallel, action, service, and topic execution.
+- `engine/persistentExecutor.ts`: the versioned command/status transport for ROS-owned executions.
 - `storage/treeStorage.ts`: versioned browser persistence and JSON import/export.
 - Root helpers and types: node creation, ordering, layout, search, and templates.
 
-The editor owns graph state; the executor consumes a complete tree snapshot and emits execution events. Keep graph editing independent from ROS execution so both remain testable.
+The editor owns graph state; an executor consumes a complete tree snapshot and emits execution events. Local runs use the browser executor. Opt-in persistent runs are sent to `infra/ros/behavior_tree_runner.py`, which owns ROS clients independently of the browser and exposes reconnectable status over standard `std_msgs/String` topics. Keep graph editing independent from either execution transport so both remain testable.
 
 ### 3D Visualization
 
@@ -97,6 +98,7 @@ State is intentionally local to the browser:
 | State                        | Owner                     | Persistence                       |
 | ---------------------------- | ------------------------- | --------------------------------- |
 | Active ROS connection        | `useRos`                  | Memory only                       |
+| Persistent BT runtime        | ROS behavior-tree runner  | Memory until completion/restart   |
 | Current view and open panels | `MainControlView`         | Memory only                       |
 | Mobile single/split panels   | `MainControlView`         | `localStorage`                    |
 | Panel split                  | `useResizablePanels`      | `localStorage`                    |
@@ -105,7 +107,7 @@ State is intentionally local to the browser:
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
 
-Visited mobile panel types remain mounted while hidden so transient editor and runtime state survives panel switches. Live ROS clients and executions are still session-only and are not serialized across app reloads.
+Visited mobile panel types remain mounted while hidden so transient editor state survives panel switches. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
 Persist domain definitions, not live ROS clients, Three.js objects, React state, or callbacks. Parse stored data defensively and provide defaults for newly introduced fields.
 

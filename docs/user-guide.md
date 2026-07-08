@@ -35,6 +35,8 @@ Use the visualization settings to select a fixed frame, choose topics, configure
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.
 
+Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets Robo-Boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
+
 Trees are stored in the current browser and can be imported or exported as JSON.
 
 ## Custom Control Pads
@@ -60,4 +62,4 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy currently has no application backend or user account. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin.
+Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.

@@ -90,6 +90,11 @@ fi
 
 echo "--- Launching ROS Components ---"
 
+# Owns behavior-tree sessions that are explicitly configured to outlive the
+# browser. It uses only standard ROS interfaces and dynamically loads the
+# robot's action/service/message types from the active overlays.
+python3 /ros_ws/behavior_tree_runner.py &
+
 # Launch rosapi with respawn loop (the Node subclass has a bug; it may crash on first
 # graph query, so we respawn it automatically)
 (while true; do

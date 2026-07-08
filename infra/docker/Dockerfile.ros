@@ -116,6 +116,7 @@ WORKDIR /ros_ws
 
 # Copy and use the entrypoint script
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
+COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
 RUN chmod +x /ros_ws/entrypoint.sh
 
 # Run the entrypoint script
