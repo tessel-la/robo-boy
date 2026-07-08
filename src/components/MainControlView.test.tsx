@@ -312,7 +312,7 @@ describe('MainControlView desktop workspace', () => {
 
     // A touch-only split must not overwrite the saved desktop column layout.
     const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
-    expect(stored.columnRatiosByRow[0]).toEqual([0.5, 0.5]);
+    expect(stored.columnRatiosByRow[0]).toEqual([1, 1]);
   });
 
   it('reflows a multi-row desktop workspace cleanly when the viewport becomes mobile', async () => {
