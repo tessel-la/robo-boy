@@ -24,6 +24,7 @@ interface BehaviorTreeToolbarProps {
   canRedo: boolean;
   interactionMode: BehaviorTreeInteractionMode;
   isFollowMode: boolean;
+  persistentExecution: boolean;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -38,6 +39,7 @@ interface BehaviorTreeToolbarProps {
   onRedo: () => void;
   onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
   onToggleFollowMode: () => void;
+  onPersistentExecutionChange: (enabled: boolean) => void;
   onOpenAgent: () => void;
   onRename: (name: string) => void;
   blackboardValues: Record<string, unknown>;
@@ -55,6 +57,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   canRedo,
   interactionMode,
   isFollowMode,
+  persistentExecution,
   onSave,
   onLoad,
   onNew,
@@ -69,6 +72,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onRedo,
   onInteractionModeChange,
   onToggleFollowMode,
+  onPersistentExecutionChange,
   onOpenAgent,
   onRename,
   blackboardValues,
@@ -506,6 +510,26 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
+        <label
+          className={`bt-persistent-toggle${persistentExecution ? ' active' : ''}`}
+          title="Keep this tree running in ROS if Robo-Boy is closed"
+        >
+          <input
+            type="checkbox"
+            checked={persistentExecution}
+            disabled={isExecuting}
+            onChange={event => onPersistentExecutionChange(event.target.checked)}
+          />
+          <svg className="bt-persistent-toggle-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="4" y="3" width="16" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <rect x="4" y="14" width="16" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="8" cy="6.5" r="1" fill="currentColor" />
+            <circle cx="8" cy="17.5" r="1" fill="currentColor" />
+            <path d="M12 6.5h5M12 17.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          <span className="bt-persistent-toggle-track" aria-hidden="true"><span /></span>
+          <span className="bt-persistent-toggle-label">Keep running</span>
+        </label>
         <button
           className={`bt-float-icon-btn bt-follow-mode-btn${isFollowMode ? ' active' : ''}`}
           onClick={onToggleFollowMode}

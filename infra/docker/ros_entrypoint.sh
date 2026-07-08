@@ -25,12 +25,6 @@ if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ]; then
     echo "--- CYCLONEDDS_URI: ${CYCLONEDDS_URI:-<unset>} ---"
 fi
 
-# Source republisher workspace if built
-if [ -f /republisher_ws/install/setup.bash ]; then
-    echo "--- Sourcing republisher workspace ---"
-    source /republisher_ws/install/setup.bash
-fi
-
 # Source optional robot overlay workspaces for custom message types.
 # Supported mounts:
 #   /overlay_ws                         legacy single install workspace
@@ -89,6 +83,11 @@ if [ -n "${ROBOT_WORKSPACE_SETUP:-}" ] && [ -f "${ROBOT_WORKSPACE_SETUP}" ]; the
 fi
 
 echo "--- Launching ROS Components ---"
+
+# Owns behavior-tree sessions that are explicitly configured to outlive the
+# browser. It uses only standard ROS interfaces and dynamically loads the
+# robot's action/service/message types from the active overlays.
+python3 /ros_ws/behavior_tree_runner.py &
 
 # Launch rosapi with respawn loop (the Node subclass has a bug; it may crash on first
 # graph query, so we respawn it automatically)

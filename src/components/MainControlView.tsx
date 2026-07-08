@@ -28,6 +28,7 @@ import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
   BehaviorTreeExecutionSnapshot,
 } from '../features/behaviorTree/components/BehaviorTreePanel';
+import { PersistentBehaviorTreeExecutor } from '../features/behaviorTree/engine/persistentExecutor';
 import TfTreePanel from '../features/tfTree/components/TfTreePanel';
 import anime from 'animejs';
 
@@ -1016,6 +1017,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isStandardBtExecuting, setIsStandardBtExecuting] = useState(false);
   const [retainStandardMobileLayout, setRetainStandardMobileLayout] = useState(false);
   const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
+  const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
+  const persistentBtSessionId = useRef<string | undefined>(undefined);
   const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
@@ -1423,6 +1426,40 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     // Only re-run effect if connect/disconnect functions or connectionParams change
   }, [connect, disconnect, connectionParams]);
 
+  // Monitor ROS-owned sessions at shell level so a returning user sees the
+  // running-tree control before opening (and mounting) the editor.
+  useEffect(() => {
+    if (!isConnected || !ros || typeof (ros as any).callOnConnection !== 'function') return;
+    const monitor = new PersistentBehaviorTreeExecutor(ros);
+    persistentBtMonitor.current = monitor;
+    const unsubscribe = monitor.subscribe(status => {
+      const active = status.state === 'running' || status.state === 'paused';
+      if (active) {
+        persistentBtSessionId.current = status.sessionId;
+        setBtExecution({
+          isExecuting: true,
+          isPaused: status.state === 'paused',
+          treeName: status.treeName || status.tree?.name || 'Behavior tree',
+          activeNodeId: status.activeNodeId,
+          activeNodeLabel: status.activeNodeLabel || (status.state === 'paused' ? 'Paused' : 'Running'),
+          status: status.state === 'paused' ? 'paused' : undefined,
+          startedAt: status.startedAt,
+          isPersistent: true,
+        });
+      } else if (persistentBtSessionId.current === status.sessionId) {
+        persistentBtSessionId.current = undefined;
+        setBtExecution(previous => previous.isPersistent
+          ? { ...previous, isExecuting: false, isPaused: false, status: status.error ? 'error' : 'completed' }
+          : previous);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (persistentBtMonitor.current === monitor) persistentBtMonitor.current = null;
+    };
+  }, [isConnected, ros]);
+
   // Lazy-mount BT panel on first visit; trigger 3D resize on switch
   useEffect(() => {
     if (viewMode === 'behaviorTree') setBtEverMounted(true);
@@ -1445,7 +1482,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [isLargeScreen, isMobileSplitView, mobileWorkspacePanels]);
 
   const handleInternalDisconnect = () => {
-    btExecutionControls.current?.stop();
+    if (!btExecution.isPersistent) btExecutionControls.current?.stop();
     disconnect(); // Disconnect ROS
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
@@ -2507,7 +2544,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const handleReturnToBehaviorTree = () => {
     if (isDesktopWorkspace) {
       const behaviorTreePanel = workspacePanels.find(panel => panel.type === 'behaviorTree');
-      if (!behaviorTreePanel) return;
+      if (!behaviorTreePanel) {
+        setIsWorkspaceOpen(false);
+        setBtEverMounted(true);
+        setViewMode('behaviorTree');
+        setIsTransitioning(false);
+        return;
+      }
       setExecutionJumpPanelId(behaviorTreePanel.id);
       window.requestAnimationFrame(() => {
         document
@@ -2529,7 +2572,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const handleStopBehaviorTree = () => {
-    btExecutionControls.current?.stop();
+    if (btExecutionControls.current) {
+      btExecutionControls.current.stop();
+    } else if (persistentBtSessionId.current) {
+      persistentBtMonitor.current?.stop(persistentBtSessionId.current);
+    }
   };
 
   const handleStandardBtExecutionChange = (snapshot: BehaviorTreeExecutionSnapshot) => {

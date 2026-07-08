@@ -53,6 +53,7 @@ services:
       dockerfile: infra/docker/Dockerfile.ros # Use the ROS Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME:-noble}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
