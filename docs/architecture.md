@@ -140,5 +140,6 @@ Feature modules should not import application-shell state. Pass connection objec
 
 - Caddy path routing is part of the frontend contract. Changes to `/websocket`, `/video_stream`, or `/mesh_resources` require coordinated frontend and proxy updates.
 - ROS 2 interface discovery depends on `ROS_DISTRO`, `ROS_DOMAIN_ID`, network compatibility, and mounted interface workspaces.
+- The ROS container derives from the official `ros:<distro>-ros-core-<ubuntu>` image. Keep `ROS_DISTRO` and `ROS_UBUNTU_CODENAME` paired when overriding them (for example, Jazzy/Noble or Humble/Jammy).
 - The production `infra/docker/Dockerfile` builds static assets and serves them with Nginx; the default Compose stack is development-oriented and serves Vite through Caddy.
 - Browser storage is origin-specific. Switching between HTTP, HTTPS, hostnames, or ports produces separate local datasets.

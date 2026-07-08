@@ -1,63 +1,31 @@
-# Dockerfile for ROS 2 components
+# ROS 2 runtime for rosbridge, video streaming, and persistent behavior trees.
+# Keep the distro and Ubuntu codename paired (for example: Jazzy/Noble,
+# Humble/Jammy) when overriding these build arguments.
 ARG ROS_DISTRO=jazzy
-FROM ubuntu:24.04
+ARG ROS_UBUNTU_CODENAME=noble
+FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME}
 
-# Set noninteractive mode for installations
-ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
 ARG ROS_DISTRO
-ENV ROS_DISTRO=${ROS_DISTRO}
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Set the default shell to bash
 SHELL ["/bin/bash", "-c"]
 
-
-# Setup retry function for apt
-RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
-
-# Update apt sources to use a different mirror
-RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://us.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list && \
-    sed -i 's|http://security.ubuntu.com/ubuntu/|http://us.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list
-
-# Install dependencies and set up ROS 2 repository
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    lsb-release \
-    software-properties-common \
-    && add-apt-repository universe \
-    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
-    && apt-get update \
-    && apt-get upgrade -y \
+# The official ROS image already provides Ubuntu, the ROS apt repository,
+# signing keys, and the core ROS runtime. Install only Robo-Boy's runtime
+# dependencies here; robot-specific interfaces are supplied through overlays.
+RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
+    apt-get update && apt-get install -y --no-install-recommends \
+      ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+      ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
+      ros-${ROS_DISTRO}-rosbridge-server \
+      ros-${ROS_DISTRO}-image-transport \
+      ros-${ROS_DISTRO}-cv-bridge \
+      ros-${ROS_DISTRO}-web-video-server \
+      ros-${ROS_DISTRO}-geographic-msgs \
+      ros-${ROS_DISTRO}-moveit-msgs \
+      ros-${ROS_DISTRO}-type-description-interfaces \
+      ros-${ROS_DISTRO}-vision-msgs \
     && rm -rf /var/lib/apt/lists/*
-
-# Install necessary dependencies (ensure git is included)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-ros-base \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-    ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
-    python3-colcon-common-extensions \
-    python3-rosdep \
-    python3-vcstool \
-    ros-${ROS_DISTRO}-rosbridge-server \
-    ros-${ROS_DISTRO}-image-transport \
-    ros-${ROS_DISTRO}-cv-bridge \
-    ros-${ROS_DISTRO}-web-video-server \
-    ros-${ROS_DISTRO}-rosidl-default-generators \
-    ros-${ROS_DISTRO}-geographic-msgs \
-    ros-${ROS_DISTRO}-moveit-msgs \
-    ros-${ROS_DISTRO}-type-description-interfaces \
-    ros-${ROS_DISTRO}-vision-msgs \
-    python3-numpy \
-    python3-opencv \
-    python3-pip \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install python dependencies
-RUN pip install --break-system-packages pyquaternion
 
 # Patch rosapi's action lookup. Some distros ship ros2action.api with a helper
 # that calls Node.get_action_names_and_types(), which rosapi's node class does
@@ -66,58 +34,13 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     proxy_path="$(python3 -c 'import importlib.util; print(importlib.util.find_spec("rosapi.proxy").origin)')" && \
     sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
 
-# --- Build packages from source --- 
-RUN mkdir -p /republisher_ws/src
-WORKDIR /republisher_ws/src
-# Copy the interface package
-# COPY tf2_web_republisher_py/tf2_web_republisher /republisher_ws/src/tf2_web_republisher
-# Copy the python package
-# COPY tf2_web_republisher_py/tf2_web_republisher_py /republisher_ws/src/tf2_web_republisher_py
-
-# --- DEBUG: Show copied files ---
-RUN echo "--- Contents of /republisher_ws/src: ---" && ls -la /republisher_ws/src
-# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher
-# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher
-# RUN echo "--- Contents of /republisher_ws/src/tf2_web_republisher/tf2_web_republisher: ---" && ls -la /republisher_ws/src/tf2_web_republisher/tf2_web_republisher || echo "Inner dir not found"
-# RUN echo "--- package.xml content: ---" && cat /republisher_ws/src/tf2_web_republisher/package.xml || echo "package.xml not found"
-# --- END DEBUG ---
-
-# Build the workspace
-WORKDIR /republisher_ws
-# Clean potential stale artifacts before building
-RUN echo "--- Cleaning build/install/log directories --- " && rm -rf build install log
-# RUN echo "--- Attempting colcon build --- " && . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build --symlink-install --packages-select tf2_web_republisher && colcon build --symlink-install --packages-select tf2_web_republisher_py
-# Build the entire workspace now, colcon handles order
-# --- Build TF2 web republisher if sources were copied ---
-# RUN if [ -d "src/tf2_web_republisher" ]; then \
-#       echo "--- Building tf2_web_republisher packages ---" && \
-#       . /opt/ros/${ROS_DISTRO}/setup.sh && \
-#       colcon build --symlink-install --packages-select tf2_web_republisher tf2_web_republisher_py; \
-#     else \
-#       echo "--- Skipping tf2_web_republisher build (sources not found) ---"; \
-#     fi
-
-# --- DEBUG: Show build results ---
-RUN echo "--- Contents of /republisher_ws after build: ---" && ls -la /republisher_ws
-RUN echo "--- Contents of /republisher_ws/install after build: ---" && ls -la /republisher_ws/install || echo "Install directory not found"
-# Add specific check for installed Python package and msg module
-# RUN echo "--- Checking for installed Python msg module: ---" && \
-#     ls -la /republisher_ws/install/tf2_web_republisher/lib/python3.10/site-packages/tf2_web_republisher/msg || echo "Python msg module directory not found!"
-# --- END DEBUG ---
-
-# --------------------------------------------
-
-# Create overlay workspace mount point (users can bind-mount their robot
-# workspace install dir here to expose custom message types to rosbridge).
+# Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws
 
-# Reset working directory
 WORKDIR /ros_ws
 
-# Copy and use the entrypoint script
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
 RUN chmod +x /ros_ws/entrypoint.sh
 
-# Run the entrypoint script
 ENTRYPOINT ["/ros_ws/entrypoint.sh"]

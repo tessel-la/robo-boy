@@ -25,12 +25,6 @@ if [ "${RMW_IMPLEMENTATION}" = "rmw_cyclonedds_cpp" ]; then
     echo "--- CYCLONEDDS_URI: ${CYCLONEDDS_URI:-<unset>} ---"
 fi
 
-# Source republisher workspace if built
-if [ -f /republisher_ws/install/setup.bash ]; then
-    echo "--- Sourcing republisher workspace ---"
-    source /republisher_ws/install/setup.bash
-fi
-
 # Source optional robot overlay workspaces for custom message types.
 # Supported mounts:
 #   /overlay_ws                         legacy single install workspace
