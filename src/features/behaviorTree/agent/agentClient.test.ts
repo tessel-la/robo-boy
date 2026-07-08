@@ -52,7 +52,21 @@ describe('buildBehaviorTreeAgentPrompt', () => {
         openTree: tree,
         selectedTree,
         note: 'Use full tree plus focused selection.',
+        additionalContext: [{
+          id: 'ros:/dock:robot/action/Dock',
+          kind: 'ros',
+          label: 'ROS: /dock',
+          value: { name: '/dock', type: 'robot/action/Dock' },
+        }],
       },
+      attachments: [{
+        id: 'file:mission',
+        name: 'mission.yaml',
+        mimeType: 'application/yaml',
+        size: 18,
+        kind: 'text',
+        content: 'max_velocity: 0.4',
+      }],
       rosResources: { actions: [], services: [], topics: [] },
       resourceSchemas: { actions: {}, services: {} },
     });
@@ -60,6 +74,9 @@ describe('buildBehaviorTreeAgentPrompt', () => {
     expect(prompt).toContain('"mode":"open-and-selection"');
     expect(prompt).toContain('"openTree"');
     expect(prompt).toContain('"selectedTree"');
+    expect(prompt).toContain('"label":"ROS: /dock"');
+    expect(prompt).toContain('File: mission.yaml');
+    expect(prompt).toContain('max_velocity: 0.4');
     expect(prompt).toContain('Use full tree plus focused selection.');
   });
 
@@ -84,6 +101,10 @@ describe('buildBehaviorTreeAgentPrompt', () => {
       currentTree: null,
       rosResources: { actions: [], services: [], topics: [] },
       resourceSchemas: { actions: {}, services: {} },
+      attachments: [{
+        id: 'image:map', name: 'map.png', mimeType: 'image/png', size: 3,
+        kind: 'image', content: 'aW1n',
+      }],
       onToken: token => tokens.push(token),
       onProgress: message => progress.push(message),
     });
@@ -105,6 +126,10 @@ describe('buildBehaviorTreeAgentPrompt', () => {
       model: 'qwen2.5-coder:7b',
       stream: true,
       response_format: { type: 'json_object' },
+      messages: [{ content: [
+        { type: 'text', text: expect.stringContaining('Image: map.png') },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1n' } },
+      ] }],
     });
   });
 
@@ -131,6 +156,10 @@ describe('buildBehaviorTreeAgentPrompt', () => {
       currentTree: null,
       rosResources: { actions: [], services: [], topics: [] },
       resourceSchemas: { actions: {}, services: {} },
+      attachments: [{
+        id: 'image:map', name: 'map.webp', mimeType: 'image/webp', size: 3,
+        kind: 'image', content: 'aW1n',
+      }],
     });
 
     expect(result).toBe('{"name":"Gemini"}');
@@ -142,6 +171,10 @@ describe('buildBehaviorTreeAgentPrompt', () => {
       })
     );
     expect(JSON.parse((fetchMock.mock.calls[0][1]?.body ?? '{}') as string)).toMatchObject({
+      contents: [{ parts: [
+        { text: expect.stringContaining('Image: map.webp') },
+        { inlineData: { mimeType: 'image/webp', data: 'aW1n' } },
+      ] }],
       generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
     });
   });

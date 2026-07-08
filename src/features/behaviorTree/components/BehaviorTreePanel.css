@@ -23,6 +23,16 @@
   background: var(--background-color, #fafafa);
 }
 
+.bt-palette-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .react-flow__node.bt-agent-canvas-proposed {
   pointer-events: none;
   opacity: .96;

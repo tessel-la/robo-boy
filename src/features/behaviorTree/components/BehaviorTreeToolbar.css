@@ -13,7 +13,9 @@
   pointer-events: none;
 }
 
-.bt-float-bar > * { pointer-events: auto; }
+.bt-float-bar > * {
+  pointer-events: auto;
+}
 
 /* Menu pill: ☰ + tree name */
 .bt-float-menu-btn {
@@ -40,7 +42,9 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
-.bt-float-menu-btn:active { transform: scale(0.97); }
+.bt-float-menu-btn:active {
+  transform: scale(0.97);
+}
 
 .bt-float-menu-btn svg {
   opacity: 0.55;
@@ -86,7 +90,9 @@
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   color: var(--text-color, #333333);
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    background 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -170,7 +176,9 @@
   pointer-events: none;
 }
 
-.bt-float-actions > * { pointer-events: auto; }
+.bt-float-actions > * {
+  pointer-events: auto;
+}
 
 .bt-float-run-btn,
 .bt-float-pause-btn,
@@ -186,7 +194,9 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: filter 0.15s ease, transform 0.12s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -196,8 +206,13 @@
   box-shadow: 0 3px 12px rgba(76, 175, 80, 0.4);
 }
 
-.bt-float-run-btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
-.bt-float-run-btn:active { transform: scale(0.96); }
+.bt-float-run-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.bt-float-run-btn:active {
+  transform: scale(0.96);
+}
 
 .bt-float-pause-btn {
   background: #f59e0b;
@@ -205,8 +220,13 @@
   box-shadow: 0 3px 12px rgba(245, 158, 11, 0.35);
 }
 
-.bt-float-pause-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
-.bt-float-pause-btn:active { transform: scale(0.96); }
+.bt-float-pause-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.bt-float-pause-btn:active {
+  transform: scale(0.96);
+}
 
 .bt-float-stop-btn {
   background: var(--error-color, #f44336);
@@ -214,8 +234,12 @@
   box-shadow: 0 3px 12px rgba(244, 67, 54, 0.35);
 }
 
-.bt-float-stop-btn:hover  { filter: brightness(1.08); }
-.bt-float-stop-btn:active { transform: scale(0.96); }
+.bt-float-stop-btn:hover {
+  filter: brightness(1.08);
+}
+.bt-float-stop-btn:active {
+  transform: scale(0.96);
+}
 
 .bt-float-stop-btn:disabled,
 .bt-float-menu-btn:disabled,
@@ -255,15 +279,27 @@
   color: var(--text-color, #333333);
 }
 
-.bt-float-delete-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
-.bt-float-duplicate-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
-.bt-float-rename-btn:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
+.bt-float-delete-btn:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.bt-float-duplicate-btn:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.bt-float-rename-btn:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
 .bt-float-delete-btn:active,
 .bt-float-duplicate-btn:active,
-.bt-float-rename-btn:active { transform: scale(0.97); }
+.bt-float-rename-btn:active {
+  transform: scale(0.97);
+}
 
-.bt-float-btn-label { font-size: 13px; }
-.bt-float-count     { font-size: 13px; }
+.bt-float-btn-label {
+  font-size: 13px;
+}
+.bt-float-count {
+  font-size: 13px;
+}
 
 /* ── Popover — click-dismiss zone (transparent) ──────────────────────────── */
 
@@ -291,7 +327,9 @@
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: var(--bt-menu-radius);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   pointer-events: auto;
   container-type: inline-size;
@@ -300,14 +338,16 @@
 }
 
 .bt-menu-panel::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   z-index: 2;
   border: 1px solid transparent;
   border-radius: inherit;
   pointer-events: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .bt-menu-panel:hover::before,
@@ -331,7 +371,10 @@
   opacity: 0.48;
   pointer-events: auto;
   touch-action: none;
-  transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease;
 }
 
 /* The shared tree menu hides resize handles in narrow containers. BT menus
@@ -341,7 +384,7 @@
 }
 
 .bt-menu-resize-handle::after {
-  content: "";
+  content: '';
   position: absolute;
   width: 14px;
   height: 14px;
@@ -418,12 +461,19 @@
 }
 
 @keyframes bt-popover-in {
-  from { opacity: 0; transform: scale(0.84) translateY(-8px); }
-  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+  from {
+    opacity: 0;
+    transform: scale(0.84) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @keyframes bt-menu-resize-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 10%, transparent);
   }
   50% {
@@ -445,7 +495,9 @@
   line-height: 1;
   cursor: pointer;
   border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
@@ -524,7 +576,9 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--text-color, #333333);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .bt-menu-name-input:focus {
@@ -558,7 +612,11 @@
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, filter 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s,
+    filter 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -567,7 +625,9 @@
   border-color: var(--primary-color, #4285f4);
 }
 
-.bt-menu-action-btn:active { transform: scale(0.96); }
+.bt-menu-action-btn:active {
+  transform: scale(0.96);
+}
 
 .bt-menu-save-btn {
   background: var(--primary-color, #4285f4);
@@ -583,7 +643,11 @@
 
 .bt-menu-action-btn:nth-child(1) {
   background: color-mix(in srgb, var(--secondary-color, var(--primary-color, #4285f4)) 12%, var(--card-bg, #ffffff));
-  border-color: color-mix(in srgb, var(--secondary-color, var(--primary-color, #4285f4)) 26%, var(--border-color, #e0e0e0));
+  border-color: color-mix(
+    in srgb,
+    var(--secondary-color, var(--primary-color, #4285f4)) 26%,
+    var(--border-color, #e0e0e0)
+  );
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--secondary-color, var(--primary-color, #4285f4)) 18%, transparent);
   color: var(--secondary-color, var(--primary-color, #4285f4));
 }
@@ -650,8 +714,12 @@
   outline: none;
 }
 
-.bt-menu-tree-row:hover  { background: var(--background-color, #f5f5f5); }
-.bt-menu-tree-row:active { background: var(--border-color, #e8e8e8); }
+.bt-menu-tree-row:hover {
+  background: var(--background-color, #f5f5f5);
+}
+.bt-menu-tree-row:active {
+  background: var(--border-color, #e8e8e8);
+}
 
 .bt-menu-tree-row.active {
   background: rgba(66, 133, 244, 0.07);
@@ -693,7 +761,9 @@
   font-size: 18px;
   cursor: pointer;
   border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   flex-shrink: 0;
   line-height: 1;
 }
@@ -725,7 +795,9 @@
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 12px;
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 10px 34px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.08);
   color: var(--text-color, #333333);
   animation: bt-delete-confirm-in 0.18s ease-out;
 }
@@ -776,7 +848,11 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, filter 0.15s, transform 0.12s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    filter 0.15s,
+    transform 0.12s;
 }
 
 .bt-delete-confirm-cancel {
@@ -806,14 +882,22 @@
 }
 
 @keyframes bt-delete-confirm-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .bt-float-name { max-width: 120px; }
+  .bt-float-name {
+    max-width: 120px;
+  }
 }
 
 @container (max-width: 640px) {
@@ -885,8 +969,8 @@
   }
 
   .bt-float-icon-btn {
-    width: 42px;
-    height: 42px;
+    width: 34px;
+    height: 34px;
   }
 
   .bt-float-icon-btn.bt-palette-toggle,
@@ -895,33 +979,33 @@
   .bt-follow-mode-btn,
   .bt-undo-tree-btn,
   .bt-redo-tree-btn {
-    width: 48px;
-    height: 48px;
+    width: 34px;
+    height: 34px;
   }
 
   .bt-select-tool-icon,
   .bt-pan-tool-icon {
-    width: 31px;
-    height: 31px;
+    width: 17px;
+    height: 17px;
   }
 
   .bt-follow-tool-icon {
-    width: 28px;
-    height: 28px;
+    width: 17px;
+    height: 17px;
   }
 
   .bt-arrange-tree-btn svg,
   .bt-undo-tree-btn svg,
   .bt-redo-tree-btn svg {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
   }
 
   .bt-float-run-btn,
   .bt-float-pause-btn,
   .bt-float-stop-btn {
-    width: 42px;
-    height: 42px;
+    width: 34px;
+    height: 34px;
   }
 
   .bt-menu-overlay {
@@ -984,9 +1068,14 @@
 }
 
 @media (max-width: 480px) {
-  .bt-float-name { max-width: 80px; font-size: 12px; }
+  .bt-float-name {
+    max-width: 80px;
+    font-size: 12px;
+  }
 
-  .bt-float-btn-label { display: none; }
+  .bt-float-btn-label {
+    display: none;
+  }
 
   .bt-float-run-btn,
   .bt-float-pause-btn,
@@ -1004,25 +1093,44 @@
     justify-content: center;
   }
 
-  .bt-float-count { display: none; }
+  .bt-float-count {
+    display: none;
+  }
 }
 
 /* ── Dark mode ────────────────────────────────────────────────────────────── */
 
 @media (prefers-color-scheme: dark) {
   .bt-menu-panel {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }
-.bt-blackboard-editor { width: 100%; min-height: 110px; box-sizing: border-box; resize: vertical; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--background-color); color: var(--text-color); font: 0.72rem/1.4 monospace; }
-.bt-blackboard-error { margin-top: 4px; color: var(--error-color, #d32f2f); font-size: 0.7rem; }
+.bt-blackboard-editor {
+  width: 100%;
+  min-height: 110px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--background-color);
+  color: var(--text-color);
+  font: 0.72rem/1.4 monospace;
+}
+.bt-blackboard-error {
+  margin-top: 4px;
+  color: var(--error-color, #d32f2f);
+  font-size: 0.7rem;
+}
 
 /* Keep every primary canvas action on the same mobile touch grid. */
 @media (max-width: 600px) {
   .bt-float-menu-btn {
-    height: 44px;
-    min-height: 44px;
-    border-radius: 22px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 17px;
   }
 
   .bt-float-icon-btn,
@@ -1037,10 +1145,10 @@
   .bt-float-pause-btn,
   .bt-float-stop-btn {
     box-sizing: border-box;
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
     padding: 0;
     align-items: center;
     justify-content: center;
@@ -1049,6 +1157,6 @@
   .bt-float-run-btn,
   .bt-float-pause-btn,
   .bt-float-stop-btn {
-    border-radius: 22px;
+    border-radius: 17px;
   }
 }

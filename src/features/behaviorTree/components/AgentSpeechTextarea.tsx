@@ -44,6 +44,7 @@ interface AgentSpeechTextareaProps {
   className?: string;
   autoFocus?: boolean;
   textareaRef?: React.RefObject<HTMLTextAreaElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
   onTranscribeAudio?: (audio: Blob) => Promise<string>;
 }
 
@@ -66,6 +67,7 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
   className = '',
   autoFocus,
   textareaRef,
+  onKeyDown,
   onTranscribeAudio,
 }) => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -84,11 +86,14 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
     valueRef.current = value;
   }, [value]);
 
-  useEffect(() => () => {
-    recognitionRef.current?.abort();
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
-    streamRef.current?.getTracks().forEach(track => track.stop());
-  }, []);
+  useEffect(
+    () => () => {
+      recognitionRef.current?.abort();
+      if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach(track => track.stop());
+    },
+    []
+  );
 
   const appendTranscript = (transcript: string) => {
     const current = valueRef.current.trimEnd();
@@ -227,7 +232,9 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
 
   return (
     <div className={`${className} bt-agent-speech-field`.trim()}>
-      <label className="bt-agent-field-label" htmlFor={id}>{label}</label>
+      <label className="bt-agent-field-label" htmlFor={id}>
+        {label}
+      </label>
       <span className="bt-agent-textarea-shell">
         <textarea
           id={id}
@@ -235,6 +242,7 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
           rows={rows}
           value={value}
           onChange={event => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
         />
@@ -250,17 +258,32 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
           {isListening ? <FaStop aria-hidden="true" /> : <FaMicrophone aria-hidden="true" />}
         </button>
       </span>
-      {isRequestingPermission && <span className="bt-agent-speech-status" role="status">Requesting microphone permission…</span>}
+      {isRequestingPermission && (
+        <span className="bt-agent-speech-status" role="status">
+          Requesting microphone permission…
+        </span>
+      )}
       {isListening && (
         <span className="bt-agent-speech-status is-listening" role="status">
           <span className="bt-agent-listening-wave" aria-hidden="true">
-            <i /><i /><i /><i />
+            <i />
+            <i />
+            <i />
+            <i />
           </span>
           Listening…
         </span>
       )}
-      {isTranscribing && <span className="bt-agent-speech-status" role="status">Transcribing audio…</span>}
-      {speechError && <span className="bt-agent-speech-error" role="alert">{speechError}</span>}
+      {isTranscribing && (
+        <span className="bt-agent-speech-status" role="status">
+          Transcribing audio…
+        </span>
+      )}
+      {speechError && (
+        <span className="bt-agent-speech-error" role="alert">
+          {speechError}
+        </span>
+      )}
     </div>
   );
 };

@@ -333,6 +333,21 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
 
     expect(screen.getByTestId('bt-node-palette')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close node palette' }));
+    expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
+  });
+
+  it('closes the desktop palette after adding a node', async () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    fireEvent.click(screen.getByText('Sequence'));
+
+    expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as { nodes: Array<Record<string, any>> };
+      expect(latestProps.nodes.some(node => node.type === 'sequence')).toBe(true);
+    });
   });
 
   it('opens and closes the AI behavior tree agent', () => {
@@ -344,6 +359,10 @@ describe('BehaviorTreePanel', () => {
     expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    fireEvent.pointerDown(document.querySelector('.bt-agent-overlay')!);
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
   });
 
@@ -361,8 +380,8 @@ describe('BehaviorTreePanel', () => {
     fireEvent.change(prompt, { target: { value: 'Add a stop action to this sequence' } });
     fireEvent.submit(prompt.closest('form')!);
 
-    expect(await screen.findByTestId('bt-agent-panel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Describe the behavior')).toHaveValue('Add a stop action to this sequence');
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+    await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalled());
   });
 
   it('previews agent changes on the canvas and accepts them from the popup', async () => {
@@ -421,8 +440,6 @@ describe('BehaviorTreePanel', () => {
     await screen.findByTestId('rf-node-move');
 
     fireEvent.click(screen.getByTestId('bt-open-agent'));
-    fireEvent.click(screen.getByRole('button', { name: 'Scan ROS resources' }));
-    await screen.findByText('1 resources · 0 input schemas');
     fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move one meter and wait' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
 

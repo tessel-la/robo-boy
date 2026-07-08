@@ -44,6 +44,7 @@ import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
 import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
 import { buildTreeDiff, summarizeTreeChanges } from './BehaviorTreeAgentPreview';
 import { BehaviorTreeExecutor } from '../engine/executor';
+import type { BehaviorTreeAgentCheckpoint } from '../agent/types';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import {
   exportBehaviorTree,
@@ -1962,6 +1963,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     isRestoringHistory.current = false;
   }, [createHistorySnapshot, restoreRootTreeSnapshot]);
 
+  const restoreAgentCheckpoint = useCallback((checkpoint: BehaviorTreeAgentCheckpoint) => {
+    pushUndoSnapshot();
+    isRestoringHistory.current = true;
+    restoreRootTreeSnapshot(checkpoint);
+    setCanUndo(true);
+    setCanRedo(false);
+    isRestoringHistory.current = false;
+  }, [pushUndoSnapshot, restoreRootTreeSnapshot]);
+
   useEffect(() => {
     onExecutionChange?.(executionSnapshot);
   }, [executionSnapshot, onExecutionChange]);
@@ -2140,10 +2150,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
       addNodeAtPosition(nodeType, position, item, { avoidOverlap: true });
 
-      // Close palette on mobile after adding
-      if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
-        setIsPaletteCollapsed(true);
-      }
+      setIsPaletteCollapsed(true);
     },
     [addNodeAtPosition, isExecuting, screenToFlowPosition]
   );
@@ -2547,6 +2554,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     boxSelectionEndedAtRef.current = 0;
     manualEdgeSelectionRef.current = null;
     setOrderingParentId(null);
+    setIsPaletteCollapsed(true);
+    setInlineAgentPosition(null);
     setSelectedNodes([]);
     setSelectedEdges([]);
     applySelectionState(new Set(), new Set());
@@ -2967,6 +2976,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       )}
 
       <div className="bt-content">
+        {!isPaletteCollapsed && (
+          <button
+            type="button"
+            className="bt-palette-backdrop"
+            onClick={() => setIsPaletteCollapsed(true)}
+            aria-label="Close node palette"
+          />
+        )}
         <NodePalette
           ros={ros}
           isConnected={isConnected}
@@ -3225,12 +3242,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         selectedTreeContext={selectedTreeContext}
         previewTree={agentPreviewTree}
         inlinePosition={inlineAgentPosition}
-        onOpen={() => setIsAgentOpen(true)}
         onInlineClose={() => setInlineAgentPosition(null)}
-        onClose={() => {
-          setIsAgentOpen(false);
-          clearAgentPreview();
-        }}
+        onClose={() => setIsAgentOpen(false)}
+        captureCheckpoint={createHistorySnapshot}
+        onRestoreCheckpoint={restoreAgentCheckpoint}
+        onNotify={showSaveNotice}
         onPreviewChange={tree => {
           setAgentPreviewTree(tree);
           setAgentPreviewDimensions({});
