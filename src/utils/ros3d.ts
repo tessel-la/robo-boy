@@ -1399,13 +1399,14 @@ class UrdfClient extends THREE.Object3D {
     tfClient: CustomTFProvider;
     rootObject: THREE.Object3D;
     robotDescriptionTopic?: string;
+    path?: string;
     onComplete?: (model: THREE.Object3D) => void;
     // Removed loader option, will use internal Collada and STL loaders
   }) {
     super();
     this.ros = options.ros;
     this.tfClient = options.tfClient;
-    this.path = '/mesh_resources/'; // Hardcoded path
+    this.path = options.path || '/mesh_resources';
     this.rootObject = options.rootObject;
     this.onComplete = options.onComplete;
 
@@ -1732,9 +1733,10 @@ class UrdfClient extends THREE.Object3D {
       return resolved;
     }
 
-    // Handle localhost:8000 URLs by replacing them with /mesh_resources
+    // Normalize mesh URLs emitted by robot descriptions to the configured resource server.
     if (filePath.startsWith('http://localhost:8000/')) {
-      const resolved = filePath.replace('http://localhost:8000/', '/mesh_resources/');
+      const basePath = this.path.endsWith('/') ? this.path : `${this.path}/`;
+      const resolved = filePath.replace('http://localhost:8000/', basePath);
       console.log(`[UrdfClient] Resolved localhost path: ${filePath} -> ${resolved}`);
       return resolved;
     }

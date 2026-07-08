@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
 import './CameraView.css'; // We'll create this CSS file next
+import { useRuntimeConfig } from '../runtime/runtimeConfig';
 
 // Remove hardcoded URL
-// const DEFAULT_ROSBRIDGE_URL = 'ws://localhost:9090'; 
+// const DEFAULT_ROSBRIDGE_URL = 'ws://localhost:9090';
 
 interface CameraViewProps {
   ros: Ros;
@@ -22,7 +23,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   ros,
   cameraTopic,
   // webVideoServerPort = 8080, // Port is now handled by proxy
-  streamType = 'mjpeg', 
+  streamType = 'mjpeg',
   streamWidth,
   streamHeight,
   // Destructure new props
@@ -30,6 +31,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   onTopicChange,
   selectId = 'camera-topic-select',
 }) => {
+  const { videoStreamBaseUrl } = useRuntimeConfig();
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,10 +42,10 @@ const CameraView: React.FC<CameraViewProps> = ({
       cameraTopic: cameraTopic,
     });
 
-    if (ros && ros.isConnected && cameraTopic) { // Ensure topic is selected
+    if (ros && ros.isConnected && cameraTopic) {
+      // Ensure topic is selected
       try {
-        // Construct relative URL using the Caddy proxy path
-        let url = `/video_stream/stream?topic=${cameraTopic}`;
+        let url = `${videoStreamBaseUrl}/stream?topic=${cameraTopic}`;
         if (streamType) {
           url += `&type=${streamType}`;
         }
@@ -58,13 +60,13 @@ const CameraView: React.FC<CameraViewProps> = ({
         setError(null);
         console.log(`[CameraView] Relative stream URL set to: ${url}`);
       } catch (e) {
-        console.error("[CameraView] Error constructing stream URL:", e);
-        setError("Failed to construct stream URL.");
+        console.error('[CameraView] Error constructing stream URL:', e);
+        setError('Failed to construct stream URL.');
         setStreamUrl(null);
       }
     } else {
       setStreamUrl(null);
-      setError(cameraTopic ? "Connecting..." : "No camera topic selected.");
+      setError(cameraTopic ? 'Connecting...' : 'No camera topic selected.');
     }
   }, [
     ros,
@@ -74,22 +76,23 @@ const CameraView: React.FC<CameraViewProps> = ({
     streamType,
     streamWidth,
     streamHeight,
+    videoStreamBaseUrl,
   ]);
 
   return (
     <div className="camera-view">
       {/* Container now needs position relative for absolute positioning of dropdown */}
       <div className="camera-stream-container">
-        {/* Add the dropdown selector inside the container */} 
+        {/* Add the dropdown selector inside the container */}
         {availableTopics.length > 0 && (
           <div className="camera-topic-selector overlay">
             {/* <label htmlFor="camera-topic-select">Topic:</label> */}
             <select
               id={selectId}
               value={cameraTopic} // Use current cameraTopic prop
-              onChange={(e) => onTopicChange(e.target.value)} // Use handler prop
+              onChange={e => onTopicChange(e.target.value)} // Use handler prop
             >
-              {availableTopics.map((topic) => (
+              {availableTopics.map(topic => (
                 <option key={topic} value={topic}>
                   {topic}
                 </option>
@@ -97,7 +100,7 @@ const CameraView: React.FC<CameraViewProps> = ({
             </select>
           </div>
         )}
-        
+
         {/* Existing error/image/placeholder rendering */}
         {error ? (
           <div className="error-message">{error}</div>
@@ -105,8 +108,8 @@ const CameraView: React.FC<CameraViewProps> = ({
           <img
             src={streamUrl}
             alt={`Stream for ${cameraTopic}`}
-            onError={(e) => {
-              console.error("Error loading video stream:", e);
+            onError={e => {
+              console.error('Error loading video stream:', e);
               setError(
                 // Update error message to reflect proxy
                 `Failed to load stream via proxy (${streamUrl}). Check Caddyfile, web_video_server, topic (${cameraTopic}), and type (${streamType}).`
@@ -123,4 +126,4 @@ const CameraView: React.FC<CameraViewProps> = ({
   );
 };
 
-export default CameraView; 
+export default CameraView;

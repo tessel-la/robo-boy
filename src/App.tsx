@@ -10,12 +10,13 @@ import {
   DEFAULT_THEMES,
   THEME_STORAGE_KEY,
   CUSTOM_THEMES_STORAGE_KEY,
-  generateThemeCss
+  generateThemeCss,
 } from './features/theme/themeUtils';
+import { RuntimeConfigProvider } from './runtime/runtimeConfig';
 
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
-  ros2Value: string | number;   // Now required
+  ros2Value: string | number; // Now required
 }
 
 function App() {
@@ -31,7 +32,7 @@ function App() {
     try {
       return stored ? JSON.parse(stored) : [];
     } catch (e) {
-      console.error("Failed to parse custom themes from localStorage", e);
+      console.error('Failed to parse custom themes from localStorage', e);
       return [];
     }
   });
@@ -80,7 +81,6 @@ function App() {
     }
     // Save the selected theme ID
     localStorage.setItem(THEME_STORAGE_KEY, selectedThemeId);
-
   }, [selectedThemeId, customThemes]); // Re-run when selection or custom themes change
 
   // --- Theme CRUD Functions ---
@@ -98,7 +98,7 @@ function App() {
   const addCustomTheme = (newTheme: CustomTheme) => {
     // Add basic validation for iconId if it's added
     if (!newTheme.name || !newTheme.colors.primary || !newTheme.colors.secondary || !newTheme.colors.background) {
-      console.error("Cannot add theme: Missing data.");
+      console.error('Cannot add theme: Missing data.');
       return;
     }
     // Ensure iconId is valid if provided
@@ -114,7 +114,7 @@ function App() {
 
   const updateCustomTheme = (updatedTheme: CustomTheme) => {
     // Add validation for iconId if needed
-    const updatedThemes = customThemes.map(t => t.id === updatedTheme.id ? updatedTheme : t);
+    const updatedThemes = customThemes.map(t => (t.id === updatedTheme.id ? updatedTheme : t));
     setCustomThemes(updatedThemes);
     localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
   };
@@ -170,7 +170,7 @@ function App() {
   // Combine default and custom themes for the selector
   const allThemesForSelector = [
     ...DEFAULT_THEMES.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), isDefault: true })),
-    ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false }))
+    ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false })),
   ];
 
   return (
@@ -179,11 +179,13 @@ function App() {
         {!connectionParams ? (
           <EntrySection onConnect={handleConnect} />
         ) : (
-          <MainControlView
-            connectionParams={connectionParams}
-            onDisconnect={handleDisconnect}
-          // Potentially pass theme management functions down if needed
-          />
+          <RuntimeConfigProvider connectionParams={connectionParams}>
+            <MainControlView
+              connectionParams={connectionParams}
+              onDisconnect={handleDisconnect}
+              // Potentially pass theme management functions down if needed
+            />
+          </RuntimeConfigProvider>
         )}
       </main>
       <ThemeSelector
@@ -203,4 +205,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

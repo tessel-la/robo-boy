@@ -4,6 +4,7 @@ import ROSLIB from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import { buildCameraStreamUrl } from '../rosMessageUtils';
 import './DataDisplayComponents.css';
+import { useRuntimeConfig } from '../../../runtime/runtimeConfig';
 
 interface CameraComponentProps {
   config: GamepadComponentConfig;
@@ -76,7 +77,7 @@ function rawImageToDataUrl(message: any): string | null {
       const r = source[sourceIndex] ?? 0;
       const g = source[sourceIndex + 1] ?? 0;
       const b = source[sourceIndex + 2] ?? 0;
-      const a = channels === 4 ? source[sourceIndex + 3] ?? 255 : 255;
+      const a = channels === 4 ? (source[sourceIndex + 3] ?? 255) : 255;
 
       imageData.data[targetIndex] = encoding.startsWith('bgr') ? b : r;
       imageData.data[targetIndex + 1] = g;
@@ -90,14 +91,17 @@ function rawImageToDataUrl(message: any): string | null {
 }
 
 const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditing = false, scaleFactor = 1 }) => {
+  const { videoStreamBaseUrl } = useRuntimeConfig();
   const topicRef = useRef<Topic | null>(null);
   const statusRef = useRef('No camera topic selected');
   const lastRosFrameAtRef = useRef(-Infinity);
   const action = config.action as ROSTopicConfig | undefined;
   const transport = config.config?.cameraTransport ?? 'proxy';
-  const streamType = action?.messageType?.includes('CompressedImage') && (!config.config?.streamType || config.config.streamType === 'mjpeg')
-    ? 'ros_compressed'
-    : (config.config?.streamType ?? 'mjpeg');
+  const streamType =
+    action?.messageType?.includes('CompressedImage') &&
+    (!config.config?.streamType || config.config.streamType === 'mjpeg')
+      ? 'ros_compressed'
+      : (config.config?.streamType ?? 'mjpeg');
   const streamWidth = config.config?.streamWidth;
   const streamHeight = config.config?.streamHeight;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -124,12 +128,15 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
     }
 
     if (transport === 'proxy') {
-      setImageUrl(buildCameraStreamUrl({
-        topic: action.topic,
-        streamType,
-        width: streamWidth,
-        height: streamHeight,
-      }));
+      setImageUrl(
+        buildCameraStreamUrl({
+          topic: action.topic,
+          streamType,
+          width: streamWidth,
+          height: streamHeight,
+          baseUrl: videoStreamBaseUrl,
+        })
+      );
       setStatusIfChanged('');
       return;
     }
@@ -188,6 +195,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
     streamType,
     streamWidth,
     transport,
+    videoStreamBaseUrl,
   ]);
 
   const fontSize = Math.max(10, Math.floor(12 * scaleFactor));

@@ -5,206 +5,223 @@ import ROSLIB from 'roslib';
 
 // Mock ROSLIB
 vi.mock('roslib', () => {
-    const RosMock = vi.fn(function () {
-        return {
-            on: vi.fn(),
-            close: vi.fn(),
-            connect: vi.fn(),
-        }
-    });
+  const RosMock = vi.fn(function () {
     return {
-        default: {
-            Ros: RosMock
-        },
-        Ros: RosMock
+      on: vi.fn(),
+      close: vi.fn(),
+      connect: vi.fn(),
     };
+  });
+  return {
+    default: {
+      Ros: RosMock,
+    },
+    Ros: RosMock,
+  };
 });
 
 describe('useRos', () => {
-    const mockParams = {
-        ip: '192.168.1.10',
-        port: 9090,
-        ros2Option: 'domain' as const,
-        ros2Value: '10'
-    };
+  const mockParams = {
+    ip: '192.168.1.10',
+    port: 9090,
+    ros2Option: 'domain' as const,
+    ros2Value: '10',
+  };
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        // Reset window location mock if needed
-        Object.defineProperty(window, 'location', {
-            value: {
-                hostname: 'localhost',
-                protocol: 'http:',
-            },
-            writable: true,
-        });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset window location mock if needed
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'localhost',
+        protocol: 'http:',
+      },
+      writable: true,
+    });
+  });
+
+  it('should initialize with disconnected state', () => {
+    const { result } = renderHook(() => useRos());
+    expect(result.current.ros).toBeNull();
+    expect(result.current.isConnected).toBe(false);
+  });
+
+  it('should attempt connection with correct URL', () => {
+    const { result } = renderHook(() => useRos());
+
+    act(() => {
+      result.current.connect(mockParams);
     });
 
-    it('should initialize with disconnected state', () => {
-        const { result } = renderHook(() => useRos());
-        expect(result.current.ros).toBeNull();
-        expect(result.current.isConnected).toBe(false);
+    expect(ROSLIB.Ros).toHaveBeenCalledWith({
+      url: 'ws://localhost/websocket',
+    });
+  });
+
+  it('should use wss for https protocol', () => {
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'robot.local',
+        protocol: 'https:',
+      },
+      writable: true,
     });
 
-    it('should attempt connection with correct URL', () => {
-        const { result } = renderHook(() => useRos());
+    const { result } = renderHook(() => useRos());
 
-        act(() => {
-            result.current.connect(mockParams);
-        });
-
-        expect(ROSLIB.Ros).toHaveBeenCalledWith({
-            url: 'ws://localhost/websocket'
-        });
+    act(() => {
+      result.current.connect(mockParams);
     });
 
-    it('should use wss for https protocol', () => {
-        Object.defineProperty(window, 'location', {
-            value: {
-                hostname: 'robot.local',
-                protocol: 'https:',
-            },
-            writable: true,
-        });
+    expect(ROSLIB.Ros).toHaveBeenCalledWith({
+      url: 'wss://robot.local/websocket',
+    });
+  });
 
-        const { result } = renderHook(() => useRos());
-
-        act(() => {
-            result.current.connect(mockParams);
-        });
-
-        expect(ROSLIB.Ros).toHaveBeenCalledWith({
-            url: 'wss://robot.local/websocket'
-        });
+  it('should preserve a non-default web port', () => {
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'robot.local',
+        host: 'robot.local:8443',
+        protocol: 'https:',
+      },
+      writable: true,
     });
 
-    it('should handle successful connection', () => {
-        const onMock = vi.fn();
-        (ROSLIB.Ros as any).mockImplementation(function () {
-            return {
-                on: onMock,
-                close: vi.fn(),
-            }
-        });
+    const { result } = renderHook(() => useRos());
+    act(() => result.current.connect(mockParams));
 
-        const { result } = renderHook(() => useRos());
+    expect(ROSLIB.Ros).toHaveBeenCalledWith({
+      url: 'wss://robot.local:8443/websocket',
+    });
+  });
 
-        act(() => {
-            result.current.connect(mockParams);
-        });
-
-        // Simulate 'connection' event
-        const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
-        if (connectionCallback) {
-            act(() => {
-                connectionCallback();
-            });
-        }
-
-        expect(result.current.isConnected).toBe(true);
-        expect(result.current.ros).toBeTruthy();
+  it('should handle successful connection', () => {
+    const onMock = vi.fn();
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      return {
+        on: onMock,
+        close: vi.fn(),
+      };
     });
 
-    it('should handle connection error', () => {
-        const onMock = vi.fn();
-        const closeMock = vi.fn();
-        (ROSLIB.Ros as any).mockImplementation(function () {
-            return {
-                on: onMock,
-                close: closeMock,
-            }
-        });
+    const { result } = renderHook(() => useRos());
 
-        const { result } = renderHook(() => useRos());
-
-        act(() => {
-            result.current.connect(mockParams);
-        });
-
-        // Simulate successful connection first to verified it gets reset
-        const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
-        if (connectionCallback) {
-            act(() => {
-                connectionCallback();
-            });
-        }
-        expect(result.current.isConnected).toBe(true);
-
-        // Now simulate error
-        const errorCallback = onMock.mock.calls.find(call => call[0] === 'error')?.[1];
-        if (errorCallback) {
-            act(() => {
-                errorCallback(new Error('Connection failed'));
-            });
-        }
-
-        expect(result.current.isConnected).toBe(false);
-        expect(result.current.ros).toBeNull();
-        expect(closeMock).toHaveBeenCalled();
+    act(() => {
+      result.current.connect(mockParams);
     });
 
-    it('should handle disconnect', () => {
-        const closeMock = vi.fn();
-        const onMock = vi.fn();
-        (ROSLIB.Ros as any).mockImplementation(function () {
-            return {
-                on: onMock,
-                close: closeMock,
-            }
-        });
+    // Simulate 'connection' event
+    const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
+    if (connectionCallback) {
+      act(() => {
+        connectionCallback();
+      });
+    }
 
-        const { result } = renderHook(() => useRos());
+    expect(result.current.isConnected).toBe(true);
+    expect(result.current.ros).toBeTruthy();
+  });
 
-        act(() => {
-            result.current.connect(mockParams);
-        });
-
-        // Simulate 'connection'
-        const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
-        if (connectionCallback) {
-            act(() => {
-                connectionCallback();
-            });
-        }
-
-        act(() => {
-            result.current.disconnect();
-        });
-
-        expect(closeMock).toHaveBeenCalled();
-        expect(result.current.isConnected).toBe(false);
-        expect(result.current.ros).toBeNull();
+  it('should handle connection error', () => {
+    const onMock = vi.fn();
+    const closeMock = vi.fn();
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      return {
+        on: onMock,
+        close: closeMock,
+      };
     });
 
-    it('should prevent multiple connection attempts', () => {
-        const { result } = renderHook(() => useRos());
+    const { result } = renderHook(() => useRos());
 
-        act(() => {
-            result.current.connect(mockParams);
-            result.current.connect(mockParams); // Second call
-        });
-
-        expect(ROSLIB.Ros).toHaveBeenCalledTimes(1);
+    act(() => {
+      result.current.connect(mockParams);
     });
 
-    it('should cleanup on unmount', () => {
-        const closeMock = vi.fn();
-        (ROSLIB.Ros as any).mockImplementation(function () {
-            return {
-                on: vi.fn(),
-                close: closeMock,
-            }
-        });
+    // Simulate successful connection first to verified it gets reset
+    const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
+    if (connectionCallback) {
+      act(() => {
+        connectionCallback();
+      });
+    }
+    expect(result.current.isConnected).toBe(true);
 
-        const { result, unmount } = renderHook(() => useRos());
+    // Now simulate error
+    const errorCallback = onMock.mock.calls.find(call => call[0] === 'error')?.[1];
+    if (errorCallback) {
+      act(() => {
+        errorCallback(new Error('Connection failed'));
+      });
+    }
 
-        act(() => {
-            result.current.connect(mockParams);
-        });
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.ros).toBeNull();
+    expect(closeMock).toHaveBeenCalled();
+  });
 
-        unmount();
-
-        expect(closeMock).toHaveBeenCalled();
+  it('should handle disconnect', () => {
+    const closeMock = vi.fn();
+    const onMock = vi.fn();
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      return {
+        on: onMock,
+        close: closeMock,
+      };
     });
 
+    const { result } = renderHook(() => useRos());
+
+    act(() => {
+      result.current.connect(mockParams);
+    });
+
+    // Simulate 'connection'
+    const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
+    if (connectionCallback) {
+      act(() => {
+        connectionCallback();
+      });
+    }
+
+    act(() => {
+      result.current.disconnect();
+    });
+
+    expect(closeMock).toHaveBeenCalled();
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.ros).toBeNull();
+  });
+
+  it('should prevent multiple connection attempts', () => {
+    const { result } = renderHook(() => useRos());
+
+    act(() => {
+      result.current.connect(mockParams);
+      result.current.connect(mockParams); // Second call
+    });
+
+    expect(ROSLIB.Ros).toHaveBeenCalledTimes(1);
+  });
+
+  it('should cleanup on unmount', () => {
+    const closeMock = vi.fn();
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      return {
+        on: vi.fn(),
+        close: closeMock,
+      };
+    });
+
+    const { result, unmount } = renderHook(() => useRos());
+
+    act(() => {
+      result.current.connect(mockParams);
+    });
+
+    unmount();
+
+    expect(closeMock).toHaveBeenCalled();
+  });
 });
