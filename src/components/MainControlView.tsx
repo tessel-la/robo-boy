@@ -429,6 +429,7 @@ type WorkspaceInteraction =
   | {
       mode: 'column';
       axis: 'x' | 'y';
+      layout: 'workspace' | 'stacked';
       rowIndex: number;
       index: number;
       startClientX: number;
@@ -1004,6 +1005,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (typeof window === 'undefined' || !window.matchMedia) return false;
     return window.matchMedia(STACKED_WORKSPACE_QUERY).matches;
   });
+  const [stackedWorkspaceRatios, setStackedWorkspaceRatios] = useState([1, 1]);
   // Once BT panel mounts, keep it alive (preserves nodes/executor state)
   const [btEverMounted, setBtEverMounted] = useState(false);
   const [tfEverMounted, setTfEverMounted] = useState(false);
@@ -1089,8 +1091,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     [workspaceLayout.rowSizes, workspaceTiles]
   );
   const renderedWorkspaceRows = useMemo(
-    () =>
-      isWorkspaceStacked ? (workspaceTiles.length > 0 ? [workspaceTiles.slice(0, 2)] : []) : workspaceRows,
+    () => (isWorkspaceStacked ? (workspaceTiles.length > 0 ? [workspaceTiles.slice(0, 2)] : []) : workspaceRows),
     [isWorkspaceStacked, workspaceRows, workspaceTiles]
   );
   const workspaceRowRatios = useMemo(
@@ -1102,6 +1103,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       workspaceRows.map((row, rowIndex) => normalizeRatios(workspaceLayout.columnRatiosByRow[rowIndex], row.length)),
     [workspaceLayout.columnRatiosByRow, workspaceRows]
   );
+  const renderedWorkspaceColumnRatiosByRow = useMemo<Record<number, number[]>>(() => {
+    if (isWorkspaceStacked) {
+      return { 0: normalizeRatios(stackedWorkspaceRatios, renderedWorkspaceRows[0]?.length || 0) };
+    }
+
+    return Object.fromEntries(workspaceColumnRatiosByRow.map((ratios, rowIndex) => [rowIndex, ratios]));
+  }, [isWorkspaceStacked, renderedWorkspaceRows, stackedWorkspaceRatios, workspaceColumnRatiosByRow]);
   const capturedWorkspaceLayout = useMemo<WorkspaceLayoutState>(() => {
     const rowSizes = workspaceRows.map(row => row.length);
     const columnRatiosByRow = rowSizes.reduce<Record<number, number[]>>((ratiosByRow, rowSize, rowIndex) => {
@@ -1250,6 +1258,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     mediaQuery.addEventListener('change', handleMediaChange);
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, []);
+
+  useEffect(() => {
+    if (!isWorkspaceStacked) return;
+
+    // The mobile layout combines panels that may have belonged to different
+    // desktop rows. Start it at the top and notify canvas-based children only
+    // after that new geometry has committed.
+    if (workspaceRef.current) workspaceRef.current.scrollTop = 0;
+    workspaceInteractionRef.current = null;
+    setIsWorkspaceResizing(false);
+
+    const id = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
+    return () => window.clearTimeout(id);
+  }, [isWorkspaceStacked]);
 
   useEffect(() => {
     if (!isWorkspaceTemplateMenuOpen) return;
@@ -1857,12 +1879,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     workspaceInteractionRef.current = {
       mode: 'column',
       axis,
+      layout: isWorkspaceStacked ? 'stacked' : 'workspace',
       rowIndex,
       index,
       startClientX: event.clientX,
       startClientY: event.clientY,
       containerSize: (axis === 'y' ? rowElement?.clientHeight : rowElement?.clientWidth) || 1,
-      startRatios: workspaceColumnRatiosByRow[rowIndex] || [],
+      startRatios: renderedWorkspaceColumnRatiosByRow[rowIndex] || [],
     };
   };
 
@@ -1881,16 +1904,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       return;
     }
 
+    const nextRatios = updateAdjacentRatios(
+      interaction.startRatios,
+      interaction.index,
+      interaction.axis === 'y' ? deltaY : deltaX,
+      interaction.containerSize
+    );
+
+    if (interaction.layout === 'stacked') {
+      setStackedWorkspaceRatios(nextRatios);
+      return;
+    }
+
     setWorkspaceLayout(prev => ({
       ...prev,
       columnRatiosByRow: {
         ...prev.columnRatiosByRow,
-        [interaction.rowIndex]: updateAdjacentRatios(
-          interaction.startRatios,
-          interaction.index,
-          interaction.axis === 'y' ? deltaY : deltaX,
-          interaction.containerSize
-        ),
+        [interaction.rowIndex]: nextRatios,
       },
     }));
   }, []);
@@ -3453,7 +3483,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3490,7 +3520,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3525,7 +3555,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.panel.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: workspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
                               onAnimationEnd={() => {
                                 setLastAddedWorkspacePanelId(prev => (prev === tile.panel.id ? null : prev));
                                 setExecutionJumpPanelId(prev => (prev === tile.panel.id ? null : prev));

@@ -306,8 +306,66 @@ describe('MainControlView desktop workspace', () => {
     fireEvent(screen.getByLabelText('Desktop workspace'), pointerUp);
 
     await waitFor(() => {
-      const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
-      expect(stored.columnRatiosByRow[0][0]).toBeGreaterThan(stored.columnRatiosByRow[0][1]);
+      const cards = row.querySelectorAll<HTMLElement>('.workspace-card');
+      expect(parseFloat(cards[0].style.flex)).toBeGreaterThan(parseFloat(cards[1].style.flex));
+    });
+
+    // A touch-only split must not overwrite the saved desktop column layout.
+    const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
+    expect(stored.columnRatiosByRow[0]).toEqual([1, 1]);
+  });
+
+  it('reflows a multi-row desktop workspace cleanly when the viewport becomes mobile', async () => {
+    let stackedListener: ((event: MediaQueryListEvent) => void) | undefined;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(min-width: 1024px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn((type: string, listener: (event: MediaQueryListEvent) => void) => {
+          if (query === '(max-width: 767px)' && type === 'change') stackedListener = listener;
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        makePanel('panel-camera', 'camera', 'Camera'),
+        makePanel('panel-pad', 'pad', 'Pad controls'),
+        makePanel('panel-bt', 'behaviorTree', 'Behavior tree'),
+        makePanel('panel-3d', '3d', '3D view'),
+      ])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad', 'panel-bt', 'panel-3d']));
+    localStorage.setItem(
+      workspaceLayoutKey,
+      JSON.stringify({
+        rowSizes: [1, 1, 2],
+        rowRatios: [4, 2, 1],
+        columnRatiosByRow: { 0: [1], 1: [1], 2: [3, 1] },
+      })
+    );
+
+    renderMainControlView();
+    const workspace = await screen.findByLabelText('Desktop workspace');
+    expect(workspace.querySelectorAll('.workspace-card')).toHaveLength(4);
+    workspace.scrollTop = 120;
+
+    act(() => stackedListener?.({ matches: true } as MediaQueryListEvent));
+
+    await waitFor(() => {
+      const rows = workspace.querySelectorAll('.workspace-tile-row');
+      const cards = workspace.querySelectorAll<HTMLElement>('.workspace-card');
+      expect(rows).toHaveLength(1);
+      expect(cards).toHaveLength(2);
+      expect(parseFloat(cards[0].style.flex)).toBe(0.5);
+      expect(parseFloat(cards[1].style.flex)).toBe(0.5);
+      expect(workspace.scrollTop).toBe(0);
     });
   });
 
