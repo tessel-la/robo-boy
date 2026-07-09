@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { Ros } from 'roslib';
 import './CameraView.css'; // We'll create this CSS file next
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
+import { buildCameraStreamUrl } from '../utils/cameraStreamUrl';
+import SafeCameraImage from './SafeCameraImage';
 
 // Remove hardcoded URL
 // const DEFAULT_ROSBRIDGE_URL = 'ws://localhost:9090';
@@ -45,17 +47,13 @@ const CameraView: React.FC<CameraViewProps> = ({
     if (ros && ros.isConnected && cameraTopic) {
       // Ensure topic is selected
       try {
-        let url = `${videoStreamBaseUrl}/stream?topic=${cameraTopic}`;
-        if (streamType) {
-          url += `&type=${streamType}`;
-        }
-        if (streamWidth) {
-          url += `&width=${streamWidth}`;
-        }
-        if (streamHeight) {
-          url += `&height=${streamHeight}`;
-        }
-
+        const url = buildCameraStreamUrl({
+          topic: cameraTopic,
+          streamType,
+          width: streamWidth,
+          height: streamHeight,
+          baseUrl: videoStreamBaseUrl,
+        });
         setStreamUrl(url);
         setError(null);
         console.log(`[CameraView] Relative stream URL set to: ${url}`);
@@ -105,7 +103,7 @@ const CameraView: React.FC<CameraViewProps> = ({
         {error ? (
           <div className="error-message">{error}</div>
         ) : streamUrl ? (
-          <img
+          <SafeCameraImage
             src={streamUrl}
             alt={`Stream for ${cameraTopic}`}
             onError={e => {

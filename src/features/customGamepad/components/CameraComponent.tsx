@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Ros, Topic } from 'roslib';
 import ROSLIB from 'roslib';
+import SafeCameraImage from '../../../components/SafeCameraImage';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import { buildCameraStreamUrl } from '../rosMessageUtils';
 import './DataDisplayComponents.css';
@@ -33,6 +34,11 @@ function arrayDataToBase64(data: string | number[] | Uint8Array): string {
     binary += String.fromCharCode(byte);
   });
   return window.btoa(binary);
+}
+
+function normalizeBase64ImageData(data: string | number[] | Uint8Array): string | null {
+  const base64 = arrayDataToBase64(data).replace(/\s/g, '');
+  return /^[A-Za-z0-9+/]*={0,2}$/.test(base64) ? base64 : null;
 }
 
 function arrayDataToBytes(data: string | number[] | Uint8Array): Uint8Array {
@@ -164,8 +170,13 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
       }
       lastRosFrameAtRef.current = now;
 
+      const encodedImageData = action.messageType.includes('CompressedImage')
+        ? normalizeBase64ImageData(message.data)
+        : null;
       const nextUrl = action.messageType.includes('CompressedImage')
-        ? `data:${getImageMimeType(action.messageType, message.format)};base64,${arrayDataToBase64(message.data)}`
+        ? encodedImageData
+          ? `data:${getImageMimeType(action.messageType, message.format)};base64,${encodedImageData}`
+          : null
         : rawImageToDataUrl(message);
 
       if (!nextUrl) {
@@ -203,7 +214,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
   return (
     <div className="data-display-component camera-pad-component" data-testid="camera-component">
       {imageUrl ? (
-        <img
+        <SafeCameraImage
           src={imageUrl}
           alt={`Camera stream ${action?.topic || ''}`}
           onError={() => setStatusIfChanged('Failed to load camera stream')}

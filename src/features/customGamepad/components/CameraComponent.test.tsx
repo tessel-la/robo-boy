@@ -47,7 +47,7 @@ describe('CameraComponent', () => {
 
     expect(screen.getByRole('img')).toHaveAttribute(
       'src',
-      '/video_stream/stream?topic=/camera/image_raw/compressed&type=ros_compressed'
+      '/video_stream/stream?topic=%2Fcamera%2Fimage_raw%2Fcompressed&type=ros_compressed'
     );
   });
 
@@ -73,5 +73,21 @@ describe('CameraComponent', () => {
 
     unmount();
     expect(roslibMock.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects malformed base64 ROS image payloads', () => {
+    render(
+      <CameraComponent
+        config={{ ...baseConfig, config: { cameraTransport: 'ros' } }}
+        ros={{ isConnected: true } as any}
+      />
+    );
+
+    act(() => {
+      roslibMock.subscribers[0]({ data: '<svg onload=alert(1)>', format: 'jpeg' });
+    });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Unsupported image encoding')).toBeInTheDocument();
   });
 });

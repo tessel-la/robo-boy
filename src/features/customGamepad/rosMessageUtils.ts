@@ -1,6 +1,7 @@
 import type { Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import type { GamepadComponentConfig } from './types';
+export { buildCameraStreamUrl } from '../../utils/cameraStreamUrl';
 
 export interface TopicInfo {
   name: string;
@@ -338,26 +339,6 @@ export function buildPoseStampedPayload({
       orientation,
     },
   };
-}
-
-export function buildCameraStreamUrl({
-  topic,
-  streamType = 'mjpeg',
-  width,
-  height,
-  baseUrl = '/video_stream',
-}: {
-  topic: string;
-  streamType?: string;
-  width?: number;
-  height?: number;
-  baseUrl?: string;
-}): string {
-  let url = `${baseUrl.replace(/\/$/, '')}/stream?topic=${topic}`;
-  if (streamType) url += `&type=${streamType}`;
-  if (width) url += `&width=${width}`;
-  if (height) url += `&height=${height}`;
-  return url;
 }
 
 function isNumericRosType(type: string): boolean {
