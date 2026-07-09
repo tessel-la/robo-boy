@@ -2,23 +2,43 @@
 pub fn run() {
   configure_linux_webkit_runtime();
 
-  let mut builder = tauri::Builder::default();
+  const DESKTOP_UI_ZOOM: f64 = 0.9;
 
-  if std::env::var_os("ROBOBOY_DESKTOP_DEBUG").is_some() {
-    builder = builder.on_page_load(|webview, payload| {
-      eprintln!(
-        "[Robo-Boy] page load {:?}: {}",
-        payload.event(),
-        payload.url()
-      );
+  let debug_page_load = std::env::var_os("ROBOBOY_DESKTOP_DEBUG").is_some();
 
+  tauri::Builder::default()
+    .setup(|app| {
+      use tauri::Manager;
+
+      if let Some(webview_window) = app.get_webview_window("main") {
+        if let Err(error) = webview_window.set_zoom(DESKTOP_UI_ZOOM) {
+          eprintln!("[Robo-Boy] failed to set desktop UI zoom: {error}");
+        }
+      }
+
+      Ok(())
+    })
+    .on_page_load(move |webview, payload| {
       if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-        let webview = webview.clone();
-        std::thread::spawn(move || {
-          std::thread::sleep(std::time::Duration::from_millis(750));
+        if let Err(error) = webview.set_zoom(DESKTOP_UI_ZOOM) {
+          eprintln!("[Robo-Boy] failed to set desktop UI zoom: {error}");
+        }
+      }
 
-          if let Err(error) = webview.eval_with_callback(
-            r#"
+      if debug_page_load {
+        eprintln!(
+          "[Robo-Boy] page load {:?}: {}",
+          payload.event(),
+          payload.url()
+        );
+
+        if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+          let webview = webview.clone();
+          std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(750));
+
+            if let Err(error) = webview.eval_with_callback(
+              r#"
               JSON.stringify({
                 readyState: document.readyState,
                 appStarted: Boolean(window.__ROBOBOY_APP_STARTED),
@@ -31,18 +51,16 @@ pub fn run() {
                 bootErrors: window.__ROBOBOY_BOOT_ERRORS || [],
               })
             "#,
-            |result| {
-              eprintln!("[Robo-Boy] webview probe: {result}");
-            },
-          ) {
-            eprintln!("[Robo-Boy] webview probe failed: {error}");
-          }
-        });
+              |result| {
+                eprintln!("[Robo-Boy] webview probe: {result}");
+              },
+            ) {
+              eprintln!("[Robo-Boy] webview probe failed: {error}");
+            }
+          });
+        }
       }
-    });
-  }
-
-  builder
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

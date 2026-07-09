@@ -28,7 +28,7 @@ const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.R
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
   urdf: <FaCube />,
-  laserscan: <FaDotCircle />,  // Updated LaserScan icon
+  laserscan: <FaDotCircle />, // Updated LaserScan icon
   posestamped: <FaArrowRight />, // PoseStamped icon
   // TF icon excluded - controlled via Settings menu
   // Add more icons here as needed:
@@ -55,7 +55,9 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   const [useManualInput, setUseManualInput] = useState<boolean>(false);
   // Find all available URDF topics (std_msgs/String)
   const availableUrdfTopics = allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
-  const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(availableUrdfTopics[0]?.name || '');
+  const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(
+    availableUrdfTopics[0]?.name || ''
+  );
 
   // Check if a type has available topics
   const getAvailableTopics = (type: Exclude<VisualizationConfig['type'], 'tf'>): TopicInfo[] => {
@@ -78,8 +80,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
       console.log('  All topic types:', [...new Set(allTopics.map(t => t.type))]);
 
       // Test the filtering manually
-      const manualTest = allTopics.filter(topic =>
-        topic.type === 'geometry_msgs/msg/PoseStamped' || topic.type === 'geometry_msgs/PoseStamped'
+      const manualTest = allTopics.filter(
+        topic => topic.type === 'geometry_msgs/msg/PoseStamped' || topic.type === 'geometry_msgs/PoseStamped'
       );
       console.log('  Manual filter test:', manualTest);
     }
@@ -173,178 +175,197 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="add-viz-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Add Visualization</h2>
+      <div className="add-viz-modal" onClick={e => e.stopPropagation()}>
+        <div className="add-viz-modal-header">
+          <h2>Add Visualization</h2>
+          <button className="add-viz-close-button" onClick={onClose} aria-label="Close add visualization menu">
+            &times;
+          </button>
+        </div>
 
-        <div className="viz-grid-section">
-          <p className="section-label">Available Visualizations:</p>
-          <div className="viz-grid">
-            {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
-              const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
-              const availableTopics = getAvailableTopics(vizType);
-              const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
-              const icon = VIZ_TYPE_ICONS[vizType];
+        <div className="add-viz-modal-body">
+          <div className="viz-grid-section">
+            <p className="section-label">Available Visualizations:</p>
+            <div className="viz-grid">
+              {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
+                const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
+                const availableTopics = getAvailableTopics(vizType);
+                const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
+                const icon = VIZ_TYPE_ICONS[vizType];
 
-              // Debug logging for PoseStamped specifically in grid rendering
-              if (vizType === 'posestamped') {
-                console.log('[AddVisualizationModal] PoseStamped grid rendering:');
-                console.log('  Available topics:', availableTopics);
-                console.log('  Has topics or is URDF:', hasTopicsOrIsUrdf);
-                console.log('  All topics count:', allTopics.length);
-              }
+                // Debug logging for PoseStamped specifically in grid rendering
+                if (vizType === 'posestamped') {
+                  console.log('[AddVisualizationModal] PoseStamped grid rendering:');
+                  console.log('  Available topics:', availableTopics);
+                  console.log('  Has topics or is URDF:', hasTopicsOrIsUrdf);
+                  console.log('  All topics count:', allTopics.length);
+                }
 
-              let title = `Add ${formatTypeName(type)}`;
-              if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
-                title += ` (${availableTopics[0]?.name || 'first available'})`;
-              } else if (vizType === 'urdf') {
-                title += ` (default: ${urdfRobotDescriptionTopic})`;
-              } else {
-                title = 'No compatible topics available';
-              }
+                let title = `Add ${formatTypeName(type)}`;
+                if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
+                  title += ` (${availableTopics[0]?.name || 'first available'})`;
+                } else if (vizType === 'urdf') {
+                  title += ` (default: ${urdfRobotDescriptionTopic})`;
+                } else {
+                  title = 'No compatible topics available';
+                }
 
-              return (
-                <button
-                  key={type}
-                  className={`viz-grid-item ${!hasTopicsOrIsUrdf ? 'disabled' : ''}`}
-                  onClick={() => hasTopicsOrIsUrdf && addQuickVisualization(vizType)}
-                  disabled={!hasTopicsOrIsUrdf}
-                  title={title}
-                >
-                  <div className="viz-icon">
-                    {icon}
+                return (
+                  <button
+                    key={type}
+                    className={`viz-grid-item ${!hasTopicsOrIsUrdf ? 'disabled' : ''}`}
+                    onClick={() => hasTopicsOrIsUrdf && addQuickVisualization(vizType)}
+                    disabled={!hasTopicsOrIsUrdf}
+                    title={title}
+                  >
+                    <div className="viz-icon">{icon}</div>
+                    <div className="viz-name">{formatTypeName(type)}</div>
+                    {vizType !== 'urdf' && hasTopicsOrIsUrdf && (
+                      <div className="viz-topic-count">
+                        {availableTopics.length} topic{availableTopics.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="advanced-section">
+            <details>
+              <summary className="advanced-toggle">Advanced (customize options)</summary>
+              <div className="advanced-content">
+                <div className="form-group">
+                  <label htmlFor="advanced-viz-type">Visualization Type:</label>
+                  <select
+                    id="advanced-viz-type"
+                    value={selectedType}
+                    onChange={e => handleTypeSelect(e.target.value as Exclude<VisualizationConfig['type'], 'tf'> | '')}
+                  >
+                    <option value="" disabled>
+                      -- Select Type --
+                    </option>
+                    {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
+                      const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
+                      const hasTopics = getAvailableTopics(vizType).length > 0;
+                      const canAdd = vizType === 'urdf' || hasTopics;
+                      return (
+                        <option key={type} value={type} disabled={!canAdd}>
+                          {formatTypeName(type)} {vizType !== 'urdf' && !hasTopics ? '(No topics)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {selectedType && selectedType !== 'urdf' && (
+                  <div className="form-group">
+                    <label htmlFor="viz-topic-select">Topic:</label>
+                    {!useManualInput ? (
+                      <div>
+                        <select id="viz-topic-select" value={selectedTopic} onChange={handleTopicChange}>
+                          <option value="" disabled>
+                            -- Select Topic --
+                          </option>
+                          {getAvailableTopics(selectedType).map(topic => (
+                            <option key={topic.name} value={topic.name}>
+                              {topic.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="manual-topic-actions">
+                          <button
+                            type="button"
+                            className="secondary-inline-button"
+                            onClick={() => setUseManualInput(true)}
+                          >
+                            Enter topic manually
+                          </button>
+                          {getAvailableTopics(selectedType).length === 0 && (
+                            <div className="add-viz-field-warning">
+                              No {selectedType} topics found. Try manual input.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          id="manual-topic-input"
+                          placeholder={`Enter ${selectedType} topic (e.g., /drone0/joy_control/target_pose)`}
+                          value={manualTopicInput}
+                          onChange={e => setManualTopicInput(e.target.value)}
+                          className="manual-topic-input"
+                        />
+                        <button
+                          type="button"
+                          className="secondary-inline-button"
+                          onClick={() => {
+                            setUseManualInput(false);
+                            setManualTopicInput('');
+                          }}
+                        >
+                          Back to topic list
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="viz-name">{formatTypeName(type)}</div>
-                  {vizType !== 'urdf' && hasTopicsOrIsUrdf && (
-                    <div className="viz-topic-count">{availableTopics.length} topic{availableTopics.length !== 1 ? 's' : ''}</div>
-                  )}
+                )}
+
+                {selectedType === 'urdf' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="urdf-robot-description-topic">Robot Description Topic:</label>
+                      <select
+                        id="urdf-robot-description-topic"
+                        value={urdfRobotDescriptionTopic}
+                        onChange={e => setUrdfRobotDescriptionTopic(e.target.value)}
+                        disabled={availableUrdfTopics.length === 0}
+                      >
+                        {availableUrdfTopics.length === 0 && (
+                          <option value="" disabled>
+                            No URDF topics available
+                          </option>
+                        )}
+                        {availableUrdfTopics.map(topic => (
+                          <option key={topic.name} value={topic.name}>
+                            {topic.name}
+                          </option>
+                        ))}
+                      </select>
+                      {availableUrdfTopics.length === 0 && (
+                        <div className="add-viz-field-error">No URDF topics of type std_msgs/String found.</div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <button
+                  className="manual-add-button"
+                  onClick={handleManualAddClick}
+                  disabled={
+                    !selectedType ||
+                    (selectedType === 'urdf' && (!urdfRobotDescriptionTopic || availableUrdfTopics.length === 0)) ||
+                    (selectedType !== 'urdf' && !useManualInput && !selectedTopic) ||
+                    (selectedType !== 'urdf' && useManualInput && !manualTopicInput)
+                  }
+                >
+                  Add Visualization
                 </button>
-              );
-            })}
+              </div>
+            </details>
           </div>
         </div>
 
-        <div className="advanced-section">
-          <details>
-            <summary className="advanced-toggle">Advanced (customize options)</summary>
-            <div className="advanced-content">
-              <div className="form-group">
-                <label htmlFor="advanced-viz-type">Visualization Type:</label>
-                <select
-                  id="advanced-viz-type"
-                  value={selectedType}
-                  onChange={(e) => handleTypeSelect(e.target.value as Exclude<VisualizationConfig['type'], 'tf'> | '')}
-                >
-                  <option value="" disabled>-- Select Type --</option>
-                  {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
-                    const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
-                    const hasTopics = getAvailableTopics(vizType).length > 0;
-                    const canAdd = vizType === 'urdf' || hasTopics;
-                    return (
-                      <option key={type} value={type} disabled={!canAdd}>
-                        {formatTypeName(type)} {vizType !== 'urdf' && !hasTopics ? '(No topics)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {selectedType && selectedType !== 'urdf' && (
-                <div className="form-group">
-                  <label htmlFor="viz-topic-select">Topic:</label>
-                  {!useManualInput ? (
-                    <div>
-                      <select id="viz-topic-select" value={selectedTopic} onChange={handleTopicChange}>
-                        <option value="" disabled>-- Select Topic --</option>
-                        {getAvailableTopics(selectedType).map(topic => (
-                          <option key={topic.name} value={topic.name}>{topic.name}</option>
-                        ))}
-                      </select>
-                      <div style={{ marginTop: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setUseManualInput(true)}
-                          style={{ fontSize: '12px', padding: '4px 8px' }}
-                        >
-                          Enter topic manually
-                        </button>
-                        {getAvailableTopics(selectedType).length === 0 && (
-                          <div style={{ color: 'orange', fontSize: '12px', marginTop: '4px' }}>
-                            No {selectedType} topics found. Try manual input.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <input
-                        type="text"
-                        id="manual-topic-input"
-                        placeholder={`Enter ${selectedType} topic (e.g., /drone0/joy_control/target_pose)`}
-                        value={manualTopicInput}
-                        onChange={(e) => setManualTopicInput(e.target.value)}
-                        style={{ width: '100%', marginBottom: '8px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUseManualInput(false);
-                          setManualTopicInput('');
-                        }}
-                        style={{ fontSize: '12px', padding: '4px 8px' }}
-                      >
-                        Back to topic list
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {selectedType === 'urdf' && (
-                <>
-                  <div className="form-group">
-                    <label htmlFor="urdf-robot-description-topic">Robot Description Topic:</label>
-                    <select
-                      id="urdf-robot-description-topic"
-                      value={urdfRobotDescriptionTopic}
-                      onChange={(e) => setUrdfRobotDescriptionTopic(e.target.value)}
-                      disabled={availableUrdfTopics.length === 0}
-                    >
-                      {availableUrdfTopics.length === 0 && (
-                        <option value="" disabled>No URDF topics available</option>
-                      )}
-                      {availableUrdfTopics.map(topic => (
-                        <option key={topic.name} value={topic.name}>{topic.name}</option>
-                      ))}
-                    </select>
-                    {availableUrdfTopics.length === 0 && (
-                      <div style={{ color: 'red', marginTop: 4 }}>No URDF topics of type std_msgs/String found.</div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              <button
-                className="manual-add-button"
-                onClick={handleManualAddClick}
-                disabled={
-                  !selectedType ||
-                  (selectedType === 'urdf' && (!urdfRobotDescriptionTopic || availableUrdfTopics.length === 0)) ||
-                  (selectedType !== 'urdf' && !useManualInput && !selectedTopic) ||
-                  (selectedType !== 'urdf' && useManualInput && !manualTopicInput)
-                }
-              >
-                Add Visualization
-              </button>
-            </div>
-          </details>
-        </div>
-
         <div className="modal-actions">
-          <button className="cancel-button" onClick={onClose}>Close</button>
+          <button className="cancel-button" onClick={onClose}>
+            Close
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-export default AddVisualizationModal; 
+export default AddVisualizationModal;

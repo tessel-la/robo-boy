@@ -1052,6 +1052,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workspaceInteractionRef = useRef<WorkspaceInteraction | null>(null);
+  const workspaceResizeFrameRef = useRef<number | null>(null);
+  const pendingWorkspaceResizeRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const templateImportInputRef = useRef<HTMLInputElement>(null);
   const workspacePadImportInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const workspacePadNoticeTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1926,7 +1928,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     };
   };
 
-  const updateWorkspaceInteraction = useCallback((clientX: number, clientY: number) => {
+  const applyWorkspaceInteraction = useCallback((clientX: number, clientY: number) => {
     const interaction = workspaceInteractionRef.current;
     if (!interaction) return;
 
@@ -1962,11 +1964,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }));
   }, []);
 
+  const flushPendingWorkspaceResize = useCallback(() => {
+    if (workspaceResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+      workspaceResizeFrameRef.current = null;
+    }
+
+    const pendingResize = pendingWorkspaceResizeRef.current;
+    pendingWorkspaceResizeRef.current = null;
+    if (pendingResize) {
+      applyWorkspaceInteraction(pendingResize.clientX, pendingResize.clientY);
+    }
+  }, [applyWorkspaceInteraction]);
+
+  const updateWorkspaceInteraction = useCallback(
+    (clientX: number, clientY: number) => {
+      pendingWorkspaceResizeRef.current = { clientX, clientY };
+      if (workspaceResizeFrameRef.current !== null) return;
+
+      workspaceResizeFrameRef.current = window.requestAnimationFrame(() => {
+        workspaceResizeFrameRef.current = null;
+        const pendingResize = pendingWorkspaceResizeRef.current;
+        pendingWorkspaceResizeRef.current = null;
+        if (pendingResize) {
+          applyWorkspaceInteraction(pendingResize.clientX, pendingResize.clientY);
+        }
+      });
+    },
+    [applyWorkspaceInteraction]
+  );
+
   const handleWorkspacePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     updateWorkspaceInteraction(event.clientX, event.clientY);
   };
 
   const handleWorkspacePointerEnd = () => {
+    flushPendingWorkspaceResize();
     workspaceInteractionRef.current = null;
     setIsWorkspaceResizing(false);
   };
@@ -1979,6 +2012,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       updateWorkspaceInteraction(event.clientX, event.clientY);
     };
     const handlePointerEnd = () => {
+      flushPendingWorkspaceResize();
       workspaceInteractionRef.current = null;
       setIsWorkspaceResizing(false);
     };
@@ -1996,7 +2030,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handlePointerEnd);
     };
-  }, [updateWorkspaceInteraction]);
+  }, [flushPendingWorkspaceResize, updateWorkspaceInteraction]);
+
+  useEffect(
+    () => () => {
+      if (workspaceResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+        workspaceResizeFrameRef.current = null;
+      }
+      pendingWorkspaceResizeRef.current = null;
+    },
+    []
+  );
 
   const handleRemoveWorkspacePanel = (panelId: string) => {
     setWorkspacePanels(prev => prev.filter(panel => panel.id !== panelId));
