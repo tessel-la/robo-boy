@@ -155,7 +155,7 @@
   font-size: 0.85rem;
 }
 
-.add-viz-modal select option {
+:root[data-runtime='tauri'] .add-viz-modal select option {
   background-color: rgba(50, 50, 50, 0.95);
   color: var(--text-color, #e8eaed);
 }

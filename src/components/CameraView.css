@@ -81,7 +81,7 @@
   /* Limit width */
 }
 
-.camera-topic-selector.overlay select option {
+:root[data-runtime='tauri'] .camera-topic-selector.overlay select option {
   background-color: var(--input-background-color, var(--background-secondary));
   color: var(--text-color);
 }

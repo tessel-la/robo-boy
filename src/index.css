@@ -1,6 +1,5 @@
 /* Default theme (Light) */
 :root {
-  color-scheme: light;
   --primary-color: #32CD32; /* Lime Green */
   --primary-hover-color: #28a745; /* Darker Lime */
   --primary-darker-color: #218838; /* Even Darker Lime */
@@ -27,7 +26,6 @@
 }
 
 [data-theme='dark'] {
-  color-scheme: dark;
   --primary-color: #32CD32; /* Lime Green */
   --primary-hover-color: #40e040; /* Brighter Lime for hover */
   --primary-darker-color: #28a745; /* Slightly darker for borders */
@@ -54,7 +52,6 @@
 
 /* Solarized Theme */
 [data-theme='solarized'] {
-  color-scheme: light;
   --primary-color: #cb4b16; /* Orange */
   --primary-hover-color: #bd360b; /* Darker Orange */
   --primary-darker-color: #a52f08; /* Even Darker Orange */
@@ -160,8 +157,16 @@ textarea {
     transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
-select option,
-select optgroup {
+:root[data-runtime='tauri'] {
+    color-scheme: light;
+}
+
+:root[data-runtime='tauri'][data-theme='dark'] {
+    color-scheme: dark;
+}
+
+:root[data-runtime='tauri'] select option,
+:root[data-runtime='tauri'] select optgroup {
     background-color: var(--background-color);
     color: var(--text-color);
 }

@@ -3,7 +3,21 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import './index.css'
 
-;(window as typeof window & { __ROBOBOY_APP_STARTED?: boolean }).__ROBOBOY_APP_STARTED = true
+const roboBoyWindow = window as typeof window & {
+  __ROBOBOY_APP_STARTED?: boolean
+  __TAURI__?: unknown
+  __TAURI_INTERNALS__?: unknown
+}
+
+if (
+  window.location.protocol === 'tauri:' ||
+  roboBoyWindow.__TAURI__ ||
+  roboBoyWindow.__TAURI_INTERNALS__
+) {
+  document.documentElement.setAttribute('data-runtime', 'tauri')
+}
+
+roboBoyWindow.__ROBOBOY_APP_STARTED = true
 
 const rootElement = document.getElementById('root')
 
