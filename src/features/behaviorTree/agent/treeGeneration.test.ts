@@ -96,6 +96,21 @@ describe('parseGeneratedBehaviorTree', () => {
     });
   });
 
+  it('sanitizes generated node coordinates before they reach the canvas', () => {
+    const tree = parseGeneratedBehaviorTree(
+      JSON.stringify({
+        name: 'Coordinates',
+        nodes: [
+          { id: 'root', type: 'sequence', label: 'Root', position: { x: '12', y: 'bad' } },
+          { id: 'wait', type: 'timeout', label: 'Wait', x: Infinity, y: -40, config: { timeout: 100 } },
+        ],
+        edges: [{ source: 'root', target: 'wait' }],
+      })
+    );
+
+    expect(tree.nodes.every(node => Number.isFinite(node.position.x) && Number.isFinite(node.position.y))).toBe(true);
+  });
+
   it('parses a clarification response', () => {
     expect(
       parseGeneratedAgentResponse(
