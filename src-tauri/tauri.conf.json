@@ -18,6 +18,8 @@
         "minWidth": 800,
         "minHeight": 600,
         "backgroundColor": "#1f242d",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-gpu-rasterization --enable-zero-copy",
+        "devtools": false,
         "resizable": true,
         "fullscreen": false
       }

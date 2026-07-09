@@ -15,6 +15,10 @@
   container-type: inline-size;
 }
 
+.visualization-panel canvas {
+  display: block;
+}
+
 /* Remove old controls bar */
 /* .visualization-controls { ... } */
 

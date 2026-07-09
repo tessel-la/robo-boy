@@ -161,6 +161,11 @@ textarea {
     color-scheme: light;
 }
 
+:root[data-runtime='tauri'] * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
 :root[data-runtime='tauri'][data-theme='dark'] {
     color-scheme: dark;
 }

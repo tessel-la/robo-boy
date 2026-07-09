@@ -34,6 +34,20 @@ npm run desktop:dev
 
 The command starts Vite in Tauri mode and opens the native window. Tauri mode omits the PWA service worker; normal web builds continue to include it.
 
+## Desktop Rendering Performance
+
+The Linux desktop shell uses WebKitGTK. Robo-Boy uses WebKit's accelerated DMABUF renderer by default so desktop rendering stays as close as possible to the browser.
+
+On machines where the GPU stack opens to a blank window or crashes, use the compatibility renderer:
+
+```bash
+ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING=1 npm run desktop:dev
+```
+
+Compatibility mode disables WebKit's DMABUF renderer for that launch.
+
+On Windows, the desktop webview keeps Wry's default disabled Edge UI features and adds GPU rasterization hints through `additionalBrowserArgs` in `src-tauri/tauri.conf.json`. Desktop devtools are disabled in the packaged webview config to keep the runtime closer to production performance.
+
 ## Build An Installer
 
 ```bash

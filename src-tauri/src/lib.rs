@@ -19,12 +19,6 @@ pub fn run() {
       Ok(())
     })
     .on_page_load(move |webview, payload| {
-      if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-        if let Err(error) = webview.set_zoom(DESKTOP_UI_ZOOM) {
-          eprintln!("[Robo-Boy] failed to set desktop UI zoom: {error}");
-        }
-      }
-
       if debug_page_load {
         eprintln!(
           "[Robo-Boy] page load {:?}: {}",
@@ -67,13 +61,24 @@ pub fn run() {
 
 #[cfg(target_os = "linux")]
 fn configure_linux_webkit_runtime() {
+  if !is_linux_compatibility_renderer_requested() {
+    return;
+  }
+
   // WebKitGTK 2.52 can crash its WebKitWebProcess with SIGBUS on some
   // AppImage + GPU driver combinations, showing only a white window.
-  // Disabling the DMABUF renderer keeps the AppImage on the safer rendering
-  // path while respecting a user-provided override.
+  // Disabling the DMABUF renderer keeps those systems on the safer rendering
+  // path when explicitly requested.
   if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
   }
+}
+
+#[cfg(target_os = "linux")]
+fn is_linux_compatibility_renderer_requested() -> bool {
+  std::env::var("ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING")
+    .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"))
+    .unwrap_or(false)
 }
 
 #[cfg(not(target_os = "linux"))]

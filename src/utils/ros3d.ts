@@ -17,6 +17,16 @@ interface UrdfModelCacheEntry {
 
 const urdfModelCache = new Map<string, UrdfModelCacheEntry>();
 
+const isDesktopRuntime = (): boolean =>
+  typeof document !== 'undefined' && document.documentElement.dataset.runtime === 'tauri';
+
+const getRendererPixelRatio = (): number => {
+  if (typeof window === 'undefined') return 1;
+
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  return isDesktopRuntime() ? Math.min(devicePixelRatio, 1) : devicePixelRatio;
+};
+
 function getUrdfCacheKey(ros: Ros, topic: string): string {
   const rosUrl = (ros as any)?.url || 'default-ros';
   return `${rosUrl}:${topic}`;
@@ -29,6 +39,8 @@ class Viewer {
   renderer: THREE.WebGLRenderer;
   fixedFrame: string = '';
   private animationId: number | null = null;
+  private renderWidth = 0;
+  private renderHeight = 0;
 
   constructor(options: {
     divID: string;
@@ -93,9 +105,14 @@ class Viewer {
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
-      antialias: options.antialias,
+      antialias: isDesktopRuntime() ? false : options.antialias,
+      powerPreference: 'high-performance',
+      stencil: false,
     });
+    this.renderer.setPixelRatio(getRendererPixelRatio());
     this.renderer.setSize(options.width, options.height);
+    this.renderWidth = options.width;
+    this.renderHeight = options.height;
     // Enable shadows if needed
     this.renderer.shadowMap.enabled = false; // Keep disabled for performance
     
@@ -113,6 +130,10 @@ class Viewer {
 
   // Resize viewer
   resize(width: number, height: number): void {
+    if (width === this.renderWidth && height === this.renderHeight) return;
+
+    this.renderWidth = width;
+    this.renderHeight = height;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
