@@ -1,7 +1,34 @@
 import { defineConfig } from 'vite';
+import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 // import mkcert from 'vite-plugin-mkcert' // Ensure mkcert is commented out/removed
+
+const tauriHtmlCompatibilityPlugin = (): Plugin => ({
+  name: 'tauri-html-compatibility',
+  apply: 'build',
+  transformIndexHtml(html) {
+    return html
+      .replace(/\s+crossorigin(?=(\s|>|$))/g, '')
+      .replace(/<script type="module" src=/g, '<script defer src=');
+  },
+});
+
+const roslibGlobalThisPlugin = (): Plugin => ({
+  name: 'roslib-global-this',
+  apply: 'build',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!/[\\/]node_modules[\\/]roslib[\\/]src[\\/]RosLib\.js$/.test(id)) {
+      return null;
+    }
+
+    return code.replace(
+      'var ROSLIB = this.ROSLIB ||',
+      'var ROSLIB = globalThis.ROSLIB ||',
+    );
+  },
+});
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -17,6 +44,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    roslibGlobalThisPlugin(),
+    ...(mode === 'tauri' ? [tauriHtmlCompatibilityPlugin()] : []),
     ...(mode === 'tauri'
       ? []
       : [

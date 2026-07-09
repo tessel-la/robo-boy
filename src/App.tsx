@@ -19,16 +19,33 @@ export interface ConnectionParams {
   ros2Value: string | number; // Now required
 }
 
+const safeGetStorageItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`Unable to read ${key} from localStorage. Falling back to defaults.`, error);
+    return null;
+  }
+};
+
+const safeSetStorageItem = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn(`Unable to save ${key} to localStorage.`, error);
+  }
+};
+
 function App() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams | null>(null);
 
   // --- Theme State ---
   const [selectedThemeId, setSelectedThemeId] = useState<string>(() => {
-    return localStorage.getItem(THEME_STORAGE_KEY) || 'dark';
+    return safeGetStorageItem(THEME_STORAGE_KEY) || 'dark';
   });
 
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => {
-    const stored = localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY);
+    const stored = safeGetStorageItem(CUSTOM_THEMES_STORAGE_KEY);
     try {
       return stored ? JSON.parse(stored) : [];
     } catch (e) {
@@ -80,7 +97,7 @@ function App() {
       }
     }
     // Save the selected theme ID
-    localStorage.setItem(THEME_STORAGE_KEY, selectedThemeId);
+    safeSetStorageItem(THEME_STORAGE_KEY, selectedThemeId);
   }, [selectedThemeId, customThemes]); // Re-run when selection or custom themes change
 
   // --- Theme CRUD Functions ---
@@ -108,7 +125,7 @@ function App() {
     // }
     const updatedThemes = [...customThemes, newTheme];
     setCustomThemes(updatedThemes);
-    localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
+    safeSetStorageItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
     selectTheme(newTheme.id);
   };
 
@@ -116,13 +133,13 @@ function App() {
     // Add validation for iconId if needed
     const updatedThemes = customThemes.map(t => (t.id === updatedTheme.id ? updatedTheme : t));
     setCustomThemes(updatedThemes);
-    localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
+    safeSetStorageItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
   };
 
   const deleteCustomTheme = (themeIdToDelete: string) => {
     const updatedThemes = customThemes.filter((t: CustomTheme) => t.id !== themeIdToDelete);
     setCustomThemes(updatedThemes);
-    localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
+    safeSetStorageItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(updatedThemes));
     // If the deleted theme was selected, fall back to default
     if (selectedThemeId === themeIdToDelete) {
       selectTheme('dark');

@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     
     <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="48x48" href="/images/favicon-48x48.png">
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="./images/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="./images/favicon-48x48.png">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
     
     <!-- Viewport and PWA settings -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#282c34" />
-    <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon-precomposed" href="/images/ios-apple-touch-icon.png?v=2">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon-precomposed" href="./images/ios-apple-touch-icon.png?v=2">
     
     <!-- Apple specific PWA tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,25 +21,48 @@
     <meta name="apple-mobile-web-app-title" content="Robo-Boy">
     
     <!-- Apple touch icons - iOS is very specific about these -->
-    <link rel="apple-touch-icon" href="/images/ios-apple-touch-icon.png?v=2">
-    <link rel="apple-touch-icon" sizes="180x180" href="/images/ios-apple-touch-icon.png?v=2">
+    <link rel="apple-touch-icon" href="./images/ios-apple-touch-icon.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="./images/ios-apple-touch-icon.png?v=2">
     
     <!-- iPhone 12 mini specific icon -->
-    <link rel="apple-touch-icon" media="(device-width: 375px) and (device-height: 812px)" href="/images/ios-mini-touch-icon.png?v=2">
+    <link rel="apple-touch-icon" media="(device-width: 375px) and (device-height: 812px)" href="./images/ios-mini-touch-icon.png?v=2">
     
     <!-- Apple launch screen images -->
-    <link rel="apple-touch-startup-image" href="/images/apple-launch-2732x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-    <link rel="apple-touch-startup-image" href="/images/apple-launch-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="./images/apple-launch-2732x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="./images/apple-launch-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
     <!-- iPhone 12 mini, 11 Pro, XS, X -->
-    <link rel="apple-touch-startup-image" href="/images/apple-launch-1125x2436.png?v=2" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="./images/apple-launch-1125x2436.png?v=2" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
     
     <!-- iOS specific manifest -->
-    <link rel="manifest" href="/apple-app-manifest.json" media="(display-mode: standalone) and (-webkit-max-device-pixel-ratio: 4)">
+    <link rel="manifest" href="./apple-app-manifest.json" media="(display-mode: standalone) and (-webkit-max-device-pixel-ratio: 4)">
     
     <title>Robo-Boy</title>
+    <script>
+      window.__ROBOBOY_BOOT_ERRORS = [];
+      window.addEventListener('error', function (event) {
+        window.__ROBOBOY_BOOT_ERRORS.push({
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+        });
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        window.__ROBOBOY_BOOT_ERRORS.push({
+          message: event.reason && event.reason.message ? event.reason.message : String(event.reason),
+        });
+      });
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin: 0; background: #1f242d;">
+    <div id="root">
+      <div style="min-height: 100vh; display: grid; place-items: center; color: #f5f7fb; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+        <div style="text-align: center;">
+          <div style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Loading Robo-Boy…</div>
+          <div style="font-size: 14px; color: #cbd5e1;">Starting the desktop interface</div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html> 
