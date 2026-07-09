@@ -544,6 +544,11 @@
   }
 }
 
+.topic-dropdown option {
+  background: #333;
+  color: var(--text-color, #e8eaed);
+}
+
 .cancel-topic-change {
   background: none;
   border: none;

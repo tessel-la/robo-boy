@@ -155,6 +155,11 @@
   font-size: 0.85rem;
 }
 
+.add-viz-modal select option {
+  background-color: rgba(50, 50, 50, 0.95);
+  color: var(--text-color, #e8eaed);
+}
+
 .manual-add-button {
   width: 100%;
   padding: 8px;
