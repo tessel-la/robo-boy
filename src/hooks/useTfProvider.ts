@@ -24,10 +24,15 @@ export function useTfProvider({
   handleTFMessage,
 }: UseTfProviderProps) {
   const customTFProvider = useRef<CustomTFProvider | null>(null);
+  const initialTransformsRef = useRef<TransformStore>(initialTransforms);
   const tfSub = useRef<ROSLIB.Topic | null>(null);
   const tfStaticSub = useRef<ROSLIB.Topic | null>(null);
   // Internal state to signal when the provider instance is ready
   const [isProviderReady, setIsProviderReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    initialTransformsRef.current = initialTransforms;
+  }, [initialTransforms]);
 
   // Effect 1: Manage TF Provider instance and Fixed Frame updates
   useEffect(() => {
@@ -35,7 +40,7 @@ export function useTfProvider({
     if (ros && isRosConnected && ros3dViewer.current) {
       if (!customTFProvider.current) {
         // console.log(`[TF Provider Effect] Creating provider with fixedFrame: ${fixedFrame}`);
-        customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransforms);
+        customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransformsRef.current);
         ros3dViewer.current.fixedFrame = fixedFrame; // Set viewer frame on creation
         setIsProviderReady(true);
       } else {
@@ -92,7 +97,7 @@ export function useTfProvider({
     };
 
     // Depend on prerequisites and fixedFrame for updates
-  }, [ros, isRosConnected, ros3dViewer, fixedFrame, initialTransforms]);
+  }, [ros, isRosConnected, ros3dViewer, fixedFrame, isProviderReady]);
 
   // Effect 2: Manage TF Subscriptions based on provider readiness
   useEffect(() => {
@@ -115,7 +120,7 @@ export function useTfProvider({
           messageType: 'tf2_msgs/TFMessage',
           throttle_rate: 0, // No throttling - receive all TF updates for smooth visualization
           queue_size: 10, // Buffer some messages to avoid drops
-          compression: 'cbor' // Use compression for faster transfer
+          compression: 'none'
         });
         tfSub.current.subscribe((msg: any) => handleTFMessage(msg, false));
       }
@@ -126,7 +131,7 @@ export function useTfProvider({
           messageType: 'tf2_msgs/TFMessage',
           throttle_rate: 0, // No throttling for static TF
           queue_size: 10,
-          compression: 'cbor'
+          compression: 'none'
         });
         tfStaticSub.current.subscribe((msg: any) => handleTFMessage(msg, true));
       }

@@ -23,6 +23,7 @@ import {
   importGamepadLayouts,
   loadGamepadLibrary,
 } from '../features/customGamepad/gamepadStorage';
+import { filterCameraTopics } from '../features/customGamepad/rosMessageUtils';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
@@ -1378,10 +1379,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           // Filter topics likely to be camera feeds based on type or name pattern
           // Note: Comparing types is more reliable but requires type info from getTopics.
           // ROS2 might require separate calls to get type info if not included in getTopics response.
-          const imageTypes = ['sensor_msgs/Image', 'sensor_msgs/CompressedImage'];
-          const potentialTopics = response.topics.filter((topic, index) => {
-            const type = response.types[index];
-            if (imageTypes.includes(type)) {
+          const fetchedTopics = response.topics.map((topic, index) => ({
+            name: topic,
+            type: response.types[index] || '',
+          }));
+          const cameraTopicNames = new Set(filterCameraTopics(fetchedTopics).map(topic => topic.name));
+          const potentialTopics = response.topics.filter(topic => {
+            if (cameraTopicNames.has(topic)) {
               return true;
             }
             // Fallback: Check for common naming patterns if type information is missing/incomplete

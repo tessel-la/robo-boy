@@ -1,5 +1,4 @@
 import { ImgHTMLAttributes, useEffect, useRef } from 'react';
-import { escape as escapeHtml } from 'lodash-es';
 
 type SafeCameraImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string;
@@ -33,7 +32,7 @@ export default function SafeCameraImage({ src, ...imageProps }: SafeCameraImageP
     if (!imageElement) return;
 
     if (isSafeCameraImageSrc(src)) {
-      imageElement.src = escapeHtml(src).replace(/&amp;/g, '&');
+      imageElement.src = src;
       return;
     }
 

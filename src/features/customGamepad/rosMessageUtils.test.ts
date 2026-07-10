@@ -35,7 +35,7 @@ describe('rosMessageUtils', () => {
         width: 640,
         height: 480,
       })
-    ).toBe('/video_stream/stream?topic=%2Fcamera%2Fimage_raw&type=mjpeg&width=640&height=480');
+    ).toBe('/video_stream/stream?topic=/camera/image_raw&type=mjpeg&width=640&height=480');
   });
 
   it('encodes camera proxy stream URL parameters', () => {
@@ -45,7 +45,7 @@ describe('rosMessageUtils', () => {
         streamType: 'mjpeg&debug=true',
       })
     ).toBe(
-      '/video_stream/stream?topic=%2Fcamera%2Fimage_raw%26amp%3Bnext%3D%26lt%3Bscript%26gt%3B&type=mjpeg%26amp%3Bdebug%3Dtrue'
+      '/video_stream/stream?topic=/camera/image_raw%26next%3D%3Cscript%3E&type=mjpeg%26debug%3Dtrue'
     );
   });
 

@@ -46,7 +46,7 @@ describe('CameraView', () => {
       render(<CameraView {...defaultProps} />);
 
       const img = screen.getByRole('img');
-      expect(img).toHaveAttribute('src', '/video_stream/stream?topic=%2Fcamera%2Fimage_raw&type=mjpeg');
+      expect(img).toHaveAttribute('src', '/video_stream/stream?topic=/camera/image_raw&type=mjpeg');
     });
   });
 
@@ -118,7 +118,7 @@ describe('CameraView', () => {
       const img = screen.getByRole('img');
       expect(img).toHaveAttribute(
         'src',
-        '/video_stream/stream?topic=%2Fcamera%2Fimage_raw%26amp%3Bx%3D%26lt%3Bimg%20src%3Dx%20onerror%3Dalert(1)%26gt%3B&type=mjpeg'
+        '/video_stream/stream?topic=/camera/image_raw%26x%3D%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E&type=mjpeg'
       );
     });
   });

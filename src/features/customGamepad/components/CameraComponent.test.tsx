@@ -47,7 +47,7 @@ describe('CameraComponent', () => {
 
     expect(screen.getByRole('img')).toHaveAttribute(
       'src',
-      '/video_stream/stream?topic=%2Fcamera%2Fimage_raw%2Fcompressed&type=ros_compressed'
+      '/video_stream/stream?topic=/camera/image_raw/compressed&type=ros_compressed'
     );
   });
 
