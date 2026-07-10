@@ -112,14 +112,11 @@ describe('CameraView', () => {
       expect(img.getAttribute('src')).toContain('type=ros_compressed');
     });
 
-    it('should encode topic query parameters', () => {
+    it('should reject invalid topic query delimiters', () => {
       render(<CameraView {...defaultProps} cameraTopic={'/camera/image_raw&x=<img src=x onerror=alert(1)>'} />);
 
-      const img = screen.getByRole('img');
-      expect(img).toHaveAttribute(
-        'src',
-        '/video_stream/stream?topic=/camera/image_raw%26x%3D%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E&type=mjpeg'
-      );
+      expect(screen.getByText('Failed to construct stream URL.')).toBeInTheDocument();
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
   });
 

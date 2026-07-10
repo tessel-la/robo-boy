@@ -105,6 +105,7 @@ const CameraView: React.FC<CameraViewProps> = ({
         ) : streamUrl ? (
           <SafeCameraImage
             src={streamUrl}
+            allowedStreamBaseUrl={videoStreamBaseUrl}
             alt={`Stream for ${cameraTopic}`}
             onError={e => {
               console.error('Error loading video stream:', e);

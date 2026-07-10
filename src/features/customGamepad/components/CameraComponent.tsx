@@ -216,6 +216,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
       {imageUrl ? (
         <SafeCameraImage
           src={imageUrl}
+          allowedStreamBaseUrl={transport === 'proxy' ? videoStreamBaseUrl : undefined}
           alt={`Camera stream ${action?.topic || ''}`}
           onError={() => setStatusIfChanged('Failed to load camera stream')}
         />

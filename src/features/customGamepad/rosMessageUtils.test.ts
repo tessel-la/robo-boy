@@ -38,15 +38,29 @@ describe('rosMessageUtils', () => {
     ).toBe('/video_stream/stream?topic=/camera/image_raw&type=mjpeg&width=640&height=480');
   });
 
-  it('encodes camera proxy stream URL parameters', () => {
+  it('preserves ROS topic slashes and encodes stream URL parameters', () => {
     expect(
       buildCameraStreamUrl({
+        topic: '/camera/image_raw',
+        streamType: 'ros_compressed',
+      })
+    ).toBe('/video_stream/stream?topic=/camera/image_raw&type=ros_compressed');
+  });
+
+  it('rejects invalid camera proxy stream inputs', () => {
+    expect(() =>
+      buildCameraStreamUrl({
         topic: '/camera/image_raw&next=<script>',
+        streamType: 'mjpeg',
+      })
+    ).toThrow('Invalid camera topic name');
+
+    expect(() =>
+      buildCameraStreamUrl({
+        topic: '/camera/image_raw',
         streamType: 'mjpeg&debug=true',
       })
-    ).toBe(
-      '/video_stream/stream?topic=/camera/image_raw%26next%3D%3Cscript%3E&type=mjpeg%26debug%3Dtrue'
-    );
+    ).toThrow('Invalid camera stream type');
   });
 
   it('flattens nested numeric fields and array indexes', () => {

@@ -1,43 +1,38 @@
 import { ImgHTMLAttributes, useEffect, useRef } from 'react';
+import { getSafeCameraStreamUrl } from '../utils/cameraStreamUrl';
 
 type SafeCameraImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string;
+  allowedStreamBaseUrl?: string;
 };
 
 const SAFE_CAMERA_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/;
-const RELATIVE_URL_BASE = 'http://camera.local';
 
-export function isSafeCameraImageSrc(src: string): boolean {
-  if (SAFE_CAMERA_DATA_URL_PATTERN.test(src)) return true;
+export function getSafeCameraImageSrc(src: string, allowedStreamBaseUrl?: string): string | null {
+  if (SAFE_CAMERA_DATA_URL_PATTERN.test(src)) return src;
 
-  try {
-    const url = new URL(src, src.startsWith('/') ? RELATIVE_URL_BASE : window.location.origin);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      url.pathname.endsWith('/stream') &&
-      url.searchParams.has('topic') &&
-      !url.username &&
-      !url.password
-    );
-  } catch {
-    return false;
-  }
+  return getSafeCameraStreamUrl(src, allowedStreamBaseUrl);
 }
 
-export default function SafeCameraImage({ src, ...imageProps }: SafeCameraImageProps) {
+export function isSafeCameraImageSrc(src: string, allowedStreamBaseUrl?: string): boolean {
+  return getSafeCameraImageSrc(src, allowedStreamBaseUrl) !== null;
+}
+
+export default function SafeCameraImage({ src, allowedStreamBaseUrl, ...imageProps }: SafeCameraImageProps) {
   const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     const imageElement = imageRef.current;
     if (!imageElement) return;
 
-    if (isSafeCameraImageSrc(src)) {
-      imageElement.src = src;
+    const safeSrc = getSafeCameraImageSrc(src, allowedStreamBaseUrl);
+    if (safeSrc) {
+      imageElement.src = safeSrc;
       return;
     }
 
     imageElement.removeAttribute('src');
-  }, [src]);
+  }, [allowedStreamBaseUrl, src]);
 
   return <img ref={imageRef} {...imageProps} />;
 }
