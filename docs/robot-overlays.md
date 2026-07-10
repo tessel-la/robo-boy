@@ -25,6 +25,14 @@ docker compose up -d --build --force-recreate ros-stack
 
 Robo-Boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, `ROS_LOCALHOST_ONLY`, and DDS middleware settings.
 
+For ROS 2 Jazzy and newer, prefer the explicit discovery range variables as well:
+
+```dotenv
+ROS_DOMAIN_ID=0
+ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+ROS_STATIC_PEERS=
+```
+
 Fast DDS default:
 
 ```dotenv
@@ -40,7 +48,7 @@ CYCLONEDDS_CONFIG_PATH=./config/cyclonedds/default.xml
 CYCLONEDDS_URI=file:///etc/cyclonedds/config.xml
 ```
 
-`CYCLONEDDS_CONFIG_PATH` is a host path mounted into the ROS container at `/etc/cyclonedds/config.xml`. Point it at a custom XML file when the robot or simulator needs fixed interfaces, peers, multicast policy, or other Cyclone-specific settings. Use an absolute path when sharing one custom file across multiple Compose projects.
+`CYCLONEDDS_CONFIG_PATH` is a host path mounted into the ROS container at `/etc/cyclonedds/config.xml`. The default profile uses multicast only for SPDP discovery, keeps RTPS UDP payloads below a normal 1500-byte interface MTU to avoid IP fragmentation, increases participant-index headroom for host-networked container/tool churn, and leaves interface selection automatic so laptops can move between wired and Wi-Fi networks. Point it at a custom XML file when the robot or simulator needs fixed interfaces, peers, multicast policy, or other Cyclone-specific settings. Use an absolute path when sharing one custom file across multiple Compose projects.
 
 ## Aerostack
 

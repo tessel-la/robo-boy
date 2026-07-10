@@ -60,8 +60,9 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
-      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+      - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
       # Switch between Fast DDS and Cyclone DDS by setting RMW_IMPLEMENTATION.
       # Fast DDS keeps UDP transport by default to avoid shared-memory issues
       # across host-networked containers running as different users.
