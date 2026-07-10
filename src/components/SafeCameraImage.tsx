@@ -6,12 +6,13 @@ type SafeCameraImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
 };
 
 const SAFE_CAMERA_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/;
+const RELATIVE_URL_BASE = 'http://camera.local';
 
-function isSafeCameraImageSrc(src: string): boolean {
+export function isSafeCameraImageSrc(src: string): boolean {
   if (SAFE_CAMERA_DATA_URL_PATTERN.test(src)) return true;
 
   try {
-    const url = new URL(src, window.location.origin);
+    const url = new URL(src, src.startsWith('/') ? RELATIVE_URL_BASE : window.location.origin);
     return (
       (url.protocol === 'http:' || url.protocol === 'https:') &&
       url.pathname.endsWith('/stream') &&
