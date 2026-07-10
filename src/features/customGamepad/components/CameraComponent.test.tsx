@@ -74,4 +74,20 @@ describe('CameraComponent', () => {
     unmount();
     expect(roslibMock.unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects malformed base64 ROS image payloads', () => {
+    render(
+      <CameraComponent
+        config={{ ...baseConfig, config: { cameraTransport: 'ros' } }}
+        ros={{ isConnected: true } as any}
+      />
+    );
+
+    act(() => {
+      roslibMock.subscribers[0]({ data: '<svg onload=alert(1)>', format: 'jpeg' });
+    });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Unsupported image encoding')).toBeInTheDocument();
+  });
 });

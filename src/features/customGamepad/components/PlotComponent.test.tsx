@@ -6,12 +6,13 @@ import { GamepadComponentConfig } from '../types';
 
 const roslibMock = vi.hoisted(() => ({
   subscribers: [] as Array<(message: unknown) => void>,
+  topic: vi.fn(),
   unsubscribe: vi.fn(),
 }));
 
 vi.mock('roslib', () => ({
   default: {
-    Topic: vi.fn(function Topic() {
+    Topic: roslibMock.topic.mockImplementation(function Topic() {
       return {
         subscribe: vi.fn((callback: (message: unknown) => void) => {
           roslibMock.subscribers.push(callback);
@@ -42,6 +43,7 @@ describe('PlotComponent', () => {
 
   beforeEach(() => {
     roslibMock.subscribers = [];
+    roslibMock.topic.mockClear();
     roslibMock.unsubscribe.mockClear();
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
       callback(performance.now());
@@ -99,6 +101,35 @@ describe('PlotComponent', () => {
     expect(screen.getByText(/x 1.00/)).toBeInTheDocument();
     expect(screen.getByText(/z -0.25/)).toBeInTheDocument();
     expect(document.querySelectorAll('.plot-svg polyline')).toHaveLength(2);
+  });
+
+  it('keeps one subscription while samples update the plot', () => {
+    const nowSpy = vi.spyOn(Date, 'now');
+
+    render(
+      <PlotComponent
+        config={{
+          ...baseConfig,
+          config: {
+            ...baseConfig.config,
+            fieldPaths: ['linear.x'],
+          },
+        }}
+        ros={{ isConnected: true } as any}
+      />
+    );
+
+    expect(roslibMock.topic).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      nowSpy.mockReturnValue(1_000);
+      roslibMock.subscribers[0]({ linear: { x: 1 } });
+      nowSpy.mockReturnValue(2_000);
+      roslibMock.subscribers[0]({ linear: { x: 2 } });
+    });
+
+    expect(roslibMock.topic).toHaveBeenCalledTimes(1);
+    expect(roslibMock.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('shows a field error when messages do not contain numeric data', () => {

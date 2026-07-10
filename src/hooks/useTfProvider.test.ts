@@ -138,6 +138,14 @@ describe('useTfProvider', () => {
         }));
 
         expect(ROSLIB.Topic).toHaveBeenCalledTimes(2); // /tf and /tf_static
+        expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
+            name: '/tf',
+            compression: 'none'
+        }));
+        expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
+            name: '/tf_static',
+            compression: 'none'
+        }));
         expect(subscribeMock).toHaveBeenCalledTimes(2);
     });
 

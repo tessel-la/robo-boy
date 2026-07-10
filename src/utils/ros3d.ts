@@ -17,6 +17,16 @@ interface UrdfModelCacheEntry {
 
 const urdfModelCache = new Map<string, UrdfModelCacheEntry>();
 
+const isDesktopRuntime = (): boolean =>
+  typeof document !== 'undefined' && document.documentElement.dataset.runtime === 'tauri';
+
+const getRendererPixelRatio = (): number => {
+  if (typeof window === 'undefined') return 1;
+
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  return isDesktopRuntime() ? Math.min(devicePixelRatio, 1) : devicePixelRatio;
+};
+
 function getUrdfCacheKey(ros: Ros, topic: string): string {
   const rosUrl = (ros as any)?.url || 'default-ros';
   return `${rosUrl}:${topic}`;
@@ -29,6 +39,8 @@ class Viewer {
   renderer: THREE.WebGLRenderer;
   fixedFrame: string = '';
   private animationId: number | null = null;
+  private renderWidth = 0;
+  private renderHeight = 0;
 
   constructor(options: {
     divID: string;
@@ -93,9 +105,14 @@ class Viewer {
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
-      antialias: options.antialias,
+      antialias: isDesktopRuntime() ? false : options.antialias,
+      powerPreference: 'high-performance',
+      stencil: false,
     });
+    this.renderer.setPixelRatio(getRendererPixelRatio());
     this.renderer.setSize(options.width, options.height);
+    this.renderWidth = options.width;
+    this.renderHeight = options.height;
     // Enable shadows if needed
     this.renderer.shadowMap.enabled = false; // Keep disabled for performance
     
@@ -113,6 +130,10 @@ class Viewer {
 
   // Resize viewer
   resize(width: number, height: number): void {
+    if (width === this.renderWidth && height === this.renderHeight) return;
+
+    this.renderWidth = width;
+    this.renderHeight = height;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
@@ -1399,13 +1420,14 @@ class UrdfClient extends THREE.Object3D {
     tfClient: CustomTFProvider;
     rootObject: THREE.Object3D;
     robotDescriptionTopic?: string;
+    path?: string;
     onComplete?: (model: THREE.Object3D) => void;
     // Removed loader option, will use internal Collada and STL loaders
   }) {
     super();
     this.ros = options.ros;
     this.tfClient = options.tfClient;
-    this.path = '/mesh_resources/'; // Hardcoded path
+    this.path = options.path || '/mesh_resources';
     this.rootObject = options.rootObject;
     this.onComplete = options.onComplete;
 
@@ -1732,9 +1754,10 @@ class UrdfClient extends THREE.Object3D {
       return resolved;
     }
 
-    // Handle localhost:8000 URLs by replacing them with /mesh_resources
+    // Normalize mesh URLs emitted by robot descriptions to the configured resource server.
     if (filePath.startsWith('http://localhost:8000/')) {
-      const resolved = filePath.replace('http://localhost:8000/', '/mesh_resources/');
+      const basePath = this.path.endsWith('/') ? this.path : `${this.path}/`;
+      const resolved = filePath.replace('http://localhost:8000/', basePath);
       console.log(`[UrdfClient] Resolved localhost path: ${filePath} -> ${resolved}`);
       return resolved;
     }

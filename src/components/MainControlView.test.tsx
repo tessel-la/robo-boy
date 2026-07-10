@@ -260,6 +260,22 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('discovers ROS 2 image topics for camera panels', async () => {
+    getTopics.mockImplementation((success: any) => {
+      success({
+        topics: ['/camera/ros2_image', '/status'],
+        types: ['sensor_msgs/msg/Image', 'std_msgs/msg/String'],
+      });
+    });
+
+    renderMainControlView();
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+
+    expect(await screen.findByLabelText('Camera topic')).toHaveValue('/camera/ros2_image');
+  });
+
   it('resizes vertically stacked mobile workspace tiles by vertical drag', async () => {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,

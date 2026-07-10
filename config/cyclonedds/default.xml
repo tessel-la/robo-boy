@@ -3,13 +3,15 @@
   <Domain id="any">
     <General>
       <Interfaces>
-        <NetworkInterface autodetermine="true" />
+        <NetworkInterface autodetermine="true" priority="default" multicast="true" />
       </Interfaces>
-      <AllowMulticast>true</AllowMulticast>
+      <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>1400B</MaxMessageSize>
+      <FragmentSize>1200B</FragmentSize>
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>240</MaxAutoParticipantIndex>
     </Discovery>
   </Domain>
 </CycloneDDS>

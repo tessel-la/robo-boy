@@ -39,6 +39,17 @@ Changes under `src/` should hot reload. Rebuild after changing files under `infr
 docker compose up -d --build --force-recreate
 ```
 
+## Desktop Frontend
+
+The Tauri application packages only the frontend and expects the ROS stack to run separately. After installing the Tauri platform prerequisites and Rust, start it with:
+
+```bash
+docker compose up -d --build ros-stack
+npm run desktop:dev
+```
+
+See [Desktop application](desktop.md) for the port contract and installer build command.
+
 ## Useful Commands
 
 ```bash

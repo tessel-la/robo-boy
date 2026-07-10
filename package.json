@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite --config config/vite.config.ts --host",
     "build": "tsc && vite build --config config/vite.config.ts",
+    "dev:tauri": "vite --config config/vite.config.ts --host --mode tauri",
+    "build:tauri": "tsc && vite build --config config/vite.config.ts --mode tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "tauri": "tauri",
     "lint": "eslint . --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
@@ -39,6 +44,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.2.66",

@@ -185,6 +185,7 @@ const NODE_POSITION_COLLISION_X = 160;
 const NODE_POSITION_COLLISION_Y = 110;
 const MANUAL_EDGE_SELECTION_SUPPRESSION_MS = 160;
 const AGENT_PREVIEW_ID_PREFIX = 'agent-preview:';
+const MIN_FLOW_VIEWPORT_SIZE = 1;
 
 const getReactFlowChangeElementId = (change: unknown): string | null => {
   if (!change || typeof change !== 'object') return null;
@@ -242,6 +243,38 @@ const createViewportRect = (left: number, top: number, right: number, bottom: nu
 } as DOMRect);
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const isFinitePoint = (position: { x: number; y: number }) =>
+  Number.isFinite(position.x) && Number.isFinite(position.y);
+
+const finiteCoordinate = (value: unknown, fallback = 0): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeCanvasPosition = (position: unknown): { x: number; y: number } => {
+  const record = position && typeof position === 'object' ? position as { x?: unknown; y?: unknown } : {};
+  return {
+    x: finiteCoordinate(record.x),
+    y: finiteCoordinate(record.y),
+  };
+};
+
+const finiteDimension = (value: unknown): number | undefined => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const isFlowViewportReady = (element: HTMLElement | null): boolean => {
+  if (!element) return false;
+  const rect = element.getBoundingClientRect();
+  return (
+    Number.isFinite(rect.width) &&
+    Number.isFinite(rect.height) &&
+    rect.width > MIN_FLOW_VIEWPORT_SIZE &&
+    rect.height > MIN_FLOW_VIEWPORT_SIZE
+  );
+};
 
 const findOpenPaletteAddPosition = (
   position: { x: number; y: number },
@@ -570,6 +603,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const resetTransientNodeState = useCallback((treeNodes: BehaviorTreeNode[]): BehaviorTreeNode[] => {
     return treeNodes.map((node) => ({
       ...node,
+      position: normalizeCanvasPosition(node.position),
+      positionAbsolute: undefined,
+      width: finiteDimension(node.width),
+      height: finiteDimension(node.height),
       selected: false,
       dragging: false,
       data: {
@@ -607,10 +644,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const centerTreeInView = useCallback(() => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) return;
         fitView({ padding: 0.22, duration: 380, maxZoom: 1.1 });
       });
     });
-  }, [fitView]);
+  }, [fitView, isActive]);
 
   const fitAgentPreviewInView = useCallback(() => {
     if (agentPreviewFitTimerRef.current !== null) {
@@ -620,6 +658,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     let attempts = 0;
     const tryFit = () => {
       agentPreviewFitTimerRef.current = null;
+      if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) {
+        if (attempts >= 10) return;
+        attempts += 1;
+        agentPreviewFitTimerRef.current = window.setTimeout(tryFit, 50);
+        return;
+      }
       const fitted = fitView({ padding: 0.2, duration: 420, maxZoom: 1.15 });
       if (fitted || attempts >= 10) return;
       attempts += 1;
@@ -627,7 +671,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     };
 
     window.requestAnimationFrame(tryFit);
-  }, [fitView]);
+  }, [fitView, isActive]);
 
   useEffect(() => () => {
     if (agentPreviewFitTimerRef.current !== null) {
@@ -1197,8 +1241,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       event.preventDefault();
       if (isExecuting) return;
 
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!reactFlowBounds) return;
+      if (!isFlowViewportReady(reactFlowWrapper.current)) return;
 
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
@@ -1216,6 +1259,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         x: event.clientX - 75,
         y: event.clientY - 40,
       });
+      if (!isFinitePoint(position)) return;
 
       addNodeAtPosition(data.nodeType, position, data.item);
     },
@@ -1640,9 +1684,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     persistEditorTree(arrangeBehaviorTree(nodes as BehaviorTreeNode[], edges), edges);
     window.requestAnimationFrame(() => {
+      if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) return;
       fitView({ padding: 0.18, duration: 450, maxZoom: 1.15 });
     });
-  }, [edges, fitView, nodes, persistEditorTree]);
+  }, [edges, fitView, isActive, nodes, persistEditorTree]);
 
   const handleRename = useCallback((name: string) => {
     const activeTree = currentTreeRef.current;
@@ -1699,6 +1744,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (!node) return;
 
       const position = node.positionAbsolute ?? node.position;
+      if (!isActive || !isFinitePoint(position) || !isFlowViewportReady(reactFlowWrapper.current)) return;
       const centerX = position.x + (node.width ?? 150) / 2;
       const centerY = position.y + (node.height ?? 80) / 2;
 
@@ -1715,7 +1761,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         });
       });
     },
-    [getZoom, setCenter]
+    [getZoom, isActive, setCenter]
   );
 
   const updateDisplayedNodeStatus = useCallback((nodeId: string, status: ExecutionStatus) => {
@@ -2235,12 +2281,21 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     ) => {
       if (isExecuting) return;
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= MIN_FLOW_VIEWPORT_SIZE ||
+        bounds.height <= MIN_FLOW_VIEWPORT_SIZE
+      ) {
+        return;
+      }
 
       const position = screenToFlowPosition({
         x: bounds.left + bounds.width / 2,
         y: bounds.top + bounds.height / 2,
       });
+      if (!isFinitePoint(position)) return;
 
       addNodeAtPosition(nodeType, position, item, { avoidOverlap: true });
 
@@ -2262,13 +2317,24 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       ([currentId, proposedId]) => {
         const currentNode = currentNodeById.get(currentId);
         const proposedNode = proposedNodeById.get(proposedId);
-        return currentNode && proposedNode
+        return currentNode &&
+          proposedNode &&
+          isFinitePoint(currentNode.position) &&
+          isFinitePoint(proposedNode.position)
           ? [{ x: currentNode.position.x - proposedNode.position.x, y: currentNode.position.y - proposedNode.position.y }]
           : [];
       }
     );
-    const fallbackCurrentRight = Math.max(0, ...behaviorNodes.map(node => node.position.x + (node.width ?? 180)));
-    const proposedLeft = Math.min(0, ...agentPreviewTree.nodes.map(node => node.position.x));
+    const finiteCurrentRights = behaviorNodes
+      .filter(node => isFinitePoint(node.position))
+      .map(node => node.position.x + (node.width ?? 180))
+      .filter(Number.isFinite);
+    const finiteProposedLefts = agentPreviewTree.nodes
+      .filter(node => isFinitePoint(node.position))
+      .map(node => node.position.x)
+      .filter(Number.isFinite);
+    const fallbackCurrentRight = Math.max(0, ...finiteCurrentRights);
+    const proposedLeft = Math.min(0, ...finiteProposedLefts);
     const previewOffset = anchorOffsets.length > 0
       ? {
           x: anchorOffsets.reduce((sum, offset) => sum + offset.x, 0) / anchorOffsets.length,
@@ -2301,6 +2367,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const proposedNodes = agentPreviewTree.nodes.flatMap(node => {
       const change = agentPreviewDiff.proposedNodes.get(node.id) ?? 'added';
       if (change !== 'added') return [];
+      if (!isFinitePoint(node.position)) return [];
       const previewId = `${AGENT_PREVIEW_ID_PREFIX}${node.id}`;
       const measured = agentPreviewDimensions[previewId];
       return [{
@@ -2310,8 +2377,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           x: node.position.x + previewOffset.x,
           y: node.position.y + previewOffset.y,
         },
-        width: measured?.width ?? node.width,
-        height: measured?.height ?? node.height,
+        width: measured && Number.isFinite(measured.width) ? measured.width : node.width,
+        height: measured && Number.isFinite(measured.height) ? measured.height : node.height,
         className: `${node.className ?? ''} bt-agent-canvas-proposed bt-agent-canvas-added`.trim(),
         selectable: false,
         draggable: false,
@@ -2432,16 +2499,21 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       });
     } else {
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
-      addNodeAtPosition(
-        BehaviorNodeType.Subtree,
-        screenToFlowPosition({
-          x: bounds.left + bounds.width / 2,
-          y: bounds.top + bounds.height / 2,
-        }),
-        agentPreviewTree,
-        { avoidOverlap: true }
-      );
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= MIN_FLOW_VIEWPORT_SIZE ||
+        bounds.height <= MIN_FLOW_VIEWPORT_SIZE
+      ) {
+        return;
+      }
+      const position = screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+      if (!isFinitePoint(position)) return;
+      addNodeAtPosition(BehaviorNodeType.Subtree, position, agentPreviewTree, { avoidOverlap: true });
     }
     setIsAgentOpen(false);
     clearAgentPreview();
@@ -2971,6 +3043,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleSearchSelect = useCallback(
     (node: BehaviorTreeNode) => {
       const position = node.positionAbsolute ?? node.position;
+      if (!isActive || !isFinitePoint(position) || !isFlowViewportReady(reactFlowWrapper.current)) return;
       const centerX = position.x + (node.width ?? 150) / 2;
       const centerY = position.y + (node.height ?? 80) / 2;
       const selectedNode = { ...node, selected: true, dragging: false };
@@ -2981,7 +3054,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setOrderingParentId(null);
       setCenter(centerX, centerY, { zoom: Math.max(getZoom(), 1), duration: 400 });
     },
-    [applySelectionState, getZoom, setCenter]
+    [applySelectionState, getZoom, isActive, setCenter]
   );
 
   return (
@@ -3127,7 +3200,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             panOnDrag={canvasInteractionMode === 'pan'}
             selectionOnDrag={false}
             connectionRadius={48}
-            fitView
+            fitView={isActive}
             minZoom={0.1}
             maxZoom={2}
             deleteKeyCode={isExecuting ? null : ['Backspace', 'Delete']}

@@ -159,6 +159,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
+    if (!Array.isArray(message?.transforms)) {
+      console.warn('[TF] Ignoring malformed TF message:', message);
+      return;
+    }
+
     let _newFramesFound = false;
     setTransforms((prevTransforms: TransformStore) => {
       let currentFrames = new Set<string>();
@@ -173,6 +178,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         const transform: StoredTransform = { translation: new THREE.Vector3(tStamped.transform.translation.x, tStamped.transform.translation.y, tStamped.transform.translation.z), rotation: new THREE.Quaternion(tStamped.transform.rotation.x, tStamped.transform.rotation.y, tStamped.transform.rotation.z, tStamped.transform.rotation.w) };
         const existingEntry = newTransforms[childFrame];
         if (!existingEntry || !isStatic ||
+          existingEntry.parentFrame !== parentFrame ||
           !existingEntry.transform.translation.equals(transform.translation) ||
           !existingEntry.transform.rotation.equals(transform.rotation)) {
           newTransforms[childFrame] = { parentFrame, transform, isStatic };

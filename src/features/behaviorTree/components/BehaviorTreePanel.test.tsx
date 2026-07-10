@@ -46,6 +46,12 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
   toJSON: () => ({}),
 } as DOMRect);
 
+const setCanvasRect = (rect = createRect(0, 0, 800, 600)): HTMLElement => {
+  const canvas = document.querySelector('.bt-canvas') as HTMLElement;
+  canvas.getBoundingClientRect = () => rect;
+  return canvas;
+};
+
 const createMatchMedia =
   (matches: boolean) =>
   (query: string): MediaQueryList => ({
@@ -350,6 +356,7 @@ describe('BehaviorTreePanel', () => {
 
   it('closes the desktop palette after adding a node', async () => {
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    setCanvasRect();
 
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
     fireEvent.click(screen.getByText('Sequence'));
@@ -446,6 +453,7 @@ describe('BehaviorTreePanel', () => {
     }));
 
     render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Agent Current Tree'));
     await screen.findByTestId('rf-node-move');
@@ -486,6 +494,45 @@ describe('BehaviorTreePanel', () => {
         selectionOnDrag: false,
       })
     );
+  });
+
+  it('does not ask React Flow to fit a hidden behavior tree canvas', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'hidden-tree',
+            name: 'Hidden Tree',
+            nodes: [
+              {
+                id: 'hidden-node',
+                type: 'sequence',
+                position: { x: null, y: 'not-a-number' },
+                data: { label: 'Hidden Node', type: 'sequence' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive={false} />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Hidden Tree'));
+
+    await screen.findByTestId('rf-node-hidden-node');
+    expect(reactFlowMock.render.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ fitView: false })
+    );
+    expect(reactFlowMock.fitView).not.toHaveBeenCalled();
+    const latestProps = reactFlowMock.render.mock.lastCall?.[0] as { nodes: Array<Record<string, any>> };
+    expect(latestProps.nodes[0].position).toEqual({ x: 0, y: 0 });
   });
 
   it('offers a responsive tree arrangement action', () => {
@@ -666,6 +713,7 @@ describe('BehaviorTreePanel', () => {
     );
 
     render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Follow Tree'));
     await screen.findByTestId('rf-node-node-follow');
@@ -901,6 +949,7 @@ describe('BehaviorTreePanel', () => {
     );
 
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Center Tree'));
 
@@ -1263,6 +1312,7 @@ describe('BehaviorTreePanel', () => {
     });
 
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    setCanvasRect();
     fireEvent.click(screen.getByText('Retry'));
     await waitFor(() => {
       const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {

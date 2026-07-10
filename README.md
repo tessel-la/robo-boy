@@ -10,7 +10,7 @@
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
 </p>
 
-Robo-Boy is a web interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes.
+Robo-Boy is a web and desktop interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. Both interfaces use the same React codebase; the desktop package is a lightweight Tauri shell and connects to a separately installed ROS stack.
 
 ## Start With Docker
 
@@ -43,7 +43,7 @@ docker compose down
 
 ## Documentation
 
-See the [documentation index](docs/README.md) for application usage, development commands, ROS workspace overlays, custom gamepads, and architecture.
+See the [documentation index](docs/README.md) for application usage, desktop packaging, development commands, ROS workspace overlays, custom gamepads, and architecture.
 
 ## License
 

@@ -3,6 +3,7 @@ import { ConnectionParams } from '../App'; // Adjust if ConnectionParams definit
 import './EntrySection.css';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
+import { getDefaultConnectionHost } from '../runtime/runtimeConfig';
 
 interface EntrySectionProps {
   onConnect: (params: ConnectionParams) => void;
@@ -10,7 +11,17 @@ interface EntrySectionProps {
 
 // Simple gear icon component for the advanced options
 const GearIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="3"></circle>
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
   </svg>
@@ -48,11 +59,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   // Track theme changes
   const [themeColors, setThemeColors] = useState({
     primary: '',
-    hover: ''
+    hover: '',
   });
 
   // Get current hostname for quick connect
-  const currentHostname = window.location.hostname;
+  const currentHostname = getDefaultConnectionHost();
 
   // Watch for theme changes
   useEffect(() => {
@@ -64,7 +75,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
       if (primary !== themeColors.primary || hover !== themeColors.hover) {
         setThemeColors({
           primary,
-          hover
+          hover,
         });
       }
     };
@@ -76,7 +87,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme']
+      attributeFilter: ['data-theme'],
     });
 
     return () => observer.disconnect();
@@ -99,7 +110,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
         targets: gearIcon as HTMLElement,
         rotate: showAdvanced ? 180 : 0,
         duration: 500,
-        easing: 'easeInOutQuad'
+        easing: 'easeInOutQuad',
       });
     }
   }, [showAdvanced]);
@@ -150,19 +161,19 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
           { value: 15, duration: 600, easing: 'easeInOutBack' },
           { value: -8, duration: 300, easing: 'easeInOutBack' },
           { value: 8, duration: 400, easing: 'easeInOutBack' },
-          { value: 0, duration: 500, easing: 'easeInOutBack' }
+          { value: 0, duration: 500, easing: 'easeInOutBack' },
         ] as any,
-        duration: 2200
+        duration: 2200,
       })
       .add({
         targets: dashRef.current,
         translateY: [
           { value: -4, duration: 300, easing: 'easeOutExpo' },
-          { value: 0, duration: 600, easing: 'easeInElastic' }
+          { value: 0, duration: 600, easing: 'easeInElastic' },
         ] as any,
         scale: [
           { value: 1.2, duration: 300, easing: 'easeOutExpo' },
-          { value: 1, duration: 600, easing: 'easeInElastic' }
+          { value: 1, duration: 600, easing: 'easeInElastic' },
         ] as any,
         duration: 900,
         offset: '-=1000', // Start before previous animation ends
@@ -228,23 +239,24 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
           ros2Value: currentHostname,
         };
         onConnect(params);
-      }
+      },
     });
 
     // First shrink to a dot
-    timeline.add({
-      targets: overlay,
-      width: '20px',
-      height: '20px',
-      borderRadius: '50%',
-      duration: 300
-    })
+    timeline
+      .add({
+        targets: overlay,
+        width: '20px',
+        height: '20px',
+        borderRadius: '50%',
+        duration: 300,
+      })
       // Then drop to bottom of screen
       .add({
         targets: overlay,
         top: `${window.innerHeight - 10}px`,
         duration: 500,
-        easing: 'easeInQuad'
+        easing: 'easeInQuad',
       })
       // Finally expand to fill screen
       .add({
@@ -252,7 +264,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
         width: '200vmax',
         height: '200vmax',
         duration: 600,
-        easing: 'easeOutQuad'
+        easing: 'easeOutQuad',
       });
   };
 
@@ -266,7 +278,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
         <div className="logo-container" ref={logoRef}>
           <h1 className="app-title">
             <span className="title-robo">Robo</span>
-            <span className="title-dash" ref={dashRef}>-</span>
+            <span className="title-dash" ref={dashRef}>
+              -
+            </span>
             <span className="title-boy">Boy</span>
           </h1>
         </div>
@@ -279,7 +293,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
             ref={quickConnectRef}
             style={{
               position: 'relative',
-              transition: 'opacity 0.1s ease'
+              transition: 'opacity 0.1s ease',
             }}
             disabled={isTransitioning}
           >
@@ -297,7 +311,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
               minWidth: '48px',
               display: 'flex',
               justifyContent: 'center',
-              alignItems: 'center'
+              alignItems: 'center',
             }}
           >
             <span className="advanced-toggle-content">
@@ -305,11 +319,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
             </span>
           </button>
 
-          <form
-            onSubmit={handleSubmit}
-            ref={formRef}
-            className={`advanced-form ${showAdvanced ? 'visible' : ''}`}
-          >
+          <form onSubmit={handleSubmit} ref={formRef} className={`advanced-form ${showAdvanced ? 'visible' : ''}`}>
             <div className="form-group">
               <label>Connection Method:</label>
               <div className="radio-group">
@@ -323,30 +333,25 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
                   Domain ID
                 </label>
                 <label>
-                  <input
-                    type="radio"
-                    value="ip"
-                    checked={ros2Option === 'ip'}
-                    onChange={() => setRos2Option('ip')}
-                  />
+                  <input type="radio" value="ip" checked={ros2Option === 'ip'} onChange={() => setRos2Option('ip')} />
                   IP Address
                 </label>
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="ros2Value">
-                {ros2Option === 'domain' ? 'Domain ID:' : 'IP Address:'}
-              </label>
+              <label htmlFor="ros2Value">{ros2Option === 'domain' ? 'Domain ID:' : 'IP Address:'}</label>
               <input
                 type={ros2Option === 'domain' ? 'number' : 'text'}
                 id="ros2Value"
                 value={ros2Value}
-                onChange={(e) => setRos2Value(e.target.value)}
+                onChange={e => setRos2Value(e.target.value)}
                 placeholder={ros2Option === 'domain' ? 'e.g., 0' : 'e.g., 192.168.1.100'}
                 required
               />
             </div>
-            <button type="submit" className="connect-btn">Connect</button>
+            <button type="submit" className="connect-btn">
+              Connect
+            </button>
           </form>
         </div>
       </div>
@@ -358,11 +363,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
           transform: 'translate(-50%, -50%)',
           zIndex: 1000,
           display: 'none',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
         }}
       />
     </div>
   );
 };
 
-export default EntrySection; 
+export default EntrySection;

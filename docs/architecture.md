@@ -5,18 +5,13 @@ This document describes the current runtime and the boundaries future developmen
 ## System Overview
 
 ```text
-Browser
+Browser or Tauri webview
   React application
   ROSLIB WebSocket client
   Three.js visualization
         |
-        | HTTP/HTTPS and WebSocket
-        v
-Caddy
-  /                -> Vite app
-  /websocket       -> rosbridge :9090
-  /video_stream    -> web_video_server :8080
-  /mesh_resources  -> optional host mesh server :8000
+        | Web: same-origin Caddy routes
+        | Desktop: direct ROS host ports
         |
         v
 ROS stack
@@ -27,7 +22,7 @@ ROS stack
 Robot or simulation nodes
 ```
 
-Robo-Boy is a browser application with no application server or database. Caddy provides one origin for the frontend and ROS-facing services. The `ros-stack` container uses host networking for DDS discovery, while the frontend and Caddy share the `app-net` bridge network.
+Robo-Boy has no application server or database. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
 
 ## Frontend Composition
 
@@ -46,7 +41,7 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 
 ## ROS Boundary
 
-`useRos` is the owner of the active `ROSLIB.Ros` instance. It derives the endpoint from the page origin and connects to `/websocket`, making deployment independent of a hardcoded host or port.
+`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds derive same-origin proxy routes from the page location; Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
 
 The connection object is passed to feature components. Code that creates a `ROSLIB.Topic`, `Service`, or action request must:
 

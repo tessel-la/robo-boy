@@ -48,6 +48,19 @@ const mergeDefaults = (defaults: unknown, supplied: unknown): any => {
   return result;
 };
 
+const finiteNumber = (value: unknown, fallback = 0): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const readGeneratedPosition = (raw: Record<string, any>): { x: number; y: number } => {
+  const position = raw.position && typeof raw.position === 'object' ? raw.position : {};
+  return {
+    x: finiteNumber(raw.x ?? position.x),
+    y: finiteNumber(raw.y ?? position.y),
+  };
+};
+
 const nodeData = (
   type: BehaviorNodeType,
   raw: Record<string, any>,
@@ -146,7 +159,7 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
       return {
         id,
         type,
-        position: { x: Number(candidate.x) || 0, y: Number(candidate.y) || 0 },
+        position: readGeneratedPosition(candidate),
         data: { label: String(candidate.label || nested.name), tree: nested },
       };
     }
@@ -154,7 +167,7 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
     return {
       id,
       type,
-      position: { x: Number(candidate.x) || 0, y: Number(candidate.y) || 0 },
+      position: readGeneratedPosition(candidate),
       data: nodeData(type, candidate, schemas),
     };
   });
