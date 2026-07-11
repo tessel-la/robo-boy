@@ -7,7 +7,7 @@
     "dev": "vite --config config/vite.config.ts --host",
     "build": "tsc && vite build --config config/vite.config.ts",
     "dev:tauri": "vite --config config/vite.config.ts --host --mode tauri",
-    "build:tauri": "tsc && vite build --config config/vite.config.ts --mode tauri",
+    "build:tauri": "tsc && vite build --config config/vite.config.ts --mode tauri && node scripts/check-tauri-build.cjs",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "tauri": "tauri",

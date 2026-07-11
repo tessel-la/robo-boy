@@ -3,7 +3,6 @@ import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
 import ThemeSelector from './features/theme/components/ThemeSelector';
-import ThemeCreator from './features/theme/components/ThemeCreator';
 import {
   CustomTheme,
   DEFAULT_THEMES,
@@ -14,6 +13,7 @@ import {
 import { RuntimeConfigProvider } from './runtime/runtimeConfig';
 
 const MainControlView = lazy(() => import('./components/MainControlView'));
+const ThemeCreator = lazy(() => import('./features/theme/components/ThemeCreator'));
 
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
@@ -215,12 +215,16 @@ function App() {
         openThemeCreator={openThemeCreator}
         deleteTheme={deleteCustomTheme}
       />
-      <ThemeCreator
-        isOpen={isThemeCreatorOpen}
-        onClose={closeThemeCreator}
-        onSave={handleSaveTheme}
-        existingTheme={themeToEdit}
-      />
+      {isThemeCreatorOpen && (
+        <Suspense fallback={null}>
+          <ThemeCreator
+            isOpen
+            onClose={closeThemeCreator}
+            onSave={handleSaveTheme}
+            existingTheme={themeToEdit}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
