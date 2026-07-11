@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
-import MainControlView from './components/MainControlView';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import ThemeCreator from './features/theme/components/ThemeCreator';
 import {
@@ -13,6 +12,8 @@ import {
   generateThemeCss,
 } from './features/theme/themeUtils';
 import { RuntimeConfigProvider } from './runtime/runtimeConfig';
+
+const MainControlView = lazy(() => import('./components/MainControlView'));
 
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
@@ -197,11 +198,13 @@ function App() {
           <EntrySection onConnect={handleConnect} />
         ) : (
           <RuntimeConfigProvider connectionParams={connectionParams}>
-            <MainControlView
-              connectionParams={connectionParams}
-              onDisconnect={handleDisconnect}
-              // Potentially pass theme management functions down if needed
-            />
+            <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
+              <MainControlView
+                connectionParams={connectionParams}
+                onDisconnect={handleDisconnect}
+                // Potentially pass theme management functions down if needed
+              />
+            </Suspense>
           </RuntimeConfigProvider>
         )}
       </main>

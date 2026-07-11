@@ -118,9 +118,9 @@ export function useTfProvider({
           ros: ros,
           name: '/tf',
           messageType: 'tf2_msgs/TFMessage',
-          throttle_rate: 0, // No throttling - receive all TF updates for smooth visualization
-          queue_size: 10, // Buffer some messages to avoid drops
-          compression: 'none'
+          throttle_rate: 25, // Cap UI work at 40 Hz while keeping motion smooth.
+          queue_size: 1, // Drop stale transforms instead of building main-thread backlog.
+          compression: 'cbor'
         });
         tfSub.current.subscribe((msg: any) => handleTFMessage(msg, false));
       }
@@ -130,8 +130,8 @@ export function useTfProvider({
           name: '/tf_static',
           messageType: 'tf2_msgs/TFMessage',
           throttle_rate: 0, // No throttling for static TF
-          queue_size: 10,
-          compression: 'none'
+          queue_size: 1,
+          compression: 'cbor'
         });
         tfStaticSub.current.subscribe((msg: any) => handleTFMessage(msg, true));
       }

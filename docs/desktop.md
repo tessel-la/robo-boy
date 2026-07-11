@@ -38,6 +38,8 @@ The command starts Vite in Tauri mode and opens the native window. Tauri mode om
 
 The Linux desktop shell uses WebKitGTK. Robo-Boy uses WebKit's accelerated DMABUF renderer by default so desktop rendering stays as close as possible to the browser.
 
+The connected workspace is loaded on demand. Inactive mobile camera and 3D panels release their stream and renderer, and inactive TF trees unsubscribe until shown again. High-rate TF visualization traffic uses CBOR with a bounded queue and update rate so stale transforms cannot build a main-thread backlog.
+
 On machines where the GPU stack opens to a blank window or crashes, use the compatibility renderer:
 
 ```bash

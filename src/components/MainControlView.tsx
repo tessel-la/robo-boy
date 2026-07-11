@@ -3006,7 +3006,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 aria-hidden={!isPanelActive}
                 style={{ display: isPanelActive ? undefined : 'none' }}
               >
-                {renderWorkspacePanelContent(typedPanel, isPanelActive)}
+                {isPanelActive || (type !== '3d' && type !== 'camera')
+                  ? renderWorkspacePanelContent(typedPanel, isPanelActive)
+                  : null}
               </div>
             );
           })}

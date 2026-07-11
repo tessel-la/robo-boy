@@ -53,7 +53,7 @@ const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
 const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
 
 const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
-  const { state, isPaused, pause, resume, refresh } = useTfTree(ros);
+  const { state, isPaused, pause, resume, refresh } = useTfTree(ros, isActive);
   const { fitView, setCenter } = useReactFlow();
   const panelRef = useRef<HTMLElement>(null);
   const [nowMs, setNowMs] = useState(Date.now());

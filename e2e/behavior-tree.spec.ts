@@ -136,7 +136,7 @@ async function seedRunningActionTree(page: Page) {
             label: 'Navigate',
             actionName: '/navigate_to_pose',
             actionType: 'nav2_msgs/action/NavigateToPose',
-            parameters: {},
+            parameters: { target: { x: 0, y: 0 } },
             timeout: 60000,
           },
         },
@@ -348,6 +348,44 @@ test.describe('Behavior Tree panel', () => {
     ));
     expect(scrollOwners).toHaveLength(1);
     expect(String(scrollOwners[0])).toContain('tree-panel-menu-scroll');
+  });
+
+  test('keeps blackboard and action selectors inside a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 620 });
+    await openBehaviorTree(page);
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.getByLabel('New blackboard variable').fill('goal_value');
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByLabel('Type for goal_value').click();
+    const typeOptions = page.getByRole('listbox', { name: 'Type for goal_value options' });
+    await expect(typeOptions).toBeVisible();
+    let box = await typeOptions.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(620);
+    await typeOptions.getByRole('option', { name: 'Double' }).click();
+    await page.getByRole('button', { name: 'Close menu' }).click();
+
+    await seedRunningActionTree(page);
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Long Action Tree' }).click();
+    const actionNode = page.locator('.react-flow__node').filter({ hasText: 'Navigate' });
+    await actionNode.dispatchEvent('click');
+    await actionNode.dispatchEvent('click');
+    const inputs = page.getByLabel('input blackboard bindings');
+    await inputs.getByRole('button', { name: '+ Connect' }).click();
+    await page.getByLabel('Goal field 1').click();
+    const goalOptions = page.getByRole('listbox', { name: 'Goal field 1 options' });
+    await expect(goalOptions).toBeVisible();
+    box = await goalOptions.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(620);
   });
 
   test('defaults an action node name and lets the user rename it', async ({ page }) => {

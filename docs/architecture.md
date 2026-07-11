@@ -102,7 +102,7 @@ State is intentionally local to the browser:
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
 
-Visited mobile panel types remain mounted while hidden so transient editor state survives panel switches. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
+Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
 Persist domain definitions, not live ROS clients, Three.js objects, React state, or callbacks. Parse stored data defensively and provide defaults for newly introduced fields.
 
