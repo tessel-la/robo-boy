@@ -1,0 +1,150 @@
+.bbeditor {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background-color);
+}
+.bbeditor-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: 11px;
+  font-weight: 700;
+}
+.bbeditor-head small {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+  border-radius: 9px;
+  padding: 1px 6px;
+}
+.bbeditor-empty {
+  padding: 16px 10px;
+  color: var(--text-color-secondary);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.bbeditor-list {
+  max-height: 230px;
+  overflow-y: auto;
+}
+.bbeditor-row {
+  display: grid;
+  grid-template-columns: 10px minmax(58px, 0.9fr) minmax(62px, 0.7fr) minmax(70px, 1.1fr) 22px;
+  gap: 5px;
+  align-items: center;
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--border-color);
+}
+.bbeditor-row input,
+.bbeditor-row select,
+.bbeditor-new input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  height: 30px;
+  padding: 0 6px;
+  line-height: 28px;
+  font-size: 10px;
+  vertical-align: middle;
+}
+.bbeditor-row > * {
+  grid-row: 1;
+  align-self: center;
+}
+.bbeditor-row select {
+  display: block;
+  appearance: auto;
+}
+.bbeditor-row input:focus,
+.bbeditor-new input:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 22%, transparent);
+  border-color: var(--primary-color);
+}
+.bbeditor-row input.invalid {
+  border-color: var(--error-color, #d32f2f);
+}
+.bbeditor-name {
+  font-weight: 650;
+}
+.bbeditor-pin {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7c4dff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #7c4dff 20%, transparent);
+}
+.bbeditor-pin.boolean {
+  background: #e91e63;
+}
+.bbeditor-pin.number {
+  background: #4caf50;
+}
+.bbeditor-pin.string {
+  background: #ff9800;
+}
+.bbeditor-bool {
+  width: 100%;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--card-bg);
+  color: var(--text-color-secondary);
+  padding: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.bbeditor-bool.on {
+  color: #fff;
+  background: #4caf50;
+  border-color: #4caf50;
+}
+.bbeditor-remove {
+  width: 22px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-color-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+.bbeditor-remove:hover {
+  color: var(--error-color, #d32f2f);
+}
+.bbeditor-new {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 7px;
+}
+.bbeditor-new button {
+  height: 30px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bbeditor-new button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.bbeditor.readonly .bbeditor-row {
+  grid-template-columns: 10px minmax(64px, 0.9fr) 58px minmax(64px, 1.1fr);
+}

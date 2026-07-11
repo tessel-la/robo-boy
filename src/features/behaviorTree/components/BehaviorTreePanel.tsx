@@ -52,6 +52,7 @@ import {
 } from '../engine/persistentExecutor';
 import type { BehaviorTreeAgentCheckpoint } from '../agent/types';
 import { arrangeBehaviorTree } from '../layoutUtils';
+import { listBlackboardVariables } from '../blackboard';
 import {
   exportBehaviorTree,
   saveBehaviorTree,
@@ -518,6 +519,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [rootTree, setRootTree] = useState<BehaviorTree | null>(null);
   const [treePath, setTreePath] = useState<string[]>([]);
+  const blackboardVariables = useMemo(() => listBlackboardVariables({
+    nodes,
+    blackboardDefaults: currentTree?.blackboardDefaults,
+  }), [nodes, currentTree?.blackboardDefaults]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
@@ -3432,6 +3437,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         <ActionParameterEditor
           nodeData={editingAction.data}
           ros={ros}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
         />
@@ -3440,6 +3447,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         <ServiceParameterEditor
           nodeData={editingService.data}
           ros={ros}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
           onSave={handleSaveServiceRequest}
           onClose={() => setEditingService(null)}
         />
@@ -3462,7 +3471,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       {editingConfigNode && (
         <BehaviorNodeConfigEditor
           node={editingConfigNode}
-          blackboardVariables={Object.keys(currentTree?.blackboardDefaults || {})}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
           onSave={handleSaveNodeConfig}
           onClose={() => setEditingConfigNodeId(null)}
         />

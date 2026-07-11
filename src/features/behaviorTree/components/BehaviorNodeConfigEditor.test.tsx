@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { BehaviorNodeType, type BehaviorTreeNode } from '../types';
 import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
@@ -71,7 +71,7 @@ describe('BehaviorNodeConfigEditor', () => {
         label: 'Publisher',
         topicName: '/cmd_vel',
         messageType: 'geometry_msgs/msg/Twist',
-        message: { linear: { x: 1 } },
+        message: { linear: { x: 1 }, angular: { z: 0 } },
         inputBindings: [{ targetPath: 'linear.x', variable: 'speed' }],
       })
     );
@@ -79,9 +79,10 @@ describe('BehaviorNodeConfigEditor', () => {
     fireEvent.change(screen.getByLabelText('Message JSON'), { target: { value: '{"linear":{"x":2}}' } });
     fireEvent.change(screen.getByLabelText('Frequency (Hz, empty for once)'), { target: { value: '5' } });
     fireEvent.change(screen.getByLabelText('Duration (ms, 0 for continuous)'), { target: { value: '3000' } });
-    fireEvent.change(screen.getByLabelText('Target path = variable'), {
-      target: { value: 'linear.x=speed\ninvalid\nangular.z = enabled' },
-    });
+    const bindings = screen.getByLabelText('input blackboard bindings');
+    fireEvent.click(within(bindings).getByRole('button', { name: '+ Connect' }));
+    fireEvent.change(screen.getByLabelText('Message field 2'), { target: { value: 'angular.z' } });
+    fireEvent.change(within(bindings).getByLabelText('Blackboard key 2'), { target: { value: 'enabled' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onSave).toHaveBeenCalledWith(
@@ -127,7 +128,10 @@ describe('BehaviorNodeConfigEditor', () => {
     expect(screen.getByText('Add at least one message-path mapping.')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Timeout (ms)'), { target: { value: '2500' } });
-    fireEvent.change(screen.getByLabelText('Source path = variable'), { target: { value: 'data.ready=enabled' } });
+    const bindings = screen.getByLabelText('output blackboard bindings');
+    fireEvent.click(within(bindings).getByRole('button', { name: '+ Connect' }));
+    fireEvent.change(screen.getByLabelText('Message field 1'), { target: { value: 'data.ready' } });
+    fireEvent.change(within(bindings).getByLabelText('Blackboard key 1'), { target: { value: 'enabled' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -387,8 +387,8 @@
   position: absolute;
   top: 56px;
   left: 12px;
-  width: min(280px, calc(100% - 24px));
-  height: min(440px, calc(100% - 80px));
+  width: min(380px, calc(100% - 24px));
+  height: min(620px, calc(100% - 80px));
   max-width: calc(100vw - 24px);
   /* 100% here resolves against overlay height (position:absolute inset:0 = definite) */
   max-height: calc(100% - 80px);
@@ -401,7 +401,9 @@
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.14),
     0 2px 8px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   container-type: inline-size;
   animation: bt-popover-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -600,8 +602,8 @@
 
 /* Tree section — takes remaining space in panel, tree list scrolls inside */
 .bt-menu-tree-section {
-  flex: 1;
-  min-height: 78px;
+  flex: 0 0 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 10px 0 0;
@@ -737,7 +739,8 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: min(210px, 28vh);
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;

@@ -1,20 +1,31 @@
-import {
-  BlackboardComparisonOperator,
-  BlackboardInputBinding,
-  BlackboardOutputBinding,
-} from './types';
+import { BlackboardComparisonOperator, BlackboardInputBinding, BlackboardOutputBinding, BehaviorTree } from './types';
+
+export const listBlackboardVariables = (tree?: Pick<BehaviorTree, 'nodes' | 'blackboardDefaults'> | null): string[] => {
+  if (!tree) return [];
+  const variables = new Set(Object.keys(tree.blackboardDefaults || {}));
+  tree.nodes.forEach(node => {
+    const data = node.data as {
+      variable?: string;
+      inputBindings?: BlackboardInputBinding[];
+      outputBindings?: BlackboardOutputBinding[];
+    };
+    if (data.variable) variables.add(data.variable);
+    data.inputBindings?.forEach(binding => binding.variable && variables.add(binding.variable));
+    data.outputBindings?.forEach(binding => binding.variable && variables.add(binding.variable));
+  });
+  return Array.from(variables).sort();
+};
 
 export type Blackboard = Map<string, unknown>;
 
-export const cloneJsonValue = <T,>(value: T): T => {
+export const cloneJsonValue = <T>(value: T): T => {
   if (value === undefined) return value;
   if (typeof structuredClone === 'function') return structuredClone(value);
   return JSON.parse(JSON.stringify(value)) as T;
 };
 
-export const createBlackboard = (defaults?: Record<string, unknown>): Blackboard => (
-  new Map(Object.entries(defaults || {}).map(([key, value]) => [key, cloneJsonValue(value)]))
-);
+export const createBlackboard = (defaults?: Record<string, unknown>): Blackboard =>
+  new Map(Object.entries(defaults || {}).map(([key, value]) => [key, cloneJsonValue(value)]));
 
 export const getValueAtPath = (value: unknown, path: string): unknown => {
   if (!path.trim()) return value;
