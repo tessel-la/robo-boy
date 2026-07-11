@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
-import { BehaviorNodeType, BehaviorTree } from '../types';
+import BlackboardEditor from './BlackboardEditor';
+import { BehaviorNodeType, BehaviorTree, BlackboardValueType } from '../types';
 import {
   BEHAVIOR_TREE_STORAGE_EVENT,
   listBehaviorTrees,
@@ -43,7 +44,8 @@ interface BehaviorTreeToolbarProps {
   onOpenAgent: () => void;
   onRename: (name: string) => void;
   blackboardValues: Record<string, unknown>;
-  onBlackboardDefaultsChange: (values: Record<string, unknown>) => void;
+  blackboardTypes: Record<string, BlackboardValueType>;
+  onBlackboardDefaultsChange: (values: Record<string, unknown>, types: Record<string, BlackboardValueType>) => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
@@ -76,24 +78,19 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onOpenAgent,
   onRename,
   blackboardValues,
+  blackboardTypes,
   onBlackboardDefaultsChange,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
   const [nameValue, setNameValue] = useState(currentTree?.name ?? '');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
-  const [blackboardText, setBlackboardText] = useState(() => JSON.stringify(blackboardValues, null, 2));
-  const [blackboardError, setBlackboardError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync local name whenever the active tree changes
   useEffect(() => {
     setNameValue(currentTree?.name ?? '');
   }, [currentTree?.id, currentTree?.name]);
-
-  useEffect(() => {
-    setBlackboardText(JSON.stringify(blackboardValues, null, 2));
-  }, [blackboardValues]);
 
   useEffect(() => {
     if (!isEditingLocked) return;
@@ -296,25 +293,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       <div className="bt-menu-section">
         <label className="bt-menu-label">Blackboard {isExecuting ? '(live)' : '(defaults)'}</label>
-        <textarea
-          className="bt-blackboard-editor"
-          value={blackboardText}
+        <BlackboardEditor
+          values={blackboardValues}
+          types={blackboardTypes}
           readOnly={isExecuting}
-          spellCheck={false}
-          onChange={event => setBlackboardText(event.target.value)}
-          onBlur={() => {
-            if (isExecuting) return;
-            try {
-              const parsed = JSON.parse(blackboardText);
-              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-              setBlackboardError('');
-              onBlackboardDefaultsChange(parsed);
-            } catch {
-              setBlackboardError('Enter a JSON object.');
-            }
-          }}
+          onChange={onBlackboardDefaultsChange}
         />
-        {blackboardError && <div className="bt-blackboard-error">{blackboardError}</div>}
       </div>
 
       <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
@@ -527,7 +511,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <circle cx="8" cy="17.5" r="1" fill="currentColor" />
             <path d="M12 6.5h5M12 17.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          <span className="bt-persistent-toggle-track" aria-hidden="true"><span /></span>
+          <span className="bt-persistent-toggle-track" aria-hidden="true">
+            <span />
+          </span>
           <span className="bt-persistent-toggle-label">Keep running</span>
         </label>
         <button

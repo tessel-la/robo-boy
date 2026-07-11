@@ -8,9 +8,10 @@ const tauriHtmlCompatibilityPlugin = (): Plugin => ({
   name: 'tauri-html-compatibility',
   apply: 'build',
   transformIndexHtml(html) {
-    return html
-      .replace(/\s+crossorigin(?=(\s|>|$))/g, '')
-      .replace(/<script type="module" src=/g, '<script defer src=');
+    // Tauri custom protocols do not need CORS on same-app assets. Keep the
+    // Vite entry as an ES module: production chunks contain imports/exports,
+    // and converting it to a classic deferred script prevents React booting.
+    return html.replace(/\s+crossorigin(?=(\s|>|$))/g, '');
   },
 });
 

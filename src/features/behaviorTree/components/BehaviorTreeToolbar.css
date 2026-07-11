@@ -387,8 +387,8 @@
   position: absolute;
   top: 56px;
   left: 12px;
-  width: min(280px, calc(100% - 24px));
-  height: min(440px, calc(100% - 80px));
+  width: min(380px, calc(100% - 24px));
+  height: min(620px, calc(100% - 80px));
   max-width: calc(100vw - 24px);
   /* 100% here resolves against overlay height (position:absolute inset:0 = definite) */
   max-height: calc(100% - 80px);
@@ -600,8 +600,8 @@
 
 /* Tree section — takes remaining space in panel, tree list scrolls inside */
 .bt-menu-tree-section {
-  flex: 1;
-  min-height: 78px;
+  flex: 0 0 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 10px 0 0;
@@ -737,15 +737,15 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  flex: 1;
+  flex: 0 0 auto;
+  max-height: none;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color, #dddddd) transparent;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 
 .bt-menu-tree-list::-webkit-scrollbar {
@@ -1136,6 +1136,15 @@
     padding-top: 8px;
   }
 
+  /* The full-screen menu owns touch scrolling. Nested lists expand so mobile
+     users never have to manage two scroll areas in the same sheet. */
+  .bt-menu-tree-list {
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
+  }
+
   .bt-menu-tree-section > .bt-menu-label {
     padding: 0 12px 6px;
   }
@@ -1146,6 +1155,15 @@
 
   .bt-menu-tree-row.active {
     padding-left: 9px;
+  }
+}
+
+@media (max-height: 650px) {
+  .bt-menu-tree-list {
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 }
 

@@ -213,7 +213,7 @@ const TreePanelMenu: React.FC<TreePanelMenuProps> = ({
             role="dialog"
             aria-label={panelLabel}
           >
-            {menuContent}
+            <div className="tree-panel-menu-scroll">{menuContent}</div>
             {(['nw', 'ne', 'sw', 'se'] as const).map(corner => (
               <div
                 key={corner}

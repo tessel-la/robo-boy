@@ -140,11 +140,14 @@ describe('useTfProvider', () => {
         expect(ROSLIB.Topic).toHaveBeenCalledTimes(2); // /tf and /tf_static
         expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
             name: '/tf',
-            compression: 'none'
+            compression: 'cbor',
+            throttle_rate: 25,
+            queue_size: 1
         }));
         expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
             name: '/tf_static',
-            compression: 'none'
+            compression: 'cbor',
+            queue_size: 1
         }));
         expect(subscribeMock).toHaveBeenCalledTimes(2);
     });

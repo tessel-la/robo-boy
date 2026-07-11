@@ -85,6 +85,13 @@
   white-space: nowrap;
 }
 
+.bt-data-flow { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--border-color); min-width: 0; }
+.bt-data-flow span { display: flex; align-items: center; gap: 3px; max-width: 115px; padding: 2px 5px; border-radius: 8px; background: color-mix(in srgb, var(--primary-color) 9%, transparent); color: var(--text-color-secondary); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-data-flow span.out { background: color-mix(in srgb, #7c4dff 10%, transparent); }
+.bt-data-flow i { width: 5px; height: 5px; flex: 0 0 auto; border: 1.5px solid var(--primary-color); border-radius: 50%; }
+.bt-data-flow span.out i { border-color: #7c4dff; }
+.bt-data-flow b { color: var(--text-color-secondary); font-size: 8px; align-self: center; }
+
 /* Node status indicator */
 .bt-node-status {
   display: flex;

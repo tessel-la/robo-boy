@@ -199,6 +199,10 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
       raw.blackboardDefaults && typeof raw.blackboardDefaults === 'object' && !Array.isArray(raw.blackboardDefaults)
         ? raw.blackboardDefaults
         : undefined,
+    blackboardTypes:
+      raw.blackboardTypes && typeof raw.blackboardTypes === 'object' && !Array.isArray(raw.blackboardTypes)
+        ? raw.blackboardTypes
+        : undefined,
     nodes,
     edges,
     createdAt: now,

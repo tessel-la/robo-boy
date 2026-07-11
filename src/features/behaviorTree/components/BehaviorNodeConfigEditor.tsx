@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   BehaviorNodeType,
   BehaviorTreeNode,
@@ -7,37 +7,49 @@ import {
   ROSTopicNodeData,
   TimeoutNodeData,
 } from '../types';
+import type { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType } from '../types';
+import BlackboardBindingEditor, { BlackboardPathSuggestion, completeBindings } from './BlackboardBindingEditor';
 import './ActionParameterEditor.css';
 
 interface Props {
   node: BehaviorTreeNode;
   blackboardVariables: string[];
+  blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
   onSave: (data: BehaviorTreeNode['data']) => void;
   onClose: () => void;
 }
 
-const parseBindings = (value: string) => value.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
-  const [path, variable] = line.split('=').map(part => part.trim());
-  return { path, variable };
-}).filter(binding => binding.path && binding.variable);
+const inferredType = (value: unknown): string => {
+  if (typeof value === 'boolean') return 'bool';
+  if (typeof value === 'number') return 'float64';
+  if (typeof value === 'string') return 'string';
+  if (Array.isArray(value)) return 'object[]';
+  return 'object';
+};
 
-const formatBindings = (bindings: Array<{ sourcePath?: string; targetPath?: string; variable: string }> = []) => (
-  bindings.map(binding => `${binding.sourcePath ?? binding.targetPath ?? ''}=${binding.variable}`).join('\n')
-);
+const valuePaths = (value: unknown, prefix = ''): BlackboardPathSuggestion[] => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return prefix ? [{ path: prefix, rosType: inferredType(value) }] : [];
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const nested = valuePaths(child, path);
+    return nested.length ? nested : [{ path, rosType: inferredType(child) }];
+  });
+};
 
-const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, onSave, onClose }) => {
+const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, blackboardValues = {}, blackboardTypes = {}, onSave, onClose }) => {
   const [data, setData] = useState(node.data);
   const [payload, setPayload] = useState(() => JSON.stringify(
     node.type === BehaviorNodeType.Topic ? (node.data as ROSTopicNodeData).message || {} : {},
     null,
     2
   ));
-  const initialBindings = useMemo(() => {
-    if (node.type === BehaviorNodeType.Topic) return formatBindings((node.data as ROSTopicNodeData).inputBindings);
-    if (node.type === BehaviorNodeType.Subscriber) return formatBindings((node.data as ROSSubscriberNodeData).outputBindings);
-    return '';
-  }, [node]);
-  const [bindings, setBindings] = useState(initialBindings);
+  const [inputBindings, setInputBindings] = useState<BlackboardInputBinding[]>(() => (
+    node.type === BehaviorNodeType.Topic ? (node.data as ROSTopicNodeData).inputBindings || [] : []
+  ));
+  const [outputBindings, setOutputBindings] = useState<BlackboardOutputBinding[]>(() => (
+    node.type === BehaviorNodeType.Subscriber ? (node.data as ROSSubscriberNodeData).outputBindings || [] : []
+  ));
   const [error, setError] = useState('');
 
   const save = () => {
@@ -48,16 +60,10 @@ const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, 
       }
       if (node.type === BehaviorNodeType.Topic) {
         const parsed = JSON.parse(payload) as Record<string, unknown>;
-        const mapped = parseBindings(bindings).map(binding => ({
-          targetPath: binding.path,
-          variable: binding.variable,
-        }));
+        const mapped = completeBindings(inputBindings);
         onSave({ ...data, message: parsed, inputBindings: mapped } as ROSTopicNodeData);
       } else if (node.type === BehaviorNodeType.Subscriber) {
-        const mapped = parseBindings(bindings).map(binding => ({
-          sourcePath: binding.path,
-          variable: binding.variable,
-        }));
+        const mapped = completeBindings(outputBindings);
         if (mapped.length === 0) throw new Error('Add at least one message-path mapping.');
         onSave({ ...data, outputBindings: mapped } as ROSSubscriberNodeData);
       } else {
@@ -126,10 +132,27 @@ const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, 
             </>
           )}
           {node.type === BehaviorNodeType.Subscriber && input('Timeout (ms)', (data as ROSSubscriberNodeData).timeout ?? 10000, value => setData({ ...data, timeout: Number(value) } as ROSSubscriberNodeData), 'number')}
-          {(node.type === BehaviorNodeType.Topic || node.type === BehaviorNodeType.Subscriber) && (
-            <label className="bt-config-field"><span>{node.type === BehaviorNodeType.Topic ? 'Target path = variable' : 'Source path = variable'}</span>
-              <textarea value={bindings} onChange={event => setBindings(event.target.value)} placeholder="data=enabled" spellCheck={false} />
-            </label>
+          {node.type === BehaviorNodeType.Topic && (
+            <BlackboardBindingEditor
+              direction="input"
+              bindings={inputBindings}
+              onChange={bindings => setInputBindings(bindings as BlackboardInputBinding[])}
+              blackboardVariables={blackboardVariables}
+              blackboardValues={blackboardValues}
+              blackboardTypes={blackboardTypes}
+              pathSuggestions={valuePaths((data as ROSTopicNodeData).message)}
+              pathLabel="Message field"
+            />
+          )}
+          {node.type === BehaviorNodeType.Subscriber && (
+            <BlackboardBindingEditor
+              direction="output"
+              bindings={outputBindings}
+              onChange={bindings => setOutputBindings(bindings as BlackboardOutputBinding[])}
+              blackboardVariables={blackboardVariables}
+              pathLabel="Message field"
+              emptyHint="Connect at least one incoming field"
+            />
           )}
           {error && <div className="ape-json-error">{error}</div>}
         </div>

@@ -184,8 +184,6 @@ export function usePoseStampedClient({
         updateTrail(positionVec);
       }
 
-      console.log(`[PoseStamped] Updated pose visualization at (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
-
     } catch (error) {
       console.error('[PoseStamped] Error processing message:', error);
     }

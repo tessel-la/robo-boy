@@ -4,6 +4,7 @@ import {
   applyOutputBindings,
   createBlackboard,
   evaluateBlackboardValue,
+  listBlackboardVariables,
   getValueAtPath,
 } from './blackboard';
 
@@ -37,5 +38,37 @@ describe('behavior tree blackboard', () => {
     expect(evaluateBlackboardValue('5', 'greaterThan', 2)).toBe(false);
     expect(evaluateBlackboardValue(undefined, 'exists', undefined, false)).toBe(false);
     expect(evaluateBlackboardValue({ ok: true }, 'equals', { ok: true })).toBe(true);
+  });
+
+  it('discovers variables used by node connections as well as defaults', () => {
+    expect(
+      listBlackboardVariables({
+        blackboardDefaults: { speed: 1 },
+        nodes: [
+          {
+            id: 'publisher',
+            type: 'topic',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Publish',
+              topicName: '/cmd',
+              messageType: 'Test',
+              inputBindings: [{ targetPath: 'data', variable: 'command' }],
+            },
+          },
+          {
+            id: 'subscriber',
+            type: 'subscriber',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'Read',
+              topicName: '/state',
+              messageType: 'Test',
+              outputBindings: [{ sourcePath: 'ready', variable: 'is_ready' }],
+            },
+          },
+        ],
+      })
+    ).toEqual(['command', 'is_ready', 'speed']);
   });
 });

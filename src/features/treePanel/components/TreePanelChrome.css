@@ -59,8 +59,8 @@
   position: absolute;
   top: 56px;
   left: 12px;
-  width: min(300px, calc(100% - 24px));
-  height: min(460px, calc(100% - 80px));
+  width: min(360px, calc(100% - 24px));
+  height: min(560px, calc(100% - 80px));
   max-width: calc(100% - 24px);
   max-height: calc(100% - 80px);
   box-sizing: border-box;
@@ -77,6 +77,42 @@
   pointer-events: auto;
   animation: tree-panel-popover-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: top left;
+}
+
+.tree-panel-menu-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color, #dddddd) transparent;
+  border-radius: calc(var(--tree-panel-menu-radius) - 1px);
+}
+
+.tree-panel-menu-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.tree-panel-menu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 0;
+}
+
+.tree-panel-menu-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-color, #dddddd);
+  border-radius: 999px;
+}
+
+.tree-panel-menu-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary, #aaaaaa);
+}
+
+.tree-panel-menu-scroll::-webkit-scrollbar-thumb:active {
+  background: var(--primary-color, #4285f4);
 }
 
 .tree-panel-menu-panel::before {
