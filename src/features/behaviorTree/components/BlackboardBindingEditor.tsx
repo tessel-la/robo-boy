@@ -1,5 +1,6 @@
 import React, { useId } from 'react';
 import { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType } from '../types';
+import ContainedSelect from './ContainedSelect';
 import './BlackboardBindingEditor.css';
 
 type Binding = BlackboardInputBinding | BlackboardOutputBinding;
@@ -130,21 +131,21 @@ const BlackboardBindingEditor: React.FC<Props> = ({
               <label>
                 <span>{pathLabel}</span>
                 {suggestions.length > 0 ? (
-                  <select
-                    aria-label={`${pathLabel} ${index + 1}`}
+                  <ContainedSelect
+                    ariaLabel={`${pathLabel} ${index + 1}`}
                     value={pathOf(binding)}
-                    onChange={event => update(index, 'path', event.target.value)}
-                  >
-                    <option value="">Select parameter…</option>
-                    {pathOf(binding) && !suggestions.some(suggestion => suggestion.path === pathOf(binding)) && (
-                      <option value={pathOf(binding)}>{pathOf(binding)} · custom</option>
-                    )}
-                    {suggestions.map(suggestion => (
-                      <option key={suggestion.path} value={suggestion.path}>
-                        {suggestion.path}{suggestion.rosType ? ` · ${suggestion.rosType}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={next => update(index, 'path', next)}
+                    options={[
+                      { value: '', label: 'Select parameter…' },
+                      ...(pathOf(binding) && !suggestions.some(suggestion => suggestion.path === pathOf(binding))
+                        ? [{ value: pathOf(binding), label: `${pathOf(binding)} · custom` }]
+                        : []),
+                      ...suggestions.map(suggestion => ({
+                        value: suggestion.path,
+                        label: `${suggestion.path}${suggestion.rosType ? ` · ${suggestion.rosType}` : ''}`,
+                      })),
+                    ]}
+                  />
                 ) : (
                   <input
                     aria-label={`${pathLabel} ${index + 1}`}
@@ -166,20 +167,22 @@ const BlackboardBindingEditor: React.FC<Props> = ({
               <label>
                 <span>Blackboard key</span>
                 {direction === 'input' ? (
-                  <select
-                    aria-label={`Blackboard key ${index + 1}`}
+                  <ContainedSelect
+                    ariaLabel={`Blackboard key ${index + 1}`}
                     value={binding.variable}
-                    onChange={event => update(index, 'variable', event.target.value)}
-                  >
-                    <option value="">Select value…</option>
-                    {variables
+                    onChange={next => update(index, 'variable', next)}
+                    options={[
+                      { value: '', label: 'Select value…' },
+                      ...variables
                       .filter(variable => variable === binding.variable || (blackboardTypes[variable]
                         ? isBlackboardTypeCompatible(blackboardTypes[variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType)
                         : isBlackboardValueCompatible(blackboardValues[variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType)))
-                      .map(variable => (
-                        <option key={variable} value={variable}>{variable} · {blackboardTypes[variable] || valueKind(blackboardValues[variable])}</option>
-                      ))}
-                  </select>
+                      .map(variable => ({
+                        value: variable,
+                        label: `${variable} · ${blackboardTypes[variable] || valueKind(blackboardValues[variable])}`,
+                      })),
+                    ]}
+                  />
                 ) : (
                   <input
                     aria-label={`Blackboard key ${index + 1}`}

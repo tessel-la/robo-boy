@@ -113,6 +113,9 @@
 .bbe-row.incompatible select {
   border-color: var(--error-color, #d32f2f);
 }
+.bbe-row.incompatible .contained-select-trigger {
+  border-color: var(--error-color, #d32f2f);
+}
 .bbe-wire {
   align-self: end;
   height: 28px;

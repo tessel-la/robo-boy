@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BlackboardValueType } from '../types';
+import ContainedSelect, { ContainedSelectOption } from './ContainedSelect';
 import './BlackboardEditor.css';
 
 interface Props {
@@ -42,6 +43,25 @@ const defaultFor = (type: BlackboardValueType): unknown => ({
 const isNumeric = (type: BlackboardValueType) => ['int32', 'int64', 'float32', 'float64'].includes(type);
 const isStructured = (type: BlackboardValueType) => !['bool', 'int32', 'int64', 'float32', 'float64', 'string'].includes(type);
 const pinKind = (type: BlackboardValueType) => type === 'bool' ? 'boolean' : isNumeric(type) ? 'number' : type === 'string' ? 'string' : 'json';
+
+const TYPE_OPTIONS: ContainedSelectOption[] = [
+  { value: 'bool', label: 'Bool', group: 'Primitives' },
+  { value: 'int32', label: 'Int32', group: 'Primitives' },
+  { value: 'int64', label: 'Int64', group: 'Primitives' },
+  { value: 'float32', label: 'Float32', group: 'Primitives' },
+  { value: 'float64', label: 'Double', group: 'Primitives' },
+  { value: 'string', label: 'String', group: 'Primitives' },
+  { value: 'numberArray', label: 'Number array', group: 'Collections' },
+  { value: 'stringArray', label: 'String array', group: 'Collections' },
+  { value: 'vector3', label: 'Vector3', group: 'ROS common' },
+  { value: 'point', label: 'Point', group: 'ROS common' },
+  { value: 'quaternion', label: 'Quaternion', group: 'ROS common' },
+  { value: 'pose', label: 'Pose', group: 'ROS common' },
+  { value: 'twist', label: 'Twist', group: 'ROS common' },
+  { value: 'time', label: 'Time', group: 'ROS common' },
+  { value: 'duration', label: 'Duration', group: 'ROS common' },
+  { value: 'json', label: 'JSON', group: 'Advanced' },
+];
 
 const JsonValueInput: React.FC<{
   name: string;
@@ -119,35 +139,13 @@ const BlackboardEditor: React.FC<Props> = ({ values, types = {}, readOnly = fals
                 title="Variable keys stay stable so node connections remain valid"
                 spellCheck={false}
               />
-              <select
-                aria-label={`Type for ${name}`}
+              <ContainedSelect
+                ariaLabel={`Type for ${name}`}
                 value={kind}
                 disabled={readOnly}
-                onChange={event => setType(name, event.target.value as BlackboardValueType)}
-              >
-                <optgroup label="Primitives">
-                  <option value="bool">Bool</option>
-                  <option value="int32">Int32</option>
-                  <option value="int64">Int64</option>
-                  <option value="float32">Float32</option>
-                  <option value="float64">Double</option>
-                  <option value="string">String</option>
-                </optgroup>
-                <optgroup label="Collections">
-                  <option value="numberArray">Number array</option>
-                  <option value="stringArray">String array</option>
-                </optgroup>
-                <optgroup label="ROS common">
-                  <option value="vector3">Vector3</option>
-                  <option value="point">Point</option>
-                  <option value="quaternion">Quaternion</option>
-                  <option value="pose">Pose</option>
-                  <option value="twist">Twist</option>
-                  <option value="time">Time</option>
-                  <option value="duration">Duration</option>
-                </optgroup>
-                <option value="json">JSON</option>
-              </select>
+                options={TYPE_OPTIONS}
+                onChange={next => setType(name, next as BlackboardValueType)}
+              />
               {kind === 'bool' ? (
                 <button
                   type="button"
