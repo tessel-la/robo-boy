@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { BlackboardInputBinding, BlackboardOutputBinding } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType } from '../types';
 import './BlackboardBindingEditor.css';
 
 type Binding = BlackboardInputBinding | BlackboardOutputBinding;
@@ -15,6 +15,7 @@ interface Props {
   onChange: (bindings: Binding[]) => void;
   blackboardVariables?: string[];
   blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
   pathSuggestions?: Array<string | BlackboardPathSuggestion>;
   pathLabel?: string;
   emptyHint?: string;
@@ -41,12 +42,35 @@ export const isBlackboardValueCompatible = (value: unknown, rosType?: string): b
   return typeof value === 'object' && !Array.isArray(value);
 };
 
+export const isBlackboardTypeCompatible = (type: BlackboardValueType | undefined, rosType?: string): boolean => {
+  if (!type || !rosType) return true;
+  const normalized = rosType.toLowerCase();
+  if (['bool', 'boolean'].includes(normalized)) return type === 'bool';
+  if (/^u?int(8|16|32)?$/.test(normalized) || ['byte', 'char'].includes(normalized)) return type === 'int32';
+  if (/^u?int64$/.test(normalized)) return type === 'int64' || type === 'int32';
+  if (['float', 'float32'].includes(normalized)) return ['float32', 'int32'].includes(type);
+  if (['double', 'float64'].includes(normalized)) return ['float64', 'float32', 'int32', 'int64'].includes(type);
+  if (normalized === 'string' || normalized === 'wstring') return type === 'string';
+  if (normalized.endsWith('[]')) {
+    return normalized.startsWith('string') ? type === 'stringArray' : type === 'numberArray';
+  }
+  if (normalized.includes('vector3')) return type === 'vector3';
+  if (normalized.includes('/point')) return type === 'point' || type === 'vector3';
+  if (normalized.includes('quaternion')) return type === 'quaternion';
+  if (normalized.includes('/pose')) return type === 'pose';
+  if (normalized.includes('/twist')) return type === 'twist';
+  if (normalized.includes('/time')) return type === 'time';
+  if (normalized.includes('/duration')) return type === 'duration';
+  return type === 'json';
+};
+
 const BlackboardBindingEditor: React.FC<Props> = ({
   direction,
   bindings,
   onChange,
   blackboardVariables = [],
   blackboardValues = {},
+  blackboardTypes = {},
   pathSuggestions = [],
   pathLabel = direction === 'input' ? 'Target field' : 'Source field',
   emptyHint,
@@ -100,7 +124,7 @@ const BlackboardBindingEditor: React.FC<Props> = ({
         <div className="bbe-list">
           {bindings.map((binding, index) => (
             <div
-              className={`bbe-row${direction === 'input' && binding.variable && !isBlackboardValueCompatible(blackboardValues[binding.variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType) ? ' incompatible' : ''}`}
+              className={`bbe-row${direction === 'input' && binding.variable && !(blackboardTypes[binding.variable] ? isBlackboardTypeCompatible(blackboardTypes[binding.variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType) : isBlackboardValueCompatible(blackboardValues[binding.variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType)) ? ' incompatible' : ''}`}
               key={`${index}-${pathOf(binding)}`}
             >
               <label>
@@ -149,12 +173,11 @@ const BlackboardBindingEditor: React.FC<Props> = ({
                   >
                     <option value="">Select value…</option>
                     {variables
-                      .filter(variable => variable === binding.variable || isBlackboardValueCompatible(
-                        blackboardValues[variable],
-                        suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType
-                      ))
+                      .filter(variable => variable === binding.variable || (blackboardTypes[variable]
+                        ? isBlackboardTypeCompatible(blackboardTypes[variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType)
+                        : isBlackboardValueCompatible(blackboardValues[variable], suggestions.find(suggestion => suggestion.path === pathOf(binding))?.rosType)))
                       .map(variable => (
-                        <option key={variable} value={variable}>{variable} · {valueKind(blackboardValues[variable])}</option>
+                        <option key={variable} value={variable}>{variable} · {blackboardTypes[variable] || valueKind(blackboardValues[variable])}</option>
                       ))}
                   </select>
                 ) : (

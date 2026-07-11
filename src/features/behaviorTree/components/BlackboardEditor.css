@@ -28,8 +28,8 @@
   line-height: 1.5;
 }
 .bbeditor-list {
-  max-height: 230px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 .bbeditor-row {
   display: grid;
@@ -147,4 +147,11 @@
 }
 .bbeditor.readonly .bbeditor-row {
   grid-template-columns: 10px minmax(64px, 0.9fr) 58px minmax(64px, 1.1fr);
+}
+
+@media (max-width: 600px), (max-height: 650px) {
+  .bbeditor-list {
+    max-height: none;
+    overflow: visible;
+  }
 }

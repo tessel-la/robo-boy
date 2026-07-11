@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import BlackboardBindingEditor, { isBlackboardValueCompatible } from './BlackboardBindingEditor';
+import BlackboardBindingEditor, { isBlackboardTypeCompatible, isBlackboardValueCompatible } from './BlackboardBindingEditor';
 
 describe('BlackboardBindingEditor', () => {
   it('filters input choices by the selected ROS field type while keeping dynamic values available', () => {
@@ -25,5 +25,9 @@ describe('BlackboardBindingEditor', () => {
     expect(isBlackboardValueCompatible('2', 'float32')).toBe(false);
     expect(isBlackboardValueCompatible([], 'float64[]')).toBe(true);
     expect(isBlackboardValueCompatible({}, 'geometry_msgs/msg/Point')).toBe(true);
+    expect(isBlackboardTypeCompatible('float64', 'double')).toBe(true);
+    expect(isBlackboardTypeCompatible('float32', 'int32')).toBe(false);
+    expect(isBlackboardTypeCompatible('pose', 'geometry_msgs/msg/Pose')).toBe(true);
+    expect(isBlackboardTypeCompatible('twist', 'geometry_msgs/msg/Pose')).toBe(false);
   });
 });

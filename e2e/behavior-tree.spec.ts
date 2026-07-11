@@ -313,6 +313,43 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
   });
 
+  test('uses one menu scroll area when saved trees and blackboard values overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 620 });
+    await openBehaviorTree(page);
+    await page.evaluate(() => {
+      const now = Date.now();
+      const values = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`value_${index}`, index]));
+      const saved = Array.from({ length: 12 }, (_, index) => ({
+        version: '1.0.0',
+        tree: {
+          id: `scroll-tree-${index}`,
+          name: `Scroll Tree ${index}`,
+          nodes: [],
+          edges: [],
+          blackboardDefaults: values,
+          createdAt: now,
+          updatedAt: now,
+        },
+      }));
+      localStorage.setItem('robo-boy-behavior-trees', JSON.stringify(saved));
+    });
+
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').first().click();
+    await page.getByTestId('bt-menu-button').click();
+
+    const scrollOwners = await page.getByTestId('bt-menu-panel').evaluate(panel => (
+      [panel, ...Array.from(panel.querySelectorAll<HTMLElement>('*'))]
+        .filter(element => {
+          const overflow = getComputedStyle(element).overflowY;
+          return ['auto', 'scroll'].includes(overflow) && element.scrollHeight > element.clientHeight + 1;
+        })
+        .map(element => element.className)
+    ));
+    expect(scrollOwners).toHaveLength(1);
+    expect(String(scrollOwners[0])).toContain('tree-panel-menu-scroll');
+  });
+
   test('defaults an action node name and lets the user rename it', async ({ page }) => {
     await openBehaviorTree(page);
     await openNodePalette(page);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { BlackboardInputBinding, BlackboardOutputBinding, ROSActionNodeData } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType, ROSActionNodeData } from '../types';
 import { fetchActionGoalDetails, ActionFieldSchema } from '../services/rosDiscovery';
 import { ACTION_TEMPLATES } from '../actionTemplates';
 import BlackboardBindingEditor, { BlackboardPathSuggestion, completeBindings } from './BlackboardBindingEditor';
@@ -17,6 +17,7 @@ interface ActionParameterEditorProps {
   onClose: () => void;
   blackboardVariables?: string[];
   blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
 }
 
 // ─── Type helpers ─────────────────────────────────────────────────────────────
@@ -295,6 +296,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
   onClose,
   blackboardVariables = [],
   blackboardValues = {},
+  blackboardTypes = {},
 }) => {
   const [fields, setFields] = useState<ActionFieldSchema[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
@@ -496,6 +498,7 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
                 onChange={bindings => setInputBindings(bindings as BlackboardInputBinding[])}
                 blackboardVariables={blackboardVariables}
                 blackboardValues={blackboardValues}
+                blackboardTypes={blackboardTypes}
                 pathSuggestions={fieldPaths(fields)}
                 pathLabel="Goal field"
               />

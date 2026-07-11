@@ -62,6 +62,24 @@ export interface BaseNodeData {
 
 export type BlackboardValue = unknown;
 
+export type BlackboardValueType =
+  | 'bool'
+  | 'int32'
+  | 'int64'
+  | 'float32'
+  | 'float64'
+  | 'string'
+  | 'numberArray'
+  | 'stringArray'
+  | 'vector3'
+  | 'point'
+  | 'quaternion'
+  | 'pose'
+  | 'twist'
+  | 'time'
+  | 'duration'
+  | 'json';
+
 export interface BlackboardInputBinding {
   variable: string;
   targetPath: string;
@@ -171,6 +189,7 @@ export interface BehaviorTree {
   createdAt: number;
   updatedAt: number;
   blackboardDefaults?: Record<string, BlackboardValue>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
 }
 
 // Execution context

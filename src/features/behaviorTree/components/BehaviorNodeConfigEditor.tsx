@@ -7,7 +7,7 @@ import {
   ROSTopicNodeData,
   TimeoutNodeData,
 } from '../types';
-import type { BlackboardInputBinding, BlackboardOutputBinding } from '../types';
+import type { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType } from '../types';
 import BlackboardBindingEditor, { BlackboardPathSuggestion, completeBindings } from './BlackboardBindingEditor';
 import './ActionParameterEditor.css';
 
@@ -15,6 +15,7 @@ interface Props {
   node: BehaviorTreeNode;
   blackboardVariables: string[];
   blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
   onSave: (data: BehaviorTreeNode['data']) => void;
   onClose: () => void;
 }
@@ -36,7 +37,7 @@ const valuePaths = (value: unknown, prefix = ''): BlackboardPathSuggestion[] => 
   });
 };
 
-const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, blackboardValues = {}, onSave, onClose }) => {
+const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, blackboardValues = {}, blackboardTypes = {}, onSave, onClose }) => {
   const [data, setData] = useState(node.data);
   const [payload, setPayload] = useState(() => JSON.stringify(
     node.type === BehaviorNodeType.Topic ? (node.data as ROSTopicNodeData).message || {} : {},
@@ -138,6 +139,7 @@ const BehaviorNodeConfigEditor: React.FC<Props> = ({ node, blackboardVariables, 
               onChange={bindings => setInputBindings(bindings as BlackboardInputBinding[])}
               blackboardVariables={blackboardVariables}
               blackboardValues={blackboardValues}
+              blackboardTypes={blackboardTypes}
               pathSuggestions={valuePaths((data as ROSTopicNodeData).message)}
               pathLabel="Message field"
             />

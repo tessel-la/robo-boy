@@ -401,9 +401,7 @@
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.14),
     0 2px 8px rgba(0, 0, 0, 0.06);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   pointer-events: auto;
   container-type: inline-size;
   animation: bt-popover-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -739,16 +737,15 @@
 /* ── Saved trees list ─────────────────────────────────────────────────────── */
 
 .bt-menu-tree-list {
-  flex: 0 1 auto;
-  max-height: min(210px, 28vh);
+  flex: 0 0 auto;
+  max-height: none;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color, #dddddd) transparent;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 
 .bt-menu-tree-list::-webkit-scrollbar {
@@ -1139,6 +1136,15 @@
     padding-top: 8px;
   }
 
+  /* The full-screen menu owns touch scrolling. Nested lists expand so mobile
+     users never have to manage two scroll areas in the same sheet. */
+  .bt-menu-tree-list {
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
+  }
+
   .bt-menu-tree-section > .bt-menu-label {
     padding: 0 12px 6px;
   }
@@ -1149,6 +1155,15 @@
 
   .bt-menu-tree-row.active {
     padding-left: 9px;
+  }
+}
+
+@media (max-height: 650px) {
+  .bt-menu-tree-list {
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 }
 

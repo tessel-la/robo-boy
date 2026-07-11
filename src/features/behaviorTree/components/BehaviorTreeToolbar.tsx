@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import BlackboardEditor from './BlackboardEditor';
-import { BehaviorNodeType, BehaviorTree } from '../types';
+import { BehaviorNodeType, BehaviorTree, BlackboardValueType } from '../types';
 import {
   BEHAVIOR_TREE_STORAGE_EVENT,
   listBehaviorTrees,
@@ -44,7 +44,8 @@ interface BehaviorTreeToolbarProps {
   onOpenAgent: () => void;
   onRename: (name: string) => void;
   blackboardValues: Record<string, unknown>;
-  onBlackboardDefaultsChange: (values: Record<string, unknown>) => void;
+  blackboardTypes: Record<string, BlackboardValueType>;
+  onBlackboardDefaultsChange: (values: Record<string, unknown>, types: Record<string, BlackboardValueType>) => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
@@ -77,6 +78,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onOpenAgent,
   onRename,
   blackboardValues,
+  blackboardTypes,
   onBlackboardDefaultsChange,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -291,7 +293,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       <div className="bt-menu-section">
         <label className="bt-menu-label">Blackboard {isExecuting ? '(live)' : '(defaults)'}</label>
-        <BlackboardEditor values={blackboardValues} readOnly={isExecuting} onChange={onBlackboardDefaultsChange} />
+        <BlackboardEditor
+          values={blackboardValues}
+          types={blackboardTypes}
+          readOnly={isExecuting}
+          onChange={onBlackboardDefaultsChange}
+        />
       </div>
 
       <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />

@@ -86,6 +86,7 @@ import {
   ROSTopicInfo,
   BlackboardInputBinding,
   BlackboardOutputBinding,
+  BlackboardValueType,
 } from '../types';
 import {
   areTreePathsEqual,
@@ -1612,8 +1613,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     );
   }, [editingConfigNodeId, edges, nodes, persistEditorTree]);
 
-  const handleBlackboardDefaultsChange = useCallback((defaults: Record<string, unknown>) => {
-    persistEditorTree(nodes, edges, { blackboardDefaults: defaults });
+  const handleBlackboardDefaultsChange = useCallback((defaults: Record<string, unknown>, types: Record<string, BlackboardValueType>) => {
+    persistEditorTree(nodes, edges, { blackboardDefaults: defaults, blackboardTypes: types });
   }, [edges, nodes, persistEditorTree]);
 
   const handleSave = useCallback(() => {
@@ -2501,6 +2502,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         name: agentPreviewTree.name,
         description: agentPreviewTree.description,
         blackboardDefaults: agentPreviewTree.blackboardDefaults,
+        blackboardTypes: agentPreviewTree.blackboardTypes,
       });
     } else {
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
@@ -3106,6 +3108,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }}
         onRename={handleRename}
         blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
+        blackboardTypes={currentTree?.blackboardTypes || {}}
         onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
       />
 
@@ -3439,6 +3442,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           blackboardVariables={blackboardVariables}
           blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
         />
@@ -3449,6 +3453,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           blackboardVariables={blackboardVariables}
           blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
           onSave={handleSaveServiceRequest}
           onClose={() => setEditingService(null)}
         />
@@ -3473,6 +3478,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           node={editingConfigNode}
           blackboardVariables={blackboardVariables}
           blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
           onSave={handleSaveNodeConfig}
           onClose={() => setEditingConfigNodeId(null)}
         />

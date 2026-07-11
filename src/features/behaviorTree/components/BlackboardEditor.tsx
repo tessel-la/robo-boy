@@ -1,22 +1,47 @@
 import React, { useEffect, useState } from 'react';
+import { BlackboardValueType } from '../types';
 import './BlackboardEditor.css';
 
 interface Props {
   values: Record<string, unknown>;
+  types?: Record<string, BlackboardValueType>;
   readOnly?: boolean;
-  onChange: (values: Record<string, unknown>) => void;
+  onChange: (values: Record<string, unknown>, types: Record<string, BlackboardValueType>) => void;
 }
 
-type ValueKind = 'boolean' | 'number' | 'string' | 'json';
-
-const kindOf = (value: unknown): ValueKind => {
-  if (typeof value === 'boolean') return 'boolean';
-  if (typeof value === 'number') return 'number';
+const inferredType = (value: unknown): BlackboardValueType => {
+  if (typeof value === 'boolean') return 'bool';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'int32' : 'float64';
   if (typeof value === 'string') return 'string';
+  if (Array.isArray(value)) {
+    return value.every(item => typeof item === 'string') ? 'stringArray' : 'numberArray';
+  }
   return 'json';
 };
 
-const defaultFor = (kind: ValueKind): unknown => ({ boolean: false, number: 0, string: '', json: {} })[kind];
+const xyz = () => ({ x: 0, y: 0, z: 0 });
+const defaultFor = (type: BlackboardValueType): unknown => ({
+  bool: false,
+  int32: 0,
+  int64: 0,
+  float32: 0,
+  float64: 0,
+  string: '',
+  numberArray: [],
+  stringArray: [],
+  vector3: xyz(),
+  point: xyz(),
+  quaternion: { x: 0, y: 0, z: 0, w: 1 },
+  pose: { position: xyz(), orientation: { x: 0, y: 0, z: 0, w: 1 } },
+  twist: { linear: xyz(), angular: xyz() },
+  time: { sec: 0, nanosec: 0 },
+  duration: { sec: 0, nanosec: 0 },
+  json: {},
+})[type];
+
+const isNumeric = (type: BlackboardValueType) => ['int32', 'int64', 'float32', 'float64'].includes(type);
+const isStructured = (type: BlackboardValueType) => !['bool', 'int32', 'int64', 'float32', 'float64', 'string'].includes(type);
+const pinKind = (type: BlackboardValueType) => type === 'bool' ? 'boolean' : isNumeric(type) ? 'number' : type === 'string' ? 'string' : 'json';
 
 const JsonValueInput: React.FC<{
   name: string;
@@ -48,19 +73,26 @@ const JsonValueInput: React.FC<{
   );
 };
 
-const BlackboardEditor: React.FC<Props> = ({ values, readOnly = false, onChange }) => {
+const BlackboardEditor: React.FC<Props> = ({ values, types = {}, readOnly = false, onChange }) => {
   const [draftName, setDraftName] = useState('');
 
-  const setValue = (name: string, value: unknown) => onChange({ ...values, [name]: value });
+  const resolvedTypes = Object.fromEntries(Object.entries(values).map(([name, value]) => [name, types[name] || inferredType(value)])) as Record<string, BlackboardValueType>;
+  const setValue = (name: string, value: unknown) => onChange({ ...values, [name]: value }, resolvedTypes);
+  const setType = (name: string, type: BlackboardValueType) => onChange(
+    { ...values, [name]: defaultFor(type) },
+    { ...resolvedTypes, [name]: type }
+  );
   const remove = (name: string) => {
     const next = { ...values };
+    const nextTypes = { ...resolvedTypes };
     delete next[name];
-    onChange(next);
+    delete nextTypes[name];
+    onChange(next, nextTypes);
   };
   const add = () => {
     const name = draftName.trim();
     if (!name || Object.prototype.hasOwnProperty.call(values, name)) return;
-    onChange({ ...values, [name]: null });
+    onChange({ ...values, [name]: false }, { ...resolvedTypes, [name]: 'bool' });
     setDraftName('');
   };
 
@@ -75,10 +107,10 @@ const BlackboardEditor: React.FC<Props> = ({ values, readOnly = false, onChange 
       )}
       <div className="bbeditor-list">
         {Object.entries(values).map(([name, value]) => {
-          const kind = kindOf(value);
+          const kind = resolvedTypes[name];
           return (
             <div className="bbeditor-row" key={name}>
-              <span className={`bbeditor-pin ${kind}`} aria-hidden="true" />
+              <span className={`bbeditor-pin ${pinKind(kind)}`} aria-hidden="true" />
               <input
                 className="bbeditor-name"
                 value={name}
@@ -91,14 +123,32 @@ const BlackboardEditor: React.FC<Props> = ({ values, readOnly = false, onChange 
                 aria-label={`Type for ${name}`}
                 value={kind}
                 disabled={readOnly}
-                onChange={event => setValue(name, defaultFor(event.target.value as ValueKind))}
+                onChange={event => setType(name, event.target.value as BlackboardValueType)}
               >
-                <option value="boolean">Bool</option>
-                <option value="number">Number</option>
-                <option value="string">Text</option>
+                <optgroup label="Primitives">
+                  <option value="bool">Bool</option>
+                  <option value="int32">Int32</option>
+                  <option value="int64">Int64</option>
+                  <option value="float32">Float32</option>
+                  <option value="float64">Double</option>
+                  <option value="string">String</option>
+                </optgroup>
+                <optgroup label="Collections">
+                  <option value="numberArray">Number array</option>
+                  <option value="stringArray">String array</option>
+                </optgroup>
+                <optgroup label="ROS common">
+                  <option value="vector3">Vector3</option>
+                  <option value="point">Point</option>
+                  <option value="quaternion">Quaternion</option>
+                  <option value="pose">Pose</option>
+                  <option value="twist">Twist</option>
+                  <option value="time">Time</option>
+                  <option value="duration">Duration</option>
+                </optgroup>
                 <option value="json">JSON</option>
               </select>
-              {kind === 'boolean' ? (
+              {kind === 'bool' ? (
                 <button
                   type="button"
                   className={`bbeditor-bool${value ? ' on' : ''}`}
@@ -108,16 +158,17 @@ const BlackboardEditor: React.FC<Props> = ({ values, readOnly = false, onChange 
                 >
                   {value ? 'TRUE' : 'FALSE'}
                 </button>
-              ) : kind === 'json' ? (
+              ) : isStructured(kind) ? (
                 <JsonValueInput name={name} value={value} readOnly={readOnly} onChange={next => setValue(name, next)} />
               ) : (
                 <input
                   aria-label={`Value for ${name}`}
-                  type={kind === 'number' ? 'number' : 'text'}
+                  type={isNumeric(kind) ? 'number' : 'text'}
+                  step={kind === 'int32' || kind === 'int64' ? '1' : 'any'}
                   value={String(value)}
                   readOnly={readOnly}
                   onChange={event =>
-                    setValue(name, kind === 'number' ? Number(event.target.value) : event.target.value)
+                    setValue(name, isNumeric(kind) ? Number(event.target.value) : event.target.value)
                   }
                 />
               )}

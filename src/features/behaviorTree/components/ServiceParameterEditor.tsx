@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { BlackboardInputBinding, BlackboardOutputBinding, ROSServiceNodeData } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType, ROSServiceNodeData } from '../types';
 import { fetchServiceRequestSchema, ActionFieldSchema } from '../services/rosDiscovery';
 import { SERVICE_TEMPLATES } from '../serviceTemplates';
 import BlackboardBindingEditor, { BlackboardPathSuggestion, completeBindings } from './BlackboardBindingEditor';
@@ -13,6 +13,7 @@ interface ServiceParameterEditorProps {
   onClose: () => void;
   blackboardVariables?: string[];
   blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
 }
 
 // ─── Type helpers (shared with ActionParameterEditor) ─────────────────────────
@@ -291,6 +292,7 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
   onClose,
   blackboardVariables = [],
   blackboardValues = {},
+  blackboardTypes = {},
 }) => {
   const [fields, setFields] = useState<ActionFieldSchema[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
@@ -495,6 +497,7 @@ const ServiceParameterEditor: React.FC<ServiceParameterEditorProps> = ({
                 onChange={bindings => setInputBindings(bindings as BlackboardInputBinding[])}
                 blackboardVariables={blackboardVariables}
                 blackboardValues={blackboardValues}
+                blackboardTypes={blackboardTypes}
                 pathSuggestions={fieldPaths(fields)}
                 pathLabel="Request field"
               />
