@@ -31,6 +31,7 @@ import BehaviorTreePanel, {
 } from '../features/behaviorTree/components/BehaviorTreePanel';
 import { PersistentBehaviorTreeExecutor } from '../features/behaviorTree/engine/persistentExecutor';
 import TfTreePanel from '../features/tfTree/components/TfTreePanel';
+import { saveRecentConnection } from '../runtime/recentConnections';
 import anime from 'animejs';
 
 // --- Top Bar Icons ---
@@ -1492,6 +1493,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     disconnect(); // Disconnect ROS
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
+
+  useEffect(() => {
+    if (isConnected) saveRecentConnection(connectionParams);
+  }, [connectionParams, isConnected]);
 
   // --- Handlers for Modular Panels ---
   const handleSelectPanel = (id: string) => {

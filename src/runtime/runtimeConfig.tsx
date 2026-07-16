@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type { ConnectionParams } from '../App';
+import { normalizeConnectionHost } from './connectionHost';
 
 export interface RuntimeEndpoints {
   rosbridgeUrl: string;
@@ -9,7 +10,32 @@ export interface RuntimeEndpoints {
   host: string;
 }
 
+export interface RuntimePortConfig {
+  rosbridgePort: string;
+  videoStreamPort: string;
+  meshResourcesPort: string;
+  webBackendMode: 'auto' | 'proxy' | 'direct';
+}
+
 type BrowserLocation = Pick<Location, 'protocol' | 'hostname'> & Partial<Pick<Location, 'host'>>;
+
+const readPortEnv = (value: string | undefined, fallback: string): string => {
+  if (!value) return fallback;
+
+  const port = Number.parseInt(value, 10);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? String(port) : fallback;
+};
+
+const readWebBackendMode = (value: string | undefined): RuntimePortConfig['webBackendMode'] => {
+  return value === 'proxy' || value === 'direct' ? value : 'auto';
+};
+
+export const getRuntimePortConfig = (): RuntimePortConfig => ({
+  rosbridgePort: readPortEnv(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
+  videoStreamPort: readPortEnv(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
+  meshResourcesPort: readPortEnv(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
+  webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
+});
 
 const getBrowserLocation = (): BrowserLocation => {
   if (typeof window === 'undefined') {
@@ -22,24 +48,54 @@ export const isDesktopRuntime = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 };
 
-const normalizeHost = (value: string): string => {
-  const candidate = value.trim();
-  if (!candidate) return 'localhost';
+const formatUrlHost = (host: string): string => (host.includes(':') ? `[${host}]` : host);
 
-  try {
-    const parsed = new URL(candidate.includes('://') ? candidate : `http://${candidate}`);
-    return parsed.hostname.replace(/^\[|\]$/g, '') || 'localhost';
-  } catch {
-    return candidate.replace(/^\[|\]$/g, '') || 'localhost';
-  }
+const isSameHost = (configuredHost: string, location: BrowserLocation): boolean => {
+  return (
+    normalizeConnectionHost(configuredHost, 'localhost').toLowerCase() ===
+    normalizeConnectionHost(location.hostname, 'localhost').toLowerCase()
+  );
+};
+
+const resolveDirectEndpoints = (
+  host: string,
+  ports: RuntimePortConfig,
+  mode: RuntimeEndpoints['mode'],
+  location?: BrowserLocation
+): RuntimeEndpoints => {
+  const urlHost = formatUrlHost(host);
+  const secureWebPage = mode === 'web' && location?.protocol === 'https:';
+  const websocketScheme = secureWebPage ? 'wss' : 'ws';
+  const httpScheme = secureWebPage ? 'https' : 'http';
+
+  return {
+    rosbridgeUrl: `${websocketScheme}://${urlHost}:${ports.rosbridgePort}`,
+    videoStreamBaseUrl: `${httpScheme}://${urlHost}:${ports.videoStreamPort}`,
+    meshResourcesBaseUrl: `${httpScheme}://${urlHost}:${ports.meshResourcesPort}`,
+    mode,
+    host,
+  };
 };
 
 export function resolveRuntimeEndpoints(
   params?: ConnectionParams | null,
   desktop = isDesktopRuntime(),
-  location = getBrowserLocation()
+  location = getBrowserLocation(),
+  ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
+  const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';
+  const host = normalizeConnectionHost(configuredHost, 'localhost');
+
   if (!desktop) {
+    const shouldUseDirectBackend =
+      params?.ros2Option === 'ip' &&
+      ports.webBackendMode !== 'proxy' &&
+      (ports.webBackendMode === 'direct' || !isSameHost(configuredHost, location));
+
+    if (shouldUseDirectBackend) {
+      return resolveDirectEndpoints(host, ports, 'web', location);
+    }
+
     const authority = location.host || location.hostname;
     const websocketScheme = location.protocol === 'https:' ? 'wss' : 'ws';
     return {
@@ -51,17 +107,7 @@ export function resolveRuntimeEndpoints(
     };
   }
 
-  const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';
-  const host = normalizeHost(configuredHost);
-  const urlHost = host.includes(':') ? `[${host}]` : host;
-
-  return {
-    rosbridgeUrl: `ws://${urlHost}:9090`,
-    videoStreamBaseUrl: `http://${urlHost}:8080`,
-    meshResourcesBaseUrl: `http://${urlHost}:8000`,
-    mode: 'desktop',
-    host,
-  };
+  return resolveDirectEndpoints(host, ports, 'desktop');
 }
 
 const RuntimeConfigContext = createContext<RuntimeEndpoints>(resolveRuntimeEndpoints());

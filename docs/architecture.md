@@ -10,8 +10,8 @@ Browser or Tauri webview
   ROSLIB WebSocket client
   Three.js visualization
         |
-        | Web: same-origin Caddy routes
-        | Desktop: direct ROS host ports
+        | Web: Caddy routes or selected backend host
+        | Desktop: selected backend host ports
         |
         v
 ROS stack
@@ -41,7 +41,7 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 
 ## ROS Boundary
 
-`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds derive same-origin proxy routes from the page location; Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
+`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect and Domain ID, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
 
 The connection object is passed to feature components. Code that creates a `ROSLIB.Topic`, `Service`, or action request must:
 

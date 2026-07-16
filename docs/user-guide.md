@@ -8,7 +8,9 @@
 
 ## Connect To A Robot
 
-Open Robo-Boy and submit the connection form. The browser connects to rosbridge through the current Robo-Boy host at `/websocket`; the value entered on the connection screen is retained as robot context, while the deployed proxy determines the actual WebSocket endpoint.
+Open Robo-Boy and submit the connection form. Quick Connect and Domain ID use the current Robo-Boy host's proxy routes. When you select **Host or IP**, the host entered on the connection screen is used as the ROS backend host for rosbridge, video, and mesh endpoints.
+
+Successful Host or IP connections are saved on the landing page as recent machines. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
@@ -16,7 +18,7 @@ After rosbridge connects, the main control view discovers available ROS resource
 
 ### Camera
 
-Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the `/video_stream` proxy route.
+Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the active runtime endpoint, either the `/video_stream` proxy route or the selected backend host.
 
 ### 3D Visualization
 
