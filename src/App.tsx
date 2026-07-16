@@ -18,6 +18,9 @@ const ThemeCreator = lazy(() => import('./features/theme/components/ThemeCreator
 export interface ConnectionParams {
   ros2Option: 'domain' | 'ip'; // Now required
   ros2Value: string | number; // Now required
+  rosbridgePort?: string;
+  videoStreamPort?: string;
+  meshResourcesPort?: string;
 }
 
 const safeGetStorageItem = (key: string): string | null => {

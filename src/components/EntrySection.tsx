@@ -3,7 +3,12 @@ import { ConnectionParams } from '../App'; // Adjust if ConnectionParams definit
 import './EntrySection.css';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
-import { getDefaultConnectionHost } from '../runtime/runtimeConfig';
+import {
+  getDefaultConnectionHost,
+  getDefaultServicePorts,
+  normalizeRuntimeServicePorts,
+  type RuntimeServicePorts,
+} from '../runtime/runtimeConfig';
 import {
   loadRecentConnections,
   RecentConnection,
@@ -13,6 +18,8 @@ import {
 interface EntrySectionProps {
   onConnect: (params: ConnectionParams) => void;
 }
+
+type PortKey = keyof RuntimeServicePorts;
 
 // Simple gear icon component for the advanced options
 const GearIcon = () => (
@@ -73,6 +80,7 @@ const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
+  const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [recentConnections, setRecentConnections] = useState<RecentConnection[]>(() => loadRecentConnections());
@@ -90,6 +98,19 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
   // Get current hostname for quick connect
   const currentHostname = getDefaultConnectionHost();
+  const defaultServicePorts = getDefaultServicePorts();
+
+  const normalizeSelectedPorts = (ports = servicePorts): RuntimeServicePorts => {
+    return normalizeRuntimeServicePorts(ports, defaultServicePorts);
+  };
+
+  const updateServicePort = (key: PortKey, value: string) => {
+    setServicePorts(ports => ({ ...ports, [key]: value }));
+  };
+
+  const normalizeServicePort = (key: PortKey) => {
+    setServicePorts(ports => normalizeSelectedPorts({ ...ports, [key]: ports[key] }));
+  };
 
   // Watch for theme changes
   useEffect(() => {
@@ -221,9 +242,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
       }
     }
 
+    const selectedPorts = normalizeSelectedPorts();
     const params: ConnectionParams = {
       ros2Option,
       ros2Value: ros2Option === 'domain' ? parseInt(ros2Value, 10) || 0 : ros2Value,
+      ...selectedPorts,
     };
     onConnect(params);
   };
@@ -260,9 +283,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
       easing: 'easeInOutQuad',
       complete: () => {
         // Call onConnect after animation completes
+        const selectedPorts = normalizeSelectedPorts();
         const params: ConnectionParams = {
           ros2Option: 'ip',
           ros2Value: currentHostname,
+          ...selectedPorts,
         };
         onConnect(params);
       },
@@ -296,7 +321,12 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
 
   const handleRecentConnect = (connection: RecentConnection) => {
     if (isTransitioning) return;
-    onConnect({ ros2Option: 'ip', ros2Value: connection.host });
+    const selectedPorts = normalizeRuntimeServicePorts(connection, defaultServicePorts);
+    onConnect({
+      ros2Option: 'ip',
+      ros2Value: connection.host,
+      ...selectedPorts,
+    });
   };
 
   const handleRemoveRecentConnection = (event: React.MouseEvent, connection: RecentConnection) => {
@@ -385,6 +415,53 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
                 required
               />
             </div>
+            <div className="form-group">
+              <label>Ports:</label>
+              <div className="port-grid">
+                <label className="port-field" htmlFor="rosbridgePort">
+                  <span>ROS</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9, ]*"
+                    id="rosbridgePort"
+                    value={servicePorts.rosbridgePort}
+                    onChange={e => updateServicePort('rosbridgePort', e.target.value)}
+                    onBlur={() => normalizeServicePort('rosbridgePort')}
+                    placeholder={defaultServicePorts.rosbridgePort}
+                    required
+                  />
+                </label>
+                <label className="port-field" htmlFor="videoStreamPort">
+                  <span>Video</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9, ]*"
+                    id="videoStreamPort"
+                    value={servicePorts.videoStreamPort}
+                    onChange={e => updateServicePort('videoStreamPort', e.target.value)}
+                    onBlur={() => normalizeServicePort('videoStreamPort')}
+                    placeholder={defaultServicePorts.videoStreamPort}
+                    required
+                  />
+                </label>
+                <label className="port-field" htmlFor="meshResourcesPort">
+                  <span>Mesh</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9, ]*"
+                    id="meshResourcesPort"
+                    value={servicePorts.meshResourcesPort}
+                    onChange={e => updateServicePort('meshResourcesPort', e.target.value)}
+                    onBlur={() => normalizeServicePort('meshResourcesPort')}
+                    placeholder={defaultServicePorts.meshResourcesPort}
+                    required
+                  />
+                </label>
+              </div>
+            </div>
             <button type="submit" className="connect-btn">
               Connect
             </button>
@@ -403,6 +480,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
                       title={`Connect to ${connection.host}`}
                     >
                       <span className="recent-connection-host">{connection.host}</span>
+                      <span className="recent-connection-port">
+                        {connection.rosbridgePort} / {connection.videoStreamPort} / {connection.meshResourcesPort}
+                      </span>
                     </button>
                     <button
                       type="button"
