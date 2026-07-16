@@ -153,24 +153,28 @@ class BehaviorTreeRunner(Node):
 
     def _on_command(self, message: String) -> None:
         try:
-            command = json.loads(message.data)
-        except (TypeError, json.JSONDecodeError):
-            self.get_logger().warning('Ignoring malformed behavior-tree command')
-            return
-        if command.get('protocolVersion') != PROTOCOL_VERSION:
-            return
+            try:
+                command = json.loads(message.data)
+            except (TypeError, json.JSONDecodeError):
+                self.get_logger().warning('Ignoring malformed behavior-tree command')
+                return
+            if command.get('protocolVersion') != PROTOCOL_VERSION:
+                return
 
-        name = command.get('command')
-        if name == 'status':
-            self._publish_snapshot(include_tree=True)
-        elif name == 'start':
-            self._start(command)
-        elif name == 'pause':
-            self._pause(command.get('sessionId'))
-        elif name == 'resume':
-            self._resume(command.get('sessionId'))
-        elif name == 'stop':
-            self._stop_execution(command.get('sessionId'))
+            name = command.get('command')
+            if name == 'status':
+                self._publish_snapshot(include_tree=True)
+            elif name == 'start':
+                self._start(command)
+            elif name == 'pause':
+                self._pause(command.get('sessionId'))
+            elif name == 'resume':
+                self._resume(command.get('sessionId'))
+            elif name == 'stop':
+                self._stop_execution(command.get('sessionId'))
+        except Exception as exc:
+            self.get_logger().exception(f'Behavior-tree command failed: {exc}')
+            self._publish_error(str(exc))
 
     def _matches(self, session_id: Optional[str]) -> bool:
         return session_id is None or session_id == self._session_id
