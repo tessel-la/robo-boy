@@ -44,4 +44,16 @@ describe('resolveRuntimeEndpoints', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '[::1]' }, true);
     expect(endpoints.rosbridgeUrl).toBe('ws://[::1]:9090');
   });
+
+  it('allows desktop direct-connect ports to be overridden', () => {
+    const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.local' }, true, undefined, {
+      rosbridgePort: '19090',
+      videoStreamPort: '18080',
+      meshResourcesPort: '18000',
+    });
+
+    expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
+    expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
+    expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
+  });
 });

@@ -18,6 +18,12 @@ npm run dev
 
 Open `http://localhost:5173`. The frontend can load without Docker, but ROS, video, and mesh proxy routes require compatible services or test mocks.
 
+Set `FRONTEND_PORT` to use a different local Vite port:
+
+```bash
+FRONTEND_PORT=3000 npm run dev
+```
+
 ## Complete Development Stack
 
 Generate the certificate as described in the root README, select a Compose configuration, and start the stack:
@@ -38,6 +44,20 @@ Changes under `src/` should hot reload. Rebuild after changing files under `infr
 ```bash
 docker compose up -d --build --force-recreate
 ```
+
+The default ports are defined in the copied `.env` file. The main knobs are:
+
+| Variable | Default | Used by |
+| --- | --- | --- |
+| `FRONTEND_PORT` | `5173` | Vite dev server and Caddy frontend upstream |
+| `HTTP_PORT` | `80` | Caddy HTTP listener |
+| `HTTPS_PORT` | `443` | Caddy HTTPS and HTTP/3 listener |
+| `ROSBRIDGE_PORT` | `9090` | rosbridge and Caddy `/websocket` upstream |
+| `VIDEO_STREAM_PORT` | `8080` | `web_video_server` and Caddy `/video_stream` upstream |
+| `MESH_RESOURCES_PORT` | `8000` | Caddy `/mesh_resources` upstream |
+| `VITE_ROSBRIDGE_PORT` | `9090` | Desktop direct-connect rosbridge URL |
+| `VITE_VIDEO_STREAM_PORT` | `8080` | Desktop direct-connect video URL |
+| `VITE_MESH_RESOURCES_PORT` | `8000` | Desktop direct-connect mesh URL |
 
 ## Desktop Frontend
 

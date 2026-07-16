@@ -5,6 +5,8 @@ ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 ROS_AUTOMATIC_DISCOVERY_RANGE="${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
 ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-}"
+ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
+VIDEO_STREAM_PORT="${VIDEO_STREAM_PORT:-8080}"
 
 export RMW_IMPLEMENTATION
 export ROS_AUTOMATIC_DISCOVERY_RANGE
@@ -22,6 +24,7 @@ echo "--- Sourcing ROS ${ROS_DISTRO} ---"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 echo "--- DDS middleware: ${RMW_IMPLEMENTATION} ---"
+echo "--- ROS service ports: rosbridge=${ROSBRIDGE_PORT}; web_video_server=${VIDEO_STREAM_PORT} ---"
 echo "--- ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}; ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-<unset>}; ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE} ---"
 if [ -n "${ROS_STATIC_PEERS}" ]; then
     echo "--- ROS_STATIC_PEERS: ${ROS_STATIC_PEERS} ---"
@@ -109,12 +112,13 @@ done) &
 # default_call_service_timeout=5.0 ensures calls never block indefinitely.
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
     address:=0.0.0.0 \
+    port:="${ROSBRIDGE_PORT}" \
     call_services_in_new_thread:=true \
     send_action_goals_in_new_thread:=true \
     default_call_service_timeout:=5.0 &
 
 # Launch web_video_server
-ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:=8080 &
+ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &
 
 echo "--- Waiting for processes to exit ---"
 wait -n

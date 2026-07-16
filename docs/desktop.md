@@ -12,6 +12,12 @@ The desktop frontend connects directly to these services on the selected ROS hos
 | web_video_server | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
 
+Override the desktop direct-connect defaults with Vite environment variables when needed:
+
+```bash
+VITE_ROSBRIDGE_PORT=19090 VITE_VIDEO_STREAM_PORT=18080 VITE_MESH_RESOURCES_PORT=18000 npm run desktop:dev
+```
+
 Quick Connect uses `localhost`. To connect to another computer, open the advanced connection options, select **IP Address**, and enter its hostname or IP address. Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
 
 The existing `ros-stack` Compose service satisfies the local contract:

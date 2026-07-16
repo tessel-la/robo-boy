@@ -9,7 +9,26 @@ export interface RuntimeEndpoints {
   host: string;
 }
 
+export interface RuntimePortConfig {
+  rosbridgePort: string;
+  videoStreamPort: string;
+  meshResourcesPort: string;
+}
+
 type BrowserLocation = Pick<Location, 'protocol' | 'hostname'> & Partial<Pick<Location, 'host'>>;
+
+const readPortEnv = (value: string | undefined, fallback: string): string => {
+  if (!value) return fallback;
+
+  const port = Number.parseInt(value, 10);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? String(port) : fallback;
+};
+
+export const getRuntimePortConfig = (): RuntimePortConfig => ({
+  rosbridgePort: readPortEnv(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
+  videoStreamPort: readPortEnv(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
+  meshResourcesPort: readPortEnv(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
+});
 
 const getBrowserLocation = (): BrowserLocation => {
   if (typeof window === 'undefined') {
@@ -37,7 +56,8 @@ const normalizeHost = (value: string): string => {
 export function resolveRuntimeEndpoints(
   params?: ConnectionParams | null,
   desktop = isDesktopRuntime(),
-  location = getBrowserLocation()
+  location = getBrowserLocation(),
+  ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
   if (!desktop) {
     const authority = location.host || location.hostname;
@@ -56,9 +76,9 @@ export function resolveRuntimeEndpoints(
   const urlHost = host.includes(':') ? `[${host}]` : host;
 
   return {
-    rosbridgeUrl: `ws://${urlHost}:9090`,
-    videoStreamBaseUrl: `http://${urlHost}:8080`,
-    meshResourcesBaseUrl: `http://${urlHost}:8000`,
+    rosbridgeUrl: `ws://${urlHost}:${ports.rosbridgePort}`,
+    videoStreamBaseUrl: `http://${urlHost}:${ports.videoStreamPort}`,
+    meshResourcesBaseUrl: `http://${urlHost}:${ports.meshResourcesPort}`,
     mode: 'desktop',
     host,
   };

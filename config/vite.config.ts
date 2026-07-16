@@ -31,12 +31,19 @@ const roslibGlobalThisPlugin = (): Plugin => ({
   },
 });
 
+const parsePort = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+
+  const port = Number.parseInt(value, 10);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
+};
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
   server: {
     host: '0.0.0.0', // Listen on all interfaces within the container
-    port: 5173,
+    port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
     // https: false, // Ensure HTTPS is disabled (default is false anyway)
     // hmr: { // Optional: Specify host for Hot Module Replacement if needed
     //   host: 'localhost', // Browser connects to Caddy on localhost

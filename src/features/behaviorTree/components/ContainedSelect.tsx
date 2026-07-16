@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './ContainedSelect.css';
 
@@ -17,6 +17,39 @@ interface Props {
 }
 
 const mobileQuery = '(max-width: 600px), (pointer: coarse)';
+const VIEWPORT_MARGIN = 8;
+const POPOVER_GAP = 4;
+
+export interface VisibleViewport {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export const computeContainedSelectFrame = (
+  rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width'>,
+  viewport: VisibleViewport
+): React.CSSProperties => {
+  const viewRight = viewport.left + viewport.width;
+  const viewBottom = viewport.top + viewport.height;
+  const availableWidth = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2);
+  const width = Math.min(Math.max(rect.width, 220), availableWidth);
+  const left = Math.min(
+    Math.max(rect.left, viewport.left + VIEWPORT_MARGIN),
+    Math.max(viewport.left + VIEWPORT_MARGIN, viewRight - width - VIEWPORT_MARGIN)
+  );
+  const below = Math.max(0, viewBottom - rect.bottom - POPOVER_GAP - VIEWPORT_MARGIN);
+  const above = Math.max(0, rect.top - viewport.top - POPOVER_GAP - VIEWPORT_MARGIN);
+  const opensBelow = below >= 180 || below >= above;
+  const maxHeight = Math.min(300, opensBelow ? below : above);
+  const idealTop = opensBelow ? rect.bottom + POPOVER_GAP : rect.top - POPOVER_GAP - maxHeight;
+  const top = Math.min(
+    Math.max(idealTop, viewport.top + VIEWPORT_MARGIN),
+    Math.max(viewport.top + VIEWPORT_MARGIN, viewBottom - maxHeight - VIEWPORT_MARGIN)
+  );
+  return { left, top, width, maxHeight, visibility: 'visible' };
+};
 
 const useContainedMode = () => {
   const [contained, setContained] = useState(() => (
@@ -36,8 +69,9 @@ const useContainedMode = () => {
 const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange, disabled = false }) => {
   const contained = useContainedMode();
   const [open, setOpen] = useState(false);
-  const [frame, setFrame] = useState<React.CSSProperties>({});
+  const [frame, setFrame] = useState<React.CSSProperties | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const selected = options.find(option => option.value === value);
   const grouped = useMemo(() => {
     const groups = new Map<string, ContainedSelectOption[]>();
@@ -48,33 +82,43 @@ const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange,
     return Array.from(groups.entries());
   }, [options]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const margin = 8;
-      const width = Math.min(Math.max(rect.width, 220), window.innerWidth - margin * 2);
-      const left = Math.min(Math.max(rect.left, margin), window.innerWidth - width - margin);
-      const below = window.innerHeight - rect.bottom - margin;
-      const above = rect.top - margin;
-      const opensBelow = below >= 180 || below >= above;
-      const maxHeight = Math.max(120, Math.min(300, opensBelow ? below : above));
-      setFrame(opensBelow
-        ? { left, top: rect.bottom + 4, width, maxHeight }
-        : { left, bottom: window.innerHeight - rect.top + 4, width, maxHeight });
+      const visualViewport = window.visualViewport;
+      setFrame(computeContainedSelectFrame(rect, {
+        left: visualViewport?.offsetLeft ?? 0,
+        top: visualViewport?.offsetTop ?? 0,
+        width: visualViewport?.width ?? window.innerWidth,
+        height: visualViewport?.height ?? window.innerHeight,
+      }));
     };
     const close = (event: PointerEvent) => {
-      if (!triggerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const visualViewport = window.visualViewport;
     place();
     window.addEventListener('resize', place);
+    window.addEventListener('orientationchange', place);
     window.addEventListener('scroll', place, true);
+    visualViewport?.addEventListener('resize', place);
+    visualViewport?.addEventListener('scroll', place);
     document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', closeOnEscape);
     return () => {
       window.removeEventListener('resize', place);
+      window.removeEventListener('orientationchange', place);
       window.removeEventListener('scroll', place, true);
+      visualViewport?.removeEventListener('resize', place);
+      visualViewport?.removeEventListener('scroll', place);
       document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', closeOnEscape);
     };
   }, [open]);
 
@@ -100,12 +144,18 @@ const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange,
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={disabled}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => { setFrame(null); setOpen(current => !current); }}
       >
         <span>{selected?.label || 'Select…'}</span><i aria-hidden="true" />
       </button>
       {open && createPortal(
-        <div className="contained-select-popover" style={frame} role="listbox" aria-label={`${ariaLabel} options`}>
+        <div
+          ref={popoverRef}
+          className="contained-select-popover"
+          style={frame || { visibility: 'hidden' }}
+          role="listbox"
+          aria-label={`${ariaLabel} options`}
+        >
           {grouped.map(([group, groupOptions]) => (
             <React.Fragment key={group || 'options'}>
               {group && <div className="contained-select-group">{group}</div>}
