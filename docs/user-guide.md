@@ -10,6 +10,8 @@
 
 Open Robo-Boy and submit the connection form. Quick Connect and Domain ID use the current Robo-Boy host's proxy routes. When you select **Host or IP**, the host entered on the connection screen is used as the ROS backend host for rosbridge, video, and mesh endpoints.
 
+Successful Host or IP connections are saved on the landing page as recent machines. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
+
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
 ## Main Views

@@ -34,6 +34,19 @@ describe('resolveRuntimeEndpoints', () => {
     });
   });
 
+  it('repairs comma-separated IPv4 typos before building endpoint URLs', () => {
+    const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '192,168,1,20' }, false, {
+      protocol: 'http:',
+      hostname: 'operator.local',
+      host: 'operator.local',
+    });
+
+    expect(endpoints.rosbridgeUrl).toBe('ws://192.168.1.20:9090');
+    expect(endpoints.videoStreamBaseUrl).toBe('http://192.168.1.20:8080');
+    expect(endpoints.meshResourcesBaseUrl).toBe('http://192.168.1.20:8000');
+    expect(endpoints.host).toBe('192.168.1.20');
+  });
+
   it('accepts VPN DNS names for remote web backend connections', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.tailnet.ts.net' }, false, {
       protocol: 'http:',

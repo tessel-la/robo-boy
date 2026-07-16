@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type { ConnectionParams } from '../App';
+import { normalizeConnectionHost } from './connectionHost';
 
 export interface RuntimeEndpoints {
   rosbridgeUrl: string;
@@ -47,22 +48,13 @@ export const isDesktopRuntime = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 };
 
-const normalizeHost = (value: string): string => {
-  const candidate = value.trim();
-  if (!candidate) return 'localhost';
-
-  try {
-    const parsed = new URL(candidate.includes('://') ? candidate : `http://${candidate}`);
-    return parsed.hostname.replace(/^\[|\]$/g, '') || 'localhost';
-  } catch {
-    return candidate.replace(/^\[|\]$/g, '') || 'localhost';
-  }
-};
-
 const formatUrlHost = (host: string): string => (host.includes(':') ? `[${host}]` : host);
 
 const isSameHost = (configuredHost: string, location: BrowserLocation): boolean => {
-  return normalizeHost(configuredHost).toLowerCase() === normalizeHost(location.hostname).toLowerCase();
+  return (
+    normalizeConnectionHost(configuredHost, 'localhost').toLowerCase() ===
+    normalizeConnectionHost(location.hostname, 'localhost').toLowerCase()
+  );
 };
 
 const resolveDirectEndpoints = (
@@ -92,7 +84,7 @@ export function resolveRuntimeEndpoints(
   ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
   const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';
-  const host = normalizeHost(configuredHost);
+  const host = normalizeConnectionHost(configuredHost, 'localhost');
 
   if (!desktop) {
     const shouldUseDirectBackend =
