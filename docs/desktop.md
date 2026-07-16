@@ -18,7 +18,9 @@ Override the desktop direct-connect defaults with Vite environment variables whe
 VITE_ROSBRIDGE_PORT=19090 VITE_VIDEO_STREAM_PORT=18080 VITE_MESH_RESOURCES_PORT=18000 npm run desktop:dev
 ```
 
-Quick Connect uses `localhost`. To connect to another computer, open the advanced connection options, select **IP Address**, and enter its hostname or IP address. Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
+When the backend runs on another laptop, use the advanced connection box, select **Host or IP**, and enter that laptop's hostname, VPN DNS name, or IP. Desktop connects directly to rosbridge, video, and mesh services on that host.
+
+Quick Connect uses `localhost`. To connect to another computer, open the advanced connection options, select **Host or IP**, and enter its hostname or IP address. Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
 
 The existing `ros-stack` Compose service satisfies the local contract:
 
@@ -72,4 +74,4 @@ Installers are written below `src-tauri/target/release/bundle/`. Building instal
 
 ## Web And Future Mobile
 
-The web build continues to use same-origin Caddy routes (`/websocket`, `/video_stream`, and `/mesh_resources`). Runtime endpoint selection lives in `src/runtime/runtimeConfig.tsx`; future Tauri mobile targets can use the same direct, remote-host contract as desktop without forking feature code.
+The web build uses same-origin Caddy routes (`/websocket`, `/video_stream`, and `/mesh_resources`) for proxy-backed connections and can use direct backend host URLs when the advanced host connection points at another machine. Runtime endpoint selection lives in `src/runtime/runtimeConfig.tsx`; future Tauri mobile targets can use the same direct, remote-host contract as desktop without forking feature code.

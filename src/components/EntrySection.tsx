@@ -334,18 +334,18 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
                 </label>
                 <label>
                   <input type="radio" value="ip" checked={ros2Option === 'ip'} onChange={() => setRos2Option('ip')} />
-                  IP Address
+                  Host or IP
                 </label>
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="ros2Value">{ros2Option === 'domain' ? 'Domain ID:' : 'IP Address:'}</label>
+              <label htmlFor="ros2Value">{ros2Option === 'domain' ? 'Domain ID:' : 'Host or IP:'}</label>
               <input
                 type={ros2Option === 'domain' ? 'number' : 'text'}
                 id="ros2Value"
                 value={ros2Value}
                 onChange={e => setRos2Value(e.target.value)}
-                placeholder={ros2Option === 'domain' ? 'e.g., 0' : 'e.g., 192.168.1.100'}
+                placeholder={ros2Option === 'domain' ? 'e.g., 0' : 'e.g., robot.tailnet.ts.net'}
                 required
               />
             </div>

@@ -15,6 +15,7 @@ services:
       - VITE_ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
       - VITE_VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
       - VITE_MESH_RESOURCES_PORT=${MESH_RESOURCES_PORT:-8000}
+      - VITE_WEB_BACKEND_MODE=${VITE_WEB_BACKEND_MODE:-auto}
     # Remove ports mapping if Caddy handles external access
     # ports:
     #   - "127.0.0.1:5173:5173" 
@@ -33,6 +34,7 @@ services:
     environment:
       - HTTP_PORT=${HTTP_PORT:-80}
       - HTTPS_PORT=${HTTPS_PORT:-443}
+      - BACKEND_HOST=${BACKEND_HOST:-host.docker.internal}
       - FRONTEND_PORT=${FRONTEND_PORT:-5173}
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
       - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}

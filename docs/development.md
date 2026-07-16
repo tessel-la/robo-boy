@@ -52,12 +52,24 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `FRONTEND_PORT` | `5173` | Vite dev server and Caddy frontend upstream |
 | `HTTP_PORT` | `80` | Caddy HTTP listener |
 | `HTTPS_PORT` | `443` | Caddy HTTPS and HTTP/3 listener |
+| `BACKEND_HOST` | `host.docker.internal` | Caddy upstream host for ROS services |
 | `ROSBRIDGE_PORT` | `9090` | rosbridge and Caddy `/websocket` upstream |
 | `VIDEO_STREAM_PORT` | `8080` | `web_video_server` and Caddy `/video_stream` upstream |
 | `MESH_RESOURCES_PORT` | `8000` | Caddy `/mesh_resources` upstream |
 | `VITE_ROSBRIDGE_PORT` | `9090` | Desktop direct-connect rosbridge URL |
 | `VITE_VIDEO_STREAM_PORT` | `8080` | Desktop direct-connect video URL |
 | `VITE_MESH_RESOURCES_PORT` | `8000` | Desktop direct-connect mesh URL |
+| `VITE_WEB_BACKEND_MODE` | `auto` | `auto`, `proxy`, or `direct` for web IP connections |
+
+For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
+
+```bash
+BACKEND_HOST=192.168.1.20 docker compose up -d --build app caddy
+```
+
+In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+
+If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
 ## Desktop Frontend
 

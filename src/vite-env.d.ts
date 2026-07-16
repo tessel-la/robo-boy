@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_ROSBRIDGE_PORT?: string;
   readonly VITE_VIDEO_STREAM_PORT?: string;
   readonly VITE_MESH_RESOURCES_PORT?: string;
+  readonly VITE_WEB_BACKEND_MODE?: string;
   // more env variables...
 }
 

@@ -96,6 +96,24 @@ describe('useRos', () => {
     });
   });
 
+  it('should use the advanced host value as a direct web backend host', () => {
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'operator.local',
+        host: 'operator.local',
+        protocol: 'http:',
+      },
+      writable: true,
+    });
+
+    const { result } = renderHook(() => useRos());
+    act(() => result.current.connect({ ros2Option: 'ip', ros2Value: 'robot.tailnet.ts.net' }));
+
+    expect(ROSLIB.Ros).toHaveBeenCalledWith({
+      url: 'ws://robot.tailnet.ts.net:9090',
+    });
+  });
+
   it('should handle successful connection', () => {
     const onMock = vi.fn();
     (ROSLIB.Ros as any).mockImplementation(function () {
