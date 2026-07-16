@@ -17,12 +17,17 @@ export interface RuntimePortConfig {
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
+export type RuntimeServicePorts = Pick<RuntimePortConfig, 'rosbridgePort' | 'videoStreamPort' | 'meshResourcesPort'>;
+
 type BrowserLocation = Pick<Location, 'protocol' | 'hostname'> & Partial<Pick<Location, 'host'>>;
 
-const readPortEnv = (value: string | undefined, fallback: string): string => {
+export const normalizeRuntimePort = (value: string | number | undefined, fallback: string): string => {
   if (!value) return fallback;
 
-  const port = Number.parseInt(value, 10);
+  const cleanedValue = String(value).trim().replace(/[,\s]/g, '');
+  if (!/^\d+$/.test(cleanedValue)) return fallback;
+
+  const port = Number.parseInt(cleanedValue, 10);
   return Number.isInteger(port) && port > 0 && port <= 65535 ? String(port) : fallback;
 };
 
@@ -31,10 +36,19 @@ const readWebBackendMode = (value: string | undefined): RuntimePortConfig['webBa
 };
 
 export const getRuntimePortConfig = (): RuntimePortConfig => ({
-  rosbridgePort: readPortEnv(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
-  videoStreamPort: readPortEnv(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
-  meshResourcesPort: readPortEnv(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
+  rosbridgePort: normalizeRuntimePort(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
+  videoStreamPort: normalizeRuntimePort(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
+  meshResourcesPort: normalizeRuntimePort(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
+});
+
+export const normalizeRuntimeServicePorts = (
+  ports: Partial<RuntimeServicePorts> | undefined,
+  fallbacks: RuntimeServicePorts
+): RuntimeServicePorts => ({
+  rosbridgePort: normalizeRuntimePort(ports?.rosbridgePort, fallbacks.rosbridgePort),
+  videoStreamPort: normalizeRuntimePort(ports?.videoStreamPort, fallbacks.videoStreamPort),
+  meshResourcesPort: normalizeRuntimePort(ports?.meshResourcesPort, fallbacks.meshResourcesPort),
 });
 
 const getBrowserLocation = (): BrowserLocation => {
@@ -85,15 +99,20 @@ export function resolveRuntimeEndpoints(
 ): RuntimeEndpoints {
   const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';
   const host = normalizeConnectionHost(configuredHost, 'localhost');
+  const selectedPorts = normalizeRuntimeServicePorts(params ?? undefined, ports);
+  const connectionPorts = {
+    ...ports,
+    ...selectedPorts,
+  };
 
   if (!desktop) {
     const shouldUseDirectBackend =
       params?.ros2Option === 'ip' &&
-      ports.webBackendMode !== 'proxy' &&
-      (ports.webBackendMode === 'direct' || !isSameHost(configuredHost, location));
+      connectionPorts.webBackendMode !== 'proxy' &&
+      (connectionPorts.webBackendMode === 'direct' || !isSameHost(configuredHost, location));
 
     if (shouldUseDirectBackend) {
-      return resolveDirectEndpoints(host, ports, 'web', location);
+      return resolveDirectEndpoints(host, connectionPorts, 'web', location);
     }
 
     const authority = location.host || location.hostname;
@@ -107,7 +126,7 @@ export function resolveRuntimeEndpoints(
     };
   }
 
-  return resolveDirectEndpoints(host, ports, 'desktop');
+  return resolveDirectEndpoints(host, connectionPorts, 'desktop');
 }
 
 const RuntimeConfigContext = createContext<RuntimeEndpoints>(resolveRuntimeEndpoints());
@@ -127,4 +146,13 @@ export const useRuntimeConfig = (): RuntimeEndpoints => useContext(RuntimeConfig
 
 export const getDefaultConnectionHost = (): string => {
   return isDesktopRuntime() ? 'localhost' : getBrowserLocation().hostname;
+};
+
+export const getDefaultServicePorts = (): RuntimeServicePorts => {
+  const ports = getRuntimePortConfig();
+  return {
+    rosbridgePort: ports.rosbridgePort,
+    videoStreamPort: ports.videoStreamPort,
+    meshResourcesPort: ports.meshResourcesPort,
+  };
 };

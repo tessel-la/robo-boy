@@ -15,14 +15,53 @@ describe('recentConnections', () => {
   it('stores successful host connections with normalized hostnames', () => {
     const recent = saveRecentConnection({ ros2Option: 'ip', ros2Value: 'http://robot.tailnet.ts.net:1234/path' }, 10);
 
-    expect(recent).toEqual([{ host: 'robot.tailnet.ts.net', lastConnectedAt: 10 }]);
-    expect(loadRecentConnections()).toEqual([{ host: 'robot.tailnet.ts.net', lastConnectedAt: 10 }]);
+    expect(recent).toEqual([
+      {
+        host: 'robot.tailnet.ts.net',
+        rosbridgePort: '9090',
+        videoStreamPort: '8080',
+        meshResourcesPort: '8000',
+        lastConnectedAt: 10,
+      },
+    ]);
+    expect(loadRecentConnections()).toEqual(recent);
   });
 
   it('stores repaired comma-separated IPv4 hostnames', () => {
     const recent = saveRecentConnection({ ros2Option: 'ip', ros2Value: '192,168,1,20' }, 10);
 
-    expect(recent).toEqual([{ host: '192.168.1.20', lastConnectedAt: 10 }]);
+    expect(recent).toEqual([
+      {
+        host: '192.168.1.20',
+        rosbridgePort: '9090',
+        videoStreamPort: '8080',
+        meshResourcesPort: '8000',
+        lastConnectedAt: 10,
+      },
+    ]);
+  });
+
+  it('stores custom service ports with recent hosts', () => {
+    const recent = saveRecentConnection(
+      {
+        ros2Option: 'ip',
+        ros2Value: 'robot.tailnet.ts.net',
+        rosbridgePort: '19,090',
+        videoStreamPort: '18,080',
+        meshResourcesPort: '18,000',
+      },
+      10
+    );
+
+    expect(recent).toEqual([
+      {
+        host: 'robot.tailnet.ts.net',
+        rosbridgePort: '19090',
+        videoStreamPort: '18080',
+        meshResourcesPort: '18000',
+        lastConnectedAt: 10,
+      },
+    ]);
   });
 
   it('does not store domain-id connections as machines', () => {
@@ -37,8 +76,20 @@ describe('recentConnections', () => {
     saveRecentConnection({ ros2Option: 'ip', ros2Value: 'camera.local' }, 15);
 
     expect(loadRecentConnections()).toEqual([
-      { host: 'robot.local', lastConnectedAt: 20 },
-      { host: 'camera.local', lastConnectedAt: 15 },
+      {
+        host: 'robot.local',
+        rosbridgePort: '9090',
+        videoStreamPort: '8080',
+        meshResourcesPort: '8000',
+        lastConnectedAt: 20,
+      },
+      {
+        host: 'camera.local',
+        rosbridgePort: '9090',
+        videoStreamPort: '8080',
+        meshResourcesPort: '8000',
+        lastConnectedAt: 15,
+      },
     ]);
   });
 
@@ -65,6 +116,14 @@ describe('recentConnections', () => {
       ])
     );
 
-    expect(removeRecentConnection('robot.local')).toEqual([{ host: 'camera.local', lastConnectedAt: 15 }]);
+    expect(removeRecentConnection('robot.local')).toEqual([
+      {
+        host: 'camera.local',
+        rosbridgePort: '9090',
+        videoStreamPort: '8080',
+        meshResourcesPort: '8000',
+        lastConnectedAt: 15,
+      },
+    ]);
   });
 });

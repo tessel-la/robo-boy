@@ -124,4 +124,43 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
   });
+
+  it('allows the landing page connection to override service ports', () => {
+    const endpoints = resolveRuntimeEndpoints(
+      {
+        ros2Option: 'ip',
+        ros2Value: 'robot.local',
+        rosbridgePort: '19090',
+        videoStreamPort: '18080',
+        meshResourcesPort: '18000',
+      },
+      false,
+      {
+        protocol: 'http:',
+        hostname: 'operator.local',
+        host: 'operator.local',
+      }
+    );
+
+    expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
+    expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
+    expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
+  });
+
+  it('repairs comma-formatted service ports from the landing page', () => {
+    const endpoints = resolveRuntimeEndpoints(
+      {
+        ros2Option: 'ip',
+        ros2Value: 'robot.local',
+        rosbridgePort: '19,090',
+        videoStreamPort: '18,080',
+        meshResourcesPort: '18,000',
+      },
+      true
+    );
+
+    expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
+    expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
+    expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
+  });
 });
