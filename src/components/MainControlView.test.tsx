@@ -721,6 +721,24 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
   });
 
+  it('falls back to an available generic pad when a saved preset no longer exists', async () => {
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'generic-joy', name: 'Generic Joy Pad', layout: { id: 'generic-joy-layout' }, isDefault: true },
+    ]);
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'panda-cartesian-jog' }])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    expect(screen.getByRole('button', { name: 'Pad layout Generic Joy Pad' })).toBeInTheDocument();
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('generic-joy');
+  });
+
   it('deletes the pad selected in a workspace control and falls back to another pad', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },

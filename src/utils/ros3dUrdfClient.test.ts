@@ -10,6 +10,14 @@ const roslibMock = vi.hoisted(() => ({
   }>,
 }));
 
+const meshLoaderMock = vi.hoisted(() => ({
+  mtlLoad: vi.fn(),
+  mtlResourcePath: vi.fn(),
+  materialsPreload: vi.fn(),
+  objLoad: vi.fn(),
+  objSetMaterials: vi.fn(),
+}));
+
 vi.mock('roslib', () => ({
   Topic: vi.fn(function Topic(options: { name: string }) {
     const instance = {
@@ -24,6 +32,37 @@ vi.mock('roslib', () => ({
     return instance;
   }),
 }));
+
+vi.mock('three/examples/jsm/loaders/MTLLoader.js', () => ({
+  MTLLoader: class MTLLoader {
+    setResourcePath(path: string) {
+      meshLoaderMock.mtlResourcePath(path);
+      return this;
+    }
+
+    load(url: string, onLoad: (materials: { preload: () => void }) => void) {
+      meshLoaderMock.mtlLoad(url);
+      onLoad({ preload: meshLoaderMock.materialsPreload });
+    }
+  },
+}));
+
+vi.mock('three/examples/jsm/loaders/OBJLoader.js', async () => {
+  const THREE = await vi.importActual<typeof import('three')>('three');
+  return {
+    OBJLoader: class OBJLoader {
+      setMaterials(materials: unknown) {
+        meshLoaderMock.objSetMaterials(materials);
+        return this;
+      }
+
+      load(url: string, onLoad: (model: THREE.Group) => void) {
+        meshLoaderMock.objLoad(url);
+        onLoad(new THREE.Group());
+      }
+    },
+  };
+});
 
 describe('UrdfClient cache', () => {
   const urdf = `
@@ -40,7 +79,46 @@ describe('UrdfClient cache', () => {
 
   beforeEach(() => {
     vi.resetModules();
+    vi.clearAllMocks();
     roslibMock.topicInstances = [];
+  });
+
+  it('loads companion OBJ materials for name-only URDF materials', async () => {
+    const { UrdfClient } = await import('./ros3d');
+    const rootObject = new THREE.Scene();
+    const tfClient = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      lookupTransform: vi.fn(() => null),
+    };
+    const client = new UrdfClient({
+      ros: { url: 'ws://panda-materials' } as any,
+      tfClient: tfClient as any,
+      rootObject,
+      robotDescriptionTopic: '/robot_description',
+    });
+    const pandaUrdf = `
+      <robot name="panda">
+        <link name="panda_link6">
+          <visual>
+            <geometry>
+              <mesh filename="package://meshes/visual/link6.obj" />
+            </geometry>
+            <material name="panda_white" />
+          </visual>
+        </link>
+      </robot>
+    `;
+
+    roslibMock.topicInstances[0].callback?.({ data: pandaUrdf });
+
+    expect(meshLoaderMock.mtlResourcePath).toHaveBeenCalledWith('/mesh_resources/meshes/visual/');
+    expect(meshLoaderMock.mtlLoad).toHaveBeenCalledWith('/mesh_resources/meshes/visual/link6.mtl');
+    expect(meshLoaderMock.materialsPreload).toHaveBeenCalledOnce();
+    expect(meshLoaderMock.objSetMaterials).toHaveBeenCalledOnce();
+    expect(meshLoaderMock.objLoad).toHaveBeenCalledWith('/mesh_resources/meshes/visual/link6.obj');
+
+    client.dispose();
   });
 
   it('reuses a cached URDF model without resubscribing to robot_description', async () => {
