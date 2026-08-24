@@ -27,11 +27,10 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
 	}
 
-	# Serve the Panda meshes from a narrowly scoped read-only container mount.
-	# This keeps the Genesis control API private on host loopback.
+	# Proxy mesh resources to the configured backend. The backend owns the
+	# active robot assets; Robo Boy remains independent of robot and simulator.
 	handle_path /mesh_resources/* {
-		root * /srv/mesh_resources
-		file_server
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
 	}
 
 	# Route other requests to the Vite app container (Default Handler)
@@ -61,10 +60,9 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
 	}
 
-	# Serve the Panda meshes from a narrowly scoped read-only container mount.
+	# Proxy mesh resources to the configured robot backend.
 	handle_path /mesh_resources/* {
-		root * /srv/mesh_resources
-		file_server
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
 	}
 
 	# Route other requests to the Vite app container (Default Handler)
