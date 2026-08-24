@@ -4,6 +4,7 @@ import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, StoredTransform } from '../tfUtils';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 /**
@@ -20,6 +21,7 @@ export class UrdfClient extends THREE.Object3D {
     private onComplete?: (model: THREE.Object3D) => void;
     private linkNameMap: Map<string, THREE.Object3D> = new Map();
     private colladaLoader: ColladaLoader;
+    private objLoader: OBJLoader;
     private stlLoader: STLLoader;
 
     constructor(options: {
@@ -38,6 +40,7 @@ export class UrdfClient extends THREE.Object3D {
         this.onComplete = options.onComplete;
 
         this.colladaLoader = new ColladaLoader();
+        this.objLoader = new OBJLoader();
         this.stlLoader = new STLLoader();
 
         this.rootObject.add(this);
@@ -253,6 +256,18 @@ export class UrdfClient extends THREE.Object3D {
                         linkObject.add(daeMesh);
                         console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
                     }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
+                } else if (filename.toLowerCase().endsWith('.obj')) {
+                    this.objLoader.load(fullPath, (objMesh) => {
+                        objMesh.scale.copy(scaleVec);
+                        this.applyOrigin(visualElement, objMesh);
+                        if (urdfMaterial) {
+                            objMesh.traverse(child => {
+                                if (child instanceof THREE.Mesh) child.material = urdfMaterial;
+                            });
+                        }
+                        linkObject.add(objMesh);
+                        console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
+                    }, undefined, (error) => console.error(`[UrdfClient] Error loading OBJ ${fullPath}:`, error));
                 } else if (filename.toLowerCase().endsWith('.stl')) {
                     this.stlLoader.load(fullPath, (geometry) => {
                         const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });

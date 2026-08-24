@@ -405,6 +405,10 @@ const STACKED_WORKSPACE_QUERY = '(max-width: 767px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
+const RETIRED_BUILT_IN_PAD_IDS = new Set([
+  'panda-cartesian-jog',
+  'default-panda-cartesian-jog',
+]);
 
 type WorkspaceDraft = {
   type: WorkspacePanelType;
@@ -2733,7 +2737,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const activePanel = [...workspacePanels, ...mobileWorkspacePanels].find(
       panel => panel.id === workspacePadMenu.panelId
     );
-    const selectedLayoutId = activePanel?.layoutId || gamepadLibrary[0]?.id || '';
+    const requestedLayoutId = activePanel?.layoutId;
+    const matchingGamepad = gamepadLibrary.find(
+      item => item.id === requestedLayoutId || item.layout.id === requestedLayoutId
+    );
+    const selectedGamepad = matchingGamepad || (
+      !requestedLayoutId || RETIRED_BUILT_IN_PAD_IDS.has(requestedLayoutId)
+        ? gamepadLibrary[0]
+        : undefined
+    );
+    const selectedLayoutId = selectedGamepad?.id || requestedLayoutId || '';
 
     return createPortal(
       <div
@@ -2781,10 +2794,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const renderWorkspacePadControls = (panel: WorkspacePanel) => {
-    const selectedLayoutId = panel.layoutId || gamepadLibrary[0]?.id || '';
-    const selectedGamepad = gamepadLibrary.find(
-      item => item.id === selectedLayoutId || item.layout.id === selectedLayoutId
+    const matchingGamepad = gamepadLibrary.find(
+      item => item.id === panel.layoutId || item.layout.id === panel.layoutId
     );
+    const selectedGamepad = matchingGamepad || (
+      !panel.layoutId || RETIRED_BUILT_IN_PAD_IDS.has(panel.layoutId)
+        ? gamepadLibrary[0]
+        : undefined
+    );
+    const selectedLayoutId = selectedGamepad?.id || panel.layoutId || '';
     const canExportSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const canDeleteSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const padTransferNotice = workspacePadTransferNotice[panel.id];

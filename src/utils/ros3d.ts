@@ -4,6 +4,8 @@ import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, StoredTransform } from './tfUtils';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
 
@@ -1407,6 +1409,7 @@ class UrdfClient extends THREE.Object3D {
   private onComplete?: (model: THREE.Object3D) => void;
   private linkNameMap: Map<string, THREE.Object3D> = new Map();
   private colladaLoader: ColladaLoader;
+  private objLoader: OBJLoader;
   private stlLoader: STLLoader;
   private cacheKey: string;
   private disposed = false;
@@ -1432,6 +1435,7 @@ class UrdfClient extends THREE.Object3D {
     this.onComplete = options.onComplete;
 
     this.colladaLoader = new ColladaLoader();
+    this.objLoader = new OBJLoader();
     this.stlLoader = new STLLoader();
     this.userData.preserveAcrossViewerCleanup = true;
 
@@ -1688,6 +1692,57 @@ class UrdfClient extends THREE.Object3D {
             linkObject.add(daeMesh);
             console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
           }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
+        } else if (filename.toLowerCase().endsWith('.obj')) {
+          const addObjMesh = (objMesh: THREE.Group) => {
+            objMesh.scale.copy(scaleVec);
+            this.applyOrigin(visualElement, objMesh);
+            if (urdfMaterial) {
+              objMesh.traverse(child => {
+                if (child instanceof THREE.Mesh) child.material = urdfMaterial;
+              });
+            }
+            linkObject.add(objMesh);
+            console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
+          };
+          const loadObj = (loader: OBJLoader) => {
+            loader.load(
+              fullPath,
+              addObjMesh,
+              undefined,
+              (error) => console.error(`[UrdfClient] Error loading OBJ ${fullPath}:`, error),
+            );
+          };
+
+          // Native Panda visuals carry the end-effector buttons and colored
+          // trim in a companion MTL file. Geometry-only mobile meshes use an
+          // explicit URDF color and intentionally skip material discovery.
+          const hasCompanionMaterial =
+            !urdfMaterial &&
+            /\/visual\//i.test(fullPath) &&
+            !/_mobile\.obj(?:$|[?#])/i.test(fullPath);
+
+          if (hasCompanionMaterial) {
+            const materialPath = fullPath.replace(/\.obj(?=$|[?#])/i, '.mtl');
+            const resourcePath = fullPath.slice(0, fullPath.lastIndexOf('/') + 1);
+            const materialLoader = new MTLLoader();
+            materialLoader.setResourcePath(resourcePath);
+            materialLoader.load(
+              materialPath,
+              (materials) => {
+                materials.preload();
+                const materialAwareLoader = new OBJLoader();
+                materialAwareLoader.setMaterials(materials);
+                loadObj(materialAwareLoader);
+              },
+              undefined,
+              (error) => {
+                console.warn(`[UrdfClient] MTL unavailable for ${fullPath}; using OBJ defaults.`, error);
+                loadObj(this.objLoader);
+              },
+            );
+          } else {
+            loadObj(this.objLoader);
+          }
         } else if (filename.toLowerCase().endsWith('.stl')) {
           this.stlLoader.load(fullPath, (geometry) => {
             const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
@@ -1772,31 +1827,37 @@ class UrdfClient extends THREE.Object3D {
     return filePath;
   }
   
-  private loadMaterial(materialElement?: Element): THREE.Material {
+  private loadMaterial(materialElement?: Element): THREE.Material | null {
+    if (!materialElement) return null;
+
+    const colorElement = materialElement.getElementsByTagName('color')[0];
+    const textureElement = materialElement.getElementsByTagName('texture')[0];
+    if (!colorElement && !textureElement) {
+      // A name-only URDF material is a reference, not an instruction to
+      // replace the mesh's authored MTL materials with the default gray.
+      return null;
+    }
+
     let color = new THREE.Color(0xcccccc); // Default light grey instead of darker grey
     let texture = null;
 
-    if (materialElement) {
-        const colorElement = materialElement.getElementsByTagName('color')[0];
-        if (colorElement) {
-            const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
-            if (rgba && rgba.length === 4) {
-                color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
-            }
+    if (colorElement) {
+        const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
+        if (rgba && rgba.length === 4) {
+            color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
         }
-        const textureElement = materialElement.getElementsByTagName('texture')[0];
-        if (textureElement) {
-            const filename = textureElement.getAttribute('filename');
-            if (filename) {
-                // Basic texture loading, assuming PNG or JPG
-                // Proper path resolution for textures is also needed here
-                const texturePath = this.resolvePackagePath(filename);
-                try {
-                    texture = new THREE.TextureLoader().load(texturePath);
-                    console.log(`[UrdfClient] Loading texture: ${texturePath}`);
-                } catch (e) {
-                    console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
-                }
+    }
+    if (textureElement) {
+        const filename = textureElement.getAttribute('filename');
+        if (filename) {
+            // Basic texture loading, assuming PNG or JPG
+            // Proper path resolution for textures is also needed here
+            const texturePath = this.resolvePackagePath(filename);
+            try {
+                texture = new THREE.TextureLoader().load(texturePath);
+                console.log(`[UrdfClient] Loading texture: ${texturePath}`);
+            } catch (e) {
+                console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
             }
         }
     }

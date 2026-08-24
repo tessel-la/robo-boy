@@ -39,6 +39,8 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
+  const heldValuesRef = useRef<number[] | null>(null);
+  const holdTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const joystickSizeRef = useRef(100); // Use ref to hold joystick size
@@ -238,6 +240,22 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     [publishMessage]
   );
 
+  const stopHeldPublishing = useCallback(() => {
+    heldValuesRef.current = null;
+    if (holdTimerRef.current !== null) {
+      window.clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  const publishWhileHeld = useCallback((values: number[]) => {
+    heldValuesRef.current = values;
+    if (holdTimerRef.current !== null) return;
+    holdTimerRef.current = window.setInterval(() => {
+      if (heldValuesRef.current) publishMessage(heldValuesRef.current);
+    }, THROTTLE_INTERVAL);
+  }, [publishMessage]);
+
   useEffect(() => {
     if (!config.action || isEditing) return;
 
@@ -254,6 +272,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     topicRef.current.advertise();
 
     return () => {
+      stopHeldPublishing();
       // Send zero values on cleanup
       if (lastSentValues.current.some(v => v !== 0)) {
         publishThrottled.cancel();
@@ -262,7 +281,15 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, publishMessage, publishThrottled, isEditing, onJoyAxesChange]);
+  }, [
+    ros,
+    config.action,
+    publishMessage,
+    publishThrottled,
+    isEditing,
+    onJoyAxesChange,
+    stopHeldPublishing,
+  ]);
 
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null || event.distance === null || isEditing) return;
@@ -271,6 +298,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const magnitude = event.distance / 100; // Normalize distance to 0-1.
 
     if (magnitude === 0) {
+      stopHeldPublishing();
       publishThrottled([0, 0]);
       return;
     }
@@ -283,14 +311,17 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const x = magnitude * Math.cos(angleRad);
     const y = magnitude * Math.sin(angleRad);
 
-    publishThrottled([x, y]);
-  }, [publishThrottled, isEditing]);
+    const values = [x, y];
+    publishThrottled(values);
+    publishWhileHeld(values);
+  }, [publishThrottled, publishWhileHeld, stopHeldPublishing, isEditing]);
 
   const handleStop = useCallback(() => {
     if (isEditing) return;
+    stopHeldPublishing();
     publishThrottled.cancel();
     publishMessage([0, 0]);
-  }, [publishMessage, publishThrottled, isEditing]);
+  }, [publishMessage, publishThrottled, stopHeldPublishing, isEditing]);
 
   // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {
