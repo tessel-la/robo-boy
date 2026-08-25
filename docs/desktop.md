@@ -20,6 +20,11 @@ VITE_ROSBRIDGE_PORT=19090 VITE_VIDEO_STREAM_PORT=18080 VITE_MESH_RESOURCES_PORT=
 
 When the backend runs on another laptop, use the advanced connection box, select **Host or IP**, and enter that laptop's hostname, VPN DNS name, or IP. Desktop connects directly to rosbridge, video, and mesh services on that host.
 
+The BT agent's Ollama provider also follows this selected backend host on port `11434` by default. In Agent
+settings, clear **Use connected backend host** to enter a different Ollama URL. A remote Ollama server must
+listen on its VPN or LAN interface rather than only `127.0.0.1`. If Ollama rejects the desktop webview's
+origin, add `tauri://*,http://tauri.localhost,https://tauri.localhost` to `OLLAMA_ORIGINS`.
+
 Quick Connect uses `localhost`. To connect to another computer, open the advanced connection options, select **Host or IP**, and enter its hostname or IP address. Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
 
 The existing `ros-stack` Compose service satisfies the local contract:

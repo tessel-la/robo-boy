@@ -199,6 +199,7 @@
 }
 
 .bt-agent-settings label,
+.bt-agent-setting-field,
 .bt-agent-speech-field {
   display: grid;
   gap: 6px;
@@ -206,6 +207,49 @@
   font-size: 12px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.bt-agent-model-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 6px;
+}
+
+.bt-agent-model-refresh {
+  display: grid;
+  min-height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+  cursor: pointer;
+}
+
+.bt-agent-model-refresh:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.bt-agent-model-error {
+  color: var(--error-color, #d32f2f);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.bt-agent-settings .bt-agent-ollama-backend-toggle {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-self: end;
+  align-items: center;
+  min-height: 42px;
+}
+
+.bt-agent-settings .bt-agent-ollama-backend-toggle input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
 }
 
 .bt-agent-settings input,

@@ -38,6 +38,8 @@ The stack starts:
 - `app`: Vite development server with source mounted for hot reload.
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
+- `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
+- Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
 
@@ -56,9 +58,13 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `ROSBRIDGE_PORT` | `9090` | rosbridge and Caddy `/websocket` upstream |
 | `VIDEO_STREAM_PORT` | `8080` | `web_video_server` and Caddy `/video_stream` upstream |
 | `MESH_RESOURCES_PORT` | `8000` | Caddy `/mesh_resources` upstream |
+| `OLLAMA_BACKEND_URL` | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
+| `OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama port |
+| `OLLAMA_PROXY_TARGET` | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream |
 | `VITE_ROSBRIDGE_PORT` | `9090` | Desktop direct-connect rosbridge URL |
 | `VITE_VIDEO_STREAM_PORT` | `8080` | Desktop direct-connect video URL |
 | `VITE_MESH_RESOURCES_PORT` | `8000` | Desktop direct-connect mesh URL |
+| `VITE_OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama URL |
 | `VITE_WEB_BACKEND_MODE` | `auto` | `auto`, `proxy`, or `direct` for web IP connections |
 
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
@@ -66,6 +72,16 @@ For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to t
 ```bash
 BACKEND_HOST=192.168.1.20 docker compose up -d --build app caddy
 ```
+
+Ollama remains external to Robo Boy. The application does not start Ollama or control its bind address,
+origins, models, or networking. The browser provider uses `/ollama` so discovery and generation remain
+same-origin. A transport-only relay connects that route to `OLLAMA_BACKEND_URL`, which can be any Ollama API
+reachable from the Docker host. The default supports a same-machine Ollama without exposing it to Docker or
+the network.
+The Tauri app uses the host selected on the connection screen (including VPN hostnames and IPs) with
+`VITE_OLLAMA_PORT`. Set `OLLAMA_HOST=0.0.0.0:11434` on the Ollama machine, or bind it specifically to the
+VPN interface, so remote desktop clients can reach it. If a desktop webview receives
+a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
 In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 

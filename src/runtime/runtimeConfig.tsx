@@ -6,6 +6,7 @@ export interface RuntimeEndpoints {
   rosbridgeUrl: string;
   videoStreamBaseUrl: string;
   meshResourcesBaseUrl: string;
+  ollamaBaseUrl: string;
   mode: 'web' | 'desktop';
   host: string;
 }
@@ -14,6 +15,7 @@ export interface RuntimePortConfig {
   rosbridgePort: string;
   videoStreamPort: string;
   meshResourcesPort: string;
+  ollamaPort: string;
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
@@ -39,6 +41,7 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   rosbridgePort: normalizeRuntimePort(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
   videoStreamPort: normalizeRuntimePort(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
   meshResourcesPort: normalizeRuntimePort(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
+  ollamaPort: normalizeRuntimePort(import.meta.env.VITE_OLLAMA_PORT, '11434'),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
 });
 
@@ -86,6 +89,7 @@ const resolveDirectEndpoints = (
     rosbridgeUrl: `${websocketScheme}://${urlHost}:${ports.rosbridgePort}`,
     videoStreamBaseUrl: `${httpScheme}://${urlHost}:${ports.videoStreamPort}`,
     meshResourcesBaseUrl: `${httpScheme}://${urlHost}:${ports.meshResourcesPort}`,
+    ollamaBaseUrl: `${httpScheme}://${urlHost}:${ports.ollamaPort}`,
     mode,
     host,
   };
@@ -121,6 +125,7 @@ export function resolveRuntimeEndpoints(
       rosbridgeUrl: `${websocketScheme}://${authority}/websocket`,
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
+      ollamaBaseUrl: '/ollama',
       mode: 'web',
       host: location.hostname,
     };

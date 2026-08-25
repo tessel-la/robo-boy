@@ -33,6 +33,14 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
 	}
 
+	# Keep the read/chat Ollama endpoints same-origin without exposing its
+	# model-management API through the public web proxy.
+	@ollama_api path /ollama/api/tags /ollama/api/chat
+	handle @ollama_api {
+		uri strip_prefix /ollama
+		reverse_proxy unix//run/ollama-relay/ollama.sock
+	}
+
 	# Route other requests to the Vite app container (Default Handler)
 	handle {
 		# Still proxy to HTTP endpoint of Vite container
@@ -63,6 +71,13 @@
 	# Proxy mesh resources to the configured robot backend.
 	handle_path /mesh_resources/* {
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+	}
+
+	# Proxy only the Ollama endpoints used by the BT agent.
+	@ollama_api path /ollama/api/tags /ollama/api/chat
+	handle @ollama_api {
+		uri strip_prefix /ollama
+		reverse_proxy unix//run/ollama-relay/ollama.sock
 	}
 
 	# Route other requests to the Vite app container (Default Handler)

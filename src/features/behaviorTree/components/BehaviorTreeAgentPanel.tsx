@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources, fetchActionGoalDetails, fetchServiceRequestSchema } from '../services/rosDiscovery';
 import { BehaviorTree, ROSDiscoveryResult } from '../types';
 import { listBehaviorTrees } from '../storage/treeStorage';
-import { generateBehaviorTree, transcribeAgentAudio } from '../agent/agentClient';
+import { fetchOllamaModels, generateBehaviorTree, transcribeAgentAudio } from '../agent/agentClient';
 import { getProviderDefaults, loadAgentSettings, saveAgentSettings } from '../agent/agentStorage';
 import { parseGeneratedAgentResponse } from '../agent/treeGeneration';
 import {
@@ -21,6 +21,7 @@ import {
 import AgentSpeechTextarea from './AgentSpeechTextarea';
 import BehaviorTreeSketchEditor from './BehaviorTreeSketchEditor';
 import './BehaviorTreeAgentPanel.css';
+import { useRuntimeConfig } from '../../../runtime/runtimeConfig';
 
 interface BehaviorTreeAgentPanelProps {
   open: boolean;
@@ -164,6 +165,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   onRestoreCheckpoint = () => undefined,
   onNotify = () => undefined,
 }) => {
+  const runtime = useRuntimeConfig();
   const [settings, setSettings] = useState<BehaviorTreeAgentSettings>(loadAgentSettings);
   const [prompt, setPrompt] = useState('');
   const [inlinePrompt, setInlinePrompt] = useState('');
@@ -174,6 +176,10 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   const [error, setError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [ollamaModelsError, setOllamaModelsError] = useState('');
+  const [isLoadingOllamaModels, setIsLoadingOllamaModels] = useState(false);
+  const [ollamaModelsRefresh, setOllamaModelsRefresh] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [showSketchEditor, setShowSketchEditor] = useState(false);
@@ -191,6 +197,13 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   openRef.current = open;
   const [panelFrame, setPanelFrame] = useState<AgentPanelFrame | null>(null);
   const [resizeCorner, setResizeCorner] = useState<AgentResizeCorner | null>(null);
+  const resolvedSettings = useMemo(
+    () =>
+      settings.provider === 'ollama' && settings.ollamaUseBackendHost
+        ? { ...settings, baseUrl: runtime.ollamaBaseUrl }
+        : settings,
+    [runtime.ollamaBaseUrl, settings]
+  );
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -207,17 +220,58 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose, open, showSketchEditor]);
 
-  const updateSettings = (patch: Partial<BehaviorTreeAgentSettings>) => {
+  const updateSettings = useCallback((patch: Partial<BehaviorTreeAgentSettings>) => {
     setError('');
     setSettings(previous => {
       const next = { ...previous, ...patch };
       saveAgentSettings(next);
       return next;
     });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (settings.provider !== 'ollama') {
+      setOllamaModels([]);
+      setOllamaModelsError('');
+      setIsLoadingOllamaModels(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoadingOllamaModels(true);
+    setOllamaModelsError('');
+    const timeout = window.setTimeout(async () => {
+      try {
+        const models = await fetchOllamaModels(resolvedSettings.baseUrl, settings.apiKey, controller.signal);
+        setOllamaModels(models);
+        setSettings(previous => {
+          if (models.length === 0 || models.includes(previous.model)) return previous;
+          const next = { ...previous, model: models[0] };
+          saveAgentSettings(next);
+          return next;
+        });
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setOllamaModels([]);
+        setOllamaModelsError(cause instanceof Error ? cause.message : 'Could not load Ollama models.');
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingOllamaModels(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [ollamaModelsRefresh, resolvedSettings.baseUrl, settings.apiKey, settings.provider]);
 
   const handleProviderChange = (provider: AgentProvider) => {
-    updateSettings({ provider, apiKey: '', ...getProviderDefaults(provider) });
+    updateSettings({
+      provider,
+      apiKey: '',
+      ...getProviderDefaults(provider),
+      ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}),
+    });
   };
 
   const handleResizeStart = (corner: AgentResizeCorner, event: React.PointerEvent<HTMLDivElement>) => {
@@ -331,11 +385,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
   ) => {
     const userMessage = rawPrompt.trim();
     if (!userMessage || isGenerating) return;
-    if (!settings.baseUrl.trim() || !settings.model.trim()) {
+    if (!resolvedSettings.baseUrl.trim() || !settings.model.trim()) {
       setError('Set both a base URL and model before generating.');
       return;
     }
-    if (settings.provider !== 'openai-compatible' && !settings.apiKey.trim()) {
+    if (settings.provider !== 'openai-compatible' && settings.provider !== 'ollama' && !settings.apiKey.trim()) {
       setError(`Add an API key for ${settings.provider} before generating.`);
       return;
     }
@@ -383,7 +437,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
       const result = await generateBehaviorTree({
         prompt: userMessage,
         conversation: previousConversation.map(({ role, content }) => ({ role, content })),
-        settings: { ...settings, includeCurrentTree: Boolean(treeContext) },
+        settings: { ...resolvedSettings, includeCurrentTree: Boolean(treeContext) },
         currentTree: treeContext?.openTree ?? treeContext?.selectedTree ?? null,
         treeContext,
         rosResources: includeRosResources ? discovered.resources : EMPTY_RESOURCES,
@@ -851,17 +905,80 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                 >
                   <option value="openai">OpenAI</option>
                   <option value="gemini">Google Gemini</option>
+                  <option value="ollama">Ollama</option>
                   <option value="openai-compatible">OpenAI-compatible / local</option>
                 </select>
               </label>
               <label>
-                Model
-                <input value={settings.model} onChange={event => updateSettings({ model: event.target.value })} />
-              </label>
-              <label>
                 Base URL
-                <input value={settings.baseUrl} onChange={event => updateSettings({ baseUrl: event.target.value })} />
+                <input
+                  value={resolvedSettings.baseUrl}
+                  disabled={settings.provider === 'ollama' && settings.ollamaUseBackendHost}
+                  onChange={event => updateSettings({ baseUrl: event.target.value })}
+                />
               </label>
+              {settings.provider === 'ollama' && (
+                <label className="bt-agent-ollama-backend-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.ollamaUseBackendHost}
+                    onChange={event =>
+                      updateSettings({
+                        ollamaUseBackendHost: event.target.checked,
+                        ...(!event.target.checked ? { baseUrl: resolvedSettings.baseUrl } : {}),
+                      })
+                    }
+                  />
+                  Use connected backend host
+                </label>
+              )}
+              {settings.provider === 'ollama' ? (
+                <div className="bt-agent-setting-field">
+                  <label htmlFor="bt-agent-ollama-model">Model</label>
+                  <div className="bt-agent-model-select-row">
+                    <select
+                      id="bt-agent-ollama-model"
+                      value={settings.model}
+                      onChange={event => updateSettings({ model: event.target.value })}
+                      disabled={isLoadingOllamaModels || ollamaModels.length === 0}
+                    >
+                      {settings.model && !ollamaModels.includes(settings.model) && (
+                        <option value={settings.model}>{settings.model}</option>
+                      )}
+                      {!settings.model && (
+                        <option value="">
+                          {isLoadingOllamaModels ? 'Loading models…' : 'No models available'}
+                        </option>
+                      )}
+                      {ollamaModels.map(model => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="bt-agent-model-refresh"
+                      onClick={() => setOllamaModelsRefresh(value => value + 1)}
+                      disabled={isLoadingOllamaModels}
+                      aria-label="Refresh Ollama models"
+                      title="Refresh Ollama models"
+                    >
+                      <FaSyncAlt className={isLoadingOllamaModels ? 'spinning' : ''} aria-hidden="true" />
+                    </button>
+                  </div>
+                  {ollamaModelsError && (
+                    <span className="bt-agent-model-error" role="status">
+                      {ollamaModelsError}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <label>
+                  Model
+                  <input value={settings.model} onChange={event => updateSettings({ model: event.target.value })} />
+                </label>
+              )}
               <label>
                 API key
                 <input
@@ -869,7 +986,11 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                   autoComplete="off"
                   value={settings.apiKey}
                   onChange={event => updateSettings({ apiKey: event.target.value })}
-                  placeholder={settings.provider === 'openai-compatible' ? 'Optional for local models' : 'Required'}
+                  placeholder={
+                    settings.provider === 'openai-compatible' || settings.provider === 'ollama'
+                      ? 'Optional for local models'
+                      : 'Required'
+                  }
                 />
               </label>
               <AgentSpeechTextarea
@@ -879,7 +1000,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                 rows={2}
                 value={settings.systemContext}
                 onChange={systemContext => updateSettings({ systemContext })}
-                onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
+                onTranscribeAudio={audio => transcribeAgentAudio(audio, resolvedSettings)}
                 placeholder="Safety constraints, preferred BT conventions…"
               />
               <AgentSpeechTextarea
@@ -889,7 +1010,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
                 rows={3}
                 value={settings.robotContext}
                 onChange={robotContext => updateSettings({ robotContext })}
-                onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
+                onTranscribeAudio={audio => transcribeAgentAudio(audio, resolvedSettings)}
                 placeholder="Robot capabilities, frames, operational rules…"
               />
               <p className="bt-agent-key-note">
@@ -1083,7 +1204,7 @@ const BehaviorTreeAgentPanel: React.FC<BehaviorTreeAgentPanelProps> = ({
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handlePromptKeyDown}
-              onTranscribeAudio={audio => transcribeAgentAudio(audio, settings)}
+              onTranscribeAudio={audio => transcribeAgentAudio(audio, resolvedSettings)}
               rows={clarification ? 3 : 4}
               textareaRef={promptRef}
               placeholder={

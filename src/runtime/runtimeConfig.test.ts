@@ -13,6 +13,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'wss://robot.local:8443/websocket',
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
+      ollamaBaseUrl: '/ollama',
       mode: 'web',
       host: 'robot.local',
     });
@@ -29,6 +30,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://192.168.1.20:9090',
       videoStreamBaseUrl: 'http://192.168.1.20:8080',
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
+      ollamaBaseUrl: 'http://192.168.1.20:11434',
       mode: 'web',
       host: '192.168.1.20',
     });
@@ -58,6 +60,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://robot.tailnet.ts.net:9090',
       videoStreamBaseUrl: 'http://robot.tailnet.ts.net:8080',
       meshResourcesBaseUrl: 'http://robot.tailnet.ts.net:8000',
+      ollamaBaseUrl: 'http://robot.tailnet.ts.net:11434',
       mode: 'web',
       host: 'robot.tailnet.ts.net',
     });
@@ -76,6 +79,7 @@ describe('resolveRuntimeEndpoints', () => {
         rosbridgePort: '9090',
         videoStreamPort: '8080',
         meshResourcesPort: '8000',
+        ollamaPort: '11434',
         webBackendMode: 'proxy',
       }
     );
@@ -92,6 +96,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://192.168.1.20:9090',
       videoStreamBaseUrl: 'http://192.168.1.20:8080',
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
+      ollamaBaseUrl: 'http://192.168.1.20:11434',
       mode: 'desktop',
       host: '192.168.1.20',
     });
@@ -117,12 +122,14 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgePort: '19090',
       videoStreamPort: '18080',
       meshResourcesPort: '18000',
+      ollamaPort: '11435',
       webBackendMode: 'auto',
     });
 
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
     expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
+    expect(endpoints.ollamaBaseUrl).toBe('http://robot.local:11435');
   });
 
   it('allows the landing page connection to override service ports', () => {

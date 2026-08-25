@@ -1,0 +1,11 @@
+{
+	admin off
+	auto_https off
+}
+
+# This relay owns no Ollama configuration. It only bridges the host network to
+# a Unix socket shared with the public Caddy container.
+:80 {
+	bind unix//run/ollama-relay/ollama.sock|0666
+	reverse_proxy {$OLLAMA_BACKEND_URL:http://127.0.0.1:11434}
+}

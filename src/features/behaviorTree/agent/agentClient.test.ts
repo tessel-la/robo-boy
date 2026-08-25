@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BehaviorNodeType, BehaviorTree } from '../types';
-import { buildBehaviorTreeAgentPrompt, generateBehaviorTree, transcribeAgentAudio } from './agentClient';
+import {
+  buildBehaviorTreeAgentPrompt,
+  fetchOllamaModels,
+  generateBehaviorTree,
+  transcribeAgentAudio,
+} from './agentClient';
 import { getDefaultAgentSettings } from './agentStorage';
 
 const tree: BehaviorTree = {
@@ -130,6 +135,76 @@ describe('buildBehaviorTreeAgentPrompt', () => {
         { type: 'text', text: expect.stringContaining('Image: map.png') },
         { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1n' } },
       ] }],
+    });
+  });
+
+  it('fetches and sorts the models installed on an Ollama server', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      JSON.stringify({
+        models: [
+          { name: 'qwen3:8b' },
+          { model: 'gemma3:4b' },
+          { name: 'qwen3:8b' },
+        ],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    ));
+
+    await expect(fetchOllamaModels('http://robot.local:11434/v1/', 'secret')).resolves.toEqual([
+      'gemma3:4b',
+      'qwen3:8b',
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://robot.local:11434/api/tags',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Authorization: 'Bearer secret' },
+      })
+    );
+  });
+
+  it('streams behavior-tree JSON through the native Ollama chat API', async () => {
+    const tokens: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"message":{"content":"{\\"name\\":\\"Patrol"}}\n'));
+          controller.enqueue(new TextEncoder().encode('{"message":{"content":" tree\\"}"},"done":true}\n'));
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }
+    ));
+
+    const result = await generateBehaviorTree({
+      prompt: 'Build a patrol',
+      settings: {
+        ...getDefaultAgentSettings(),
+        provider: 'ollama',
+        baseUrl: '/ollama',
+        model: 'qwen3:8b',
+      },
+      currentTree: null,
+      rosResources: { actions: [], services: [], topics: [] },
+      resourceSchemas: { actions: {}, services: {} },
+      attachments: [{
+        id: 'image:map', name: 'map.png', mimeType: 'image/png', size: 3,
+        kind: 'image', content: 'aW1n',
+      }],
+      onToken: token => tokens.push(token),
+    });
+
+    expect(result).toBe('{"name":"Patrol tree"}');
+    expect(tokens).toEqual(['{"name":"Patrol', ' tree"}']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/ollama/api/chat',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0][1]?.body ?? '{}') as string)).toMatchObject({
+      model: 'qwen3:8b',
+      stream: true,
+      format: 'json',
+      messages: [{ role: 'user', content: expect.stringContaining('Build a patrol'), images: ['aW1n'] }],
     });
   });
 

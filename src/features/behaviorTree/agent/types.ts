@@ -1,7 +1,7 @@
 import { BehaviorTree, ROSDiscoveryResult } from '../types';
 import type { ActionGoalDetails } from '../services/rosDiscovery';
 
-export type AgentProvider = 'openai' | 'gemini' | 'openai-compatible';
+export type AgentProvider = 'openai' | 'gemini' | 'ollama' | 'openai-compatible';
 
 export interface BehaviorTreeAgentSettings {
   provider: AgentProvider;
@@ -11,6 +11,7 @@ export interface BehaviorTreeAgentSettings {
   systemContext: string;
   robotContext: string;
   includeCurrentTree: boolean;
+  ollamaUseBackendHost: boolean;
 }
 
 export type BehaviorTreeAgentTreeContextMode = 'open' | 'selection' | 'open-and-selection' | 'additional';
