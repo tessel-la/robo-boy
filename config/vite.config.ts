@@ -44,6 +44,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '0.0.0.0', // Listen on all interfaces within the container
     port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
+    proxy: {
+      '/ollama': {
+        target: process.env.OLLAMA_PROXY_TARGET ?? 'http://127.0.0.1:11434',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/ollama/, ''),
+      },
+    },
     // https: false, // Ensure HTTPS is disabled (default is false anyway)
     // hmr: { // Optional: Specify host for Hot Module Replacement if needed
     //   host: 'localhost', // Browser connects to Caddy on localhost

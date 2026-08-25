@@ -98,17 +98,88 @@ const readSse = async (
   return result;
 };
 
+const readNdjson = async (
+  response: Response,
+  extract: (payload: any) => string | undefined,
+  onToken?: (text: string) => void
+): Promise<string> => {
+  if (!response.body) throw new Error('The provider returned no response body.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = '';
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const payload = JSON.parse(trimmed);
+    if (payload.error) throw new Error(String(payload.error));
+    const token = extract(payload);
+    if (token) {
+      result += token;
+      onToken?.(token);
+    }
+  };
+
+  let streamDone = false;
+  while (!streamDone) {
+    const { value, done } = await reader.read();
+    streamDone = done;
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+    lines.forEach(consumeLine);
+  }
+  if (buffer.trim()) consumeLine(buffer);
+  return result;
+};
+
 const checkedFetch = async (url: string, init: RequestInit): Promise<Response> => {
   const response = await fetch(url, init);
   if (response.ok) return response;
   const body = await response.text();
   let message = body;
   try {
-    message = JSON.parse(body)?.error?.message ?? body;
+    const payload = JSON.parse(body);
+    message = typeof payload?.error === 'string' ? payload.error : payload?.error?.message ?? body;
   } catch {
     /* keep raw body */
   }
   throw new Error(`${response.status} ${response.statusText}${message ? `: ${message.slice(0, 500)}` : ''}`);
+};
+
+const getOllamaApiBaseUrl = (baseUrl: string): string => {
+  const normalized = baseUrl.trim().replace(/\/+$/, '');
+  if (normalized.endsWith('/api')) return normalized;
+  if (normalized.endsWith('/v1')) return `${normalized.slice(0, -3)}/api`;
+  return `${normalized}/api`;
+};
+
+export const fetchOllamaModels = async (
+  baseUrl: string,
+  apiKey = '',
+  signal?: AbortSignal
+): Promise<string[]> => {
+  if (!baseUrl.trim()) throw new Error('Set the Ollama base URL before loading models.');
+  const headers: Record<string, string> = {};
+  if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`;
+  const apiBaseUrl = getOllamaApiBaseUrl(baseUrl);
+
+  try {
+    const response = await checkedFetch(`${apiBaseUrl}/tags`, { method: 'GET', signal, headers });
+    const payload = await response.json();
+    if (!Array.isArray(payload?.models)) throw new Error('Ollama returned an invalid model list.');
+    const names = payload.models
+      .map((model: any): unknown => model?.name ?? model?.model)
+      .filter((name: unknown): name is string => typeof name === 'string' && Boolean(name.trim()));
+    return Array.from(new Set<string>(names)).sort((left, right) => left.localeCompare(right));
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
+    const detail = cause instanceof Error ? cause.message : 'Unknown connection error';
+    throw new Error(
+      `Ollama model discovery failed at ${apiBaseUrl}: ${detail}. ` +
+      'For remote connections, make sure Ollama listens on the VPN or LAN interface.'
+    );
+  }
 };
 
 const blobToBase64 = async (blob: Blob): Promise<string> => {
@@ -136,6 +207,9 @@ export const transcribeAgentAudio = async (
 ): Promise<string> => {
   if (!settings.baseUrl.trim()) {
     throw new Error('Set a base URL before using voice input.');
+  }
+  if (settings.provider === 'ollama') {
+    throw new Error('Ollama does not provide an audio transcription endpoint. Use browser voice recognition instead.');
   }
   if (settings.provider !== 'openai-compatible' && !settings.apiKey.trim()) {
     throw new Error(`Add an API key for ${settings.provider} before using voice input.`);
@@ -220,6 +294,33 @@ export const generateBehaviorTree = async (request: BehaviorTreeAgentRequest): P
       payload => payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? '').join(''),
       onToken
     );
+  }
+
+  if (settings.provider === 'ollama') {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (settings.apiKey.trim()) headers.Authorization = `Bearer ${settings.apiKey.trim()}`;
+    const response = await checkedFetch(`${getOllamaApiBaseUrl(settings.baseUrl)}/chat`, {
+      method: 'POST',
+      signal,
+      headers,
+      body: JSON.stringify({
+        model: settings.model,
+        stream: true,
+        format: 'json',
+        options: { temperature: 0.2 },
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+            ...(imageAttachments.length > 0
+              ? { images: imageAttachments.map(attachment => attachment.content) }
+              : {}),
+          },
+        ],
+      }),
+    });
+    onProgress?.('Receiving and assembling the tree…');
+    return readNdjson(response, payload => payload.message?.content, onToken);
   }
 
   const url = `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`;

@@ -21,9 +21,14 @@ describe('agentStorage', () => {
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
       model: 'gemini-2.5-flash',
     });
+    expect(getProviderDefaults('ollama')).toEqual({
+      baseUrl: '/ollama',
+      model: '',
+    });
     expect(getDefaultAgentSettings()).toMatchObject({
       provider: 'openai-compatible',
       includeCurrentTree: true,
+      ollamaUseBackendHost: true,
       baseUrl: 'http://localhost:11434/v1',
     });
   });
@@ -43,5 +48,14 @@ describe('agentStorage', () => {
 
     localStorage.setItem('robo-boy-bt-agent-settings', '{broken');
     expect(loadAgentSettings()).toEqual(getDefaultAgentSettings());
+  });
+
+  it('connects directly to local Ollama from the desktop runtime', () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+    try {
+      expect(getProviderDefaults('ollama').baseUrl).toBe('http://localhost:11434');
+    } finally {
+      delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
   });
 });

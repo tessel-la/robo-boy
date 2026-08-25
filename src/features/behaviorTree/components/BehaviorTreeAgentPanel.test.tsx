@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BehaviorNodeType, BehaviorTree } from '../types';
 import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
+import { RuntimeConfigProvider } from '../../../runtime/runtimeConfig';
 
 const rosDiscoveryMock = vi.hoisted(() => ({
   discoverAllROSResources: vi.fn(),
@@ -11,7 +12,9 @@ const rosDiscoveryMock = vi.hoisted(() => ({
 }));
 
 const agentClientMock = vi.hoisted(() => ({
+  fetchOllamaModels: vi.fn(),
   generateBehaviorTree: vi.fn(),
+  transcribeAgentAudio: vi.fn(),
 }));
 
 vi.mock('../services/rosDiscovery', () => rosDiscoveryMock);
@@ -55,6 +58,7 @@ describe('BehaviorTreeAgentPanel', () => {
         edges: [],
       })
     );
+    agentClientMock.fetchOllamaModels.mockResolvedValue(['gemma3:4b', 'qwen3:8b']);
   });
 
   it('builds removable automatic context from the open tree, selection, and ROS', () => {
@@ -404,6 +408,75 @@ describe('BehaviorTreeAgentPanel', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('loads installed models when Ollama is selected', async () => {
+    render(
+      <BehaviorTreeAgentPanel
+        open
+        ros={null}
+        isConnected={false}
+        currentTree={tree}
+        selectedTreeContext={null}
+        previewTree={null}
+        onClose={vi.fn()}
+        onPreviewChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent settings' }));
+    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'ollama' } });
+
+    await waitFor(() => expect(agentClientMock.fetchOllamaModels).toHaveBeenCalledWith(
+      '/ollama',
+      '',
+      expect.any(AbortSignal)
+    ));
+    expect(await screen.findByLabelText('Model')).toHaveValue('gemma3:4b');
+    expect(screen.getByRole('option', { name: 'qwen3:8b' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Base URL')).toHaveValue('/ollama');
+    expect(screen.getByLabelText('Use connected backend host')).toBeChecked();
+  });
+
+  it('uses the connected VPN backend for Ollama in the desktop app', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+    const view = render(
+      <RuntimeConfigProvider connectionParams={{ ros2Option: 'ip', ros2Value: 'robot.tailnet.ts.net' }}>
+        <BehaviorTreeAgentPanel
+          open
+          ros={null}
+          isConnected={false}
+          currentTree={tree}
+          selectedTreeContext={null}
+          previewTree={null}
+          onClose={vi.fn()}
+          onPreviewChange={vi.fn()}
+        />
+      </RuntimeConfigProvider>
+    );
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Agent settings' }));
+      fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'ollama' } });
+
+      await waitFor(() => expect(agentClientMock.fetchOllamaModels).toHaveBeenCalledWith(
+        'http://robot.tailnet.ts.net:11434',
+        '',
+        expect.any(AbortSignal)
+      ));
+      expect(screen.getByLabelText('Base URL')).toHaveValue('http://robot.tailnet.ts.net:11434');
+
+      fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Build a patrol' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+      await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          settings: expect.objectContaining({ baseUrl: 'http://robot.tailnet.ts.net:11434' }),
+        })
+      ));
+    } finally {
+      view.unmount();
+      delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
   });
 
   it('runs an inline instruction in the background without opening the panel', async () => {
