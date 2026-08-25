@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "la.tessel.roboboy.hello",
+  "name": "Hello Panel",
+  "description": "A minimal external panel that demonstrates the Robo-Boy panel lifecycle.",
+  "version": "1.0.0",
+  "entryPoint": "./index.js",
+  "compatibility": {
+    "panelApi": "^1.0.0",
+    "roboboy": ">=0.3.0-0 <1.0.0"
+  },
+  "capabilities": ["storage"],
+  "author": {
+    "name": "Tessella"
+  },
+  "repository": "https://github.com/tessel-la/roboboy-hello-panel",
+  "tags": ["example", "developer-tools"]
+}

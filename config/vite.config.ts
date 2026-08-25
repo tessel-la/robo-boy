@@ -24,10 +24,7 @@ const roslibGlobalThisPlugin = (): Plugin => ({
       return null;
     }
 
-    return code.replace(
-      'var ROSLIB = this.ROSLIB ||',
-      'var ROSLIB = globalThis.ROSLIB ||',
-    );
+    return code.replace('var ROSLIB = this.ROSLIB ||', 'var ROSLIB = globalThis.ROSLIB ||');
   },
 });
 
@@ -41,6 +38,18 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
+  resolve: {
+    // MainControlView is lazy-loaded after the connection screen. Keep hooks
+    // and the renderer on one React instance across linked panel SDKs and
+    // dependency-optimizer generations.
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    // semver is first reached through the lazy external-panel registry. Make
+    // it part of the initial dev optimization pass so login cannot trigger a
+    // dependency re-bundle while React is mounting MainControlView.
+    include: ['react', 'react-dom', 'react-dom/client', 'semver'],
+  },
   server: {
     host: '0.0.0.0', // Listen on all interfaces within the container
     port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
@@ -79,6 +88,7 @@ export default defineConfig(({ mode }) => ({
     // mkcert() // Ensure mkcert is commented out/removed
   ],
   build: {
+    outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
     chunkSizeWarningLimit: 1600,
   },
 }));

@@ -16,6 +16,7 @@ if (window.location.protocol === 'tauri:' || roboBoyWindow.__TAURI__ || roboBoyW
 roboBoyWindow.__ROBOBOY_APP_STARTED = true;
 
 const rootElement = document.getElementById('root');
+let isBooting = true;
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -96,7 +97,11 @@ window.addEventListener('error', event => {
     event.preventDefault();
     return;
   }
-  renderBootError(event.error ?? event.message);
+  if (isBooting) {
+    renderBootError(event.error ?? event.message);
+  } else {
+    console.error('[runtime error]', event.error ?? event.message);
+  }
 });
 
 window.addEventListener('unhandledrejection', event => {
@@ -104,7 +109,11 @@ window.addEventListener('unhandledrejection', event => {
     event.preventDefault();
     return;
   }
-  renderBootError(event.reason);
+  if (isBooting) {
+    renderBootError(event.reason);
+  } else {
+    console.error('[unhandled rejection]', event.reason);
+  }
 });
 
 try {
@@ -119,6 +128,8 @@ try {
     </ErrorBoundary>
     // </React.StrictMode>,
   );
+  isBooting = false;
 } catch (error) {
+  isBooting = false;
   renderBootError(error);
 }

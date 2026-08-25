@@ -49,23 +49,23 @@ docker compose up -d --build --force-recreate
 
 The default ports are defined in the copied `.env` file. The main knobs are:
 
-| Variable | Default | Used by |
-| --- | --- | --- |
-| `FRONTEND_PORT` | `5173` | Vite dev server and Caddy frontend upstream |
-| `HTTP_PORT` | `80` | Caddy HTTP listener |
-| `HTTPS_PORT` | `443` | Caddy HTTPS and HTTP/3 listener |
-| `BACKEND_HOST` | `host.docker.internal` | Caddy upstream host for ROS services |
-| `ROSBRIDGE_PORT` | `9090` | rosbridge and Caddy `/websocket` upstream |
-| `VIDEO_STREAM_PORT` | `8080` | `web_video_server` and Caddy `/video_stream` upstream |
-| `MESH_RESOURCES_PORT` | `8000` | Caddy `/mesh_resources` upstream |
-| `OLLAMA_BACKEND_URL` | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
-| `OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama port |
-| `OLLAMA_PROXY_TARGET` | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream |
-| `VITE_ROSBRIDGE_PORT` | `9090` | Desktop direct-connect rosbridge URL |
-| `VITE_VIDEO_STREAM_PORT` | `8080` | Desktop direct-connect video URL |
-| `VITE_MESH_RESOURCES_PORT` | `8000` | Desktop direct-connect mesh URL |
-| `VITE_OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama URL |
-| `VITE_WEB_BACKEND_MODE` | `auto` | `auto`, `proxy`, or `direct` for web IP connections |
+| Variable                   | Default                  | Used by                                                    |
+| -------------------------- | ------------------------ | ---------------------------------------------------------- |
+| `FRONTEND_PORT`            | `5173`                   | Vite dev server and Caddy frontend upstream                |
+| `HTTP_PORT`                | `80`                     | Caddy HTTP listener                                        |
+| `HTTPS_PORT`               | `443`                    | Caddy HTTPS and HTTP/3 listener                            |
+| `BACKEND_HOST`             | `host.docker.internal`   | Caddy upstream host for ROS services                       |
+| `ROSBRIDGE_PORT`           | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
+| `VIDEO_STREAM_PORT`        | `8080`                   | `web_video_server` and Caddy `/video_stream` upstream      |
+| `MESH_RESOURCES_PORT`      | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `OLLAMA_BACKEND_URL`       | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
+| `OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama port                         |
+| `OLLAMA_PROXY_TARGET`      | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream                      |
+| `VITE_ROSBRIDGE_PORT`      | `9090`                   | Desktop direct-connect rosbridge URL                       |
+| `VITE_VIDEO_STREAM_PORT`   | `8080`                   | Desktop direct-connect video URL                           |
+| `VITE_MESH_RESOURCES_PORT` | `8000`                   | Desktop direct-connect mesh URL                            |
+| `VITE_OLLAMA_PORT`         | `11434`                  | Desktop direct-connect Ollama URL                          |
+| `VITE_WEB_BACKEND_MODE`    | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
 
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
@@ -84,6 +84,15 @@ VPN interface, so remote desktop clients can reach it. If a desktop webview rece
 a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
 In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+
+External panel manifests are discovered from `public/panels/installed.json`. Set `VITE_PANEL_REGISTRY_URL` to use
+another same-origin installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
+[External panels](external-panels.md) before changing the SDK, manifest schema, or installed assets.
+
+The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
+registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
+dependency during the connection transition can otherwise invalidate Vite's development dependency graph while
+React is mounting the workspace.
 
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
@@ -108,6 +117,9 @@ npm run test:run
 npm run test:coverage
 npm run e2e
 ```
+
+Set `ROBOBOY_DIST_DIR` when build artifacts need to be written outside the default `dist/` directory. The web and
+Tauri Vite builds honor it, and the Tauri post-build module check validates the same directory.
 
 `npm run e2e` starts its own Vite server. To test an already-running Docker/Caddy stack, use:
 
@@ -154,11 +166,11 @@ Do not create official releases directly from `dev`.
 
 Release Please uses Conventional Commits to choose the next SemVer version:
 
-| Commit message | Release type |
-| -------------- | ------------ |
-| `fix: correct login redirect` | Patch |
-| `feat: add export endpoint` | Minor |
-| `feat!: change public API response format` | Major |
+| Commit message                             | Release type |
+| ------------------------------------------ | ------------ |
+| `fix: correct login redirect`              | Patch        |
+| `feat: add export endpoint`                | Minor        |
+| `feat!: change public API response format` | Major        |
 
 Breaking changes can also be marked with a `BREAKING CHANGE:` footer in the commit body. Commits such as `docs:`, `test:`, `chore:`, and `refactor:` can appear in history, but they do not create a release by themselves unless they include a breaking-change marker.
 

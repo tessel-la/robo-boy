@@ -2,7 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const projectRoot = path.resolve(__dirname, '..');
-const distDir = path.join(projectRoot, 'dist');
+const distDir = process.env.ROBOBOY_DIST_DIR
+  ? path.resolve(projectRoot, process.env.ROBOBOY_DIST_DIR)
+  : path.join(projectRoot, 'dist');
 const indexPath = path.join(distDir, 'index.html');
 
 const fail = message => {

@@ -664,6 +664,22 @@
   text-transform: uppercase;
 }
 
+.workspace-add-menu-subtitle {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.workspace-panel-catalog-note {
+  padding: 5px 8px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.workspace-panel-catalog-warning {
+  color: var(--warning-color, #f59f00);
+}
+
 .workspace-add-menu button {
   width: 100%;
   min-height: 34px;
@@ -1357,8 +1373,29 @@ body.no-scroll {
   background: #14b8a6;
 }
 
+.workspace-card-dot-external {
+  background: #ec4899;
+}
+
 .workspace-card-dot-view {
   background: #22c55e;
+}
+
+.panel-unavailable {
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px !important;
+}
+
+.panel-unavailable strong {
+  color: var(--error-color, #f87171);
+}
+
+.panel-unavailable span {
+  max-width: 560px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .workspace-card-actions {

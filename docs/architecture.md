@@ -86,6 +86,19 @@ New visualization types should follow the same split: serializable configuration
 
 `src/features/theme/` owns theme creation and CSS generation. Built-in themes are CSS variable sets in `src/index.css`; custom themes generate a scoped style element and are persisted in browser storage. Components should consume theme variables rather than hardcoded palette colors.
 
+### Panel Hosting And External Panels
+
+`MainControlView` owns the unified workspace and persists panel instances by stable panel-definition ID. The common
+catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
+`src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
+`public/panels/installed.json` without importing panel code.
+
+Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small, framework-neutral
+contract in `panel-sdk/`; `ExternalPanelHost` lazily imports a bundle when its tile mounts, supplies only declared host
+services, and isolates import/activation/mount failures to that tile. Keep application stores and feature internals out
+of the public context. See [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring,
+and inventory boundaries.
+
 ## State And Persistence
 
 State is intentionally local to the browser:
@@ -101,6 +114,7 @@ State is intentionally local to the browser:
 | Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON |
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
+| External panel instance data | `MainControlView`         | JSON in workspace `localStorage`  |
 
 Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
@@ -119,6 +133,10 @@ App shell and shared components
 ```
 
 Feature modules should not import application-shell state. Pass connection objects and callbacks through props or narrow feature APIs. Shared helpers must remain independent of feature UI.
+
+External panels sit outside this internal dependency graph. They depend only on the published panel SDK and receive
+their allowed runtime services from the host context. Robo-Boy core may import SDK types; it must never import an
+external panel's source or package directly.
 
 ## Adding A Feature
 

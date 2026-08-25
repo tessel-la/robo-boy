@@ -33,6 +33,11 @@ import { PersistentBehaviorTreeExecutor } from '../features/behaviorTree/engine/
 import TfTreePanel from '../features/tfTree/components/TfTreePanel';
 import { saveRecentConnection } from '../runtime/recentConnections';
 import anime from 'animejs';
+import ExternalPanelHost from '../panels/ExternalPanelHost';
+import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
+import { isJsonObject, type PanelCatalogEntry, type RoboBoyJsonObject } from '../panels/types';
+import { isValidPanelId } from '../panels/registry';
+import { useInstalledPanels } from '../panels/useInstalledPanels';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -352,6 +357,17 @@ const icons = {
   check: <IconMCVCheck />,
 };
 
+const getPanelCatalogIcon = (panel: PanelCatalogEntry) => {
+  if (panel.source === 'external') return icons.add;
+  if (panel.id === 'camera') return icons.camera;
+  if (panel.id === '3d') return icons.view3d;
+  if (panel.id === 'behaviorTree') return icons.bt;
+  if (panel.id === 'tfTree') return icons.tf;
+  return icons.grip;
+};
+
+const getPanelStyleId = (panelId: string) => (isBuiltInPanelId(panelId) ? panelId : 'external');
+
 // Define Panel Types
 export type PanelType = GamepadType; // Now using the enum
 export interface ActivePanel {
@@ -367,7 +383,7 @@ interface MainControlViewProps {
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
-type WorkspacePanelType = 'camera' | '3d' | 'pad' | 'tfTree' | 'behaviorTree';
+type WorkspacePanelType = string;
 type GamepadEditorSession = {
   mode: GamepadSaveMode;
   initialLayout: CustomGamepadLayout | null;
@@ -384,6 +400,7 @@ interface WorkspacePanel {
   title: string;
   cameraTopic?: string;
   layoutId?: string;
+  panelState?: RoboBoyJsonObject;
 }
 
 type WorkspaceTile =
@@ -405,10 +422,7 @@ const STACKED_WORKSPACE_QUERY = '(max-width: 767px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
-const RETIRED_BUILT_IN_PAD_IDS = new Set([
-  'panda-cartesian-jog',
-  'default-panda-cartesian-jog',
-]);
+const RETIRED_BUILT_IN_PAD_IDS = new Set(['panda-cartesian-jog', 'default-panda-cartesian-jog']);
 
 type WorkspaceDraft = {
   type: WorkspacePanelType;
@@ -450,11 +464,7 @@ const clamp = (value: number, min: number, max: number) => {
 };
 
 const getWorkspaceTitle = (type: WorkspacePanelType) => {
-  if (type === 'camera') return 'Camera';
-  if (type === '3d') return '3D view';
-  if (type === 'tfTree') return 'TF tree';
-  if (type === 'behaviorTree') return 'Behavior tree';
-  return 'Pad controls';
+  return BUILT_IN_PANELS.find(panel => panel.id === type)?.name || 'External panel';
 };
 
 const createWorkspacePanel = (
@@ -462,11 +472,12 @@ const createWorkspacePanel = (
   options: {
     cameraTopic?: string;
     layoutId?: string;
+    title?: string;
   }
 ): WorkspacePanel => {
   return {
     id: generateUniqueId('workspace-panel'),
-    title: getWorkspaceTitle(draft.type),
+    title: options.title || getWorkspaceTitle(draft.type),
     type: draft.type,
     cameraTopic: draft.type === 'camera' ? options.cameraTopic : undefined,
     layoutId: draft.type === 'pad' ? options.layoutId : undefined,
@@ -476,11 +487,7 @@ const createWorkspacePanel = (
 const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
   if (!panel || typeof panel !== 'object') return null;
   const candidate = panel as Partial<WorkspacePanel>;
-  if (
-    typeof candidate.id !== 'string' ||
-    !['camera', '3d', 'pad', 'tfTree', 'behaviorTree'].includes(candidate.type || '') ||
-    typeof candidate.title !== 'string'
-  ) {
+  if (typeof candidate.id !== 'string' || !isValidPanelId(candidate.type) || typeof candidate.title !== 'string') {
     return null;
   }
 
@@ -490,6 +497,7 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
     title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
+    panelState: isJsonObject(candidate.panelState) ? candidate.panelState : undefined,
   };
 };
 
@@ -972,6 +980,12 @@ const applyWorkspaceDropPlacement = (
 };
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
+  const installedPanelRegistry = useInstalledPanels();
+  const panelCatalog = useMemo(
+    () => createPanelCatalog(installedPanelRegistry.panels),
+    [installedPanelRegistry.panels]
+  );
+  const panelCatalogById = useMemo(() => new Map(panelCatalog.map(panel => [panel.id, panel])), [panelCatalog]);
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
   const [isMobileSplitView, setIsMobileSplitView] = useState(loadMobileSplitViewPreference);
@@ -1459,9 +1473,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         });
       } else if (persistentBtSessionId.current === status.sessionId) {
         persistentBtSessionId.current = undefined;
-        setBtExecution(previous => previous.isPersistent
-          ? { ...previous, isExecuting: false, isPaused: false, status: status.error ? 'error' : 'completed' }
-          : previous);
+        setBtExecution(previous =>
+          previous.isPersistent
+            ? { ...previous, isExecuting: false, isPaused: false, status: status.error ? 'error' : 'completed' }
+            : previous
+        );
       }
     });
 
@@ -1630,7 +1646,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             ? {
                 ...panel,
                 type,
-                title: getWorkspaceTitle(type),
+                title: panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
                 cameraTopic: type === 'camera' ? selectedCameraTopic || availableCameraTopics[0] : undefined,
                 layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
               }
@@ -1655,6 +1671,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         {
           cameraTopic: selectedCameraTopic || availableCameraTopics[0],
           layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+          title: panelCatalogById.get(type)?.name,
         }
       );
       const nextPanels = [...prev];
@@ -2473,7 +2490,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           ? {
               ...panel,
               type,
-              title: getWorkspaceTitle(type),
+              title: panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
               cameraTopic:
                 type === 'camera'
                   ? panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0]
@@ -2741,11 +2758,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const matchingGamepad = gamepadLibrary.find(
       item => item.id === requestedLayoutId || item.layout.id === requestedLayoutId
     );
-    const selectedGamepad = matchingGamepad || (
-      !requestedLayoutId || RETIRED_BUILT_IN_PAD_IDS.has(requestedLayoutId)
-        ? gamepadLibrary[0]
-        : undefined
-    );
+    const selectedGamepad =
+      matchingGamepad ||
+      (!requestedLayoutId || RETIRED_BUILT_IN_PAD_IDS.has(requestedLayoutId) ? gamepadLibrary[0] : undefined);
     const selectedLayoutId = selectedGamepad?.id || requestedLayoutId || '';
 
     return createPortal(
@@ -2797,11 +2812,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const matchingGamepad = gamepadLibrary.find(
       item => item.id === panel.layoutId || item.layout.id === panel.layoutId
     );
-    const selectedGamepad = matchingGamepad || (
-      !panel.layoutId || RETIRED_BUILT_IN_PAD_IDS.has(panel.layoutId)
-        ? gamepadLibrary[0]
-        : undefined
-    );
+    const selectedGamepad =
+      matchingGamepad ||
+      (!panel.layoutId || RETIRED_BUILT_IN_PAD_IDS.has(panel.layoutId) ? gamepadLibrary[0] : undefined);
     const selectedLayoutId = selectedGamepad?.id || panel.layoutId || '';
     const canExportSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const canDeleteSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
@@ -2922,6 +2935,38 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
+    const catalogEntry = panelCatalogById.get(panel.type);
+
+    if (catalogEntry?.source === 'external') {
+      return (
+        <ExternalPanelHost
+          manifest={catalogEntry.manifest}
+          instanceId={panel.id}
+          ros={ros}
+          isActive={isPanelActive}
+          state={panel.panelState}
+          onStateChange={panelState => {
+            setWorkspacePanels(previous =>
+              previous.map(candidate => (candidate.id === panel.id ? { ...candidate, panelState } : candidate))
+            );
+          }}
+        />
+      );
+    }
+
+    if (!catalogEntry && installedPanelRegistry.isLoading && !isBuiltInPanelId(panel.type)) {
+      return <div className="placeholder">Loading external panel catalog…</div>;
+    }
+
+    if (!isBuiltInPanelId(panel.type)) {
+      return (
+        <div className="placeholder panel-unavailable" role="alert">
+          <strong>{panel.title} is not installed</strong>
+          <span>Install panel {panel.type} and reload Robo-Boy to restore this workspace tile.</span>
+        </div>
+      );
+    }
+
     if (!isConnected || !ros) {
       return <div className="placeholder">Connecting to ROS...</div>;
     }
@@ -2980,7 +3025,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return (
       <section
         key={panel.id}
-        className={`workspace-card mobile-workspace-window workspace-card-${panel.type} ${activeMobileWindowIndex === index ? 'is-active' : ''}${isMobileSwapAnimating ? ` is-swapping is-swapping-${index === 0 ? 'up' : 'down'}` : ''}`}
+        className={`workspace-card mobile-workspace-window workspace-card-${getPanelStyleId(panel.type)} ${activeMobileWindowIndex === index ? 'is-active' : ''}${isMobileSwapAnimating ? ` is-swapping is-swapping-${index === 0 ? 'up' : 'down'}` : ''}`}
         aria-label={`${index === 0 ? 'Top' : 'Bottom'} mobile window`}
         aria-hidden={!isVisible}
         style={{
@@ -3000,7 +3045,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               aria-pressed={activeMobileWindowIndex === index}
               aria-label={`Select ${index === 0 ? 'top' : 'bottom'} window`}
             >
-              <span className={`workspace-card-dot workspace-card-dot-${panel.type}`} aria-hidden="true" />
+              <span
+                className={`workspace-card-dot workspace-card-dot-${getPanelStyleId(panel.type)}`}
+                aria-hidden="true"
+              />
               <span>{panel.title}</span>
               {activeMobileWindowIndex === index && <span className="mobile-workspace-active-label">Active</span>}
             </button>
@@ -3021,7 +3069,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         <div className="workspace-card-content">
           {panelTypes.map(type => {
             const isPanelActive = panel.type === type && isVisible;
-            const typedPanel = { ...panel, type, title: getWorkspaceTitle(type) };
+            const typedPanel = {
+              ...panel,
+              type,
+              title: panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
+            };
             return (
               <div
                 key={type}
@@ -3069,6 +3121,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (placement === 'toolbar' && workspaceReplacementPanelId) return null;
     if (placement === 'replacement' && !workspaceReplacementPanelId) return null;
     const isReplacementMenu = placement === 'replacement';
+    const builtInPanels = panelCatalog.filter(panel => panel.source === 'built-in');
+    const externalPanels = panelCatalog.filter(panel => panel.source === 'external');
+    const renderPanelButton = (panel: PanelCatalogEntry) => (
+      <button
+        key={panel.id}
+        type="button"
+        draggable={!isReplacementMenu}
+        onDragStart={event => handleWorkspaceDragStart(event, panel.id)}
+        onDragEnd={handleWorkspaceDragEnd}
+        onClick={() => handleAddWorkspacePanel(panel.id)}
+        title={panel.description}
+        data-panel-source={panel.source}
+      >
+        {getPanelCatalogIcon(panel)}
+        <span>{panel.menuLabel}</span>
+      </button>
+    );
 
     return (
       <div
@@ -3081,56 +3150,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           <span className="workspace-add-menu-title">
             {workspaceReplacementPanelId ? 'Replace panel' : 'Components'}
           </span>
-          <button
-            type="button"
-            draggable={!isReplacementMenu}
-            onDragStart={event => handleWorkspaceDragStart(event, 'camera')}
-            onDragEnd={handleWorkspaceDragEnd}
-            onClick={() => handleAddWorkspacePanel('camera')}
-          >
-            {icons.camera}
-            <span>Camera</span>
-          </button>
-          <button
-            type="button"
-            draggable={!isReplacementMenu}
-            onDragStart={event => handleWorkspaceDragStart(event, '3d')}
-            onDragEnd={handleWorkspaceDragEnd}
-            onClick={() => handleAddWorkspacePanel('3d')}
-          >
-            {icons.view3d}
-            <span>3D panel</span>
-          </button>
-          <button
-            type="button"
-            draggable={!isReplacementMenu}
-            onDragStart={event => handleWorkspaceDragStart(event, 'behaviorTree')}
-            onDragEnd={handleWorkspaceDragEnd}
-            onClick={() => handleAddWorkspacePanel('behaviorTree')}
-          >
-            {icons.bt}
-            <span>Behavior tree</span>
-          </button>
-          <button
-            type="button"
-            draggable={!isReplacementMenu}
-            onDragStart={event => handleWorkspaceDragStart(event, 'tfTree')}
-            onDragEnd={handleWorkspaceDragEnd}
-            onClick={() => handleAddWorkspacePanel('tfTree')}
-          >
-            {icons.tf}
-            <span>TF tree</span>
-          </button>
-          <button
-            type="button"
-            draggable={!isReplacementMenu}
-            onDragStart={event => handleWorkspaceDragStart(event, 'pad')}
-            onDragEnd={handleWorkspaceDragEnd}
-            onClick={() => handleAddWorkspacePanel('pad')}
-          >
-            {icons.grip}
-            <span>Pad controls</span>
-          </button>
+          {builtInPanels.map(renderPanelButton)}
+          {(externalPanels.length > 0 ||
+            installedPanelRegistry.isLoading ||
+            installedPanelRegistry.issues.length > 0) && (
+            <span className="workspace-add-menu-title workspace-add-menu-subtitle">External panels</span>
+          )}
+          {externalPanels.map(renderPanelButton)}
+          {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
+          {!installedPanelRegistry.isLoading && installedPanelRegistry.issues.length > 0 && (
+            <span
+              className="workspace-panel-catalog-note workspace-panel-catalog-warning"
+              title={installedPanelRegistry.issues.map(issue => issue.message).join('\n')}
+              role="status"
+            >
+              {installedPanelRegistry.issues.length} external panel
+              {installedPanelRegistry.issues.length === 1 ? '' : 's'} unavailable
+            </span>
+          )}
         </div>
       </div>
     );
@@ -3671,7 +3708,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                             </section>
                           ) : (
                             <section
-                              className={`workspace-card workspace-card-${tile.panel.type} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}${executionJumpPanelId === tile.panel.id ? ' is-execution-jump' : ''}${isWorkspaceStacked && isMobileSwapAnimating ? ` is-mobile-swapping-${tileIndex === 0 ? 'up' : 'down'}` : ''}`}
+                              className={`workspace-card workspace-card-${getPanelStyleId(tile.panel.type)} ${lastAddedWorkspacePanelId === tile.panel.id ? 'is-settling' : ''}${executionJumpPanelId === tile.panel.id ? ' is-execution-jump' : ''}${isWorkspaceStacked && isMobileSwapAnimating ? ` is-mobile-swapping-${tileIndex === 0 ? 'up' : 'down'}` : ''}`}
                               aria-label={tile.panel.title}
                               data-workspace-card-id={tile.panel.id}
                               data-workspace-row-index={rowIndex}
@@ -3693,7 +3730,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               >
                                 <div className="workspace-card-title">
                                   <span
-                                    className={`workspace-card-dot workspace-card-dot-${tile.panel.type}`}
+                                    className={`workspace-card-dot workspace-card-dot-${getPanelStyleId(tile.panel.type)}`}
                                     aria-hidden="true"
                                   />
                                   <span>{tile.panel.title}</span>
