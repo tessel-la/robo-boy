@@ -116,15 +116,11 @@ The overlay mounts the sibling inventory and panel repositories read-only, stage
 volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
 entry, or set it in `.env` to a comma-separated subset.
 
-The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. To make its Robo-Boy card
-use the same overlay, build the `app` image once with the command above and set this in Robo-Boy's `.env`:
-
-```dotenv
-COMPOSE_FILE=docker-compose.yml:infra/compose/panels.yml
-```
-
-Stopping and starting Robo-Boy from the dashboard then uses the panel-enabled Compose configuration. Restore
-`COMPOSE_FILE=docker-compose.yml` to return to the panel-free default.
+The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
+selects `docker-compose.yml` and `infra/compose/panels.yml` through a per-application `composeFiles` setting, so
+stopping and starting Robo-Boy from the dashboard uses the panel-enabled configuration. Keep
+`COMPOSE_FILE=docker-compose.yml` in Robo-Boy's shared `.env`: simulators consume that file for ROS/DDS settings,
+and putting the panel overlay there would incorrectly apply it relative to every simulator project.
 
 The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
 registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
