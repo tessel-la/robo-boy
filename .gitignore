@@ -172,5 +172,8 @@ CLAUDE.md
 compose/
 !/infra/compose/
 !/infra/compose/panels.yml
+!/infra/compose/panels.remote.yml
+config/panel-sources.json
+config/panel-secrets.env
 .windsurf/
 skills-lock.json

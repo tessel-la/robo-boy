@@ -286,6 +286,98 @@ empty default registry, and external bundle copies must not be committed to Robo
 deployment pipeline should perform the equivalent staging operation from immutable published release URLs rather
 than relying on sibling working copies.
 
+## Remote Inventories And Private Panels
+
+`scripts/install-panels.mjs` is the deployment installer for published releases. Unlike the local sibling-repository
+stager, it starts from one or more inventory catalog URLs, downloads the selected manifests and bundles, verifies
+their identities and SHA-256 values, and atomically replaces the deployment's `installed.json`. A failed install
+leaves the previous registry active. Versioned bundles are immutable and may remain cached when a later registry
+no longer selects them.
+
+The source configuration is deployment-owned:
+
+```json
+{
+  "schemaVersion": 1,
+  "inventories": [
+    {
+      "name": "roboboy-official",
+      "catalogUrl": "https://panels.roboboy.example/catalog.json",
+      "allowedOrigins": ["https://releases.roboboy.example"]
+    },
+    {
+      "name": "company-private",
+      "catalogUrl": "https://panels.company.example/roboboy/catalog.json",
+      "allowedOrigins": ["https://panels.company.example"],
+      "authorizationEnv": "ROBOBOY_PANEL_AUTHORIZATION",
+      "authenticatedOrigins": ["https://panels.company.example"]
+    }
+  ],
+  "enabledPanels": [
+    "la.tessel.roboboy.timeseries",
+    "com.company.robot.private-telemetry"
+  ]
+}
+```
+
+`enabledPanels` is optional; omitting it installs every entry from every configured inventory. Panel IDs must be
+unique across all selected inventories: a private catalog cannot silently replace an official panel. Catalog,
+entry, manifest, bundle, and redirect URLs must use HTTPS, except localhost HTTP used by installer tests. Every
+release origin must be explicitly allowed.
+
+Private credentials are not stored in the source configuration. `authorizationEnv` names an environment variable
+whose complete value becomes the `Authorization` header, such as `Bearer <token>`. The header is sent only to
+`authenticatedOrigins`, which must also be allowed origins. Redirects are checked again before response bytes are
+accepted. Keep the actual secret in an ignored, deployment-specific environment file.
+
+The remote Docker overlay uses a deployment-owned named volume and does not mount panel repositories. With no
+extra configuration it reads `config/panel-sources.official.json` and installs the official catalog:
+
+```bash
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-installer
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d
+```
+
+To combine official and private inventories, create the ignored deployment-local configuration and secret files,
+then point Compose at them:
+
+```bash
+cp config/panel-sources.example.json config/panel-sources.json
+cp config/panel-secrets.example.env config/panel-secrets.env
+# Edit both deployment-local files before continuing.
+
+ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json \
+ROBOBOY_PANEL_SECRETS_FILE=./config/panel-secrets.env \
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-installer
+
+ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json \
+ROBOBOY_PANEL_SECRETS_FILE=./config/panel-secrets.env \
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d
+```
+
+The first `up` runs the one-shot installer before starting the app. To apply inventory, selection, credential, or
+release updates to an existing deployment, explicitly rerun it and then reload Robo-Boy:
+
+```bash
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml run --rm panel-installer
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml restart app
+```
+
+The installer validates compatibility metadata structurally. Robo-Boy applies its canonical SemVer compatibility
+checks while reading the generated registry and refuses to expose incompatible releases in the workspace menu.
+
+The current base Compose stack runs Vite, so the overlay mounts the volume at `/app/public/panels`. A deployment
+using the production Nginx image sets `ROBOBOY_PANEL_WEB_ROOT=/usr/share/nginx/html/panels`. In both cases the
+browser reads the same-origin `/panels/installed.json`; it never receives inventory credentials or imports a
+cross-origin module.
+
+An organization can therefore keep using an unmodified official Robo-Boy application image while privately
+owning its panel source, build pipeline, HTTPS inventory, release storage, access policy, and enabled-panel list.
+It should build against a pinned panel SDK version, publish a browser-ready immutable ESM bundle, and use a stable
+reverse-domain ID under a domain it controls. Until `@tessel-la/roboboy-panel-sdk` is published, the type-only SDK
+still needs to be obtained from a matching tagged Robo-Boy source release; publishing that package remains a
+release-process prerequisite for a fully independent third-party authoring experience.
+
 The sibling `robo-boy-hello-panel`, `robo-boy-timeseries-panel`, `robo-boy-webrtc-panel`, and
 `robo-boy-panel-inventory` directories are workspace prototypes in this vertical slice. Their example GitHub
 release URLs are publication targets, not evidence that those repositories or artifacts are already public. A
@@ -294,8 +386,10 @@ Robo-Boy build atomically.
 
 ## Limitations And Expected Evolution
 
-- v1 installation/removal/update is deployment-managed; the included staging command supports local releases,
-  but there is no inventory download or UI installer yet.
+- v1 installation/removal/update is deployment-managed. Local and remote command-line installers exist, but there
+  is no installation UI, scheduled update policy, rollback UI, revocation service, or garbage collector yet.
+- The remote installer supports one ESM bundle per panel release. Manifests that declare additional assets are
+  rejected until the inventory contract defines immutable URLs for each asset.
 - Same-realm panels are trusted code. Browser APIs beyond ROS/storage are declared but not enforceably gated.
 - Runtime entry points must be installed same-origin; arbitrary remote modules are rejected.
 - Optional manifest icons/previews are catalog metadata only in this slice.

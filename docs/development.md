@@ -116,6 +116,13 @@ The overlay mounts the sibling inventory and panel repositories read-only, stage
 volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
 entry, or set it in `.env` to a comma-separated subset.
 
+This is a developer convenience only. For published official or private releases, use
+`infra/compose/panels.remote.yml`. The remote overlay defaults to `config/panel-sources.official.json`, mounts no
+panel repositories, and has its installer populate a named volume from configured HTTPS inventories. A deployment
+can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
+[External panels](external-panels.md#remote-inventories-and-private-panels) for configuration and credential
+handling.
+
 The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
 selects `docker-compose.yml` and `infra/compose/panels.yml` through a per-application `composeFiles` setting, so
 stopping and starting Robo-Boy from the dashboard uses the panel-enabled configuration. Keep

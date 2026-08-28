@@ -20,6 +20,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "preview": "vite preview --config config/vite.config.ts --host",
     "test": "vitest --config config/vitest.config.ts",
+    "test:panel-installer": "node --test scripts/install-panels.test.mjs",
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",
     "e2e": "playwright test --config config/playwright.config.ts",

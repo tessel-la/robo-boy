@@ -1,0 +1,30 @@
+services:
+  panel-installer:
+    image: ${ROBOBOY_PANEL_INSTALLER_IMAGE:-roboboy-panel-installer:local}
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.panel-installer
+    command:
+      - --config
+      - /config/panel-sources.json
+      - --output
+      - /panels
+    env_file:
+      - path: ${ROBOBOY_PANEL_SECRETS_FILE:-./config/panel-secrets.env}
+        required: false
+    volumes:
+      - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.official.json}:/config/panel-sources.json:ro
+      - roboboy-installed-panels:/panels
+    restart: "no"
+    networks:
+      - app-net
+
+  app:
+    depends_on:
+      panel-installer:
+        condition: service_completed_successfully
+    volumes:
+      - roboboy-installed-panels:${ROBOBOY_PANEL_WEB_ROOT:-/app/public/panels}:ro
+
+volumes:
+  roboboy-installed-panels:

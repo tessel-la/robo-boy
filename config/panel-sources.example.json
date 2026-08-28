@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "inventories": [
+    {
+      "name": "roboboy-official",
+      "catalogUrl": "https://raw.githubusercontent.com/tessel-la/robo-boy-panel-inventory/main/catalog.json",
+      "allowedOrigins": [
+        "https://github.com",
+        "https://objects.githubusercontent.com",
+        "https://release-assets.githubusercontent.com"
+      ]
+    },
+    {
+      "name": "company-private",
+      "catalogUrl": "https://panels.example.com/roboboy/catalog.json",
+      "allowedOrigins": ["https://panels.example.com"],
+      "authorizationEnv": "ROBOBOY_PANEL_AUTHORIZATION",
+      "authenticatedOrigins": ["https://panels.example.com"]
+    }
+  ],
+  "enabledPanels": [
+    "la.tessel.roboboy.timeseries",
+    "com.example.robot.private-telemetry"
+  ]
+}
