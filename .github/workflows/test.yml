@@ -265,9 +265,20 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npx playwright install --with-deps chromium
 
+    - name: Install external panel test artifacts
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: |
+        mkdir -p .panel-stage/public
+        cp -a public/. .panel-stage/public/
+        node scripts/install-panels.mjs \
+          --config config/panel-sources.official.json \
+          --output .panel-stage/public/panels
+
     - name: Run E2E tests
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       id: e2e_tests
+      env:
+        ROBOBOY_PUBLIC_DIR: ${{ github.workspace }}/.panel-stage/public
       run: |
         set +e
         npm run e2e 2>&1 | tee playwright-output.log

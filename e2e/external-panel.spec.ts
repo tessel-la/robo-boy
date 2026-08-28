@@ -5,7 +5,7 @@ import { installWebRtcMock } from './helpers/webrtcMock';
 test('discovers and lazily loads the standalone Hello Panel artifact', async ({ page }) => {
   let panelBundleRequests = 0;
   page.on('request', request => {
-    if (request.url().endsWith('/panels/hello-panel/1.0.0/index.js')) panelBundleRequests += 1;
+    if (request.url().endsWith('/panels/la.tessel.roboboy.hello/1.0.0/index.js')) panelBundleRequests += 1;
   });
 
   await page.addInitScript(() => {
@@ -142,7 +142,7 @@ test('negotiates and controls the standalone WebRTC camera panel', async ({ page
   const deleteAuthorizationHeaders: string[] = [];
 
   page.on('request', request => {
-    if (request.url().endsWith('/panels/webrtc-panel/1.2.0/index.js')) {
+    if (request.url().endsWith('/panels/la.tessel.roboboy.webrtc/1.2.0/index.js')) {
       panelBundleRequests += 1;
     }
   });
