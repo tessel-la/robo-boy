@@ -16,8 +16,6 @@ services:
       - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.official.json}:/config/panel-sources.json:ro
       - roboboy-installed-panels:/panels
     restart: "no"
-    networks:
-      - app-net
 
   app:
     depends_on:
