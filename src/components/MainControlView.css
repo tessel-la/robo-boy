@@ -1584,6 +1584,9 @@ body.no-scroll {
   animation: workspace-menu-enter 150ms ease-out;
   scrollbar-width: thin;
   scrollbar-color: var(--primary-color) var(--background-secondary);
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .workspace-pad-layout-option {
