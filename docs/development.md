@@ -124,8 +124,8 @@ can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
 handling.
 
 The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
-selects `docker-compose.yml` and `infra/compose/panels.yml` through a per-application `composeFiles` setting, so
-stopping and starting Robo-Boy from the dashboard uses the panel-enabled configuration. Keep
+selects `docker-compose.yml` and `infra/compose/panels.remote.yml` through a per-application `composeFiles` setting,
+so stopping and starting Robo-Boy from the dashboard runs the release installer before the application. Keep
 `COMPOSE_FILE=docker-compose.yml` in Robo-Boy's shared `.env`: simulators consume that file for ROS/DDS settings,
 and putting the panel overlay there would incorrectly apply it relative to every simulator project.
 

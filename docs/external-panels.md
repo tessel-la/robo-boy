@@ -379,11 +379,10 @@ It should build against a pinned panel SDK GitHub release, publish a browser-rea
 stable reverse-domain ID under a domain it controls. Neither private panel source nor an npm-registry publication
 is required.
 
-The sibling `robo-boy-hello-panel`, `robo-boy-timeseries-panel`, `robo-boy-webrtc-panel`, and
-`robo-boy-panel-inventory` directories are workspace prototypes in this vertical slice. Their example GitHub
-release URLs are publication targets, not evidence that those repositories or artifacts are already public. A
-production pipeline must verify inventory metadata and artifact hashes before staging, then publish the complete
-Robo-Boy build atomically.
+The official Hello, Time Series, and WebRTC examples are independently released from their panel repositories;
+their source and bundles are not copied into Robo-Boy. The sibling directories remain convenient coordinated
+development checkouts only. A production pipeline must verify inventory metadata and artifact hashes before
+staging, then publish the complete Robo-Boy build atomically.
 
 ## Limitations And Expected Evolution
 
