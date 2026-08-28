@@ -273,13 +273,13 @@ my-roboboy-panel/
 4. Test activation, mount, active-state changes, cleanup, missing services, and failure paths.
 5. Publish immutable manifest and bundle artifacts from the panel's repository and record a SHA-256 SRI digest.
 6. Add catalog metadata to the separate Panel Inventory repository; do not copy source there.
-7. For the current local workspace, run `npm run panels:stage-local`. It reads the separate inventory, finds the
-   matching sibling panel repositories by manifest ID, verifies version and integrity metadata, and generates
-   `.panel-stage/public/panels/installed.json` plus versioned bundles. Set `ROBOBOY_PANEL_IDS` to a comma-separated
-   list, or pass repeated `--panel <id>` arguments, to select only part of the inventory.
-8. Run `npm run dev:panels`, `npm run build:panels`, or `npm run build:tauri:panels` to use that generated public
-   tree. Normal `dev`, `build`, and `build:tauri` commands keep the tracked empty registry and package no external
-   panels.
+7. For the current local workspace, `npm run panels:stage-local` reads the separate inventory, finds the matching
+   sibling panel repositories by manifest ID, verifies version and integrity metadata, and generates
+   `.panel-stage/public/panels/installed.json` plus versioned bundles.
+8. Run `npm run dev:panels`, `npm run build:panels`, or `npm run build:tauri:panels`; each command stages the panels
+   before using the generated public tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated list, or append repeated
+   `-- --panel <id>` arguments to one of these commands, to select only part of the inventory. Normal `dev`,
+   `build`, and `build:tauri` commands keep the tracked empty registry and package no external panels.
 
 The generated `.panel-stage/` directory is ignored by Git. The tracked `public/panels/installed.json` remains an
 empty default registry, and external bundle copies must not be committed to Robo-Boy. A production installer or
