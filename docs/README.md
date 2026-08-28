@@ -4,6 +4,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 
 ## Guides
 
+- [Agent guide](agent-guide.md): task-specific reading routes, source-of-truth rules, architecture boundaries,
+  extension-path decisions, SDK stability, and verification expectations for coding agents.
 - [User guide](user-guide.md): connect to ROS, use cameras and 3D views, build control pads, edit behavior trees, and manage themes.
 - [Development guide](development.md): run the frontend locally, test changes, inspect services, work with the Docker stack, and follow the release process.
 - [Desktop application](desktop.md): run and package the Tauri frontend against a separately installed ROS stack.
@@ -16,6 +18,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 
 | Area                             | Location                                      |
 | -------------------------------- | --------------------------------------------- |
+| Agent instructions and routes    | `docs/agent-guide.md`                         |
 | Application shell and shared UI  | `src/App.tsx`, `src/components/`              |
 | ROS and visualization hooks      | `src/hooks/`                                  |
 | Feature modules                  | `src/features/`                               |
