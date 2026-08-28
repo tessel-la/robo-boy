@@ -170,5 +170,7 @@ CLAUDE.md
 .codex/
 .claude/
 compose/
+!/infra/compose/
+!/infra/compose/panels.yml
 .windsurf/
 skills-lock.json

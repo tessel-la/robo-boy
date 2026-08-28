@@ -105,6 +105,27 @@ Normal development discovers an empty tracked registry at `public/panels/install
 installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
 [External panels](external-panels.md) before changing the SDK, manifest schema, or staging process.
 
+For the Docker development stack, opt in with the panel Compose overlay:
+
+```bash
+docker compose -f docker-compose.yml -f infra/compose/panels.yml build app
+docker compose -f docker-compose.yml -f infra/compose/panels.yml up -d
+```
+
+The overlay mounts the sibling inventory and panel repositories read-only, stages verified bundles in a named
+volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
+entry, or set it in `.env` to a comma-separated subset.
+
+The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. To make its Robo-Boy card
+use the same overlay, build the `app` image once with the command above and set this in Robo-Boy's `.env`:
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:infra/compose/panels.yml
+```
+
+Stopping and starting Robo-Boy from the dashboard then uses the panel-enabled Compose configuration. Restore
+`COMPOSE_FILE=docker-compose.yml` to return to the panel-free default.
+
 The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
 registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
 dependency during the connection transition can otherwise invalidate Vite's development dependency graph while
