@@ -47,8 +47,10 @@ This choice fits the current static Vite/Tauri architecture:
 - The installed registry and versioned on-disk layout leave room for a future installer, but v1 does not define
   an installer transaction, rollback, publisher-signing, or garbage-collection protocol.
 
-npm packages remain a reasonable release transport, but Robo-Boy does not scan `node_modules` or require panel
-packages to be application dependencies. Direct live imports from arbitrary HTTPS origins were not selected:
+Package tarballs remain a reasonable development-contract transport—the panel SDK is an npm-compatible tarball
+attached to a versioned Robo-Boy GitHub release—but runtime panels are immutable manifest and ESM bundle assets.
+Robo-Boy does not scan `node_modules` or require panel packages to be application dependencies. Direct live
+imports from arbitrary HTTPS origins were not selected:
 they conflict with Tauri's CSP and offline packaging, require CORS, and increase supply-chain exposure. Module
 federation would add a runtime not otherwise needed by this Vite application. iframe isolation is a possible
 future loader for untrusted panels but needs explicit bridges for ROS, theming, sizing, and persistence.
@@ -264,9 +266,9 @@ my-roboboy-panel/
   README.md
 ```
 
-1. During v1 development, depend on the type-only SDK from Robo-Boy's `panel-sdk/` directory and use
-   `import type`. Publish it as `@tessel-la/roboboy-panel-sdk` before treating that package name as a public
-   registry dependency.
+1. Depend on the type-only SDK tarball from the pinned `panel-sdk-v<version>` Robo-Boy GitHub release and use
+   `import type`. For coordinated local development only, the sibling examples may temporarily use
+   `file:../robo-boy/panel-sdk` before the release asset exists.
 2. Export one default definition and build a browser ESM artifact with no unresolved bare imports.
 3. Keep manifest ID/version/API values aligned with the module export and package release, and make `unmount`
    deterministic and idempotent.
@@ -373,10 +375,9 @@ cross-origin module.
 
 An organization can therefore keep using an unmodified official Robo-Boy application image while privately
 owning its panel source, build pipeline, HTTPS inventory, release storage, access policy, and enabled-panel list.
-It should build against a pinned panel SDK version, publish a browser-ready immutable ESM bundle, and use a stable
-reverse-domain ID under a domain it controls. Until `@tessel-la/roboboy-panel-sdk` is published, the type-only SDK
-still needs to be obtained from a matching tagged Robo-Boy source release; publishing that package remains a
-release-process prerequisite for a fully independent third-party authoring experience.
+It should build against a pinned panel SDK GitHub release, publish a browser-ready immutable ESM bundle, and use a
+stable reverse-domain ID under a domain it controls. Neither private panel source nor an npm-registry publication
+is required.
 
 The sibling `robo-boy-hello-panel`, `robo-boy-timeseries-panel`, `robo-boy-webrtc-panel`, and
 `robo-boy-panel-inventory` directories are workspace prototypes in this vertical slice. Their example GitHub
