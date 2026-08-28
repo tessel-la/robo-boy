@@ -777,6 +777,43 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
   });
 
+  it('scrolls the workspace pad menu on touch without selecting a pad', async () => {
+    loadGamepadLibrary.mockReturnValue([
+      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
+      { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
+    ]);
+    localStorage.setItem(workspaceOpenKey, 'true');
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    renderMainControlView();
+
+    await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad layout Drive Pad' }));
+
+    const menu = screen.getByRole('listbox', { name: 'Pad layouts' });
+    const armPad = screen.getByRole('option', { name: /Arm Pad/ });
+    fireEvent.touchStart(armPad, {
+      changedTouches: [{ identifier: 1, clientX: 20, clientY: 120 }],
+      touches: [{ identifier: 1, clientX: 20, clientY: 120 }],
+    });
+    fireEvent.touchMove(armPad, {
+      changedTouches: [{ identifier: 1, clientX: 20, clientY: 80 }],
+      touches: [{ identifier: 1, clientX: 20, clientY: 80 }],
+    });
+    fireEvent.scroll(menu);
+    fireEvent.touchEnd(armPad, {
+      changedTouches: [{ identifier: 1, clientX: 20, clientY: 80 }],
+      touches: [],
+    });
+    fireEvent.click(armPad, { detail: 1 });
+
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-drive');
+    expect(screen.getByRole('listbox', { name: 'Pad layouts' })).toBeInTheDocument();
+
+    fireEvent.click(armPad);
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
+  });
+
   it('falls back to an available generic pad when a saved preset no longer exists', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'generic-joy', name: 'Generic Joy Pad', layout: { id: 'generic-joy-layout' }, isDefault: true },

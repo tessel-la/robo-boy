@@ -431,6 +431,8 @@ const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
 const WORKSPACE_PERSIST_DELAY_MS = 100;
+const WORKSPACE_PAD_MENU_SCROLL_THRESHOLD_PX = 8;
+const WORKSPACE_PAD_MENU_SYNTHETIC_CLICK_WINDOW_MS = 500;
 const RETIRED_BUILT_IN_PAD_IDS = new Set(['panda-cartesian-jog', 'default-panda-cartesian-jog']);
 
 type WorkspaceDraft = {
@@ -1110,6 +1112,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspacePadNoticeTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const workspacePadMenuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const workspacePadMenuRef = useRef<HTMLDivElement>(null);
+  const workspacePadMenuGestureRef = useRef<{
+    touchIdentifier: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressWorkspacePadMenuClickUntilRef = useRef(0);
   const workspaceTemplateControlRef = useRef<HTMLDivElement>(null);
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const workspaceReplaceMenuRef = useRef<HTMLDivElement>(null);
@@ -1417,11 +1426,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     if (!workspacePadMenu) return;
 
     const closePadMenu = () => setWorkspacePadMenu(null);
+    const closePadMenuOnOutsideScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && workspacePadMenuRef.current?.contains(target)) return;
+      closePadMenu();
+    };
+
     window.addEventListener('resize', closePadMenu);
-    window.addEventListener('scroll', closePadMenu, true);
+    window.addEventListener('scroll', closePadMenuOnOutsideScroll, true);
     return () => {
       window.removeEventListener('resize', closePadMenu);
-      window.removeEventListener('scroll', closePadMenu, true);
+      window.removeEventListener('scroll', closePadMenuOnOutsideScroll, true);
     };
   }, [workspacePadMenu]);
 
@@ -2179,6 +2194,64 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     });
   };
 
+  const handleWorkspacePadMenuTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    suppressWorkspacePadMenuClickUntilRef.current = 0;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+
+    workspacePadMenuGestureRef.current = {
+      touchIdentifier: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      moved: false,
+    };
+  };
+
+  const handleWorkspacePadMenuTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = workspacePadMenuGestureRef.current;
+    if (!gesture || gesture.moved) return;
+
+    let touch: React.Touch | undefined;
+    for (let index = 0; index < event.changedTouches.length; index += 1) {
+      const candidate = event.changedTouches[index];
+      if (candidate.identifier === gesture.touchIdentifier) {
+        touch = candidate;
+        break;
+      }
+    }
+    if (!touch) return;
+
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    if (Math.hypot(deltaX, deltaY) >= WORKSPACE_PAD_MENU_SCROLL_THRESHOLD_PX) {
+      gesture.moved = true;
+    }
+  };
+
+  const handleWorkspacePadMenuTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = workspacePadMenuGestureRef.current;
+    if (!gesture) return;
+
+    let endedTrackedTouch = false;
+    for (let index = 0; index < event.changedTouches.length; index += 1) {
+      if (event.changedTouches[index].identifier === gesture.touchIdentifier) {
+        endedTrackedTouch = true;
+        break;
+      }
+    }
+    if (!endedTrackedTouch) return;
+
+    suppressWorkspacePadMenuClickUntilRef.current = gesture.moved
+      ? Date.now() + WORKSPACE_PAD_MENU_SYNTHETIC_CLICK_WINDOW_MS
+      : 0;
+    workspacePadMenuGestureRef.current = null;
+  };
+
+  const handleWorkspacePadMenuTouchCancel = () => {
+    workspacePadMenuGestureRef.current = null;
+    suppressWorkspacePadMenuClickUntilRef.current = 0;
+  };
+
   const handleExportWorkspacePad = (panel: WorkspacePanel) => {
     if (!panel.layoutId) return;
 
@@ -2810,6 +2883,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         role="listbox"
         aria-label="Pad layouts"
         style={workspacePadMenu.style}
+        onTouchStartCapture={handleWorkspacePadMenuTouchStart}
+        onTouchMoveCapture={handleWorkspacePadMenuTouchMove}
+        onTouchEndCapture={handleWorkspacePadMenuTouchEnd}
+        onTouchCancelCapture={handleWorkspacePadMenuTouchCancel}
         onKeyDown={event => {
           if (event.key === 'Escape') setWorkspacePadMenu(null);
         }}
@@ -2824,7 +2901,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               className={`workspace-pad-layout-option ${isSelected ? 'is-selected' : ''}`}
               role="option"
               aria-selected={isSelected}
-              onClick={() => {
+              onClick={event => {
+                if (Date.now() < suppressWorkspacePadMenuClickUntilRef.current && event.detail !== 0) {
+                  suppressWorkspacePadMenuClickUntilRef.current = 0;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return;
+                }
+
                 handleWorkspacePadLayoutChange(workspacePadMenu.panelId, item.id);
                 setWorkspacePadMenu(null);
               }}
