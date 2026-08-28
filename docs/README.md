@@ -18,7 +18,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 
 | Area                             | Location                                      |
 | -------------------------------- | --------------------------------------------- |
-| Agent instructions and routes    | `AGENTS.md`, `docs/agent-guide.md`            |
+| Agent instructions and routes    | `docs/agent-guide.md`                         |
 | Application shell and shared UI  | `src/App.tsx`, `src/components/`              |
 | ROS and visualization hooks      | `src/hooks/`                                  |
 | Feature modules                  | `src/features/`                               |

@@ -272,7 +272,7 @@ When handing off a task, include:
 ```text
 Objective: <concrete outcome>
 Base branch: dev
-Required reading: AGENTS.md plus <task-specific guides>
+Required reading: docs/agent-guide.md plus <task-specific guides>
 Public contract: <SDK type/schema/domain type, if any>
 In-scope files: <paths>
 Persisted/deployment behavior affected: <none or details>
