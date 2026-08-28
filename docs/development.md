@@ -103,7 +103,8 @@ Normal development discovers an empty tracked registry at `public/panels/install
 `.panel-stage/` tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated ID list or append
 `-- --panel <id>` to select specific panels. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
 installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
-[External panels](external-panels.md) before changing the SDK, manifest schema, or staging process.
+[External panels](external-panels.md#create-install-and-register-a-panel) for the complete standalone repository,
+SDK, integrity, local inventory, host-development, and Docker-development workflow.
 
 For the Docker development stack, opt in with the panel Compose overlay:
 
@@ -120,8 +121,8 @@ This is a developer convenience only. For published official or private releases
 `infra/compose/panels.remote.yml`. The remote overlay defaults to `config/panel-sources.official.json`, mounts no
 panel repositories, and has its installer populate a named volume from configured HTTPS inventories. A deployment
 can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
-[External panels](external-panels.md#remote-inventories-and-private-panels) for configuration and credential
-handling.
+[External panels](external-panels.md#remote-inventories-and-private-panels) for configuration, subset selection,
+and credential handling.
 
 The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
 selects `docker-compose.yml` and `infra/compose/panels.remote.yml` through a per-application `composeFiles` setting,

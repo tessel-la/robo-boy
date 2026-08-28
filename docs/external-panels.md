@@ -266,6 +266,77 @@ my-roboboy-panel/
   README.md
 ```
 
+Keep the panel repository outside Robo-Boy. The local stager scans each immediate child of `--source-root`, reads
+`roboboy.panel.json`, and matches repositories by panel ID rather than directory name. A typical workspace is:
+
+```text
+workspace/
+  robo-boy/
+  my-roboboy-panel/
+  my-panel-inventory/
+```
+
+Install the type-only SDK directly from its versioned GitHub release:
+
+```bash
+cd my-roboboy-panel
+npm install --save-dev \
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v1.0.0/tessel-la-roboboy-panel-sdk-1.0.0.tgz
+```
+
+After building `dist/index.js`, calculate its SRI value and copy the complete `sha256-...` value into both the
+panel manifest and its local inventory entry:
+
+```bash
+printf 'sha256-'
+openssl dgst -sha256 -binary dist/index.js | openssl base64 -A
+printf '\n'
+```
+
+The manifest ID, version, compatibility, capabilities, and integrity must agree with the inventory entry. Stage
+and run one panel without copying it into Robo-Boy:
+
+```bash
+cd ../robo-boy
+npm run panels:stage-local -- \
+  --inventory ../my-panel-inventory \
+  --source-root .. \
+  --panel com.company.robot.my-panel
+
+npm run dev:panels -- \
+  --inventory ../my-panel-inventory \
+  --source-root .. \
+  --panel com.company.robot.my-panel
+```
+
+For Docker development, `infra/compose/panels.yml` mounts the known example repositories. Add an uncommitted
+deployment-local Compose file for a new panel and inventory:
+
+```yaml
+services:
+  app:
+    volumes:
+      - /absolute/path/my-panel-inventory:/panel-workspace/robo-boy-panel-inventory:ro
+      - /absolute/path/my-roboboy-panel:/panel-workspace/my-roboboy-panel:ro
+```
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f infra/compose/panels.yml \
+  -f /absolute/path/my-panel.compose.yml \
+  build app
+
+docker compose \
+  -f docker-compose.yml \
+  -f infra/compose/panels.yml \
+  -f /absolute/path/my-panel.compose.yml \
+  up -d
+```
+
+Do not commit that deployment-local Compose file, the generated `.panel-stage/` tree, or panel bundle copies to
+Robo-Boy.
+
 1. Depend on the type-only SDK tarball from the pinned `panel-sdk-v<version>` Robo-Boy GitHub release and use
    `import type`. For coordinated local development only, the sibling examples may temporarily use
    `file:../robo-boy/panel-sdk` before the release asset exists.
@@ -326,6 +397,48 @@ The source configuration is deployment-owned:
 unique across all selected inventories: a private catalog cannot silently replace an official panel. Catalog,
 entry, manifest, bundle, and redirect URLs must use HTTPS, except localhost HTTP used by installer tests. Every
 release origin must be explicitly allowed.
+
+### Select A Published Panel Subset
+
+The tracked official source configuration intentionally omits `enabledPanels`, so it installs every official
+entry. To select a subset, create the ignored deployment-local copy:
+
+```bash
+cp config/panel-sources.official.json config/panel-sources.json
+```
+
+Add the exact IDs to its top-level object. For example, this installs only Time Series and WebRTC:
+
+```json
+{
+  "schemaVersion": 1,
+  "inventories": [
+    {
+      "name": "roboboy-official",
+      "catalogUrl": "https://raw.githubusercontent.com/tessel-la/robo-boy-panel-inventory/main/catalog.json",
+      "allowedOrigins": [
+        "https://github.com",
+        "https://objects.githubusercontent.com",
+        "https://release-assets.githubusercontent.com"
+      ]
+    }
+  ],
+  "enabledPanels": [
+    "la.tessel.roboboy.timeseries",
+    "la.tessel.roboboy.webrtc"
+  ]
+}
+```
+
+Then set this non-secret path in Robo-Boy's `.env` so manual Compose and Tessella Dashboard launches use it:
+
+```dotenv
+ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json
+```
+
+Rerun `panel-installer` and restart `app` after changing the selection. An empty or missing `enabledPanels` installs
+all catalog entries; every listed ID must exist in one configured inventory or installation fails without
+replacing the working registry.
 
 Private credentials are not stored in the source configuration. `authorizationEnv` names an environment variable
 whose complete value becomes the `Authorization` header, such as `Bearer <token>`. The header is sent only to
