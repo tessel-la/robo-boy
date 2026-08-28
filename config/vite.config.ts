@@ -38,6 +38,9 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
+  // External panel releases are deployment inputs, not Robo-Boy source files.
+  // Explicit panel builds point this at the generated .panel-stage/public tree.
+  publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
   resolve: {
     // MainControlView is lazy-loaded after the connection screen. Keep hooks
     // and the renderer on one React instance across linked panel SDKs and

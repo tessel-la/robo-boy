@@ -217,9 +217,9 @@ const definition: RoboBoyPanelDefinition = {
 export default definition;
 ```
 
-The complete standalone example is the sibling `robo-boy-hello-panel` repository. Its installed release artifact
-is under `public/panels/hello-panel/`, and `public/panels/installed.json` makes it available without importing it
-into application source.
+The complete standalone example is the sibling `robo-boy-hello-panel` repository. It is not included in a normal
+Robo-Boy checkout or build. The explicit panel staging command reads its inventory entry, verifies its local
+release artifact, and places it in a generated deployment tree without importing it into application source.
 
 ## ROS Time Series Reference Panel
 
@@ -232,8 +232,7 @@ fields before placing retention and rendering controls in a scrollable advanced 
 
 The release bundles ROSLIB because the panel SDK exposes the host ROS object as a stable interface but does not
 share Robo-Boy's module graph. This keeps the artifact independently buildable at the cost of about 170 KiB in
-the panel bundle. The installed artifact lives under `public/panels/timeseries-panel/` and is loaded only when a
-user adds that panel.
+the panel bundle. An explicitly staged artifact is loaded only when a user adds that panel.
 
 ## WebRTC / RTSP Camera Reference Panel
 
@@ -249,7 +248,7 @@ fallback for external gateways; simulator-specific preset buttons are not part o
 Its compact footer never hides statistics based on tile height. Resolution, bitrate, FPS, candidate-pair RTT,
 receiver jitter, packet loss, and dropped frames can be enabled independently from the advanced settings.
 Bearer credentials remain in the settings input for the current panel session and are never written to panel
-storage. The installed artifact lives under `public/panels/webrtc-panel/` and declares only `network` and `storage`.
+storage. Its explicitly staged artifact declares only `network` and `storage`.
 
 ## Create, Install, And Register A Panel
 
@@ -274,9 +273,18 @@ my-roboboy-panel/
 4. Test activation, mount, active-state changes, cleanup, missing services, and failure paths.
 5. Publish immutable manifest and bundle artifacts from the panel's repository and record a SHA-256 SRI digest.
 6. Add catalog metadata to the separate Panel Inventory repository; do not copy source there.
-7. For manual installation, copy the bundle below `public/panels/<panel>/<version>/`, recompute its digest, and
-   add its manifest metadata to `public/panels/installed.json` with a versioned relative `entryPoint`.
-8. Rebuild/repackage Robo-Boy. The bundle is copied unchanged to `dist/panels/` for web/Docker and Tauri.
+7. For the current local workspace, run `npm run panels:stage-local`. It reads the separate inventory, finds the
+   matching sibling panel repositories by manifest ID, verifies version and integrity metadata, and generates
+   `.panel-stage/public/panels/installed.json` plus versioned bundles. Set `ROBOBOY_PANEL_IDS` to a comma-separated
+   list, or pass repeated `--panel <id>` arguments, to select only part of the inventory.
+8. Run `npm run dev:panels`, `npm run build:panels`, or `npm run build:tauri:panels` to use that generated public
+   tree. Normal `dev`, `build`, and `build:tauri` commands keep the tracked empty registry and package no external
+   panels.
+
+The generated `.panel-stage/` directory is ignored by Git. The tracked `public/panels/installed.json` remains an
+empty default registry, and external bundle copies must not be committed to Robo-Boy. A production installer or
+deployment pipeline should perform the equivalent staging operation from immutable published release URLs rather
+than relying on sibling working copies.
 
 The sibling `robo-boy-hello-panel`, `robo-boy-timeseries-panel`, `robo-boy-webrtc-panel`, and
 `robo-boy-panel-inventory` directories are workspace prototypes in this vertical slice. Their example GitHub
@@ -286,7 +294,8 @@ Robo-Boy build atomically.
 
 ## Limitations And Expected Evolution
 
-- v1 installation/removal/update is deployment-managed; there is no UI installer yet.
+- v1 installation/removal/update is deployment-managed; the included staging command supports local releases,
+  but there is no inventory download or UI installer yet.
 - Same-realm panels are trusted code. Browser APIs beyond ROS/storage are declared but not enforceably gated.
 - Runtime entry points must be installed same-origin; arbitrary remote modules are rejected.
 - Optional manifest icons/previews are catalog metadata only in this slice.

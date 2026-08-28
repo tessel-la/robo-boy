@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts --host",
+    "panels:stage-local": "node scripts/stage-local-panels.mjs",
+    "dev:panels": "npm run panels:stage-local && ROBOBOY_PUBLIC_DIR=.panel-stage/public vite --config config/vite.config.ts --host",
     "build": "tsc && vite build --config config/vite.config.ts",
+    "build:panels": "npm run panels:stage-local && tsc && ROBOBOY_PUBLIC_DIR=.panel-stage/public vite build --config config/vite.config.ts",
     "dev:tauri": "vite --config config/vite.config.ts --host --mode tauri",
     "build:tauri": "tsc && vite build --config config/vite.config.ts --mode tauri && node scripts/check-tauri-build.cjs",
+    "build:tauri:panels": "npm run panels:stage-local && tsc && ROBOBOY_PUBLIC_DIR=.panel-stage/public vite build --config config/vite.config.ts --mode tauri && node scripts/check-tauri-build.cjs",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "tauri": "tauri",

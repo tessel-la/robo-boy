@@ -162,6 +162,7 @@ node_modules
 dev-dist/
 playwright-report/
 test-results/
+.panel-stage/
 generate-icons.ps1
 generate-icons.sh
 CLAUDE.md

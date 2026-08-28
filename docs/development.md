@@ -98,9 +98,12 @@ WHEP/WebRTC instead.
 The gateway control API stays bound to host loopback. The relay exposes only `GET /webrtc/_discovery/paths`,
 which maps to MediaMTX's active-path listing; configuration and mutation endpoints are not proxied.
 
-External panel manifests are discovered from `public/panels/installed.json`. Set `VITE_PANEL_REGISTRY_URL` to use
-another same-origin installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
-[External panels](external-panels.md) before changing the SDK, manifest schema, or installed assets.
+Normal development discovers an empty tracked registry at `public/panels/installed.json`. Run
+`npm run dev:panels` to verify and stage the inventory-listed sibling panel releases into the ignored
+`.panel-stage/` tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated ID list to select specific panels, or set
+`VITE_PANEL_REGISTRY_URL` to use another same-origin installed-registry path. Panel modules remain unloaded until
+their workspace tiles mount. See [External panels](external-panels.md) before changing the SDK, manifest schema,
+or staging process.
 
 The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
 registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
