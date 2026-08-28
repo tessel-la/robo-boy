@@ -142,12 +142,12 @@ describe('useTfProvider', () => {
             name: '/tf',
             compression: 'cbor',
             throttle_rate: 25,
-            queue_size: 1
+            queue_length: 1
         }));
         expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
             name: '/tf_static',
             compression: 'cbor',
-            queue_size: 1
+            queue_length: 1
         }));
         expect(subscribeMock).toHaveBeenCalledTimes(2);
     });

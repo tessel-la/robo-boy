@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadInstalledPanelRegistry, parseInstalledPanelRegistry } from './registry';
 
 const registryUrl = 'https://roboboy.test/panels/installed.json';
+const integrity = 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=';
 
 const createManifest = (overrides: Record<string, unknown> = {}) => ({
   schemaVersion: 1,
@@ -9,7 +10,8 @@ const createManifest = (overrides: Record<string, unknown> = {}) => ({
   name: 'Telemetry',
   description: 'Shows robot telemetry.',
   version: '1.2.3',
-  entryPoint: './telemetry/index.js',
+  entryPoint: './telemetry/1.2.3/index.js',
+  integrity,
   compatibility: {
     panelApi: '^1.0.0',
     roboboy: '>=0.3.0-0 <1.0.0',
@@ -31,7 +33,7 @@ describe('installed panel registry', () => {
     expect(result.panels).toEqual([
       expect.objectContaining({
         id: 'com.example.telemetry',
-        entryPoint: 'https://roboboy.test/panels/telemetry/index.js',
+        entryPoint: 'https://roboboy.test/panels/telemetry/1.2.3/index.js',
         registryUrl,
       }),
     ]);
@@ -88,6 +90,50 @@ describe('installed panel registry', () => {
 
     expect(result.panels).toEqual([]);
     expect(result.issues[0]).toMatchObject({ code: 'invalid-entry-point', panelId: 'com.example.telemetry' });
+  });
+
+  it('requires a valid SHA-256 integrity value and an immutable version path', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        panels: [
+          createManifest({ id: 'com.example.no-integrity', integrity: undefined }),
+          createManifest({ id: 'com.example.mutable', entryPoint: './telemetry/latest/index.js' }),
+        ],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toEqual([]);
+    expect(result.issues.map(issue => issue.code)).toEqual(['invalid-manifest', 'invalid-entry-point']);
+  });
+
+  it('keeps declared assets inside the immutable panel release directory', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        panels: [
+          createManifest({
+            assets: [{ path: '../../../other/1.2.3/worker.js', integrity }],
+          }),
+        ],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toEqual([]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: 'invalid-entry-point' })]);
+  });
+
+  it('rejects registries above the panel-count safety limit', () => {
+    const panels = Array.from({ length: 101 }, (_, index) =>
+      createManifest({ id: `com.example.panel-${index}`, entryPoint: `./1.2.3/panel-${index}.js` })
+    );
+
+    const result = parseInstalledPanelRegistry({ schemaVersion: 1, panels }, registryUrl);
+
+    expect(result.panels).toEqual([]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: 'invalid-registry' })]);
   });
 
   it('reports an unavailable registry without throwing', async () => {

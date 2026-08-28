@@ -32,10 +32,18 @@ import BehaviorTreePanel, {
 import { PersistentBehaviorTreeExecutor } from '../features/behaviorTree/engine/persistentExecutor';
 import TfTreePanel from '../features/tfTree/components/TfTreePanel';
 import { saveRecentConnection } from '../runtime/recentConnections';
+import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import anime from 'animejs';
 import ExternalPanelHost from '../panels/ExternalPanelHost';
 import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
-import { isJsonObject, type PanelCatalogEntry, type RoboBoyJsonObject } from '../panels/types';
+import {
+  isJsonObject,
+  isStoredPanelState,
+  type PanelCatalogEntry,
+  type RoboBoyPanelRuntime,
+  type StoredPanelState,
+} from '../panels/types';
+import { validatePanelState } from '../panels/storage';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 
@@ -400,7 +408,7 @@ interface WorkspacePanel {
   title: string;
   cameraTopic?: string;
   layoutId?: string;
-  panelState?: RoboBoyJsonObject;
+  panelState?: StoredPanelState;
 }
 
 type WorkspaceTile =
@@ -422,6 +430,7 @@ const STACKED_WORKSPACE_QUERY = '(max-width: 767px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
+const WORKSPACE_PERSIST_DELAY_MS = 100;
 const RETIRED_BUILT_IN_PAD_IDS = new Set(['panda-cartesian-jog', 'default-panda-cartesian-jog']);
 
 type WorkspaceDraft = {
@@ -491,13 +500,20 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
     return null;
   }
 
+  const storedPanelState =
+    isStoredPanelState(candidate.panelState, candidate.type) && validatePanelState(candidate.panelState.values)
+      ? candidate.panelState
+      : isJsonObject(candidate.panelState) && validatePanelState(candidate.panelState)
+        ? { schemaVersion: 1 as const, panelId: candidate.type, values: candidate.panelState }
+        : undefined;
+
   return {
     id: candidate.id,
     type: candidate.type as WorkspacePanelType,
     title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
-    panelState: isJsonObject(candidate.panelState) ? candidate.panelState : undefined,
+    panelState: storedPanelState,
   };
 };
 
@@ -980,6 +996,19 @@ const applyWorkspaceDropPlacement = (
 };
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
+  const runtimeEndpoints = useRuntimeConfig();
+  const panelRuntime = useMemo<RoboBoyPanelRuntime>(
+    () => ({
+      target: runtimeEndpoints.mode,
+      endpoints: {
+        rosbridge: runtimeEndpoints.rosbridgeUrl,
+        videoStream: runtimeEndpoints.videoStreamBaseUrl,
+        meshResources: runtimeEndpoints.meshResourcesBaseUrl,
+        ollama: runtimeEndpoints.ollamaBaseUrl,
+      },
+    }),
+    [runtimeEndpoints]
+  );
   const installedPanelRegistry = useInstalledPanels();
   const panelCatalog = useMemo(
     () => createPanelCatalog(installedPanelRegistry.panels),
@@ -992,6 +1021,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
   const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadUnifiedWorkspacePanels);
+  const workspacePanelsRef = useRef(workspacePanels);
+  workspacePanelsRef.current = workspacePanels;
   const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(loadMobileWorkspacePanels);
   const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() =>
     mobileWorkspacePanels.reduce<Record<string, WorkspacePanelType[]>>((mountedTypes, panel) => {
@@ -1039,7 +1070,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const btExecutionControls = useRef<BehaviorTreeExecutionControls | null>(null);
   const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentBtSessionId = useRef<string | undefined>(undefined);
-  const { ros, isConnected, connect, disconnect } = useRos(); // Use the hook
+  const { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect } = useRos(); // Use the hook
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
@@ -1198,8 +1229,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   });
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels));
+    const timeoutId = window.setTimeout(() => {
+      localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels));
+    }, WORKSPACE_PERSIST_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [workspacePanels]);
+
+  useEffect(() => {
+    return () => localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanelsRef.current));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(MOBILE_WORKSPACE_PANELS_KEY, JSON.stringify(mobileWorkspacePanels.slice(0, 2)));
@@ -1649,6 +1687,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 title: panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
                 cameraTopic: type === 'camera' ? selectedCameraTopic || availableCameraTopics[0] : undefined,
                 layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
+                panelState: panel.type === type ? panel.panelState : undefined,
               }
             : panel
         )
@@ -2496,6 +2535,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   ? panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0]
                   : panel.cameraTopic,
               layoutId: type === 'pad' ? panel.layoutId || gamepadLibrary[0]?.id : panel.layoutId,
+              panelState: panel.type === type ? panel.panelState : undefined,
             }
           : panel
       )
@@ -2943,11 +2983,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           manifest={catalogEntry.manifest}
           instanceId={panel.id}
           ros={ros}
+          connectionStatus={connectionStatus}
+          connectionGeneration={connectionGeneration}
+          runtime={panelRuntime}
           isActive={isPanelActive}
-          state={panel.panelState}
-          onStateChange={panelState => {
+          state={panel.panelState?.panelId === panel.type ? panel.panelState.values : undefined}
+          onStateChange={values => {
             setWorkspacePanels(previous =>
-              previous.map(candidate => (candidate.id === panel.id ? { ...candidate, panelState } : candidate))
+              previous.map(candidate =>
+                candidate.id === panel.id && candidate.type === panel.type
+                  ? {
+                      ...candidate,
+                      panelState: { schemaVersion: 1, panelId: panel.type, values },
+                    }
+                  : candidate
+              )
             );
           }}
         />

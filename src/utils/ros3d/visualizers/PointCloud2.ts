@@ -277,7 +277,7 @@ export class PointCloud2 extends THREE.Object3D {
                 messageType: 'sensor_msgs/PointCloud2',
                 compression: 'cbor', // Use compression for faster transfer
                 throttle_rate: this.throttleRate,
-                queue_size: 1 // Keep only the latest message
+                queue_length: 1 // Keep only the latest message
             });
 
             this.rosTopicInstance.subscribe(this.processMessage.bind(this));

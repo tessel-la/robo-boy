@@ -3,11 +3,17 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
 import { throttle } from 'lodash-es';
-import { GamepadComponentConfig, JoyAxesPublisher, ROSTopicConfig } from '../types';
+import {
+  GamepadComponentConfig,
+  JoyAxesPublisher,
+  ROSTopicConfig,
+  TwistAxesPublisher,
+} from '../types';
 import {
   buildPoseStampedPayload,
   buildTwistPayload,
   isPoseStampedMessageType,
+  isTwistMessageType,
 } from '../rosMessageUtils';
 import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
 
@@ -26,6 +32,7 @@ interface JoystickComponentProps {
   isEditing?: boolean;
   scaleFactor?: number;
   onJoyAxesChange?: JoyAxesPublisher;
+  onTwistAxesChange?: TwistAxesPublisher;
 }
 
 const THROTTLE_INTERVAL = 100;
@@ -36,6 +43,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
   isEditing,
   scaleFactor: _scaleFactor = 1,
   onJoyAxesChange,
+  onTwistAxesChange,
 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
@@ -148,7 +156,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const maxValue = config.config?.max ?? config.config?.maxValue;
 
     // Only apply range mapping if custom range is explicitly set
-    const mappedValues = (minValue !== undefined && maxValue !== undefined) ?
+    const rangeMappedValues = (minValue !== undefined && maxValue !== undefined) ?
       values.map(value => {
         // Clamp to [-1, 1] first (joystick natural range)
         const clampedValue = Math.max(-1, Math.min(1, value));
@@ -158,9 +166,20 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       }) :
       values; // Use raw joystick values [-1, 1] when no custom range is set
 
+    const mappedValues = rangeMappedValues.map((value, index) =>
+      value * (config.config?.axisScales?.[index] ?? 1)
+    );
+
     const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
     if (isJoyMessage && onJoyAxesChange) {
       if (onJoyAxesChange(config, mappedValues)) {
+        lastSentValues.current = [...values];
+      }
+      return;
+    }
+
+    if (isTwistMessageType(action.messageType) && onTwistAxesChange) {
+      if (onTwistAxesChange(config, mappedValues)) {
         lastSentValues.current = [...values];
       }
       return;
@@ -192,12 +211,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
         axes: axes,
         buttons: []
       });
-    } else if (
-      action.messageType === 'geometry_msgs/Twist' ||
-      action.messageType === 'geometry_msgs/msg/Twist' ||
-      action.messageType === 'geometry_msgs/TwistStamped' ||
-      action.messageType === 'geometry_msgs/msg/TwistStamped'
-    ) {
+    } else if (isTwistMessageType(action.messageType)) {
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
       message = new ROSLIB.Message(buildTwistPayload({
         messageType: action.messageType,
@@ -233,7 +247,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       topicRef.current.publish(message);
       lastSentValues.current = [...values];
     }
-  }, [config, isEditing, onJoyAxesChange]);
+  }, [config, isEditing, onJoyAxesChange, onTwistAxesChange]);
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -263,6 +277,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     if (!action.topic || !action.messageType) return;
     const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
     if (isJoyMessage && onJoyAxesChange) return;
+    if (isTwistMessageType(action.messageType) && onTwistAxesChange) return;
 
     topicRef.current = new ROSLIB.Topic({
       ros: ros,
@@ -288,6 +303,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     publishThrottled,
     isEditing,
     onJoyAxesChange,
+    onTwistAxesChange,
     stopHeldPublishing,
   ]);
 

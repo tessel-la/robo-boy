@@ -247,7 +247,8 @@ describe('MainControlView desktop workspace', () => {
           name: 'Hello Panel',
           description: 'A minimal external panel.',
           version: '1.0.0',
-          entryPoint: 'https://roboboy.test/panels/hello-panel/index.js',
+          entryPoint: 'https://roboboy.test/panels/hello-panel/1.0.0/index.js',
+          integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
           registryUrl: 'https://roboboy.test/panels/installed.json',
           compatibility: { panelApi: '^1.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
           capabilities: ['storage'],
@@ -494,7 +495,15 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('replaces a selected panel without changing its tile identity', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        {
+          ...makePanel('panel-camera', 'camera', 'Camera'),
+          panelState: { schemaVersion: 1, panelId: 'camera', values: { privateValue: 'camera-only' } },
+        },
+      ])
+    );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
     renderMainControlView();
 
@@ -507,6 +516,7 @@ describe('MainControlView desktop workspace', () => {
       expect(stored).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: 'panel-camera', type: 'tfTree', title: 'TF tree' })])
       );
+      expect(stored[0].panelState).toBeUndefined();
     });
   });
 

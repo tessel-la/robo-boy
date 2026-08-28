@@ -27,6 +27,17 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
 	}
 
+	# MediaMTX WebRTC/WHEP signaling. WebRTC media is negotiated separately
+	# over the gateway's advertised ICE port (UDP 8189 by default).
+	handle /webrtc* {
+		uri strip_prefix /webrtc
+		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+			# MediaMTX returns an origin-relative WHEP session URL. Restore the
+			# public prefix so the panel's DELETE cleanup reaches this handler.
+			header_down Location ^/(.*)$ /webrtc/$1
+		}
+	}
+
 	# Proxy mesh resources to the configured backend. The backend owns the
 	# active robot assets; Robo Boy remains independent of robot and simulator.
 	handle_path /mesh_resources/* {
@@ -66,6 +77,14 @@
 	handle /video_stream* {
 		uri strip_prefix /video_stream
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
+	}
+
+	# Proxy WHEP signaling to the backend media gateway.
+	handle /webrtc* {
+		uri strip_prefix /webrtc
+		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+			header_down Location ^/(.*)$ /webrtc/$1
+		}
 	}
 
 	# Proxy mesh resources to the configured robot backend.

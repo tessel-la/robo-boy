@@ -6,7 +6,7 @@ services:
       dockerfile: infra/docker/Dockerfile.dev
     volumes:
       - .:/app
-      - /app/node_modules 
+      - /app/node_modules
     command: npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5173}
     ipc: host
     environment:
@@ -41,11 +41,13 @@ services:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
       - ollama-relay-socket:/run/ollama-relay
+      - webrtc-relay-socket:/run/webrtc-relay
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
       - app
       - ollama-relay
+      - webrtc-relay
       - ros-stack
     networks:
       - app-net
@@ -64,6 +66,20 @@ services:
     volumes:
       - ./infra/caddy/OllamaRelay.Caddyfile:/etc/caddy/Caddyfile:ro
       - ollama-relay-socket:/run/ollama-relay
+
+  # MediaMTX runs on the host network so its ICE candidates include physical
+  # and VPN interfaces. This relay exposes only its HTTP/WHEP signaling API to
+  # Caddy through a Unix socket shared with the bridge network.
+  webrtc-relay:
+    image: caddy:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - WEBRTC_BACKEND_URL=${WEBRTC_BACKEND_URL:-http://127.0.0.1:8889}
+      - WEBRTC_DISCOVERY_BACKEND_URL=${WEBRTC_DISCOVERY_BACKEND_URL:-http://127.0.0.1:9997}
+    volumes:
+      - ./infra/caddy/WebRtcRelay.Caddyfile:/etc/caddy/Caddyfile:ro
+      - webrtc-relay-socket:/run/webrtc-relay
 
   # ROS 2 Stack (Rosbridge + Image Publisher)
   # network_mode: host so ROS 2 DDS multicast discovery works with other
@@ -103,6 +119,7 @@ volumes:
   caddy-data:
   caddy-config:
   ollama-relay-socket:
+  webrtc-relay-socket:
 
 networks:
   app-net:

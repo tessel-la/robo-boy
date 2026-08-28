@@ -59,6 +59,16 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/ollama/, ''),
       },
+      '/webrtc/_discovery/paths': {
+        target: process.env.WEBRTC_DISCOVERY_PROXY_TARGET ?? 'http://127.0.0.1:9997',
+        changeOrigin: true,
+        rewrite: () => '/v3/paths/list',
+      },
+      '/webrtc': {
+        target: process.env.WEBRTC_PROXY_TARGET ?? 'http://127.0.0.1:8889',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/webrtc/, ''),
+      },
     },
     // https: false, // Ensure HTTPS is disabled (default is false anyway)
     // hmr: { // Optional: Specify host for Hot Module Replacement if needed
@@ -82,6 +92,11 @@ export default defineConfig(({ mode }) => ({
             manifest: false, // Disable inline manifest
             injectRegister: 'auto',
             includeAssets: ['favicon.ico'], // Include any additional assets
+            workbox: {
+              // Registry and manifest JSON must be available before any lazy
+              // panel bundle can be discovered while the PWA is offline.
+              globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+            },
             // The manifest is now defined in the manifest.webmanifest file
           }),
         ]),

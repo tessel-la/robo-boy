@@ -52,6 +52,7 @@ export interface GamepadComponentConfig {
     // Joystick specific
     maxValue?: number;
     axes?: string[]; // Which axes to map to
+    axisScales?: number[]; // Optional per-axis output scaling after range mapping
     poseStampedFrameId?: string;
     poseStampedReferenceMode?: 'frame' | 'tf' | 'odometry';
     poseStampedReferenceFrameId?: string;
@@ -101,6 +102,11 @@ export interface GamepadComponentConfig {
 }
 
 export type JoyAxesPublisher = (
+  config: GamepadComponentConfig,
+  values: number[]
+) => boolean;
+
+export type TwistAxesPublisher = (
   config: GamepadComponentConfig,
   values: number[]
 ) => boolean;

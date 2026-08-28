@@ -9,14 +9,20 @@ import type {
 export type {
   RoboBoyJsonObject,
   RoboBoyJsonValue,
+  RoboBoyPanelAsset,
   RoboBoyPanelCapability,
+  RoboBoyPanelConnection,
+  RoboBoyPanelConnectionSnapshot,
   RoboBoyPanelContext,
   RoboBoyPanelDefinition,
   RoboBoyPanelInstance,
   RoboBoyPanelLogger,
   RoboBoyPanelManifest,
   RoboBoyPanelModule,
+  RoboBoyPanelRuntime,
   RoboBoyPanelStorage,
+  RoboBoyPanelViewport,
+  RoboBoyPanelViewportSnapshot,
 } from '../../panel-sdk';
 
 export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad';
@@ -71,6 +77,12 @@ export interface InstalledPanelRegistryResult {
   issues: PanelRegistryIssue[];
 }
 
+export interface StoredPanelState {
+  schemaVersion: 1;
+  panelId: string;
+  values: RoboBoyJsonObject;
+}
+
 export type PanelModuleImporter = (entryPoint: string) => Promise<unknown>;
 
 export const isPanelDefinition = (value: unknown): value is RoboBoyPanelDefinition => {
@@ -89,13 +101,35 @@ export const isPanelModule = (value: unknown): value is RoboBoyPanelModule => {
   );
 };
 
-export const isJsonObject = (value: unknown): value is RoboBoyJsonObject => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  return Object.values(value).every(item => isJsonValue(item));
+const isJsonValueInternal = (value: unknown, ancestors: Set<object>, depth: number): boolean => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (!value || typeof value !== 'object' || depth > 20 || ancestors.has(value)) return false;
+
+  ancestors.add(value);
+  const isValid = Array.isArray(value)
+    ? value.every(item => isJsonValueInternal(item, ancestors, depth + 1))
+    : Object.getPrototypeOf(value) === Object.prototype &&
+      Object.values(value).every(item => isJsonValueInternal(item, ancestors, depth + 1));
+  ancestors.delete(value);
+  return isValid;
 };
 
-export const isJsonValue = (value: unknown): boolean => {
-  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true;
-  if (Array.isArray(value)) return value.every(item => isJsonValue(item));
-  return isJsonObject(value);
+export const isJsonObject = (value: unknown): value is RoboBoyJsonObject => {
+  return (
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value) && isJsonValueInternal(value, new Set(), 0)
+  );
+};
+
+export const isJsonValue = (value: unknown): boolean => isJsonValueInternal(value, new Set(), 0);
+
+export const isStoredPanelState = (value: unknown, panelId?: string): value is StoredPanelState => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StoredPanelState>;
+  return (
+    candidate.schemaVersion === 1 &&
+    typeof candidate.panelId === 'string' &&
+    (!panelId || candidate.panelId === panelId) &&
+    isJsonObject(candidate.values)
+  );
 };

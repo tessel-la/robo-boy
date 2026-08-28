@@ -22,7 +22,8 @@ export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
   fixedFrame: 'odom',
   displayedTfFrames: [],
   showTfFrameLabels: true,
-  tfAxesScale: 0.5,
+  // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
+  tfAxesScale: 0.1,
 };
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
@@ -31,14 +32,17 @@ const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 const inMemoryState = new Map<string, VisualizationPanelState>();
 
 const normalizeVisualizationState = (
-  state: Partial<VisualizationPanelState> | null | undefined
+  state: Partial<VisualizationPanelState> | null | undefined,
+  migrateLegacyAxesScale = false
 ): VisualizationPanelState => ({
   visualizations: Array.isArray(state?.visualizations) ? state.visualizations : [],
   fixedFrame: state?.fixedFrame || DEFAULT_VISUALIZATION_STATE.fixedFrame,
   displayedTfFrames: Array.isArray(state?.displayedTfFrames) ? state.displayedTfFrames : [],
   showTfFrameLabels: state?.showTfFrameLabels ?? DEFAULT_VISUALIZATION_STATE.showTfFrameLabels,
   tfAxesScale: typeof state?.tfAxesScale === 'number' && Number.isFinite(state.tfAxesScale)
-    ? state.tfAxesScale
+    ? migrateLegacyAxesScale && state.tfAxesScale === 0.5
+      ? DEFAULT_VISUALIZATION_STATE.tfAxesScale
+      : state.tfAxesScale
     : DEFAULT_VISUALIZATION_STATE.tfAxesScale,
 });
 
@@ -81,7 +85,9 @@ export const getVisualizationStateForKey = (storageKey: string): VisualizationPa
   try {
     const savedStateStr = localStorage.getItem(storageKey);
     if (savedStateStr) {
-      const parsedState = normalizeVisualizationState(JSON.parse(savedStateStr));
+      // 0.5 m was the old default and overwhelms 0.25 m-class robots. Migrate
+      // persisted panels once; newly chosen scales remain untouched on save.
+      const parsedState = normalizeVisualizationState(JSON.parse(savedStateStr), true);
       inMemoryState.set(storageKey, parsedState);
       return parsedState;
     }

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearExternalPanelModuleCache, loadExternalPanelDefinition } from './loader';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearExternalPanelModuleCache, loadExternalPanelDefinition, verifyExternalPanelIntegrity } from './loader';
 import type { ResolvedPanelManifest } from './types';
 
 const manifest: ResolvedPanelManifest = {
@@ -8,7 +8,8 @@ const manifest: ResolvedPanelManifest = {
   name: 'Example panel',
   description: 'An example.',
   version: '1.0.0',
-  entryPoint: 'https://roboboy.test/panels/example.js',
+  entryPoint: 'https://roboboy.test/panels/example/1.0.0/index.js',
+  integrity: 'sha256-LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=',
   registryUrl: 'https://roboboy.test/panels/installed.json',
   compatibility: { panelApi: '^1.0.0', roboboy: '*' },
   capabilities: [],
@@ -25,6 +26,7 @@ const createDefinition = (overrides: Record<string, unknown> = {}) => ({
 
 describe('external panel loader', () => {
   beforeEach(() => clearExternalPanelModuleCache());
+  afterEach(() => vi.unstubAllGlobals());
 
   it('loads and validates a panel module', async () => {
     const definition = createDefinition();
@@ -32,6 +34,35 @@ describe('external panel loader', () => {
 
     await expect(loadExternalPanelDefinition(manifest, importer)).resolves.toBe(definition);
     expect(importer).toHaveBeenCalledWith(manifest.entryPoint);
+  });
+
+  it('verifies the downloaded bundle against its declared SHA-256 digest', async () => {
+    const body = new TextEncoder().encode('hello');
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(body.buffer),
+    });
+
+    await expect(verifyExternalPanelIntegrity(manifest, fetcher as typeof fetch)).resolves.toBeUndefined();
+    await expect(
+      verifyExternalPanelIntegrity(
+        { ...manifest, integrity: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' },
+        fetcher
+      )
+    ).rejects.toMatchObject({ code: 'integrity-failed' });
+  });
+
+  it('verifies the bundle when Web Crypto is unavailable', async () => {
+    vi.stubGlobal('crypto', undefined);
+    const body = new TextEncoder().encode('hello');
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(body.buffer),
+    });
+
+    await expect(verifyExternalPanelIntegrity(manifest, fetcher as typeof fetch)).resolves.toBeUndefined();
   });
 
   it('loads each panel bundle once and shares the pending promise', async () => {
@@ -74,5 +105,12 @@ describe('external panel loader', () => {
         vi.fn().mockResolvedValue({ default: createDefinition({ apiVersion: '2.0.0' }) })
       )
     ).rejects.toMatchObject({ code: 'definition-mismatch' });
+  });
+
+  it('accepts a compatible module API patch version', async () => {
+    const definition = createDefinition({ apiVersion: '1.0.0' });
+    await expect(
+      loadExternalPanelDefinition(manifest, vi.fn().mockResolvedValue({ default: definition }))
+    ).resolves.toBe(definition);
   });
 });

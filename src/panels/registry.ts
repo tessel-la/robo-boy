@@ -11,6 +11,9 @@ import type {
 } from './types';
 
 const PANEL_ID_PATTERN = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
+const PANEL_INTEGRITY_PATTERN = /^sha256-[A-Za-z0-9+/]{43}=$/;
+const MAX_INSTALLED_PANELS = 100;
+const MAX_REGISTRY_BYTES = 256 * 1024;
 const PANEL_CAPABILITIES = new Set<RoboBoyPanelCapability>([
   'ros',
   'storage',
@@ -55,6 +58,23 @@ const isStringArray = (value: unknown, maxItems = 30): value is string[] => {
   return Array.isArray(value) && value.length <= maxItems && value.every(item => isNonEmptyString(item, 80));
 };
 
+const isPanelAssetArray = (value: unknown): value is NonNullable<RoboBoyPanelManifest['assets']> => {
+  return (
+    Array.isArray(value) &&
+    value.length <= 50 &&
+    value.every(asset => {
+      if (!asset || typeof asset !== 'object') return false;
+      const candidate = asset as { path?: unknown; integrity?: unknown; offline?: unknown };
+      return (
+        isNonEmptyString(candidate.path, 2048) &&
+        typeof candidate.integrity === 'string' &&
+        PANEL_INTEGRITY_PATTERN.test(candidate.integrity) &&
+        (candidate.offline === undefined || typeof candidate.offline === 'boolean')
+      );
+    })
+  );
+};
+
 const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<RoboBoyPanelManifest>;
@@ -70,6 +90,9 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
     typeof candidate.version === 'string' &&
     Boolean(valid(candidate.version)) &&
     isNonEmptyString(candidate.entryPoint, 2048) &&
+    typeof candidate.integrity === 'string' &&
+    PANEL_INTEGRITY_PATTERN.test(candidate.integrity) &&
+    (!candidate.assets || isPanelAssetArray(candidate.assets)) &&
     Boolean(
       compatibility &&
       typeof compatibility === 'object' &&
@@ -91,13 +114,26 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
   );
 };
 
+const hasVersionPathSegment = (url: URL, version: string): boolean => {
+  try {
+    return url.pathname
+      .split('/')
+      .filter(Boolean)
+      .map(segment => decodeURIComponent(segment))
+      .includes(version);
+  } catch {
+    return false;
+  }
+};
+
 const resolveSameOriginEntryPoint = (entryPoint: string, registryUrl: string): string | null => {
   try {
     const registry = new URL(registryUrl);
     const resolved = new URL(entryPoint, registry);
     const isSameLocation = resolved.protocol === registry.protocol && resolved.host === registry.host;
     const isLoadableProtocol = ['http:', 'https:', 'tauri:', 'asset:', 'customprotocol:'].includes(resolved.protocol);
-    return isSameLocation && isLoadableProtocol ? resolved.href : null;
+    const hasStableUrlShape = !resolved.username && !resolved.password && !resolved.search && !resolved.hash;
+    return isSameLocation && isLoadableProtocol && hasStableUrlShape ? resolved.href : null;
   } catch {
     return null;
   }
@@ -126,6 +162,18 @@ export const parseInstalledPanelRegistry = (
     return {
       panels,
       issues: [{ code: 'invalid-registry', message: 'The installed panel registry must contain a panels array.' }],
+    };
+  }
+
+  if (document.panels.length > MAX_INSTALLED_PANELS) {
+    return {
+      panels,
+      issues: [
+        {
+          code: 'invalid-registry',
+          message: `The installed panel registry exceeds the ${MAX_INSTALLED_PANELS}-panel safety limit.`,
+        },
+      ],
     };
   }
 
@@ -171,18 +219,42 @@ export const parseInstalledPanelRegistry = (
     }
 
     const entryPoint = resolveSameOriginEntryPoint(candidate.entryPoint, registryUrl);
-    if (!entryPoint) {
+    if (!entryPoint || !hasVersionPathSegment(new URL(entryPoint), candidate.version)) {
       issues.push({
         code: 'invalid-entry-point',
         panelId: candidate.id,
-        message: `${candidate.name} must use a same-origin installed entry point.`,
+        message: `${candidate.name} must use a same-origin entry point with ${candidate.version} as an immutable path segment.`,
+      });
+      knownIds.add(candidate.id);
+      return;
+    }
+
+    const assets = candidate.assets?.map(asset => {
+      const path = resolveSameOriginEntryPoint(asset.path, entryPoint);
+      const releaseDirectory = new URL('.', entryPoint);
+      return path &&
+        new URL(path).pathname.startsWith(releaseDirectory.pathname) &&
+        hasVersionPathSegment(new URL(path), candidate.version)
+        ? { ...asset, path }
+        : null;
+    });
+    if (assets?.some(asset => asset === null)) {
+      issues.push({
+        code: 'invalid-entry-point',
+        panelId: candidate.id,
+        message: `${candidate.name} declares an asset outside its same-origin versioned release path.`,
       });
       knownIds.add(candidate.id);
       return;
     }
 
     knownIds.add(candidate.id);
-    panels.push({ ...candidate, entryPoint, registryUrl });
+    panels.push({
+      ...candidate,
+      entryPoint,
+      assets: assets?.filter((asset): asset is NonNullable<typeof asset> => asset !== null),
+      registryUrl,
+    });
   });
 
   return { panels, issues };
@@ -202,7 +274,15 @@ export const loadInstalledPanelRegistry = async (
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    return parseInstalledPanelRegistry(await response.json(), registryUrl);
+    const declaredLength = Number(response.headers?.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REGISTRY_BYTES) {
+      throw new Error(`registry exceeds ${MAX_REGISTRY_BYTES} bytes`);
+    }
+    const body = await response.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_REGISTRY_BYTES) {
+      throw new Error(`registry exceeds ${MAX_REGISTRY_BYTES} bytes`);
+    }
+    return parseInstalledPanelRegistry(JSON.parse(body), registryUrl);
   } catch (error) {
     return {
       panels: [],

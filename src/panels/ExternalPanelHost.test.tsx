@@ -10,7 +10,8 @@ const manifest: ResolvedPanelManifest = {
   name: 'Example panel',
   description: 'An example.',
   version: '1.0.0',
-  entryPoint: 'https://roboboy.test/panels/example.js',
+  entryPoint: 'https://roboboy.test/panels/example/1.0.0/index.js',
+  integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
   registryUrl: 'https://roboboy.test/panels/installed.json',
   compatibility: { panelApi: '^1.0.0', roboboy: '*' },
   capabilities: ['ros', 'storage'],
@@ -25,6 +26,17 @@ const renderHost = (importer: (entryPoint: string) => Promise<unknown>, override
       manifest={manifest}
       instanceId="panel-instance"
       ros={{} as any}
+      connectionStatus="connected"
+      connectionGeneration={1}
+      runtime={{
+        target: 'web',
+        endpoints: {
+          rosbridge: 'wss://robot.test/websocket',
+          videoStream: 'https://robot.test/stream',
+          meshResources: 'https://robot.test/meshes',
+          ollama: 'https://robot.test/ollama',
+        },
+      }}
       isActive
       state={{ count: 2 }}
       onStateChange={onStateChange}
@@ -65,7 +77,15 @@ describe('ExternalPanelHost', () => {
 
     expect(await screen.findByText('External content')).toBeInTheDocument();
     expect(importer).toHaveBeenCalledOnce();
-    expect(receivedContext).toMatchObject({ panelId: manifest.id, instanceId: 'panel-instance', ros: {} });
+    expect(receivedContext).toMatchObject({
+      panelId: manifest.id,
+      instanceId: 'panel-instance',
+      ros: {},
+      runtime: { target: 'web' },
+    });
+    expect(receivedContext?.connection.getSnapshot()).toEqual({ status: 'connected', generation: 1 });
+    expect(receivedContext?.viewport.getSnapshot()).toEqual(expect.objectContaining({ isActive: true }));
+    expect(receivedContext?.storage).toMatchObject({ schemaVersion: 1, quotaBytes: 65536 });
     expect(receivedContext?.storage?.get('count', 0)).toBe(3);
     expect(onStateChange).toHaveBeenCalledWith({ count: 3 });
     expect(setActive).toHaveBeenCalledWith(true);
@@ -82,7 +102,7 @@ describe('ExternalPanelHost', () => {
         id: manifest.id,
         activate: (context: RoboBoyPanelContext) => {
           receivedContext = context;
-          return { mount: (container: HTMLElement) => (container.textContent = 'Mounted') };
+          return { mount: (container: HTMLElement) => (container.textContent = 'Mounted'), unmount: vi.fn() };
         },
       },
     });
@@ -98,7 +118,10 @@ describe('ExternalPanelHost', () => {
     const activate = vi
       .fn()
       .mockRejectedValueOnce(new Error('initialization failed'))
-      .mockResolvedValueOnce({ mount: (container: HTMLElement) => (container.textContent = 'Recovered') });
+      .mockResolvedValueOnce({
+        mount: (container: HTMLElement) => (container.textContent = 'Recovered'),
+        unmount: vi.fn(),
+      });
     const importer = vi.fn().mockResolvedValue({
       default: { apiVersion: '1.0.0', id: manifest.id, activate },
     });
@@ -120,6 +143,7 @@ describe('ExternalPanelHost', () => {
           mount: () => {
             throw new Error('render failed');
           },
+          unmount: vi.fn(),
         }),
       },
     });

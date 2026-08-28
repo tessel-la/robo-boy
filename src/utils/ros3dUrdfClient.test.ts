@@ -168,4 +168,55 @@ describe('UrdfClient cache', () => {
     expect(secondModel).toBe(firstModel);
     expect(rootObject.children).toContain(secondClient);
   }, 10000);
+
+  it('composes URDF fixed-axis roll, pitch, yaw for joints and visuals', async () => {
+    const { UrdfClient } = await import('./ros3d');
+    const rootObject = new THREE.Scene();
+    const tfClient = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      lookupTransform: vi.fn(() => null),
+    };
+    let model: THREE.Object3D | undefined;
+    const client = new UrdfClient({
+      ros: { url: 'ws://rpy-robot' } as any,
+      tfClient: tfClient as any,
+      rootObject,
+      robotDescriptionTopic: '/robot_description',
+      onComplete: (loadedModel) => {
+        model = loadedModel;
+      },
+    });
+    const rpyUrdf = `
+      <robot name="rpy_bot">
+        <link name="base_link" />
+        <link name="head_link">
+          <visual>
+            <origin xyz="0 0 0" rpy="0.1 0.2 0.3" />
+            <geometry><box size="0.1 0.1 0.1" /></geometry>
+          </visual>
+        </link>
+        <joint name="head_joint" type="fixed">
+          <origin xyz="0 0 0.2" rpy="0.4 0.5 0.6" />
+          <parent link="base_link" />
+          <child link="head_link" />
+        </joint>
+      </robot>
+    `;
+
+    roslibMock.topicInstances[0].callback?.({ data: rpyUrdf });
+
+    const head = model?.getObjectByName('head_link');
+    const visual = head?.children.find((child) => child instanceof THREE.Mesh);
+    const expectedJoint = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0.4, 0.5, 0.6, 'ZYX')
+    );
+    const expectedVisual = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0.1, 0.2, 0.3, 'ZYX')
+    );
+    expect(head?.quaternion.angleTo(expectedJoint)).toBeLessThan(1e-7);
+    expect(visual?.quaternion.angleTo(expectedVisual)).toBeLessThan(1e-7);
+
+    client.dispose();
+  });
 });

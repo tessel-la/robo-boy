@@ -93,28 +93,29 @@ catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, beha
 `src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
 `public/panels/installed.json` without importing panel code.
 
-Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small, framework-neutral
-contract in `panel-sdk/`; `ExternalPanelHost` lazily imports a bundle when its tile mounts, supplies only declared host
-services, and isolates import/activation/mount failures to that tile. Keep application stores and feature internals out
-of the public context. See [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring,
-and inventory boundaries.
+Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small,
+framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies and lazily imports a deployment-bundled
+release when its tile mounts, supplies narrow storage/runtime/connection/viewport services, and isolates lifecycle
+failures to that tile. This is trusted same-realm code, so capability declarations shape the API and review process
+but are not a security sandbox. Keep application stores and feature internals out of the public context. See
+[External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
 
 ## State And Persistence
 
 State is intentionally local to the browser:
 
-| State                        | Owner                     | Persistence                       |
-| ---------------------------- | ------------------------- | --------------------------------- |
-| Active ROS connection        | `useRos`                  | Memory only                       |
-| Persistent BT runtime        | ROS behavior-tree runner  | Memory until completion/restart   |
-| Current view and open panels | `MainControlView`         | Memory only                       |
-| Mobile single/split panels   | `MainControlView`         | `localStorage`                    |
-| Panel split                  | `useResizablePanels`      | `localStorage`                    |
-| Themes                       | `App` and theme utilities | `localStorage`                    |
-| Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON |
-| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
-| 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
-| External panel instance data | `MainControlView`         | JSON in workspace `localStorage`  |
+| State                        | Owner                     | Persistence                                                      |
+| ---------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| Active ROS connection        | `useRos`                  | Memory only                                                      |
+| Persistent BT runtime        | ROS behavior-tree runner  | Memory until completion/restart                                  |
+| Current view and open panels | `MainControlView`         | Memory only                                                      |
+| Mobile single/split panels   | `MainControlView`         | `localStorage`                                                   |
+| Panel split                  | `useResizablePanels`      | `localStorage`                                                   |
+| Themes                       | `App` and theme utilities | `localStorage`                                                   |
+| Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON                                |
+| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
+| 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
+| External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
 
 Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
@@ -134,9 +135,9 @@ App shell and shared components
 
 Feature modules should not import application-shell state. Pass connection objects and callbacks through props or narrow feature APIs. Shared helpers must remain independent of feature UI.
 
-External panels sit outside this internal dependency graph. They depend only on the published panel SDK and receive
-their allowed runtime services from the host context. Robo-Boy core may import SDK types; it must never import an
-external panel's source or package directly.
+External panels sit outside this internal dependency graph. They depend only on the versioned panel SDK contract
+(currently source-controlled under `panel-sdk/`) and receive narrow runtime services from the host context.
+Robo-Boy core may import SDK types; it must never import an external panel's source or package directly.
 
 ## Adding A Feature
 
@@ -151,7 +152,7 @@ external panel's source or package directly.
 
 ## Operational Constraints
 
-- Caddy path routing is part of the frontend contract. Changes to `/websocket`, `/video_stream`, or `/mesh_resources` require coordinated frontend and proxy updates.
+- Caddy path routing is part of the frontend contract. Changes to `/websocket`, `/video_stream`, `/webrtc`, or `/mesh_resources` require coordinated frontend and proxy updates. `/webrtc` proxies media-gateway WHEP signaling through a host-network relay and shared Unix socket; its reserved `/_discovery/paths` child exposes only the active-path listing from the loopback MediaMTX API. Negotiated WebRTC media still reaches the gateway's advertised ICE candidates directly.
 - ROS 2 interface discovery depends on `ROS_DISTRO`, `ROS_DOMAIN_ID`, network compatibility, and mounted interface workspaces.
 - The ROS container derives from the official `ros:<distro>-ros-core-<ubuntu>` image. Keep `ROS_DISTRO` and `ROS_UBUNTU_CODENAME` paired when overriding them (for example, Jazzy/Noble or Humble/Jammy).
 - The production `infra/docker/Dockerfile` builds static assets and serves them with Nginx; the default Compose stack is development-oriented and serves Vite through Caddy.
