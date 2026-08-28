@@ -30,6 +30,7 @@ describe('useRos', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as Window & { ros?: unknown }).ros;
     // Reset window location mock if needed
     Object.defineProperty(window, 'location', {
       value: {
@@ -44,6 +45,8 @@ describe('useRos', () => {
     const { result } = renderHook(() => useRos());
     expect(result.current.ros).toBeNull();
     expect(result.current.isConnected).toBe(false);
+    expect(result.current.connectionStatus).toBe('disconnected');
+    expect((window as Window & { ros?: unknown }).ros).toBeUndefined();
   });
 
   it('should attempt connection with correct URL', () => {
@@ -128,6 +131,7 @@ describe('useRos', () => {
     act(() => {
       result.current.connect(mockParams);
     });
+    const connect = result.current.connect;
 
     // Simulate 'connection' event
     const connectionCallback = onMock.mock.calls.find(call => call[0] === 'connection')?.[1];
@@ -139,6 +143,10 @@ describe('useRos', () => {
 
     expect(result.current.isConnected).toBe(true);
     expect(result.current.ros).toBeTruthy();
+    expect(result.current.connectionStatus).toBe('connected');
+    expect(result.current.connectionGeneration).toBe(1);
+    expect((window as Window & { ros?: unknown }).ros).toBeUndefined();
+    expect(result.current.connect).toBe(connect);
   });
 
   it('should handle connection error', () => {

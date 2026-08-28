@@ -46,7 +46,7 @@ describe('visualizationState', () => {
       fixedFrame: 'odom',
       displayedTfFrames: [],
       showTfFrameLabels: true,
-      tfAxesScale: 0.5,
+      tfAxesScale: 0.1,
     });
   });
 
@@ -59,6 +59,15 @@ describe('visualizationState', () => {
 
     const state = getVisualizationState();
     expect(state).toEqual(mockState);
+  });
+
+  it('should migrate the old 0.5 m TF axes default when loading saved panels', () => {
+    localStorage.setItem(
+      'roboboy_3d_visualization_state',
+      JSON.stringify({ ...mockState, tfAxesScale: 0.5 })
+    );
+
+    expect(getVisualizationState().tfAxesScale).toBe(0.1);
   });
 
   it('should prioritize memory overly localStorage', () => {
@@ -151,7 +160,7 @@ describe('visualizationState', () => {
     expect(getVisualizationState()).toEqual({
       ...oldState,
       showTfFrameLabels: true,
-      tfAxesScale: 0.5,
+      tfAxesScale: 0.1,
     });
   });
 });

@@ -39,6 +39,7 @@ The stack starts:
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
+- `webrtc-relay`: host-network adapter from Caddy's Unix socket to MediaMTX's WHEP signaling API.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
@@ -49,23 +50,27 @@ docker compose up -d --build --force-recreate
 
 The default ports are defined in the copied `.env` file. The main knobs are:
 
-| Variable | Default | Used by |
-| --- | --- | --- |
-| `FRONTEND_PORT` | `5173` | Vite dev server and Caddy frontend upstream |
-| `HTTP_PORT` | `80` | Caddy HTTP listener |
-| `HTTPS_PORT` | `443` | Caddy HTTPS and HTTP/3 listener |
-| `BACKEND_HOST` | `host.docker.internal` | Caddy upstream host for ROS services |
-| `ROSBRIDGE_PORT` | `9090` | rosbridge and Caddy `/websocket` upstream |
-| `VIDEO_STREAM_PORT` | `8080` | `web_video_server` and Caddy `/video_stream` upstream |
-| `MESH_RESOURCES_PORT` | `8000` | Caddy `/mesh_resources` upstream |
-| `OLLAMA_BACKEND_URL` | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
-| `OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama port |
-| `OLLAMA_PROXY_TARGET` | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream |
-| `VITE_ROSBRIDGE_PORT` | `9090` | Desktop direct-connect rosbridge URL |
-| `VITE_VIDEO_STREAM_PORT` | `8080` | Desktop direct-connect video URL |
-| `VITE_MESH_RESOURCES_PORT` | `8000` | Desktop direct-connect mesh URL |
-| `VITE_OLLAMA_PORT` | `11434` | Desktop direct-connect Ollama URL |
-| `VITE_WEB_BACKEND_MODE` | `auto` | `auto`, `proxy`, or `direct` for web IP connections |
+| Variable                        | Default                  | Used by                                                    |
+| ------------------------------- | ------------------------ | ---------------------------------------------------------- |
+| `FRONTEND_PORT`                 | `5173`                   | Vite dev server and Caddy frontend upstream                |
+| `HTTP_PORT`                     | `80`                     | Caddy HTTP listener                                        |
+| `HTTPS_PORT`                    | `443`                    | Caddy HTTPS and HTTP/3 listener                            |
+| `BACKEND_HOST`                  | `host.docker.internal`   | Caddy upstream host for ROS services                       |
+| `ROSBRIDGE_PORT`                | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
+| `VIDEO_STREAM_PORT`             | `8080`                   | `web_video_server` and Caddy `/video_stream` upstream      |
+| `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
+| `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
+| `MESH_RESOURCES_PORT`           | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `OLLAMA_BACKEND_URL`            | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
+| `OLLAMA_PORT`                   | `11434`                  | Desktop direct-connect Ollama port                         |
+| `OLLAMA_PROXY_TARGET`           | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream                      |
+| `WEBRTC_PROXY_TARGET`           | `http://127.0.0.1:8889`  | Frontend-only Vite `/webrtc` WHEP upstream                 |
+| `WEBRTC_DISCOVERY_PROXY_TARGET` | `http://127.0.0.1:9997`  | Frontend-only Vite active-path discovery upstream          |
+| `VITE_ROSBRIDGE_PORT`           | `9090`                   | Desktop direct-connect rosbridge URL                       |
+| `VITE_VIDEO_STREAM_PORT`        | `8080`                   | Desktop direct-connect video URL                           |
+| `VITE_MESH_RESOURCES_PORT`      | `8000`                   | Desktop direct-connect mesh URL                            |
+| `VITE_OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama URL                          |
+| `VITE_WEB_BACKEND_MODE`         | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
 
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
@@ -84,6 +89,51 @@ VPN interface, so remote desktop clients can reach it. If a desktop webview rece
 a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
 In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+
+The optional camera gateway is reached through the same-origin `/webrtc` route for WHEP signaling. Caddy reaches
+host-network MediaMTX through `webrtc-relay` and a shared Unix socket, avoiding Docker host-gateway firewall
+differences. Its ICE media port is negotiated by WebRTC and must be reachable directly from clients (the Genesis
+gateway uses UDP `8189`). RTSP remains a direct gateway service on port `8554` for native clients; browsers use
+WHEP/WebRTC instead.
+The gateway control API stays bound to host loopback. The relay exposes only `GET /webrtc/_discovery/paths`,
+which maps to MediaMTX's active-path listing; configuration and mutation endpoints are not proxied.
+
+Normal development discovers an empty tracked registry at `public/panels/installed.json`. Run
+`npm run dev:panels` to verify and stage the inventory-listed sibling panel releases into the ignored
+`.panel-stage/` tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated ID list or append
+`-- --panel <id>` to select specific panels. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
+installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
+[External panels](external-panels.md#create-install-and-register-a-panel) for the complete standalone repository,
+SDK, integrity, local inventory, host-development, and Docker-development workflow.
+
+For the Docker development stack, opt in with the panel Compose overlay:
+
+```bash
+docker compose -f docker-compose.yml -f infra/compose/panels.yml build app
+docker compose -f docker-compose.yml -f infra/compose/panels.yml up -d
+```
+
+The overlay mounts the sibling inventory and panel repositories read-only, stages verified bundles in a named
+volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
+entry, or set it in `.env` to a comma-separated subset.
+
+This is a developer convenience only. For published official or private releases, use
+`infra/compose/panels.remote.yml`. The remote overlay defaults to `config/panel-sources.official.json`, mounts no
+panel repositories, and has its installer populate a named volume from configured HTTPS inventories. A deployment
+can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
+[External panels](external-panels.md#remote-inventories-and-private-panels) for configuration, subset selection,
+and credential handling.
+
+The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
+selects `docker-compose.yml` and `infra/compose/panels.remote.yml` through a per-application `composeFiles` setting,
+so stopping and starting Robo-Boy from the dashboard runs the release installer before the application. Keep
+`COMPOSE_FILE=docker-compose.yml` in Robo-Boy's shared `.env`: simulators consume that file for ROS/DDS settings,
+and putting the panel overlay there would incorrectly apply it relative to every simulator project.
+
+The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
+registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
+dependency during the connection transition can otherwise invalidate Vite's development dependency graph while
+React is mounting the workspace.
 
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
@@ -108,6 +158,9 @@ npm run test:run
 npm run test:coverage
 npm run e2e
 ```
+
+Set `ROBOBOY_DIST_DIR` when build artifacts need to be written outside the default `dist/` directory. The web and
+Tauri Vite builds honor it, and the Tauri post-build module check validates the same directory.
 
 `npm run e2e` starts its own Vite server. To test an already-running Docker/Caddy stack, use:
 
@@ -154,11 +207,11 @@ Do not create official releases directly from `dev`.
 
 Release Please uses Conventional Commits to choose the next SemVer version:
 
-| Commit message | Release type |
-| -------------- | ------------ |
-| `fix: correct login redirect` | Patch |
-| `feat: add export endpoint` | Minor |
-| `feat!: change public API response format` | Major |
+| Commit message                             | Release type |
+| ------------------------------------------ | ------------ |
+| `fix: correct login redirect`              | Patch        |
+| `feat: add export endpoint`                | Minor        |
+| `feat!: change public API response format` | Major        |
 
 Breaking changes can also be marked with a `BREAKING CHANGE:` footer in the commit body. Commits such as `docs:`, `test:`, `chore:`, and `refactor:` can appear in history, but they do not create a release by themselves unless they include a breaking-change marker.
 

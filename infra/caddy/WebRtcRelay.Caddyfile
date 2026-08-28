@@ -1,0 +1,26 @@
+{
+	admin off
+	auto_https off
+}
+
+# MediaMTX uses host networking so it can expose ICE candidates on physical
+# and VPN interfaces. Bridge the signaling API back to the public proxy over a
+# Unix socket instead of depending on host-gateway firewall behavior.
+:80 {
+	bind unix//run/webrtc-relay/webrtc.sock|0666
+
+	# Expose one read-only discovery resource. The rest of MediaMTX's control
+	# API remains loopback-only and is not reachable through Robo-Boy.
+	handle /_discovery/paths {
+		@get method GET
+		handle @get {
+			rewrite * /v3/paths/list
+			reverse_proxy {$WEBRTC_DISCOVERY_BACKEND_URL:http://127.0.0.1:9997}
+		}
+		respond "Method not allowed" 405
+	}
+
+	handle {
+		reverse_proxy {$WEBRTC_BACKEND_URL:http://127.0.0.1:8889}
+	}
+}

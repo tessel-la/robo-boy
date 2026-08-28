@@ -24,10 +24,7 @@ const roslibGlobalThisPlugin = (): Plugin => ({
       return null;
     }
 
-    return code.replace(
-      'var ROSLIB = this.ROSLIB ||',
-      'var ROSLIB = globalThis.ROSLIB ||',
-    );
+    return code.replace('var ROSLIB = this.ROSLIB ||', 'var ROSLIB = globalThis.ROSLIB ||');
   },
 });
 
@@ -41,6 +38,21 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
+  // External panel releases are deployment inputs, not Robo-Boy source files.
+  // Explicit panel builds point this at the generated .panel-stage/public tree.
+  publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
+  resolve: {
+    // MainControlView is lazy-loaded after the connection screen. Keep hooks
+    // and the renderer on one React instance across linked panel SDKs and
+    // dependency-optimizer generations.
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    // semver is first reached through the lazy external-panel registry. Make
+    // it part of the initial dev optimization pass so login cannot trigger a
+    // dependency re-bundle while React is mounting MainControlView.
+    include: ['react', 'react-dom', 'react-dom/client', 'semver'],
+  },
   server: {
     host: '0.0.0.0', // Listen on all interfaces within the container
     port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
@@ -49,6 +61,16 @@ export default defineConfig(({ mode }) => ({
         target: process.env.OLLAMA_PROXY_TARGET ?? 'http://127.0.0.1:11434',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/ollama/, ''),
+      },
+      '/webrtc/_discovery/paths': {
+        target: process.env.WEBRTC_DISCOVERY_PROXY_TARGET ?? 'http://127.0.0.1:9997',
+        changeOrigin: true,
+        rewrite: () => '/v3/paths/list',
+      },
+      '/webrtc': {
+        target: process.env.WEBRTC_PROXY_TARGET ?? 'http://127.0.0.1:8889',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/webrtc/, ''),
       },
     },
     // https: false, // Ensure HTTPS is disabled (default is false anyway)
@@ -73,12 +95,18 @@ export default defineConfig(({ mode }) => ({
             manifest: false, // Disable inline manifest
             injectRegister: 'auto',
             includeAssets: ['favicon.ico'], // Include any additional assets
+            workbox: {
+              // Registry and manifest JSON must be available before any lazy
+              // panel bundle can be discovered while the PWA is offline.
+              globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+            },
             // The manifest is now defined in the manifest.webmanifest file
           }),
         ]),
     // mkcert() // Ensure mkcert is commented out/removed
   ],
   build: {
+    outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
     chunkSizeWarningLimit: 1600,
   },
 }));

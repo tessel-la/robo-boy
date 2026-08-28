@@ -49,6 +49,13 @@ export const CAMERA_MESSAGE_TYPES = [
 
 export const JOY_MESSAGE_TYPES = ['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'];
 
+export const TWIST_MESSAGE_TYPES = [
+  'geometry_msgs/Twist',
+  'geometry_msgs/msg/Twist',
+  'geometry_msgs/TwistStamped',
+  'geometry_msgs/msg/TwistStamped',
+];
+
 export const POSE_STAMPED_MESSAGE_TYPES = ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'];
 
 export const ODOMETRY_MESSAGE_TYPES = ['nav_msgs/Odometry', 'nav_msgs/msg/Odometry'];
@@ -146,6 +153,10 @@ export function isCameraMessageType(type: string): boolean {
 
 export function isJoyMessageType(type: string): boolean {
   return JOY_MESSAGE_TYPES.includes(type);
+}
+
+export function isTwistMessageType(type: string): boolean {
+  return TWIST_MESSAGE_TYPES.includes(type);
 }
 
 export function isPoseStampedMessageType(type: string): boolean {

@@ -30,16 +30,21 @@ vi.mock('roslib', () => ({
 }));
 
 vi.mock('./GamepadComponent', () => ({
-  default: ({ config, onJoyAxesChange }: any) => (
-    <div>
-      <button onClick={() => onJoyAxesChange(config, config.id === 'left' ? [0.5, -0.25] : [-0.75, 1])}>
-        Move {config.id}
-      </button>
-      <button onClick={() => onJoyAxesChange(config, [0, 0])}>
-        Stop {config.id}
-      </button>
-    </div>
-  ),
+  default: ({ config, onJoyAxesChange, onTwistAxesChange }: any) => {
+    const publish = config.action.messageType.includes('Twist')
+      ? onTwistAxesChange
+      : onJoyAxesChange;
+    return (
+      <div>
+        <button onClick={() => publish(config, config.id === 'left' ? [0.5, -0.25] : [-0.75, 1])}>
+          Move {config.id}
+        </button>
+        <button onClick={() => publish(config, [0, 0])}>
+          Stop {config.id}
+        </button>
+      </div>
+    );
+  },
 }));
 
 const layout: Layout = {
@@ -91,6 +96,65 @@ describe('CustomGamepadLayout Joy aggregation', () => {
 
     unmount();
     expect(topic.publish.mock.calls[topic.publish.mock.calls.length - 1][0].axes).toEqual([0, 0, 0, 0]);
+    expect(topic.unadvertise).toHaveBeenCalledOnce();
+  });
+});
+
+describe('CustomGamepadLayout Twist aggregation', () => {
+  beforeEach(() => {
+    roslibMock.topics = [];
+  });
+
+  it('combines translation and rotation and resets each stick independently', () => {
+    const twistLayout: Layout = {
+      ...layout,
+      id: 'cmd-vel',
+      name: 'Cmd Vel',
+      rosConfig: { defaultTopic: '/cmd_vel', defaultMessageType: 'geometry_msgs/msg/Twist' },
+      components: [
+        {
+          ...layout.components[0],
+          action: { topic: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' },
+          config: { axes: ['linear.y', 'linear.x'] },
+        },
+        {
+          ...layout.components[1],
+          action: { topic: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' },
+          config: { axes: ['angular.z'] },
+        },
+      ],
+    };
+
+    const { unmount } = render(<CustomGamepadLayout layout={twistLayout} ros={{} as any} />);
+    const topic = roslibMock.topics[0];
+
+    expect(roslibMock.topics).toHaveLength(1);
+    expect(topic.advertise).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move left' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop left' }));
+
+    expect(topic.publish.mock.calls.map(([message]) => message)).toEqual([
+      {
+        linear: { x: -0.25, y: 0.5, z: 0 },
+        angular: { x: 0, y: 0, z: 0 },
+      },
+      {
+        linear: { x: -0.25, y: 0.5, z: 0 },
+        angular: { x: 0, y: 0, z: -0.75 },
+      },
+      {
+        linear: { x: 0, y: 0, z: 0 },
+        angular: { x: 0, y: 0, z: -0.75 },
+      },
+    ]);
+
+    unmount();
+    expect(topic.publish.mock.calls[topic.publish.mock.calls.length - 1][0]).toEqual({
+      linear: { x: 0, y: 0, z: 0 },
+      angular: { x: 0, y: 0, z: 0 },
+    });
     expect(topic.unadvertise).toHaveBeenCalledOnce();
   });
 });

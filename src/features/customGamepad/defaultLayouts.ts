@@ -1,6 +1,6 @@
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
 
-// The built-in library intentionally contains one generic starting point.
+// Generic ROS Joy starting point.
 export const defaultDualJoystickHeartbeatLayout: CustomGamepadLayout = {
   id: 'default-dual-joystick-heartbeat',
   name: 'Dual Joystick + Heartbeat',

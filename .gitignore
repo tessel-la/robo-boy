@@ -162,6 +162,7 @@ node_modules
 dev-dist/
 playwright-report/
 test-results/
+.panel-stage/
 generate-icons.ps1
 generate-icons.sh
 CLAUDE.md
@@ -169,5 +170,10 @@ CLAUDE.md
 .codex/
 .claude/
 compose/
+!/infra/compose/
+!/infra/compose/panels.yml
+!/infra/compose/panels.remote.yml
+config/panel-sources.json
+config/panel-secrets.env
 .windsurf/
 skills-lock.json

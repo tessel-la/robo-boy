@@ -43,7 +43,7 @@ type TfEdgeEntry = {
 };
 type TfEdgeMap = Map<string, TfEdgeEntry>;
 
-const DEFAULT_AXES_SCALE = 0.5;
+const DEFAULT_AXES_SCALE = 0.1;
 const TF_EDGE_COLOR = 0x9aa7b3;
 
 function disposeMaterial(material: Material | Material[] | null | undefined) {

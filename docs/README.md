@@ -10,18 +10,20 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.
+- [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.
 
 ## Source Map
 
-| Area                             | Location                                          |
-| -------------------------------- | ------------------------------------------------- |
-| Application shell and shared UI  | `src/App.tsx`, `src/components/`                  |
-| ROS and visualization hooks      | `src/hooks/`                                      |
-| Feature modules                  | `src/features/`                                   |
-| ROS 3D implementation            | `src/utils/ros3d/`                                |
-| Shared utilities and persistence | `src/utils/`                                      |
-| Unit tests                       | Co-located `*.test.ts` and `*.test.tsx` files     |
-| End-to-end tests                 | `e2e/`                                            |
-| Build and test configuration     | `config/`                                         |
-| Runtime infrastructure           | `docker-compose.yml`, `infra/`                    |
-| Desktop shell and runtime URLs   | `src-tauri/`, `src/runtime/`                      |
+| Area                             | Location                                      |
+| -------------------------------- | --------------------------------------------- |
+| Application shell and shared UI  | `src/App.tsx`, `src/components/`              |
+| ROS and visualization hooks      | `src/hooks/`                                  |
+| Feature modules                  | `src/features/`                               |
+| ROS 3D implementation            | `src/utils/ros3d/`                            |
+| Shared utilities and persistence | `src/utils/`                                  |
+| Unit tests                       | Co-located `*.test.ts` and `*.test.tsx` files |
+| End-to-end tests                 | `e2e/`                                        |
+| Build and test configuration     | `config/`                                     |
+| Runtime infrastructure           | `docker-compose.yml`, `infra/`                |
+| Desktop shell and runtime URLs   | `src-tauri/`, `src/runtime/`                  |
+| Panel catalog, SDK, and loader   | `src/panels/`, `panel-sdk/`, `public/panels/` |

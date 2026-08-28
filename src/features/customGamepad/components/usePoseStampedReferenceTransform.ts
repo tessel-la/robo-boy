@@ -37,14 +37,14 @@ export function usePoseStampedReferenceTransform(
       ros,
       name: '/tf',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 10,
+      queue_length: 10,
       throttle_rate: 0,
     });
     const tfStaticTopic = new ROSLIB.Topic({
       ros,
       name: '/tf_static',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 10,
+      queue_length: 10,
       throttle_rate: 0,
     });
     const handleTf = (message: TfMessageLike) => updateTransform(message, false);

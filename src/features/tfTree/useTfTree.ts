@@ -50,7 +50,7 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
       ros,
       name: '/tf',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 1,
+      queue_length: 1,
       throttle_rate: 50,
       compression: 'cbor',
     });
@@ -58,7 +58,7 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
       ros,
       name: '/tf_static',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 1,
+      queue_length: 1,
       throttle_rate: 0,
       compression: 'cbor',
     });

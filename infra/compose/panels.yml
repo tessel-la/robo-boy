@@ -1,0 +1,22 @@
+services:
+  app:
+    command:
+      - npm
+      - run
+      - dev:panels
+      - --
+      - --inventory
+      - /panel-workspace/robo-boy-panel-inventory
+      - --source-root
+      - /panel-workspace
+    environment:
+      - ROBOBOY_PANEL_IDS=${ROBOBOY_PANEL_IDS:-}
+    volumes:
+      - ../robo-boy-panel-inventory:/panel-workspace/robo-boy-panel-inventory:ro
+      - ../robo-boy-hello-panel:/panel-workspace/robo-boy-hello-panel:ro
+      - ../robo-boy-timeseries-panel:/panel-workspace/robo-boy-timeseries-panel:ro
+      - ../robo-boy-webrtc-panel:/panel-workspace/robo-boy-webrtc-panel:ro
+      - roboboy-panel-stage:/app/.panel-stage
+
+volumes:
+  roboboy-panel-stage:

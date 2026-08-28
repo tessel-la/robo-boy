@@ -8,6 +8,8 @@ import { resolveRuntimeEndpoints } from '../runtime/runtimeConfig';
 interface UseRosReturn {
   ros: Ros | null;
   isConnected: boolean;
+  connectionStatus: 'disconnected' | 'connecting' | 'connected';
+  connectionGeneration: number;
   connect: (params: ConnectionParams) => void;
   disconnect: () => void;
   // Add publish/subscribe methods here later
@@ -19,6 +21,9 @@ interface UseRosReturn {
 export const useRos = (): UseRosReturn => {
   const [ros, setRos] = useState<Ros | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [connectionStatus, setConnectionStatus] = useState<UseRosReturn['connectionStatus']>('disconnected');
+  const [connectionGeneration, setConnectionGeneration] = useState(0);
+  const isConnectedRef = useRef(false);
   // Use a single ref to hold the current ROS instance. Simpler state management.
   const rosInstanceRef = useRef<Ros | null>(null);
   // Ref to track if a connection attempt is in progress to avoid overlaps
@@ -28,14 +33,16 @@ export const useRos = (): UseRosReturn => {
   const disconnect = useCallback(() => {
     if (rosInstanceRef.current) {
       console.log('[disconnect] Disconnecting ROS instance...');
-      rosInstanceRef.current.close();
+      const currentRos = rosInstanceRef.current;
       rosInstanceRef.current = null;
+      currentRos.close();
     }
     // Reset state regardless of whether an instance existed
     console.log('[disconnect] Resetting state.');
     setIsConnected(false);
+    isConnectedRef.current = false;
     setRos(null);
-    (window as any).ros = null;
+    setConnectionStatus('disconnected');
     isConnectingRef.current = false;
   }, []);
 
@@ -46,7 +53,7 @@ export const useRos = (): UseRosReturn => {
         console.log('[connect] Connection attempt already in progress.');
         return;
       }
-      if (isConnected) {
+      if (isConnectedRef.current) {
         console.log('[connect] Already connected (state check).');
         return;
       }
@@ -55,18 +62,21 @@ export const useRos = (): UseRosReturn => {
       console.log('[connect] Resetting connection state before new attempt.');
       setIsConnected(false);
       setRos(null);
+      setConnectionStatus('disconnected');
       isConnectingRef.current = false; // Ensure flag is false before potentially closing/connecting
 
       // 3. Close Previous Instance
       if (rosInstanceRef.current) {
         console.log('[connect] Closing previous ROS instance ref before new attempt.');
-        rosInstanceRef.current.close();
+        const previousRos = rosInstanceRef.current;
         rosInstanceRef.current = null;
+        previousRos.close();
       }
 
       // 4. Set Connecting Flag
       console.log('[connect] Setting connecting flag and attempting connection with params:', params);
       isConnectingRef.current = true;
+      setConnectionStatus('connecting');
 
       const { rosbridgeUrl: url, mode } = resolveRuntimeEndpoints(params);
       console.log(`[connect] Using ${mode} ROS bridge URL: ${url}`);
@@ -76,6 +86,7 @@ export const useRos = (): UseRosReturn => {
       // 5. Assign Ref *before* adding listeners
       console.log('[connect] Assigning new ROS instance to ref.');
       rosInstanceRef.current = newRos;
+      setConnectionGeneration(generation => generation + 1);
 
       // 6. Add Listeners
       newRos.on('connection', () => {
@@ -85,8 +96,8 @@ export const useRos = (): UseRosReturn => {
           console.log('[on.connection] Current instance matched. Setting connected state.');
           setRos(newRos);
           setIsConnected(true);
-          // Expose for console debugging
-          (window as any).ros = newRos;
+          isConnectedRef.current = true;
+          setConnectionStatus('connected');
           isConnectingRef.current = false;
         } else {
           console.warn('[on.connection] Ignoring event from stale ROS instance.');
@@ -128,5 +139,5 @@ export const useRos = (): UseRosReturn => {
     };
   }, [disconnect]);
 
-  return { ros, isConnected, connect, disconnect };
+  return { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect };
 };

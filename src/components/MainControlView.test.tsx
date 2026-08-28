@@ -15,6 +15,7 @@ const deleteCustomGamepad = vi.fn();
 const downloadGamepadLayout = vi.fn();
 const importGamepadFile = vi.fn();
 const saveGamepadFromEditor = vi.fn();
+const useInstalledPanels = vi.fn();
 
 vi.mock('../hooks/useRos', () => ({
   useRos: () => ({
@@ -34,6 +35,18 @@ vi.mock('../hooks/useResizablePanels', () => ({
     containerRef: { current: null },
     isDragging: false,
   }),
+}));
+
+vi.mock('../panels/useInstalledPanels', () => ({
+  useInstalledPanels: () => useInstalledPanels(),
+}));
+
+vi.mock('../panels/ExternalPanelHost', () => ({
+  default: ({ manifest, instanceId }: any) => (
+    <div data-testid="external-panel-host">
+      {manifest.name}:{instanceId}
+    </div>
+  ),
 }));
 
 vi.mock('animejs', () => ({
@@ -226,6 +239,26 @@ describe('MainControlView desktop workspace', () => {
       errors: [],
       idMap: { 'imported-drive': 'custom-imported-drive' },
     });
+    useInstalledPanels.mockReturnValue({
+      panels: [
+        {
+          schemaVersion: 1,
+          id: 'la.tessel.roboboy.hello',
+          name: 'Hello Panel',
+          description: 'A minimal external panel.',
+          version: '1.0.0',
+          entryPoint: 'https://roboboy.test/panels/hello-panel/1.0.0/index.js',
+          integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
+          registryUrl: 'https://roboboy.test/panels/installed.json',
+          compatibility: { panelApi: '^1.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
+          capabilities: ['storage'],
+          author: { name: 'Tessella' },
+          repository: 'https://github.com/tessel-la/roboboy-hello-panel',
+        },
+      ],
+      issues: [],
+      isLoading: false,
+    });
     getTopics.mockImplementation((success: any) => {
       success({
         topics: ['/camera/image_raw', '/status'],
@@ -258,6 +291,20 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it('adds an installed external panel through the common workspace catalog', async () => {
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Hello Panel' }));
+
+    expect(await screen.findByTestId('external-panel-host')).toHaveTextContent('Hello Panel:workspace-panel-');
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')).toEqual([
+        expect.objectContaining({ type: 'la.tessel.roboboy.hello', title: 'Hello Panel' }),
+      ]);
+    });
   });
 
   it('discovers ROS 2 image topics for camera panels', async () => {
@@ -448,7 +495,15 @@ describe('MainControlView desktop workspace', () => {
   });
 
   it('replaces a selected panel without changing its tile identity', async () => {
-    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        {
+          ...makePanel('panel-camera', 'camera', 'Camera'),
+          panelState: { schemaVersion: 1, panelId: 'camera', values: { privateValue: 'camera-only' } },
+        },
+      ])
+    );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
     renderMainControlView();
 
@@ -461,6 +516,7 @@ describe('MainControlView desktop workspace', () => {
       expect(stored).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: 'panel-camera', type: 'tfTree', title: 'TF tree' })])
       );
+      expect(stored[0].panelState).toBeUndefined();
     });
   });
 
