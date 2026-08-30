@@ -30,6 +30,17 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
         pendingResize.current = null;
       }
 
+      if (orbitControlsRef.current) {
+        try {
+          if (typeof orbitControlsRef.current.dispose === 'function') {
+            orbitControlsRef.current.dispose();
+          }
+        } catch (e) {
+          console.warn('[useRos3dViewer Cleanup] Error disposing OrbitControls:', e);
+        }
+        orbitControlsRef.current = null;
+      }
+
       // Helper function to recursively dispose of resources in the scene graph
       const disposeSceneResources = (obj: THREE.Object3D) => {
         if (!obj) return;
@@ -89,7 +100,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
       }
       ros3dViewer.current = null;
       gridClient.current = null;
-      orbitControlsRef.current = null;
       console.log('[useRos3dViewer Cleanup] Viewer refs nulled.');
     };
 

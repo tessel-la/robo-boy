@@ -81,12 +81,13 @@ export class OrbitControls {
 
         // Add event listeners
         this.element.addEventListener('mousedown', this.onMouseDown, false);
-        this.element.addEventListener('wheel', this.onMouseWheel, false);
+        this.element.addEventListener('wheel', this.onMouseWheel, { passive: false });
 
         // Add touch event listeners
-        this.element.addEventListener('touchstart', this.onTouchStart, false);
-        this.element.addEventListener('touchmove', this.onTouchMove, false);
-        this.element.addEventListener('touchend', this.onTouchEnd, false);
+        this.element.addEventListener('touchstart', this.onTouchStart, { passive: false });
+        this.element.addEventListener('touchmove', this.onTouchMove, { passive: false });
+        this.element.addEventListener('touchend', this.onTouchEnd, { passive: false });
+        this.element.addEventListener('touchcancel', this.onTouchEnd, { passive: false });
 
         // Initial update
         this.update();
@@ -108,8 +109,13 @@ export class OrbitControls {
 
         switch (event.button) {
             case this.mouseButtons.LEFT:
-                this.state = this.STATE.ROTATE;
-                this.rotateStart.set(event.clientX, event.clientY);
+                if (event.ctrlKey) {
+                    this.state = this.STATE.PAN;
+                    this.panStart.set(event.clientX, event.clientY);
+                } else {
+                    this.state = this.STATE.ROTATE;
+                    this.rotateStart.set(event.clientX, event.clientY);
+                }
                 break;
             case this.mouseButtons.MIDDLE:
                 // Middle click (wheel button) for pan/translate
@@ -374,10 +380,8 @@ export class OrbitControls {
                     const distanceChange = touchDistance - this.prevTouchDistance;
                     const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
 
-                    // Calculate midpoint movement
                     const midpointDeltaX = midX - this.prevTouchMidpoint.x;
                     const midpointDeltaY = midY - this.prevTouchMidpoint.y;
-                    const midpointMovement = Math.sqrt(midpointDeltaX * midpointDeltaX + midpointDeltaY * midpointDeltaY);
 
                     // Pinch zoom: significant change in finger distance (>4% of current spread)
                     // This triggers when fingers move toward/away from each other
@@ -389,15 +393,10 @@ export class OrbitControls {
                             this.dollyIn();
                         }
                     }
-                    // Pan: significant midpoint movement with relatively stable finger distance
-                    // Threshold of 8px to avoid accidental triggering, pinchRatio < 3% for stability
-                    else if (midpointMovement > 8 && pinchRatio < 0.03) {
-                        this.panEnd.set(midX, midY);
-                        this.panDelta.subVectors(this.panEnd, this.panStart);
-                        // Multiply pan delta for faster movement, invert X only (Y inverted for up/down)
-                        this.pan(-this.panDelta.x * 2.5, this.panDelta.y * 2.5);
-                        this.panStart.copy(this.panEnd);
-                    }
+                    // Pan follows the midpoint incrementally, including slow
+                    // movements that previously never crossed the per-frame
+                    // threshold. It can happen alongside a pinch gesture.
+                    this.pan(-midpointDeltaX * 2.5, midpointDeltaY * 2.5);
                 }
 
                 // Update tracking values
@@ -538,5 +537,6 @@ export class OrbitControls {
         this.element.removeEventListener('touchstart', this.onTouchStart, false);
         this.element.removeEventListener('touchmove', this.onTouchMove, false);
         this.element.removeEventListener('touchend', this.onTouchEnd, false);
+        this.element.removeEventListener('touchcancel', this.onTouchEnd, false);
     }
 }

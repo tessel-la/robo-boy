@@ -991,6 +991,7 @@ class OrbitControls {
   // Track touch points for multi-touch gestures
   private touches = { ONE: 0, TWO: 1 };
   private prevTouchDistance = -1;
+  private prevTouchMidpoint = new THREE.Vector2();
   
   private EPS = 0.000001;
   
@@ -1033,12 +1034,13 @@ class OrbitControls {
     
     // Add event listeners
     this.element.addEventListener('mousedown', this.onMouseDown, false);
-    this.element.addEventListener('wheel', this.onMouseWheel, false);
+    this.element.addEventListener('wheel', this.onMouseWheel, { passive: false });
     
     // Add touch event listeners
-    this.element.addEventListener('touchstart', this.onTouchStart, false);
-    this.element.addEventListener('touchmove', this.onTouchMove, false);
-    this.element.addEventListener('touchend', this.onTouchEnd, false);
+    this.element.addEventListener('touchstart', this.onTouchStart, { passive: false });
+    this.element.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    this.element.addEventListener('touchend', this.onTouchEnd, { passive: false });
+    this.element.addEventListener('touchcancel', this.onTouchEnd, { passive: false });
     
     // Initial update
     this.update();
@@ -1060,11 +1062,17 @@ class OrbitControls {
     
     switch (event.button) {
       case this.mouseButtons.LEFT:
-        this.state = this.STATE.ROTATE;
-        this.rotateStart.set(event.clientX, event.clientY);
+        if (event.ctrlKey) {
+          this.state = this.STATE.PAN;
+          this.panStart.set(event.clientX, event.clientY);
+        } else {
+          this.state = this.STATE.ROTATE;
+          this.rotateStart.set(event.clientX, event.clientY);
+        }
         break;
       case this.mouseButtons.MIDDLE:
-        this.state = this.STATE.DOLLY;
+        this.state = this.STATE.PAN;
+        this.panStart.set(event.clientX, event.clientY);
         break;
       case this.mouseButtons.RIGHT:
         this.state = this.STATE.PAN;
@@ -1194,6 +1202,7 @@ class OrbitControls {
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         this.panStart.set(x, y);
+        this.prevTouchMidpoint.set(x, y);
         this.state = this.STATE.PAN;
         break;
         
@@ -1272,13 +1281,17 @@ class OrbitControls {
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         const touchDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // If we have a previous distance, use it for pinch zoom
+        // Keep pinch zoom independent from two-finger translation. In
+        // particular, an unchanged finger distance must not zoom the camera.
         if (this.prevTouchDistance > 0 && touchDistance > 0) {
-          // If new distance is greater, zoom in, otherwise zoom out
-          if (touchDistance > this.prevTouchDistance) {
-            this.dollyIn();
-          } else {
-            this.dollyOut();
+          const distanceChange = touchDistance - this.prevTouchDistance;
+          const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
+          if (pinchRatio > 0.04) {
+            if (distanceChange > 0) {
+              this.dollyIn();
+            } else {
+              this.dollyOut();
+            }
           }
           this.prevTouchDistance = touchDistance;
         }
@@ -1287,11 +1300,12 @@ class OrbitControls {
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         this.panEnd.set(x, y);
-        this.panDelta.subVectors(this.panEnd, this.panStart);
+        this.panDelta.subVectors(this.panEnd, this.prevTouchMidpoint);
         
         this.pan(this.panDelta.x, this.panDelta.y);
         
         this.panStart.copy(this.panEnd);
+        this.prevTouchMidpoint.copy(this.panEnd);
         break;
     }
     
@@ -1393,6 +1407,7 @@ class OrbitControls {
     this.element.removeEventListener('touchstart', this.onTouchStart, false);
     this.element.removeEventListener('touchmove', this.onTouchMove, false);
     this.element.removeEventListener('touchend', this.onTouchEnd, false);
+    this.element.removeEventListener('touchcancel', this.onTouchEnd, false);
   }
 }
 
