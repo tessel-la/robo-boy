@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { FiSettings, FiX } from 'react-icons/fi';
 import { ConnectionParams } from '../App'; // Import types
 import { useRos } from '../hooks/useRos'; // Import the hook
 import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
@@ -46,6 +46,7 @@ import {
 import { validatePanelState } from '../panels/storage';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
+import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -312,32 +313,6 @@ const IconMCVUpload = () => (
     <path d="M5 3h14" />
   </svg>
 );
-const IconMCVChevronDown = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-const IconMCVCheck = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="m5 12 4 4L19 6" />
-  </svg>
-);
 // --- End Top Bar Icons ---
 
 // Use Icon components
@@ -361,8 +336,6 @@ const icons = {
   saveLayout: <IconMCVSaveLayout />,
   download: <IconMCVDownload />,
   upload: <IconMCVUpload />,
-  chevronDown: <IconMCVChevronDown />,
-  check: <IconMCVCheck />,
 };
 
 const getPanelCatalogIcon = (panel: PanelCatalogEntry) => {
@@ -399,7 +372,6 @@ type GamepadEditorSession = {
 
 type WorkspacePadMenuState = {
   panelId: string;
-  style: React.CSSProperties;
 };
 
 interface WorkspacePanel {
@@ -431,8 +403,6 @@ const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const WORKSPACE_TILE_DRAG_FORMAT = 'application/x-robo-boy-workspace-tile';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
 const WORKSPACE_PERSIST_DELAY_MS = 100;
-const WORKSPACE_PAD_MENU_SCROLL_THRESHOLD_PX = 8;
-const WORKSPACE_PAD_MENU_SYNTHETIC_CLICK_WINDOW_MS = 500;
 const RETIRED_BUILT_IN_PAD_IDS = new Set(['panda-cartesian-jog', 'default-panda-cartesian-jog']);
 
 type WorkspaceDraft = {
@@ -1110,15 +1080,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const templateImportInputRef = useRef<HTMLInputElement>(null);
   const workspacePadImportInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const workspacePadNoticeTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const workspacePadMenuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const workspacePadMenuRef = useRef<HTMLDivElement>(null);
-  const workspacePadMenuGestureRef = useRef<{
-    touchIdentifier: number;
-    startX: number;
-    startY: number;
-    moved: boolean;
-  } | null>(null);
-  const suppressWorkspacePadMenuClickUntilRef = useRef(0);
   const workspaceTemplateControlRef = useRef<HTMLDivElement>(null);
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const workspaceReplaceMenuRef = useRef<HTMLDivElement>(null);
@@ -1401,44 +1362,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       window.removeEventListener('scroll', closeReplacementMenu, true);
     };
   }, [workspaceReplacementPanelId]);
-
-  useEffect(() => {
-    if (!workspacePadMenu) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target;
-      const activeTrigger = workspacePadMenuTriggerRefs.current[workspacePadMenu.panelId];
-      const clickedMenu = target instanceof Node && Boolean(workspacePadMenuRef.current?.contains(target));
-      const clickedTrigger = target instanceof Node && Boolean(activeTrigger?.contains(target));
-
-      if (!clickedMenu && !clickedTrigger) {
-        setWorkspacePadMenu(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-    };
-  }, [workspacePadMenu]);
-
-  useEffect(() => {
-    if (!workspacePadMenu) return;
-
-    const closePadMenu = () => setWorkspacePadMenu(null);
-    const closePadMenuOnOutsideScroll = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Node && workspacePadMenuRef.current?.contains(target)) return;
-      closePadMenu();
-    };
-
-    window.addEventListener('resize', closePadMenu);
-    window.addEventListener('scroll', closePadMenuOnOutsideScroll, true);
-    return () => {
-      window.removeEventListener('resize', closePadMenu);
-      window.removeEventListener('scroll', closePadMenuOnOutsideScroll, true);
-    };
-  }, [workspacePadMenu]);
 
   // Fetch topics when connected
   useEffect(() => {
@@ -2158,98 +2081,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     });
   };
 
-  const handleOpenWorkspacePadMenu = (event: React.MouseEvent<HTMLButtonElement>, panelId: string) => {
-    event.stopPropagation();
-    if (workspacePadMenu?.panelId === panelId) {
-      setWorkspacePadMenu(null);
-      return;
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const margin = 8;
-    const gap = 6;
-    const menuWidth = Math.min(Math.max(rect.width, 220), viewportWidth - margin * 2);
-    const spaceBelow = viewportHeight - rect.bottom - margin - gap;
-    const spaceAbove = rect.top - margin - gap;
-    const openUpward = spaceBelow < 220 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, Math.min(openUpward ? spaceAbove : spaceBelow, 300));
-    const left = clamp(rect.left, margin, viewportWidth - menuWidth - margin);
-    const top = openUpward
-      ? Math.max(margin, rect.top - gap)
-      : Math.min(rect.bottom + gap, viewportHeight - maxHeight - margin);
-
-    setWorkspacePadMenu({
-      panelId,
-      style: {
-        position: 'fixed',
-        top: `${top}px`,
-        left: `${left}px`,
-        width: `${menuWidth}px`,
-        maxHeight: `${maxHeight}px`,
-        transform: openUpward ? 'translateY(-100%)' : 'none',
-        transformOrigin: openUpward ? 'bottom center' : 'top center',
-      },
-    });
-  };
-
-  const handleWorkspacePadMenuTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    suppressWorkspacePadMenuClickUntilRef.current = 0;
-    const touch = event.changedTouches[0];
-    if (!touch) return;
-
-    workspacePadMenuGestureRef.current = {
-      touchIdentifier: touch.identifier,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      moved: false,
-    };
-  };
-
-  const handleWorkspacePadMenuTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    const gesture = workspacePadMenuGestureRef.current;
-    if (!gesture || gesture.moved) return;
-
-    let touch: React.Touch | undefined;
-    for (let index = 0; index < event.changedTouches.length; index += 1) {
-      const candidate = event.changedTouches[index];
-      if (candidate.identifier === gesture.touchIdentifier) {
-        touch = candidate;
-        break;
-      }
-    }
-    if (!touch) return;
-
-    const deltaX = touch.clientX - gesture.startX;
-    const deltaY = touch.clientY - gesture.startY;
-    if (Math.hypot(deltaX, deltaY) >= WORKSPACE_PAD_MENU_SCROLL_THRESHOLD_PX) {
-      gesture.moved = true;
-    }
-  };
-
-  const handleWorkspacePadMenuTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    const gesture = workspacePadMenuGestureRef.current;
-    if (!gesture) return;
-
-    let endedTrackedTouch = false;
-    for (let index = 0; index < event.changedTouches.length; index += 1) {
-      if (event.changedTouches[index].identifier === gesture.touchIdentifier) {
-        endedTrackedTouch = true;
-        break;
-      }
-    }
-    if (!endedTrackedTouch) return;
-
-    suppressWorkspacePadMenuClickUntilRef.current = gesture.moved
-      ? Date.now() + WORKSPACE_PAD_MENU_SYNTHETIC_CLICK_WINDOW_MS
-      : 0;
-    workspacePadMenuGestureRef.current = null;
-  };
-
-  const handleWorkspacePadMenuTouchCancel = () => {
-    workspacePadMenuGestureRef.current = null;
-    suppressWorkspacePadMenuClickUntilRef.current = 0;
+  const handleOpenWorkspacePadMenu = (panelId: string) => {
+    setWorkspacePadMenu({ panelId });
   };
 
   const handleExportWorkspacePad = (panel: WorkspacePanel) => {
@@ -2861,77 +2694,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     </div>
   );
 
-  const renderWorkspacePadLayoutMenu = () => {
-    if (!workspacePadMenu) return null;
-
-    const activePanel = [...workspacePanels, ...mobileWorkspacePanels].find(
-      panel => panel.id === workspacePadMenu.panelId
-    );
-    const requestedLayoutId = activePanel?.layoutId;
-    const matchingGamepad = gamepadLibrary.find(
-      item => item.id === requestedLayoutId || item.layout.id === requestedLayoutId
-    );
-    const selectedGamepad =
-      matchingGamepad ||
-      (!requestedLayoutId || RETIRED_BUILT_IN_PAD_IDS.has(requestedLayoutId) ? gamepadLibrary[0] : undefined);
-    const selectedLayoutId = selectedGamepad?.id || requestedLayoutId || '';
-
-    return createPortal(
-      <div
-        className="workspace-pad-layout-menu"
-        ref={workspacePadMenuRef}
-        role="listbox"
-        aria-label="Pad layouts"
-        style={workspacePadMenu.style}
-        onTouchStartCapture={handleWorkspacePadMenuTouchStart}
-        onTouchMoveCapture={handleWorkspacePadMenuTouchMove}
-        onTouchEndCapture={handleWorkspacePadMenuTouchEnd}
-        onTouchCancelCapture={handleWorkspacePadMenuTouchCancel}
-        onKeyDown={event => {
-          if (event.key === 'Escape') setWorkspacePadMenu(null);
-        }}
-      >
-        {gamepadLibrary.map(item => {
-          const isSelected = item.id === selectedLayoutId || item.layout.id === selectedLayoutId;
-
-          return (
-            <button
-              type="button"
-              key={item.id}
-              className={`workspace-pad-layout-option ${isSelected ? 'is-selected' : ''}`}
-              role="option"
-              aria-selected={isSelected}
-              onClick={event => {
-                if (Date.now() < suppressWorkspacePadMenuClickUntilRef.current && event.detail !== 0) {
-                  suppressWorkspacePadMenuClickUntilRef.current = 0;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  return;
-                }
-
-                handleWorkspacePadLayoutChange(workspacePadMenu.panelId, item.id);
-                setWorkspacePadMenu(null);
-              }}
-            >
-              <span
-                className={`workspace-card-dot workspace-card-dot-${item.isDefault ? 'view' : 'pad'}`}
-                aria-hidden="true"
-              />
-              <span className="workspace-pad-layout-option-text">
-                <span className="workspace-pad-layout-option-name">{item.name}</span>
-                <span className="workspace-pad-layout-option-kind">{item.isDefault ? 'Template' : 'Custom'}</span>
-              </span>
-              <span className="workspace-pad-layout-option-check" aria-hidden="true">
-                {isSelected ? icons.check : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>,
-      document.body
-    );
-  };
-
   const renderWorkspacePadControls = (panel: WorkspacePanel) => {
     const matchingGamepad = gamepadLibrary.find(
       item => item.id === panel.layoutId || item.layout.id === panel.layoutId
@@ -2946,101 +2708,155 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     return (
       <div className="workspace-pad-component">
-        <div className="workspace-pad-selector">
-          <span className="workspace-pad-selector-label" id={`workspace-pad-label-${panel.id}`}>
-            Pad layout
-          </span>
-          {gamepadLibrary.length > 0 ? (
-            <button
-              type="button"
-              className={`workspace-pad-layout-trigger ${workspacePadMenu?.panelId === panel.id ? 'is-open' : ''}`}
-              ref={element => {
-                workspacePadMenuTriggerRefs.current[panel.id] = element;
-              }}
-              onClick={event => handleOpenWorkspacePadMenu(event, panel.id)}
-              aria-haspopup="listbox"
-              aria-expanded={workspacePadMenu?.panelId === panel.id}
-              aria-labelledby={`workspace-pad-label-${panel.id} workspace-pad-trigger-name-${panel.id}`}
-            >
-              <span className="workspace-pad-layout-trigger-name" id={`workspace-pad-trigger-name-${panel.id}`}>
-                {selectedGamepad?.name || 'Select pad'}
-              </span>
-              <span className="workspace-pad-layout-trigger-icon" aria-hidden="true">
-                {icons.chevronDown}
-              </span>
-            </button>
-          ) : (
-            <span className="workspace-pad-selector-empty">No pads</span>
-          )}
-          <div className="workspace-pad-selector-actions">
-            <button
-              type="button"
-              className="workspace-pad-action-button workspace-pad-import-button"
-              onClick={() => workspacePadImportInputRefs.current[panel.id]?.click()}
-              title="Import pad"
-              aria-label={`Import pad for ${panel.title}`}
-            >
-              {icons.upload}
-            </button>
-            <button
-              type="button"
-              className="workspace-pad-action-button workspace-pad-export-button"
-              onClick={() => handleExportWorkspacePad(panel)}
-              disabled={!canExportSelectedPad}
-              title={canExportSelectedPad ? 'Export selected pad' : 'Only custom pads can be exported'}
-              aria-label={selectedGamepad ? `Export ${selectedGamepad.name}` : 'Export selected pad'}
-            >
-              {icons.download}
-            </button>
-            <button
-              type="button"
-              className="workspace-pad-action-button workspace-pad-edit-button"
-              onClick={() => handleOpenWorkspacePadEditor(panel.id, selectedLayoutId)}
-              disabled={!selectedGamepad}
-              title={selectedGamepad?.isDefault ? 'Customize selected pad' : 'Edit selected pad'}
-              aria-label={
-                selectedGamepad
-                  ? `${selectedGamepad.isDefault ? 'Customize' : 'Edit'} ${selectedGamepad.name}`
-                  : 'Edit selected pad'
-              }
-            >
-              {icons.edit}
-            </button>
-            <button
-              type="button"
-              className="workspace-pad-action-button workspace-pad-delete-button"
-              onClick={() => handleDeleteWorkspacePad(panel)}
-              disabled={!canDeleteSelectedPad}
-              title={canDeleteSelectedPad ? 'Delete selected pad' : 'Only custom pads can be deleted'}
-              aria-label={selectedGamepad ? `Delete ${selectedGamepad.name}` : 'Delete selected pad'}
-            >
-              {icons.trash}
-            </button>
-            <button
-              type="button"
-              className="workspace-pad-action-button workspace-pad-create-button"
-              onClick={() => handleOpenWorkspacePadEditor(panel.id)}
-              title="Create new pad"
-              aria-label="Create new pad"
-            >
-              {icons.add}
-            </button>
-          </div>
-          <input
-            ref={element => {
-              workspacePadImportInputRefs.current[panel.id] = element;
-            }}
-            type="file"
-            accept=".json,application/json"
-            hidden
-            onChange={event => handleImportWorkspacePad(panel.id, event)}
-          />
-          {padTransferNotice && (
-            <div className={`workspace-pad-transfer-notice ${padTransferNotice.type}`} role="status">
-              {padTransferNotice.message}
+        <TreePanelMenu
+          open={workspacePadMenu?.panelId === panel.id}
+          onOpen={() => handleOpenWorkspacePadMenu(panel.id)}
+          onClose={() => setWorkspacePadMenu(null)}
+          showTrigger={false}
+          triggerContent={null}
+          buttonLabel="Pad settings"
+          buttonTitle="Pad settings"
+          panelLabel="Pad settings"
+          classNames={{ panel: 'workspace-pad-menu-panel' }}
+          menuContent={
+            <div className="workspace-pad-settings">
+              <header className="workspace-pad-settings-header">
+                <div>
+                  <span className="workspace-pad-settings-kicker">Panel controls</span>
+                  <h3>Pad controls</h3>
+                </div>
+                <button
+                  type="button"
+                  className="workspace-pad-settings-close"
+                  onClick={() => setWorkspacePadMenu(null)}
+                  aria-label="Close pad settings"
+                >
+                  <FiX aria-hidden="true" />
+                </button>
+              </header>
+
+              <div className="workspace-pad-settings-content">
+                <section className="workspace-pad-settings-section">
+                  <label className="workspace-pad-settings-label" htmlFor={`workspace-pad-layout-${panel.id}`}>
+                    Active layout
+                  </label>
+                  {gamepadLibrary.length > 0 ? (
+                    <div className="workspace-pad-settings-select-wrap">
+                      <select
+                        id={`workspace-pad-layout-${panel.id}`}
+                        aria-label="Pad layout"
+                        value={selectedLayoutId}
+                        onChange={event => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
+                      >
+                        {gamepadLibrary.map(item => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} · {item.isDefault ? 'Template' : 'Custom'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="workspace-pad-settings-empty">No pad layouts are available.</p>
+                  )}
+                </section>
+
+                <section className="workspace-pad-settings-section workspace-pad-current-card">
+                  <div className="workspace-pad-current-heading">
+                    <div>
+                      <span className="workspace-pad-settings-label">Selected pad</span>
+                      <strong>{selectedGamepad?.name || 'No pad selected'}</strong>
+                    </div>
+                    {selectedGamepad && (
+                      <span className={`workspace-pad-kind-badge ${selectedGamepad.isDefault ? 'template' : 'custom'}`}>
+                        {selectedGamepad.isDefault ? 'Template' : 'Custom'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="workspace-pad-selected-actions">
+                    <button
+                      type="button"
+                      className="workspace-pad-settings-action primary"
+                      onClick={() => {
+                        setWorkspacePadMenu(null);
+                        handleOpenWorkspacePadEditor(panel.id, selectedLayoutId);
+                      }}
+                      disabled={!selectedGamepad}
+                      aria-label={
+                        selectedGamepad
+                          ? `${selectedGamepad.isDefault ? 'Customize' : 'Edit'} ${selectedGamepad.name}`
+                          : 'Edit selected pad'
+                      }
+                    >
+                      {icons.edit}
+                      <span>{selectedGamepad?.isDefault ? 'Customize' : 'Edit'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="workspace-pad-settings-action"
+                      onClick={() => handleExportWorkspacePad(panel)}
+                      disabled={!canExportSelectedPad}
+                      title={canExportSelectedPad ? 'Export selected pad' : 'Only custom pads can be exported'}
+                      aria-label={selectedGamepad ? `Export ${selectedGamepad.name}` : 'Export selected pad'}
+                    >
+                      {icons.download}
+                      <span>Export</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="workspace-pad-settings-action danger"
+                      onClick={() => handleDeleteWorkspacePad(panel)}
+                      disabled={!canDeleteSelectedPad}
+                      title={canDeleteSelectedPad ? 'Delete selected pad' : 'Only custom pads can be deleted'}
+                      aria-label={selectedGamepad ? `Delete ${selectedGamepad.name}` : 'Delete selected pad'}
+                    >
+                      {icons.trash}
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </section>
+
+                <section className="workspace-pad-library-actions" aria-label="Pad library actions">
+                  <button
+                    type="button"
+                    className="workspace-pad-library-button"
+                    onClick={() => {
+                      setWorkspacePadMenu(null);
+                      handleOpenWorkspacePadEditor(panel.id);
+                    }}
+                  >
+                    {icons.add}
+                    <span>Create pad</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="workspace-pad-library-button"
+                    onClick={() => workspacePadImportInputRefs.current[panel.id]?.click()}
+                    aria-label={`Import pad for ${panel.title}`}
+                  >
+                    {icons.upload}
+                    <span>Import pad</span>
+                  </button>
+                </section>
+
+                <input
+                  ref={element => {
+                    workspacePadImportInputRefs.current[panel.id] = element;
+                  }}
+                  type="file"
+                  accept=".json,application/json"
+                  hidden
+                  onChange={event => handleImportWorkspacePad(panel.id, event)}
+                />
+                {padTransferNotice && (
+                  <div className={`workspace-pad-transfer-notice ${padTransferNotice.type}`} role="status">
+                    {padTransferNotice.message}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+          }
+        />
         <div className="workspace-pad-body">
           {isConnected && ros && selectedLayoutId ? (
             <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} />
@@ -3170,7 +2986,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           if (event.target === event.currentTarget && index === 0) setIsMobileSwapAnimating(false);
         }}
       >
-        {isMobileSplitView && (
+        {(isMobileSplitView || panel.type === 'pad') && (
           <header className="workspace-card-header mobile-workspace-window-header">
             <button
               type="button"
@@ -3186,18 +3002,31 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               <span>{panel.title}</span>
               {activeMobileWindowIndex === index && <span className="mobile-workspace-active-label">Active</span>}
             </button>
-            {index === 0 && (
-              <button
-                type="button"
-                className="mobile-workspace-swap-button"
-                onClick={handleSwapMobileWorkspacePanels}
-                disabled={isMobileSwapAnimating}
-                title="Swap mobile windows"
-                aria-label="Swap mobile windows"
-              >
-                {icons.swap}
-              </button>
-            )}
+            <div className="workspace-card-actions">
+              {panel.type === 'pad' && (
+                <button
+                  type="button"
+                  className={workspacePadMenu?.panelId === panel.id ? 'is-open' : ''}
+                  onClick={() => handleOpenWorkspacePadMenu(panel.id)}
+                  title="Pad settings"
+                  aria-label="Pad settings"
+                >
+                  <FiSettings aria-hidden="true" />
+                </button>
+              )}
+              {index === 0 && isMobileSplitView && (
+                <button
+                  type="button"
+                  className="mobile-workspace-swap-button"
+                  onClick={handleSwapMobileWorkspacePanels}
+                  disabled={isMobileSwapAnimating}
+                  title="Swap mobile windows"
+                  aria-label="Swap mobile windows"
+                >
+                  {icons.swap}
+                </button>
+              )}
+            </div>
           </header>
         )}
         <div className="workspace-card-content">
@@ -3870,6 +3699,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                                   <span>{tile.panel.title}</span>
                                 </div>
                                 <div className="workspace-card-actions">
+                                  {tile.panel.type === 'pad' && (
+                                    <button
+                                      type="button"
+                                      className={workspacePadMenu?.panelId === tile.panel.id ? 'is-open' : ''}
+                                      onClick={event => {
+                                        event.stopPropagation();
+                                        handleOpenWorkspacePadMenu(tile.panel.id);
+                                      }}
+                                      title="Pad settings"
+                                      aria-label="Pad settings"
+                                    >
+                                      <FiSettings aria-hidden="true" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     className={`workspace-replace-button ${workspaceReplacementPanelId === tile.panel.id && isWorkspaceAddMenuOpen ? 'is-open' : ''}`}
@@ -3971,7 +3814,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           renderMobileWorkspace()
         )}
         {renderWorkspaceAddMenu('replacement')}
-        {renderWorkspacePadLayoutMenu()}
       </div>
 
       {/* Render AddPanelMenu using Portal outside main flow */}

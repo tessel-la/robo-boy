@@ -729,6 +729,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
     fireEvent.click(screen.getByLabelText('Edit Drive Pad'));
 
     expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Drive Pad');
@@ -743,6 +744,7 @@ describe('MainControlView desktop workspace', () => {
     const { container } = renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
     fireEvent.click(screen.getByLabelText('Export Drive Pad'));
     expect(downloadGamepadLayout).toHaveBeenCalledWith('custom-drive');
 
@@ -760,7 +762,7 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
-  it('selects workspace pads from the custom dropdown menu', async () => {
+  it('selects workspace pads from the shared settings menu', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
       { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
@@ -771,13 +773,15 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
-    fireEvent.click(screen.getByRole('button', { name: 'Pad layout Drive Pad' }));
-    fireEvent.click(screen.getByRole('option', { name: /Arm Pad/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pad layout' }), {
+      target: { value: 'custom-arm' },
+    });
 
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
   });
 
-  it('scrolls the workspace pad menu on touch without selecting a pad', async () => {
+  it('keeps pad library actions together in the shared settings menu', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
       { id: 'custom-arm', name: 'Arm Pad', layout: { id: 'custom-arm' }, isDefault: false },
@@ -788,30 +792,20 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
-    fireEvent.click(screen.getByRole('button', { name: 'Pad layout Drive Pad' }));
+    const settingsButton = screen.getByRole('button', { name: 'Pad settings' });
+    expect(settingsButton.closest('.workspace-card-header')).not.toBeNull();
+    expect(settingsButton.closest('.workspace-pad-component')).toBeNull();
+    fireEvent.click(settingsButton);
 
-    const menu = screen.getByRole('listbox', { name: 'Pad layouts' });
-    const armPad = screen.getByRole('option', { name: /Arm Pad/ });
-    fireEvent.touchStart(armPad, {
-      changedTouches: [{ identifier: 1, clientX: 20, clientY: 120 }],
-      touches: [{ identifier: 1, clientX: 20, clientY: 120 }],
-    });
-    fireEvent.touchMove(armPad, {
-      changedTouches: [{ identifier: 1, clientX: 20, clientY: 80 }],
-      touches: [{ identifier: 1, clientX: 20, clientY: 80 }],
-    });
-    fireEvent.scroll(menu);
-    fireEvent.touchEnd(armPad, {
-      changedTouches: [{ identifier: 1, clientX: 20, clientY: 80 }],
-      touches: [],
-    });
-    fireEvent.click(armPad, { detail: 1 });
+    expect(screen.getByRole('dialog', { name: 'Pad settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create pad' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import pad for Pad controls' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Edit Drive Pad')).toBeInTheDocument();
+    expect(screen.getByLabelText('Export Drive Pad')).toBeInTheDocument();
+    expect(screen.getByLabelText('Delete Drive Pad')).toBeInTheDocument();
 
-    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-drive');
-    expect(screen.getByRole('listbox', { name: 'Pad layouts' })).toBeInTheDocument();
-
-    fireEvent.click(armPad);
-    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-arm');
+    fireEvent.click(screen.getByRole('button', { name: 'Close pad settings' }));
+    expect(screen.queryByRole('dialog', { name: 'Pad settings' })).not.toBeInTheDocument();
   });
 
   it('falls back to an available generic pad when a saved preset no longer exists', async () => {
@@ -828,8 +822,9 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
-    expect(screen.getByRole('button', { name: 'Pad layout Generic Joy Pad' })).toBeInTheDocument();
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('generic-joy');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
+    expect(screen.getByRole('combobox', { name: 'Pad layout' })).toHaveValue('generic-joy');
   });
 
   it('deletes the pad selected in a workspace control and falls back to another pad', async () => {
@@ -843,6 +838,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
     fireEvent.click(screen.getByLabelText('Delete Drive Pad'));
 
     expect(deleteCustomGamepad).toHaveBeenCalledWith('custom-drive');
@@ -869,6 +865,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
     fireEvent.click(screen.getByLabelText('Customize Template Pad'));
 
     expect(cloneGamepadTemplate).toHaveBeenCalledWith('template-drive');
