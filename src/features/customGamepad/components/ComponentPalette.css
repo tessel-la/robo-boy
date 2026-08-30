@@ -649,7 +649,7 @@
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .component-card:active {
@@ -673,11 +673,19 @@
   align-items: center;
   justify-content: center;
   background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
+  border: 0;
   border-radius: 4px;
   color: var(--primary-color, #007bff);
   opacity: 0.6;
   transition: all 0.2s ease;
-  pointer-events: none;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.drag-indicator:active {
+  cursor: grabbing;
 }
 
 .component-card:hover .drag-indicator {
@@ -691,4 +699,4 @@
   opacity: 1;
   background-color: var(--primary-color, #007bff);
   color: white;
-} 
+}

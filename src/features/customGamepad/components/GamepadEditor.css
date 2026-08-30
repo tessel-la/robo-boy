@@ -1,638 +1,436 @@
-/* GamepadEditor.css */
-
 .gamepad-editor-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  inset: 0;
   z-index: 10000;
-  animation: fadeInOverlay 0.12s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes fadeInOverlay {
-  from {
-    background-color: rgba(0, 0, 0, 0);
-  }
-  to {
-    background-color: rgba(0, 0, 0, 0.5);
-  }
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.56);
+  animation: gamepad-editor-overlay-in 140ms ease-out;
 }
 
 .gamepad-editor-modal {
-  background-color: var(--card-bg, #ffffff);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  width: 95vw;
-  height: auto;
-  min-height: 60vh;
-  max-height: 95vh;
-  max-width: 1400px;
+  width: min(1400px, 100%);
+  height: min(900px, 100%);
+  min-width: 0;
+  min-height: 560px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideInModal 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-origin: center;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #333333);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: gamepad-editor-modal-in 180ms cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
-@keyframes slideInModal {
-  from {
-    opacity: 0;
-    transform: scale(0.9) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+@keyframes gamepad-editor-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gamepad-editor-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .editor-header {
+  min-height: 64px;
+  flex: 0 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  background-color: var(--background-secondary, #f8f9fa);
-  flex-shrink: 0;
-}
-
-.editor-header h2 {
-  margin: 0;
-  color: var(--text-color, #333);
-  font-size: 1.5rem;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: var(--text-color-secondary, #666);
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.close-button:hover {
-  background-color: var(--background-hover, #e9ecef);
-  color: var(--text-color, #333);
-  transform: scale(1.1);
-}
-
-.editor-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* Allow content to shrink if needed */
-}
-
-/* Design Tab */
-.design-tab {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  min-height: 0; /* Allow flex shrinking */
-}
-
-/* Editor Sidebar - Contains ComponentPalette and GridSettingsMenu side by side */
-.editor-sidebar {
-  width: 100%;
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  background-color: var(--background-secondary, #f8f9fa);
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  box-sizing: border-box;
-  position: relative;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0; /* Don't shrink the sidebar */
-  max-height: 35vh; /* Limit sidebar to 35% of viewport height */
-}
-
-/* Buttons row - always visible at the top */
-.sidebar-buttons-row {
-  display: flex;
-  flex-direction: row;
+  justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
-  width: 100%;
-  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
+  padding: 10px 14px 10px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background: color-mix(in srgb, var(--background-secondary, #f8f9fa) 84%, transparent);
 }
 
-/* Expanded content area - takes full width when expanded */
-.sidebar-expanded-content {
-  width: 100%;
-  overflow-y: auto;
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-10px);
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  flex: 1;
-  min-height: 0;
-  
-  /* Custom Scrollbar Styling */
-  /* Firefox */
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color, #32CD32) var(--background-secondary, #f8f9fa);
-}
+.editor-title { min-width: 0; }
 
-/* Webkit (Chrome, Safari, Edge, etc.) */
-.sidebar-expanded-content::-webkit-scrollbar {
-  width: 8px; /* Width of the vertical scrollbar */
-}
-
-.sidebar-expanded-content::-webkit-scrollbar-track {
-  background: var(--background-secondary, #f8f9fa); /* Track color */
-  border-radius: 4px;
-}
-
-.sidebar-expanded-content::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color, #32CD32); /* Thumb color */
-  border-radius: 4px;
-  border: 2px solid var(--background-secondary, #f8f9fa); /* Border around thumb */
-}
-
-.sidebar-expanded-content::-webkit-scrollbar-thumb:hover {
-  background-color: var(--primary-hover-color, #28a745); /* Darker green on hover */
-}
-
-/* When ComponentPalette is expanded */
-.editor-sidebar.component-palette-expanded {
-  max-height: 35vh; /* Constrain to 35% of viewport height */
-}
-
-.editor-sidebar.component-palette-expanded .sidebar-expanded-content {
+.editor-kicker {
   display: block;
-  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
-  opacity: 1;
-  transform: translateY(0);
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
-.editor-sidebar.component-palette-expanded .sidebar-expanded-content .component-palette {
-  width: 100%;
-  display: block;
-  animation: expandContent 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+.editor-title h2,
+.editor-tools-header h3 {
+  margin: 3px 0 0;
+  color: var(--text-color, #333333);
+  line-height: 1.2;
 }
 
-.editor-sidebar.component-palette-expanded .sidebar-expanded-content .grid-settings-menu {
-  display: none;
+.editor-title h2 {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* When GridSettingsMenu is expanded */
-.editor-sidebar.grid-settings-expanded {
-  max-height: 35vh; /* Constrain to 35% of viewport height */
-}
-
-.editor-sidebar.grid-settings-expanded .sidebar-expanded-content {
-  display: block;
-  max-height: calc(35vh - 120px); /* Account for buttons row and padding */
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.editor-sidebar.grid-settings-expanded .sidebar-expanded-content .grid-settings-menu {
-  width: 100%;
-  display: block;
-  animation: expandContent 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.editor-sidebar.grid-settings-expanded .sidebar-expanded-content .component-palette {
-  display: none;
-}
-
-@keyframes expandContent {
-  from {
-    opacity: 0;
-    transform: scale(0.98) translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* Update ComponentPalette to work in new layout */
-.editor-sidebar .component-palette {
-  flex: 1;
+.editor-header-actions {
   min-width: 0;
-  margin-bottom: 0;
-  box-sizing: border-box;
-  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Update GridSettingsMenu to work in new layout */
-.editor-sidebar .grid-settings-menu {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-  box-sizing: border-box;
-  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* When neither is expanded, show buttons side by side */
-.editor-sidebar:not(.component-palette-expanded):not(.grid-settings-expanded) .sidebar-buttons-row {
-  justify-content: space-around;
-}
-
-.editor-sidebar:not(.component-palette-expanded):not(.grid-settings-expanded) .sidebar-expanded-content {
-  display: none;
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* Component Grid - Similar to 3D Panel */
-.component-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.component-grid-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.editor-header-action,
+.editor-close-button,
+.editor-tools-header button {
+  min-height: 36px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--background-secondary, #f8f9fa);
+  gap: 7px;
+  box-sizing: border-box;
+  padding: 0 11px;
   border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 6px;
-  padding: 12px 6px;
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color-secondary, #666666);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  text-align: center;
-  min-height: 80px;
-  position: relative;
+  font-size: 12px;
+  font-weight: 700;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
-.component-grid-item:hover {
-  border-color: var(--primary-color, #007bff);
-  background-color: var(--primary-color-light, #e3f2fd);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.editor-header-action:hover,
+.editor-header-action.is-active {
+  border-color: color-mix(in srgb, var(--primary-color, #32cd32) 52%, var(--border-color, #e0e0e0));
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
 }
 
-.component-grid-item.selected {
-  border-color: var(--primary-color, #007bff);
-  background-color: var(--primary-color-light, #e3f2fd);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+.editor-close-button,
+.editor-tools-header button {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
-.component-grid-item .component-icon {
-  font-size: 24px;
-  margin-bottom: 6px;
-  color: var(--primary-color, #007bff);
+.editor-close-button:hover,
+.editor-tools-header button:hover {
+  background: var(--background-secondary, #f8f9fa);
+  color: var(--text-color, #333333);
 }
 
-.component-grid-item .component-name {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-color, #333);
-  margin-bottom: 3px;
+.editor-header-action:focus-visible,
+.editor-close-button:focus-visible,
+.editor-tools-header button:focus-visible,
+.pad-name-input:focus-visible,
+.cancel-button:focus-visible,
+.save-button:focus-visible {
+  outline: none;
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
 }
 
-.component-grid-item .component-description {
-  font-size: 0.7rem;
-  color: var(--text-color-secondary, #666);
-  line-height: 1.1;
+.editor-header-actions svg,
+.editor-tools-header svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
-.component-hint {
-  background-color: var(--primary-color-light, #e3f2fd);
-  border: 1px solid var(--primary-color, #007bff);
-  border-radius: 6px;
-  padding: 12px;
-  margin-top: 8px;
+.editor-content,
+.editor-workspace {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
 }
 
-.component-hint p {
+.editor-tools-panel {
+  width: min(360px, 40%);
+  min-width: 280px;
+  min-height: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-color, #e0e0e0);
+  background: color-mix(in srgb, var(--background-secondary, #f8f9fa) 76%, transparent);
+  animation: editor-tools-in 160ms ease-out;
+}
+
+@keyframes editor-tools-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.editor-tools-header {
+  min-height: 58px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px 9px 14px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.editor-tools-header h3 { font-size: 15px; }
+
+.editor-tools-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color, #dddddd) transparent;
+}
+
+.editor-tools-scroll > .component-palette,
+.editor-tools-scroll > .grid-settings-menu {
+  min-height: 100%;
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--primary-color, #007bff);
-  text-align: center;
-  font-weight: 500;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.editor-tools-scroll .palette-content,
+.editor-tools-scroll .settings-content { padding: 10px; }
+
+.editor-tools-scroll .component-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .design-area {
-  flex: 1;
-  padding: 16px;
-  overflow: hidden;
-  background-color: var(--card-bg, #ffffff);
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
   display: flex;
-  justify-content: center;
   align-items: center;
-  min-width: 300px;
-  min-height: 0; /* Allow it to shrink */
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px;
+  background: var(--card-bg, #ffffff);
+  transition: background 150ms ease;
 }
 
-/* Drag active state */
 .design-area.drag-active {
-  background-color: var(--card-bg, #ffffff);
-  border: 2px dashed var(--border-color, #ddd);
-  border-radius: 8px;
   margin: 8px;
-  padding: 8px;
+  padding: 4px;
+  border: 2px dashed var(--primary-color, #32cd32);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 5%, var(--card-bg, #ffffff));
 }
 
-/* Ensure the direct child of design-area (the layout renderer) can grow */
 .design-area > * {
-  flex: 1;
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  flex: 1 1 auto;
 }
 
-/* Footer */
 .editor-footer {
+  min-height: 66px;
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 16px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
   border-top: 1px solid var(--border-color, #e0e0e0);
-  background-color: var(--background-secondary, #f8f9fa);
-  flex-shrink: 0;
+  background: color-mix(in srgb, var(--background-secondary, #f8f9fa) 84%, transparent);
 }
 
 .pad-name-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  max-width: 300px;
-  margin: 0 auto;
+  min-width: 180px;
+  max-width: 420px;
+  flex: 1 1 420px;
+  display: grid;
+  gap: 5px;
 }
 
 .pad-name-section label {
-  font-size: 0.9em;
-  font-weight: 500;
-  color: var(--text-color, #333);
-  text-align: center;
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .pad-name-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 4px;
-  font-size: 0.9em;
-  background-color: var(--background-color, #fff);
-  color: var(--text-color, #333);
-  transition: border-color 0.2s ease;
-  text-align: center;
-}
-
-.pad-name-input:focus {
-  outline: none;
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid var(--border-color, #dddddd);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #333333);
+  font-size: 13px;
 }
 
 .footer-buttons {
+  flex: 0 0 auto;
   display: flex;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .cancel-button,
 .save-button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  font-weight: 500;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color, #dddddd);
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .cancel-button {
-  background-color: var(--background-secondary, #6c757d);
-  color: var(--text-color, #333);
-  border: 1px solid var(--border-color, #adb5bd);
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color-secondary, #666666);
 }
 
-.cancel-button:hover {
-  background-color: var(--text-color-secondary, #5a6268);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
+.cancel-button:hover { color: var(--text-color, #333333); }
 
 .save-button {
-  background-color: var(--primary-color, #007bff);
-  color: white;
+  border-color: var(--primary-color, #32cd32);
+  background: var(--primary-color, #32cd32);
+  color: #ffffff;
 }
 
-.save-button:hover {
-  background-color: var(--primary-color-dark, #0056b3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
-}
+.save-button:hover { filter: brightness(0.94); }
 
 .save-button:disabled {
-  background-color: var(--border-color, #dee2e6);
-  color: var(--text-color-secondary, #666);
+  opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* Mobile responsive design updates */
-@media (max-width: 768px) {
+@media (max-width: 700px) {
+  .gamepad-editor-overlay { padding: 0; }
+
   .gamepad-editor-modal {
-    min-height: auto; /* Remove fixed min-height for mobile */
-    max-height: 90vh; /* Keep reasonable max height */
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
   }
 
-  .design-tab {
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+  .editor-header {
+    min-height: 56px;
+    gap: 8px;
+    padding: max(8px, env(safe-area-inset-top)) 8px 8px 12px;
   }
-  
-  .editor-sidebar {
+
+  .editor-title h2 { font-size: 15px; }
+  .editor-header-actions { gap: 4px; }
+
+  .editor-header-action,
+  .editor-close-button {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+  }
+
+  .editor-header-action span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .editor-workspace { flex-direction: column; }
+
+  .editor-tools-panel {
     width: 100%;
-    max-height: none;
-    border-right: none;
+    min-width: 0;
+    max-height: 42%;
+    flex: 0 1 330px;
+    border-right: 0;
     border-bottom: 1px solid var(--border-color, #e0e0e0);
-    padding: 12px;
-    flex-direction: column;
-    box-sizing: border-box;
-    overflow: visible;
+    animation-name: editor-tools-mobile-in;
   }
 
-  .sidebar-buttons-row {
-    flex-direction: row;
-    gap: 12px;
-    margin-bottom: 12px;
-    justify-content: space-around;
+  @keyframes editor-tools-mobile-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
-  .sidebar-expanded-content {
-    max-height: 300px;
-    overflow-y: auto;
+  .editor-tools-header {
+    min-height: 52px;
+    padding: 7px 8px 7px 12px;
   }
 
-  .editor-sidebar .component-palette {
-    flex: 1;
-    min-width: 0;
-    max-width: none;
-    box-sizing: border-box;
+  .editor-tools-scroll { padding: 8px; }
+
+  .editor-tools-scroll .component-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .editor-sidebar .grid-settings-menu {
-    flex: 1;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-  
-  .design-area {
-    flex: 1;
-    padding: 8px;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-width: unset;
-    min-height: auto; /* Remove fixed min-height */
-    max-height: 40vh; /* Reduced from 50vh to 40vh */
-  }
-  
+  .design-area { padding: 6px; }
+
   .editor-footer {
-    padding: 12px 16px;
+    min-height: 0;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
 
-  .pad-name-section {
-    gap: 4px;
-    max-width: 280px;
-  }
+  .pad-name-section { min-width: 0; }
 
   .pad-name-section label {
-    font-size: 0.85em;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
-  .pad-name-input {
-    padding: 6px 10px;
-    font-size: 0.85em;
-  }
+  .footer-buttons { align-items: end; }
 
-  .footer-buttons {
-    gap: 8px;
-  }
-  
   .cancel-button,
   .save-button {
-    padding: 8px 16px;
-    font-size: 0.9rem;
-  }
-  
-  .cancel-button {
-    background-color: var(--background-secondary, #6c757d);
-    color: var(--text-color, #333);
+    min-height: 40px;
+    padding: 0 12px;
   }
 }
 
-@media (max-width: 480px) {
-  .gamepad-editor-modal {
-    width: 100vw;
-    height: auto;
-    min-height: auto; /* Remove fixed min-height */
-    max-height: 95vh;
-    border-radius: 0;
-    overflow: hidden;
-  }
-  
-  .editor-sidebar {
-    padding: 8px;
+@media (max-width: 430px) {
+  .editor-kicker { display: none; }
+  .editor-title h2 { margin-top: 0; }
+  .editor-tools-scroll .component-grid { grid-template-columns: 1fr; }
+
+  .editor-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .sidebar-buttons-row {
-    gap: 8px;
-  }
+  .footer-buttons { gap: 5px; }
 
-  .sidebar-expanded-content {
-    max-height: 250px;
-  }
-
-  .editor-sidebar .component-palette {
-    flex: 1;
-    min-width: 0;
-    max-width: none;
-    box-sizing: border-box;
-  }
-
-  .editor-sidebar .grid-settings-menu {
-    flex: 1;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-
-  .design-area {
-    flex: 1;
-    padding: 6px;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-width: unset;
-    min-height: auto; /* Remove fixed min-height */
-    max-height: 30vh; /* Reduced from 40vh to 30vh */
-  }
+  .cancel-button,
+  .save-button { padding: 0 10px; }
 }
 
-/* Very small screens (iPhone SE and similar) */
-@media (max-width: 375px) {
-  .gamepad-editor-modal {
-    width: 100vw;
-    height: auto;
-    min-height: auto; /* Remove fixed min-height */
-    max-height: 98vh;
-    border-radius: 0;
-    overflow: hidden;
-  }
-  
-  .design-tab {
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-  }
-  
-  .editor-sidebar {
-    padding: 6px;
-  }
-
-  .sidebar-buttons-row {
-    gap: 6px;
-  }
-
-  .sidebar-expanded-content {
-    max-height: 200px;
-  }
-
-  .editor-sidebar .component-palette {
-    flex: 1;
-    min-width: 0;
-    max-width: none;
-    box-sizing: border-box;
-  }
-
-  .editor-sidebar .grid-settings-menu {
-    flex: 1;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-  
-  .design-area {
-    flex: 1;
-    padding: 4px;
-    overflow: hidden;
-    min-height: auto; /* Remove fixed min-height */
-    max-height: 25vh; /* Reduced from 35vh to 25vh */
-  }
-} 
+@media (prefers-reduced-motion: reduce) {
+  .gamepad-editor-overlay,
+  .gamepad-editor-modal,
+  .editor-tools-panel { animation-duration: 1ms; }
+}

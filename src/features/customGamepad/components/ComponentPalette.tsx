@@ -18,6 +18,7 @@ interface ComponentPaletteProps {
   onDragEnd?: () => void;
   onExpandedChange?: (expanded: boolean) => void;
   forceCollapsed?: boolean;
+  contentOnly?: boolean;
 }
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
@@ -26,7 +27,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   onDragStart,
   onDragEnd,
   onExpandedChange,
-  forceCollapsed = false
+  forceCollapsed = false,
+  contentOnly = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredComponent, setHoveredComponent] = useState<string | null>(null);
@@ -161,7 +163,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     onDragEnd?.();
   };
 
-  // Touch handling - for touch devices, start drag on touch move
+  // Touch dragging is limited to the explicit grip so swiping anywhere else on
+  // a card remains a normal vertical scroll gesture.
   const touchStartRef = useRef<{ x: number; y: number; componentType: string } | null>(null);
   const isDraggingRef = useRef(false);
   const DRAG_THRESHOLD = 5; // Lower threshold for easier drag initiation
@@ -214,7 +217,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   return (
     <div ref={containerRef} className={`component-palette ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Collapsed State - only shown in buttons row */}
-      {isInButtonsRow && (
+      {!contentOnly && isInButtonsRow && (
         <div className="palette-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">component</h3>
@@ -236,7 +239,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       )}
 
       {/* Expanded State - shown when in expanded area */}
-      {!isInButtonsRow && (
+      {(contentOnly || !isInButtonsRow) && (
         <>
           <div className="palette-content">
             <div className="palette-hint">
@@ -255,9 +258,6 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     draggable
                     onDragStart={(e) => handleDragStart(e, component.type)}
                     onDragEnd={handleDragEnd}
-                    onTouchStart={(e) => handleTouchStart(e, component.type)}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
                     onMouseEnter={() => setHoveredComponent(component.type)}
                     onMouseLeave={() => setHoveredComponent(null)}
                     title={`Drag to add ${component.name}`}
@@ -274,11 +274,19 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     <div className="component-size">
                       {component.defaultSize.width}×{component.defaultSize.height}
                     </div>
-                    <div className="drag-indicator">
+                    <button
+                      type="button"
+                      className="drag-indicator"
+                      aria-label={`Drag ${component.name}`}
+                      onTouchStart={(e) => handleTouchStart(e, component.type)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={handleTouchEnd}
+                    >
                       <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                         <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                       </svg>
-                    </div>
+                    </button>
                   </div>
                 );
               })}

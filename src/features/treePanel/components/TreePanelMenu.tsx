@@ -34,6 +34,7 @@ interface TreePanelMenuProps {
   panelTestId?: string;
   panelLabel?: string;
   classNames?: TreePanelMenuClassNames;
+  showTrigger?: boolean;
 }
 
 const joinClasses = (...classes: Array<string | undefined>) => classes.filter(Boolean).join(' ');
@@ -54,6 +55,7 @@ const TreePanelMenu: React.FC<TreePanelMenuProps> = ({
   panelTestId,
   panelLabel = 'Tree controls',
   classNames,
+  showTrigger = true,
 }) => {
   const [menuFrame, setMenuFrame] = useState<MenuFrame | null>(null);
   const [activeResizeCorner, setActiveResizeCorner] = useState<MenuResizeCorner | null>(null);
@@ -159,40 +161,42 @@ const TreePanelMenu: React.FC<TreePanelMenuProps> = ({
 
   return (
     <>
-      <div className={triggerBarClassName}>
-        <button
-          type="button"
-          className={joinClasses('tree-panel-menu-button', classNames?.button)}
-          onClick={onOpen}
-          disabled={disabled}
-          title={buttonTitle}
-          aria-label={buttonLabel}
-          data-testid={buttonTestId}
-        >
-          <svg
-            className="tree-panel-menu-icon"
-            width="14"
-            height="11"
-            viewBox="0 0 14 11"
-            fill="currentColor"
-            aria-hidden="true"
+      {showTrigger && (
+        <div className={triggerBarClassName}>
+          <button
+            type="button"
+            className={joinClasses('tree-panel-menu-button', classNames?.button)}
+            onClick={onOpen}
+            disabled={disabled}
+            title={buttonTitle}
+            aria-label={buttonLabel}
+            data-testid={buttonTestId}
           >
-            <rect y="0" width="14" height="1.8" rx="0.9" />
-            <rect y="4.6" width="14" height="1.8" rx="0.9" />
-            <rect y="9.2" width="14" height="1.8" rx="0.9" />
-          </svg>
-          {triggerContent}
-          {warningCount > 0 && (
-            <span
-              className="tree-panel-menu-warning"
-              aria-label={`${warningCount} warning${warningCount === 1 ? '' : 's'}`}
+            <svg
+              className="tree-panel-menu-icon"
+              width="14"
+              height="11"
+              viewBox="0 0 14 11"
+              fill="currentColor"
+              aria-hidden="true"
             >
-              {warningCount}
-            </span>
-          )}
-        </button>
-        {triggerAfter}
-      </div>
+              <rect y="0" width="14" height="1.8" rx="0.9" />
+              <rect y="4.6" width="14" height="1.8" rx="0.9" />
+              <rect y="9.2" width="14" height="1.8" rx="0.9" />
+            </svg>
+            {triggerContent}
+            {warningCount > 0 && (
+              <span
+                className="tree-panel-menu-warning"
+                aria-label={`${warningCount} warning${warningCount === 1 ? '' : 's'}`}
+              >
+                {warningCount}
+              </span>
+            )}
+          </button>
+          {triggerAfter}
+        </div>
+      )}
 
       {open && (
         <div

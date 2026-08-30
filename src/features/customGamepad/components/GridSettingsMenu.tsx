@@ -11,6 +11,7 @@ interface GridSettingsMenuProps {
   onGridSizeChange: (width: number, height: number) => void;
   onExpandedChange?: (expanded: boolean) => void;
   forceCollapsed?: boolean;
+  contentOnly?: boolean;
 }
 
 const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
@@ -22,7 +23,8 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
   onDescriptionChange,
   onGridSizeChange,
   onExpandedChange,
-  forceCollapsed = false
+  forceCollapsed = false,
+  contentOnly = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -75,7 +77,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
   return (
     <div ref={containerRef} className={`grid-settings-menu ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Collapsed State - only shown in buttons row */}
-      {currentIsInButtonsRow && (
+      {!contentOnly && currentIsInButtonsRow && (
         <div className="settings-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">Settings</h3>
@@ -105,7 +107,7 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
       )}
 
       {/* Expanded State - shown when in expanded area */}
-      {!currentIsInButtonsRow && (
+      {(contentOnly || !currentIsInButtonsRow) && (
         <>
           <div className="settings-content">
             {/* Grid Size Controls - Now the primary setting */}
@@ -185,4 +187,4 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
   );
 };
 
-export default GridSettingsMenu; 
+export default GridSettingsMenu;
