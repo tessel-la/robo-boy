@@ -19,7 +19,7 @@
 }
 
 /* Header styling */
-.settings-popup-header {
+.topic-settings-popup .settings-popup-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -29,7 +29,7 @@
   background-color: rgba(50, 50, 50, 0.3);
 }
 
-.settings-popup-header h3 {
+.topic-settings-popup .settings-popup-header h3 {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,8 +39,30 @@
   font-weight: 500;
 }
 
+.topic-settings-popup .close-button {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, var(--text-secondary, #aaaaaa));
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.topic-settings-popup .close-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--primary-color, #8ab4f8);
+}
+
 /* Content styling */
-.settings-popup-content {
+.topic-settings-popup .settings-popup-content {
   padding: 8px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -479,4 +501,4 @@ input[type="color"] {
     padding: 8px 12px; /* Slightly larger touch targets */
     font-size: 0.85rem;
   }
-} 
+}

@@ -79,23 +79,6 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
     const filteredTopics = allTopics.filter(topic => validRosTypes.includes(topic.type));
 
-    // Debug logging for PoseStamped specifically
-    if (type === 'posestamped') {
-      console.log('[AddVisualizationModal] PoseStamped topic filtering:');
-      console.log('  Valid ROS types:', validRosTypes);
-      console.log('  All topics:', allTopics.length);
-      console.log('  All topics sample:', allTopics.slice(0, 3));
-      console.log('  Filtered topics:', filteredTopics);
-      console.log('  Filtered topics length:', filteredTopics.length);
-      console.log('  All topic types:', [...new Set(allTopics.map(t => t.type))]);
-
-      // Test the filtering manually
-      const manualTest = allTopics.filter(
-        topic => topic.type === 'geometry_msgs/msg/PoseStamped' || topic.type === 'geometry_msgs/PoseStamped'
-      );
-      console.log('  Manual filter test:', manualTest);
-    }
-
     return filteredTopics;
   };
 
@@ -181,12 +164,6 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Debug: Log when modal opens
-  console.log('[AddVisualizationModal] Modal opened with topics:', allTopics.length);
-  if (allTopics.length === 0) {
-    console.log('[AddVisualizationModal] WARNING: No topics available when modal opened!');
-  }
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="add-viz-modal" onClick={e => e.stopPropagation()}>
@@ -206,14 +183,6 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 const availableTopics = getAvailableTopics(vizType);
                 const hasTopics = availableTopics.length > 0;
                 const icon = VIZ_TYPE_ICONS[vizType];
-
-                // Debug logging for PoseStamped specifically in grid rendering
-                if (vizType === 'posestamped') {
-                  console.log('[AddVisualizationModal] PoseStamped grid rendering:');
-                  console.log('  Available topics:', availableTopics);
-                  console.log('  Has topics:', hasTopics);
-                  console.log('  All topics count:', allTopics.length);
-                }
 
                 let title = `Add ${formatTypeName(type)}`;
                 if (vizType !== 'urdf' && hasTopics) {

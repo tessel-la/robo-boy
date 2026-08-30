@@ -78,4 +78,26 @@ describe('VisualizationPanel state restoration', () => {
     expect(new Set(viewerIds).size).toBe(2);
     expect(viewerIds.every(id => id.startsWith('ros3d-viewer-'))).toBe(true);
   });
+
+  it('keeps add visualization inside the shared settings menu', () => {
+    const ros = {
+      isConnected: true,
+      getTopics: (onSuccess: (response: { topics: string[]; types: string[] }) => void) => {
+        onSuccess({ topics: [], types: [] });
+      },
+    };
+
+    render(<VisualizationPanel ros={ros as any} />);
+    expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
+
+    expect(screen.getByRole('heading', { name: 'Add Visualization' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '3D view settings' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.getByRole('dialog', { name: '3D view settings' })).toBeInTheDocument();
+  });
 });

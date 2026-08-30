@@ -1,706 +1,588 @@
 .visualization-panel {
-  display: flex;
-  flex-direction: column; /* Stack controls above viewer */
+  position: relative;
   width: 100%;
-  height: 100%; /* Fill parent height */
-  min-height: 300px; /* Example minimum height */
-  background-color: var(--background-color); /* Use theme variable */
-  border-radius: var(--border-radius); /* Use theme variable */
+  height: 100%;
+  min-width: 0;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: var(--border-radius);
+  background: var(--background-color, #111111);
+  color: var(--text-color, #e8eaed);
   box-shadow: var(--box-shadow);
-  /* Remove padding from panel */
-  padding: 0;
-  box-sizing: border-box; /* Include padding in width/height */
-  position: relative; /* Needed for positioning button and popup */
-  overflow: hidden; /* Contain the viewer */
   container-type: inline-size;
+}
+
+.visualization-panel * {
+  box-sizing: border-box;
 }
 
 .visualization-panel canvas {
   display: block;
 }
 
-/* Remove old controls bar */
-/* .visualization-controls { ... } */
-
-/* --- Settings Button --- */
-.visualization-settings-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 20;
-  background-color: var(--card-bg-alpha, rgba(var(--card-bg-rgb, 30 30 30) / 0.85));
-  color: var(--text-color, #fff);
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.2));
-  border-radius: 8px;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-  backdrop-filter: blur(4px);
+.viewer-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  background: #111111;
 }
 
-.visualization-settings-button svg {
+.viewer-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+}
+
+.visualization-float-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 30;
+  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.visualization-float-bar > * {
+  pointer-events: auto;
+}
+
+.visualization-menu-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visualization-menu-panel {
+  width: min(400px, calc(100% - 24px));
+  height: min(620px, calc(100% - 80px));
+}
+
+.settings-popup {
+  min-width: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color, #212529);
+}
+
+.settings-popup-header {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+  flex: 0 0 auto;
+}
+
+.settings-popup-kicker,
+.settings-menu-label {
+  display: block;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.settings-popup-header h3 {
+  margin: 3px 0 0;
+  color: var(--text-color, #212529);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.settings-popup .close-button {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  cursor: pointer;
+}
+
+.settings-popup .close-button:hover {
+  background: var(--background-color, #f8f9fa);
+  color: var(--text-color, #212529);
+}
+
+.settings-popup .close-button svg {
   width: 18px;
   height: 18px;
 }
 
-/* Ensure icon button styling is defined */
-.icon-button {
-  background: none;
-  border: none;
-  color: var(--text-color, #fff);
-  cursor: pointer;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease;
-}
-
-.icon-button:hover {
-  color: var(--primary-color);
-}
-
-.visualization-settings-button:hover {
-  background-color: var(--background-secondary, rgba(60, 60, 60, 0.9));
-  border-color: var(--border-color-hover, rgba(255, 255, 255, 0.4));
-}
-
-/* --- Settings Popup Container (Now an Overlay) --- */
-.settings-popup-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 19; /* Below button, above overlay */
-}
-
-/* --- Settings Popup (Content Box within Overlay) --- */
-.settings-popup {
-  position: absolute;
-  max-height: calc(100% - 24px);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  background-color: var(--card-bg, #2f2f2f);
-  color: var(--text-primary, #e0e0e0);
-  padding: 15px 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  min-width: 300px;
-  width: min(610px, calc(100% - 24px));
-  max-width: calc(100% - 24px);
-  border: 1px solid var(--border-color, #444);
-  z-index: 1000; /* Above viewer content, scoped to the 3D panel */
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%); /* Center in viewport */
-}
-
-.settings-popup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-color, #444);
-  flex-shrink: 0; /* Prevent header from shrinking */
-}
-
-.settings-popup-header h3 {
-  margin: 0;
-  color: var(--primary-color, #32cd32);
-  font-size: 1.1rem; /* Slightly smaller heading */
-}
-
-.close-button {
-  background: none;
-  border: none;
-  color: var(--text-secondary, #aaa);
-  font-size: 1.4em;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.2s ease;
-}
-
-.close-button:hover {
-  color: var(--primary-color, #32cd32);
-}
-
 .settings-popup-content {
+  min-width: 0;
+  display: flex;
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  max-height: none;
-  padding-right: 10px;
-  margin-right: -10px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color, #32cd32) var(--card-bg, #2f2f2f);
-  font-size: 0.9rem; /* Slightly smaller text */
+  flex-direction: column;
 }
 
-.settings-popup-content::-webkit-scrollbar {
-  width: 8px;
-}
-.settings-popup-content::-webkit-scrollbar-track {
-  background: var(--card-bg, #2f2f2f);
-  border-radius: 4px;
-}
-.settings-popup-content::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color, #32cd32);
-  border-radius: 4px;
-  border: 2px solid var(--card-bg, #2f2f2f);
-}
-
-/* Make fixed frame section look consistent */
-.fixed-frame-section {
-  padding-bottom: 15px; /* Add spacing below fixed frame */
-  margin-bottom: 10px; /* Add margin below fixed frame */
-  border-bottom: 1px solid var(--border-color, #444); /* Separator line */
-}
-
-/* --- Collapsible Section Styles --- */
+.settings-menu-section,
 .popup-section {
-  border-bottom: 1px solid var(--border-color, #444);
-  padding-bottom: 10px;
-  margin-bottom: 10px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
 }
 
-.popup-section:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
+.fixed-frame-section {
+  padding: 13px 15px 14px;
 }
 
-/* New style for header containing the add button */
+.fixed-frame-section .settings-menu-label {
+  margin-bottom: 7px;
+}
+
+.settings-select-wrap,
+.topic-dropdown-container {
+  position: relative;
+  min-width: 0;
+}
+
+.settings-select-wrap::after,
+.topic-dropdown-container::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.settings-select-wrap select,
+.topic-dropdown {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 34px 0 10px;
+  appearance: none;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  outline: none;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.settings-select-wrap select:focus,
+.topic-dropdown:focus {
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
+}
+
+.settings-select-wrap select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .section-header-with-action {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  /* Match vertical padding of regular section header */
-  padding: 8px 0;
+  align-items: stretch;
+  padding-right: 12px;
 }
 
-/* Make the original header button take available space */
 .section-header-with-action .section-header {
-  flex-grow: 1;
-  padding: 0; /* Remove default padding */
-  margin-right: 10px; /* Space before add button */
-  /* Ensure hover effect doesn't cover add button */
-  width: auto;
+  flex: 1 1 auto;
 }
 
-/* Add button specific style within popup */
-.add-viz-popup-button {
-  background: none;
-  border: none;
-  color: var(--primary-color); /* Use primary color */
-  font-size: 1.2em;
-  padding: 0 5px; /* Small padding */
-  cursor: pointer;
-  flex-shrink: 0; /* Prevent shrinking */
-  line-height: 1;
-}
-
-.add-viz-popup-button:hover {
-  color: var(--text-color); /* Slight dim on hover */
-  opacity: 0.8;
-}
-
-/* Original section header styles */
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 8px 0;
   width: 100%;
-  cursor: pointer;
+  min-width: 0;
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 15px;
+  border: 0;
+  background: transparent;
+  color: var(--text-color, #212529);
   text-align: left;
-  color: var(--text-primary, #e0e0e0);
-  transition: background-color 0.1s ease;
+  cursor: pointer;
 }
 
 .section-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, transparent);
 }
 
-.section-header h4 {
-  /* Keep h4 styles */
-  margin: 0;
-  font-weight: bold;
-  font-size: 0.95em;
-  color: var(--text-secondary, #ccc);
-  border-bottom: none;
-  padding-bottom: 0;
+.section-heading-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.section-header svg {
-  /* Keep chevron styles */
-  font-size: 1.2em;
-  color: var(--text-secondary, #aaa);
+.section-heading-title {
+  overflow: hidden;
+  color: var(--text-color, #212529);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-heading-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+}
+
+.section-heading-meta > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-count-badge {
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 14%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.add-viz-popup-button {
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 26%, var(--border-color, #dee2e6));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+  cursor: pointer;
+}
+
+.add-viz-popup-button:hover {
+  border-color: var(--primary-color, #32cd32);
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 16%, var(--card-bg, #ffffff));
+}
+
+.add-viz-popup-button svg {
+  width: 17px;
+  height: 17px;
 }
 
 .section-content {
-  padding-top: 10px;
+  padding: 0 15px 14px;
 }
 
-/* Adjustments for nested control groups/items */
-.section-content .popup-control-item,
-.section-content .popup-control-group {
-  gap: 8px; /* Slightly more gap inside sections */
-  padding-left: 10px; /* Indent content slightly */
-}
-
-.section-content .popup-control-group {
-  border-top: none; /* Remove extra border from TF group */
-  padding-top: 0;
-}
-
-.section-content label {
-  font-weight: normal; /* Labels inside sections are not bold */
-  font-size: 0.9em;
-}
-
-.tf-label-toggle {
+.tf-section-content {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-color, #e0e0e0);
-  cursor: pointer;
-  margin: 6px 0 10px 10px;
-  min-height: 26px;
-}
-
-/* --- Styles for TF Checkbox List --- */
-.tf-frame-group {
-  min-width: 0;
-}
-
-.tf-checkbox-list {
-  list-style: none;
-  padding: 2px 4px 2px 0;
-  margin: 0;
-  max-height: clamp(88px, 18vh, 150px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  font-size: 0.85rem; /* Smaller font for list items */
-  max-width: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary-color, #32cd32) var(--background-secondary, #333);
-}
-
-.tf-checkbox-list li {
-  padding: 2px 0; /* Less padding for more compact list */
-}
-
-.tf-checkbox-list li label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  min-width: 0;
-  min-height: 28px;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-.tf-checkbox-list li label:hover,
-.tf-label-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.tf-checkbox-list li label {
-  overflow-wrap: anywhere;
-}
-
-.tf-checkbox-list input[type='checkbox'],
-.tf-label-toggle input[type='checkbox'] {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border: 1px solid var(--border-color, #666);
-  border-radius: 4px;
-  background-color: var(--background-secondary, #333);
-  cursor: pointer;
-}
-
-.tf-checkbox-list input[type='checkbox']:checked,
-.tf-label-toggle input[type='checkbox']:checked {
-  background-color: var(--primary-color, #32cd32);
-  border-color: var(--primary-color, #32cd32);
-}
-
-.tf-checkbox-list input[type='checkbox']:checked::before,
-.tf-label-toggle input[type='checkbox']:checked::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 4px;
-  height: 8px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.no-frames-message {
-  font-style: italic;
-  color: var(--text-secondary, #aaa);
-  font-size: 0.9em;
-  margin-top: 5px;
-}
-
-/* --- Range Input Styles --- */
-.range-input-container {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  margin-top: 5px;
+}
+
+.tf-scale-control,
+.tf-frame-group {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-color, #f8f9fa) 82%, var(--card-bg, #ffffff));
+}
+
+.control-heading-row,
+.tf-frame-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  color: var(--text-color, #212529);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .range-input {
-  flex: 1;
-  height: 6px;
-  background: var(--background-secondary, #444);
+  width: 100%;
+  height: 5px;
+  margin: 6px 0;
+  appearance: none;
   border-radius: 3px;
   outline: none;
-  -webkit-appearance: none;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 28%, var(--border-color, #dee2e6));
 }
 
 .range-input::-webkit-slider-thumb {
-  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  background: var(--primary-color, #32cd32);
+  border: 2px solid var(--card-bg, #ffffff);
   border-radius: 50%;
+  background: var(--primary-color, #32cd32);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
   cursor: pointer;
 }
 
 .range-input::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  background: var(--primary-color, #32cd32);
+  border: 2px solid var(--card-bg, #ffffff);
   border-radius: 50%;
+  background: var(--primary-color, #32cd32);
   cursor: pointer;
-  border: none;
 }
 
 .range-value {
-  font-size: 0.9em;
-  font-weight: bold;
-  color: var(--text-primary, #fff);
-  min-width: 30px;
+  min-width: 32px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--card-bg, #ffffff);
+  color: var(--primary-color, #32cd32);
+  font-size: 10px;
+  font-weight: 800;
   text-align: center;
 }
 
-/* --- ROS3D Viewer Container --- */
-.ros3d-viewer {
-  flex-grow: 1; /* Allow viewer to take remaining space */
-  width: 100%;
-  height: 100%;
-  touch-action: none; /* Reserve one- and two-finger gestures for camera controls */
-  /* No background color here, let ROS3D handle it or use the panel's */
-  min-height: 0; /* Override previous min-height if needed */
-  position: relative; /* Needed for absolute positioning of overlay */
-  /* border: 1px solid var(--border-color); */ /* Optional border */
-}
-
-/* Style the canvas element created by ROS3D.Viewer */
-.ros3d-viewer canvas {
-  display: block; /* Remove any potential bottom spacing */
-  width: 100% !important; /* Force canvas size */
-  height: 100% !important; /* Force canvas size */
-}
-
-/* Overlay for messages (connecting, select topic, error) */
-.viewer-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+.settings-toggle-row {
+  min-height: 42px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-size: 1.2em;
-  z-index: 10; /* Above the viewer canvas */
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 8px;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+  cursor: pointer;
 }
 
-.viewer-overlay.error-overlay {
-  background-color: rgba(220, 53, 69, 0.8); /* Semi-transparent red */
-  color: white;
-}
-
-.viz-placeholder {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: var(--text-secondary);
-  font-style: italic;
-  background-color: rgba(40, 44, 52, 0.8); /* Semi-transparent overlay */
-  z-index: 10; /* Ensure it's above the canvas */
-  pointer-events: none; /* Allow interaction with canvas if needed later */
-}
-
-/* NEW: Ensure viewer container takes up space */
-.viewer-container {
-  flex-grow: 1; /* Takes available vertical space */
-  width: 100%;
-  height: 100%; /* Fill the flex item space */
-  min-height: 0; /* Important for flexbox shrinking */
-  position: relative; /* Needed for overlays if any */
-  background-color: #111; /* Default dark background */
-}
-
-/* --- Styles for Active Visualizations List --- */
-.active-visualizations-list ul {
-  list-style: none;
-  padding: 0;
+.settings-toggle-row input,
+.tf-checkbox-list input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
   margin: 0;
-  max-height: clamp(88px, 18vh, 150px);
-  overflow-y: auto;
-  font-size: 0.85rem; /* Smaller font for visualization items */
+  accent-color: var(--primary-color, #32cd32);
 }
 
-.active-visualizations-list li {
-  position: relative;
-  padding: 6px 8px;
+.tf-frame-list-heading > span:last-child {
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.tf-checkbox-list {
+  max-height: 166px;
+  margin: 0 -4px -4px;
+  padding: 0 4px 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  list-style: none;
+}
+
+.tf-checkbox-list li + li {
+  border-top: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 66%, transparent);
+}
+
+.tf-checkbox-list label {
+  min-width: 0;
+  min-height: 38px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--border-color-lighter, #444);
-  min-height: 40px; /* Ensure consistent height */
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 4px;
+  color: var(--text-color, #212529);
+  font-size: 12px;
+  cursor: pointer;
 }
 
-.active-visualizations-list li:last-child {
-  border-bottom: none;
+.tf-frame-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.active-visualizations-list .viz-type {
-  font-weight: bold;
-  margin-right: 8px;
-  flex-shrink: 0; /* Prevent type from shrinking */
-  color: var(--primary-color, #32cd32);
-  width: 90px; /* Fixed width for type label */
+.no-frames-message,
+.no-visualizations-message {
+  margin: 0;
+  padding: 18px 10px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 12px;
+  text-align: center;
 }
 
-.active-visualizations-list .viz-topic {
-  flex-grow: 1;
-  margin-right: 8px;
+.active-visualizations-list ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visualization-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--background-color, #f8f9fa) 78%, var(--card-bg, #ffffff));
+}
+
+.visualization-item-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.viz-type {
+  min-width: 0;
+  padding: 3px 8px;
   overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 12%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+  font-size: 10px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
-  padding: 3px 5px;
-  border-radius: 3px;
-  transition: all 0.2s ease;
-  max-width: calc(100% - 90px); /* Reserve space for buttons */
 }
 
-.active-visualizations-list .viz-topic:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: var(--primary-color, #32cd32);
-}
-
-/* Updated styles for the topic dropdown container */
-.topic-dropdown-container {
-  flex: 1; /* Take available space */
+.visualization-item-actions {
   display: flex;
   align-items: center;
-  margin-right: 80px; /* Reserve space for action buttons */
-  min-width: 0; /* Allow container to shrink below content size */
-  position: relative;
-  height: 28px; /* Match the height of buttons */
+  gap: 5px;
+  flex: 0 0 auto;
 }
 
-/* Improved dropdown styling */
-.topic-dropdown {
-  width: 100%;
-  background: #333;
-  border: 1px solid #555;
-  color: var(--text-color, #e8eaed);
-  border-radius: 3px;
-  padding: 0 5px; /* Reduce vertical padding */
-  font-size: 0.9em;
-  /* Improve text overflow handling */
-  text-overflow: ellipsis;
-  height: 28px; /* Match the exact height of buttons */
-  line-height: 28px; /* Center text vertically */
-  margin: 0; /* Remove any default margin */
-  /* For Firefox */
-  scrollbar-width: thin;
-  /* For Webkit browsers */
-  &::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #666;
-    border-radius: 3px;
-  }
-}
-
-:root[data-runtime='tauri'] .topic-dropdown option {
-  background: #333;
-  color: var(--text-color, #e8eaed);
-}
-
-.cancel-topic-change {
-  background: none;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-  padding: 0 5px;
-  font-size: 0.9em;
-}
-
-.cancel-topic-change:hover {
-  color: var(--text-color, #e8eaed);
-}
-
-/* Improved positioning for the action buttons */
-.active-visualizations-list .remove-viz-button,
-.active-visualizations-list .viz-settings-button {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  display: flex;
+.visualization-item-actions button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
   padding: 0;
-  font-size: 1.1em;
-  color: var(--text-color, #e8eaed);
-  transition: all 0.2s ease;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  background-color: rgba(50, 50, 50, 0.5);
-}
-
-/* Position the buttons properly */
-.active-visualizations-list .remove-viz-button {
-  right: 8px;
-}
-
-.active-visualizations-list .viz-settings-button {
-  right: 40px; /* Position to the left of the delete button */
-}
-
-.no-visualizations-message {
-  color: var(--text-color-secondary, #aaa);
-  font-style: italic;
-  text-align: center;
-  padding: 10px 0;
-}
-
-/* Individual visualization settings buttons */
-.viz-settings-button {
-  position: absolute; /* Positioned absolutely in the panel */
-  z-index: 20; /* Above viewer, same as settings button */
-  background-color: rgba(50, 50, 50, 0.8);
-  color: #fff;
-  border: 1px solid #666;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 7px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
   cursor: pointer;
-  font-size: 0.9em;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.viz-settings-button:hover {
-  background-color: rgba(80, 80, 80, 0.9);
-  border-color: #aaa;
+.visualization-item-actions .viz-settings-button:hover {
+  border-color: var(--primary-color, #32cd32);
   color: var(--primary-color, #32cd32);
 }
 
-.viz-settings-button svg {
-  font-size: 1em;
-  color: var(--text-color, #fff);
+.visualization-item-actions .remove-viz-button:hover {
+  border-color: var(--error-color, #dc3545);
+  color: var(--error-color, #dc3545);
 }
 
-/* Mobile responsiveness for settings popup */
-@media (max-width: 768px) {
-  .settings-popup {
-    max-width: 95%;
-    max-height: calc(100% - 16px); /* Stay inside the 3D panel */
-    padding: 12px 15px; /* Slightly less padding on mobile */
+.visualization-item-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.viz-topic-label {
+  display: block;
+  margin: 0 0 5px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 700;
+}
+
+:root[data-runtime='tauri'] .settings-popup select option {
+  background: var(--card-bg, #2f2f2f);
+  color: var(--text-color, #e8eaed);
+}
+
+.error-display {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 25;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--error-color, #dc3545) 88%, transparent);
+  color: #ffffff;
+  font-size: 12px;
+}
+
+@container (max-width: 600px) {
+  .visualization-float-bar {
+    top: 12px;
+    left: 12px;
   }
 
-  .settings-popup-header h3 {
-    font-size: 1rem;
+  .visualization-float-bar .tree-panel-menu-button {
+    height: 34px;
+    min-height: 34px;
   }
 
-  .settings-popup-content {
-    font-size: 0.85rem; /* Even smaller text on mobile */
-    max-height: none;
+  .settings-popup-header {
+    min-height: 58px;
+    padding: 9px 12px;
+  }
+
+  .fixed-frame-section {
+    padding: 11px 12px 12px;
+  }
+
+  .section-header {
+    min-height: 56px;
+    padding: 8px 12px;
+  }
+
+  .section-header-with-action {
+    padding-right: 10px;
+  }
+
+  .section-content {
+    padding: 0 12px 12px;
+  }
+
+  .settings-select-wrap select,
+  .topic-dropdown {
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .visualization-item-actions button {
+    width: 34px;
+    height: 34px;
   }
 
   .tf-checkbox-list {
-    max-height: clamp(86px, 20vh, 160px);
-  }
-
-  .active-visualizations-list li,
-  .tf-checkbox-list li {
-    padding: 5px 0; /* Tighter spacing */
-  }
-
-  .active-visualizations-list .viz-type {
-    width: 70px; /* Reduce width on small screens */
-    font-size: 0.9em;
-  }
-
-  .topic-dropdown-container {
-    height: 24px; /* Smaller on mobile */
-    margin-right: 70px;
-  }
-
-  .topic-dropdown {
-    font-size: 0.85em;
-    padding: 0 4px;
-    height: 24px;
-    line-height: 24px;
-  }
-
-  .active-visualizations-list .remove-viz-button,
-  .active-visualizations-list .viz-settings-button {
-    width: 24px;
-    height: 24px;
-  }
-
-  .active-visualizations-list .viz-settings-button {
-    right: 32px; /* Closer on small screens */
+    max-height: none;
   }
 }

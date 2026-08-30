@@ -11,6 +11,7 @@ describe('SettingsPopup', () => {
   const mockOnAddVisualizationClick = vi.fn();
   const mockOnTfAxesScaleChange = vi.fn();
   const mockOnShowTfFrameLabelsChange = vi.fn();
+  const mockOnUpdateVisualizationTopic = vi.fn();
 
   const defaultProps = {
     onClose: mockOnClose,
@@ -27,6 +28,7 @@ describe('SettingsPopup', () => {
     ],
     onRemoveVisualization: mockOnRemoveVisualization,
     onAddVisualizationClick: mockOnAddVisualizationClick,
+    onUpdateVisualizationTopic: mockOnUpdateVisualizationTopic,
     allTopics: [
       { name: '/points', type: 'sensor_msgs/PointCloud2' },
       { name: '/scan', type: 'sensor_msgs/LaserScan' },
@@ -98,6 +100,24 @@ describe('SettingsPopup', () => {
       // Trash icon buttons for removal
       const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThan(1);
+    });
+
+    it('updates a visualization from its contained topic selector', () => {
+      render(
+        <SettingsPopup
+          {...defaultProps}
+          allTopics={[
+            { name: '/points', type: 'sensor_msgs/PointCloud2' },
+            { name: '/points_filtered', type: 'sensor_msgs/msg/PointCloud2' },
+          ]}
+        />
+      );
+
+      fireEvent.change(screen.getByLabelText('Topic', { selector: '#visualization-topic-viz-1' }), {
+        target: { value: '/points_filtered' },
+      });
+
+      expect(mockOnUpdateVisualizationTopic).toHaveBeenCalledWith('viz-1', '/points_filtered');
     });
 
     it('does not offer unrelated String topics for an active URDF visualization', () => {
