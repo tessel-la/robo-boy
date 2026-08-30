@@ -252,7 +252,7 @@
   border: 2px solid var(--border-color, #e0e0e0);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
   background-color: var(--card-bg, #ffffff);
   position: relative;
   overflow: hidden;
@@ -262,56 +262,12 @@
 .component-card:hover,
 .component-card.hovered {
   border-color: var(--primary-color, #007bff);
-  background-color: var(--primary-color-light, #e3f2fd);
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.2);
+  background-color: color-mix(in srgb, var(--primary-color, #007bff) 7%, var(--card-bg, #ffffff));
 }
 
 .component-card.selected {
   border-color: var(--primary-color, #007bff);
-  background-color: var(--primary-color-light, #e3f2fd);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  animation: selectedPulse 2s infinite;
-}
-
-@keyframes selectedPulse {
-  0%, 100% { 
-    transform: scale(1);
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-  50% { 
-    transform: scale(1.02);
-    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.4);
-  }
-}
-
-.component-card.selected::after {
-  content: '✓';
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  background-color: var(--primary-color, #007bff);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: bold;
-  animation: checkmarkAppear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes checkmarkAppear {
-  from {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  background-color: color-mix(in srgb, var(--primary-color, #007bff) 10%, var(--card-bg, #ffffff));
 }
 
 .component-preview {
@@ -328,7 +284,7 @@
 }
 
 .component-card:hover .component-preview {
-  transform: scale(1.1);
+  border-color: var(--primary-color, #007bff);
 }
 
 .component-info {
@@ -657,8 +613,7 @@
 }
 
 .component-card.dragging {
-  opacity: 0.5;
-  transform: scale(0.95);
+  opacity: 0.65;
   border-style: dashed;
   border-color: var(--primary-color, #007bff);
 }
@@ -673,11 +628,12 @@
   align-items: center;
   justify-content: center;
   background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
-  border: 0;
-  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #007bff) 35%, var(--border-color, #e0e0e0));
+  border-radius: 50%;
   color: var(--primary-color, #007bff);
-  opacity: 0.6;
-  transition: all 0.2s ease;
+  opacity: 0.78;
+  overflow: hidden;
+  transition: border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
   cursor: grab;
   pointer-events: auto;
   touch-action: none;
@@ -688,15 +644,42 @@
   cursor: grabbing;
 }
 
-.component-card:hover .drag-indicator {
-  opacity: 1;
-  background-color: var(--primary-color, #007bff);
-  color: white;
-  transform: scale(1.1);
+.drag-indicator::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--primary-color, #007bff);
+  transform: scale(0);
+  transform-origin: center;
 }
 
-.component-card.selected .drag-indicator {
+.drag-indicator.is-holding::before {
+  animation: component-hold-progress 420ms linear forwards;
+}
+
+.drag-indicator svg {
+  position: relative;
+  z-index: 1;
+}
+
+.drag-indicator.is-holding {
+  color: #ffffff;
+  opacity: 1;
+}
+
+@keyframes component-hold-progress {
+  from { transform: scale(0.08); }
+  to { transform: scale(1); }
+}
+
+.component-card:hover .drag-indicator {
+  opacity: 1;
+  border-color: var(--primary-color, #007bff);
+}
+
+.component-card.dragging .drag-indicator {
   opacity: 1;
   background-color: var(--primary-color, #007bff);
-  color: white;
+  color: #ffffff;
 }
