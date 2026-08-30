@@ -976,7 +976,6 @@ class OrbitControls {
   private state = this.STATE.NONE;
   
   private spherical = new THREE.Spherical();
-  private sphericalDelta = new THREE.Spherical();
   private scale = 1;
   private panOffset = new THREE.Vector3();
   
@@ -989,7 +988,6 @@ class OrbitControls {
   private panDelta = new THREE.Vector2();
   
   // Track touch points for multi-touch gestures
-  private touches = { ONE: 0, TWO: 1 };
   private prevTouchDistance = -1;
   private prevTouchMidpoint = new THREE.Vector2();
   
@@ -1054,6 +1052,27 @@ class OrbitControls {
     // Convert from cartesian to spherical coordinates
     this.spherical.setFromVector3(offset);
   }
+
+  private rotate(deltaX: number, deltaY: number, speed: number = this.rotateSpeed): void {
+    const element = this.element === document.body ? document.body : this.element;
+    if (element.clientHeight <= 0) return;
+
+    const worldUp = new THREE.Vector3(0, 0, 1);
+    const offset = new THREE.Vector3().subVectors(this.camera.position, this.target);
+    const toYUp = new THREE.Quaternion().setFromUnitVectors(worldUp, new THREE.Vector3(0, 1, 0));
+
+    offset.applyQuaternion(toYUp);
+    this.spherical.setFromVector3(offset);
+    this.spherical.theta -= 2 * Math.PI * deltaX / element.clientHeight * speed;
+    this.spherical.phi -= 2 * Math.PI * deltaY / element.clientHeight * speed;
+    this.spherical.phi = THREE.MathUtils.clamp(this.spherical.phi, this.EPS, Math.PI - this.EPS);
+    this.spherical.makeSafe();
+
+    offset.setFromSpherical(this.spherical).applyQuaternion(toYUp.invert());
+    this.camera.position.copy(this.target).add(offset);
+    this.camera.up.copy(worldUp);
+    this.camera.lookAt(this.target);
+  }
   
   private onMouseDown(event: MouseEvent): void {
     if (!this.enabled) return;
@@ -1097,53 +1116,7 @@ class OrbitControls {
       case this.STATE.ROTATE:
         this.rotateEnd.set(event.clientX, event.clientY);
         this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-        
-        // Get element dimensions for rotation calculations
-        const element = this.element === document.body ? document.body : this.element;
-        const elementWidth = element.clientWidth;
-        const elementHeight = element.clientHeight;
-        
-        // Scale factor for rotation (adjust as needed for sensitivity)
-        const rotateSpeed = this.rotateSpeed;
-        
-        // Completely separate axis handling for Z-up system
-        // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-        const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-        
-        // Apply rotation around world Z axis (phi in spherical coordinates)
-        const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1), 
-          -horizontalRotationAngle
-        );
-        
-        // Apply Z-axis rotation to current camera position
-        const cameraPosition = new THREE.Vector3().subVectors(
-          this.camera.position,
-          this.target
-        );
-        cameraPosition.applyQuaternion(rotationZ);
-        
-        // Vertical movement (Y) - rotate around local X axis (polar angle)
-        // First get the right vector (perpendicular to camera direction and Z-up)
-        const forward = cameraPosition.clone().normalize();
-        const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-        
-        // Calculate vertical rotation angle
-        const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-        
-        // Apply rotation around right vector
-        const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-        cameraPosition.applyQuaternion(rotationX);
-        
-        // Update camera position based on rotated vector
-        this.camera.position.copy(this.target).add(cameraPosition);
-        
-        // Ensure camera up vector stays aligned with world Z
-        this.camera.up.set(0, 0, 1);
-        
-        // Look at target
-        this.camera.lookAt(this.target);
-        
+        this.rotate(this.rotateDelta.x, this.rotateDelta.y);
         this.rotateStart.copy(this.rotateEnd);
         break;
         
@@ -1172,7 +1145,7 @@ class OrbitControls {
     
     if (event.deltaY < 0) {
       this.dollyIn();
-    } else {
+    } else if (event.deltaY > 0) {
       this.dollyOut();
     }
     
@@ -1224,53 +1197,7 @@ class OrbitControls {
             event.touches[0].clientY
           );
           this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-          
-          // Get element dimensions for rotation calculations
-          const element = this.element === document.body ? document.body : this.element;
-          const elementWidth = element.clientWidth;
-          const elementHeight = element.clientHeight;
-          
-          // Scale factor for rotation (adjust as needed for sensitivity)
-          const rotateSpeed = this.rotateSpeed;
-          
-          // Completely separate axis handling for Z-up system
-          // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-          const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-          
-          // Apply rotation around world Z axis (phi in spherical coordinates)
-          const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(0, 0, 1), 
-            -horizontalRotationAngle
-          );
-          
-          // Apply Z-axis rotation to current camera position
-          const cameraPosition = new THREE.Vector3().subVectors(
-            this.camera.position,
-            this.target
-          );
-          cameraPosition.applyQuaternion(rotationZ);
-          
-          // Vertical movement (Y) - rotate around local X axis (polar angle)
-          // First get the right vector (perpendicular to camera direction and Z-up)
-          const forward = cameraPosition.clone().normalize();
-          const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-          
-          // Calculate vertical rotation angle
-          const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-          
-          // Apply rotation around right vector
-          const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-          cameraPosition.applyQuaternion(rotationX);
-          
-          // Update camera position based on rotated vector
-          this.camera.position.copy(this.target).add(cameraPosition);
-          
-          // Ensure camera up vector stays aligned with world Z
-          this.camera.up.set(0, 0, 1);
-          
-          // Look at target
-          this.camera.lookAt(this.target);
-          
+          this.rotate(this.rotateDelta.x, this.rotateDelta.y);
           this.rotateStart.copy(this.rotateEnd);
         }
         break;
@@ -1281,18 +1208,10 @@ class OrbitControls {
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         const touchDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // Keep pinch zoom independent from two-finger translation. In
-        // particular, an unchanged finger distance must not zoom the camera.
+        // Scale the camera distance by the inverse change in finger spacing:
+        // spreading fingers zooms in and pinching them together zooms out.
         if (this.prevTouchDistance > 0 && touchDistance > 0) {
-          const distanceChange = touchDistance - this.prevTouchDistance;
-          const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
-          if (pinchRatio > 0.04) {
-            if (distanceChange > 0) {
-              this.dollyIn();
-            } else {
-              this.dollyOut();
-            }
-          }
+          this.scale *= this.prevTouchDistance / touchDistance;
           this.prevTouchDistance = touchDistance;
         }
         
@@ -1357,11 +1276,11 @@ class OrbitControls {
   }
   
   private dollyIn(): void {
-    this.scale /= 0.95;
+    this.scale *= 0.95;
   }
   
   private dollyOut(): void {
-    this.scale *= 0.95;
+    this.scale /= 0.95;
   }
   
   public update(): void {

@@ -118,4 +118,140 @@ describe('active ROS3D OrbitControls interactions', () => {
     expect(target.length()).toBeGreaterThan(0);
     expect(camera.position.distanceTo(target)).toBeCloseTo(initialDistance, 10);
   });
+
+  it('zooms conventionally with both the mouse wheel and desktop trackpad pinch', () => {
+    const target = (controls as unknown as TestControls).target;
+    const initialDistance = camera.position.distanceTo(target);
+
+    element.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: -100,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    const zoomedInDistance = camera.position.distanceTo(target);
+
+    element.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: 100,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+    expect(zoomedInDistance).toBeLessThan(initialDistance);
+    expect(camera.position.distanceTo(target)).toBeCloseTo(initialDistance, 10);
+
+    element.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: -100,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    const trackpadZoomedInDistance = camera.position.distanceTo(target);
+
+    element.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaY: 100,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+    expect(trackpadZoomedInDistance).toBeLessThan(initialDistance);
+    expect(camera.position.distanceTo(target)).toBeCloseTo(initialDistance, 10);
+  });
+
+  it('zooms in when two fingers spread and out when they pinch together', () => {
+    const target = (controls as unknown as TestControls).target;
+    const initialDistance = camera.position.distanceTo(target);
+
+    dispatchTouch(element, 'touchstart', [
+      { clientX: 100, clientY: 100 },
+      { clientX: 200, clientY: 100 },
+    ]);
+    dispatchTouch(element, 'touchmove', [
+      { clientX: 80, clientY: 100 },
+      { clientX: 220, clientY: 100 },
+    ]);
+    const zoomedInDistance = camera.position.distanceTo(target);
+
+    dispatchTouch(element, 'touchmove', [
+      { clientX: 100, clientY: 100 },
+      { clientX: 200, clientY: 100 },
+    ]);
+    dispatchTouch(element, 'touchend', []);
+
+    expect(zoomedInDistance).toBeLessThan(initialDistance);
+    expect(camera.position.distanceTo(target)).toBeCloseTo(initialDistance, 10);
+  });
+
+  it('clamps vertical rotation at the poles instead of flipping the view', () => {
+    const target = (controls as unknown as TestControls).target;
+    const initialDistance = camera.position.distanceTo(target);
+
+    element.dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        clientX: 250,
+        clientY: 200,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(
+      new MouseEvent('mousemove', {
+        clientX: 250,
+        clientY: 10_000,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(
+      new MouseEvent('mousemove', {
+        clientX: 250,
+        clientY: 20_000,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(new MouseEvent('mouseup'));
+
+    const offset = camera.position.clone().sub(target);
+    expect(offset.length()).toBeCloseTo(initialDistance, 10);
+    expect(offset.normalize().dot(new THREE.Vector3(0, 0, 1))).toBeGreaterThan(0.999);
+    expect(camera.up).toEqual(new THREE.Vector3(0, 0, 1));
+  });
+
+  it('uses the conventional orbit direction and preserves camera radius', () => {
+    const target = (controls as unknown as TestControls).target;
+    const initialHeight = camera.position.z;
+    const initialDistance = camera.position.distanceTo(target);
+
+    element.dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        clientX: 250,
+        clientY: 200,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(
+      new MouseEvent('mousemove', {
+        clientX: 250,
+        clientY: 220,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(new MouseEvent('mouseup'));
+
+    expect(camera.position.z).toBeGreaterThan(initialHeight);
+    expect(camera.position.distanceTo(target)).toBeCloseTo(initialDistance, 10);
+  });
 });
