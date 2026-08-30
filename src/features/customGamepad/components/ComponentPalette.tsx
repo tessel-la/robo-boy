@@ -167,8 +167,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     onDragEnd?.();
   };
 
-  // Touch dragging is limited to the explicit grip so swiping anywhere else on
-  // a card remains a normal vertical scroll gesture.
+  // A stationary hold anywhere on a card starts dragging. Moving first cancels
+  // the hold so the same surface still behaves like a normal scrolling list.
   const touchStartRef = useRef<{ x: number; y: number; componentType: string } | null>(null);
   const touchHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef(false);
@@ -264,7 +264,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         <>
           <div className="palette-content">
             <div className="palette-hint">
-              <span>Press and hold a grip to drag a component onto the grid</span>
+              <span>Press and hold a component to drag it onto the grid</span>
             </div>
             <div className="component-grid">
               {componentLibrary.map(component => {
@@ -276,13 +276,17 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                 return (
                   <div
                     key={component.type}
-                    className={`component-card ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''}`}
+                    className={`component-card ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''} ${isHolding ? 'is-holding' : ''}`}
                     draggable
                     onDragStart={(e) => handleDragStart(e, component.type)}
                     onDragEnd={handleDragEnd}
+                    onTouchStart={(e) => handleTouchStart(e, component.type)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchEnd}
                     onMouseEnter={() => setHoveredComponent(component.type)}
                     onMouseLeave={() => setHoveredComponent(null)}
-                    title={`Drag to add ${component.name}`}
+                    title={`Press and hold to drag ${component.name}`}
                   >
                     <div className="component-info">
                       <div className="component-preview">
@@ -296,19 +300,6 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     <div className="component-size">
                       {component.defaultSize.width}×{component.defaultSize.height}
                     </div>
-                    <button
-                      type="button"
-                      className={`drag-indicator ${isHolding ? 'is-holding' : ''}`}
-                      aria-label={`Press and hold to drag ${component.name}`}
-                      onTouchStart={(e) => handleTouchStart(e, component.type)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
-                      onTouchCancel={handleTouchEnd}
-                    >
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                      </svg>
-                    </button>
                   </div>
                 );
               })}

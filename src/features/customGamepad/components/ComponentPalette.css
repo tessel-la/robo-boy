@@ -618,68 +618,25 @@
   border-color: var(--primary-color, #007bff);
 }
 
-.drag-indicator {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--primary-color-light, rgba(0, 123, 255, 0.1));
-  border: 1px solid color-mix(in srgb, var(--primary-color, #007bff) 35%, var(--border-color, #e0e0e0));
-  border-radius: 50%;
-  color: var(--primary-color, #007bff);
-  opacity: 0.78;
-  overflow: hidden;
-  transition: border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
-  cursor: grab;
-  pointer-events: auto;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.drag-indicator:active {
-  cursor: grabbing;
-}
-
-.drag-indicator::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  background: var(--primary-color, #007bff);
-  transform: scale(0);
-  transform-origin: center;
-}
-
-.drag-indicator.is-holding::before {
-  animation: component-hold-progress 420ms linear forwards;
-}
-
-.drag-indicator svg {
-  position: relative;
-  z-index: 1;
-}
-
-.drag-indicator.is-holding {
-  color: #ffffff;
-  opacity: 1;
-}
-
-@keyframes component-hold-progress {
-  from { transform: scale(0.08); }
-  to { transform: scale(1); }
-}
-
-.component-card:hover .drag-indicator {
-  opacity: 1;
+.component-card.is-holding {
   border-color: var(--primary-color, #007bff);
 }
 
-.component-card.dragging .drag-indicator {
-  opacity: 1;
-  background-color: var(--primary-color, #007bff);
-  color: #ffffff;
+.component-card.is-holding::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--primary-color, #007bff);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: component-hold-progress 420ms linear forwards;
+  pointer-events: none;
+}
+
+@keyframes component-hold-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }

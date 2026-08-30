@@ -16,7 +16,7 @@ vi.mock('./HeartbeatComponent', () => ({ default: () => <span /> }));
 describe('ComponentPalette touch gestures', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('allows scrolling over cards and starts touch dragging after holding the grip', () => {
+  it('allows scrolling over cards and starts touch dragging after holding a card', () => {
     vi.useFakeTimers();
     const onComponentSelect = vi.fn();
     const onDragStart = vi.fn();
@@ -29,7 +29,7 @@ describe('ComponentPalette touch gestures', () => {
       />
     );
 
-    const joystickCard = screen.getByTitle('Drag to add Joystick');
+    const joystickCard = screen.getByTitle('Press and hold to drag Joystick');
     fireEvent.touchStart(joystickCard, {
       touches: [{ identifier: 1, clientX: 30, clientY: 100 }],
     });
@@ -41,12 +41,11 @@ describe('ComponentPalette touch gestures', () => {
     expect(onComponentSelect).not.toHaveBeenCalled();
     expect(onDragStart).not.toHaveBeenCalled();
 
-    const joystickGrip = screen.getByRole('button', { name: 'Press and hold to drag Joystick' });
-    fireEvent.touchStart(joystickGrip, {
+    fireEvent.touchStart(joystickCard, {
       touches: [{ identifier: 2, clientX: 30, clientY: 100 }],
     });
 
-    expect(joystickGrip).toHaveClass('is-holding');
+    expect(joystickCard).toHaveClass('is-holding');
     expect(onDragStart).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(419));
@@ -56,7 +55,7 @@ describe('ComponentPalette touch gestures', () => {
 
     expect(onComponentSelect).toHaveBeenCalledWith('joystick');
     expect(onDragStart).toHaveBeenCalledWith('joystick');
-    expect(joystickGrip).not.toHaveClass('is-holding');
+    expect(joystickCard).not.toHaveClass('is-holding');
   });
 
   it('cancels the hold indicator when the finger moves before activation', () => {
@@ -71,16 +70,16 @@ describe('ComponentPalette touch gestures', () => {
       />
     );
 
-    const joystickGrip = screen.getByRole('button', { name: 'Press and hold to drag Joystick' });
-    fireEvent.touchStart(joystickGrip, {
+    const joystickCard = screen.getByTitle('Press and hold to drag Joystick');
+    fireEvent.touchStart(joystickCard, {
       touches: [{ identifier: 3, clientX: 30, clientY: 100 }],
     });
-    fireEvent.touchMove(joystickGrip, {
+    fireEvent.touchMove(joystickCard, {
       touches: [{ identifier: 3, clientX: 45, clientY: 100 }],
     });
     act(() => vi.advanceTimersByTime(420));
 
-    expect(joystickGrip).not.toHaveClass('is-holding');
+    expect(joystickCard).not.toHaveClass('is-holding');
     expect(onDragStart).not.toHaveBeenCalled();
   });
 });
