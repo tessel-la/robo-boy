@@ -30,6 +30,17 @@ describe('ComponentPalette touch gestures', () => {
     );
 
     const joystickCard = screen.getByTitle('Press and hold to drag Joystick');
+    vi.spyOn(joystickCard, 'getBoundingClientRect').mockReturnValue({
+      bottom: 100,
+      height: 80,
+      left: 10,
+      right: 210,
+      top: 20,
+      width: 200,
+      x: 10,
+      y: 20,
+      toJSON: () => ({}),
+    });
     fireEvent.touchStart(joystickCard, {
       touches: [{ identifier: 1, clientX: 30, clientY: 100 }],
     });
@@ -42,10 +53,13 @@ describe('ComponentPalette touch gestures', () => {
     expect(onDragStart).not.toHaveBeenCalled();
 
     fireEvent.touchStart(joystickCard, {
-      touches: [{ identifier: 2, clientX: 30, clientY: 100 }],
+      touches: [{ identifier: 2, clientX: 110, clientY: 60 }],
     });
 
     expect(joystickCard).toHaveClass('is-holding');
+    expect(joystickCard.style.getPropertyValue('--hold-origin-x')).toBe('100px');
+    expect(joystickCard.style.getPropertyValue('--hold-origin-y')).toBe('40px');
+    expect(Number.parseFloat(joystickCard.style.getPropertyValue('--hold-radius'))).toBeCloseTo(107.7, 1);
     expect(onDragStart).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(419));

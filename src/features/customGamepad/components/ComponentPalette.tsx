@@ -181,6 +181,20 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
   const handleTouchStart = useCallback((e: React.TouchEvent, componentType: string) => {
     const touch = e.touches[0];
+    const card = e.currentTarget as HTMLElement;
+    const bounds = card.getBoundingClientRect();
+    const originX = touch.clientX - bounds.left;
+    const originY = touch.clientY - bounds.top;
+    const radius = Math.max(
+      Math.hypot(originX, originY),
+      Math.hypot(bounds.width - originX, originY),
+      Math.hypot(originX, bounds.height - originY),
+      Math.hypot(bounds.width - originX, bounds.height - originY)
+    );
+
+    card.style.setProperty('--hold-origin-x', `${originX}px`);
+    card.style.setProperty('--hold-origin-y', `${originY}px`);
+    card.style.setProperty('--hold-radius', `${radius}px`);
     cancelTouchHold();
     touchStartRef.current = {
       x: touch.clientX,

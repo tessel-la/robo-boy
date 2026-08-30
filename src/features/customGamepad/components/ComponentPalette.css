@@ -625,18 +625,28 @@
 .component-card.is-holding::after {
   content: '';
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: var(--primary-color, #007bff);
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: component-hold-progress 420ms linear forwards;
+  left: var(--hold-origin-x, 50%);
+  top: var(--hold-origin-y, 50%);
+  width: calc(var(--hold-radius, 120px) * 2);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary-color, #007bff) 28%, transparent);
+  transform: translate(-50%, -50%) scale(0);
+  transform-origin: center;
+  animation: component-hold-progress 420ms cubic-bezier(0.2, 0, 0, 1) forwards;
   pointer-events: none;
 }
 
 @keyframes component-hold-progress {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
