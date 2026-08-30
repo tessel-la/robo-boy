@@ -92,7 +92,9 @@ New visualization types should follow the same split: serializable configuration
 catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
 `src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
 `panels/installed.json` without importing panel code. The tracked default registry is empty; explicit panel builds
-generate a separate ignored public tree from inventory-selected releases.
+generate a separate ignored public tree from a schema-v2 desired state that can combine remote inventories and
+explicitly listed local repositories. The generated registry locks exact versions, integrity, selection, and source
+provenance.
 
 Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small,
 framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies and lazily imports a deployment-bundled

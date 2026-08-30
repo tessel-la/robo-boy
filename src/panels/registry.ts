@@ -4,6 +4,7 @@ import { BUILT_IN_PANELS } from './builtInPanels';
 import { DEFAULT_INSTALLED_PANEL_REGISTRY_PATH, ROBOBOY_PANEL_API_VERSION } from './constants';
 import type {
   InstalledPanelRegistryResult,
+  PanelInstallationMetadata,
   PanelRegistryIssue,
   ResolvedPanelManifest,
   RoboBoyPanelCapability,
@@ -34,7 +35,66 @@ interface ParseRegistryOptions {
 interface InstalledPanelRegistryDocument {
   schemaVersion: 1;
   panels: unknown[];
+  installation?: unknown;
 }
+
+const parseInstallationMetadata = (value: unknown): PanelInstallationMetadata | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<PanelInstallationMetadata>;
+  const selection = candidate.selection;
+  const sources = candidate.sources;
+  const resolvedPanels = candidate.resolvedPanels;
+  if (
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.configSchemaVersion !== 'number' ||
+    !Number.isInteger(candidate.configSchemaVersion) ||
+    candidate.configSchemaVersion < 1 ||
+    !selection ||
+    !['all', 'include', 'none'].includes(selection.mode) ||
+    !Array.isArray(sources) ||
+    !Array.isArray(resolvedPanels)
+  ) {
+    return undefined;
+  }
+  const validSource = (source: unknown): source is PanelInstallationMetadata['sources'][number] =>
+    Boolean(
+      source &&
+      typeof source === 'object' &&
+      ['remote', 'local'].includes((source as { type?: string }).type || '') &&
+      isNonEmptyString((source as { name?: unknown }).name, 120)
+    );
+  if (sources.length > 20 || !sources.every(validSource)) return undefined;
+  const sourceKeys = new Set(sources.map(source => `${source.type}:${source.name}`));
+  if (sourceKeys.size !== sources.length) return undefined;
+  if (
+    selection.mode === 'include' &&
+    (!Array.isArray(selection.panelIds) ||
+      selection.panelIds.length === 0 ||
+      new Set(selection.panelIds).size !== selection.panelIds.length ||
+      !selection.panelIds.every(isValidPanelId))
+  ) {
+    return undefined;
+  }
+  if (selection.mode !== 'include' && selection.panelIds !== undefined) return undefined;
+  if (
+    resolvedPanels.length > 100 ||
+    !resolvedPanels.every(panel => {
+      if (!panel || typeof panel !== 'object') return false;
+      const resolved = panel as PanelInstallationMetadata['resolvedPanels'][number];
+      return (
+        isValidPanelId(resolved.id) &&
+        isNonEmptyString(resolved.version, 64) &&
+        PANEL_INTEGRITY_PATTERN.test(resolved.integrity) &&
+        validSource(resolved.source) &&
+        sourceKeys.has(`${resolved.source.type}:${resolved.source.name}`)
+      );
+    })
+  ) {
+    return undefined;
+  }
+  if (new Set(resolvedPanels.map(panel => panel.id)).size !== resolvedPanels.length) return undefined;
+  return candidate as PanelInstallationMetadata;
+};
 
 export const isValidPanelId = (value: unknown): value is string => {
   return typeof value === 'string' && value.length <= 128 && PANEL_ID_PATTERN.test(value);
@@ -257,7 +317,8 @@ export const parseInstalledPanelRegistry = (
     });
   });
 
-  return { panels, issues };
+  const installation = parseInstallationMetadata(document.installation);
+  return { panels, issues, ...(installation ? { installation } : {}) };
 };
 
 export const getInstalledPanelRegistryUrl = (): string => {

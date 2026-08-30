@@ -307,6 +307,35 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
+  it('shows installed panel count and source provenance in the workspace catalog', async () => {
+    const current = useInstalledPanels();
+    useInstalledPanels.mockReturnValue({
+      ...current,
+      installation: {
+        schemaVersion: 1,
+        configSchemaVersion: 2,
+        selection: { mode: 'include', panelIds: ['la.tessel.roboboy.hello'] },
+        sources: [{ type: 'local', name: 'development-workspace' }],
+        resolvedPanels: [
+          {
+            id: 'la.tessel.roboboy.hello',
+            version: '1.0.0',
+            integrity: current.panels[0].integrity,
+            source: { type: 'local', name: 'development-workspace' },
+          },
+        ],
+      },
+    });
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+
+    expect(screen.getByText('External panels · 1 installed')).toHaveAttribute(
+      'title',
+      expect.stringContaining('local:development-workspace')
+    );
+  });
+
   it('discovers ROS 2 image topics for camera panels', async () => {
     getTopics.mockImplementation((success: any) => {
       success({

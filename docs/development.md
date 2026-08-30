@@ -99,12 +99,13 @@ The gateway control API stays bound to host loopback. The relay exposes only `GE
 which maps to MediaMTX's active-path listing; configuration and mutation endpoints are not proxied.
 
 Normal development discovers an empty tracked registry at `public/panels/installed.json`. Run
-`npm run dev:panels` to verify and stage the inventory-listed sibling panel releases into the ignored
-`.panel-stage/` tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated ID list or append
-`-- --panel <id>` to select specific panels. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
+`npm run dev:panels` to verify and stage the local repositories selected by
+`config/panel-sources.local.json` into the ignored `.panel-stage/` tree. Pass
+`-- --config config/panel-sources.json` to use an ignored custom or mixed desired-state file. Schema-v2 selection is
+explicit: `all`, a non-empty `include` list, or `none`. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
 installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
 [External panels](external-panels.md#create-install-and-register-a-panel) for the complete standalone repository,
-SDK, integrity, local inventory, host-development, and Docker-development workflow.
+SDK, integrity, desired-state, host-development, and Docker-development workflow.
 
 For the Docker development stack, opt in with the panel Compose overlay:
 
@@ -113,9 +114,12 @@ docker compose -f docker-compose.yml -f infra/compose/panels.yml build app
 docker compose -f docker-compose.yml -f infra/compose/panels.yml up -d
 ```
 
-The overlay mounts the sibling inventory and panel repositories read-only, stages verified bundles in a named
-volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
-entry, or set it in `.env` to a comma-separated subset.
+The overlay mounts the known sibling panel repositories read-only and runs the common one-shot installer against
+`config/panel-sources.local.json`. Both the local and remote overlays populate the same deployment-shaped named
+volume and mount it read-only into the app. Set `ROBOBOY_PANEL_SOURCES_FILE` to an ignored schema-v2 configuration
+to select a subset, install none, add another mounted local repository, or mix local and remote sources.
+`ROBOBOY_PANEL_IDS` is no longer used by this overlay; migrate any existing value into the configuration's explicit
+`selection` object.
 
 This is a developer convenience only. For published official or private releases, use
 `infra/compose/panels.remote.yml`. The remote overlay defaults to `config/panel-sources.official.json`, mounts no

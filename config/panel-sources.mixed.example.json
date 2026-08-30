@@ -13,16 +13,15 @@
       ]
     },
     {
-      "type": "remote",
-      "name": "company-private",
-      "catalogUrl": "https://panels.example.com/roboboy/catalog.json",
-      "allowedOrigins": ["https://panels.example.com"],
-      "authorizationEnv": "ROBOBOY_PANEL_AUTHORIZATION",
-      "authenticatedOrigins": ["https://panels.example.com"]
+      "type": "local",
+      "name": "development-workspace",
+      "root": "../..",
+      "rootEnv": "ROBOBOY_PANEL_WORKSPACE",
+      "repositories": ["my-roboboy-panel"]
     }
   ],
   "selection": {
     "mode": "include",
-    "panelIds": ["la.tessel.roboboy.timeseries", "com.example.robot.private-telemetry"]
+    "panelIds": ["la.tessel.roboboy.timeseries", "com.example.robot.my-panel"]
   }
 }

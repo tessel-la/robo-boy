@@ -1,22 +1,30 @@
 services:
-  app:
+  panel-installer:
+    image: ${ROBOBOY_PANEL_INSTALLER_IMAGE:-roboboy-panel-installer:local}
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.panel-installer
     command:
-      - npm
-      - run
-      - dev:panels
-      - --
-      - --inventory
-      - /panel-workspace/robo-boy-panel-inventory
-      - --source-root
-      - /panel-workspace
+      - --config
+      - /config/panel-sources.json
+      - --output
+      - /panels
     environment:
-      - ROBOBOY_PANEL_IDS=${ROBOBOY_PANEL_IDS:-}
+      - ROBOBOY_PANEL_WORKSPACE=/panel-workspace
     volumes:
-      - ../robo-boy-panel-inventory:/panel-workspace/robo-boy-panel-inventory:ro
+      - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.local.json}:/config/panel-sources.json:ro
       - ../robo-boy-hello-panel:/panel-workspace/robo-boy-hello-panel:ro
       - ../robo-boy-timeseries-panel:/panel-workspace/robo-boy-timeseries-panel:ro
       - ../robo-boy-webrtc-panel:/panel-workspace/robo-boy-webrtc-panel:ro
-      - roboboy-panel-stage:/app/.panel-stage
+      - roboboy-installed-panels:/panels
+    restart: "no"
+
+  app:
+    depends_on:
+      panel-installer:
+        condition: service_completed_successfully
+    volumes:
+      - roboboy-installed-panels:${ROBOBOY_PANEL_WEB_ROOT:-/app/public/panels}:ro
 
 volumes:
-  roboboy-panel-stage:
+  roboboy-installed-panels:

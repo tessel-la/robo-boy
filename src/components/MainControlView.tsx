@@ -3086,6 +3086,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const isReplacementMenu = placement === 'replacement';
     const builtInPanels = panelCatalog.filter(panel => panel.source === 'built-in');
     const externalPanels = panelCatalog.filter(panel => panel.source === 'external');
+    const installation = installedPanelRegistry.installation;
+    const installationTitle = installation
+      ? [
+          `Selection: ${installation.selection.mode}`,
+          ...installation.resolvedPanels.map(
+            panel => `${panel.id}@${panel.version} — ${panel.source.type}:${panel.source.name}`
+          ),
+        ].join('\n')
+      : undefined;
     const renderPanelButton = (panel: PanelCatalogEntry) => (
       <button
         key={panel.id}
@@ -3116,11 +3125,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           {builtInPanels.map(renderPanelButton)}
           {(externalPanels.length > 0 ||
             installedPanelRegistry.isLoading ||
+            installation ||
             installedPanelRegistry.issues.length > 0) && (
-            <span className="workspace-add-menu-title workspace-add-menu-subtitle">External panels</span>
+            <span className="workspace-add-menu-title workspace-add-menu-subtitle" title={installationTitle}>
+              External panels
+              {installation && !installedPanelRegistry.isLoading ? ` · ${externalPanels.length} installed` : ''}
+            </span>
           )}
           {externalPanels.map(renderPanelButton)}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
+          {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
+            <span className="workspace-panel-catalog-note">No external panels selected</span>
+          )}
           {!installedPanelRegistry.isLoading && installedPanelRegistry.issues.length > 0 && (
             <span
               className="workspace-panel-catalog-note workspace-panel-catalog-warning"

@@ -39,6 +39,43 @@ describe('installed panel registry', () => {
     ]);
   });
 
+  it('exposes valid installation provenance for diagnostics', () => {
+    const installation = {
+      schemaVersion: 1,
+      configSchemaVersion: 2,
+      selection: { mode: 'include', panelIds: ['com.example.telemetry'] },
+      sources: [{ type: 'remote', name: 'official' }],
+      resolvedPanels: [
+        {
+          id: 'com.example.telemetry',
+          version: '1.2.3',
+          integrity,
+          source: { type: 'remote', name: 'official' },
+        },
+      ],
+    };
+    const result = parseInstalledPanelRegistry(
+      { schemaVersion: 1, installation, panels: [createManifest()] },
+      registryUrl
+    );
+
+    expect(result.installation).toEqual(installation);
+  });
+
+  it('ignores malformed optional installation provenance without hiding valid panels', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        installation: { schemaVersion: 1, configSchemaVersion: 2, selection: { mode: 'surprise' } },
+        panels: [createManifest()],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toHaveLength(1);
+    expect(result.installation).toBeUndefined();
+  });
+
   it('rejects invalid metadata and a missing entry point', () => {
     const result = parseInstalledPanelRegistry(
       {

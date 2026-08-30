@@ -75,6 +75,28 @@ export interface PanelRegistryIssue {
 export interface InstalledPanelRegistryResult {
   panels: ResolvedPanelManifest[];
   issues: PanelRegistryIssue[];
+  installation?: PanelInstallationMetadata;
+}
+
+export interface PanelInstallationSource {
+  type: 'remote' | 'local';
+  name: string;
+}
+
+export interface PanelInstallationMetadata {
+  schemaVersion: 1;
+  configSchemaVersion: number;
+  selection: {
+    mode: 'all' | 'include' | 'none';
+    panelIds?: string[];
+  };
+  sources: PanelInstallationSource[];
+  resolvedPanels: Array<{
+    id: string;
+    version: string;
+    integrity: string;
+    source: PanelInstallationSource;
+  }>;
 }
 
 export interface StoredPanelState {

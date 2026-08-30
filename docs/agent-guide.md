@@ -218,7 +218,7 @@ API solely from an example's private helper.
 3. Import and validate the built artifact, not only source modules.
 4. Recalculate SRI after every bundle change.
 5. Keep manifest and inventory metadata synchronized.
-6. Stage through the real local inventory workflow and exercise add, reload, reconnect, activity, resize, removal, and
+6. Stage through the common desired-state installer and exercise add, reload, reconnect, activity, resize, removal, and
    retry behavior in Robo-Boy.
 
 ## Verification Matrix
@@ -243,7 +243,7 @@ Agents must describe these as current limitations, not missing hidden APIs:
 
 - Installation, updates, and removal are deployment-managed; there is no panel-management UI or rollback UI.
 - Same-realm panels are trusted code. Capabilities shape context and review but do not enforce security permissions.
-- The remote installer supports one ESM bundle per release and rejects additional declared assets.
+- The common installer supports one ESM bundle per release and rejects additional declared assets.
 - Panels render settings inside their tile; there is no host settings schema, secret store, or notification API.
 - Runtime dependencies are not shared with the host.
 - SHA-256 detects artifact drift but does not establish publisher identity or revocation.
