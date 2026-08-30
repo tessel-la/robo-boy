@@ -84,6 +84,9 @@ html, body {
   height: 100dvh; /* Use dynamic viewport height for mobile browsers */
   overflow: hidden; /* Prevent scrolling */
   position: fixed; /* Prevent mobile browser address bar from causing scroll */
+  /* Keep the shell at native-app scale. Interactive surfaces such as the 3D
+     viewer opt into their own touch gestures locally. */
+  touch-action: pan-x pan-y;
 }
 
 body {

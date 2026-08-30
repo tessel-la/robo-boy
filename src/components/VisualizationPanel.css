@@ -415,6 +415,7 @@
   flex-grow: 1; /* Allow viewer to take remaining space */
   width: 100%;
   height: 100%;
+  touch-action: none; /* Reserve one- and two-finger gestures for camera controls */
   /* No background color here, let ROS3D handle it or use the panel's */
   min-height: 0; /* Override previous min-height if needed */
   position: relative; /* Needed for absolute positioning of overlay */

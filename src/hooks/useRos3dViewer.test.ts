@@ -162,6 +162,26 @@ describe('useRos3dViewer', () => {
         expect(disposeRendererMock).toHaveBeenCalled();
     });
 
+    it('should dispose camera controls on unmount', () => {
+        const disposeControlsMock = vi.fn();
+        (ROS3D.Viewer as any).mockImplementation(function () {
+            return {
+                addObject: vi.fn(),
+                scene: {},
+                camera: {},
+                resize: vi.fn()
+            };
+        });
+        (ROS3D.OrbitControls as any).mockImplementation(function () {
+            return { dispose: disposeControlsMock };
+        });
+
+        const { unmount } = renderHook(() => useRos3dViewer(viewerRef, true));
+        unmount();
+
+        expect(disposeControlsMock).toHaveBeenCalledOnce();
+    });
+
     it('should resize viewer on observation', async () => {
         const resizeMock = vi.fn();
         (ROS3D.Viewer as any).mockImplementation(function () {

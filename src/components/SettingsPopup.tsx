@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { FiX, FiChevronDown, FiChevronRight, FiTrash2, FiPlus, FiSettings } from 'react-icons/fi';
 import './VisualizationPanel.css'; // Reuse styles for now
 import { VisualizationConfig } from './VisualizationPanel'; // Import shared config type
+import { getUrdfTopics } from '../utils/urdfTopics';
 
 // Define structure for storing fetched topics
 interface TopicInfo {
@@ -68,8 +69,8 @@ const SettingsPopup = (props: SettingsPopupProps) => {
 
   // State for collapsible sections
   const [openSections, setOpenSections] = useState<SectionVisibility>({
-    tfFrames: false,  // Default TF closed
-    activeViz: true // Default Active Visualizations open
+    tfFrames: false, // Default TF closed
+    activeViz: true, // Default Active Visualizations open
   });
 
   // State to track which viz items are showing topic dropdown (getter not used, but setter is)
@@ -78,7 +79,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
   const toggleSection = (section: keyof SectionVisibility) => {
     setOpenSections((prev: SectionVisibility) => ({
       ...prev,
-      [section]: !prev[section]
+      [section]: !prev[section],
     }));
   };
 
@@ -86,7 +87,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
   const toggleTopicDropdown = (vizId: string) => {
     setShowingTopicDropdown(prev => ({
       ...prev,
-      [vizId]: !prev[vizId]
+      [vizId]: !prev[vizId],
     }));
   };
 
@@ -118,16 +119,14 @@ const SettingsPopup = (props: SettingsPopupProps) => {
     const isChecked = event.target.checked;
     let newSelectedFrames: string[];
     if (isChecked) {
-      newSelectedFrames = displayedTfFrames.includes(frameName)
-        ? displayedTfFrames
-        : [...displayedTfFrames, frameName];
+      newSelectedFrames = displayedTfFrames.includes(frameName) ? displayedTfFrames : [...displayedTfFrames, frameName];
     } else {
       newSelectedFrames = displayedTfFrames.filter(f => f !== frameName);
     }
     onDisplayedTfFramesChange(newSelectedFrames);
   };
 
-  // Handle edit visualization click 
+  // Handle edit visualization click
   const handleEditClick = (id: string) => {
     if (onEditVisualization) {
       onEditVisualization(id);
@@ -147,11 +146,14 @@ const SettingsPopup = (props: SettingsPopupProps) => {
 
   // Filter available topics for a specific visualization type
   const getTopicsForVisualizationType = (vizType: string): TopicInfo[] => {
+    if (vizType === 'urdf') {
+      return getUrdfTopics(allTopics);
+    }
+
     // Define supported message types for each visualization type
     const typeToMessageTypes: Record<string, string[]> = {
       pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
       camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
-      urdf: ['std_msgs/String', 'std_msgs/msg/String'], // Add URDF support
       laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan support
       posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'], // Added PoseStamped support
       // Add more mappings as needed
@@ -181,13 +183,15 @@ const SettingsPopup = (props: SettingsPopupProps) => {
             disabled={availableFrames.length === 0}
           >
             {availableFrames.length > 0 ? (
-              availableFrames.map((frame) => (
+              availableFrames.map(frame => (
                 <option key={frame} value={frame}>
                   {frame}
                 </option>
               ))
             ) : (
-              <option value="" disabled>No frames available</option>
+              <option value="" disabled>
+                No frames available
+              </option>
             )}
           </select>
         </div>
@@ -202,7 +206,9 @@ const SettingsPopup = (props: SettingsPopupProps) => {
             <div className="section-content">
               {/* TF Axes Scale Control */}
               <div className="popup-control-item">
-                <label htmlFor="tf-axes-scale" style={{ color: 'var(--text-color)' }}>TF Axes Size:</label>
+                <label htmlFor="tf-axes-scale" style={{ color: 'var(--text-color)' }}>
+                  TF Axes Size:
+                </label>
                 <div className="range-input-container">
                   <input
                     type="range"
@@ -211,7 +217,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                     max="2.0"
                     step="0.1"
                     value={tfAxesScale}
-                    onChange={(e) => onTfAxesScaleChange(parseFloat(e.target.value))}
+                    onChange={e => onTfAxesScaleChange(parseFloat(e.target.value))}
                     className="range-input"
                   />
                   <span className="range-value">{tfAxesScale.toFixed(1)}</span>
@@ -222,7 +228,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                 <input
                   type="checkbox"
                   checked={showTfFrameLabels}
-                  onChange={(event) => onShowTfFrameLabelsChange(event.target.checked)}
+                  onChange={event => onShowTfFrameLabelsChange(event.target.checked)}
                 />
                 Show frame labels
               </label>
@@ -230,7 +236,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
               <div className="popup-control-group tf-frame-group">
                 {availableFrames.length > 0 ? (
                   <ul className="tf-checkbox-list">
-                    {availableFrames.map((frame) => (
+                    {availableFrames.map(frame => (
                       <li key={frame}>
                         <label style={{ color: 'var(--text-color)' }}>
                           <input
@@ -271,7 +277,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
             <div className="section-content active-visualizations-list">
               {activeVisualizations.length > 0 ? (
                 <ul>
-                  {activeVisualizations.map((viz) => (
+                  {activeVisualizations.map(viz => (
                     <li key={viz.id} className="visualization-item">
                       <span className="viz-type">{viz.type.charAt(0).toUpperCase() + viz.type.slice(1)}:</span>
 
@@ -279,7 +285,7 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                       <div className="topic-dropdown-container">
                         <select
                           value={viz.topic}
-                          onChange={(e) => handleTopicChange(viz.id, e)}
+                          onChange={e => handleTopicChange(viz.id, e)}
                           className="topic-dropdown"
                           title={viz.topic}
                         >
@@ -304,16 +310,17 @@ const SettingsPopup = (props: SettingsPopupProps) => {
                       </div>
 
                       {/* Only show settings button for supported viz types */}
-                      {(viz.type === 'pointcloud' || viz.type === 'laserscan' || viz.type === 'posestamped') && onEditVisualization && (
-                        <button
-                          className="viz-settings-button"
-                          onClick={() => handleEditClick(viz.id)}
-                          title={`Configure ${viz.type} visualization`}
-                          aria-label={`Edit ${viz.type} visualization for topic ${viz.topic}`}
-                        >
-                          <FiSettings />
-                        </button>
-                      )}
+                      {(viz.type === 'pointcloud' || viz.type === 'laserscan' || viz.type === 'posestamped') &&
+                        onEditVisualization && (
+                          <button
+                            className="viz-settings-button"
+                            onClick={() => handleEditClick(viz.id)}
+                            title={`Configure ${viz.type} visualization`}
+                            aria-label={`Edit ${viz.type} visualization for topic ${viz.topic}`}
+                          >
+                            <FiSettings />
+                          </button>
+                        )}
                       <button
                         className="remove-viz-button icon-button"
                         onClick={() => onRemoveVisualization(viz.id)}
