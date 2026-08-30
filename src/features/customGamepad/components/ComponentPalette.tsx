@@ -37,6 +37,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   const [hoveredComponent, setHoveredComponent] = useState<string | null>(null);
   const [draggingComponent, setDraggingComponent] = useState<string | null>(null);
   const [holdingComponent, setHoldingComponent] = useState<string | null>(null);
+  const suppressNativeDragRef = useRef(false);
 
   // Mock ros object for preview components
   const mockRos = {
@@ -128,6 +129,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent, componentType: string) => {
+    // Touch placement is handled by the editor's custom gesture flow. Cancelling
+    // the parallel native drag prevents the browser's square drag preview.
+    if (suppressNativeDragRef.current) {
+      e.preventDefault();
+      return;
+    }
+
     setDraggingComponent(componentType);
     onDragStart?.(componentType);
     onComponentSelect(componentType); // Also set as selected for visual feedback
@@ -171,6 +179,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   // the hold so the same surface still behaves like a normal scrolling list.
   const touchStartRef = useRef<{ x: number; y: number; componentType: string } | null>(null);
   const touchHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchCardRef = useRef<HTMLElement | null>(null);
   const isDraggingRef = useRef(false);
 
   const cancelTouchHold = useCallback(() => {
@@ -182,6 +191,12 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   const handleTouchStart = useCallback((e: React.TouchEvent, componentType: string) => {
     const touch = e.touches[0];
     const card = e.currentTarget as HTMLElement;
+    if (touchCardRef.current && touchCardRef.current !== card) {
+      touchCardRef.current.draggable = true;
+    }
+    touchCardRef.current = card;
+    suppressNativeDragRef.current = true;
+    card.draggable = false;
     const bounds = card.getBoundingClientRect();
     const originX = touch.clientX - bounds.left;
     const originY = touch.clientY - bounds.top;
@@ -229,12 +244,16 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
   const handleTouchEnd = useCallback(() => {
     cancelTouchHold();
+    if (touchCardRef.current) touchCardRef.current.draggable = true;
+    touchCardRef.current = null;
+    suppressNativeDragRef.current = false;
     touchStartRef.current = null;
     isDraggingRef.current = false;
   }, [cancelTouchHold]);
 
   useEffect(() => () => {
     if (touchHoldTimeoutRef.current) clearTimeout(touchHoldTimeoutRef.current);
+    if (touchCardRef.current) touchCardRef.current.draggable = true;
   }, []);
 
   // Determine if we're in the buttons row (parent has sidebar-buttons-row class)

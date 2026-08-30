@@ -49,6 +49,7 @@ describe('ComponentPalette touch gestures', () => {
     });
     fireEvent.touchEnd(joystickCard, { changedTouches: [{ identifier: 1, clientX: 30, clientY: 50 }] });
 
+    expect(joystickCard.draggable).toBe(true);
     expect(onComponentSelect).not.toHaveBeenCalled();
     expect(onDragStart).not.toHaveBeenCalled();
 
@@ -57,9 +58,11 @@ describe('ComponentPalette touch gestures', () => {
     });
 
     expect(joystickCard).toHaveClass('is-holding');
+    expect(joystickCard.draggable).toBe(false);
     expect(joystickCard.style.getPropertyValue('--hold-origin-x')).toBe('100px');
     expect(joystickCard.style.getPropertyValue('--hold-origin-y')).toBe('40px');
     expect(Number.parseFloat(joystickCard.style.getPropertyValue('--hold-radius'))).toBeCloseTo(107.7, 1);
+    expect(fireEvent.dragStart(joystickCard)).toBe(false);
     expect(onDragStart).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(419));
@@ -70,6 +73,9 @@ describe('ComponentPalette touch gestures', () => {
     expect(onComponentSelect).toHaveBeenCalledWith('joystick');
     expect(onDragStart).toHaveBeenCalledWith('joystick');
     expect(joystickCard).not.toHaveClass('is-holding');
+
+    fireEvent.touchEnd(joystickCard, { changedTouches: [{ identifier: 2, clientX: 110, clientY: 60 }] });
+    expect(joystickCard.draggable).toBe(true);
   });
 
   it('cancels the hold indicator when the finger moves before activation', () => {

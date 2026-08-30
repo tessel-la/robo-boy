@@ -266,7 +266,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   }, [editorState.draggedComponent, layout.gridSize, handleAddComponent]);
 
   // Calculate grid position from mouse/touch event
-  const getGridPositionFromEvent = useCallback((clientX: number, clientY: number) => {
+  const getGridPositionFromEvent = useCallback((
+    clientX: number,
+    clientY: number,
+    itemWidth = 1,
+    itemHeight = 1
+  ) => {
     if (!designAreaRef.current) return null;
     
     // Try to find the grid element
@@ -277,23 +282,46 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       gridEl = designAreaRef.current;
     }
     
+    const cells = gridEl.querySelectorAll<HTMLElement>('.grid-background .grid-cell');
+    const firstCell = cells[0]?.getBoundingClientRect();
+    const nextColumn = layout.gridSize.width > 1 ? cells[1]?.getBoundingClientRect() : null;
+    const nextRow = layout.gridSize.height > 1
+      ? cells[layout.gridSize.width]?.getBoundingClientRect()
+      : null;
+
+    if (firstCell && firstCell.width > 0 && firstCell.height > 0) {
+      const columnStep = nextColumn ? nextColumn.left - firstCell.left : firstCell.width;
+      const rowStep = nextRow ? nextRow.top - firstCell.top : firstCell.height;
+
+      if (columnStep > 0 && rowStep > 0) {
+        const previewWidth = firstCell.width + (itemWidth - 1) * columnStep;
+        const previewHeight = firstCell.height + (itemHeight - 1) * rowStep;
+        const x = Math.round((clientX - firstCell.left - previewWidth / 2) / columnStep);
+        const y = Math.round((clientY - firstCell.top - previewHeight / 2) / rowStep);
+
+        return { x, y, cellWidth: firstCell.width, cellHeight: firstCell.height };
+      }
+    }
+
+    // Fallback for the first frame before the background cells have layout.
     const gridRect = gridEl.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(gridEl);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 8;
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 8;
-    
-    const innerWidth = Math.max(100, gridRect.width - paddingLeft * 2);
-    const innerHeight = Math.max(100, gridRect.height - paddingTop * 2);
-    
-    const cellWidth = innerWidth / layout.gridSize.width;
-    const cellHeight = innerHeight / layout.gridSize.height;
-    
-    // Calculate position relative to grid, clamping to valid range
-    const relX = clientX - gridRect.left - paddingLeft;
-    const relY = clientY - gridRect.top - paddingTop;
-    
-    const x = Math.max(0, Math.min(Math.floor(relX / cellWidth), layout.gridSize.width - 1));
-    const y = Math.max(0, Math.min(Math.floor(relY / cellHeight), layout.gridSize.height - 1));
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    const columnGap = parseFloat(computedStyle.columnGap) || 0;
+    const rowGap = parseFloat(computedStyle.rowGap) || 0;
+    const innerWidth = Math.max(1, gridRect.width - paddingLeft - paddingRight);
+    const innerHeight = Math.max(1, gridRect.height - paddingTop - paddingBottom);
+    const cellWidth = Math.max(1, (innerWidth - columnGap * (layout.gridSize.width - 1)) / layout.gridSize.width);
+    const cellHeight = Math.max(1, (innerHeight - rowGap * (layout.gridSize.height - 1)) / layout.gridSize.height);
+    const columnStep = cellWidth + columnGap;
+    const rowStep = cellHeight + rowGap;
+    const previewWidth = cellWidth + (itemWidth - 1) * columnStep;
+    const previewHeight = cellHeight + (itemHeight - 1) * rowStep;
+    const x = Math.round((clientX - gridRect.left - paddingLeft - previewWidth / 2) / columnStep);
+    const y = Math.round((clientY - gridRect.top - paddingTop - previewHeight / 2) / rowStep);
     
     return { x, y, cellWidth, cellHeight };
   }, [layout.gridSize]);
@@ -371,11 +399,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   const updateDropPreview = useCallback((clientX: number, clientY: number, dragState: EditorState['dragState']) => {
     if (!dragState) return;
     
-    const pos = getGridPositionFromEvent(clientX, clientY);
-    if (!pos) return;
-    
     const width = dragState.defaultSize?.width || 1;
     const height = dragState.defaultSize?.height || 1;
+    const pos = getGridPositionFromEvent(clientX, clientY, width, height);
+    if (!pos) return;
     
     const clampedX = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
     const clampedY = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
@@ -447,9 +474,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     
     // Calculate drop position fresh from event coordinates (don't rely on stale preview state)
     if (dragState) {
-      const pos = getGridPositionFromEvent(event.clientX, event.clientY);
       const width = dragState.defaultSize?.width || 1;
       const height = dragState.defaultSize?.height || 1;
+      const pos = getGridPositionFromEvent(event.clientX, event.clientY, width, height);
       
       // Use calculated position or fallback to (0,0)
       let dropX = pos ? pos.x : 0;
