@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
 import { FaCloud, FaCamera, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
+import { getPreferredUrdfTopic, getUrdfTopics } from '../utils/urdfTopics';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
@@ -53,11 +54,20 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   const [selectedType, setSelectedType] = useState<Exclude<VisualizationConfig['type'], 'tf'> | ''>('');
   const [manualTopicInput, setManualTopicInput] = useState<string>('');
   const [useManualInput, setUseManualInput] = useState<boolean>(false);
-  // Find all available URDF topics (std_msgs/String)
-  const availableUrdfTopics = allTopics.filter(topic => SUPPORTED_VIZ_TYPES.urdf.includes(topic.type));
+  // A URDF uses String transport, but ordinary String topics are not robot
+  // descriptions. Follow the ROS robot_description naming convention too.
+  const availableUrdfTopics = useMemo(() => getUrdfTopics(allTopics), [allTopics]);
   const [urdfRobotDescriptionTopic, setUrdfRobotDescriptionTopic] = useState<string>(
-    availableUrdfTopics[0]?.name || ''
+    getPreferredUrdfTopic(availableUrdfTopics)?.name || ''
   );
+
+  useEffect(() => {
+    if (useManualInput) return;
+    const currentTopicStillAvailable = availableUrdfTopics.some(topic => topic.name === urdfRobotDescriptionTopic);
+    if (!currentTopicStillAvailable) {
+      setUrdfRobotDescriptionTopic(getPreferredUrdfTopic(availableUrdfTopics)?.name || '');
+    }
+  }, [availableUrdfTopics, urdfRobotDescriptionTopic, useManualInput]);
 
   // Check if a type has available topics
   const getAvailableTopics = (type: Exclude<VisualizationConfig['type'], 'tf'>): TopicInfo[] => {
@@ -95,12 +105,13 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     let config: Omit<VisualizationConfig, 'id'>;
 
     if (type === 'urdf') {
+      const preferredTopic = getPreferredUrdfTopic(availableTopics)?.name;
+      if (!preferredTopic) return;
       config = {
         type: 'urdf',
-        // For quick add, use the first available topic (if any)
-        topic: availableTopics[0]?.name || '',
+        topic: preferredTopic,
         options: {
-          robotDescriptionTopic: availableTopics[0]?.name || '',
+          robotDescriptionTopic: preferredTopic,
         } as UrdfOptions,
       };
     } else if (availableTopics.length > 0) {
@@ -127,10 +138,11 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   // Handle manual topic selection (only used if user wants to select a specific topic)
   const handleTypeSelect = (type: Exclude<VisualizationConfig['type'], 'tf'> | '') => {
     setSelectedType(type);
+    setUseManualInput(false);
+    setManualTopicInput('');
     if (type === 'urdf') {
-      // Pre-fill topic if a common one exists, or clear if not
-      const defaultUrdfTopic = getAvailableTopics('urdf').find(t => t.name.includes('robot_description'))?.name;
-      setSelectedTopic(defaultUrdfTopic || '');
+      setUrdfRobotDescriptionTopic(getPreferredUrdfTopic(availableUrdfTopics)?.name || '');
+      setSelectedTopic('');
     } else {
       setSelectedTopic('');
     }
@@ -145,11 +157,13 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     let config: Omit<VisualizationConfig, 'id'>;
 
     if (selectedType === 'urdf') {
+      const topicToUse = useManualInput ? manualTopicInput.trim() : urdfRobotDescriptionTopic;
+      if (!topicToUse) return;
       config = {
         type: 'urdf',
-        topic: selectedTopic || urdfRobotDescriptionTopic, // Use selected or default from input
+        topic: topicToUse,
         options: {
-          robotDescriptionTopic: urdfRobotDescriptionTopic,
+          robotDescriptionTopic: topicToUse,
         } as UrdfOptions,
       };
     } else {
@@ -190,22 +204,24 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
               {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
                 const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
                 const availableTopics = getAvailableTopics(vizType);
-                const hasTopicsOrIsUrdf = vizType === 'urdf' || availableTopics.length > 0;
+                const hasTopics = availableTopics.length > 0;
                 const icon = VIZ_TYPE_ICONS[vizType];
 
                 // Debug logging for PoseStamped specifically in grid rendering
                 if (vizType === 'posestamped') {
                   console.log('[AddVisualizationModal] PoseStamped grid rendering:');
                   console.log('  Available topics:', availableTopics);
-                  console.log('  Has topics or is URDF:', hasTopicsOrIsUrdf);
+                  console.log('  Has topics:', hasTopics);
                   console.log('  All topics count:', allTopics.length);
                 }
 
                 let title = `Add ${formatTypeName(type)}`;
-                if (vizType !== 'urdf' && hasTopicsOrIsUrdf) {
+                if (vizType !== 'urdf' && hasTopics) {
                   title += ` (${availableTopics[0]?.name || 'first available'})`;
-                } else if (vizType === 'urdf') {
+                } else if (vizType === 'urdf' && hasTopics) {
                   title += ` (default: ${urdfRobotDescriptionTopic})`;
+                } else if (vizType === 'urdf') {
+                  title = 'No conventional robot_description topic found; use Advanced for a remapped topic';
                 } else {
                   title = 'No compatible topics available';
                 }
@@ -213,14 +229,14 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 return (
                   <button
                     key={type}
-                    className={`viz-grid-item ${!hasTopicsOrIsUrdf ? 'disabled' : ''}`}
-                    onClick={() => hasTopicsOrIsUrdf && addQuickVisualization(vizType)}
-                    disabled={!hasTopicsOrIsUrdf}
+                    className={`viz-grid-item ${!hasTopics ? 'disabled' : ''}`}
+                    onClick={() => hasTopics && addQuickVisualization(vizType)}
+                    disabled={!hasTopics}
                     title={title}
                   >
                     <div className="viz-icon">{icon}</div>
                     <div className="viz-name">{formatTypeName(type)}</div>
-                    {vizType !== 'urdf' && hasTopicsOrIsUrdf && (
+                    {hasTopics && (
                       <div className="viz-topic-count">
                         {availableTopics.length} topic{availableTopics.length !== 1 ? 's' : ''}
                       </div>
@@ -314,31 +330,67 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                 )}
 
                 {selectedType === 'urdf' && (
-                  <>
-                    <div className="form-group">
-                      <label htmlFor="urdf-robot-description-topic">Robot Description Topic:</label>
-                      <select
-                        id="urdf-robot-description-topic"
-                        value={urdfRobotDescriptionTopic}
-                        onChange={e => setUrdfRobotDescriptionTopic(e.target.value)}
-                        disabled={availableUrdfTopics.length === 0}
-                      >
+                  <div className="form-group">
+                    <label htmlFor={useManualInput ? 'manual-urdf-topic-input' : 'urdf-robot-description-topic'}>
+                      Robot Description Topic:
+                    </label>
+                    {!useManualInput ? (
+                      <div>
+                        <select
+                          id="urdf-robot-description-topic"
+                          value={urdfRobotDescriptionTopic}
+                          onChange={e => setUrdfRobotDescriptionTopic(e.target.value)}
+                          disabled={availableUrdfTopics.length === 0}
+                        >
+                          {availableUrdfTopics.length === 0 && (
+                            <option value="" disabled>
+                              No URDF topics available
+                            </option>
+                          )}
+                          {availableUrdfTopics.map(topic => (
+                            <option key={topic.name} value={topic.name}>
+                              {topic.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="manual-topic-actions">
+                          <button
+                            type="button"
+                            className="secondary-inline-button"
+                            onClick={() => setUseManualInput(true)}
+                          >
+                            Enter remapped topic manually
+                          </button>
+                        </div>
                         {availableUrdfTopics.length === 0 && (
-                          <option value="" disabled>
-                            No URDF topics available
-                          </option>
+                          <div className="add-viz-field-warning">
+                            No robot_description String topic found. Enter a remapped topic manually.
+                          </div>
                         )}
-                        {availableUrdfTopics.map(topic => (
-                          <option key={topic.name} value={topic.name}>
-                            {topic.name}
-                          </option>
-                        ))}
-                      </select>
-                      {availableUrdfTopics.length === 0 && (
-                        <div className="add-viz-field-error">No URDF topics of type std_msgs/String found.</div>
-                      )}
-                    </div>
-                  </>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          id="manual-urdf-topic-input"
+                          placeholder="Enter robot description topic (e.g., /my_robot/model)"
+                          value={manualTopicInput}
+                          onChange={e => setManualTopicInput(e.target.value)}
+                          className="manual-topic-input"
+                        />
+                        <button
+                          type="button"
+                          className="secondary-inline-button"
+                          onClick={() => {
+                            setUseManualInput(false);
+                            setManualTopicInput('');
+                          }}
+                        >
+                          Back to discovered topics
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <button
@@ -346,7 +398,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                   onClick={handleManualAddClick}
                   disabled={
                     !selectedType ||
-                    (selectedType === 'urdf' && (!urdfRobotDescriptionTopic || availableUrdfTopics.length === 0)) ||
+                    (selectedType === 'urdf' &&
+                      (useManualInput ? !manualTopicInput.trim() : !urdfRobotDescriptionTopic)) ||
                     (selectedType !== 'urdf' && !useManualInput && !selectedTopic) ||
                     (selectedType !== 'urdf' && useManualInput && !manualTopicInput)
                   }
