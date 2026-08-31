@@ -45,6 +45,7 @@ interface CapabilityBrokerOptions {
 
 interface BrokerResources {
   subscriptions: Map<string, { topic: Topic; listener: (message: RoboBoyJsonObject) => void }>;
+  nextSubscriptionSequence: number;
   publishers: Map<string, Topic>;
   services: Map<string, Service>;
   requests: Map<string, AbortController>;
@@ -52,6 +53,8 @@ interface BrokerResources {
 }
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+const createPanelSubscriptionId = (sequence: number): string => `subscription-${sequence}`;
 
 export const normalizeRosMessage = (value: unknown): { value: RoboBoyJsonObject; byteLength: number } | null => {
   try {
@@ -270,7 +273,7 @@ const handleRequest = async (
     if (selectedMessageType && selectedMessageType !== params.messageType) {
       throw new Error('ROS messageType does not match the user-selected topic.');
     }
-    const subscriptionId = crypto.randomUUID();
+    const subscriptionId = createPanelSubscriptionId(++resources.nextSubscriptionSequence);
     const topic = new ROSLIB.Topic({
       ros,
       name,
@@ -407,6 +410,7 @@ export const connectPanelCapabilityBroker = (
 ): (() => void) => {
   const resources: BrokerResources = {
     subscriptions: new Map(),
+    nextSubscriptionSequence: 0,
     publishers: new Map(),
     services: new Map(),
     requests: new Map(),

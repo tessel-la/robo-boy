@@ -24,6 +24,69 @@ const manifest: ResolvedPanelManifest = {
 };
 
 describe('panel capability broker', () => {
+  it('subscribes when randomUUID is unavailable on a plain-HTTP remote origin', async () => {
+    const port = {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: vi.fn(),
+      start: vi.fn(),
+      close: vi.fn(),
+    } as unknown as MessagePort;
+    const ros = {
+      idCounter: 0,
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      callOnConnection: vi.fn(),
+    };
+    const originalCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', {});
+
+    try {
+      const disconnect = connectPanelCapabilityBroker(
+        port,
+        {
+          manifest: {
+            ...manifest,
+            capabilities: ['ros'],
+            permissions: { ros: { subscribe: ['/joint_states'] } },
+          },
+          ros: ros as never,
+          runtime: { target: 'web' },
+          runtimeEndpoints: {},
+          hostElement: document.createElement('div'),
+          logger: console,
+        },
+        vi.fn()
+      );
+
+      port.onmessage?.({
+        data: {
+          type: 'request',
+          requestId: 'subscribe-remote',
+          method: 'ros.subscribe',
+          params: {
+            topic: '/joint_states',
+            messageType: 'sensor_msgs/msg/JointState',
+          },
+        },
+      } as MessageEvent);
+
+      await vi.waitFor(() =>
+        expect(port.postMessage).toHaveBeenCalledWith({
+          type: 'response',
+          requestId: 'subscribe-remote',
+          value: { subscriptionId: 'subscription-1' },
+        })
+      );
+      expect(ros.callOnConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'subscribe', topic: '/joint_states' })
+      );
+      disconnect();
+    } finally {
+      vi.stubGlobal('crypto', originalCrypto);
+    }
+  });
+
   it('normalizes ROS messages with non-finite values before crossing the sandbox boundary', () => {
     class RosMessage {
       position = [1.25, 2.5];
