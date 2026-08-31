@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
+import { applyPanelInstallationPreview, previewPanelInstallation } from './install-panels.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,7 +16,7 @@ const installerPath = join(projectRoot, 'scripts/install-panels.mjs');
 const integrity = bytes => `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 
 const panelFixture = (id, version, origin, prefix) => {
-  const bundle = Buffer.from(`export default { apiVersion: '1.0.0', id: '${id}', activate() {} };\n`);
+  const bundle = Buffer.from(`export default { apiVersion: '2.0.0', id: '${id}', activate() {} };\n`);
   const digest = integrity(bundle);
   const manifest = {
     schemaVersion: 1,
@@ -25,7 +26,7 @@ const panelFixture = (id, version, origin, prefix) => {
     version,
     entryPoint: './dist/index.js',
     integrity: digest,
-    compatibility: { panelApi: '^1.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
+    compatibility: { panelApi: '^2.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
     capabilities: ['storage'],
     author: { name: 'Test Author' },
     repository: `https://example.com/${id}`,
@@ -108,7 +109,7 @@ test('installs public and authenticated private inventories into one registry', 
             type: 'remote',
             name: 'private',
             catalogUrl: `${server.origin}/private/catalog.json`,
-            authorizationEnv: 'PRIVATE_PANEL_AUTHORIZATION',
+            authorizationEnv: 'ROBOBOY_PANEL_SOURCE_PRIVATE_AUTHORIZATION',
           },
         ],
         selection: { mode: 'all' },
@@ -116,7 +117,7 @@ test('installs public and authenticated private inventories into one registry', 
     );
 
     await execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', output], {
-      env: { ...process.env, PRIVATE_PANEL_AUTHORIZATION: 'Bearer private-test-token' },
+      env: { ...process.env, ROBOBOY_PANEL_SOURCE_PRIVATE_AUTHORIZATION: 'Bearer private-test-token' },
     });
     const registry = JSON.parse(await readFile(join(output, 'installed.json'), 'utf8'));
     assert.deepEqual(
@@ -325,7 +326,7 @@ test('replaces same-version local development bytes while retaining exact proven
     await execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', output]);
 
     const rebuiltBundle = Buffer.from(
-      "export default { apiVersion: '1.0.0', id: 'com.example.local-rebuild', activate() { return {}; } };\n"
+      "export default { apiVersion: '2.0.0', id: 'com.example.local-rebuild', activate() { return {}; } };\n"
     );
     const rebuiltIntegrity = integrity(rebuiltBundle);
     await writeFile(
@@ -436,6 +437,137 @@ test('rejects removed schemaVersion 1 source configuration', async () => {
     await assert.rejects(
       execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', join(temporaryRoot, 'out')]),
       error => error.stderr.includes('must use schemaVersion 2')
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects attempts to reuse privileged environment variables as panel source inputs', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-panel-installer-env-scope-'));
+  try {
+    const output = join(temporaryRoot, 'out');
+    await assert.rejects(
+      previewPanelInstallation({
+        config: join(temporaryRoot, 'sources.json'),
+        configValue: {
+          schemaVersion: 2,
+          sources: [
+            {
+              type: 'remote',
+              name: 'unsafe',
+              catalogUrl: 'https://example.com/catalog.json',
+              authorizationEnv: 'ROBOBOY_PANEL_MANAGER_TOKEN',
+            },
+          ],
+          selection: { mode: 'none' },
+        },
+        output,
+      }),
+      /dedicated panel-source credential/
+    );
+    await assert.rejects(
+      previewPanelInstallation({
+        config: join(temporaryRoot, 'sources.json'),
+        configValue: {
+          schemaVersion: 2,
+          sources: [
+            {
+              type: 'local',
+              name: 'unsafe',
+              rootEnv: 'ROBOBOY_PANEL_MANAGER_TOKEN',
+              repositories: ['panel'],
+            },
+          ],
+          selection: { mode: 'none' },
+        },
+        output,
+      }),
+      /dedicated panel workspace root/
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('previews exact add and remove changes without mutating the active registry', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-panel-installer-preview-'));
+  try {
+    const localRepository = join(temporaryRoot, 'local-panel');
+    const next = panelFixture('com.example.next', '2.0.0', 'https://example.com', 'unused');
+    await mkdir(join(localRepository, 'dist'), { recursive: true });
+    await writeFile(join(localRepository, 'roboboy.panel.json'), JSON.stringify(next.manifest));
+    await writeFile(join(localRepository, 'dist/index.js'), next.bundle);
+    const configPath = join(temporaryRoot, 'sources.json');
+    const output = join(temporaryRoot, 'panels');
+    const config = {
+      schemaVersion: 2,
+      sources: [{ type: 'local', name: 'workspace', root: '.', repositories: ['./local-panel'] }],
+      selection: { mode: 'all' },
+    };
+    await mkdir(output, { recursive: true });
+    const previousRegistry = JSON.stringify({
+      schemaVersion: 1,
+      panels: [
+        {
+          ...next.manifest,
+          id: 'com.example.previous',
+          name: 'Previous',
+          entryPoint: './com.example.previous/1.0.0/index.js',
+          version: '1.0.0',
+        },
+      ],
+    });
+    await writeFile(join(output, 'installed.json'), previousRegistry);
+
+    const preview = await previewPanelInstallation({
+      config: configPath,
+      configValue: config,
+      output,
+    });
+
+    assert.match(preview.planId, /^sha256-/);
+    assert.deepEqual(
+      preview.changes.map(change => [change.type, change.panel.id]),
+      [
+        ['add', 'com.example.next'],
+        ['remove', 'com.example.previous'],
+      ]
+    );
+    assert.equal(await readFile(join(output, 'installed.json'), 'utf8'), previousRegistry);
+    await assert.rejects(readFile(join(output, 'com.example.next/2.0.0/index.js')));
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('applies the exact bytes held by a verified preview without fetching a third time', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-panel-installer-exact-preview-'));
+  try {
+    const localRepository = join(temporaryRoot, 'local-panel');
+    const panel = panelFixture('com.example.exact', '2.0.0', 'https://example.com', 'unused');
+    await mkdir(join(localRepository, 'dist'), { recursive: true });
+    await writeFile(join(localRepository, 'roboboy.panel.json'), JSON.stringify(panel.manifest));
+    await writeFile(join(localRepository, 'dist/index.js'), panel.bundle);
+    const configPath = join(temporaryRoot, 'sources.json');
+    const output = join(temporaryRoot, 'panels');
+    const preview = await previewPanelInstallation({
+      config: configPath,
+      configValue: {
+        schemaVersion: 2,
+        sources: [{ type: 'local', name: 'workspace', root: '.', repositories: ['./local-panel'] }],
+        selection: { mode: 'all' },
+      },
+      output,
+    });
+
+    assert.equal(JSON.stringify(preview).includes('preparedInstallation'), false);
+    await writeFile(join(localRepository, 'dist/index.js'), 'changed after verification');
+    await applyPanelInstallationPreview(preview, { output });
+
+    assert.equal(
+      await readFile(join(output, panel.manifest.id, panel.manifest.version, 'index.js'), 'utf8'),
+      panel.bundle.toString('utf8')
     );
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });

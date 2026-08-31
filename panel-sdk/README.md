@@ -8,7 +8,7 @@ export one default `RoboBoyPanelDefinition` from their ESM entry point:
 
 ```sh
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v1.0.0/tessel-la-roboboy-panel-sdk-1.0.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.0.0/tessel-la-roboboy-panel-sdk-2.0.0.tgz
 ```
 
 The SDK is distributed as an npm-compatible tarball attached to the matching versioned GitHub release. It is not
@@ -18,5 +18,7 @@ tarball integrity so replacement bytes fail installation.
 The complete authoring and deployment guide lives in the
 [Robo-Boy repository](https://github.com/tessel-la/robo-boy/blob/main/docs/external-panels.md).
 
-API `1.0.0` is the source contract in the Robo-Boy repository. Panel instances must implement both `mount` and
-`unmount`, and same-realm panels must be treated as trusted deployment code.
+API `2.0.0` is the source contract in the Robo-Boy repository. Panel instances execute in an opaque-origin
+sandbox and must implement both `mount` and `unmount`. ROS, network, storage, viewport, and connection access
+are capability-scoped services brokered by the host; raw Robo-Boy objects are not exposed to panel code. Direct
+HTTP calls are blocked by the sandbox CSP, so network access must use the reviewed `context.network` allowlist.

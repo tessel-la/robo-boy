@@ -17,7 +17,7 @@ describe('panel catalog', () => {
       entryPoint: 'https://roboboy.test/panel/1.0.0/index.js',
       integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
       registryUrl: 'https://roboboy.test/installed.json',
-      compatibility: { panelApi: '^1.0.0', roboboy: '*' },
+      compatibility: { panelApi: '^2.0.0', roboboy: '*' },
       author: { name: 'Example' },
       repository: 'https://github.com/example/panel',
     } satisfies ResolvedPanelManifest;

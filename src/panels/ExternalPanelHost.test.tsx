@@ -1,186 +1,172 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearExternalPanelModuleCache } from './loader';
+import type { PanelSandboxToHostMessage } from './sandboxProtocol';
 import ExternalPanelHost from './ExternalPanelHost';
-import type { ResolvedPanelManifest, RoboBoyPanelContext } from './types';
+import type { ResolvedPanelManifest } from './types';
+
+const broker = vi.hoisted(() => ({
+  connect: vi.fn(),
+  onMessage: undefined as ((message: PanelSandboxToHostMessage) => void) | undefined,
+  cleanup: vi.fn(),
+}));
+
+vi.mock('./capabilityBroker', () => ({
+  connectPanelCapabilityBroker: vi.fn((_port, _options, onMessage) => {
+    broker.onMessage = onMessage;
+    broker.connect(_port, _options);
+    return broker.cleanup;
+  }),
+  getGrantedPanelEndpoints: vi.fn(() => ({})),
+}));
+
+class FakePort {
+  postMessage = vi.fn();
+  close = vi.fn();
+  start = vi.fn();
+  onmessage: ((event: MessageEvent) => void) | null = null;
+}
+
+class FakeMessageChannel {
+  port1 = new FakePort();
+  port2 = new FakePort();
+}
 
 const manifest: ResolvedPanelManifest = {
   schemaVersion: 1,
   id: 'com.example.panel',
   name: 'Example panel',
   description: 'An example.',
-  version: '1.0.0',
-  entryPoint: 'https://roboboy.test/panels/example/1.0.0/index.js',
+  version: '2.0.0',
+  entryPoint: 'https://roboboy.test/panels/example/2.0.0/index.js',
   integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
   registryUrl: 'https://roboboy.test/panels/installed.json',
-  compatibility: { panelApi: '^1.0.0', roboboy: '*' },
+  compatibility: { panelApi: '^2.0.0', roboboy: '*' },
   capabilities: ['ros', 'storage'],
+  permissions: { ros: { discover: true, subscribe: ['/telemetry/**'] } },
   author: { name: 'Example' },
   repository: 'https://github.com/example/panel',
 };
 
-const renderHost = (importer: (entryPoint: string) => Promise<unknown>, overrides = {}) => {
+const renderHost = (overrides: Partial<React.ComponentProps<typeof ExternalPanelHost>> = {}) => {
   const onStateChange = vi.fn();
-  const result = render(
-    <ExternalPanelHost
-      manifest={manifest}
-      instanceId="panel-instance"
-      ros={{} as any}
-      connectionStatus="connected"
-      connectionGeneration={1}
-      runtime={{
-        target: 'web',
-        endpoints: {
-          rosbridge: 'wss://robot.test/websocket',
-          videoStream: 'https://robot.test/stream',
-          meshResources: 'https://robot.test/meshes',
-          ollama: 'https://robot.test/ollama',
-        },
-      }}
-      isActive
-      state={{ count: 2 }}
-      onStateChange={onStateChange}
-      importer={importer}
-      {...overrides}
-    />
-  );
-  return { ...result, onStateChange };
+  const sourceLoader = vi.fn().mockResolvedValue('export default {};');
+  const props: React.ComponentProps<typeof ExternalPanelHost> = {
+    manifest,
+    instanceId: 'panel-instance',
+    ros: {} as never,
+    connectionStatus: 'connected',
+    connectionGeneration: 1,
+    runtime: { target: 'web', endpoints: { videoStream: 'https://robot.test/stream' } },
+    isActive: true,
+    state: { count: 2 },
+    onStateChange,
+    sourceLoader,
+    ...overrides,
+  };
+  const result = render(<ExternalPanelHost {...props} />);
+  return { ...result, onStateChange, props, sourceLoader };
 };
 
-describe('ExternalPanelHost', () => {
-  beforeEach(() => clearExternalPanelModuleCache());
+const announceSandboxReady = (iframe: HTMLIFrameElement, sessionId = 'sandbox-session-1') => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: { type: 'roboboy-panel-sandbox-ready', sessionId },
+      source: iframe.contentWindow,
+    })
+  );
+};
 
-  it('imports lazily on mount, supplies gated services, mounts, activates, and cleans up', async () => {
-    let receivedContext: RoboBoyPanelContext | undefined;
-    const unmount = vi.fn();
-    const setActive = vi.fn();
-    const importer = vi.fn().mockResolvedValue({
-      default: {
-        apiVersion: '1.0.0',
-        id: manifest.id,
-        activate: (context: RoboBoyPanelContext) => {
-          receivedContext = context;
-          return {
-            mount: (container: HTMLElement) => {
-              container.textContent = 'External content';
-              context.storage?.set('count', 3);
-            },
-            setActive,
-            unmount,
-          };
-        },
-      },
-    });
-
-    expect(importer).not.toHaveBeenCalled();
-    const { unmount: unmountHost, onStateChange } = renderHost(importer);
-
-    expect(await screen.findByText('External content')).toBeInTheDocument();
-    expect(importer).toHaveBeenCalledOnce();
-    expect(receivedContext).toMatchObject({
-      panelId: manifest.id,
-      instanceId: 'panel-instance',
-      ros: {},
-      runtime: { target: 'web' },
-    });
-    expect(receivedContext?.connection.getSnapshot()).toEqual({ status: 'connected', generation: 1 });
-    expect(receivedContext?.viewport.getSnapshot()).toEqual(expect.objectContaining({ isActive: true }));
-    expect(receivedContext?.storage).toMatchObject({ schemaVersion: 1, quotaBytes: 65536 });
-    expect(receivedContext?.storage?.get('count', 0)).toBe(3);
-    expect(onStateChange).toHaveBeenCalledWith({ count: 3 });
-    expect(setActive).toHaveBeenCalledWith(true);
-
-    unmountHost();
-    expect(unmount).toHaveBeenCalledOnce();
+describe('ExternalPanelHost sandbox', () => {
+  beforeEach(() => {
+    broker.connect.mockClear();
+    broker.cleanup.mockClear();
+    broker.onMessage = undefined;
+    vi.stubGlobal('MessageChannel', FakeMessageChannel);
   });
 
-  it('does not expose ROS or storage unless the manifest declares them', async () => {
-    let receivedContext: RoboBoyPanelContext | undefined;
-    const importer = vi.fn().mockResolvedValue({
-      default: {
-        apiVersion: '1.0.0',
-        id: manifest.id,
-        activate: (context: RoboBoyPanelContext) => {
-          receivedContext = context;
-          return { mount: (container: HTMLElement) => (container.textContent = 'Mounted'), unmount: vi.fn() };
-        },
-      },
-    });
+  it('uses an opaque-origin iframe and sends only the capability-scoped initialization', async () => {
+    const { container, sourceLoader } = renderHost();
+    const iframe = container.querySelector('iframe');
+    expect(iframe).not.toBeNull();
+    expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads');
+    expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(iframe?.getAttribute('srcdoc')).toContain("default-src 'none'");
+    expect(sourceLoader).not.toHaveBeenCalled();
 
-    renderHost(importer, { manifest: { ...manifest, capabilities: [] } });
-
-    expect(await screen.findByText('Mounted')).toBeInTheDocument();
-    expect(receivedContext?.ros).toBeNull();
-    expect(receivedContext?.storage).toBeNull();
-  });
-
-  it('isolates initialization failures and retries successfully', async () => {
-    const activate = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('initialization failed'))
-      .mockResolvedValueOnce({
-        mount: (container: HTMLElement) => (container.textContent = 'Recovered'),
-        unmount: vi.fn(),
-      });
-    const importer = vi.fn().mockResolvedValue({
-      default: { apiVersion: '1.0.0', id: manifest.id, activate },
-    });
-
-    renderHost(importer);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('initialization failed');
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('Recovered')).toBeInTheDocument();
-    expect(activate).toHaveBeenCalledTimes(2);
-  });
-
-  it('isolates a runtime mount/render failure to the panel tile', async () => {
-    const importer = vi.fn().mockResolvedValue({
-      default: {
-        apiVersion: '1.0.0',
-        id: manifest.id,
-        activate: () => ({
-          mount: () => {
-            throw new Error('render failed');
-          },
-          unmount: vi.fn(),
-        }),
-      },
-    });
-
-    renderHost(importer);
-
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('render failed'));
-    expect(document.querySelector('[data-panel-id="com.example.panel"]')).toBeInTheDocument();
-  });
-
-  it('attributes later global runtime errors to the panel bundle and cleans up the instance', async () => {
-    const unmount = vi.fn();
-    const importer = vi.fn().mockResolvedValue({
-      default: {
-        apiVersion: '1.0.0',
-        id: manifest.id,
-        activate: () => ({
-          mount: (container: HTMLElement) => (container.textContent = 'Running panel'),
-          unmount,
-        }),
-      },
-    });
-
-    renderHost(importer);
-    expect(await screen.findByText('Running panel')).toBeInTheDocument();
-
-    act(() => {
-      window.dispatchEvent(
-        new ErrorEvent('error', {
-          error: new Error(`event callback failed at ${manifest.entryPoint}`),
-          filename: manifest.entryPoint,
-          message: 'event callback failed',
+    announceSandboxReady(iframe!);
+    await waitFor(() => expect(sourceLoader).toHaveBeenCalledWith(manifest));
+    await waitFor(() => {
+      const port = broker.connect.mock.calls[0][0] as FakePort;
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'initialize',
+          value: expect.objectContaining({
+            panelId: manifest.id,
+            capabilities: ['ros', 'storage'],
+            runtime: { target: 'web' },
+            endpoints: {},
+            storage: expect.objectContaining({ values: { count: 2 } }),
+          }),
         })
       );
     });
+    expect(container.textContent).not.toContain('export default');
+  });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('event callback failed');
-    expect(unmount).toHaveBeenCalledOnce();
+  it('accepts valid storage updates from the private broker and rejects invalid state', () => {
+    const { container, onStateChange } = renderHost();
+    announceSandboxReady(container.querySelector('iframe')!);
+
+    broker.onMessage?.({ type: 'storage', values: { count: 3 } });
+    expect(onStateChange).toHaveBeenCalledWith({ count: 3 });
+
+    broker.onMessage?.({ type: 'storage', values: { invalid: Number.NaN } as never });
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows isolated sandbox failures and creates a fresh sandbox on retry', async () => {
+    const { container } = renderHost();
+    announceSandboxReady(container.querySelector('iframe')!);
+    act(() => broker.onMessage?.({ type: 'error', message: 'render failed' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('render failed');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    const nextIframe = container.querySelector('iframe');
+    announceSandboxReady(nextIframe!);
+    expect(broker.cleanup).toHaveBeenCalled();
+  });
+
+  it('removes the loading overlay only after the sandbox reports ready', async () => {
+    const { container } = renderHost();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading Example panel');
+    announceSandboxReady(container.querySelector('iframe')!);
+    act(() => broker.onMessage?.({ type: 'ready' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('does not return to loading when equivalent manifest metadata is recreated', async () => {
+    const { container, props, rerender } = renderHost();
+    announceSandboxReady(container.querySelector('iframe')!);
+    act(() => broker.onMessage?.({ type: 'ready' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    rerender(<ExternalPanelHost {...props} manifest={{ ...manifest }} />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('reconnects when browser reordering reloads the iframe document', async () => {
+    const { container } = renderHost();
+    const iframe = container.querySelector('iframe')!;
+    announceSandboxReady(iframe, 'sandbox-session-1');
+    act(() => broker.onMessage?.({ type: 'ready' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    act(() => announceSandboxReady(iframe, 'sandbox-session-2'));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading Example panel');
+    expect(broker.connect).toHaveBeenCalledTimes(2);
+    act(() => broker.onMessage?.({ type: 'ready' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 });

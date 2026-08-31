@@ -9,6 +9,7 @@ import type {
   ResolvedPanelManifest,
   RoboBoyPanelCapability,
   RoboBoyPanelManifest,
+  RoboBoyPanelPermissions,
 } from './types';
 
 const PANEL_ID_PATTERN = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
@@ -25,6 +26,8 @@ const PANEL_CAPABILITIES = new Set<RoboBoyPanelCapability>([
   'camera',
   'microphone',
 ]);
+const HOST_ENDPOINTS = new Set(['videoStream']);
+const ROS_RESOURCE_PATTERN = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
 
 interface ParseRegistryOptions {
   hostVersion?: string;
@@ -116,6 +119,73 @@ const isStringArray = (value: unknown, maxItems = 30): value is string[] => {
   return Array.isArray(value) && value.length <= maxItems && value.every(item => isNonEmptyString(item, 80));
 };
 
+const isUniqueStringArray = (value: unknown, validator: (item: string) => boolean, maxItems = 100): value is string[] =>
+  Array.isArray(value) &&
+  value.length <= maxItems &&
+  new Set(value).size === value.length &&
+  value.every(item => typeof item === 'string' && validator(item));
+
+const isPanelPermissions = (
+  value: unknown,
+  capabilities: readonly RoboBoyPanelCapability[]
+): value is RoboBoyPanelPermissions => {
+  if (value === undefined) return !capabilities.includes('ros') && !capabilities.includes('network');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as RoboBoyPanelPermissions;
+  const keys = Object.keys(candidate);
+  if (keys.some(key => !['ros', 'network'].includes(key))) return false;
+
+  if (capabilities.includes('ros')) {
+    const ros = candidate.ros;
+    if (!ros || typeof ros !== 'object' || Array.isArray(ros)) return false;
+    if (Object.keys(ros).some(key => !['discover', 'subscribe', 'publish', 'services'].includes(key))) return false;
+    if (ros.discover !== undefined && typeof ros.discover !== 'boolean') return false;
+    if (
+      !['subscribe', 'publish', 'services'].every(key => {
+        const resources = ros[key as keyof typeof ros];
+        return resources === undefined || isUniqueStringArray(resources, item => ROS_RESOURCE_PATTERN.test(item));
+      })
+    ) {
+      return false;
+    }
+  } else if (candidate.ros !== undefined) {
+    return false;
+  }
+
+  if (capabilities.includes('network')) {
+    const network = candidate.network;
+    if (!network || typeof network !== 'object' || Array.isArray(network)) return false;
+    if (Object.keys(network).some(key => !['origins', 'hostEndpoints'].includes(key))) return false;
+    if (
+      network.origins !== undefined &&
+      !isUniqueStringArray(
+        network.origins,
+        item => {
+          if (item === 'self' || item === 'https:') return true;
+          try {
+            const url = new URL(item);
+            return url.protocol === 'https:' && url.origin === item;
+          } catch {
+            return false;
+          }
+        },
+        30
+      )
+    ) {
+      return false;
+    }
+    if (
+      network.hostEndpoints !== undefined &&
+      !isUniqueStringArray(network.hostEndpoints, item => HOST_ENDPOINTS.has(item), HOST_ENDPOINTS.size)
+    ) {
+      return false;
+    }
+  } else if (candidate.network !== undefined) {
+    return false;
+  }
+  return true;
+};
+
 const isPanelAssetArray = (value: unknown): value is NonNullable<RoboBoyPanelManifest['assets']> => {
   return (
     Array.isArray(value) &&
@@ -139,6 +209,7 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
   const compatibility = candidate.compatibility;
   const author = candidate.author;
   const capabilities = candidate.capabilities;
+  const normalizedCapabilities = capabilities || [];
 
   return (
     candidate.schemaVersion === 1 &&
@@ -166,6 +237,7 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
       (Array.isArray(capabilities) &&
         new Set(capabilities).size === capabilities.length &&
         capabilities.every(capability => PANEL_CAPABILITIES.has(capability)))) &&
+    isPanelPermissions(candidate.permissions, normalizedCapabilities) &&
     (!candidate.tags || isStringArray(candidate.tags)) &&
     (!candidate.icon || isNonEmptyString(candidate.icon, 2048)) &&
     (!candidate.preview || isNonEmptyString(candidate.preview, 2048))

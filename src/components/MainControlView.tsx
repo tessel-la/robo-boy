@@ -35,12 +35,13 @@ import { saveRecentConnection } from '../runtime/recentConnections';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import anime from 'animejs';
 import ExternalPanelHost from '../panels/ExternalPanelHost';
+import PanelManagerDialog from '../panels/PanelManagerDialog';
 import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
 import {
   isJsonObject,
   isStoredPanelState,
+  type PanelHostRuntime,
   type PanelCatalogEntry,
-  type RoboBoyPanelRuntime,
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
@@ -969,14 +970,11 @@ const applyWorkspaceDropPlacement = (
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const runtimeEndpoints = useRuntimeConfig();
-  const panelRuntime = useMemo<RoboBoyPanelRuntime>(
+  const panelRuntime = useMemo<PanelHostRuntime>(
     () => ({
       target: runtimeEndpoints.mode,
       endpoints: {
-        rosbridge: runtimeEndpoints.rosbridgeUrl,
         videoStream: runtimeEndpoints.videoStreamBaseUrl,
-        meshResources: runtimeEndpoints.meshResourcesBaseUrl,
-        ollama: runtimeEndpoints.ollamaBaseUrl,
       },
     }),
     [runtimeEndpoints]
@@ -1050,6 +1048,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
+  const [isPanelManagerOpen, setIsPanelManagerOpen] = useState(false);
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   const [workspacePadMenu, setWorkspacePadMenu] = useState<WorkspacePadMenuState | null>(null);
@@ -3133,6 +3132,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </span>
           )}
           {externalPanels.map(renderPanelButton)}
+          {!isReplacementMenu && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsWorkspaceAddMenuOpen(false);
+                setIsPanelManagerOpen(true);
+              }}
+            >
+              <FiSettings aria-hidden="true" />
+              <span>Manage installations…</span>
+            </button>
+          )}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
           {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
             <span className="workspace-panel-catalog-note">No external panels selected</span>
@@ -3844,6 +3855,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         onCustomGamepadDeleted={handleCustomGamepadDeleted}
         onGamepadLibraryChanged={() => setCustomGamepadRefreshKey(prev => prev + 1)}
       />
+
+      {isPanelManagerOpen && (
+        <PanelManagerDialog
+          installedPanels={installedPanelRegistry.panels}
+          onClose={() => setIsPanelManagerOpen(false)}
+          onApplied={installedPanelRegistry.refresh}
+        />
+      )}
 
       {/* Render GamepadEditor modal */}
       {editorSession && ros && (

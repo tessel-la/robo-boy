@@ -10,7 +10,9 @@ const MAX_PANELS = 100;
 const MAX_SOURCES = 20;
 const PANEL_ID = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/;
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]{0,79}$/;
+const AUTHORIZATION_ENVIRONMENT =
+  /^(?:ROBOBOY_PANEL_AUTHORIZATION|ROBOBOY_PANEL_SOURCE_[A-Z0-9_]{1,48}_AUTHORIZATION)$/;
+const ROOT_ENVIRONMENT = /^(?:ROBOBOY_PANEL_WORKSPACE|ROBOBOY_PANEL_SOURCE_[A-Z0-9_]{1,60}_ROOT)$/;
 const CAPABILITIES = new Set([
   'ros',
   'storage',
@@ -21,8 +23,10 @@ const CAPABILITIES = new Set([
   'camera',
   'microphone',
 ]);
+const HOST_ENDPOINTS = new Set(['videoStream']);
+const ROS_RESOURCE = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
 
-class InstallError extends Error {}
+export class InstallError extends Error {}
 
 const parseArguments = argv => {
   const options = { config: '', output: '', dryRun: false };
@@ -143,8 +147,8 @@ const validateRemoteSource = candidate => {
     }
     authenticatedOrigins.add(normalized);
   }
-  if (candidate.authorizationEnv !== undefined && !ENVIRONMENT_NAME.test(candidate.authorizationEnv)) {
-    throw new InstallError(`${candidate.name} authorizationEnv is invalid.`);
+  if (candidate.authorizationEnv !== undefined && !AUTHORIZATION_ENVIRONMENT.test(candidate.authorizationEnv)) {
+    throw new InstallError(`${candidate.name} authorizationEnv must name a dedicated panel-source credential.`);
   }
   return {
     type: 'remote',
@@ -163,8 +167,8 @@ const validateLocalSource = (candidate, label, configPath) => {
   if (candidate.repositories.length > MAX_PANELS) {
     throw new InstallError(`${candidate.name} exceeds the ${MAX_PANELS}-repository limit.`);
   }
-  if (candidate.rootEnv !== undefined && !ENVIRONMENT_NAME.test(candidate.rootEnv)) {
-    throw new InstallError(`${candidate.name} rootEnv is invalid.`);
+  if (candidate.rootEnv !== undefined && !ROOT_ENVIRONMENT.test(candidate.rootEnv)) {
+    throw new InstallError(`${candidate.name} rootEnv must name a dedicated panel workspace root.`);
   }
   const configuredRoot = candidate.rootEnv ? process.env[candidate.rootEnv] : undefined;
   const rootValue = configuredRoot || candidate.root;
@@ -197,7 +201,7 @@ const validateSourceList = (sources, configPath) => {
   });
 };
 
-const validateConfig = (value, configPath) => {
+export const validatePanelSourceConfig = (value, configPath) => {
   if (!value || typeof value !== 'object' || value.schemaVersion !== 2 || !Array.isArray(value.sources)) {
     throw new InstallError('panel source config must use schemaVersion 2 and contain a sources array.');
   }
@@ -207,6 +211,33 @@ const validateConfig = (value, configPath) => {
     selection: validateSelection(value.selection),
   };
 };
+
+const serializeConfig = config => ({
+  schemaVersion: 2,
+  sources: config.sources.map(source =>
+    source.type === 'remote'
+      ? {
+          type: 'remote',
+          name: source.name,
+          catalogUrl: source.catalogUrl.href,
+          ...(source.allowedOrigins.size > 1
+            ? { allowedOrigins: [...source.allowedOrigins].filter(origin => origin !== source.catalogUrl.origin) }
+            : {}),
+          ...(source.authorizationEnv ? { authorizationEnv: source.authorizationEnv } : {}),
+          ...(source.authorizationEnv ? { authenticatedOrigins: [...source.authenticatedOrigins] } : {}),
+        }
+      : {
+          type: 'local',
+          name: source.name,
+          root: source.root,
+          repositories: [...source.repositories],
+        }
+  ),
+  selection: {
+    mode: config.selection.mode,
+    ...(config.selection.mode === 'include' ? { panelIds: [...config.selection.panelIds] } : {}),
+  },
+});
 
 const headersFor = (source, url) => {
   if (!source.authorizationEnv || !source.authenticatedOrigins.has(url.origin)) return {};
@@ -235,9 +266,23 @@ const fetchBytes = async (source, url, maximumBytes, label) => {
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
     throw new InstallError(`${label} exceeds ${maximumBytes} bytes.`);
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.byteLength > maximumBytes) throw new InstallError(`${label} exceeds ${maximumBytes} bytes.`);
-  return bytes;
+  if (!response.body) {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > maximumBytes) throw new InstallError(`${label} exceeds ${maximumBytes} bytes.`);
+    return bytes;
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    const bytes = Buffer.from(chunk);
+    size += bytes.byteLength;
+    if (size > maximumBytes) {
+      await response.body.cancel().catch(() => undefined);
+      throw new InstallError(`${label} exceeds ${maximumBytes} bytes.`);
+    }
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks, size);
 };
 
 const fetchJson = async (source, url, label) => parseJson(await fetchBytes(source, url, MAX_JSON_BYTES, label), label);
@@ -303,6 +348,71 @@ const validateManifestShape = (manifest, label) => {
       manifest.capabilities.some(capability => !CAPABILITIES.has(capability)))
   ) {
     throw new InstallError(`${manifest.id} manifest declares invalid capabilities.`);
+  }
+  const capabilities = new Set(manifest.capabilities ?? []);
+  const permissions = manifest.permissions;
+  if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+    if (capabilities.has('ros') || capabilities.has('network')) {
+      throw new InstallError(`${manifest.id} must declare permissions for ROS or network access.`);
+    }
+  } else {
+    if (Object.keys(permissions).some(key => !['ros', 'network'].includes(key))) {
+      throw new InstallError(`${manifest.id} manifest declares unknown permissions.`);
+    }
+    const validateResourceList = (value, permission) => {
+      if (value === undefined) return;
+      if (
+        !Array.isArray(value) ||
+        value.length > MAX_PANELS ||
+        new Set(value).size !== value.length ||
+        value.some(resource => typeof resource !== 'string' || !ROS_RESOURCE.test(resource))
+      ) {
+        throw new InstallError(`${manifest.id} has invalid ROS ${permission} permissions.`);
+      }
+    };
+    if (capabilities.has('ros')) {
+      if (!permissions.ros || typeof permissions.ros !== 'object' || Array.isArray(permissions.ros)) {
+        throw new InstallError(`${manifest.id} needs ROS permissions.`);
+      }
+      if (Object.keys(permissions.ros).some(key => !['discover', 'subscribe', 'publish', 'services'].includes(key))) {
+        throw new InstallError(`${manifest.id} declares unknown ROS permissions.`);
+      }
+      if (permissions.ros.discover !== undefined && typeof permissions.ros.discover !== 'boolean') {
+        throw new InstallError(`${manifest.id} has an invalid ROS discover permission.`);
+      }
+      validateResourceList(permissions.ros.subscribe, 'subscribe');
+      validateResourceList(permissions.ros.publish, 'publish');
+      validateResourceList(permissions.ros.services, 'service');
+    } else if (permissions.ros !== undefined) {
+      throw new InstallError(`${manifest.id} declares ROS permissions without the ros capability.`);
+    }
+    if (capabilities.has('network')) {
+      if (!permissions.network || typeof permissions.network !== 'object' || Array.isArray(permissions.network)) {
+        throw new InstallError(`${manifest.id} needs network permissions.`);
+      }
+      if (Object.keys(permissions.network).some(key => !['origins', 'hostEndpoints'].includes(key))) {
+        throw new InstallError(`${manifest.id} declares unknown network permissions.`);
+      }
+      const origins = permissions.network.origins ?? [];
+      if (!Array.isArray(origins) || origins.length > 30 || new Set(origins).size !== origins.length) {
+        throw new InstallError(`${manifest.id} has invalid network origins.`);
+      }
+      for (const origin of origins) {
+        if (origin === 'self' || origin === 'https:') continue;
+        const normalized = normalizeOrigin(origin, `${manifest.id} network origin`);
+        if (normalized !== origin) throw new InstallError(`${manifest.id} network origins must be exact origins.`);
+      }
+      const endpoints = permissions.network.hostEndpoints ?? [];
+      if (
+        !Array.isArray(endpoints) ||
+        new Set(endpoints).size !== endpoints.length ||
+        endpoints.some(endpoint => !HOST_ENDPOINTS.has(endpoint))
+      ) {
+        throw new InstallError(`${manifest.id} has invalid host endpoint permissions.`);
+      }
+    } else if (permissions.network !== undefined) {
+      throw new InstallError(`${manifest.id} declares network permissions without the network capability.`);
+    }
   }
   if (manifest.assets?.length) {
     throw new InstallError(`${manifest.id} declares additional assets; asset installation is not supported yet.`);
@@ -402,8 +512,9 @@ const readInstalledSourceTypes = async output => {
   }
 };
 
-const install = async options => {
-  const config = validateConfig(await readJsonFile(options.config), options.config);
+const prepareInstallation = async options => {
+  const rawConfig = options.configValue ?? (await readJsonFile(options.config));
+  const config = validatePanelSourceConfig(rawConfig, options.config);
   const prepared = [];
   const discoveredIds = new Set();
 
@@ -430,21 +541,79 @@ const install = async options => {
       throw new InstallError(`selected panel ${requestedId} was not found in any source.`);
   }
 
-  if (options.dryRun) {
-    console.log(`[panel-installer] dry run verified ${prepared.length} panel${prepared.length === 1 ? '' : 's'}.`);
-    return;
-  }
+  const installedPanels = prepared.map(release => ({
+    ...release.manifest,
+    entryPoint: `./${release.manifest.id}/${release.manifest.version}/index.js`,
+    integrity: release.integrity,
+  }));
+  const resolvedPanels = prepared.map(release => ({
+    id: release.manifest.id,
+    version: release.manifest.version,
+    integrity: release.integrity,
+    source: release.source,
+  }));
+  const registry = {
+    schemaVersion: 1,
+    installation: {
+      schemaVersion: 1,
+      configSchemaVersion: 2,
+      selection: {
+        mode: config.selection.mode,
+        ...(config.selection.mode === 'include' ? { panelIds: [...config.selection.panelIds] } : {}),
+      },
+      sources: config.sources.map(source => ({ type: source.type, name: source.name })),
+      resolvedPanels,
+    },
+    panels: installedPanels,
+  };
+  return { config, prepared, registry };
+};
 
-  await mkdir(options.output, { recursive: true });
-  const installedSourceTypes = await readInstalledSourceTypes(options.output);
-  const stagingRoot = resolveInside(options.output, `.install-${randomUUID()}`, 'installation staging directory');
+const readExistingRegistry = async output => {
+  try {
+    return await readJsonFile(resolveInside(output, 'installed.json', 'existing installed panel registry'));
+  } catch {
+    return { schemaVersion: 1, panels: [] };
+  }
+};
+
+export const previewPanelInstallation = async options => {
+  const preparedInstallation = await prepareInstallation(options);
+  const existing = await readExistingRegistry(options.output);
+  const previousPanels = new Map(
+    (Array.isArray(existing.panels) ? existing.panels : []).map(panel => [panel.id, panel])
+  );
+  const nextPanels = new Map(preparedInstallation.registry.panels.map(panel => [panel.id, panel]));
+  const changes = [];
+  for (const panel of preparedInstallation.registry.panels) {
+    const previous = previousPanels.get(panel.id);
+    if (!previous) changes.push({ type: 'add', panel });
+    else if (previous.version !== panel.version || previous.integrity !== panel.integrity) {
+      changes.push({ type: 'update', panel, previousVersion: previous.version });
+    }
+  }
+  for (const panel of previousPanels.values()) {
+    if (!nextPanels.has(panel.id)) changes.push({ type: 'remove', panel });
+  }
+  const config = serializeConfig(preparedInstallation.config);
+  const planId = sha256(Buffer.from(JSON.stringify({ config, registry: preparedInstallation.registry })));
+  const preview = { planId, config, registry: preparedInstallation.registry, changes };
+  Object.defineProperty(preview, 'preparedInstallation', { value: preparedInstallation });
+  return preview;
+};
+
+const commitPreparedInstallation = async (preparedInstallation, output) => {
+  const { prepared, registry } = preparedInstallation;
+  await mkdir(output, { recursive: true });
+  const installedSourceTypes = await readInstalledSourceTypes(output);
+  const stagingRoot = resolveInside(output, `.install-${randomUUID()}`, 'installation staging directory');
   await mkdir(stagingRoot, { recursive: true });
   const replacedReleases = [];
   let committed = false;
   try {
-    const installedPanels = [];
-    const resolvedPanels = [];
-    for (const release of prepared) {
+    for (let index = 0; index < prepared.length; index += 1) {
+      const release = prepared[index];
+      const installedManifest = registry.panels[index];
       const stagedRelease = resolveInside(
         stagingRoot,
         `${release.manifest.id}/${release.manifest.version}`,
@@ -452,21 +621,8 @@ const install = async options => {
       );
       await mkdir(stagedRelease, { recursive: true });
       await writeFile(resolveInside(stagedRelease, 'index.js', `${release.manifest.id} staged bundle`), release.bundle);
-      const installedManifest = {
-        ...release.manifest,
-        entryPoint: `./${release.manifest.id}/${release.manifest.version}/index.js`,
-        integrity: release.integrity,
-      };
-      installedPanels.push(installedManifest);
-      resolvedPanels.push({
-        id: release.manifest.id,
-        version: release.manifest.version,
-        integrity: release.integrity,
-        source: release.source,
-      });
-
       const finalRelease = resolveInside(
-        options.output,
+        output,
         `${release.manifest.id}/${release.manifest.version}`,
         `${release.manifest.id} release`
       );
@@ -499,36 +655,18 @@ const install = async options => {
         await rename(stagedRelease, finalRelease);
       }
       await writeAtomic(
-        resolveInside(
-          options.output,
-          `${release.manifest.id}/roboboy.panel.json`,
-          `${release.manifest.id} installed manifest`
-        ),
+        resolveInside(output, `${release.manifest.id}/roboboy.panel.json`, `${release.manifest.id} installed manifest`),
         `${JSON.stringify({ ...installedManifest, installedFrom: release.source }, null, 2)}\n`
       );
     }
 
-    const registry = {
-      schemaVersion: 1,
-      installation: {
-        schemaVersion: 1,
-        configSchemaVersion: 2,
-        selection: {
-          mode: config.selection.mode,
-          ...(config.selection.mode === 'include' ? { panelIds: [...config.selection.panelIds] } : {}),
-        },
-        sources: config.sources.map(source => ({ type: source.type, name: source.name })),
-        resolvedPanels,
-      },
-      panels: installedPanels,
-    };
     await writeAtomic(
-      resolveInside(options.output, 'installed.json', 'installed panel registry'),
+      resolveInside(output, 'installed.json', 'installed panel registry'),
       `${JSON.stringify(registry, null, 2)}\n`
     );
     committed = true;
     console.log(
-      `[panel-installer] installed ${installedPanels.length} panel${installedPanels.length === 1 ? '' : 's'} in ${options.output}`
+      `[panel-installer] installed ${registry.panels.length} panel${registry.panels.length === 1 ? '' : 's'} in ${output}`
     );
   } catch (error) {
     if (!committed) {
@@ -541,11 +679,29 @@ const install = async options => {
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
   }
+  return registry;
 };
 
-try {
-  await install(parseArguments(process.argv.slice(2)));
-} catch (error) {
-  console.error(`[panel-installer] ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
+export const applyPanelInstallationPreview = async (preview, options) => {
+  if (!preview?.preparedInstallation) throw new InstallError('installation preview is not applicable.');
+  return commitPreparedInstallation(preview.preparedInstallation, options.output);
+};
+
+export const installPanels = async options => {
+  const preparedInstallation = await prepareInstallation(options);
+  if (options.dryRun) {
+    const count = preparedInstallation.prepared.length;
+    console.log(`[panel-installer] dry run verified ${count} panel${count === 1 ? '' : 's'}.`);
+    return preparedInstallation.registry;
+  }
+  return commitPreparedInstallation(preparedInstallation, options.output);
+};
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    await installPanels(parseArguments(process.argv.slice(2)));
+  } catch (error) {
+    console.error(`[panel-installer] ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
 }

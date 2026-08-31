@@ -1,30 +1,46 @@
 services:
-  panel-installer:
-    image: ${ROBOBOY_PANEL_INSTALLER_IMAGE:-roboboy-panel-installer:local}
+  panel-manager:
+    image: ${ROBOBOY_PANEL_MANAGER_IMAGE:-roboboy-panel-manager:local}
     build:
       context: .
-      dockerfile: infra/docker/Dockerfile.panel-installer
-    command:
-      - --config
-      - /config/panel-sources.json
-      - --output
-      - /panels
+      dockerfile: infra/docker/Dockerfile.panel-manager
     environment:
       - ROBOBOY_PANEL_WORKSPACE=/panel-workspace
+      - ROBOBOY_PANEL_MANAGER_TOKEN=${ROBOBOY_PANEL_MANAGER_TOKEN:-}
     volumes:
       - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.local.json}:/config/panel-sources.json:ro
       - ../robo-boy-hello-panel:/panel-workspace/robo-boy-hello-panel:ro
       - ../robo-boy-timeseries-panel:/panel-workspace/robo-boy-timeseries-panel:ro
       - ../robo-boy-webrtc-panel:/panel-workspace/robo-boy-webrtc-panel:ro
       - roboboy-installed-panels:/panels
-    restart: "no"
+      - roboboy-panel-manager-state:/state
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    networks:
+      - app-net
 
   app:
     depends_on:
-      panel-installer:
-        condition: service_completed_successfully
+      panel-manager:
+        condition: service_healthy
     volumes:
       - roboboy-installed-panels:${ROBOBOY_PANEL_WEB_ROOT:-/app/public/panels}:ro
 
+  caddy:
+    depends_on:
+      panel-manager:
+        condition: service_healthy
+
 volumes:
   roboboy-installed-panels:
+  roboboy-panel-manager-state:

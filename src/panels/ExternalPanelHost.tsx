@@ -1,28 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
-import { version as roboBoyVersion } from '../../package.json';
-import { loadExternalPanelDefinition } from './loader';
-import {
-  PANEL_STORAGE_QUOTA_BYTES,
-  PANEL_STORAGE_SCHEMA_VERSION,
-  getPanelStateSizeBytes,
-  removePanelStateValue,
-  setPanelStateValue,
-  validatePanelStorageKey,
-} from './storage';
+import { connectPanelCapabilityBroker, getGrantedPanelEndpoints } from './capabilityBroker';
+import { ROBOBOY_PANEL_API_VERSION } from './constants';
+import { loadVerifiedExternalPanelSource } from './loader';
+import { createPanelSandboxDocument } from './sandboxRuntime';
+import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
+import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
 import type {
-  PanelModuleImporter,
+  PanelHostRuntime,
   ResolvedPanelManifest,
   RoboBoyJsonObject,
-  RoboBoyJsonValue,
-  RoboBoyPanelConnection,
   RoboBoyPanelConnectionSnapshot,
-  RoboBoyPanelContext,
-  RoboBoyPanelInstance,
   RoboBoyPanelLogger,
-  RoboBoyPanelRuntime,
-  RoboBoyPanelStorage,
-  RoboBoyPanelViewport,
   RoboBoyPanelViewportSnapshot,
 } from './types';
 import './ExternalPanelHost.css';
@@ -33,14 +22,16 @@ interface ExternalPanelHostProps {
   ros: Ros | null;
   connectionStatus: RoboBoyPanelConnectionSnapshot['status'];
   connectionGeneration: number;
-  runtime: RoboBoyPanelRuntime;
+  runtime: PanelHostRuntime;
   isActive: boolean;
   state?: RoboBoyJsonObject;
   onStateChange: (state: RoboBoyJsonObject) => void;
-  importer?: PanelModuleImporter;
+  sourceLoader?: (manifest: ResolvedPanelManifest) => Promise<string>;
 }
 
 type HostStatus = { phase: 'loading' } | { phase: 'ready' } | { phase: 'error'; message: string };
+
+const PANEL_START_TIMEOUT_MS = 20_000;
 
 const createLogger = (panelId: string, instanceId: string): RoboBoyPanelLogger => {
   const prefix = `[external panel ${panelId}:${instanceId}]`;
@@ -52,11 +43,20 @@ const createLogger = (panelId: string, instanceId: string): RoboBoyPanelLogger =
   };
 };
 
-const getErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
 const getInitialViewportSnapshot = (isActive: boolean): RoboBoyPanelViewportSnapshot => {
   const isDocumentVisible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
   return { width: 0, height: 0, isIntersecting: true, isDocumentVisible, isActive: isActive && isDocumentVisible };
+};
+
+const getIframeAllow = (capabilities: readonly string[]): string | undefined => {
+  const permissions = [
+    capabilities.includes('camera') ? 'camera' : '',
+    capabilities.includes('microphone') ? 'microphone' : '',
+    capabilities.includes('web-bluetooth') ? 'bluetooth' : '',
+    capabilities.includes('web-usb') ? 'usb' : '',
+    capabilities.includes('web-serial') ? 'serial' : '',
+  ].filter(Boolean);
+  return permissions.length > 0 ? permissions.join('; ') : undefined;
 };
 
 const ExternalPanelHost = ({
@@ -69,87 +69,45 @@ const ExternalPanelHost = ({
   isActive,
   state = {},
   onStateChange,
-  importer,
+  sourceLoader = loadVerifiedExternalPanelSource,
 }: ExternalPanelHostProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<RoboBoyPanelInstance | null>(null);
-  const cleanupRef = useRef<(() => Promise<void>) | null>(null);
-  const stateRef = useRef<RoboBoyJsonObject>(state);
-  const onStateChangeRef = useRef(onStateChange);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const portRef = useRef<MessagePort | null>(null);
+  const sandboxCleanupRef = useRef<(() => void) | null>(null);
+  const viewportRef = useRef<RoboBoyPanelViewportSnapshot>(getInitialViewportSnapshot(isActive));
   const isActiveRef = useRef(isActive);
-  const connectionSnapshotRef = useRef<RoboBoyPanelConnectionSnapshot>({
-    status: connectionStatus,
-    generation: connectionGeneration,
-  });
-  const connectionListenersRef = useRef(new Set<(snapshot: RoboBoyPanelConnectionSnapshot) => void>());
-  const viewportSnapshotRef = useRef<RoboBoyPanelViewportSnapshot>(getInitialViewportSnapshot(isActive));
-  const viewportListenersRef = useRef(new Set<(snapshot: RoboBoyPanelViewportSnapshot) => void>());
-  const [effectiveActive, setEffectiveActive] = useState(viewportSnapshotRef.current.isActive);
+  const stateRef = useRef(state);
+  const onStateChangeRef = useRef(onStateChange);
   const [status, setStatus] = useState<HostStatus>({ phase: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
+  const panelRevision = `${manifest.id}:${manifest.version}:${manifest.integrity}`;
   const capabilities = useMemo(() => manifest.capabilities || [], [manifest.capabilities]);
-  const panelRos = capabilities.includes('ros') ? ros : null;
   const logger = useMemo(() => createLogger(manifest.id, instanceId), [instanceId, manifest.id]);
+  const sandboxDocument = useMemo(() => createPanelSandboxDocument(), []);
 
-  const connection = useMemo<RoboBoyPanelConnection>(
-    () => ({
-      getSnapshot: () => connectionSnapshotRef.current,
-      subscribe: listener => {
-        connectionListenersRef.current.add(listener);
-        return () => connectionListenersRef.current.delete(listener);
-      },
-    }),
-    []
-  );
-
-  const viewport = useMemo<RoboBoyPanelViewport>(
-    () => ({
-      getSnapshot: () => viewportSnapshotRef.current,
-      subscribe: listener => {
-        viewportListenersRef.current.add(listener);
-        return () => viewportListenersRef.current.delete(listener);
-      },
-      requestFullscreen: async () => {
-        const host = hostRef.current;
-        if (!host?.requestFullscreen) throw new Error('Fullscreen is unavailable for this panel host.');
-        await host.requestFullscreen();
-      },
-    }),
-    []
-  );
-
-  const publishViewport = useCallback((update: Partial<RoboBoyPanelViewportSnapshot>) => {
-    const merged = { ...viewportSnapshotRef.current, ...update };
-    const next = {
-      ...merged,
-      isActive: isActiveRef.current && merged.isIntersecting && merged.isDocumentVisible,
-    };
-    const previous = viewportSnapshotRef.current;
-    if (
-      previous.width === next.width &&
-      previous.height === next.height &&
-      previous.isIntersecting === next.isIntersecting &&
-      previous.isDocumentVisible === next.isDocumentVisible &&
-      previous.isActive === next.isActive
-    ) {
-      return;
-    }
-    viewportSnapshotRef.current = next;
-    setEffectiveActive(next.isActive);
-    viewportListenersRef.current.forEach(listener => listener(next));
-  }, []);
-
-  const failPanel = useCallback(
-    (message: string, error: unknown) => {
-      logger.error(message, error);
-      const cleanup = cleanupRef.current;
-      cleanupRef.current = null;
-      if (cleanup) void cleanup();
-      containerRef.current?.replaceChildren();
-      setStatus({ phase: 'error', message: getErrorMessage(error) });
+  const post = useCallback((message: PanelHostToSandboxMessage) => portRef.current?.postMessage(message), []);
+  const publishViewport = useCallback(
+    (update: Partial<RoboBoyPanelViewportSnapshot>) => {
+      const merged = { ...viewportRef.current, ...update };
+      const next = {
+        ...merged,
+        isActive: isActiveRef.current && merged.isIntersecting && merged.isDocumentVisible,
+      };
+      const previous = viewportRef.current;
+      if (
+        previous.width === next.width &&
+        previous.height === next.height &&
+        previous.isIntersecting === next.isIntersecting &&
+        previous.isDocumentVisible === next.isDocumentVisible &&
+        previous.isActive === next.isActive
+      ) {
+        return;
+      }
+      viewportRef.current = next;
+      post({ type: 'viewport', value: next });
     },
-    [logger]
+    [post]
   );
 
   useEffect(() => {
@@ -161,29 +119,26 @@ const ExternalPanelHost = ({
   }, [onStateChange]);
 
   useEffect(() => {
-    const next = { status: connectionStatus, generation: connectionGeneration } as const;
-    const previous = connectionSnapshotRef.current;
-    if (previous.status === next.status && previous.generation === next.generation) return;
-    connectionSnapshotRef.current = next;
-    connectionListenersRef.current.forEach(listener => listener(next));
-  }, [connectionGeneration, connectionStatus]);
-
-  useEffect(() => {
     isActiveRef.current = isActive;
     publishViewport({});
   }, [isActive, publishViewport]);
 
   useEffect(() => {
+    post({
+      type: 'connection',
+      value: { status: connectionStatus, generation: connectionGeneration },
+    });
+  }, [connectionGeneration, connectionStatus, post]);
+
+  useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-
     const updateSize = () => {
       const bounds = host.getBoundingClientRect();
       publishViewport({ width: Math.max(0, bounds.width), height: Math.max(0, bounds.height) });
     };
-    const updateDocumentVisibility = () => {
+    const updateDocumentVisibility = () =>
       publishViewport({ isDocumentVisible: document.visibilityState !== 'hidden' });
-    };
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
         ? null
@@ -197,14 +152,12 @@ const ExternalPanelHost = ({
         : new IntersectionObserver(entries => {
             publishViewport({ isIntersecting: entries[0]?.isIntersecting ?? false });
           });
-
     updateSize();
     updateDocumentVisibility();
     resizeObserver?.observe(host);
     intersectionObserver?.observe(host);
     document.addEventListener('visibilitychange', updateDocumentVisibility);
     if (!resizeObserver) window.addEventListener('resize', updateSize);
-
     return () => {
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
@@ -214,152 +167,180 @@ const ExternalPanelHost = ({
   }, [publishViewport]);
 
   useEffect(() => {
-    let disposed = false;
-    let effectCleanup: (() => Promise<void>) | null = null;
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.replaceChildren();
     setStatus({ phase: 'loading' });
+    portRef.current = null;
+  }, [panelRevision, retryKey]);
 
-    const storage: RoboBoyPanelStorage | null = capabilities.includes('storage')
-      ? {
-          schemaVersion: PANEL_STORAGE_SCHEMA_VERSION,
-          quotaBytes: PANEL_STORAGE_QUOTA_BYTES,
-          get: <T extends RoboBoyJsonValue>(key: string, fallback: T): T => {
-            validatePanelStorageKey(key);
-            const value = stateRef.current[key];
-            return value === undefined ? fallback : (value as T);
-          },
-          set: (key, value) => {
-            const nextState = setPanelStateValue(stateRef.current, key, value);
-            stateRef.current = nextState;
-            onStateChangeRef.current(nextState);
-          },
-          remove: key => {
-            const nextState = removePanelStateValue(stateRef.current, key);
-            stateRef.current = nextState;
-            onStateChangeRef.current(nextState);
-          },
-          sizeBytes: () => getPanelStateSizeBytes(stateRef.current),
-        }
-      : null;
+  const connectSandbox = useCallback(() => {
+    sandboxCleanupRef.current?.();
+    let disposed = false;
+    let disconnectBroker: (() => void) | null = null;
+    let startupSettled = false;
+    let startupTimer: number | null = null;
+    const channel = new MessageChannel();
+    const iframe = iframeRef.current;
+    const host = hostRef.current;
+    if (!iframe?.contentWindow || !host) return;
+    portRef.current = channel.port1;
 
-    const context: RoboBoyPanelContext = {
-      panelId: manifest.id,
-      instanceId,
-      hostVersion: roboBoyVersion,
-      capabilities,
-      ros: panelRos,
-      storage,
-      runtime,
-      connection,
-      viewport,
-      logger,
+    const settleStartup = () => {
+      startupSettled = true;
+      if (startupTimer !== null) window.clearTimeout(startupTimer);
+      startupTimer = null;
     };
-
-    const start = async () => {
-      try {
-        const definition = await loadExternalPanelDefinition(manifest, importer);
-        const instance = await definition.activate(context);
-        if (!instance || typeof instance.mount !== 'function' || typeof instance.unmount !== 'function') {
-          throw new Error(`${manifest.name} activation must return mount and unmount lifecycle functions.`);
-        }
-        let cleanedUp = false;
-        effectCleanup = async () => {
-          if (cleanedUp) return;
-          cleanedUp = true;
-          if (instanceRef.current === instance) instanceRef.current = null;
-          try {
-            await instance.unmount();
-          } catch (error) {
-            logger.error('Panel cleanup failed.', error);
-          }
-        };
-        cleanupRef.current = effectCleanup;
-        if (disposed) {
-          cleanupRef.current = null;
-          await effectCleanup();
-          return;
-        }
-        instanceRef.current = instance;
-        await instance.mount(container);
-        if (disposed) {
-          cleanupRef.current = null;
-          await effectCleanup();
-          return;
-        }
-        await instance.setActive?.(viewport.getSnapshot().isActive);
+    const handleMessage = (message: PanelSandboxToHostMessage) => {
+      if (message.type === 'ready') {
+        if (startupSettled) return;
+        settleStartup();
         setStatus({ phase: 'ready' });
-      } catch (error) {
-        if (disposed) return;
-        failPanel('Panel lifecycle failed.', error);
+      } else if (message.type === 'error') {
+        logger.error('Panel sandbox failed.', message.message);
+        if (startupSettled) return;
+        settleStartup();
+        setStatus({ phase: 'error', message: message.message });
+      } else if (message.type === 'log') {
+        logger[message.level](message.message, ...message.details);
+      } else if (message.type === 'storage') {
+        if (!capabilities.includes('storage') || !validatePanelState(message.values)) {
+          logger.warn('Rejected invalid panel storage update.');
+          return;
+        }
+        stateRef.current = message.values;
+        onStateChangeRef.current(message.values);
       }
     };
+    disconnectBroker = connectPanelCapabilityBroker(
+      channel.port1,
+      {
+        manifest,
+        ros: capabilities.includes('ros') ? ros : null,
+        runtime: { target: runtime.target },
+        runtimeEndpoints: runtime.endpoints,
+        hostElement: host,
+        logger,
+      },
+      handleMessage
+    );
+    iframe.contentWindow.postMessage({ type: 'roboboy-panel-port' }, '*', [channel.port2]);
+    startupTimer = window.setTimeout(() => {
+      if (disposed || startupSettled) return;
+      settleStartup();
+      logger.error('Panel sandbox failed.', 'Panel startup timed out.');
+      setStatus({ phase: 'error', message: 'Panel startup timed out.' });
+    }, PANEL_START_TIMEOUT_MS);
 
-    void start();
+    void sourceLoader(manifest)
+      .then(bundleSource => {
+        if (disposed) return;
+        post({
+          type: 'initialize',
+          value: {
+            panelId: manifest.id,
+            instanceId,
+            apiVersion: ROBOBOY_PANEL_API_VERSION,
+            bundleSource,
+            capabilities,
+            runtime: { target: runtime.target },
+            endpoints: getGrantedPanelEndpoints(manifest, runtime.endpoints),
+            connection: { status: connectionStatus, generation: connectionGeneration },
+            viewport: viewportRef.current,
+            storage: {
+              enabled: capabilities.includes('storage'),
+              schemaVersion: PANEL_STORAGE_SCHEMA_VERSION,
+              quotaBytes: PANEL_STORAGE_QUOTA_BYTES,
+              values: stateRef.current,
+            },
+          },
+        });
+      })
+      .catch(error => {
+        if (disposed || startupSettled) return;
+        settleStartup();
+        logger.error('Panel source failed to load.', error);
+        setStatus({ phase: 'error', message: error instanceof Error ? error.message : String(error) });
+      });
 
-    return () => {
+    sandboxCleanupRef.current = () => {
       disposed = true;
-      container.replaceChildren();
-      if (effectCleanup && cleanupRef.current === effectCleanup) {
-        cleanupRef.current = null;
-        void effectCleanup();
-      }
+      settleStartup();
+      channel.port1.postMessage({ type: 'dispose' } satisfies PanelHostToSandboxMessage);
+      disconnectBroker?.();
+      if (portRef.current === channel.port1) portRef.current = null;
     };
   }, [
     capabilities,
-    connection,
-    failPanel,
-    importer,
+    connectionGeneration,
+    connectionStatus,
     instanceId,
     logger,
     manifest,
-    panelRos,
-    retryKey,
+    post,
+    ros,
     runtime,
-    viewport,
+    sourceLoader,
   ]);
+  const connectSandboxRef = useRef(connectSandbox);
 
   useEffect(() => {
-    const attributedUrls = [
-      manifest.entryPoint,
-      ...(manifest.assets || []).map(asset => new URL(asset.path, manifest.entryPoint).href),
-    ];
-    const isAttributedToPanel = (error: unknown, filename?: string) => {
-      if (filename && attributedUrls.some(url => filename === url || filename.startsWith(url))) return true;
-      const stack = error instanceof Error ? error.stack : undefined;
-      return Boolean(stack && attributedUrls.some(url => stack.includes(url)));
+    connectSandboxRef.current = connectSandbox;
+  }, [connectSandbox]);
+
+  useEffect(() => {
+    let connectedSessionId: string | null = null;
+    let probeTimer: number | null = null;
+    const stopProbing = () => {
+      if (probeTimer !== null) window.clearTimeout(probeTimer);
+      probeTimer = null;
     };
-    const handleError = (event: ErrorEvent) => {
-      if (!isAttributedToPanel(event.error, event.filename)) return;
-      event.preventDefault();
-      failPanel('Panel runtime failed.', event.error || event.message);
+    const probe = () => {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'roboboy-panel-sandbox-probe' }, '*');
+      probeTimer = window.setTimeout(probe, connectedSessionId ? 1_000 : 250);
     };
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      if (!isAttributedToPanel(event.reason)) return;
-      event.preventDefault();
-      failPanel('Panel runtime promise failed.', event.reason);
+    const handleSandboxReady = (event: MessageEvent) => {
+      const iframeWindow = iframeRef.current?.contentWindow;
+      if (
+        !iframeWindow ||
+        event.source !== iframeWindow ||
+        event.data?.type !== 'roboboy-panel-sandbox-ready' ||
+        typeof event.data.sessionId !== 'string' ||
+        event.data.sessionId === connectedSessionId
+      ) {
+        return;
+      }
+      const isReload = connectedSessionId !== null;
+      connectedSessionId = event.data.sessionId;
+      if (isReload) setStatus({ phase: 'loading' });
+      connectSandboxRef.current();
     };
 
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('message', handleSandboxReady);
+    probe();
     return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      stopProbing();
+      window.removeEventListener('message', handleSandboxReady);
     };
-  }, [failPanel, manifest.assets, manifest.entryPoint]);
+  }, [panelRevision, retryKey]);
 
-  useEffect(() => {
-    if (!instanceRef.current?.setActive) return;
-    Promise.resolve(instanceRef.current.setActive(effectiveActive)).catch(error => {
-      failPanel('Panel active-state update failed.', error);
-    });
-  }, [effectiveActive, failPanel]);
+  useEffect(
+    () => () => {
+      sandboxCleanupRef.current?.();
+      sandboxCleanupRef.current = null;
+    },
+    []
+  );
 
   return (
     <div ref={hostRef} className="external-panel-host" data-panel-id={manifest.id}>
-      <div ref={containerRef} className="external-panel-mount" />
+      <iframe
+        key={`${panelRevision}:${retryKey}`}
+        ref={iframeRef}
+        className="external-panel-sandbox"
+        title={manifest.name}
+        sandbox="allow-scripts allow-downloads"
+        allow={getIframeAllow(capabilities)}
+        referrerPolicy="no-referrer"
+        srcDoc={sandboxDocument}
+      />
       {status.phase === 'loading' && (
         <div className="external-panel-status" role="status">
           Loading {manifest.name}…

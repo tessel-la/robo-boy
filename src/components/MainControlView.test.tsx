@@ -250,7 +250,7 @@ describe('MainControlView desktop workspace', () => {
           entryPoint: 'https://roboboy.test/panels/hello-panel/1.0.0/index.js',
           integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
           registryUrl: 'https://roboboy.test/panels/installed.json',
-          compatibility: { panelApi: '^1.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
+          compatibility: { panelApi: '^2.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
           capabilities: ['storage'],
           author: { name: 'Tessella' },
           repository: 'https://github.com/tessel-la/roboboy-hello-panel',

@@ -2,18 +2,19 @@
 
 Robo-Boy can host independently developed, deployment-bundled panels as workspace tiles. External panel source
 stays in its own repository; a deployer reviews and stages an immutable ESM release below Robo-Boy's same-origin
-`panels/` directory. This v1 mechanism is a trusted extension boundary, not a sandboxed plugin platform.
+`panels/` directory. Panel API v2 executes that release in an opaque-origin iframe and brokers every host service
+over a private message channel.
 
 ## Architecture And Boundaries
 
-| Boundary           | Responsibility                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Robo-Boy core      | Catalog composition, metadata/integrity checks, workspace persistence/layout, lazy loading, lifecycle, host services, and per-panel error UI |
-| Panel SDK          | Type-only manifest, activation context, storage, runtime, connection, viewport, and lifecycle interfaces in `panel-sdk/`                     |
-| External panel     | Its own source, dependencies, release process, `roboboy.panel.json`, and browser-ready ESM bundle                                            |
-| Panel Inventory    | Remote catalog metadata and immutable release locations; it does not host source or act as the installed registry                             |
-| Desired state      | Schema-v2 source and selection configuration shared by local and remote installation                                                       |
-| Installed registry | Deployment-local `panels/installed.json` locking exact bundles, integrity, selection, and source provenance                              |
+| Boundary           | Responsibility                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Robo-Boy core      | Catalog, integrity checks, workspace layout, sandbox lifecycle, permission brokers, management API/UI, and per-panel error UI |
+| Panel SDK          | Type-only manifest, activation context, storage, runtime, connection, viewport, and lifecycle interfaces in `panel-sdk/`      |
+| External panel     | Its own source, dependencies, release process, `roboboy.panel.json`, and browser-ready ESM bundle                             |
+| Panel Inventory    | Remote catalog metadata and immutable release locations; it does not host source or act as the installed registry             |
+| Desired state      | Schema-v2 source and selection configuration shared by local and remote installation                                          |
+| Installed registry | Deployment-local `panels/installed.json` locking exact bundles, integrity, selection, and source provenance                   |
 
 The core implementation is under `src/panels/`:
 
@@ -21,11 +22,14 @@ The core implementation is under `src/panels/`:
 - `registry.ts` validates installed manifests, registry limits, duplicate IDs, SemVer ranges, capabilities,
   SHA-256 metadata, and same-origin immutable release paths before any external code executes.
 - `useInstalledPanels.ts` discovers manifests without importing their bundles.
-- `loader.ts` checks the staged bundle's declared SHA-256 digest, performs a cached dynamic import only when an
-  external tile mounts, and validates the module export. Hashing uses Web Crypto when available and a bundled
+- `loader.ts` fetches the staged bundle as bytes and checks its declared SHA-256 digest only when an external tile
+  mounts. Hashing uses Web Crypto when available and a bundled
   SHA-256 implementation on HTTP/local-address or embedded-webview contexts where `crypto.subtle` is absent.
-- `ExternalPanelHost.tsx` supplies gated host services and owns activation, mounting, active-state changes,
-  cleanup, retry, and tile-local failures.
+- `ExternalPanelHost.tsx` creates an iframe without `allow-same-origin`, transfers verified source through a private
+  `MessagePort`, and owns activation, cleanup, retry, and tile-local failures.
+- `capabilityBroker.ts` enforces ROS topic/service patterns, filters discovery, validates network origins and
+  redirects, strips ambient browser credentials, and exposes only explicitly requested host endpoints.
+- `PanelManagerDialog.tsx` and `scripts/panel-manager.mjs` provide authenticated preview/apply management in Compose.
 
 `MainControlView` merges built-in and external entries into one catalog. Existing workspace records keep the
 legacy built-in IDs (`camera`, `3d`, `behaviorTree`, `tfTree`, and `pad`), so no built-in migration or duplicate
@@ -42,9 +46,10 @@ This choice fits the current static Vite/Tauri architecture:
 - Panel code is lazy and remains outside Robo-Boy's main application chunks.
 - A panel does not need React. If it chooses React, Vue, Three.js, or another runtime, those dependencies belong
   to that panel bundle and may duplicate libraries already used by Robo-Boy.
-- The Tauri `script-src 'self'` policy, offline installations, and normal web deployments behave consistently.
-- Dependencies are owned and bundled by the panel author. Authors should avoid large libraries unless the panel
-  needs them and should split additional features behind dynamic imports.
+- The sandbox receives verified source bytes as a blob module, so installed web, PWA, and Tauri assets remain
+  same-origin and offline-capable without executing in the parent page.
+- Dependencies are owned and bundled by the panel author. The installed entry point must be a self-contained ESM
+  bundle; relative dynamic chunks are not part of the current installer contract.
 - The installer atomically replaces the registry only after every selected bundle verifies. The versioned on-disk
   layout supports deterministic re-application; publisher signing and garbage collection remain future work.
 
@@ -53,8 +58,9 @@ attached to a versioned Robo-Boy GitHub release—but runtime panels are immutab
 Robo-Boy does not scan `node_modules` or require panel packages to be application dependencies. Direct live
 imports from arbitrary HTTPS origins were not selected:
 they conflict with Tauri's CSP and offline packaging, require CORS, and increase supply-chain exposure. Module
-federation would add a runtime not otherwise needed by this Vite application. iframe isolation is a possible
-future loader for untrusted panels but needs explicit bridges for ROS, theming, sizing, and persistence.
+federation would add a runtime not otherwise needed by this Vite application. The iframe bridge deliberately
+implements ROS, network, storage, sizing, connection, logging, and fullscreen operations rather than sharing host
+objects.
 
 ## Installed Registry And Discovery
 
@@ -82,10 +88,16 @@ same-origin path at build time.
         }
       ],
       "compatibility": {
-        "panelApi": "^1.0.0",
+        "panelApi": "^2.0.0",
         "roboboy": ">=0.3.0-0 <1.0.0"
       },
       "capabilities": ["ros", "storage"],
+      "permissions": {
+        "ros": {
+          "discover": true,
+          "subscribe": ["/telemetry/**"]
+        }
+      },
       "author": { "name": "Example Robotics", "url": "https://example.com" },
       "repository": "https://github.com/example/roboboy-telemetry",
       "tags": ["telemetry", "robot-specific"]
@@ -109,8 +121,8 @@ webmanifests, JavaScript bundles, styles, and common static assets copied into t
 panels remain available after the service worker has cached that release. Updating a panel means staging a new
 versioned directory, updating its hash and registry entry, and rebuilding/repackaging Robo-Boy.
 
-Discovery fetches and validates only JSON. Import begins when a workspace tile for that manifest mounts; repeated
-instances share the browser module promise but receive distinct activation contexts and storage namespaces.
+Discovery fetches and validates only JSON. Bundle fetch and sandbox startup begin when a workspace tile mounts.
+Every tile gets an isolated realm, capability channel, and storage namespace.
 The optional `installation` object generated by the installer records the configuration schema, explicit selection,
 configured source names/types, and exact version/integrity/source for each resolved panel. Robo-Boy exposes that
 provenance in the workspace catalog; older schema-v1 registries without it remain valid.
@@ -118,7 +130,7 @@ provenance in the workspace catalog; older schema-v1 registries without it remai
 ## Public Panel API
 
 The canonical type definitions are the type-only `@tessel-la/roboboy-panel-sdk` package in `panel-sdk/index.d.ts`.
-The API version is `1.0.0`.
+The API version is `2.0.0`.
 
 ```ts
 interface RoboBoyPanelDefinition {
@@ -130,10 +142,10 @@ interface RoboBoyPanelDefinition {
 interface RoboBoyPanelContext {
   readonly panelId: string;
   readonly instanceId: string;
-  readonly hostVersion: string;
   readonly capabilities: readonly RoboBoyPanelCapability[];
-  readonly ros: ROSLIB.Ros | null;
+  readonly ros: RoboBoyPanelRos | null;
   readonly storage: RoboBoyPanelStorage | null;
+  readonly network: RoboBoyPanelNetwork | null;
   readonly runtime: RoboBoyPanelRuntime;
   readonly connection: RoboBoyPanelConnection;
   readonly viewport: RoboBoyPanelViewport;
@@ -147,9 +159,10 @@ interface RoboBoyPanelInstance {
 }
 ```
 
-The boundary intentionally excludes React components, application stores, layout mutation, notifications, and
-feature-specific services. `runtime` exposes only public ROS bridge, video, mesh, and Ollama endpoints plus the
-web/desktop target. `connection` publishes status and a monotonically increasing generation when the shared ROS
+The boundary intentionally excludes React components, application stores, layout mutation, notifications, host
+version, raw ROSLIB objects, and the complete runtime endpoint map. `runtime` exposes only the web/desktop target;
+an approved `network.hostEndpoints` entry appears under `context.network.endpoints`. `connection` publishes status
+and a monotonically increasing generation when the shared ROS
 instance changes. `viewport` publishes tile size, intersection, document visibility, and effective active state;
 panels should pause expensive work while inactive. The host owns the tile and the panel owns only DOM below the
 supplied mount element. `unmount` is mandatory and must remove listeners, timers, observers, ROS clients,
@@ -159,39 +172,40 @@ rendering resources, and created DOM.
 
 1. Core validates registry metadata and compatibility.
 2. A user adds or restores a workspace tile.
-3. Core imports the ESM module, once per versioned entry point.
-4. Core validates the default export's ID, compatible SemVer API version, and `activate` function.
-5. `activate(context)` creates one instance for one workspace tile.
+3. Core verifies bundle bytes and transfers them into an opaque-origin iframe.
+4. The sandbox imports the blob module and validates its exact ID/API definition.
+5. `activate(context)` creates one instance inside that workspace tile's iframe.
 6. `mount(element)` renders that instance; `setActive` reports visibility changes when applicable.
 7. `unmount()` runs when the tile, panel version, a required ROS instance, or host disappears.
 
-Import, activation, synchronous or asynchronous mount, active-state, cleanup, and later global errors whose stack
-or source identifies the installed bundle are caught and logged. The affected tile shows a retry action; built-ins
-and other external tiles remain mounted. A rejected module promise is removed from the cache so retry can import
-it again. Core's boot-error fallback is disabled after React starts, so an unattributed runtime exception is logged
-instead of replacing the entire application.
+Fetch, import, activation, mount, active-state, cleanup, and sandbox runtime errors are reported through the channel.
+The affected tile shows a retry action; built-ins and other external tiles remain mounted. Removing the iframe
+terminates the panel realm even if its cleanup fails.
 
 ## Capabilities And Access
 
-| Capability      | Host behavior in v1                                                            |
-| --------------- | ------------------------------------------------------------------------------ |
-| `ros`           | Supplies the shared `ROSLIB.Ros` instance, or `null` while unavailable         |
-| `storage`       | Supplies a versioned, instance-owned JSON store persisted with workspace state |
-| `network`       | Declares that the panel uses `fetch`, WebSocket, or other network APIs         |
-| `web-bluetooth` | Declares use of Web Bluetooth                                                  |
-| `web-usb`       | Declares use of WebUSB                                                         |
-| `web-serial`    | Declares use of Web Serial                                                     |
-| `camera`        | Declares use of camera/media capture                                           |
-| `microphone`    | Declares use of microphone/media capture                                       |
+| Capability      | Host behavior in v2                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `ros`           | Supplies brokered discovery/subscribe/publish/service methods constrained by manifest patterns           |
+| `storage`       | Supplies a versioned, instance-owned JSON store persisted with workspace state                           |
+| `network`       | Supplies credential-free brokered fetch and approved host endpoints; iframe CSP blocks direct HTTP calls |
+| `web-bluetooth` | Declares use of Web Bluetooth                                                                            |
+| `web-usb`       | Declares use of WebUSB                                                                                   |
+| `web-serial`    | Declares use of Web Serial                                                                               |
+| `camera`        | Declares use of camera/media capture                                                                     |
+| `microphone`    | Declares use of microphone/media capture                                                                 |
 
-ROS and storage affect which services the context supplies: undeclared services are `null`. These are API-shaping
-checks, not security gates. All capabilities are declarations for deployer review and possible future consent.
-An installed same-realm module has Robo-Boy's browser privileges and can access browser globals directly. Only
-stage trusted releases. Enforceable permissions require a future isolated-realm loader and message-based API.
+Undeclared services are `null`. ROS/network capabilities require a matching `permissions` block. ROS discovery
+returns only topics matching an approved subscribe pattern; every subscribe, publish, and service request is
+checked again. Network requests accept only declared exact HTTPS origins, `self`, or the visibly broad `https:`
+grant. Host endpoint grants are narrower: `videoStream`, for example, permits only its known discovery and WHEP
+routes rather than the complete service origin. Redirect targets are checked, ambient credentials are omitted,
+privileged headers are blocked, response headers are filtered, responses are size-capped, and concurrent requests
+time out. The sandbox has no parent DOM, Robo-Boy storage, cookies, or raw host objects.
 
-The raw ROS connection is exposed because Robo-Boy panels may need arbitrary robot-specific topics, services,
-and actions. Panels must scope their own ROSLIB clients and unsubscribe, unadvertise, cancel, or detach listeners
-in `unmount`. Robo-Boy does not publish ROS on `window`; the capability-gated context is the supported boundary.
+Device capabilities are translated to iframe Permissions Policy entries. Camera and microphone still require the
+browser's normal user consent. Browser support for Bluetooth, USB, and Serial inside a sandbox varies and should be
+tested on the deployment target.
 
 Storage is owned by `(panel type, workspace instance)`, stored in a schema-versioned envelope, cleared when a
 tile changes panel type, and debounced before `localStorage` writes. It accepts only finite, acyclic, plain JSON
@@ -204,7 +218,7 @@ inspect `storage.schemaVersion`, `quotaBytes`, and `sizeBytes()` and should hand
 import type { RoboBoyPanelDefinition } from '@tessel-la/roboboy-panel-sdk';
 
 const definition: RoboBoyPanelDefinition = {
-  apiVersion: '1.0.0',
+  apiVersion: '2.0.0',
   id: 'com.example.hello',
   activate(context) {
     return {
@@ -229,16 +243,17 @@ and places it in a generated deployment tree without importing it into applicati
 
 ## ROS Time Series Reference Panel
 
-The sibling `robo-boy-timeseries-panel` is a fuller external-author example that exercises the `ros`, `storage`,
-`connection`, and `viewport` APIs. It discovers topics, subscribes through the shared ROS connection, plots up to
+The sibling `robo-boy-timeseries-panel` is a fuller external-author example that exercises the brokered `ros`,
+`storage`, `connection`, and `viewport` APIs. It discovers permitted topics, subscribes through the broker, plots up to
 eight nested numeric message fields, and provides bounded retention, bridge throttling, auto or fixed Y ranges,
 pause/clear controls, point markers, and long-form CSV export. Leaving the field list blank discovers numeric
 fields from the first received message. Its source-first settings drawer presents discovered topics and numeric
 fields before placing retention and rendering controls in a scrollable advanced section for short mobile tiles.
 
-The release bundles ROSLIB because the panel SDK exposes the host ROS object as a stable interface but does not
-share Robo-Boy's module graph. This keeps the artifact independently buildable at the cost of about 170 KiB in
-the panel bundle. An explicitly staged artifact is loaded only when a user adds that panel.
+The release uses the API v2 ROS broker and contains no ROSLIB client or direct rosbridge connection. Its manifest
+permits discovery and subscription only below `/telemetry/**` and `/diagnostics/**`; deployments must deliberately
+review and extend those scopes when their telemetry uses another namespace. An explicitly staged artifact is loaded
+only when a user adds that panel.
 
 ## WebRTC / RTSP Camera Reference Panel
 
@@ -284,7 +299,7 @@ Install the type-only SDK directly from its versioned GitHub release:
 ```bash
 cd my-roboboy-panel
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v1.0.0/tessel-la-roboboy-panel-sdk-1.0.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.0.0/tessel-la-roboboy-panel-sdk-2.0.0.tgz
 ```
 
 After building `dist/index.js`, calculate its SRI value and copy the complete `sha256-...` value into the panel
@@ -336,7 +351,7 @@ For Docker development, `infra/compose/panels.yml` runs the same installer again
 
 ```yaml
 services:
-  panel-installer:
+  panel-manager:
     volumes:
       - /absolute/path/my-roboboy-panel:/panel-workspace/my-roboboy-panel:ro
 ```
@@ -348,7 +363,7 @@ docker compose \
   -f docker-compose.yml \
   -f infra/compose/panels.yml \
   -f /absolute/path/my-panel.compose.yml \
-  build app panel-installer
+  build app panel-manager
 
 docker compose \
   -f docker-compose.yml \
@@ -357,14 +372,17 @@ docker compose \
   up -d
 ```
 
-After changing a local bundle, rerun the one-shot installer and reload the browser; the app need not be rebuilt:
+After changing a local bundle, use the **Manage installations…** action in Robo-Boy to preview and apply the
+same desired state again. For a command-line-only workflow, restart the manager after removing its persisted state
+volume or use the staging commands above.
 
 ```bash
+export ROBOBOY_PANEL_MANAGER_TOKEN='use-a-long-random-deployment-secret'
 docker compose \
   -f docker-compose.yml \
   -f infra/compose/panels.yml \
   -f /absolute/path/my-panel.compose.yml \
-  run --rm panel-installer
+  up -d --build panel-manager app caddy
 ```
 
 Do not commit the deployment-local Compose/configuration files, generated `.panel-stage/` tree, or panel bundle
@@ -423,10 +441,7 @@ the same configuration and installer; they differ only in their default configur
   ],
   "selection": {
     "mode": "include",
-    "panelIds": [
-      "la.tessel.roboboy.timeseries",
-      "com.company.robot.private-telemetry"
-    ]
+    "panelIds": ["la.tessel.roboboy.timeseries", "com.company.robot.private-telemetry"]
   }
 }
 ```
@@ -466,10 +481,7 @@ Add the exact IDs to its top-level object. For example, this installs only Time 
   ],
   "selection": {
     "mode": "include",
-    "panelIds": [
-      "la.tessel.roboboy.timeseries",
-      "la.tessel.roboboy.webrtc"
-    ]
+    "panelIds": ["la.tessel.roboboy.timeseries", "la.tessel.roboboy.webrtc"]
   }
 }
 ```
@@ -480,20 +492,24 @@ Then set this non-secret path in Robo-Boy's `.env` so manual Compose and Tessell
 ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json
 ```
 
-Rerun `panel-installer` and reload Robo-Boy after changing the selection. Use `selection.mode: "none"` to remove all
-external panels while retaining the overlay. Every ID listed by `include` must exist in one configured source or
-installation fails without replacing the working registry.
+The Compose panel manager seeds its persisted configuration from this file on first startup. Set
+`ROBOBOY_PANEL_MANAGER_TOKEN` and use **Manage installations…** to edit later desired state. Use
+`selection.mode: "none"` to remove all external panels while retaining their cached versioned bytes. Every ID
+listed by `include` must exist in one configured source or preview fails without replacing the working registry.
 
 Private credentials are not stored in the source configuration. `authorizationEnv` names an environment variable
 whose complete value becomes the `Authorization` header, such as `Bearer <token>`. The header is sent only to
 `authenticatedOrigins`, which must also be allowed origins. Redirects are checked again before response bytes are
-accepted. Keep the actual secret in an ignored, deployment-specific environment file.
+accepted. To prevent the manager token or unrelated service secrets from being reused, the name must be
+`ROBOBOY_PANEL_AUTHORIZATION` or `ROBOBOY_PANEL_SOURCE_<NAME>_AUTHORIZATION`. Local root overrides are likewise
+limited to `ROBOBOY_PANEL_WORKSPACE` or `ROBOBOY_PANEL_SOURCE_<NAME>_ROOT`. Keep actual secrets in an ignored,
+deployment-specific environment file.
 
 ### Mix Published And Local Panels
 
 Remote and local panels use the same source list and selection contract. Start from
 `config/panel-sources.mixed.example.json`, list the local repository in its local source, and mount that repository
-into the `panel-installer` service. Use `infra/compose/panels.yml` for this development workflow; it already supplies
+into the `panel-manager` service. Use `infra/compose/panels.yml` for this development workflow; it already supplies
 `ROBOBOY_PANEL_WORKSPACE=/panel-workspace` and mounts the known reference repositories. This produces one registry,
 detects duplicate IDs across source types, and records the winning source for every installed panel. Do not combine
 the local and remote Compose overlays; choose one overlay and put all desired sources in its configuration.
@@ -502,7 +518,8 @@ The remote Docker overlay uses a deployment-owned named volume and does not moun
 extra configuration it reads `config/panel-sources.official.json` and installs the official catalog:
 
 ```bash
-docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-installer
+ROBOBOY_PANEL_MANAGER_TOKEN='use-a-long-random-deployment-secret' \
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-manager
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d
 ```
 
@@ -516,19 +533,17 @@ cp config/panel-secrets.example.env config/panel-secrets.env
 
 ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json \
 ROBOBOY_PANEL_SECRETS_FILE=./config/panel-secrets.env \
-docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-installer
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-manager
 
 ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json \
 ROBOBOY_PANEL_SECRETS_FILE=./config/panel-secrets.env \
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d
 ```
 
-The first `up` runs the one-shot installer before starting the app. To apply inventory, selection, credential, or
-release updates to an existing deployment, explicitly rerun it and then reload Robo-Boy:
-
-```bash
-docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml run --rm panel-installer
-```
+The first `up` starts the manager, seeds its private state volume, verifies the selected bundles, and only then
+allows the app to start. Later changes go through authenticated preview/apply in the UI. The bearer token stays in
+dialog memory, the manager stores only environment-variable names for inventory credentials, and a preview expires
+after ten minutes. Apply re-resolves every source and rejects the plan if any verified bytes or metadata changed.
 
 The installer validates compatibility metadata structurally. Robo-Boy applies its canonical SemVer compatibility
 checks while reading the generated registry and refuses to expose incompatible releases in the workspace menu.
@@ -551,20 +566,19 @@ staging, then publish the complete Robo-Boy build atomically.
 
 ## Limitations And Expected Evolution
 
-- Installation, removal, and update remain deployment-managed. The common installer handles local and remote
-  sources, but there is no installation UI, scheduled update policy, rollback UI, revocation service, or garbage
-  collector yet.
+- Compose has authenticated preview/apply installation UI, but there is no scheduled update policy, rollback UI,
+  publisher revocation service, or garbage collector yet. CLI staging remains available for builds and Tauri.
 - The installer supports one ESM bundle per panel release. Manifests that declare additional assets are
   rejected until the inventory contract defines immutable URLs for each asset.
-- Same-realm panels are trusted code. Browser APIs beyond ROS/storage are declared but not enforceably gated.
 - Runtime entry points must be installed same-origin; arbitrary remote modules are rejected.
 - Optional manifest icons/previews are catalog metadata only in this slice.
 - Panel settings do not yet have a separate host UI; panels render their own settings inside their tile.
-- The raw ROS API is stable enough for the first slice but could gain narrower convenience services without
-  removing direct access.
+- ROS is intentionally a JSON message broker. Binary ROS payloads, actions, and streaming service responses are not
+  in API v2.
 - SHA-256 hashes detect artifact drift but do not establish publisher identity. Publisher signing, inventory
-  review policy, transactional staging, rollback metadata, and revocation should precede one-click installation.
-- Same-realm error attribution is best effort. Import, activation, mount, and lifecycle failures are isolated to
-  the tile, but arbitrary synchronous code can still block the main thread or mutate global state.
-- A truly untrusted v2 platform should use an iframe or worker protocol with structured-clone messages, explicit
-  ROS/network brokers, timeouts, quotas, and a separately versioned installer lifecycle.
+  review policy, rollback metadata, and revocation should precede installation from unreviewed catalogs.
+- A sandboxed panel cannot mutate the parent page, but CPU-heavy synchronous code can still consume main-thread
+  resources in its iframe. Per-panel CPU and bandwidth accounting remain future hardening.
+- The sandbox is an access-minimization boundary, not a safe way to run arbitrary hostile code. A panel can use data
+  explicitly granted to it and still has ordinary in-frame browser behavior. Install only reviewed artifacts; a
+  fully untrusted marketplace would require a stronger process boundary and a declarative rendering contract.

@@ -97,10 +97,12 @@ explicitly listed local repositories. The generated registry locks exact version
 provenance.
 
 Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small,
-framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies and lazily imports a deployment-bundled
-release when its tile mounts, supplies narrow storage/runtime/connection/viewport services, and isolates lifecycle
-failures to that tile. This is trusted same-realm code, so capability declarations shape the API and review process
-but are not a security sandbox. Keep application stores and feature internals out of the public context. See
+framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies a deployment-bundled release and transfers
+it into an opaque-origin iframe when its tile mounts. A private message channel supplies permission-checked
+ROS/network operations, per-instance storage, connection/viewport snapshots, logging, and fullscreen. The iframe
+cannot access the parent DOM, cookies, Robo-Boy browser storage, or undeclared runtime endpoints. Compose adds a
+separate authenticated manager for previewing and applying desired-state changes. Keep application stores and
+feature internals out of the public context. See
 [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
 
 ## State And Persistence

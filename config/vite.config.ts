@@ -57,6 +57,10 @@ export default defineConfig(({ mode }) => ({
     host: '0.0.0.0', // Listen on all interfaces within the container
     port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
     proxy: {
+      '/api/panels': {
+        target: process.env.PANEL_MANAGER_PROXY_TARGET ?? 'http://127.0.0.1:4100',
+        changeOrigin: true,
+      },
       '/ollama': {
         target: process.env.OLLAMA_PROXY_TARGET ?? 'http://127.0.0.1:11434',
         changeOrigin: true,

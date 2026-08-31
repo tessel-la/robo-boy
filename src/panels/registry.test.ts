@@ -13,10 +13,11 @@ const createManifest = (overrides: Record<string, unknown> = {}) => ({
   entryPoint: './telemetry/1.2.3/index.js',
   integrity,
   compatibility: {
-    panelApi: '^1.0.0',
+    panelApi: '^2.0.0',
     roboboy: '>=0.3.0-0 <1.0.0',
   },
   capabilities: ['ros'],
+  permissions: { ros: { discover: true, subscribe: ['/telemetry/**'] } },
   author: { name: 'Example Author', url: 'https://example.com' },
   repository: 'https://github.com/example/telemetry-panel',
   tags: ['telemetry'],
@@ -89,13 +90,33 @@ describe('installed panel registry', () => {
     expect(result.issues.map(issue => issue.code)).toEqual(['invalid-manifest', 'invalid-manifest']);
   });
 
+  it('requires explicit least-privilege permissions for ROS and network capabilities', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        panels: [
+          createManifest({ id: 'com.example.ros-without-permissions', permissions: undefined }),
+          createManifest({
+            id: 'com.example.network-without-permissions',
+            capabilities: ['network'],
+            permissions: undefined,
+          }),
+        ],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toEqual([]);
+    expect(result.issues.map(issue => issue.code)).toEqual(['invalid-manifest', 'invalid-manifest']);
+  });
+
   it('rejects incompatible Robo-Boy and panel API versions before loading code', () => {
     const result = parseInstalledPanelRegistry(
       {
         schemaVersion: 1,
         panels: [
-          createManifest({ id: 'com.example.future-api', compatibility: { panelApi: '^2.0.0', roboboy: '*' } }),
-          createManifest({ id: 'com.example.future-app', compatibility: { panelApi: '^1.0.0', roboboy: '>=2.0.0' } }),
+          createManifest({ id: 'com.example.future-api', compatibility: { panelApi: '^3.0.0', roboboy: '*' } }),
+          createManifest({ id: 'com.example.future-app', compatibility: { panelApi: '^2.0.0', roboboy: '>=2.0.0' } }),
         ],
       },
       registryUrl,
