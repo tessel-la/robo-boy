@@ -52,6 +52,21 @@ interface BrokerResources {
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+export const normalizeRosMessage = (value: unknown): { value: RoboBoyJsonObject; byteLength: number } | null => {
+  try {
+    const serialized = JSON.stringify(value);
+    if (!serialized) return null;
+    const normalized = JSON.parse(serialized) as unknown;
+    if (!isJsonObject(normalized)) return null;
+    return {
+      value: normalized,
+      byteLength: new TextEncoder().encode(serialized).byteLength,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const resourceMatches = (pattern: string, value: string): boolean => {
   const escaped = pattern
     .split('/')
@@ -265,11 +280,16 @@ const handleRequest = async (
         : 'none',
     });
     const listener = (value: unknown) => {
-      if (!isJsonObject(value) || new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_ROS_JSON_BYTES) {
-        options.logger.warn(`Dropped non-JSON ROS message from ${name}.`);
+      const normalized = normalizeRosMessage(value);
+      if (!normalized || normalized.byteLength > MAX_ROS_JSON_BYTES) {
+        options.logger.warn(`Dropped invalid or oversized ROS message from ${name}.`);
         return;
       }
-      port.postMessage({ type: 'ros-message', subscriptionId, value } satisfies PanelHostToSandboxMessage);
+      port.postMessage({
+        type: 'ros-message',
+        subscriptionId,
+        value: normalized.value,
+      } satisfies PanelHostToSandboxMessage);
     };
     topic.subscribe(listener);
     resources.subscriptions.set(subscriptionId, { topic, listener });

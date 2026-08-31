@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { connectPanelCapabilityBroker, getGrantedPanelEndpoints, resourceMatches } from './capabilityBroker';
+import {
+  connectPanelCapabilityBroker,
+  getGrantedPanelEndpoints,
+  normalizeRosMessage,
+  resourceMatches,
+} from './capabilityBroker';
 import type { ResolvedPanelManifest } from './types';
 
 const manifest: ResolvedPanelManifest = {
@@ -19,6 +24,21 @@ const manifest: ResolvedPanelManifest = {
 };
 
 describe('panel capability broker', () => {
+  it('normalizes ROS messages with non-finite values before crossing the sandbox boundary', () => {
+    class RosMessage {
+      position = [1.25, 2.5];
+      effort = [Number.NaN, Number.POSITIVE_INFINITY];
+    }
+
+    const normalized = normalizeRosMessage(new RosMessage());
+
+    expect(normalized?.value).toEqual({
+      position: [1.25, 2.5],
+      effort: [null, null],
+    });
+    expect(normalized?.byteLength).toBeGreaterThan(0);
+  });
+
   it('matches ROS resources without allowing sibling namespaces', () => {
     expect(resourceMatches('/telemetry/**', '/telemetry/drive/speed')).toBe(true);
     expect(resourceMatches('/telemetry/*', '/telemetry/speed')).toBe(true);

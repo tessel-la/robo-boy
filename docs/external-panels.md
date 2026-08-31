@@ -203,7 +203,9 @@ discovery returns only topics matching an approved `subscribe` pattern; every su
 request is checked again. A panel that needs user-configurable topics can instead declare `selectTopic: true` and
 call `context.ros.selectTopic()`. Robo-Boy obtains the complete graph, displays it in trusted host UI, and returns
 only the selected topic and message type to the panel. That selection grants subscription access to that exact pair
-for the current tile session; it does not expose the graph or create a wildcard grant. Network requests accept only
+for the current tile session; it does not expose the graph or create a wildcard grant. ROS messages are normalized
+to JSON at this boundary, so non-finite ROS floating-point values become `null` without dropping the rest of the
+message; non-JSON and oversized payloads are rejected. Network requests accept only
 declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:
 `videoStream`, for example, permits only its known discovery and WHEP routes rather than the complete service
 origin. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
