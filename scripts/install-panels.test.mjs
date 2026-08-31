@@ -101,15 +101,17 @@ test('installs public and authenticated private inventories into one registry', 
     await writeFile(
       configPath,
       JSON.stringify({
-        schemaVersion: 1,
-        inventories: [
-          { name: 'public', catalogUrl: `${server.origin}/public/catalog.json` },
+        schemaVersion: 2,
+        sources: [
+          { type: 'remote', name: 'public', catalogUrl: `${server.origin}/public/catalog.json` },
           {
+            type: 'remote',
             name: 'private',
             catalogUrl: `${server.origin}/private/catalog.json`,
             authorizationEnv: 'PRIVATE_PANEL_AUTHORIZATION',
           },
         ],
+        selection: { mode: 'all' },
       })
     );
 
@@ -155,7 +157,11 @@ test('does not replace the installed registry when integrity verification fails'
     await writeFile(join(output, 'installed.json'), previousRegistry);
     await writeFile(
       configPath,
-      JSON.stringify({ schemaVersion: 1, inventories: [{ name: 'test', catalogUrl: `${server.origin}/catalog.json` }] })
+      JSON.stringify({
+        schemaVersion: 2,
+        sources: [{ type: 'remote', name: 'test', catalogUrl: `${server.origin}/catalog.json` }],
+        selection: { mode: 'all' },
+      })
     );
 
     await assert.rejects(execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', output]));
@@ -409,6 +415,27 @@ test('rejects ambiguous schemaVersion 2 include selections', async () => {
     await assert.rejects(
       execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', join(temporaryRoot, 'out')]),
       error => error.stderr.includes('use none to install no panels')
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects removed schemaVersion 1 source configuration', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-panel-installer-v1-config-'));
+  try {
+    const configPath = join(temporaryRoot, 'sources.json');
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        inventories: [{ name: 'legacy', catalogUrl: 'https://example.com/catalog.json' }],
+      })
+    );
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [installerPath, '--config', configPath, '--output', join(temporaryRoot, 'out')]),
+      error => error.stderr.includes('must use schemaVersion 2')
     );
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });

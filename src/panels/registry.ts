@@ -46,9 +46,7 @@ const parseInstallationMetadata = (value: unknown): PanelInstallationMetadata | 
   const resolvedPanels = candidate.resolvedPanels;
   if (
     candidate.schemaVersion !== 1 ||
-    typeof candidate.configSchemaVersion !== 'number' ||
-    !Number.isInteger(candidate.configSchemaVersion) ||
-    candidate.configSchemaVersion < 1 ||
+    candidate.configSchemaVersion !== 2 ||
     !selection ||
     !['all', 'include', 'none'].includes(selection.mode) ||
     !Array.isArray(sources) ||

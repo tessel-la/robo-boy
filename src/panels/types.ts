@@ -85,7 +85,7 @@ export interface PanelInstallationSource {
 
 export interface PanelInstallationMetadata {
   schemaVersion: 1;
-  configSchemaVersion: number;
+  configSchemaVersion: 2;
   selection: {
     mode: 'all' | 'include' | 'none';
     panelIds?: string[];

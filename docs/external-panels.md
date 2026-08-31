@@ -435,8 +435,8 @@ Selection is deliberately explicit: `all` installs every discovered panel, `incl
 `panelIds` list, and `none` installs an empty registry without contacting configured sources. Panel IDs must be
 unique across selected sources: a local or private source cannot silently replace an official panel. Catalog, entry,
 manifest, bundle, and redirect URLs must use HTTPS, except localhost HTTP used by installer tests. Every release
-origin must be explicitly allowed. Legacy schema-v1 remote configuration remains accepted for migration, including
-its historical empty-`enabledPanels`-means-all behavior; new configuration must use schema v2.
+origin must be explicitly allowed. Source configuration schema v1 is not accepted; migrate `inventories` to typed
+`sources` and replace `enabledPanels` with the explicit `selection` object.
 
 ### Select A Published Panel Subset
 

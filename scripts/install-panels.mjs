@@ -197,33 +197,8 @@ const validateSourceList = (sources, configPath) => {
   });
 };
 
-const validateLegacyConfig = (value, configPath) => {
-  if (!Array.isArray(value.inventories)) {
-    throw new InstallError('schemaVersion 1 panel source config must contain an inventories array.');
-  }
-  if (value.enabledPanels !== undefined && !Array.isArray(value.enabledPanels)) {
-    throw new InstallError('enabledPanels must be an array when provided.');
-  }
-  const panelIds = new Set();
-  for (const id of value.enabledPanels ?? []) {
-    if (!isPanelId(id)) throw new InstallError(`invalid enabled panel ID ${String(id)}.`);
-    if (panelIds.has(id)) throw new InstallError(`duplicate enabled panel ID ${id}.`);
-    panelIds.add(id);
-  }
-  return {
-    schemaVersion: 1,
-    sources: validateSourceList(
-      value.inventories.map(inventory => ({ ...inventory, type: 'remote' })),
-      configPath
-    ),
-    selection: { mode: panelIds.size > 0 ? 'include' : 'all', panelIds },
-  };
-};
-
 const validateConfig = (value, configPath) => {
-  if (!value || typeof value !== 'object') throw new InstallError('panel source config is invalid.');
-  if (value.schemaVersion === 1) return validateLegacyConfig(value, configPath);
-  if (value.schemaVersion !== 2 || !Array.isArray(value.sources)) {
+  if (!value || typeof value !== 'object' || value.schemaVersion !== 2 || !Array.isArray(value.sources)) {
     throw new InstallError('panel source config must use schemaVersion 2 and contain a sources array.');
   }
   return {
@@ -537,7 +512,7 @@ const install = async options => {
       schemaVersion: 1,
       installation: {
         schemaVersion: 1,
-        configSchemaVersion: config.schemaVersion,
+        configSchemaVersion: 2,
         selection: {
           mode: config.selection.mode,
           ...(config.selection.mode === 'include' ? { panelIds: [...config.selection.panelIds] } : {}),
