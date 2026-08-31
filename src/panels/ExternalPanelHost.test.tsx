@@ -105,6 +105,7 @@ describe('ExternalPanelHost sandbox', () => {
             capabilities: ['ros', 'storage'],
             runtime: { target: 'web' },
             endpoints: {},
+            theme: expect.objectContaining({ colorScheme: expect.any(String), tokens: expect.any(Object) }),
             storage: expect.objectContaining({ values: { count: 2 } }),
           }),
         })
@@ -168,5 +169,37 @@ describe('ExternalPanelHost sandbox', () => {
     expect(broker.connect).toHaveBeenCalledTimes(2);
     act(() => broker.onMessage?.({ type: 'ready' }));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('uses a trusted host picker to approve one ROS topic', async () => {
+    const selectableManifest: ResolvedPanelManifest = {
+      ...manifest,
+      permissions: { ros: { selectTopic: true } },
+    };
+    const { container } = renderHost({ manifest: selectableManifest });
+    announceSandboxReady(container.querySelector('iframe')!);
+    await waitFor(() => expect(broker.connect).toHaveBeenCalled());
+    const brokerOptions = broker.connect.mock.calls[0][1] as {
+      requestRosTopicSelection(topics: Array<{ name: string; messageType: string }>): Promise<{
+        name: string;
+        messageType: string;
+      }>;
+    };
+    const selection = brokerOptions.requestRosTopicSelection([
+      { name: '/diagnostics', messageType: 'diagnostic_msgs/msg/DiagnosticArray' },
+      { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+    ]);
+
+    expect(await screen.findByRole('dialog', { name: 'Choose ROS topic' })).toHaveTextContent(
+      'The panel receives only the topic and message type you approve here.'
+    );
+    fireEvent.change(screen.getByLabelText('Available topics'), { target: { value: '/joint_states' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Allow selected topic' }));
+
+    await expect(selection).resolves.toEqual({
+      name: '/joint_states',
+      messageType: 'sensor_msgs/msg/JointState',
+    });
+    expect(screen.queryByRole('dialog', { name: 'Choose ROS topic' })).not.toBeInTheDocument();
   });
 });

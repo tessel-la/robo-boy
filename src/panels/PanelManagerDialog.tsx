@@ -29,6 +29,7 @@ const permissionSummary = (panel: RoboBoyPanelManifest): string[] => {
   const network = panel.permissions?.network;
   if (panel.capabilities?.includes('storage')) summary.push('64 KiB workspace storage');
   if (ros?.discover) summary.push('discover approved ROS topics');
+  if (ros?.selectTopic) summary.push('ask you to select individual ROS topics');
   if (ros?.subscribe?.length) summary.push(`subscribe ROS: ${ros.subscribe.join(', ')}`);
   if (ros?.publish?.length) summary.push(`publish ROS: ${ros.publish.join(', ')}`);
   if (ros?.services?.length) summary.push(`call ROS services: ${ros.services.join(', ')}`);

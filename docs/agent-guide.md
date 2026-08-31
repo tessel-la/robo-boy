@@ -129,8 +129,9 @@ External panels must not depend on:
 - Robo-Boy's module graph or raw ROSLIB connection
 - globals that Robo-Boy happens to create during development
 
-Opaque-origin iframes do not inherit the host's CSS custom properties. Panels must provide their own complete styles;
-there is no public theme bridge in API v2.
+Opaque-origin iframes do not inherit the parent page directly. The host copies the documented public CSS variables
+into each sandbox and exposes their snapshot through `context.theme`; panels still own their complete layout and
+must use those variables instead of hardcoded palette colors.
 
 ### Lifecycle
 
@@ -147,10 +148,11 @@ DOM below the supplied container. It cannot reach or mutate the host workspace D
 
 ### ROS and reconnection
 
-Declare `ros` together with explicit discovery, subscribe, publish, and service patterns. The host supplies a JSON
-message broker rather than the shared `ROSLIB.Ros` object. Discovery is filtered by the subscribe allowlist and each
-operation is checked again. Watch `context.connection`; its generation changes when the shared bridge changes, and
-release each returned subscription during reconfiguration or cleanup.
+Declare `ros` together with explicit discovery, subscribe, publish, and service patterns. For user-configurable
+subscriptions, declare `selectTopic` and use the trusted host picker; only its selected topic enters the sandbox.
+The host supplies a JSON message broker rather than the shared `ROSLIB.Ros` object. Discovery is filtered by the
+subscribe allowlist and each operation is checked again. Watch `context.connection`; its generation changes when the
+shared bridge changes, and release each returned subscription during reconfiguration or cleanup.
 
 ### Configuration and state
 

@@ -3,6 +3,7 @@ import type {
   RoboBoyPanelCapability,
   RoboBoyPanelConnectionSnapshot,
   RoboBoyPanelRuntime,
+  RoboBoyPanelThemeSnapshot,
   RoboBoyPanelViewportSnapshot,
 } from './types';
 
@@ -16,6 +17,7 @@ export interface PanelSandboxInitialization {
   endpoints: Record<string, string>;
   connection: RoboBoyPanelConnectionSnapshot;
   viewport: RoboBoyPanelViewportSnapshot;
+  theme: RoboBoyPanelThemeSnapshot;
   storage: {
     enabled: boolean;
     schemaVersion: number;
@@ -36,6 +38,7 @@ export type PanelHostToSandboxMessage =
   | { type: 'initialize'; value: PanelSandboxInitialization }
   | { type: 'connection'; value: RoboBoyPanelConnectionSnapshot }
   | { type: 'viewport'; value: RoboBoyPanelViewportSnapshot }
+  | { type: 'theme'; value: RoboBoyPanelThemeSnapshot }
   | { type: 'response'; requestId: string; value?: unknown; error?: string }
   | { type: 'ros-message'; subscriptionId: string; value: RoboBoyJsonObject }
   | { type: 'dispose' };

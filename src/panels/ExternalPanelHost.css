@@ -44,3 +44,110 @@
   border-radius: 6px;
   cursor: pointer;
 }
+
+.external-panel-topic-picker-backdrop {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: color-mix(in srgb, var(--background-color) 35%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.external-panel-topic-picker {
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-color);
+  background: var(--card-bg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 28%);
+}
+
+.external-panel-topic-picker header,
+.external-panel-topic-picker footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.external-panel-topic-picker h3,
+.external-panel-topic-picker p {
+  margin: 0;
+}
+
+.external-panel-topic-picker p {
+  margin: 10px 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.external-panel-topic-picker-kicker {
+  color: var(--primary-color);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.external-panel-topic-picker header > button {
+  min-width: 34px;
+  padding: 5px 8px;
+  color: var(--text-color);
+  background: var(--background-secondary);
+}
+
+.external-panel-topic-picker label {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.external-panel-topic-picker input,
+.external-panel-topic-picker select {
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-color);
+  background: var(--background-color);
+}
+
+.external-panel-topic-picker select {
+  min-height: 112px;
+  padding: 4px;
+}
+
+.external-panel-topic-picker option {
+  padding: 6px;
+}
+
+.external-panel-topic-picker-empty {
+  display: block;
+  margin: 8px 0;
+  color: var(--warning-color, #f59f00);
+  font-size: 0.8rem;
+}
+
+.external-panel-topic-picker footer {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.external-panel-topic-picker footer button:not(.primary) {
+  color: var(--text-color);
+  background: var(--background-secondary);
+}
+
+.external-panel-topic-picker footer .primary {
+  color: var(--button-text-color);
+  background: var(--primary-color);
+}

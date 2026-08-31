@@ -29,7 +29,7 @@ const panel = {
   registryUrl: 'https://roboboy.test/panels/installed.json',
   compatibility: { panelApi: '^2.0.0', roboboy: '*' },
   capabilities: ['ros' as const],
-  permissions: { ros: { discover: true, subscribe: ['/telemetry/**'] } },
+  permissions: { ros: { discover: true, selectTopic: true, subscribe: ['/telemetry/**'] } },
   author: { name: 'Example' },
   repository: 'https://github.com/example/telemetry',
 };
@@ -103,6 +103,7 @@ describe('PanelManagerDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
 
     expect(await screen.findByText('discover approved ROS topics')).toBeInTheDocument();
+    expect(screen.getByText('ask you to select individual ROS topics')).toBeInTheDocument();
     expect(screen.getByText('subscribe ROS: /telemetry/**')).toBeInTheDocument();
   });
 

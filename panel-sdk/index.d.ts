@@ -19,6 +19,8 @@ export type RoboBoyHostEndpoint = 'videoStream';
 
 export interface RoboBoyPanelRosPermissions {
   discover?: boolean;
+  /** Allow a trusted Robo-Boy picker to grant individual subscription topics selected by the user. */
+  selectTopic?: boolean;
   subscribe?: string[];
   publish?: string[];
   services?: string[];
@@ -97,7 +99,37 @@ export interface RoboBoyPanelContext {
   readonly runtime: RoboBoyPanelRuntime;
   readonly connection: RoboBoyPanelConnection;
   readonly viewport: RoboBoyPanelViewport;
+  readonly theme: RoboBoyPanelTheme;
   readonly logger: RoboBoyPanelLogger;
+}
+
+export type RoboBoyPanelThemeToken =
+  | '--primary-color'
+  | '--primary-hover-color'
+  | '--primary-darker-color'
+  | '--secondary-color'
+  | '--background-color'
+  | '--background-secondary'
+  | '--text-color'
+  | '--text-secondary'
+  | '--border-color'
+  | '--border-color-light'
+  | '--card-bg'
+  | '--card-border'
+  | '--button-text-color'
+  | '--error-color'
+  | '--success-color'
+  | '--warning-color'
+  | '--font-family-ui';
+
+export interface RoboBoyPanelThemeSnapshot {
+  readonly colorScheme: 'light' | 'dark';
+  readonly tokens: Readonly<Partial<Record<RoboBoyPanelThemeToken, string>>>;
+}
+
+export interface RoboBoyPanelTheme {
+  getSnapshot(): RoboBoyPanelThemeSnapshot;
+  subscribe(listener: (snapshot: RoboBoyPanelThemeSnapshot) => void): () => void;
 }
 
 export interface RoboBoyPanelRuntime {
@@ -133,6 +165,10 @@ export interface RoboBoyRosTopic {
   readonly messageType: string;
 }
 
+export interface RoboBoyRosTopicSelectionOptions {
+  currentTopic?: string;
+}
+
 export interface RoboBoyRosSubscriptionOptions {
   topic: string;
   messageType: string;
@@ -159,6 +195,8 @@ export interface RoboBoyRosServiceOptions {
 
 export interface RoboBoyPanelRos {
   getTopics(): Promise<RoboBoyRosTopic[]>;
+  /** Opens Robo-Boy's trusted topic picker and grants only the topic selected by the user. */
+  selectTopic(options?: RoboBoyRosTopicSelectionOptions): Promise<RoboBoyRosTopic>;
   subscribe(
     options: RoboBoyRosSubscriptionOptions,
     listener: (message: RoboBoyJsonObject) => void

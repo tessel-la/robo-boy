@@ -5,6 +5,7 @@ import { ROBOBOY_PANEL_API_VERSION } from './constants';
 import { loadVerifiedExternalPanelSource } from './loader';
 import { createPanelSandboxDocument } from './sandboxRuntime';
 import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
+import { readPanelTheme } from './theme';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
 import type {
   PanelHostRuntime,
@@ -12,7 +13,9 @@ import type {
   RoboBoyJsonObject,
   RoboBoyPanelConnectionSnapshot,
   RoboBoyPanelLogger,
+  RoboBoyPanelThemeSnapshot,
   RoboBoyPanelViewportSnapshot,
+  RoboBoyRosTopic,
 } from './types';
 import './ExternalPanelHost.css';
 
@@ -30,6 +33,7 @@ interface ExternalPanelHostProps {
 }
 
 type HostStatus = { phase: 'loading' } | { phase: 'ready' } | { phase: 'error'; message: string };
+type TopicPickerState = { topics: RoboBoyRosTopic[]; selectedTopic: string; query: string };
 
 const PANEL_START_TIMEOUT_MS = 20_000;
 
@@ -76,17 +80,62 @@ const ExternalPanelHost = ({
   const portRef = useRef<MessagePort | null>(null);
   const sandboxCleanupRef = useRef<(() => void) | null>(null);
   const viewportRef = useRef<RoboBoyPanelViewportSnapshot>(getInitialViewportSnapshot(isActive));
+  const themeRef = useRef<RoboBoyPanelThemeSnapshot>({ colorScheme: 'light', tokens: {} });
+  const selectedRosTopicsRef = useRef(new Map<string, string>());
+  const topicPickerPromiseRef = useRef<{
+    resolve(topic: RoboBoyRosTopic): void;
+    reject(error: Error): void;
+  } | null>(null);
   const isActiveRef = useRef(isActive);
   const stateRef = useRef(state);
   const onStateChangeRef = useRef(onStateChange);
   const [status, setStatus] = useState<HostStatus>({ phase: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
+  const [topicPicker, setTopicPicker] = useState<TopicPickerState | null>(null);
   const panelRevision = `${manifest.id}:${manifest.version}:${manifest.integrity}`;
   const capabilities = useMemo(() => manifest.capabilities || [], [manifest.capabilities]);
   const logger = useMemo(() => createLogger(manifest.id, instanceId), [instanceId, manifest.id]);
   const sandboxDocument = useMemo(() => createPanelSandboxDocument(), []);
+  const filteredTopicOptions = useMemo(() => {
+    if (!topicPicker) return [];
+    const query = topicPicker.query.trim().toLowerCase();
+    return query
+      ? topicPicker.topics.filter(
+          topic => topic.name.toLowerCase().includes(query) || topic.messageType.toLowerCase().includes(query)
+        )
+      : topicPicker.topics;
+  }, [topicPicker]);
 
   const post = useCallback((message: PanelHostToSandboxMessage) => portRef.current?.postMessage(message), []);
+  const cancelTopicSelection = useCallback((message = 'ROS topic selection was cancelled.') => {
+    if (!topicPickerPromiseRef.current) return;
+    topicPickerPromiseRef.current.reject(new Error(message));
+    topicPickerPromiseRef.current = null;
+    setTopicPicker(null);
+  }, []);
+  const requestRosTopicSelection = useCallback(
+    (topics: RoboBoyRosTopic[], currentTopic?: string) =>
+      new Promise<RoboBoyRosTopic>((resolve, reject) => {
+        topicPickerPromiseRef.current?.reject(new Error('A newer ROS topic selection replaced this request.'));
+        const sorted = [...topics].sort((left, right) => left.name.localeCompare(right.name));
+        topicPickerPromiseRef.current = { resolve, reject };
+        setTopicPicker({
+          topics: sorted,
+          selectedTopic: sorted.some(topic => topic.name === currentTopic) ? currentTopic! : '',
+          query: '',
+        });
+      }),
+    []
+  );
+  const approveTopicSelection = useCallback(() => {
+    if (!topicPicker?.selectedTopic || !topicPickerPromiseRef.current) return;
+    const selected = topicPicker.topics.find(topic => topic.name === topicPicker.selectedTopic);
+    if (!selected) return;
+    const pending = topicPickerPromiseRef.current;
+    topicPickerPromiseRef.current = null;
+    setTopicPicker(null);
+    pending.resolve(selected);
+  }, [topicPicker]);
   const publishViewport = useCallback(
     (update: Partial<RoboBoyPanelViewportSnapshot>) => {
       const merged = { ...viewportRef.current, ...update };
@@ -133,6 +182,21 @@ const ExternalPanelHost = ({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    const publishTheme = () => {
+      const next = readPanelTheme(host);
+      themeRef.current = next;
+      post({ type: 'theme', value: next });
+    };
+    publishTheme();
+    if (typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(publishTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
+    return () => observer.disconnect();
+  }, [post]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
     const updateSize = () => {
       const bounds = host.getBoundingClientRect();
       publishViewport({ width: Math.max(0, bounds.width), height: Math.max(0, bounds.height) });
@@ -173,6 +237,7 @@ const ExternalPanelHost = ({
 
   const connectSandbox = useCallback(() => {
     sandboxCleanupRef.current?.();
+    cancelTopicSelection('Panel reloaded before ROS topic selection completed.');
     let disposed = false;
     let disconnectBroker: (() => void) | null = null;
     let startupSettled = false;
@@ -181,6 +246,7 @@ const ExternalPanelHost = ({
     const iframe = iframeRef.current;
     const host = hostRef.current;
     if (!iframe?.contentWindow || !host) return;
+    themeRef.current = readPanelTheme(host);
     portRef.current = channel.port1;
 
     const settleStartup = () => {
@@ -217,6 +283,8 @@ const ExternalPanelHost = ({
         runtime: { target: runtime.target },
         runtimeEndpoints: runtime.endpoints,
         hostElement: host,
+        requestRosTopicSelection,
+        userSelectedRosTopics: selectedRosTopicsRef.current,
         logger,
       },
       handleMessage
@@ -244,6 +312,7 @@ const ExternalPanelHost = ({
             endpoints: getGrantedPanelEndpoints(manifest, runtime.endpoints),
             connection: { status: connectionStatus, generation: connectionGeneration },
             viewport: viewportRef.current,
+            theme: themeRef.current,
             storage: {
               enabled: capabilities.includes('storage'),
               schemaVersion: PANEL_STORAGE_SCHEMA_VERSION,
@@ -269,6 +338,7 @@ const ExternalPanelHost = ({
     };
   }, [
     capabilities,
+    cancelTopicSelection,
     connectionGeneration,
     connectionStatus,
     instanceId,
@@ -277,6 +347,7 @@ const ExternalPanelHost = ({
     post,
     ros,
     runtime,
+    requestRosTopicSelection,
     sourceLoader,
   ]);
   const connectSandboxRef = useRef(connectSandbox);
@@ -325,8 +396,9 @@ const ExternalPanelHost = ({
     () => () => {
       sandboxCleanupRef.current?.();
       sandboxCleanupRef.current = null;
+      cancelTopicSelection('Panel closed before ROS topic selection completed.');
     },
-    []
+    [cancelTopicSelection]
   );
 
   return (
@@ -353,6 +425,70 @@ const ExternalPanelHost = ({
           <button type="button" onClick={() => setRetryKey(value => value + 1)}>
             Try again
           </button>
+        </div>
+      )}
+      {topicPicker && (
+        <div className="external-panel-topic-picker-backdrop">
+          <section
+            className="external-panel-topic-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose ROS topic"
+          >
+            <header>
+              <div>
+                <span className="external-panel-topic-picker-kicker">User-approved ROS access</span>
+                <h3>Choose a topic for {manifest.name}</h3>
+              </div>
+              <button type="button" onClick={() => cancelTopicSelection()} aria-label="Cancel ROS topic selection">
+                ×
+              </button>
+            </header>
+            <p>The panel receives only the topic and message type you approve here.</p>
+            <label>
+              Search topics
+              <input
+                value={topicPicker.query}
+                onChange={event =>
+                  setTopicPicker(previous => (previous ? { ...previous, query: event.target.value } : null))
+                }
+                placeholder="/joint_states or sensor_msgs…"
+                autoFocus
+              />
+            </label>
+            <label>
+              Available topics
+              <select
+                size={Math.min(9, Math.max(3, filteredTopicOptions.length))}
+                value={topicPicker.selectedTopic}
+                onChange={event =>
+                  setTopicPicker(previous => (previous ? { ...previous, selectedTopic: event.target.value } : null))
+                }
+              >
+                {filteredTopicOptions.map(topic => (
+                  <option key={`${topic.name}:${topic.messageType}`} value={topic.name}>
+                    {topic.name} · {topic.messageType || 'unknown type'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {filteredTopicOptions.length === 0 && (
+              <span className="external-panel-topic-picker-empty">No matching topics</span>
+            )}
+            <footer>
+              <button type="button" onClick={() => cancelTopicSelection()}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!topicPicker.selectedTopic}
+                onClick={approveTopicSelection}
+              >
+                Allow selected topic
+              </button>
+            </footer>
+          </section>
         </div>
       )}
     </div>

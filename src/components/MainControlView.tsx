@@ -1111,6 +1111,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
   }, [normalizedWorkspaceTileOrder, workspacePanels]);
+  const workspaceDomOrderById = useMemo(
+    () => new Map(workspacePanels.map((panel, index) => [panel.id, index])),
+    [workspacePanels]
+  );
+  const getWorkspaceDomOrderedRow = useCallback(
+    (row: WorkspaceTile[]) =>
+      [...row].sort(
+        (left, right) =>
+          (workspaceDomOrderById.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+          (workspaceDomOrderById.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+      ),
+    [workspaceDomOrderById]
+  );
   const workspaceRows = useMemo(
     () => buildWorkspaceRows(workspaceTiles, workspaceLayout.rowSizes),
     [workspaceLayout.rowSizes, workspaceTiles]
@@ -3611,7 +3624,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                       <div className="workspace-drop-indicator workspace-drop-indicator-row" aria-hidden="true" />
                     )}
                   <div className="workspace-tile-row" style={{ flex: workspaceRowRatios[rowIndex] || 1 }}>
-                    {row.map((tile, columnIndex) => {
+                    {getWorkspaceDomOrderedRow(row).map(tile => {
+                      const columnIndex = row.findIndex(candidate => candidate.id === tile.id);
                       const tileIndex = getWorkspaceTileIndex(rowIndex, columnIndex);
                       const showColumnDropBefore =
                         workspaceDropPlacement?.mode === 'column' &&
@@ -3623,7 +3637,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                         workspaceDropPlacement.targetTileId === tile.id;
                       return (
                         <React.Fragment key={tile.id}>
-                          {showColumnDropBefore && <div className="workspace-drop-indicator" aria-hidden="true" />}
+                          {showColumnDropBefore && (
+                            <div
+                              className="workspace-drop-indicator"
+                              aria-hidden="true"
+                              style={{ order: columnIndex * 4 }}
+                            />
+                          )}
                           {tile.kind === 'view' ? (
                             <section
                               className="workspace-card workspace-card-view"
@@ -3631,7 +3651,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3668,7 +3691,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3703,7 +3729,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.panel.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                               onAnimationEnd={() => {
                                 setLastAddedWorkspacePanelId(prev => (prev === tile.panel.id ? null : prev));
                                 setExecutionJumpPanelId(prev => (prev === tile.panel.id ? null : prev));
@@ -3765,10 +3794,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               <div className="workspace-card-content">{renderWorkspacePanelContent(tile.panel)}</div>
                             </section>
                           )}
-                          {showColumnDropAfter && <div className="workspace-drop-indicator" aria-hidden="true" />}
+                          {showColumnDropAfter && (
+                            <div
+                              className="workspace-drop-indicator"
+                              aria-hidden="true"
+                              style={{ order: columnIndex * 4 + 2 }}
+                            />
+                          )}
                           {columnIndex < row.length - 1 && (
                             <div
                               className="workspace-column-resize-handle"
+                              style={{ order: columnIndex * 4 + 3 }}
                               onPointerDown={event => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
                               role="separator"
                               aria-orientation={isWorkspaceStacked ? 'horizontal' : 'vertical'}
@@ -3796,7 +3832,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                       );
                     })}
                     {rowIndex === renderedWorkspaceRows.length - 1 && workspaceDropPlacement?.mode === 'end' && (
-                      <div className="workspace-drop-indicator workspace-drop-indicator-end" aria-hidden="true" />
+                      <div
+                        className="workspace-drop-indicator workspace-drop-indicator-end"
+                        aria-hidden="true"
+                        style={{ order: row.length * 4 }}
+                      />
                     )}
                   </div>
                   {workspaceDropPlacement?.mode === 'row' &&

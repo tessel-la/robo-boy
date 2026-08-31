@@ -7,14 +7,14 @@ over a private message channel.
 
 ## Architecture And Boundaries
 
-| Boundary           | Responsibility                                                                                                                |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Robo-Boy core      | Catalog, integrity checks, workspace layout, sandbox lifecycle, permission brokers, management API/UI, and per-panel error UI |
-| Panel SDK          | Type-only manifest, activation context, storage, runtime, connection, viewport, and lifecycle interfaces in `panel-sdk/`      |
-| External panel     | Its own source, dependencies, release process, `roboboy.panel.json`, and browser-ready ESM bundle                             |
-| Panel Inventory    | Remote catalog metadata and immutable release locations; it does not host source or act as the installed registry             |
-| Desired state      | Schema-v2 source and selection configuration shared by local and remote installation                                          |
-| Installed registry | Deployment-local `panels/installed.json` locking exact bundles, integrity, selection, and source provenance                   |
+| Boundary           | Responsibility                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Robo-Boy core      | Catalog, integrity checks, workspace layout, sandbox lifecycle, permission brokers, management API/UI, and per-panel error UI   |
+| Panel SDK          | Type-only manifest, activation context, storage, runtime, connection, viewport, theme, and lifecycle interfaces in `panel-sdk/` |
+| External panel     | Its own source, dependencies, release process, `roboboy.panel.json`, and browser-ready ESM bundle                               |
+| Panel Inventory    | Remote catalog metadata and immutable release locations; it does not host source or act as the installed registry               |
+| Desired state      | Schema-v2 source and selection configuration shared by local and remote installation                                            |
+| Installed registry | Deployment-local `panels/installed.json` locking exact bundles, integrity, selection, and source provenance                     |
 
 The core implementation is under `src/panels/`:
 
@@ -149,6 +149,7 @@ interface RoboBoyPanelContext {
   readonly runtime: RoboBoyPanelRuntime;
   readonly connection: RoboBoyPanelConnection;
   readonly viewport: RoboBoyPanelViewport;
+  readonly theme: RoboBoyPanelTheme;
   readonly logger: RoboBoyPanelLogger;
 }
 
@@ -164,9 +165,11 @@ version, raw ROSLIB objects, and the complete runtime endpoint map. `runtime` ex
 an approved `network.hostEndpoints` entry appears under `context.network.endpoints`. `connection` publishes status
 and a monotonically increasing generation when the shared ROS
 instance changes. `viewport` publishes tile size, intersection, document visibility, and effective active state;
-panels should pause expensive work while inactive. The host owns the tile and the panel owns only DOM below the
-supplied mount element. `unmount` is mandatory and must remove listeners, timers, observers, ROS clients,
-rendering resources, and created DOM.
+panels should pause expensive work while inactive. `theme` provides the current light/dark color scheme and a
+reviewed set of Robo-Boy CSS tokens. The sandbox also installs those tokens on its document root and supplies base
+styles for native controls. The host owns the tile and the panel owns only DOM below the supplied mount element.
+`unmount` is mandatory and must remove listeners, timers, observers, ROS clients, rendering resources, and created
+DOM.
 
 ### Lifecycle
 
@@ -195,13 +198,44 @@ terminates the panel realm even if its cleanup fails.
 | `camera`        | Declares use of camera/media capture                                                                     |
 | `microphone`    | Declares use of microphone/media capture                                                                 |
 
-Undeclared services are `null`. ROS/network capabilities require a matching `permissions` block. ROS discovery
-returns only topics matching an approved subscribe pattern; every subscribe, publish, and service request is
-checked again. Network requests accept only declared exact HTTPS origins, `self`, or the visibly broad `https:`
-grant. Host endpoint grants are narrower: `videoStream`, for example, permits only its known discovery and WHEP
-routes rather than the complete service origin. Redirect targets are checked, ambient credentials are omitted,
-privileged headers are blocked, response headers are filtered, responses are size-capped, and concurrent requests
-time out. The sandbox has no parent DOM, Robo-Boy storage, cookies, or raw host objects.
+Undeclared services are `null`. ROS/network capabilities require a matching `permissions` block. Static ROS
+discovery returns only topics matching an approved `subscribe` pattern; every subscribe, publish, and service
+request is checked again. A panel that needs user-configurable topics can instead declare `selectTopic: true` and
+call `context.ros.selectTopic()`. Robo-Boy obtains the complete graph, displays it in trusted host UI, and returns
+only the selected topic and message type to the panel. That selection grants subscription access to that exact pair
+for the current tile session; it does not expose the graph or create a wildcard grant. Network requests accept only
+declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:
+`videoStream`, for example, permits only its known discovery and WHEP routes rather than the complete service
+origin. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
+headers are filtered, responses are size-capped, and concurrent requests time out. The sandbox has no parent DOM,
+Robo-Boy storage, cookies, or raw host objects.
+
+### Theme And UI Guidelines
+
+Opaque-origin panels cannot inherit parent-page CSS directly. Robo-Boy therefore copies only its public design
+tokens into the sandbox: primary and semantic colors, page/card/background/text/border colors, button text, and the
+UI font family. The current values are available through `context.theme.getSnapshot()` and changes are published by
+`context.theme.subscribe()`. The same tokens are also written as CSS custom properties on `:root`, which is the
+preferred styling interface:
+
+```css
+.panel-card {
+  color: var(--text-color);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.panel-action {
+  color: var(--button-text-color);
+  background: var(--primary-color);
+}
+```
+
+Use theme variables for every palette value and `--font-family-ui` for typography. Native buttons, inputs, selects,
+and textareas receive baseline Robo-Boy styling, but panels remain responsible for their layout, spacing, focus
+order, labels, disabled states, overflow behavior, and responsive UI. Avoid copying a built-in theme's resolved
+colors into panel source because custom and future themes update the variables at runtime.
 
 Device capabilities are translated to iframe Permissions Policy entries. Camera and microphone still require the
 browser's normal user consent. Browser support for Bluetooth, USB, and Serial inside a sandbox varies and should be
@@ -244,16 +278,16 @@ and places it in a generated deployment tree without importing it into applicati
 ## ROS Time Series Reference Panel
 
 The sibling `robo-boy-timeseries-panel` is a fuller external-author example that exercises the brokered `ros`,
-`storage`, `connection`, and `viewport` APIs. It discovers permitted topics, subscribes through the broker, plots up to
-eight nested numeric message fields, and provides bounded retention, bridge throttling, auto or fixed Y ranges,
-pause/clear controls, point markers, and long-form CSV export. Leaving the field list blank discovers numeric
-fields from the first received message. Its source-first settings drawer presents discovered topics and numeric
-fields before placing retention and rendering controls in a scrollable advanced section for short mobile tiles.
+`storage`, `connection`, `viewport`, and theme APIs. It asks the user to choose any topic through Robo-Boy's trusted
+picker, subscribes through the broker, plots up to eight nested numeric message fields, and provides bounded
+retention, bridge throttling, auto or fixed Y ranges, pause/clear controls, point markers, and long-form CSV export.
+Leaving the field list blank discovers numeric fields from the first received message. Its source-first settings
+drawer presents the approved topic and numeric fields before placing retention and rendering controls in a
+scrollable advanced section for short mobile tiles.
 
 The release uses the API v2 ROS broker and contains no ROSLIB client or direct rosbridge connection. Its manifest
-permits discovery and subscription only below `/telemetry/**` and `/diagnostics/**`; deployments must deliberately
-review and extend those scopes when their telemetry uses another namespace. An explicitly staged artifact is loaded
-only when a user adds that panel.
+permits the panel to open the trusted picker, but the panel never receives the unselected graph. An explicitly
+staged artifact is loaded only when a user adds that panel.
 
 ## WebRTC / RTSP Camera Reference Panel
 

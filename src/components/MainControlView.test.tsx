@@ -207,7 +207,7 @@ const connectionParams = {
   ros2Value: '0',
 };
 
-const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree', title: string) => ({
+const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | string, title: string) => ({
   id,
   type,
   title,
@@ -495,7 +495,9 @@ describe('MainControlView desktop workspace', () => {
     expect(swapButton.closest('.workspace-column-resize-handle')).toBeInTheDocument();
     expect(swapButton.closest('.workspace-card-header')).toBeNull();
     fireEvent.click(swapButton);
-    const cards = workspace.querySelectorAll('.workspace-card');
+    const cards = [...workspace.querySelectorAll<HTMLElement>('.workspace-card')].sort(
+      (left, right) => Number(left.style.order) - Number(right.style.order)
+    );
     expect(cards[0]).toHaveAttribute('aria-label', 'Pad controls');
     expect(cards[0]).toHaveClass('is-mobile-swapping-up');
     expect(cards[1]).toHaveAttribute('aria-label', 'Camera');
@@ -508,6 +510,46 @@ describe('MainControlView desktop workspace', () => {
         'panel-camera',
       ]);
     });
+  });
+
+  it('keeps an external panel mounted while swapping stacked workspace tiles', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        makePanel('panel-external', 'la.tessel.roboboy.hello', 'Hello Panel'),
+        makePanel('panel-camera', 'camera', 'Camera'),
+      ])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-external', 'panel-camera']));
+    localStorage.setItem(
+      workspaceLayoutKey,
+      JSON.stringify({ rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] } })
+    );
+
+    renderMainControlView();
+
+    const originalHost = await screen.findByTestId('external-panel-host');
+    fireEvent.click(screen.getByLabelText('Swap mobile panels'));
+
+    expect(screen.getByTestId('external-panel-host')).toBe(originalHost);
+    const visualCards = [
+      ...screen.getByLabelText('Desktop workspace').querySelectorAll<HTMLElement>('.workspace-card'),
+    ].sort((left, right) => Number(left.style.order) - Number(right.style.order));
+    expect(visualCards[0]).toHaveAttribute('aria-label', 'Camera');
+    expect(visualCards[1]).toHaveAttribute('aria-label', 'Hello Panel');
   });
 
   it('shows a global running-tree control and highlights its workspace tile', async () => {

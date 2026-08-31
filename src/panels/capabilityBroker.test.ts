@@ -40,6 +40,68 @@ describe('panel capability broker', () => {
     ).toEqual({});
   });
 
+  it('reveals the ROS graph only to the trusted picker and grants its selected topic', async () => {
+    const rosManifest: ResolvedPanelManifest = {
+      ...manifest,
+      capabilities: ['ros'],
+      permissions: { ros: { selectTopic: true } },
+    };
+    const port = {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: vi.fn(),
+      start: vi.fn(),
+      close: vi.fn(),
+    } as unknown as MessagePort;
+    const getTopics = vi.fn((resolve: (value: unknown) => void) =>
+      resolve({
+        topics: ['/private/system', '/joint_states'],
+        types: ['std_msgs/msg/String', 'sensor_msgs/msg/JointState'],
+      })
+    );
+    const requestRosTopicSelection = vi.fn(async topics => topics[1]);
+    const userSelectedRosTopics = new Map<string, string>();
+    const disconnect = connectPanelCapabilityBroker(
+      port,
+      {
+        manifest: rosManifest,
+        ros: { getTopics } as never,
+        runtime: { target: 'web' },
+        runtimeEndpoints: {},
+        hostElement: document.createElement('div'),
+        requestRosTopicSelection,
+        userSelectedRosTopics,
+        logger: console,
+      },
+      vi.fn()
+    );
+
+    port.onmessage?.({
+      data: {
+        type: 'request',
+        requestId: 'select-topic',
+        method: 'ros.selectTopic',
+        params: { currentTopic: '/joint_states' },
+      },
+    } as MessageEvent);
+
+    await vi.waitFor(() =>
+      expect(port.postMessage).toHaveBeenCalledWith({
+        type: 'response',
+        requestId: 'select-topic',
+        value: { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+      })
+    );
+    expect(requestRosTopicSelection).toHaveBeenCalledWith(
+      [
+        { name: '/private/system', messageType: 'std_msgs/msg/String' },
+        { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+      ],
+      '/joint_states'
+    );
+    expect(userSelectedRosTopics).toEqual(new Map([['/joint_states', 'sensor_msgs/msg/JointState']]));
+    disconnect();
+  });
+
   it('rejects network origins outside the reviewed allowlist before fetch', async () => {
     const port = {
       onmessage: null as ((event: MessageEvent) => void) | null,

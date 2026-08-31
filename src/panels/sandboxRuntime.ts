@@ -14,8 +14,10 @@ const panelSandboxBootstrap = () => {
     isDocumentVisible: true,
     isActive: false,
   };
+  let themeSnapshot = { colorScheme: 'light' as 'light' | 'dark', tokens: {} as Record<string, string> };
   const connectionListeners = new Set<(snapshot: typeof connectionSnapshot) => void>();
   const viewportListeners = new Set<(snapshot: typeof viewportSnapshot) => void>();
+  const themeListeners = new Set<(snapshot: typeof themeSnapshot) => void>();
   const pending = new Map<
     string,
     { resolve: (value: unknown) => void; reject: (error: Error) => void; abort?: () => void }
@@ -63,6 +65,21 @@ const panelSandboxBootstrap = () => {
     });
   };
   const jsonSize = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  const applyTheme = (value: any) => {
+    const colorScheme = value?.colorScheme === 'dark' ? 'dark' : 'light';
+    const tokens = Object.fromEntries(
+      Object.entries(value?.tokens || {}).filter(
+        ([name, tokenValue]) =>
+          /^--[a-z0-9-]{1,80}$/i.test(name) && typeof tokenValue === 'string' && tokenValue.length <= 512
+      )
+    ) as Record<string, string>;
+    themeSnapshot = { colorScheme, tokens };
+    document.documentElement.style.colorScheme = colorScheme;
+    Object.entries(tokens).forEach(([name, tokenValue]) =>
+      document.documentElement.style.setProperty(name, tokenValue)
+    );
+    themeListeners.forEach(listener => listener(themeSnapshot));
+  };
 
   const loadBundleModule = (bundleSource: string): Promise<any> => {
     const bridgeKey = `__roboboyPanelModuleBridge_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -105,6 +122,7 @@ const panelSandboxBootstrap = () => {
   const initialize = async (value: any) => {
     connectionSnapshot = value.connection;
     viewportSnapshot = value.viewport;
+    applyTheme(value.theme);
     let storageValues = structuredClone(value.storage.values);
     const storage = value.storage.enabled
       ? {
@@ -138,6 +156,7 @@ const panelSandboxBootstrap = () => {
     const ros = value.capabilities.includes('ros')
       ? {
           getTopics: () => rpc('ros.getTopics'),
+          selectTopic: (options?: unknown) => rpc('ros.selectTopic', options),
           subscribe: async (options: unknown, listener: (message: Record<string, unknown>) => void) => {
             const result = (await rpc('ros.subscribe', options)) as { subscriptionId: string };
             rosListeners.set(result.subscriptionId, listener);
@@ -207,6 +226,13 @@ const panelSandboxBootstrap = () => {
           await rpc('viewport.requestFullscreen');
         },
       }),
+      theme: Object.freeze({
+        getSnapshot: () => themeSnapshot,
+        subscribe: (listener: (snapshot: typeof themeSnapshot) => void) => {
+          themeListeners.add(listener);
+          return () => themeListeners.delete(listener);
+        },
+      }),
       logger: Object.freeze(logger),
     });
 
@@ -240,6 +266,7 @@ const panelSandboxBootstrap = () => {
       pending.forEach(({ reject }) => reject(new Error('Panel sandbox was disposed.')));
       pending.clear();
       rosListeners.clear();
+      themeListeners.clear();
     }
   };
 
@@ -261,6 +288,8 @@ const panelSandboxBootstrap = () => {
           viewportSnapshot = message.value;
           viewportListeners.forEach(listener => listener(viewportSnapshot));
           await instance?.setActive?.(viewportSnapshot.isActive);
+        } else if (message.type === 'theme') {
+          applyTheme(message.value);
         } else if (message.type === 'response') {
           const request = pending.get(message.requestId);
           if (!request) return;
@@ -298,5 +327,5 @@ export const createPanelSandboxDocument = (): string => {
     "form-action 'none'",
   ].join('; ');
   const bootstrap = `(${panelSandboxBootstrap.toString()})();`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color-scheme:light dark}*{box-sizing:border-box}</style></head><body><div id="panel-root"></div><script>${bootstrap}<\/script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color:var(--text-color,#212529);background:var(--background-color,#fff);font-family:var(--font-family-ui,system-ui,sans-serif);color-scheme:light dark}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 10px;color:var(--button-text-color,#fff);background:var(--primary-color,#32cd32);font-weight:600;cursor:pointer}button:hover{background:var(--primary-hover-color,var(--primary-color,#32cd32))}button:disabled{opacity:.48;cursor:default}input,select,textarea{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 9px;color:var(--text-color,#212529);background:var(--background-color,#fff)}:focus-visible{outline:2px solid var(--primary-color,#32cd32);outline-offset:2px}</style></head><body><div id="panel-root"></div><script>${bootstrap}<\/script></body></html>`;
 };

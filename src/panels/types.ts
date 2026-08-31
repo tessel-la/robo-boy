@@ -25,6 +25,9 @@ export type {
   RoboBoyPanelRosPermissions,
   RoboBoyPanelRuntime,
   RoboBoyPanelStorage,
+  RoboBoyPanelTheme,
+  RoboBoyPanelThemeSnapshot,
+  RoboBoyPanelThemeToken,
   RoboBoyPanelViewport,
   RoboBoyPanelViewportSnapshot,
   RoboBoyRosPublishOptions,
@@ -32,6 +35,7 @@ export type {
   RoboBoyRosSubscription,
   RoboBoyRosSubscriptionOptions,
   RoboBoyRosTopic,
+  RoboBoyRosTopicSelectionOptions,
 } from '../../panel-sdk';
 
 export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad';

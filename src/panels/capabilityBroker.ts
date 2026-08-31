@@ -29,6 +29,11 @@ interface CapabilityBrokerOptions {
   runtime: RoboBoyPanelRuntime;
   runtimeEndpoints: { videoStream?: string };
   hostElement: HTMLElement;
+  requestRosTopicSelection?: (
+    topics: Array<{ name: string; messageType: string }>,
+    currentTopic?: string
+  ) => Promise<{ name: string; messageType: string }>;
+  userSelectedRosTopics?: Map<string, string>;
   logger: {
     debug(message: string, ...details: unknown[]): void;
     info(message: string, ...details: unknown[]): void;
@@ -42,6 +47,7 @@ interface BrokerResources {
   publishers: Map<string, Topic>;
   services: Map<string, Service>;
   requests: Map<string, AbortController>;
+  selectedTopics: Map<string, string>;
 }
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -210,14 +216,43 @@ const handleRequest = async (
       .map((name, index) => ({ name, messageType: response.types?.[index] || '' }))
       .filter(topic => rosPermissions.subscribe?.some(pattern => resourceMatches(pattern, topic.name)));
   }
+  if (message.method === 'ros.selectTopic') {
+    if (!rosPermissions?.selectTopic) throw new Error('Panel is not permitted to request ROS topic selection.');
+    if (!options.requestRosTopicSelection) throw new Error('ROS topic selection is unavailable.');
+    const ros = requireRos(options.ros);
+    const response = await new Promise<{ topics?: string[]; types?: string[] }>((resolve, reject) => {
+      ros.getTopics(resolve, reject);
+    });
+    const topics = (response.topics || []).map((name, index) => ({
+      name,
+      messageType: response.types?.[index] || '',
+    }));
+    const currentTopic = typeof params.currentTopic === 'string' ? params.currentTopic : undefined;
+    const selected = await options.requestRosTopicSelection(topics, currentTopic);
+    const verified = topics.find(topic => topic.name === selected.name && topic.messageType === selected.messageType);
+    if (!verified) throw new Error('Selected ROS topic is no longer available.');
+    resources.selectedTopics.set(verified.name, verified.messageType);
+    return verified;
+  }
   if (message.method === 'ros.subscribe') {
     if (resources.subscriptions.size >= MAX_ROS_SUBSCRIPTIONS) {
       throw new Error('Panel ROS subscription limit reached.');
     }
     const ros = requireRos(options.ros);
-    const name = requireResourcePermission(rosPermissions?.subscribe, params.topic, 'topic');
+    if (typeof params.topic !== 'string' || !params.topic.startsWith('/')) {
+      throw new Error('Invalid ROS topic name.');
+    }
+    const name = params.topic;
+    const staticallyAllowed = rosPermissions?.subscribe?.some(pattern => resourceMatches(pattern, name)) ?? false;
+    const selectedMessageType = resources.selectedTopics.get(name);
+    if (!staticallyAllowed && !selectedMessageType) {
+      throw new Error(`Panel is not permitted to access ROS topic ${name}.`);
+    }
     if (typeof params.messageType !== 'string' || !params.messageType.trim())
       throw new Error('ROS messageType is required.');
+    if (selectedMessageType && selectedMessageType !== params.messageType) {
+      throw new Error('ROS messageType does not match the user-selected topic.');
+    }
     const subscriptionId = crypto.randomUUID();
     const topic = new ROSLIB.Topic({
       ros,
@@ -353,6 +388,7 @@ export const connectPanelCapabilityBroker = (
     publishers: new Map(),
     services: new Map(),
     requests: new Map(),
+    selectedTopics: options.userSelectedRosTopics ?? new Map(),
   };
   port.onmessage = event => {
     const message = event.data as PanelSandboxToHostMessage;

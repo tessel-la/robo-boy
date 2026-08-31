@@ -374,11 +374,18 @@ const validateManifestShape = (manifest, label) => {
       if (!permissions.ros || typeof permissions.ros !== 'object' || Array.isArray(permissions.ros)) {
         throw new InstallError(`${manifest.id} needs ROS permissions.`);
       }
-      if (Object.keys(permissions.ros).some(key => !['discover', 'subscribe', 'publish', 'services'].includes(key))) {
+      if (
+        Object.keys(permissions.ros).some(
+          key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services'].includes(key)
+        )
+      ) {
         throw new InstallError(`${manifest.id} declares unknown ROS permissions.`);
       }
       if (permissions.ros.discover !== undefined && typeof permissions.ros.discover !== 'boolean') {
         throw new InstallError(`${manifest.id} has an invalid ROS discover permission.`);
+      }
+      if (permissions.ros.selectTopic !== undefined && typeof permissions.ros.selectTopic !== 'boolean') {
+        throw new InstallError(`${manifest.id} has an invalid ROS topic-selection permission.`);
       }
       validateResourceList(permissions.ros.subscribe, 'subscribe');
       validateResourceList(permissions.ros.publish, 'publish');

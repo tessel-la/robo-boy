@@ -17,7 +17,7 @@ const createManifest = (overrides: Record<string, unknown> = {}) => ({
     roboboy: '>=0.3.0-0 <1.0.0',
   },
   capabilities: ['ros'],
-  permissions: { ros: { discover: true, subscribe: ['/telemetry/**'] } },
+  permissions: { ros: { discover: true, selectTopic: true, subscribe: ['/telemetry/**'] } },
   author: { name: 'Example Author', url: 'https://example.com' },
   repository: 'https://github.com/example/telemetry-panel',
   tags: ['telemetry'],
