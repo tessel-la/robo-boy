@@ -34,6 +34,7 @@ interface CapabilityBrokerOptions {
     currentTopic?: string
   ) => Promise<{ name: string; messageType: string }>;
   userSelectedRosTopics?: Map<string, string>;
+  onRosTopicSelected?: (topic: { name: string; messageType: string }) => void;
   logger: {
     debug(message: string, ...details: unknown[]): void;
     info(message: string, ...details: unknown[]): void;
@@ -247,6 +248,7 @@ const handleRequest = async (
     const verified = topics.find(topic => topic.name === selected.name && topic.messageType === selected.messageType);
     if (!verified) throw new Error('Selected ROS topic is no longer available.');
     resources.selectedTopics.set(verified.name, verified.messageType);
+    options.onRosTopicSelected?.(verified);
     return verified;
   }
   if (message.method === 'ros.subscribe') {

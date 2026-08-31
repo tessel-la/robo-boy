@@ -202,8 +202,11 @@ Undeclared services are `null`. ROS/network capabilities require a matching `per
 discovery returns only topics matching an approved `subscribe` pattern; every subscribe, publish, and service
 request is checked again. A panel that needs user-configurable topics can instead declare `selectTopic: true` and
 call `context.ros.selectTopic()`. Robo-Boy obtains the complete graph, displays it in trusted host UI, and returns
-only the selected topic and message type to the panel. That selection grants subscription access to that exact pair
-for the current tile session; it does not expose the graph or create a wildcard grant. ROS messages are normalized
+only the selected topic and message type to the panel. That selection grants subscription access to that exact pair.
+The host persists approved pairs as trusted tile metadata so mobile suspension and page reloads can reconnect without
+asking again; replacing or removing the tile removes its grants. The panel cannot read this host metadata, and the
+grant does not expose the graph or create a wildcard permission. Portable workspace exports omit these grants, and
+workspace imports cannot create them. ROS messages are normalized
 to JSON at this boundary, so non-finite ROS floating-point values become `null` without dropping the rest of the
 message; non-JSON and oversized payloads are rejected. Network requests accept only
 declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:

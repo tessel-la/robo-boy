@@ -29,6 +29,8 @@ interface ExternalPanelHostProps {
   isActive: boolean;
   state?: RoboBoyJsonObject;
   onStateChange: (state: RoboBoyJsonObject) => void;
+  approvedRosTopics?: readonly RoboBoyRosTopic[];
+  onApprovedRosTopicsChange?: (topics: RoboBoyRosTopic[]) => void;
   sourceLoader?: (manifest: ResolvedPanelManifest) => Promise<string>;
 }
 
@@ -36,6 +38,7 @@ type HostStatus = { phase: 'loading' } | { phase: 'ready' } | { phase: 'error'; 
 type TopicPickerState = { topics: RoboBoyRosTopic[]; selectedTopic: string; query: string };
 
 const PANEL_START_TIMEOUT_MS = 20_000;
+const NO_APPROVED_ROS_TOPICS: readonly RoboBoyRosTopic[] = [];
 
 const createLogger = (panelId: string, instanceId: string): RoboBoyPanelLogger => {
   const prefix = `[external panel ${panelId}:${instanceId}]`;
@@ -73,6 +76,8 @@ const ExternalPanelHost = ({
   isActive,
   state = {},
   onStateChange,
+  approvedRosTopics = NO_APPROVED_ROS_TOPICS,
+  onApprovedRosTopicsChange,
   sourceLoader = loadVerifiedExternalPanelSource,
 }: ExternalPanelHostProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -81,7 +86,7 @@ const ExternalPanelHost = ({
   const sandboxCleanupRef = useRef<(() => void) | null>(null);
   const viewportRef = useRef<RoboBoyPanelViewportSnapshot>(getInitialViewportSnapshot(isActive));
   const themeRef = useRef<RoboBoyPanelThemeSnapshot>({ colorScheme: 'light', tokens: {} });
-  const selectedRosTopicsRef = useRef(new Map<string, string>());
+  const selectedRosTopicsRef = useRef(new Map(approvedRosTopics.map(topic => [topic.name, topic.messageType])));
   const topicPickerPromiseRef = useRef<{
     resolve(topic: RoboBoyRosTopic): void;
     reject(error: Error): void;
@@ -89,6 +94,7 @@ const ExternalPanelHost = ({
   const isActiveRef = useRef(isActive);
   const stateRef = useRef(state);
   const onStateChangeRef = useRef(onStateChange);
+  const onApprovedRosTopicsChangeRef = useRef(onApprovedRosTopicsChange);
   const [status, setStatus] = useState<HostStatus>({ phase: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
   const [topicPicker, setTopicPicker] = useState<TopicPickerState | null>(null);
@@ -166,6 +172,15 @@ const ExternalPanelHost = ({
   useEffect(() => {
     onStateChangeRef.current = onStateChange;
   }, [onStateChange]);
+
+  useEffect(() => {
+    onApprovedRosTopicsChangeRef.current = onApprovedRosTopicsChange;
+  }, [onApprovedRosTopicsChange]);
+
+  useEffect(() => {
+    selectedRosTopicsRef.current.clear();
+    approvedRosTopics.forEach(topic => selectedRosTopicsRef.current.set(topic.name, topic.messageType));
+  }, [approvedRosTopics]);
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -285,6 +300,12 @@ const ExternalPanelHost = ({
         hostElement: host,
         requestRosTopicSelection,
         userSelectedRosTopics: selectedRosTopicsRef.current,
+        onRosTopicSelected: selected => {
+          const next = [...selectedRosTopicsRef.current.entries()]
+            .map(([name, messageType]) => ({ name, messageType }))
+            .sort((left, right) => left.name.localeCompare(right.name));
+          onApprovedRosTopicsChangeRef.current?.(next);
+        },
         logger,
       },
       handleMessage

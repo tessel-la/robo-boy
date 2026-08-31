@@ -202,4 +202,25 @@ describe('ExternalPanelHost sandbox', () => {
     });
     expect(screen.queryByRole('dialog', { name: 'Choose ROS topic' })).not.toBeInTheDocument();
   });
+
+  it('restores host-owned topic grants and reports newly approved topics', async () => {
+    const onApprovedRosTopicsChange = vi.fn();
+    const approvedRosTopics = [{ name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' }];
+    const { container } = renderHost({ approvedRosTopics, onApprovedRosTopicsChange });
+    announceSandboxReady(container.querySelector('iframe')!);
+    await waitFor(() => expect(broker.connect).toHaveBeenCalled());
+
+    const brokerOptions = broker.connect.mock.calls[0][1] as {
+      userSelectedRosTopics: Map<string, string>;
+      onRosTopicSelected(topic: { name: string; messageType: string }): void;
+    };
+    expect(brokerOptions.userSelectedRosTopics).toEqual(new Map([['/joint_states', 'sensor_msgs/msg/JointState']]));
+
+    brokerOptions.userSelectedRosTopics.set('/joy', 'sensor_msgs/msg/Joy');
+    brokerOptions.onRosTopicSelected({ name: '/joy', messageType: 'sensor_msgs/msg/Joy' });
+    expect(onApprovedRosTopicsChange).toHaveBeenCalledWith([
+      { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+      { name: '/joy', messageType: 'sensor_msgs/msg/Joy' },
+    ]);
+  });
 });

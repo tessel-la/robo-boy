@@ -80,6 +80,7 @@ describe('panel capability broker', () => {
     );
     const requestRosTopicSelection = vi.fn(async topics => topics[1]);
     const userSelectedRosTopics = new Map<string, string>();
+    const onRosTopicSelected = vi.fn();
     const disconnect = connectPanelCapabilityBroker(
       port,
       {
@@ -90,6 +91,7 @@ describe('panel capability broker', () => {
         hostElement: document.createElement('div'),
         requestRosTopicSelection,
         userSelectedRosTopics,
+        onRosTopicSelected,
         logger: console,
       },
       vi.fn()
@@ -119,6 +121,10 @@ describe('panel capability broker', () => {
       '/joint_states'
     );
     expect(userSelectedRosTopics).toEqual(new Map([['/joint_states', 'sensor_msgs/msg/JointState']]));
+    expect(onRosTopicSelected).toHaveBeenCalledWith({
+      name: '/joint_states',
+      messageType: 'sensor_msgs/msg/JointState',
+    });
     disconnect();
   });
 

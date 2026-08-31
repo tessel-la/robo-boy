@@ -16,6 +16,7 @@ const downloadGamepadLayout = vi.fn();
 const importGamepadFile = vi.fn();
 const saveGamepadFromEditor = vi.fn();
 const useInstalledPanels = vi.fn();
+const externalPanelHostProps = vi.fn();
 
 vi.mock('../hooks/useRos', () => ({
   useRos: () => ({
@@ -42,11 +43,14 @@ vi.mock('../panels/useInstalledPanels', () => ({
 }));
 
 vi.mock('../panels/ExternalPanelHost', () => ({
-  default: ({ manifest, instanceId }: any) => (
-    <div data-testid="external-panel-host">
-      {manifest.name}:{instanceId}
-    </div>
-  ),
+  default: (props: any) => {
+    externalPanelHostProps(props);
+    return (
+      <div data-testid="external-panel-host">
+        {props.manifest.name}:{props.instanceId}
+      </div>
+    );
+  },
 }));
 
 vi.mock('animejs', () => ({
@@ -303,6 +307,41 @@ describe('MainControlView desktop workspace', () => {
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')).toEqual([
         expect.objectContaining({ type: 'la.tessel.roboboy.hello', title: 'Hello Panel' }),
+      ]);
+    });
+  });
+
+  it('persists trusted ROS topic grants as host-owned tile metadata', async () => {
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        {
+          ...makePanel('panel-timeseries', 'la.tessel.roboboy.hello', 'Hello Panel'),
+          approvedRosTopics: [
+            { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+            { name: 'invalid', messageType: 'std_msgs/msg/String' },
+          ],
+        },
+      ])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-timeseries']));
+    renderMainControlView();
+
+    await screen.findByTestId('external-panel-host');
+    const props = externalPanelHostProps.mock.lastCall?.[0];
+    expect(props.approvedRosTopics).toEqual([{ name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' }]);
+
+    act(() =>
+      props.onApprovedRosTopicsChange([
+        { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+        { name: '/joy', messageType: 'sensor_msgs/msg/Joy' },
+      ])
+    );
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
+      expect(stored[0].approvedRosTopics).toEqual([
+        { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
+        { name: '/joy', messageType: 'sensor_msgs/msg/Joy' },
       ]);
     });
   });
@@ -572,6 +611,7 @@ describe('MainControlView desktop workspace', () => {
         {
           ...makePanel('panel-camera', 'camera', 'Camera'),
           panelState: { schemaVersion: 1, panelId: 'camera', values: { privateValue: 'camera-only' } },
+          approvedRosTopics: [{ name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' }],
         },
       ])
     );
@@ -588,6 +628,7 @@ describe('MainControlView desktop workspace', () => {
         expect.arrayContaining([expect.objectContaining({ id: 'panel-camera', type: 'tfTree', title: 'TF tree' })])
       );
       expect(stored[0].panelState).toBeUndefined();
+      expect(stored[0].approvedRosTopics).toBeUndefined();
     });
   });
 

@@ -42,6 +42,7 @@ import {
   isStoredPanelState,
   type PanelHostRuntime,
   type PanelCatalogEntry,
+  type RoboBoyRosTopic,
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
@@ -382,6 +383,7 @@ interface WorkspacePanel {
   cameraTopic?: string;
   layoutId?: string;
   panelState?: StoredPanelState;
+  approvedRosTopics?: RoboBoyRosTopic[];
 }
 
 type WorkspaceTile =
@@ -466,7 +468,35 @@ const createWorkspacePanel = (
   };
 };
 
-const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
+const normalizeApprovedRosTopics = (value: unknown): RoboBoyRosTopic[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const topics = new Map<string, string>();
+  value.slice(0, 32).forEach(candidate => {
+    if (!candidate || typeof candidate !== 'object') return;
+    const { name, messageType } = candidate as Partial<RoboBoyRosTopic>;
+    if (
+      typeof name !== 'string' ||
+      !name.startsWith('/') ||
+      name.length > 512 ||
+      /\s/.test(name) ||
+      typeof messageType !== 'string' ||
+      !messageType ||
+      messageType.length > 512 ||
+      /\s/.test(messageType)
+    ) {
+      return;
+    }
+    topics.set(name, messageType);
+  });
+  return topics.size ? [...topics.entries()].map(([name, messageType]) => ({ name, messageType })) : undefined;
+};
+
+const withoutApprovedRosTopics = ({
+  approvedRosTopics: _approvedRosTopics,
+  ...panel
+}: WorkspacePanel): WorkspacePanel => panel;
+
+const normalizeWorkspacePanel = (panel: unknown, allowApprovedRosTopics = true): WorkspacePanel | null => {
   if (!panel || typeof panel !== 'object') return null;
   const candidate = panel as Partial<WorkspacePanel>;
   if (typeof candidate.id !== 'string' || !isValidPanelId(candidate.type) || typeof candidate.title !== 'string') {
@@ -487,6 +517,7 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
     panelState: storedPanelState,
+    approvedRosTopics: allowApprovedRosTopics ? normalizeApprovedRosTopics(candidate.approvedRosTopics) : undefined,
   };
 };
 
@@ -661,13 +692,13 @@ const normalizeWorkspaceLayoutState = (layout: unknown): WorkspaceLayoutState =>
   };
 };
 
-const normalizeSavedWorkspaceLayout = (layout: unknown): SavedWorkspaceLayout | null => {
+const normalizeSavedWorkspaceLayout = (layout: unknown, allowApprovedRosTopics = true): SavedWorkspaceLayout | null => {
   if (!layout || typeof layout !== 'object') return null;
   const candidate = layout as Partial<SavedWorkspaceLayout>;
   if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return null;
 
   const panels = Array.isArray(candidate.panels)
-    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel)
+    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel, allowApprovedRosTopics)).filter(isWorkspacePanel)
     : [];
   const tileOrder = normalizeWorkspaceTileOrder(
     Array.isArray(candidate.tileOrder)
@@ -694,7 +725,7 @@ const loadSavedWorkspaceLayouts = (): SavedWorkspaceLayout[] => {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
       ? parsed
-          .map(layout => normalizeSavedWorkspaceLayout(layout))
+          .map(layout => normalizeSavedWorkspaceLayout(layout, false))
           .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
       : [];
   } catch (error) {
@@ -1638,6 +1669,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 cameraTopic: type === 'camera' ? selectedCameraTopic || availableCameraTopics[0] : undefined,
                 layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
                 panelState: panel.type === type ? panel.panelState : undefined,
+                approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
               }
             : panel
         )
@@ -2236,7 +2268,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const createSavedWorkspaceSnapshot = (title: string, existingLayout?: SavedWorkspaceLayout): SavedWorkspaceLayout => {
     const now = new Date().toISOString();
-    const panels = workspacePanels.map(panel => ({ ...panel }));
+    const panels = workspacePanels.map(withoutApprovedRosTopics);
     const tileOrder = normalizeWorkspaceTileOrder(
       normalizedWorkspaceTileOrder,
       panels.map(panel => panel.id)
@@ -2319,11 +2351,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       version: 2,
       exportedAt: new Date().toISOString(),
       currentWorkspace: {
-        panels: workspacePanels,
+        panels: workspacePanels.map(withoutApprovedRosTopics),
         tileOrder: normalizedWorkspaceTileOrder,
         layout: capturedWorkspaceLayout,
       },
-      layouts: savedWorkspaceLayouts,
+      layouts: savedWorkspaceLayouts.map(layout => ({
+        ...layout,
+        panels: layout.panels.map(withoutApprovedRosTopics),
+      })),
       gamepads,
     };
 
@@ -2357,7 +2392,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         if (!Array.isArray(candidates)) return;
 
         const importedLayouts = candidates
-          .map(layout => normalizeSavedWorkspaceLayout(layout))
+          .map(layout => normalizeSavedWorkspaceLayout(layout, false))
           .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
           .map(layout => ({
             ...layout,
@@ -2369,11 +2404,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           }));
 
         if (parsed?.version === 2 && parsed.currentWorkspace) {
-          const current = normalizeSavedWorkspaceLayout({
-            ...parsed.currentWorkspace,
-            id: `workspace-layout-${Date.now()}-current`,
-            title: 'Imported workspace',
-          });
+          const current = normalizeSavedWorkspaceLayout(
+            {
+              ...parsed.currentWorkspace,
+              id: `workspace-layout-${Date.now()}-current`,
+              title: 'Imported workspace',
+            },
+            false
+          );
           if (current) importedLayouts.unshift({ ...current, panels: remapPanels(current.panels) });
         }
         if (importedLayouts.length === 0) return;
@@ -2454,6 +2492,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   : panel.cameraTopic,
               layoutId: type === 'pad' ? panel.layoutId || gamepadLibrary[0]?.id : panel.layoutId,
               panelState: panel.type === type ? panel.panelState : undefined,
+              approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
             }
           : panel
       )
@@ -2900,17 +2939,29 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           runtime={panelRuntime}
           isActive={isPanelActive}
           state={panel.panelState?.panelId === panel.type ? panel.panelState.values : undefined}
+          approvedRosTopics={panel.approvedRosTopics}
           onStateChange={values => {
-            setWorkspacePanels(previous =>
+            const update = (previous: WorkspacePanel[]) =>
               previous.map(candidate =>
                 candidate.id === panel.id && candidate.type === panel.type
                   ? {
                       ...candidate,
-                      panelState: { schemaVersion: 1, panelId: panel.type, values },
+                      panelState: { schemaVersion: 1 as const, panelId: panel.type, values },
                     }
                   : candidate
-              )
-            );
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
+          }}
+          onApprovedRosTopicsChange={topics => {
+            const update = (previous: WorkspacePanel[]) =>
+              previous.map(candidate =>
+                candidate.id === panel.id && candidate.type === panel.type
+                  ? { ...candidate, approvedRosTopics: topics }
+                  : candidate
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
           }}
         />
       );
