@@ -67,10 +67,11 @@ const renderHost = (overrides: Partial<React.ComponentProps<typeof ExternalPanel
   return { ...result, onStateChange, props, sourceLoader };
 };
 
-const announceSandboxReady = (iframe: HTMLIFrameElement, sessionId = 'sandbox-session-1') => {
+const announceSandboxReady = (iframe: HTMLIFrameElement, sessionId = 'sandbox-session-1', origin = 'null') => {
   window.dispatchEvent(
     new MessageEvent('message', {
       data: { type: 'roboboy-panel-sandbox-ready', sessionId },
+      origin,
       source: iframe.contentWindow,
     })
   );
@@ -91,6 +92,7 @@ describe('ExternalPanelHost sandbox', () => {
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads');
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(iframe?.getAttribute('srcdoc')).toContain("default-src 'none'");
+    expect(iframe?.getAttribute('srcdoc')).toContain(JSON.stringify(window.location.origin));
     expect(sourceLoader).not.toHaveBeenCalled();
 
     announceSandboxReady(iframe!);
@@ -112,6 +114,18 @@ describe('ExternalPanelHost sandbox', () => {
       );
     });
     expect(container.textContent).not.toContain('export default');
+  });
+
+  it('rejects sandbox-ready messages that do not come from the opaque iframe origin', async () => {
+    const { container, sourceLoader } = renderHost();
+    const iframe = container.querySelector('iframe')!;
+
+    announceSandboxReady(iframe, 'spoofed-session', 'https://attacker.test');
+    await Promise.resolve();
+    expect(sourceLoader).not.toHaveBeenCalled();
+
+    announceSandboxReady(iframe);
+    await waitFor(() => expect(sourceLoader).toHaveBeenCalledWith(manifest));
   });
 
   it('accepts valid storage updates from the private broker and rejects invalid state', () => {

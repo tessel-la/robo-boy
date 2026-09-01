@@ -1,5 +1,10 @@
-const panelSandboxBootstrap = () => {
-  const sandboxSessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const panelSandboxBootstrap = (parentOrigin: string) => {
+  const createSecureId = () => {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  };
+  const sandboxSessionId = createSecureId();
   let port: MessagePort | null = null;
   let instance: {
     mount(container: HTMLElement): void | Promise<void>;
@@ -82,7 +87,7 @@ const panelSandboxBootstrap = () => {
   };
 
   const loadBundleModule = (bundleSource: string): Promise<any> => {
-    const bridgeKey = `__roboboyPanelModuleBridge_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const bridgeKey = `__roboboyPanelModuleBridge_${createSecureId()}`;
     const bundleUrl = URL.createObjectURL(new Blob([bundleSource], { type: 'text/javascript' }));
     const loaderSource = `
       const bridge = globalThis[${JSON.stringify(bridgeKey)}];
@@ -271,8 +276,9 @@ const panelSandboxBootstrap = () => {
   };
 
   window.addEventListener('message', event => {
+    if (event.source !== window.parent || event.origin !== parentOrigin) return;
     if (event.data?.type === 'roboboy-panel-sandbox-probe') {
-      window.parent.postMessage({ type: 'roboboy-panel-sandbox-ready', sessionId: sandboxSessionId }, '*');
+      window.parent.postMessage({ type: 'roboboy-panel-sandbox-ready', sessionId: sandboxSessionId }, parentOrigin);
       return;
     }
     if (port || event.data?.type !== 'roboboy-panel-port' || event.ports.length !== 1) return;
@@ -312,7 +318,7 @@ const panelSandboxBootstrap = () => {
 const escapeHtmlAttribute = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export const createPanelSandboxDocument = (): string => {
+export const createPanelSandboxDocument = (parentOrigin: string): string => {
   const csp = [
     "default-src 'none'",
     "script-src 'unsafe-inline' blob:",
@@ -326,6 +332,7 @@ export const createPanelSandboxDocument = (): string => {
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; ');
-  const bootstrap = `(${panelSandboxBootstrap.toString()})();`;
+  const serializedParentOrigin = JSON.stringify(parentOrigin).replace(/</g, '\\u003c');
+  const bootstrap = `(${panelSandboxBootstrap.toString()})(${serializedParentOrigin});`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color:var(--text-color,#212529);background:var(--background-color,#fff);font-family:var(--font-family-ui,system-ui,sans-serif);color-scheme:light dark}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 10px;color:var(--button-text-color,#fff);background:var(--primary-color,#32cd32);font-weight:600;cursor:pointer}button:hover{background:var(--primary-hover-color,var(--primary-color,#32cd32))}button:disabled{opacity:.48;cursor:default}input,select,textarea{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 9px;color:var(--text-color,#212529);background:var(--background-color,#fff)}:focus-visible{outline:2px solid var(--primary-color,#32cd32);outline-offset:2px}</style></head><body><div id="panel-root"></div><script>${bootstrap}<\/script></body></html>`;
 };

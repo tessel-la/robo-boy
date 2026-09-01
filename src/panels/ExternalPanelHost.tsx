@@ -101,7 +101,7 @@ const ExternalPanelHost = ({
   const panelRevision = `${manifest.id}:${manifest.version}:${manifest.integrity}`;
   const capabilities = useMemo(() => manifest.capabilities || [], [manifest.capabilities]);
   const logger = useMemo(() => createLogger(manifest.id, instanceId), [instanceId, manifest.id]);
-  const sandboxDocument = useMemo(() => createPanelSandboxDocument(), []);
+  const sandboxDocument = useMemo(() => createPanelSandboxDocument(window.location.origin), []);
   const filteredTopicOptions = useMemo(() => {
     if (!topicPicker) return [];
     const query = topicPicker.query.trim().toLowerCase();
@@ -310,6 +310,9 @@ const ExternalPanelHost = ({
       },
       handleMessage
     );
+    // The sandbox has an intentionally opaque origin, so '*' is required when
+    // transferring its private port. The sandbox authenticates this parent by
+    // both event.source and the parent origin embedded in its srcdoc.
     iframe.contentWindow.postMessage({ type: 'roboboy-panel-port' }, '*', [channel.port2]);
     startupTimer = window.setTimeout(() => {
       if (disposed || startupSettled) return;
@@ -385,6 +388,8 @@ const ExternalPanelHost = ({
       probeTimer = null;
     };
     const probe = () => {
+      // An opaque-origin iframe can only be targeted with '*'. The probe carries
+      // no authority, and the sandbox accepts it only from this parent origin.
       iframeRef.current?.contentWindow?.postMessage({ type: 'roboboy-panel-sandbox-probe' }, '*');
       probeTimer = window.setTimeout(probe, connectedSessionId ? 1_000 : 250);
     };
@@ -393,6 +398,7 @@ const ExternalPanelHost = ({
       if (
         !iframeWindow ||
         event.source !== iframeWindow ||
+        event.origin !== 'null' ||
         event.data?.type !== 'roboboy-panel-sandbox-ready' ||
         typeof event.data.sessionId !== 'string' ||
         event.data.sessionId === connectedSessionId
