@@ -1,4 +1,4 @@
-const panelSandboxBootstrap = (parentOrigin: string) => {
+export const panelSandboxBootstrap = (parentOrigin: string) => {
   const createSecureId = () => {
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
