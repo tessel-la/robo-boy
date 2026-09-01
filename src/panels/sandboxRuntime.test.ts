@@ -16,7 +16,8 @@ describe('panel sandbox document', () => {
 
     expect(document).toContain('crypto.getRandomValues(bytes)');
     expect(document).not.toContain('Math.random()');
-    expect(document).toContain('event.source !== window.parent || event.origin !== parentOrigin');
+    expect(document).toContain('event.source !== window.parent');
+    expect(document).toContain('event.origin !== parentOrigin');
     expect(document).toMatch(/window\.parent\.postMessage\([^;]+,\s*parentOrigin\);/);
     expect(document).toContain('(\"http://192.168.1.39\");');
   });
