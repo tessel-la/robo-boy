@@ -215,6 +215,10 @@ origin. Redirect targets are checked, ambient credentials are omitted, privilege
 headers are filtered, responses are size-capped, and concurrent requests time out. The sandbox has no parent DOM,
 Robo-Boy storage, cookies, or raw host objects.
 
+The iframe permits form event handling so panel configuration forms can submit to their own JavaScript listeners.
+Its CSP keeps `form-action 'none'`, so native form navigation and form-data submission outside the sandbox remain
+blocked.
+
 Broker request and subscription identifiers are scoped to each private `MessagePort` and do not depend on secure-
 context-only browser APIs. SDK ROS subscriptions therefore behave the same on `localhost`, plain-HTTP LAN addresses,
 and VPN addresses.

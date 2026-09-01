@@ -142,6 +142,11 @@ registry's `semver` dependency. Keep those settings when adding lazy entry point
 dependency during the connection transition can otherwise invalidate Vite's development dependency graph while
 React is mounting the workspace.
 
+The E2E workflow installs external panels from immutable v2 panel commits declared in `.github/workflows/test.yml`
+through `config/panel-sources.e2e.json`. Update the pinned commit, its committed manifest and bundle together when
+an E2E scenario needs a newer panel. Do not point these tests at the mutable official catalog: published inventory
+changes must not make an otherwise unchanged Robo-Boy commit fail.
+
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
 ## Desktop Frontend

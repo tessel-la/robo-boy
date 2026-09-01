@@ -250,6 +250,30 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/checkout@v4
 
+    - name: Checkout Hello Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/robo-boy-hello-panel
+        ref: 66f11f4774ab1a87c7025cb231d893fe569d5e2c
+        path: .panel-workspace/robo-boy-hello-panel
+
+    - name: Checkout Time Series Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/roboboy-timeseries-panel
+        ref: 2973f239d0d81ff507043587de44499e756a43ab
+        path: .panel-workspace/robo-boy-timeseries-panel
+
+    - name: Checkout WebRTC Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/roboboy-webrtc-panel
+        ref: 760e8f0b1b443640aa4026abc64380e2a05bc74f
+        path: .panel-workspace/robo-boy-webrtc-panel
+
     - name: Setup Node.js
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
@@ -271,7 +295,7 @@ jobs:
         mkdir -p .panel-stage/public
         cp -a public/. .panel-stage/public/
         node scripts/install-panels.mjs \
-          --config config/panel-sources.official.json \
+          --config config/panel-sources.e2e.json \
           --output .panel-stage/public/panels
 
     - name: Run E2E tests

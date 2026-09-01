@@ -89,7 +89,7 @@ describe('ExternalPanelHost sandbox', () => {
     const { container, sourceLoader } = renderHost();
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
-    expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads');
+    expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads allow-forms');
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(iframe?.getAttribute('srcdoc')).toContain("default-src 'none'");
     expect(iframe?.getAttribute('srcdoc')).toContain(JSON.stringify(window.location.origin));
