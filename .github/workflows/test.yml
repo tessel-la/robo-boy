@@ -263,7 +263,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: tessel-la/roboboy-timeseries-panel
-        ref: cfa2db5cb5a0d7858a3488c88882f8d99efd197c
+        ref: f536db29d339a8d3c856525face31d8588d9308c
         path: .panel-workspace/robo-boy-timeseries-panel
 
     - name: Checkout WebRTC Panel test artifact
@@ -271,7 +271,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: tessel-la/roboboy-webrtc-panel
-        ref: 331821f4539be6afab8b6e1910fdf3d4171f0b01
+        ref: 4f3251c3e4f86210eceab679c3e92c097675b2a3
         path: .panel-workspace/robo-boy-webrtc-panel
 
     - name: Setup Node.js
