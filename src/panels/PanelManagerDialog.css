@@ -1,0 +1,310 @@
+.panel-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 0.66);
+}
+
+.panel-manager-dialog {
+  width: min(920px, 100%);
+  max-height: min(860px, 94dvh);
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.panel-manager-dialog > header,
+.panel-manager-section-heading,
+.panel-manager-source-title,
+.panel-manager-installed li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panel-manager-dialog > header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-manager-dialog h2,
+.panel-manager-dialog h3,
+.panel-manager-dialog p {
+  margin: 0;
+}
+
+.panel-manager-dialog h2 {
+  font-size: 1.25rem;
+}
+
+.panel-manager-dialog h3 {
+  font-size: 1rem;
+}
+
+.panel-manager-kicker {
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-manager-icon-button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.panel-manager-icon-button:hover {
+  background: var(--background-secondary);
+}
+
+.panel-manager-content {
+  overflow: auto;
+  padding: 20px 22px 28px;
+}
+
+.panel-manager-content > section + section {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.panel-manager-section-heading p,
+.panel-manager-unlock p {
+  margin-top: 4px;
+  color: var(--text-color-secondary);
+  font-size: 0.82rem;
+}
+
+.panel-manager-add-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.panel-manager-dialog button,
+.panel-manager-dialog input,
+.panel-manager-dialog textarea,
+.panel-manager-dialog select {
+  font: inherit;
+}
+
+.panel-manager-dialog button {
+  cursor: pointer;
+}
+
+.panel-manager-add-actions button,
+.panel-manager-installed button,
+.panel-manager-review button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  color: var(--text-color);
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+}
+
+.panel-manager-sources {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.panel-manager-source {
+  padding: 14px;
+  background: color-mix(in srgb, var(--background-secondary) 66%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.panel-manager-fields,
+.panel-manager-selection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.panel-manager-fields label,
+.panel-manager-selection label,
+.panel-manager-unlock label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-color-secondary);
+  font-size: 0.76rem;
+}
+
+.panel-manager-fields .wide,
+.panel-manager-selection .wide {
+  grid-column: 1 / -1;
+}
+
+.panel-manager-dialog input,
+.panel-manager-dialog textarea,
+.panel-manager-dialog select {
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--text-color);
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+}
+
+.panel-manager-dialog textarea {
+  min-height: 66px;
+  resize: vertical;
+}
+
+.panel-manager-installed {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.panel-manager-installed li {
+  padding: 9px 11px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.panel-manager-installed span {
+  display: grid;
+}
+
+.panel-manager-installed small {
+  color: var(--text-color-secondary);
+}
+
+.panel-manager-change-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.panel-manager-change-summary span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  font-size: 0.78rem;
+}
+
+.panel-manager-change-summary [data-change='remove'] {
+  color: var(--error-color);
+}
+
+.panel-manager-permissions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.panel-manager-permissions article {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+}
+
+.panel-manager-permissions small {
+  color: var(--text-color-secondary);
+}
+
+.panel-manager-permissions ul {
+  padding-left: 18px;
+  margin: 8px 0 0;
+  color: var(--text-color-secondary);
+  font-size: 0.78rem;
+}
+
+.panel-manager-unlock {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 14px;
+  align-self: center;
+  padding: 34px 22px;
+}
+
+.panel-manager-primary {
+  justify-content: center;
+  padding: 10px 14px !important;
+  color: white !important;
+  background: var(--primary-color) !important;
+  border-color: transparent !important;
+}
+
+.panel-manager-apply {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.panel-manager-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.panel-manager-confirmation input {
+  margin-top: 0.15rem;
+}
+
+.panel-manager-message {
+  padding: 10px 22px;
+  color: var(--text-color);
+  background: var(--background-secondary);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.82rem;
+}
+
+.panel-manager-message.error {
+  color: var(--error-color);
+}
+
+@media (max-width: 640px) {
+  .panel-manager-backdrop {
+    padding: 0;
+  }
+
+  .panel-manager-dialog {
+    width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .panel-manager-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-manager-fields,
+  .panel-manager-selection {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-manager-fields .wide,
+  .panel-manager-selection .wide {
+    grid-column: auto;
+  }
+}

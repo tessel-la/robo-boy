@@ -1,92 +1,91 @@
-import { satisfies, valid } from 'semver';
-import { ROBOBOY_PANEL_API_VERSION } from './constants';
 import { getSha256Integrity } from './sha256';
-import { isPanelModule } from './types';
-import type { PanelModuleImporter, ResolvedPanelManifest, RoboBoyPanelDefinition } from './types';
+import type { ResolvedPanelManifest } from './types';
 
-const panelModuleCache = new Map<string, Promise<RoboBoyPanelDefinition>>();
-
-const defaultPanelImporter: PanelModuleImporter = entryPoint => import(/* @vite-ignore */ entryPoint);
+const MAX_PANEL_BUNDLE_BYTES = 25 * 1024 * 1024;
 
 export class PanelLoadError extends Error {
   constructor(
     message: string,
-    readonly code: 'import-failed' | 'integrity-failed' | 'invalid-module' | 'definition-mismatch'
+    readonly code: 'fetch-failed' | 'integrity-failed' | 'invalid-encoding'
   ) {
     super(message);
     this.name = 'PanelLoadError';
   }
 }
 
-export const verifyExternalPanelIntegrity = async (
+const readBoundedResponse = async (response: Response): Promise<Uint8Array> => {
+  if (!response.body) return new Uint8Array(await response.arrayBuffer());
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let streamComplete = false;
+  try {
+    while (!streamComplete) {
+      const { done, value } = await reader.read();
+      streamComplete = done;
+      if (done) continue;
+      size += value.byteLength;
+      if (size > MAX_PANEL_BUNDLE_BYTES) {
+        await reader.cancel();
+        throw new Error(`bundle exceeds ${MAX_PANEL_BUNDLE_BYTES} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+};
+
+export const loadVerifiedExternalPanelSource = async (
   manifest: ResolvedPanelManifest,
   fetcher: typeof fetch = fetch
-): Promise<void> => {
+): Promise<string> => {
+  let response: Response;
   try {
-    const response = await fetcher(manifest.entryPoint, { cache: 'no-cache' });
+    response = await fetcher(manifest.entryPoint, { cache: 'no-cache', credentials: 'omit' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const actual = await getSha256Integrity(new Uint8Array(await response.arrayBuffer()));
-    if (actual !== manifest.integrity) {
-      throw new Error(`expected ${manifest.integrity}, received ${actual}`);
+    const declaredLength = Number(response.headers?.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PANEL_BUNDLE_BYTES) {
+      throw new Error(`bundle exceeds ${MAX_PANEL_BUNDLE_BYTES} bytes`);
     }
   } catch (error) {
     throw new PanelLoadError(
-      `Unable to verify ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`,
+      `Unable to fetch ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`,
+      'fetch-failed'
+    );
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = await readBoundedResponse(response);
+  } catch (error) {
+    throw new PanelLoadError(
+      `Unable to fetch ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`,
+      'fetch-failed'
+    );
+  }
+  if (bytes.byteLength > MAX_PANEL_BUNDLE_BYTES) {
+    throw new PanelLoadError(
+      `Unable to fetch ${manifest.name}: bundle exceeds ${MAX_PANEL_BUNDLE_BYTES} bytes`,
+      'fetch-failed'
+    );
+  }
+  const actual = await getSha256Integrity(bytes);
+  if (actual !== manifest.integrity) {
+    throw new PanelLoadError(
+      `Unable to verify ${manifest.name}: expected ${manifest.integrity}, received ${actual}`,
       'integrity-failed'
     );
   }
-};
-
-export const loadExternalPanelDefinition = (
-  manifest: ResolvedPanelManifest,
-  importer: PanelModuleImporter = defaultPanelImporter
-): Promise<RoboBoyPanelDefinition> => {
-  const cacheKey = `${manifest.id}@${manifest.version}:${manifest.integrity}:${manifest.entryPoint}`;
-  const cached = panelModuleCache.get(cacheKey);
-  if (cached) return cached;
-
-  const verify = importer === defaultPanelImporter ? verifyExternalPanelIntegrity(manifest) : Promise.resolve();
-  const pending = verify
-    .then(async () => {
-      try {
-        return await importer(manifest.entryPoint);
-      } catch (error) {
-        throw new PanelLoadError(
-          `Unable to import ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`,
-          'import-failed'
-        );
-      }
-    })
-    .then(module => {
-      if (!isPanelModule(module)) {
-        throw new PanelLoadError(`${manifest.name} did not export a valid default panel definition.`, 'invalid-module');
-      }
-      if (module.default.id !== manifest.id) {
-        throw new PanelLoadError(
-          `${manifest.name} exported panel ID ${module.default.id}; expected ${manifest.id}.`,
-          'definition-mismatch'
-        );
-      }
-      if (
-        !valid(module.default.apiVersion) ||
-        !satisfies(ROBOBOY_PANEL_API_VERSION, `^${module.default.apiVersion}`, { includePrerelease: true })
-      ) {
-        throw new PanelLoadError(
-          `${manifest.name} targets panel API ${module.default.apiVersion}; this host provides ${ROBOBOY_PANEL_API_VERSION}.`,
-          'definition-mismatch'
-        );
-      }
-      return module.default;
-    })
-    .catch(error => {
-      panelModuleCache.delete(cacheKey);
-      throw error;
-    });
-
-  panelModuleCache.set(cacheKey, pending);
-  return pending;
-};
-
-export const clearExternalPanelModuleCache = (): void => {
-  panelModuleCache.clear();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new PanelLoadError(`${manifest.name} is not valid UTF-8 JavaScript.`, 'invalid-encoding');
+  }
 };

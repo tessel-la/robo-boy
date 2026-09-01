@@ -35,12 +35,14 @@ import { saveRecentConnection } from '../runtime/recentConnections';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import anime from 'animejs';
 import ExternalPanelHost from '../panels/ExternalPanelHost';
+import PanelManagerDialog from '../panels/PanelManagerDialog';
 import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
 import {
   isJsonObject,
   isStoredPanelState,
+  type PanelHostRuntime,
   type PanelCatalogEntry,
-  type RoboBoyPanelRuntime,
+  type RoboBoyRosTopic,
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
@@ -381,6 +383,7 @@ interface WorkspacePanel {
   cameraTopic?: string;
   layoutId?: string;
   panelState?: StoredPanelState;
+  approvedRosTopics?: RoboBoyRosTopic[];
 }
 
 type WorkspaceTile =
@@ -465,7 +468,35 @@ const createWorkspacePanel = (
   };
 };
 
-const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
+const normalizeApprovedRosTopics = (value: unknown): RoboBoyRosTopic[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const topics = new Map<string, string>();
+  value.slice(0, 32).forEach(candidate => {
+    if (!candidate || typeof candidate !== 'object') return;
+    const { name, messageType } = candidate as Partial<RoboBoyRosTopic>;
+    if (
+      typeof name !== 'string' ||
+      !name.startsWith('/') ||
+      name.length > 512 ||
+      /\s/.test(name) ||
+      typeof messageType !== 'string' ||
+      !messageType ||
+      messageType.length > 512 ||
+      /\s/.test(messageType)
+    ) {
+      return;
+    }
+    topics.set(name, messageType);
+  });
+  return topics.size ? [...topics.entries()].map(([name, messageType]) => ({ name, messageType })) : undefined;
+};
+
+const withoutApprovedRosTopics = ({
+  approvedRosTopics: _approvedRosTopics,
+  ...panel
+}: WorkspacePanel): WorkspacePanel => panel;
+
+const normalizeWorkspacePanel = (panel: unknown, allowApprovedRosTopics = true): WorkspacePanel | null => {
   if (!panel || typeof panel !== 'object') return null;
   const candidate = panel as Partial<WorkspacePanel>;
   if (typeof candidate.id !== 'string' || !isValidPanelId(candidate.type) || typeof candidate.title !== 'string') {
@@ -486,6 +517,7 @@ const normalizeWorkspacePanel = (panel: unknown): WorkspacePanel | null => {
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
     panelState: storedPanelState,
+    approvedRosTopics: allowApprovedRosTopics ? normalizeApprovedRosTopics(candidate.approvedRosTopics) : undefined,
   };
 };
 
@@ -660,13 +692,13 @@ const normalizeWorkspaceLayoutState = (layout: unknown): WorkspaceLayoutState =>
   };
 };
 
-const normalizeSavedWorkspaceLayout = (layout: unknown): SavedWorkspaceLayout | null => {
+const normalizeSavedWorkspaceLayout = (layout: unknown, allowApprovedRosTopics = true): SavedWorkspaceLayout | null => {
   if (!layout || typeof layout !== 'object') return null;
   const candidate = layout as Partial<SavedWorkspaceLayout>;
   if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return null;
 
   const panels = Array.isArray(candidate.panels)
-    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel)
+    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel, allowApprovedRosTopics)).filter(isWorkspacePanel)
     : [];
   const tileOrder = normalizeWorkspaceTileOrder(
     Array.isArray(candidate.tileOrder)
@@ -693,7 +725,7 @@ const loadSavedWorkspaceLayouts = (): SavedWorkspaceLayout[] => {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
       ? parsed
-          .map(layout => normalizeSavedWorkspaceLayout(layout))
+          .map(layout => normalizeSavedWorkspaceLayout(layout, false))
           .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
       : [];
   } catch (error) {
@@ -969,14 +1001,11 @@ const applyWorkspaceDropPlacement = (
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const runtimeEndpoints = useRuntimeConfig();
-  const panelRuntime = useMemo<RoboBoyPanelRuntime>(
+  const panelRuntime = useMemo<PanelHostRuntime>(
     () => ({
       target: runtimeEndpoints.mode,
       endpoints: {
-        rosbridge: runtimeEndpoints.rosbridgeUrl,
         videoStream: runtimeEndpoints.videoStreamBaseUrl,
-        meshResources: runtimeEndpoints.meshResourcesBaseUrl,
-        ollama: runtimeEndpoints.ollamaBaseUrl,
       },
     }),
     [runtimeEndpoints]
@@ -1050,6 +1079,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [activePanels, setActivePanels] = useState<ActivePanel[]>([]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
+  const [isPanelManagerOpen, setIsPanelManagerOpen] = useState(false);
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   const [workspacePadMenu, setWorkspacePadMenu] = useState<WorkspacePadMenuState | null>(null);
@@ -1112,6 +1142,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
   }, [normalizedWorkspaceTileOrder, workspacePanels]);
+  const workspaceDomOrderById = useMemo(
+    () => new Map(workspacePanels.map((panel, index) => [panel.id, index])),
+    [workspacePanels]
+  );
+  const getWorkspaceDomOrderedRow = useCallback(
+    (row: WorkspaceTile[]) =>
+      [...row].sort(
+        (left, right) =>
+          (workspaceDomOrderById.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+          (workspaceDomOrderById.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+      ),
+    [workspaceDomOrderById]
+  );
   const workspaceRows = useMemo(
     () => buildWorkspaceRows(workspaceTiles, workspaceLayout.rowSizes),
     [workspaceLayout.rowSizes, workspaceTiles]
@@ -1626,6 +1669,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                 cameraTopic: type === 'camera' ? selectedCameraTopic || availableCameraTopics[0] : undefined,
                 layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
                 panelState: panel.type === type ? panel.panelState : undefined,
+                approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
               }
             : panel
         )
@@ -2224,7 +2268,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   const createSavedWorkspaceSnapshot = (title: string, existingLayout?: SavedWorkspaceLayout): SavedWorkspaceLayout => {
     const now = new Date().toISOString();
-    const panels = workspacePanels.map(panel => ({ ...panel }));
+    const panels = workspacePanels.map(withoutApprovedRosTopics);
     const tileOrder = normalizeWorkspaceTileOrder(
       normalizedWorkspaceTileOrder,
       panels.map(panel => panel.id)
@@ -2307,11 +2351,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       version: 2,
       exportedAt: new Date().toISOString(),
       currentWorkspace: {
-        panels: workspacePanels,
+        panels: workspacePanels.map(withoutApprovedRosTopics),
         tileOrder: normalizedWorkspaceTileOrder,
         layout: capturedWorkspaceLayout,
       },
-      layouts: savedWorkspaceLayouts,
+      layouts: savedWorkspaceLayouts.map(layout => ({
+        ...layout,
+        panels: layout.panels.map(withoutApprovedRosTopics),
+      })),
       gamepads,
     };
 
@@ -2345,7 +2392,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         if (!Array.isArray(candidates)) return;
 
         const importedLayouts = candidates
-          .map(layout => normalizeSavedWorkspaceLayout(layout))
+          .map(layout => normalizeSavedWorkspaceLayout(layout, false))
           .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
           .map(layout => ({
             ...layout,
@@ -2357,11 +2404,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           }));
 
         if (parsed?.version === 2 && parsed.currentWorkspace) {
-          const current = normalizeSavedWorkspaceLayout({
-            ...parsed.currentWorkspace,
-            id: `workspace-layout-${Date.now()}-current`,
-            title: 'Imported workspace',
-          });
+          const current = normalizeSavedWorkspaceLayout(
+            {
+              ...parsed.currentWorkspace,
+              id: `workspace-layout-${Date.now()}-current`,
+              title: 'Imported workspace',
+            },
+            false
+          );
           if (current) importedLayouts.unshift({ ...current, panels: remapPanels(current.panels) });
         }
         if (importedLayouts.length === 0) return;
@@ -2442,6 +2492,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                   : panel.cameraTopic,
               layoutId: type === 'pad' ? panel.layoutId || gamepadLibrary[0]?.id : panel.layoutId,
               panelState: panel.type === type ? panel.panelState : undefined,
+              approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
             }
           : panel
       )
@@ -2888,17 +2939,29 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           runtime={panelRuntime}
           isActive={isPanelActive}
           state={panel.panelState?.panelId === panel.type ? panel.panelState.values : undefined}
+          approvedRosTopics={panel.approvedRosTopics}
           onStateChange={values => {
-            setWorkspacePanels(previous =>
+            const update = (previous: WorkspacePanel[]) =>
               previous.map(candidate =>
                 candidate.id === panel.id && candidate.type === panel.type
                   ? {
                       ...candidate,
-                      panelState: { schemaVersion: 1, panelId: panel.type, values },
+                      panelState: { schemaVersion: 1 as const, panelId: panel.type, values },
                     }
                   : candidate
-              )
-            );
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
+          }}
+          onApprovedRosTopicsChange={topics => {
+            const update = (previous: WorkspacePanel[]) =>
+              previous.map(candidate =>
+                candidate.id === panel.id && candidate.type === panel.type
+                  ? { ...candidate, approvedRosTopics: topics }
+                  : candidate
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
           }}
         />
       );
@@ -3086,6 +3149,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const isReplacementMenu = placement === 'replacement';
     const builtInPanels = panelCatalog.filter(panel => panel.source === 'built-in');
     const externalPanels = panelCatalog.filter(panel => panel.source === 'external');
+    const installation = installedPanelRegistry.installation;
+    const installationTitle = installation
+      ? [
+          `Selection: ${installation.selection.mode}`,
+          ...installation.resolvedPanels.map(
+            panel => `${panel.id}@${panel.version} — ${panel.source.type}:${panel.source.name}`
+          ),
+        ].join('\n')
+      : undefined;
     const renderPanelButton = (panel: PanelCatalogEntry) => (
       <button
         key={panel.id}
@@ -3116,11 +3188,30 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           {builtInPanels.map(renderPanelButton)}
           {(externalPanels.length > 0 ||
             installedPanelRegistry.isLoading ||
+            installation ||
             installedPanelRegistry.issues.length > 0) && (
-            <span className="workspace-add-menu-title workspace-add-menu-subtitle">External panels</span>
+            <span className="workspace-add-menu-title workspace-add-menu-subtitle" title={installationTitle}>
+              External panels
+              {installation && !installedPanelRegistry.isLoading ? ` · ${externalPanels.length} installed` : ''}
+            </span>
           )}
           {externalPanels.map(renderPanelButton)}
+          {!isReplacementMenu && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsWorkspaceAddMenuOpen(false);
+                setIsPanelManagerOpen(true);
+              }}
+            >
+              <FiSettings aria-hidden="true" />
+              <span>Manage installations…</span>
+            </button>
+          )}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
+          {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
+            <span className="workspace-panel-catalog-note">No external panels selected</span>
+          )}
           {!installedPanelRegistry.isLoading && installedPanelRegistry.issues.length > 0 && (
             <span
               className="workspace-panel-catalog-note workspace-panel-catalog-warning"
@@ -3584,7 +3675,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                       <div className="workspace-drop-indicator workspace-drop-indicator-row" aria-hidden="true" />
                     )}
                   <div className="workspace-tile-row" style={{ flex: workspaceRowRatios[rowIndex] || 1 }}>
-                    {row.map((tile, columnIndex) => {
+                    {getWorkspaceDomOrderedRow(row).map(tile => {
+                      const columnIndex = row.findIndex(candidate => candidate.id === tile.id);
                       const tileIndex = getWorkspaceTileIndex(rowIndex, columnIndex);
                       const showColumnDropBefore =
                         workspaceDropPlacement?.mode === 'column' &&
@@ -3596,7 +3688,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                         workspaceDropPlacement.targetTileId === tile.id;
                       return (
                         <React.Fragment key={tile.id}>
-                          {showColumnDropBefore && <div className="workspace-drop-indicator" aria-hidden="true" />}
+                          {showColumnDropBefore && (
+                            <div
+                              className="workspace-drop-indicator"
+                              aria-hidden="true"
+                              style={{ order: columnIndex * 4 }}
+                            />
+                          )}
                           {tile.kind === 'view' ? (
                             <section
                               className="workspace-card workspace-card-view"
@@ -3604,7 +3702,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3641,7 +3742,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                             >
                               <header
                                 className="workspace-card-header"
@@ -3676,7 +3780,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               data-workspace-card-id={tile.panel.id}
                               data-workspace-row-index={rowIndex}
                               data-workspace-column-index={columnIndex}
-                              style={{ flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1 }}
+                              style={{
+                                flex: renderedWorkspaceColumnRatiosByRow[rowIndex]?.[columnIndex] || 1,
+                                order: columnIndex * 4 + 1,
+                              }}
                               onAnimationEnd={() => {
                                 setLastAddedWorkspacePanelId(prev => (prev === tile.panel.id ? null : prev));
                                 setExecutionJumpPanelId(prev => (prev === tile.panel.id ? null : prev));
@@ -3738,10 +3845,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                               <div className="workspace-card-content">{renderWorkspacePanelContent(tile.panel)}</div>
                             </section>
                           )}
-                          {showColumnDropAfter && <div className="workspace-drop-indicator" aria-hidden="true" />}
+                          {showColumnDropAfter && (
+                            <div
+                              className="workspace-drop-indicator"
+                              aria-hidden="true"
+                              style={{ order: columnIndex * 4 + 2 }}
+                            />
+                          )}
                           {columnIndex < row.length - 1 && (
                             <div
                               className="workspace-column-resize-handle"
+                              style={{ order: columnIndex * 4 + 3 }}
                               onPointerDown={event => handleWorkspaceColumnResizeStart(event, rowIndex, columnIndex)}
                               role="separator"
                               aria-orientation={isWorkspaceStacked ? 'horizontal' : 'vertical'}
@@ -3769,7 +3883,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                       );
                     })}
                     {rowIndex === renderedWorkspaceRows.length - 1 && workspaceDropPlacement?.mode === 'end' && (
-                      <div className="workspace-drop-indicator workspace-drop-indicator-end" aria-hidden="true" />
+                      <div
+                        className="workspace-drop-indicator workspace-drop-indicator-end"
+                        aria-hidden="true"
+                        style={{ order: row.length * 4 }}
+                      />
                     )}
                   </div>
                   {workspaceDropPlacement?.mode === 'row' &&
@@ -3828,6 +3946,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         onCustomGamepadDeleted={handleCustomGamepadDeleted}
         onGamepadLibraryChanged={() => setCustomGamepadRefreshKey(prev => prev + 1)}
       />
+
+      {isPanelManagerOpen && (
+        <PanelManagerDialog
+          installedPanels={installedPanelRegistry.panels}
+          onClose={() => setIsPanelManagerOpen(false)}
+          onApplied={installedPanelRegistry.refresh}
+        />
+      )}
 
       {/* Render GamepadEditor modal */}
       {editorSession && ros && (

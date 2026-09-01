@@ -99,34 +99,41 @@ The gateway control API stays bound to host loopback. The relay exposes only `GE
 which maps to MediaMTX's active-path listing; configuration and mutation endpoints are not proxied.
 
 Normal development discovers an empty tracked registry at `public/panels/installed.json`. Run
-`npm run dev:panels` to verify and stage the inventory-listed sibling panel releases into the ignored
-`.panel-stage/` tree. Set `ROBOBOY_PANEL_IDS` to a comma-separated ID list or append
-`-- --panel <id>` to select specific panels. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
+`npm run dev:panels` to verify and stage the local repositories selected by
+`config/panel-sources.local.json` into the ignored `.panel-stage/` tree. Pass
+`-- --config config/panel-sources.json` to use an ignored custom or mixed desired-state file. Schema-v2 selection is
+explicit: `all`, a non-empty `include` list, or `none`. Set `VITE_PANEL_REGISTRY_URL` to use another same-origin
 installed-registry path. Panel modules remain unloaded until their workspace tiles mount. See
 [External panels](external-panels.md#create-install-and-register-a-panel) for the complete standalone repository,
-SDK, integrity, local inventory, host-development, and Docker-development workflow.
+SDK, integrity, desired-state, host-development, and Docker-development workflow.
 
 For the Docker development stack, opt in with the panel Compose overlay:
 
 ```bash
+export ROBOBOY_PANEL_MANAGER_TOKEN='use-a-long-random-development-secret'
 docker compose -f docker-compose.yml -f infra/compose/panels.yml build app
 docker compose -f docker-compose.yml -f infra/compose/panels.yml up -d
 ```
 
-The overlay mounts the sibling inventory and panel repositories read-only, stages verified bundles in a named
-volume, and runs the Vite frontend with `dev:panels`. Leave `ROBOBOY_PANEL_IDS` unset to enable every inventory
-entry, or set it in `.env` to a comma-separated subset.
+The overlay mounts the known sibling panel repositories read-only and starts the panel manager. On first startup it
+seeds private desired state from `config/panel-sources.local.json`, verifies the selection, and populates the shared
+panel volume before the app starts. Both overlays mount that volume read-only into the app. Set
+`ROBOBOY_PANEL_MANAGER_TOKEN`, open **Manage installations…** in the workspace add menu, and use preview/apply to
+select a subset, install none, add another mounted local repository, or mix local and remote sources.
+`ROBOBOY_PANEL_SOURCES_FILE` changes only the initial seed for a new manager-state volume.
+`ROBOBOY_PANEL_IDS` is no longer used by this overlay; migrate any existing value into the configuration's explicit
+`selection` object.
 
 This is a developer convenience only. For published official or private releases, use
 `infra/compose/panels.remote.yml`. The remote overlay defaults to `config/panel-sources.official.json`, mounts no
-panel repositories, and has its installer populate a named volume from configured HTTPS inventories. A deployment
+panel repositories, and has its manager populate a named volume from configured HTTPS inventories. A deployment
 can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
 [External panels](external-panels.md#remote-inventories-and-private-panels) for configuration, subset selection,
 and credential handling.
 
 The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
 selects `docker-compose.yml` and `infra/compose/panels.remote.yml` through a per-application `composeFiles` setting,
-so stopping and starting Robo-Boy from the dashboard runs the release installer before the application. Keep
+so stopping and starting Robo-Boy from the dashboard starts the release manager before the application. Keep
 `COMPOSE_FILE=docker-compose.yml` in Robo-Boy's shared `.env`: simulators consume that file for ROS/DDS settings,
 and putting the panel overlay there would incorrectly apply it relative to every simulator project.
 
@@ -134,6 +141,11 @@ The Vite configuration pins React and ReactDOM to the project-root copies and pr
 registry's `semver` dependency. Keep those settings when adding lazy entry points: discovering a new CommonJS
 dependency during the connection transition can otherwise invalidate Vite's development dependency graph while
 React is mounting the workspace.
+
+The E2E workflow installs external panels from immutable v2 panel commits declared in `.github/workflows/test.yml`
+through `config/panel-sources.e2e.json`. Update the pinned commit, its committed manifest and bundle together when
+an E2E scenario needs a newer panel. Do not point these tests at the mutable official catalog: published inventory
+changes must not make an otherwise unchanged Robo-Boy commit fail.
 
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 

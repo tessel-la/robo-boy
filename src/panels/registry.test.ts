@@ -13,10 +13,11 @@ const createManifest = (overrides: Record<string, unknown> = {}) => ({
   entryPoint: './telemetry/1.2.3/index.js',
   integrity,
   compatibility: {
-    panelApi: '^1.0.0',
+    panelApi: '^2.0.0',
     roboboy: '>=0.3.0-0 <1.0.0',
   },
   capabilities: ['ros'],
+  permissions: { ros: { discover: true, selectTopic: true, subscribe: ['/telemetry/**'] } },
   author: { name: 'Example Author', url: 'https://example.com' },
   repository: 'https://github.com/example/telemetry-panel',
   tags: ['telemetry'],
@@ -39,6 +40,43 @@ describe('installed panel registry', () => {
     ]);
   });
 
+  it('exposes valid installation provenance for diagnostics', () => {
+    const installation = {
+      schemaVersion: 1,
+      configSchemaVersion: 2,
+      selection: { mode: 'include', panelIds: ['com.example.telemetry'] },
+      sources: [{ type: 'remote', name: 'official' }],
+      resolvedPanels: [
+        {
+          id: 'com.example.telemetry',
+          version: '1.2.3',
+          integrity,
+          source: { type: 'remote', name: 'official' },
+        },
+      ],
+    };
+    const result = parseInstalledPanelRegistry(
+      { schemaVersion: 1, installation, panels: [createManifest()] },
+      registryUrl
+    );
+
+    expect(result.installation).toEqual(installation);
+  });
+
+  it('ignores malformed optional installation provenance without hiding valid panels', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        installation: { schemaVersion: 1, configSchemaVersion: 2, selection: { mode: 'surprise' } },
+        panels: [createManifest()],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toHaveLength(1);
+    expect(result.installation).toBeUndefined();
+  });
+
   it('rejects invalid metadata and a missing entry point', () => {
     const result = parseInstalledPanelRegistry(
       {
@@ -52,13 +90,33 @@ describe('installed panel registry', () => {
     expect(result.issues.map(issue => issue.code)).toEqual(['invalid-manifest', 'invalid-manifest']);
   });
 
+  it('requires explicit least-privilege permissions for ROS and network capabilities', () => {
+    const result = parseInstalledPanelRegistry(
+      {
+        schemaVersion: 1,
+        panels: [
+          createManifest({ id: 'com.example.ros-without-permissions', permissions: undefined }),
+          createManifest({
+            id: 'com.example.network-without-permissions',
+            capabilities: ['network'],
+            permissions: undefined,
+          }),
+        ],
+      },
+      registryUrl
+    );
+
+    expect(result.panels).toEqual([]);
+    expect(result.issues.map(issue => issue.code)).toEqual(['invalid-manifest', 'invalid-manifest']);
+  });
+
   it('rejects incompatible Robo-Boy and panel API versions before loading code', () => {
     const result = parseInstalledPanelRegistry(
       {
         schemaVersion: 1,
         panels: [
-          createManifest({ id: 'com.example.future-api', compatibility: { panelApi: '^2.0.0', roboboy: '*' } }),
-          createManifest({ id: 'com.example.future-app', compatibility: { panelApi: '^1.0.0', roboboy: '>=2.0.0' } }),
+          createManifest({ id: 'com.example.future-api', compatibility: { panelApi: '^3.0.0', roboboy: '*' } }),
+          createManifest({ id: 'com.example.future-app', compatibility: { panelApi: '^2.0.0', roboboy: '>=2.0.0' } }),
         ],
       },
       registryUrl,

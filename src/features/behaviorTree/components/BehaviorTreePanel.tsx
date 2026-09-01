@@ -705,6 +705,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setSelectedEdges([]);
       selectedNodeIdsRef.current = new Set();
       selectedEdgeIdsRef.current = new Set();
+      manualEdgeSelectionRef.current = null;
+      nodeMultiSelectSnapshotRef.current = null;
+      boxSelectionActiveRef.current = false;
+      boxSelectionNodeIdsRef.current = null;
+      boxSelectionEdgeIdsRef.current = null;
+      boxSelectionEndedAtRef.current = 0;
+      boxSelectionPointerDownRef.current = false;
+      boxSelectionEndPendingRef.current = false;
+      customBoxSelectionGestureRef.current = null;
+      customBoxSelectionRectRef.current = null;
+      setCustomBoxSelection(null);
       setOrderingParentId(null);
       setRenamingNodeId(null);
       setEditingIterationNodeId(null);

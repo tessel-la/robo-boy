@@ -15,6 +15,10 @@
 
 	# Order matters: More specific handlers first
 
+	handle /api/panels* {
+		reverse_proxy http://panel-manager:4100
+	}
+
 	# Route WebSocket requests to the ros-stack container
 	handle /websocket* {
 		uri strip_prefix /websocket
@@ -66,6 +70,10 @@
 	}
 
 	# Order matters: More specific handlers first
+
+	handle /api/panels* {
+		reverse_proxy http://panel-manager:4100
+	}
 
 	# Route WebSocket requests to the ros-stack container
 	handle /websocket* {

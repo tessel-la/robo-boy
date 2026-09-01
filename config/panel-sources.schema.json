@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roboboy.dev/schemas/panel-sources-v2.json",
+  "title": "Robo-Boy Panel Desired State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sources", "selection"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "oneOf": [{ "$ref": "#/$defs/remoteSource" }, { "$ref": "#/$defs/localSource" }]
+      }
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "enum": ["all", "none"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "panelIds"],
+          "properties": {
+            "mode": { "const": "include" },
+            "panelIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/panelId" }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "panelId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "maxLength": 128
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "remoteSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name", "catalogUrl"],
+      "properties": {
+        "type": { "const": "remote" },
+        "name": { "$ref": "#/$defs/name" },
+        "catalogUrl": { "type": "string", "format": "uri" },
+        "allowedOrigins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "format": "uri" }
+        },
+        "authorizationEnv": {
+          "type": "string",
+          "pattern": "^(ROBOBOY_PANEL_AUTHORIZATION|ROBOBOY_PANEL_SOURCE_[A-Z0-9_]{1,48}_AUTHORIZATION)$"
+        },
+        "authenticatedOrigins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "localSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name", "repositories"],
+      "anyOf": [{ "required": ["root"] }, { "required": ["rootEnv"] }],
+      "properties": {
+        "type": { "const": "local" },
+        "name": { "$ref": "#/$defs/name" },
+        "root": { "type": "string", "minLength": 1 },
+        "rootEnv": {
+          "type": "string",
+          "pattern": "^(ROBOBOY_PANEL_WORKSPACE|ROBOBOY_PANEL_SOURCE_[A-Z0-9_]{1,60}_ROOT)$"
+        },
+        "repositories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

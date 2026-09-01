@@ -1,9 +1,8 @@
 import type {
   RoboBoyJsonObject,
   RoboBoyPanelCapability,
-  RoboBoyPanelDefinition,
   RoboBoyPanelManifest,
-  RoboBoyPanelModule,
+  RoboBoyPanelRuntime,
 } from '../../panel-sdk';
 
 export type {
@@ -19,10 +18,24 @@ export type {
   RoboBoyPanelLogger,
   RoboBoyPanelManifest,
   RoboBoyPanelModule,
+  RoboBoyPanelNetwork,
+  RoboBoyPanelNetworkPermissions,
+  RoboBoyPanelPermissions,
+  RoboBoyPanelRos,
+  RoboBoyPanelRosPermissions,
   RoboBoyPanelRuntime,
   RoboBoyPanelStorage,
+  RoboBoyPanelTheme,
+  RoboBoyPanelThemeSnapshot,
+  RoboBoyPanelThemeToken,
   RoboBoyPanelViewport,
   RoboBoyPanelViewportSnapshot,
+  RoboBoyRosPublishOptions,
+  RoboBoyRosServiceOptions,
+  RoboBoyRosSubscription,
+  RoboBoyRosSubscriptionOptions,
+  RoboBoyRosTopic,
+  RoboBoyRosTopicSelectionOptions,
 } from '../../panel-sdk';
 
 export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad';
@@ -75,6 +88,35 @@ export interface PanelRegistryIssue {
 export interface InstalledPanelRegistryResult {
   panels: ResolvedPanelManifest[];
   issues: PanelRegistryIssue[];
+  installation?: PanelInstallationMetadata;
+}
+
+export interface PanelInstallationSource {
+  type: 'remote' | 'local';
+  name: string;
+}
+
+export interface PanelInstallationMetadata {
+  schemaVersion: 1;
+  configSchemaVersion: 2;
+  selection: {
+    mode: 'all' | 'include' | 'none';
+    panelIds?: string[];
+  };
+  sources: PanelInstallationSource[];
+  resolvedPanels: Array<{
+    id: string;
+    version: string;
+    integrity: string;
+    source: PanelInstallationSource;
+  }>;
+}
+
+export interface PanelHostRuntime {
+  target: RoboBoyPanelRuntime['target'];
+  endpoints: {
+    videoStream: string;
+  };
 }
 
 export interface StoredPanelState {
@@ -82,24 +124,6 @@ export interface StoredPanelState {
   panelId: string;
   values: RoboBoyJsonObject;
 }
-
-export type PanelModuleImporter = (entryPoint: string) => Promise<unknown>;
-
-export const isPanelDefinition = (value: unknown): value is RoboBoyPanelDefinition => {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<RoboBoyPanelDefinition>;
-  return (
-    typeof candidate.apiVersion === 'string' &&
-    typeof candidate.id === 'string' &&
-    typeof candidate.activate === 'function'
-  );
-};
-
-export const isPanelModule = (value: unknown): value is RoboBoyPanelModule => {
-  return Boolean(
-    value && typeof value === 'object' && isPanelDefinition((value as Partial<RoboBoyPanelModule>).default)
-  );
-};
 
 const isJsonValueInternal = (value: unknown, ancestors: Set<object>, depth: number): boolean => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;

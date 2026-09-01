@@ -109,12 +109,12 @@ Do not convert a request for one path into another merely because it is easier t
 
 ### Public and versioned
 
-The public source contract is [panel-sdk/index.d.ts](../panel-sdk/index.d.ts), currently API `1.0.0`:
+The public source contract is [panel-sdk/index.d.ts](../panel-sdk/index.d.ts), currently API `2.0.0`:
 
 - `RoboBoyPanelDefinition` and `RoboBoyPanelInstance`
 - `RoboBoyPanelContext`
 - manifest, compatibility, author, asset, capability, and JSON value types
-- storage, runtime, connection, viewport, and logger interfaces
+- brokered ROS/network, storage, runtime, connection, viewport, and logger interfaces
 
 The documented schema-version-1 manifest and installed-registry format are deployment contracts validated by the
 host. Compatibility uses SemVer ranges, including prerelease support for the current alpha host versions.
@@ -126,31 +126,33 @@ External panels must not depend on:
 - React components, hooks, contexts, application stores, or feature-module source
 - `MainControlView`, `ExternalPanelHost`, registry/loader/storage implementations, or browser-storage keys
 - built-in panel adapters or custom-gamepad implementation details
-- Robo-Boy's module graph or bundled copy of ROSLIB, Three.js, React, or another dependency
+- Robo-Boy's module graph or raw ROSLIB connection
 - globals that Robo-Boy happens to create during development
 
-CSS custom properties may be consumed as optional theme hints only when the panel supplies usable fallbacks. They are
-not a substitute for a versioned theme API.
+Opaque-origin iframes do not inherit the parent page directly. The host copies the documented public CSS variables
+into each sandbox and exposes their snapshot through `context.theme`; panels still own their complete layout and
+must use those variables instead of hardcoded palette colors.
 
 ### Lifecycle
 
 For each workspace tile, the host:
 
 1. Validates installed metadata, IDs, compatibility, paths, capabilities, and integrity fields.
-2. Verifies the bundle SHA-256 and imports one cached module per immutable release.
-3. Calls `activate(context)` to create a tile-owned instance.
+2. Verifies the bundle SHA-256 and transfers source into a new opaque-origin iframe.
+3. The sandbox imports the module and calls `activate(context)` to create a tile-owned instance.
 4. Calls `mount(container)` and optional `setActive(isActive)`.
 5. Calls `unmount()` when the tile, release, required ROS instance, or host disappears.
 
 `mount` and `unmount` are mandatory. `unmount` must be deterministic and safe after partial startup. A panel owns only
-DOM below the supplied container. It cannot mutate host workspace layout through the v1 API.
+DOM below the supplied container. It cannot reach or mutate the host workspace DOM through the v2 API.
 
 ### ROS and reconnection
 
-Declare `ros` to receive the shared `ROSLIB.Ros` object. It may be `null`. A panel that constructs topics, services,
-or actions bundles its own compatible ROSLIB runtime, scopes every client to the instance that owns it, and releases
-the client on cleanup. Watch `context.connection`; its generation changes when the shared ROS instance changes. Ignore
-events from stale clients and rebuild against the new instance.
+Declare `ros` together with explicit discovery, subscribe, publish, and service patterns. For user-configurable
+subscriptions, declare `selectTopic` and use the trusted host picker; only its selected topic enters the sandbox.
+The host supplies a JSON message broker rather than the shared `ROSLIB.Ros` object. Discovery is filtered by the
+subscribe allowlist and each operation is checked again. Watch `context.connection`; its generation changes when the
+shared bridge changes, and release each returned subscription during reconfiguration or cleanup.
 
 ### Configuration and state
 
@@ -159,7 +161,7 @@ levels deep and enforces a 64 KiB serialized quota. Keys must satisfy the SDK ho
 loaded values, version panel-owned configuration, and handle quota/unavailable-storage errors.
 
 Never persist ROSLIB clients, callbacks, DOM nodes, timers, rendering objects, media streams, Bluetooth/USB/Serial
-handles, credentials, or unbounded live samples. v1 has no host settings surface or secret store; a panel renders its
+handles, credentials, or unbounded live samples. v2 has no host settings surface or secret store; a panel renders its
 own settings and keeps secrets in memory.
 
 ### Layout, activity, and performance
@@ -204,12 +206,12 @@ API solely from an example's private helper.
 
 ### SDK or panel-host change
 
-1. Decide whether the change is backward compatible under panel API `1.0.0`.
+1. Decide whether the change is backward compatible under panel API `2.0.0`.
 2. Update the canonical SDK type before documenting a new public member.
 3. Update host types/validation/lifecycle and negative-path tests together.
 4. Update `docs/external-panels.md` and `panel-sdk/README.md`.
 5. Validate at least one minimal and one lifecycle-heavy standalone panel.
-6. Use a new API major version for a breaking source or runtime contract; do not reinterpret `1.0.0` silently.
+6. Use a new API major version for a breaking source or runtime contract; do not reinterpret `2.0.0` silently.
 
 ### Standalone panel change
 
@@ -218,7 +220,7 @@ API solely from an example's private helper.
 3. Import and validate the built artifact, not only source modules.
 4. Recalculate SRI after every bundle change.
 5. Keep manifest and inventory metadata synchronized.
-6. Stage through the real local inventory workflow and exercise add, reload, reconnect, activity, resize, removal, and
+6. Stage through the common desired-state installer and exercise add, reload, reconnect, activity, resize, removal, and
    retry behavior in Robo-Boy.
 
 ## Verification Matrix
@@ -237,18 +239,18 @@ API solely from an example's private helper.
 
 Do not report a broad workflow as verified when only a helper or typecheck ran. Record checks that were not run and why.
 
-## Known V1 Boundaries
+## Known V2 Boundaries
 
 Agents must describe these as current limitations, not missing hidden APIs:
 
-- Installation, updates, and removal are deployment-managed; there is no panel-management UI or rollback UI.
-- Same-realm panels are trusted code. Capabilities shape context and review but do not enforce security permissions.
-- The remote installer supports one ESM bundle per release and rejects additional declared assets.
+- Compose installation, updates, and removal use an authenticated preview/apply UI; Tauri/build staging remains CLI.
+- Panels run in opaque-origin iframes. ROS and network permissions are broker-enforced and reviewed before apply.
+- The common installer supports one ESM bundle per release and rejects additional declared assets.
 - Panels render settings inside their tile; there is no host settings schema, secret store, or notification API.
 - Runtime dependencies are not shared with the host.
 - SHA-256 detects artifact drift but does not establish publisher identity or revocation.
-- Runtime error isolation is best effort; arbitrary synchronous panel code can still block or mutate the page.
-- The raw ROS object is public, but host-owned topic/service/action convenience APIs are not part of v1.
+- CPU-heavy synchronous panel code can still consume main-thread resources inside its iframe.
+- The v2 ROS broker supports JSON discovery, subscribe, publish, and services; actions and binary payloads are absent.
 
 ## Documentation Maintenance
 

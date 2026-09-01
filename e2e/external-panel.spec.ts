@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { installRosMock } from './helpers/rosMock';
+import { getRosSubscriptionCount, installRosMock, waitForRosSubscription } from './helpers/rosMock';
 import { installWebRtcMock } from './helpers/webrtcMock';
 
 test('discovers and lazily loads the standalone Hello Panel artifact', async ({ page }) => {
   let panelBundleRequests = 0;
   page.on('request', request => {
-    if (request.url().endsWith('/panels/la.tessel.roboboy.hello/1.0.0/index.js')) panelBundleRequests += 1;
+    if (request.url().endsWith('/panels/la.tessel.roboboy.hello/2.0.0/index.js')) panelBundleRequests += 1;
   });
 
   await page.addInitScript(() => {
@@ -30,12 +30,13 @@ test('discovers and lazily loads the standalone Hello Panel artifact', async ({ 
   expect(panelBundleRequests).toBe(0);
 
   await page.getByRole('button', { name: 'Hello Panel', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Hello from outside Robo-Boy' })).toBeVisible();
+  const panel = page.frameLocator('iframe[title="Hello Panel"]');
+  await expect(panel.getByRole('heading', { name: 'Hello from outside Robo-Boy' })).toBeVisible();
   expect(panelBundleRequests).toBeGreaterThanOrEqual(1);
   await expect(page.getByText('Something went wrong')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Send greeting (0)' }).click();
-  await expect(page.getByRole('button', { name: 'Send greeting (1)' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Send greeting (0)' }).click();
+  await expect(panel.getByRole('button', { name: 'Send greeting (1)' })).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -59,15 +60,21 @@ test('configures an external time-series panel and plots live ROS messages', asy
   await page.getByLabel('Add workspace panel').first().click();
   await page.getByRole('button', { name: 'ROS Time Series', exact: true }).click();
 
-  const panel = page.getByLabel('ROS Time Series panel');
+  const panel = page.frameLocator('iframe[title="ROS Time Series"]').getByLabel('ROS Time Series panel');
   await expect(panel).toBeVisible();
   await panel.getByRole('button', { name: 'Configure' }).click();
-  await panel.getByLabel('Topic', { exact: true }).selectOption('/telemetry');
+  await panel.getByRole('button', { name: 'Choose ROS topic' }).click();
+  const topicPicker = page.getByRole('dialog', { name: 'Choose ROS topic' });
+  await topicPicker.getByLabel('Available topics').selectOption('/telemetry');
+  await topicPicker.getByRole('button', { name: 'Allow selected topic' }).click();
+  await panel.getByRole('button', { name: 'Configure' }).click();
   await expect(panel.getByText('Auto-detect is enabled')).toBeVisible();
   await panel.getByText('Advanced plot settings').click();
   await panel.getByLabel('Bridge throttle').selectOption('0');
   await panel.getByLabel('Point markers').check();
+  const initialSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
   await panel.getByRole('button', { name: 'Apply' }).click();
+  await waitForRosSubscription(page, '/telemetry', initialSubscriptionCount);
 
   await page.evaluate(() => {
     (
@@ -92,7 +99,9 @@ test('configures an external time-series panel and plots live ROS messages', asy
   await expect(panel.getByRole('button', { name: 'Remove data' })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Remove nested.value' })).toBeVisible();
   await panel.getByRole('button', { name: 'Remove nested.value' }).click();
+  const replacementSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
   await panel.getByRole('button', { name: 'Apply' }).click();
+  await waitForRosSubscription(page, '/telemetry', replacementSubscriptionCount);
   await page.evaluate(() => {
     (
       window as unknown as {
@@ -142,7 +151,7 @@ test('negotiates and controls the standalone WebRTC camera panel', async ({ page
   const deleteAuthorizationHeaders: string[] = [];
 
   page.on('request', request => {
-    if (request.url().endsWith('/panels/la.tessel.roboboy.webrtc/1.2.0/index.js')) {
+    if (request.url().endsWith('/panels/la.tessel.roboboy.webrtc/2.0.0/index.js')) {
       panelBundleRequests += 1;
     }
   });
@@ -184,7 +193,7 @@ test('negotiates and controls the standalone WebRTC camera panel', async ({ page
     await route.fulfill({
       status: 201,
       contentType: 'application/sdp',
-      headers: { Location: '/webrtc/session/test-session' },
+      headers: { Location: '/webrtc/manipulator_wrist_camera/whep/test-session' },
       body: 'v=0\r\ns=Robo-Boy WHEP answer\r\n',
     });
   });
@@ -202,7 +211,7 @@ test('negotiates and controls the standalone WebRTC camera panel', async ({ page
   expect(panelBundleRequests).toBe(0);
   await page.getByRole('button', { name: 'WebRTC / RTSP Camera', exact: true }).click();
 
-  const panel = page.getByLabel('WebRTC RTSP Camera panel');
+  const panel = page.frameLocator('iframe[title="WebRTC / RTSP Camera"]').getByLabel('WebRTC RTSP Camera panel');
   await expect(panel).toBeVisible();
   await expect(panel.getByText('Live · WebRTC')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Unmute' })).toHaveCount(0);
@@ -241,7 +250,10 @@ test('negotiates and controls the standalone WebRTC camera panel', async ({ page
 
   await page.setViewportSize({ width: 390, height: 360 });
   await panel.getByRole('button', { name: 'Configure' }).click();
-  await panel.getByText('Connection and display settings').click();
+  const advancedSettings = panel.locator('details').filter({ hasText: 'Connection and display settings' });
+  if ((await advancedSettings.getAttribute('open')) === null) {
+    await advancedSettings.getByText('Connection and display settings').click();
+  }
   const configuration = panel.getByLabel('WebRTC stream configuration');
   await expect
     .poll(() =>

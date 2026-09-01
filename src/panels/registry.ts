@@ -4,10 +4,12 @@ import { BUILT_IN_PANELS } from './builtInPanels';
 import { DEFAULT_INSTALLED_PANEL_REGISTRY_PATH, ROBOBOY_PANEL_API_VERSION } from './constants';
 import type {
   InstalledPanelRegistryResult,
+  PanelInstallationMetadata,
   PanelRegistryIssue,
   ResolvedPanelManifest,
   RoboBoyPanelCapability,
   RoboBoyPanelManifest,
+  RoboBoyPanelPermissions,
 } from './types';
 
 const PANEL_ID_PATTERN = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
@@ -24,6 +26,8 @@ const PANEL_CAPABILITIES = new Set<RoboBoyPanelCapability>([
   'camera',
   'microphone',
 ]);
+const HOST_ENDPOINTS = new Set(['videoStream']);
+const ROS_RESOURCE_PATTERN = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
 
 interface ParseRegistryOptions {
   hostVersion?: string;
@@ -34,7 +38,64 @@ interface ParseRegistryOptions {
 interface InstalledPanelRegistryDocument {
   schemaVersion: 1;
   panels: unknown[];
+  installation?: unknown;
 }
+
+const parseInstallationMetadata = (value: unknown): PanelInstallationMetadata | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<PanelInstallationMetadata>;
+  const selection = candidate.selection;
+  const sources = candidate.sources;
+  const resolvedPanels = candidate.resolvedPanels;
+  if (
+    candidate.schemaVersion !== 1 ||
+    candidate.configSchemaVersion !== 2 ||
+    !selection ||
+    !['all', 'include', 'none'].includes(selection.mode) ||
+    !Array.isArray(sources) ||
+    !Array.isArray(resolvedPanels)
+  ) {
+    return undefined;
+  }
+  const validSource = (source: unknown): source is PanelInstallationMetadata['sources'][number] =>
+    Boolean(
+      source &&
+      typeof source === 'object' &&
+      ['remote', 'local'].includes((source as { type?: string }).type || '') &&
+      isNonEmptyString((source as { name?: unknown }).name, 120)
+    );
+  if (sources.length > 20 || !sources.every(validSource)) return undefined;
+  const sourceKeys = new Set(sources.map(source => `${source.type}:${source.name}`));
+  if (sourceKeys.size !== sources.length) return undefined;
+  if (
+    selection.mode === 'include' &&
+    (!Array.isArray(selection.panelIds) ||
+      selection.panelIds.length === 0 ||
+      new Set(selection.panelIds).size !== selection.panelIds.length ||
+      !selection.panelIds.every(isValidPanelId))
+  ) {
+    return undefined;
+  }
+  if (selection.mode !== 'include' && selection.panelIds !== undefined) return undefined;
+  if (
+    resolvedPanels.length > 100 ||
+    !resolvedPanels.every(panel => {
+      if (!panel || typeof panel !== 'object') return false;
+      const resolved = panel as PanelInstallationMetadata['resolvedPanels'][number];
+      return (
+        isValidPanelId(resolved.id) &&
+        isNonEmptyString(resolved.version, 64) &&
+        PANEL_INTEGRITY_PATTERN.test(resolved.integrity) &&
+        validSource(resolved.source) &&
+        sourceKeys.has(`${resolved.source.type}:${resolved.source.name}`)
+      );
+    })
+  ) {
+    return undefined;
+  }
+  if (new Set(resolvedPanels.map(panel => panel.id)).size !== resolvedPanels.length) return undefined;
+  return candidate as PanelInstallationMetadata;
+};
 
 export const isValidPanelId = (value: unknown): value is string => {
   return typeof value === 'string' && value.length <= 128 && PANEL_ID_PATTERN.test(value);
@@ -56,6 +117,75 @@ const isHttpUrl = (value: unknown): value is string => {
 
 const isStringArray = (value: unknown, maxItems = 30): value is string[] => {
   return Array.isArray(value) && value.length <= maxItems && value.every(item => isNonEmptyString(item, 80));
+};
+
+const isUniqueStringArray = (value: unknown, validator: (item: string) => boolean, maxItems = 100): value is string[] =>
+  Array.isArray(value) &&
+  value.length <= maxItems &&
+  new Set(value).size === value.length &&
+  value.every(item => typeof item === 'string' && validator(item));
+
+const isPanelPermissions = (
+  value: unknown,
+  capabilities: readonly RoboBoyPanelCapability[]
+): value is RoboBoyPanelPermissions => {
+  if (value === undefined) return !capabilities.includes('ros') && !capabilities.includes('network');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as RoboBoyPanelPermissions;
+  const keys = Object.keys(candidate);
+  if (keys.some(key => !['ros', 'network'].includes(key))) return false;
+
+  if (capabilities.includes('ros')) {
+    const ros = candidate.ros;
+    if (!ros || typeof ros !== 'object' || Array.isArray(ros)) return false;
+    if (Object.keys(ros).some(key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services'].includes(key)))
+      return false;
+    if (ros.discover !== undefined && typeof ros.discover !== 'boolean') return false;
+    if (ros.selectTopic !== undefined && typeof ros.selectTopic !== 'boolean') return false;
+    if (
+      !['subscribe', 'publish', 'services'].every(key => {
+        const resources = ros[key as keyof typeof ros];
+        return resources === undefined || isUniqueStringArray(resources, item => ROS_RESOURCE_PATTERN.test(item));
+      })
+    ) {
+      return false;
+    }
+  } else if (candidate.ros !== undefined) {
+    return false;
+  }
+
+  if (capabilities.includes('network')) {
+    const network = candidate.network;
+    if (!network || typeof network !== 'object' || Array.isArray(network)) return false;
+    if (Object.keys(network).some(key => !['origins', 'hostEndpoints'].includes(key))) return false;
+    if (
+      network.origins !== undefined &&
+      !isUniqueStringArray(
+        network.origins,
+        item => {
+          if (item === 'self' || item === 'https:') return true;
+          try {
+            const url = new URL(item);
+            return url.protocol === 'https:' && url.origin === item;
+          } catch {
+            return false;
+          }
+        },
+        30
+      )
+    ) {
+      return false;
+    }
+    if (
+      network.hostEndpoints !== undefined &&
+      !isUniqueStringArray(network.hostEndpoints, item => HOST_ENDPOINTS.has(item), HOST_ENDPOINTS.size)
+    ) {
+      return false;
+    }
+  } else if (candidate.network !== undefined) {
+    return false;
+  }
+  return true;
 };
 
 const isPanelAssetArray = (value: unknown): value is NonNullable<RoboBoyPanelManifest['assets']> => {
@@ -81,6 +211,7 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
   const compatibility = candidate.compatibility;
   const author = candidate.author;
   const capabilities = candidate.capabilities;
+  const normalizedCapabilities = capabilities || [];
 
   return (
     candidate.schemaVersion === 1 &&
@@ -108,6 +239,7 @@ const isManifestShape = (value: unknown): value is RoboBoyPanelManifest => {
       (Array.isArray(capabilities) &&
         new Set(capabilities).size === capabilities.length &&
         capabilities.every(capability => PANEL_CAPABILITIES.has(capability)))) &&
+    isPanelPermissions(candidate.permissions, normalizedCapabilities) &&
     (!candidate.tags || isStringArray(candidate.tags)) &&
     (!candidate.icon || isNonEmptyString(candidate.icon, 2048)) &&
     (!candidate.preview || isNonEmptyString(candidate.preview, 2048))
@@ -257,7 +389,8 @@ export const parseInstalledPanelRegistry = (
     });
   });
 
-  return { panels, issues };
+  const installation = parseInstallationMetadata(document.installation);
+  return { panels, issues, ...(installation ? { installation } : {}) };
 };
 
 export const getInstalledPanelRegistryUrl = (): string => {

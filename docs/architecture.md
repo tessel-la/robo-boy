@@ -92,13 +92,17 @@ New visualization types should follow the same split: serializable configuration
 catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
 `src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
 `panels/installed.json` without importing panel code. The tracked default registry is empty; explicit panel builds
-generate a separate ignored public tree from inventory-selected releases.
+generate a separate ignored public tree from a schema-v2 desired state that can combine remote inventories and
+explicitly listed local repositories. The generated registry locks exact versions, integrity, selection, and source
+provenance.
 
 Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small,
-framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies and lazily imports a deployment-bundled
-release when its tile mounts, supplies narrow storage/runtime/connection/viewport services, and isolates lifecycle
-failures to that tile. This is trusted same-realm code, so capability declarations shape the API and review process
-but are not a security sandbox. Keep application stores and feature internals out of the public context. See
+framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies a deployment-bundled release and transfers
+it into an opaque-origin iframe when its tile mounts. A private message channel supplies permission-checked
+ROS/network operations, per-instance storage, connection/viewport snapshots, logging, and fullscreen. The iframe
+cannot access the parent DOM, cookies, Robo-Boy browser storage, or undeclared runtime endpoints. Compose adds a
+separate authenticated manager for previewing and applying desired-state changes. Keep application stores and
+feature internals out of the public context. See
 [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
 
 ## State And Persistence
