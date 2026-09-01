@@ -544,7 +544,9 @@ test.describe('Behavior Tree panel', () => {
     const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
 
     await firstAction.click();
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
     await multiSelectClick(secondAction);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
 
     await expect(page.getByTestId('bt-selection-actions')).toBeVisible();
     await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
@@ -568,7 +570,10 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Subtree' })).toHaveCount(0);
 
     await firstAction.click();
+    await expect(firstAction.locator('.bt-node')).toHaveClass(/clicked/);
     await multiSelectClick(secondAction);
+    await expect(page.locator('.bt-node.clicked')).toHaveCount(2);
+    await expect(page.getByTestId('bt-context-wrap')).toBeVisible();
     await page.getByTestId('bt-context-wrap').evaluate(element => (element as HTMLButtonElement).click());
 
     await expect(subtreeNode).toHaveCount(1);

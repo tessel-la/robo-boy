@@ -28,6 +28,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       static CLOSING = 2;
       static CLOSED = 3;
       static instances = new Set<MockWebSocket>();
+      static subscriptionCounts = new Map<string, number>();
 
       url: string;
       readyState = MockWebSocket.CONNECTING;
@@ -37,6 +38,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       onerror: Listener | null = null;
       onmessage: Listener | null = null;
       private listeners = new Map<string, Set<Listener>>();
+      private subscriptions = new Map<string, string>();
 
       constructor(url: string) {
         this.url = url;
@@ -59,6 +61,23 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
 
       send(payload: string) {
         const message = JSON.parse(payload);
+        if (message.op === 'subscribe' && typeof message.topic === 'string') {
+          this.subscriptions.set(message.id ?? message.topic, message.topic);
+          MockWebSocket.subscriptionCounts.set(
+            message.topic,
+            (MockWebSocket.subscriptionCounts.get(message.topic) ?? 0) + 1
+          );
+          return;
+        }
+        if (message.op === 'unsubscribe') {
+          if (typeof message.id === 'string') this.subscriptions.delete(message.id);
+          else if (typeof message.topic === 'string') {
+            this.subscriptions.forEach((topic, id) => {
+              if (topic === message.topic) this.subscriptions.delete(id);
+            });
+          }
+          return;
+        }
         if (message.op !== 'call_service') return;
 
         const values = this.getServiceValues(message.service, message.args ?? {});
@@ -87,8 +106,14 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           data: JSON.stringify({ op: 'publish', topic, msg }),
         };
         MockWebSocket.instances.forEach(socket => {
-          if (socket.readyState === MockWebSocket.OPEN) socket.emit('message', event);
+          if (socket.readyState === MockWebSocket.OPEN && [...socket.subscriptions.values()].includes(topic)) {
+            socket.emit('message', event);
+          }
         });
+      }
+
+      static hasSubscription(topic: string) {
+        return [...MockWebSocket.instances].some(socket => [...socket.subscriptions.values()].includes(topic));
       }
 
       private emit(type: string, event: unknown) {
@@ -131,10 +156,38 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     }
 
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
-    (
-      window as unknown as {
-        __publishRosTopic: (topic: string, message: unknown) => void;
-      }
-    ).__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
+    const mockWindow = window as unknown as {
+      __getRosSubscriptionCount: (topic: string) => number;
+      __hasRosSubscription: (topic: string) => boolean;
+      __publishRosTopic: (topic: string, message: unknown) => void;
+    };
+    mockWindow.__getRosSubscriptionCount = topic => MockWebSocket.subscriptionCounts.get(topic) ?? 0;
+    mockWindow.__hasRosSubscription = topic => MockWebSocket.hasSubscription(topic);
+    mockWindow.__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
   }, mockResources);
+}
+
+export async function getRosSubscriptionCount(page: Page, topic: string): Promise<number> {
+  return page.evaluate(
+    topicName =>
+      (
+        window as unknown as {
+          __getRosSubscriptionCount: (topic: string) => number;
+        }
+      ).__getRosSubscriptionCount(topicName),
+    topic
+  );
+}
+
+export async function waitForRosSubscription(page: Page, topic: string, previousCount = 0): Promise<void> {
+  await page.waitForFunction(
+    ({ topicName, count }) => {
+      const mockWindow = window as unknown as {
+        __getRosSubscriptionCount: (topic: string) => number;
+        __hasRosSubscription: (topic: string) => boolean;
+      };
+      return mockWindow.__hasRosSubscription(topicName) && mockWindow.__getRosSubscriptionCount(topicName) > count;
+    },
+    { topicName: topic, count: previousCount }
+  );
 }

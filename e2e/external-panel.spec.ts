@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { installRosMock } from './helpers/rosMock';
+import { getRosSubscriptionCount, installRosMock, waitForRosSubscription } from './helpers/rosMock';
 import { installWebRtcMock } from './helpers/webrtcMock';
 
 test('discovers and lazily loads the standalone Hello Panel artifact', async ({ page }) => {
@@ -72,7 +72,9 @@ test('configures an external time-series panel and plots live ROS messages', asy
   await panel.getByText('Advanced plot settings').click();
   await panel.getByLabel('Bridge throttle').selectOption('0');
   await panel.getByLabel('Point markers').check();
+  const initialSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
   await panel.getByRole('button', { name: 'Apply' }).click();
+  await waitForRosSubscription(page, '/telemetry', initialSubscriptionCount);
 
   await page.evaluate(() => {
     (
@@ -97,7 +99,9 @@ test('configures an external time-series panel and plots live ROS messages', asy
   await expect(panel.getByRole('button', { name: 'Remove data' })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Remove nested.value' })).toBeVisible();
   await panel.getByRole('button', { name: 'Remove nested.value' }).click();
+  const replacementSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
   await panel.getByRole('button', { name: 'Apply' }).click();
+  await waitForRosSubscription(page, '/telemetry', replacementSubscriptionCount);
   await page.evaluate(() => {
     (
       window as unknown as {

@@ -255,7 +255,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: tessel-la/robo-boy-hello-panel
-        ref: 66f11f4774ab1a87c7025cb231d893fe569d5e2c
+        ref: c48f7eb7c0942f3b72b6c94059d7f76be5451181
         path: .panel-workspace/robo-boy-hello-panel
 
     - name: Checkout Time Series Panel test artifact
