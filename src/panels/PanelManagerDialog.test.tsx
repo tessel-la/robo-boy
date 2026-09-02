@@ -282,6 +282,40 @@ describe('PanelManagerDialog', () => {
     expect(sentConfig.sources[0].name).toBe('my-custom-name');
   });
 
+  it('installing under "all discovered panels" mode only adds the clicked panel, not every discovered one', async () => {
+    const officialSummary = {
+      id: 'la.tessel.roboboy.timeseries',
+      name: 'ROS Time Series',
+      description: 'Plots ROS numeric fields.',
+      version: '1.0.0',
+    };
+    api.catalog.mockResolvedValue({
+      panels: [officialSummary, { ...officialSummary, id: 'la.tessel.roboboy.webrtc', name: 'WebRTC Camera' }],
+    });
+    api.load.mockResolvedValue({
+      config: {
+        schemaVersion: 2,
+        sources: [{ type: 'remote', name: 'official', catalogUrl: 'https://panels.example/catalog.json' }],
+        selection: { mode: 'all' },
+      },
+    });
+    api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [], changes: [] });
+    render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    await screen.findByText('ROS Time Series');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]);
+
+    await waitFor(() =>
+      expect(api.preview).toHaveBeenCalledWith(
+        'secret',
+        expect.objectContaining({ selection: { mode: 'include', panelIds: [panel.id, officialSummary.id] } })
+      )
+    );
+  });
+
   it('remembers the token across renders and auto-unlocks on the next mount', async () => {
     const { unmount } = render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
 

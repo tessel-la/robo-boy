@@ -56,10 +56,10 @@ const withCatalogPanelSelected = (
   panelId: string
 ): PanelSourcesConfig => {
   const sources = ensureOfficialSourcePresent(config);
-  if (config.selection.mode === 'all') return { ...config, sources };
-  // 'include' keeps its current list plus this panel; 'none' preserves whatever is
-  // currently applied rather than treating "add one panel" as "also uninstall everything
-  // else" -- the mandatory review step below still shows the exact resulting diff.
+  // 'include' keeps its current list plus this panel. 'all'/'none' both preserve whatever is
+  // currently applied rather than silently pulling in every other discovered panel ('all') or
+  // treating "add one panel" as "also uninstall everything else" ('none') -- the mandatory
+  // review step below still shows the exact resulting diff either way.
   const baseIds = config.selection.mode === 'include' ? config.selection.panelIds : installedIds;
   const panelIds = [...new Set([...baseIds, panelId])];
   return { ...config, sources, selection: { mode: 'include', panelIds } };
