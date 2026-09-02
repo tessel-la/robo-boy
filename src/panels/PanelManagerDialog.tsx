@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiPlus, FiTrash2, FiX } from 'react-icons/fi';
+import { OFFICIAL_PANEL_SOURCE } from './constants';
 import {
   applyPanelManagerPlan,
+  listPanelCatalog,
   loadPanelManagerConfig,
   previewPanelManagerConfig,
+  type CatalogPanelSummary,
   type PanelInstallPreview,
   type PanelSourceConfig,
   type PanelSourcesConfig,
@@ -19,9 +22,48 @@ interface PanelManagerDialogProps {
 
 const splitLines = (value: string): string[] =>
   value
-    .split(/[\n,]/)
+    .split(/[\n,\s]+/)
     .map(item => item.trim())
     .filter(Boolean);
+
+const ensureOfficialSourcePresent = (config: PanelSourcesConfig): PanelSourceConfig[] => {
+  const alreadyPresent = config.sources.some(
+    source => source.type === 'remote' && source.catalogUrl === OFFICIAL_PANEL_SOURCE.catalogUrl
+  );
+  return alreadyPresent ? config.sources : [...config.sources, OFFICIAL_PANEL_SOURCE];
+};
+
+const withPanelDeselected = (
+  config: PanelSourcesConfig,
+  installedIds: string[],
+  panelId: string
+): PanelSourcesConfig => {
+  const selectedIds = config.selection.mode === 'include' ? config.selection.panelIds : installedIds;
+  const retained = selectedIds.filter(id => id !== panelId);
+  return {
+    ...config,
+    selection: retained.length > 0 ? { mode: 'include', panelIds: retained } : { mode: 'none' },
+  };
+};
+
+const isEffectivelySelected = (config: PanelSourcesConfig, panelId: string): boolean =>
+  config.selection.mode === 'all' ||
+  (config.selection.mode === 'include' && config.selection.panelIds.includes(panelId));
+
+const withCatalogPanelSelected = (
+  config: PanelSourcesConfig,
+  installedIds: string[],
+  panelId: string
+): PanelSourcesConfig => {
+  const sources = ensureOfficialSourcePresent(config);
+  if (config.selection.mode === 'all') return { ...config, sources };
+  // 'include' keeps its current list plus this panel; 'none' preserves whatever is
+  // currently applied rather than treating "add one panel" as "also uninstall everything
+  // else" -- the mandatory review step below still shows the exact resulting diff.
+  const baseIds = config.selection.mode === 'include' ? config.selection.panelIds : installedIds;
+  const panelIds = [...new Set([...baseIds, panelId])];
+  return { ...config, sources, selection: { mode: 'include', panelIds } };
+};
 
 const permissionSummary = (panel: RoboBoyPanelManifest): string[] => {
   const summary: string[] = [];
@@ -41,21 +83,65 @@ const permissionSummary = (panel: RoboBoyPanelManifest): string[] => {
   return summary.length > 0 ? summary : ['No host capabilities'];
 };
 
+// Persisted at the user's explicit request, after confirming the tradeoff: this makes the
+// deployment secret survive browser restarts, so it also survives a future XSS bug or anyone
+// else using the same browser profile. Kept isolated to its own key so it's easy to find and
+// clear (e.g. via devtools) independent of any other stored app state.
+const PANEL_MANAGER_TOKEN_STORAGE_KEY = 'robo-boy-panel-manager-token';
+
+const loadStoredPanelManagerToken = (): string => {
+  try {
+    return window.localStorage.getItem(PANEL_MANAGER_TOKEN_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const storePanelManagerToken = (value: string) => {
+  try {
+    window.localStorage.setItem(PANEL_MANAGER_TOKEN_STORAGE_KEY, value);
+  } catch {
+    // Storage may be unavailable (private browsing, quota); the dialog still works, it just
+    // won't remember the token for next time.
+  }
+};
+
 const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManagerDialogProps) => {
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(loadStoredPanelManagerToken);
   const [config, setConfig] = useState<PanelSourcesConfig | null>(null);
   const [preview, setPreview] = useState<PanelInstallPreview | null>(null);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogPanelSummary[] | null>(null);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const installedIds = useMemo(() => installedPanels.map(panel => panel.id), [installedPanels]);
+  const skipNextResetRef = useRef(false);
 
   useEffect(() => {
+    if (skipNextResetRef.current) {
+      skipNextResetRef.current = false;
+      return;
+    }
     setPreview(null);
     setReviewConfirmed(false);
     setNotice('');
   }, [config]);
+
+  const loadCatalog = async (currentToken: string) => {
+    setCatalogLoading(true);
+    setCatalogError('');
+    try {
+      const result = await listPanelCatalog(currentToken, OFFICIAL_PANEL_SOURCE);
+      setCatalog(result.panels);
+    } catch (nextError) {
+      setCatalogError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
 
   const unlock = async () => {
     setBusy(true);
@@ -64,12 +150,21 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
       const result = await loadPanelManagerConfig(token);
       setConfig(result.config);
       if (result.startupError) setNotice(`The last startup install failed: ${result.startupError}`);
+      storePanelManagerToken(token);
+      void loadCatalog(token);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setBusy(false);
     }
   };
+
+  // Auto-unlock once on mount if a token was remembered from a previous visit, so reopening
+  // the dialog in the same browser doesn't require retyping it every time.
+  useEffect(() => {
+    if (token) void unlock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateSource = (index: number, source: PanelSourceConfig) => {
     if (!config) return;
@@ -95,27 +190,36 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
 
   const removeInstalledPanel = (panelId: string) => {
     if (!config) return;
-    const selectedIds = config.selection.mode === 'include' ? config.selection.panelIds : installedIds;
-    const retained = selectedIds.filter(id => id !== panelId);
-    setConfig({
-      ...config,
-      selection: retained.length > 0 ? { mode: 'include', panelIds: retained } : { mode: 'none' },
-    });
+    setConfig(withPanelDeselected(config, installedIds, panelId));
   };
 
-  const requestPreview = async () => {
-    if (!config) return;
+  const requestPreview = async (overrideConfig?: PanelSourcesConfig) => {
+    const target = overrideConfig ?? config;
+    if (!target) return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      setPreview(await previewPanelManagerConfig(token, config));
+      const result = await previewPanelManagerConfig(token, target);
+      skipNextResetRef.current = true;
+      setConfig(target);
+      setPreview(result);
       setReviewConfirmed(false);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setBusy(false);
     }
+  };
+
+  const installCatalogPanel = (panelId: string) => {
+    if (!config) return;
+    void requestPreview(withCatalogPanelSelected(config, installedIds, panelId));
+  };
+
+  const removeCatalogPanel = (panelId: string) => {
+    if (!config) return;
+    void requestPreview(withPanelDeselected(config, installedIds, panelId));
   };
 
   const applyPreview = async () => {
@@ -160,7 +264,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
 
         {!config ? (
           <div className="panel-manager-unlock">
-            <p>Enter the deployment token. It stays only in this dialog and is never stored by Robo-Boy.</p>
+            <p>Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next time.</p>
             <label>
               Panel manager token
               <input
@@ -182,6 +286,58 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
           </div>
         ) : (
           <div className="panel-manager-content">
+            <section>
+              <div className="panel-manager-section-heading">
+                <div>
+                  <h3>Official panels</h3>
+                  <p>Install or remove Robo-Boy's supported panels directly from the official catalog.</p>
+                </div>
+              </div>
+              {catalogLoading && <p className="panel-manager-catalog-status">Checking the official catalog…</p>}
+              {!catalogLoading && catalogError && (
+                <div className="panel-manager-catalog-error" role="alert">
+                  <span>Couldn&apos;t load the official panel catalog: {catalogError}</span>
+                  <button type="button" onClick={() => void loadCatalog(token)}>
+                    Retry
+                  </button>
+                </div>
+              )}
+              {!catalogLoading && !catalogError && catalog?.length === 0 && (
+                <p className="panel-manager-catalog-status">No official panels are available right now.</p>
+              )}
+              {!catalogLoading && !catalogError && catalog && catalog.length > 0 && (
+                <ul className="panel-manager-catalog">
+                  {catalog.map(entry => {
+                    const installed = installedIds.includes(entry.id);
+                    const selected = isEffectivelySelected(config, entry.id);
+                    return (
+                      <li key={entry.id}>
+                        <span>
+                          <strong>{entry.name}</strong>
+                          <small>{entry.description}</small>
+                        </span>
+                        {!installed && (
+                          <button type="button" onClick={() => installCatalogPanel(entry.id)} disabled={busy}>
+                            Install
+                          </button>
+                        )}
+                        {installed && selected && (
+                          <button type="button" onClick={() => removeCatalogPanel(entry.id)} disabled={busy}>
+                            Remove
+                          </button>
+                        )}
+                        {installed && !selected && (
+                          <button type="button" onClick={() => installCatalogPanel(entry.id)} disabled={busy}>
+                            Keep
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
             <section>
               <div className="panel-manager-section-heading">
                 <div>
@@ -405,7 +561,9 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
                       checked={reviewConfirmed}
                       onChange={event => setReviewConfirmed(event.target.checked)}
                     />
-                    I reviewed these sources and permissions and trust the selected panels with the granted data.
+                    <span>
+                      I reviewed these sources and permissions and trust the selected panels with the granted data.
+                    </span>
                   </label>
                   <button
                     type="button"

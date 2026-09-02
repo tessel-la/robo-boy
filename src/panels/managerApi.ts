@@ -38,6 +38,13 @@ export interface PanelInstallPreview {
   changes: PanelInstallChange[];
 }
 
+export interface CatalogPanelSummary {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+}
+
 const managerRequest = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`/api/panels/${path}`, {
     ...init,
@@ -77,4 +84,10 @@ export const applyPanelManagerPlan = (token: string, planId: string) =>
   managerRequest<{ installed: number }>('apply', token, {
     method: 'POST',
     body: JSON.stringify({ planId }),
+  });
+
+export const listPanelCatalog = (token: string, source: RemotePanelSourceConfig) =>
+  managerRequest<{ panels: CatalogPanelSummary[] }>('catalog', token, {
+    method: 'POST',
+    body: JSON.stringify({ source }),
   });

@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import { applyPanelInstallationPreview, previewPanelInstallation } from './install-panels.mjs';
+import { applyPanelInstallationPreview, listPanelCatalog, previewPanelInstallation } from './install-panels.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -572,4 +572,107 @@ test('applies the exact bytes held by a verified preview without fetching a thir
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
+});
+
+test('listPanelCatalog lists every catalog panel by metadata only, without fetching bundle bytes', async () => {
+  let server;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      if (Buffer.isBuffer(route)) response.end(route);
+      else sendJson(response, route);
+    });
+    const first = panelFixture('com.example.first', '1.0.0', server.origin, 'first/release');
+    const second = panelFixture('com.example.second', '2.0.0', server.origin, 'second/release');
+    routes.set('/catalog.json', { schemaVersion: 1, panels: ['./first.json', './second.json'] });
+    routes.set('/first.json', first.entry);
+    routes.set('/second.json', second.entry);
+    routes.set('/first/release/roboboy.panel.json', first.manifest);
+    routes.set('/second/release/roboboy.panel.json', second.manifest);
+    // Deliberately no /first/release/index.js or /second/release/index.js routes: if
+    // listPanelCatalog ever regressed into fetching bundle bytes, those requests would
+    // 404 and this test would fail with an InstallError.
+
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
+
+    assert.deepEqual(result.panels, [
+      { id: 'com.example.first', name: 'com.example.first', description: 'com.example.first test panel', version: '1.0.0' },
+      { id: 'com.example.second', name: 'com.example.second', description: 'com.example.second test panel', version: '2.0.0' },
+    ]);
+  } finally {
+    await server?.close();
+  }
+});
+
+test('listPanelCatalog rejects a catalog entry using a disallowed origin', async () => {
+  let server;
+  let otherServer;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      sendJson(response, route);
+    });
+    otherServer = await startFixtureServer((request, response) => response.writeHead(404).end());
+    routes.set('/catalog.json', { schemaVersion: 1, panels: [`${otherServer.origin}/entry.json`] });
+
+    await assert.rejects(
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      /unapproved origin/
+    );
+  } finally {
+    await server?.close();
+    await otherServer?.close();
+  }
+});
+
+test('listPanelCatalog resolves an empty catalog to an empty list', async () => {
+  let server;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      sendJson(response, route);
+    });
+    routes.set('/catalog.json', { schemaVersion: 1, panels: [] });
+
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
+
+    assert.deepEqual(result.panels, []);
+  } finally {
+    await server?.close();
+  }
+});
+
+test('listPanelCatalog rejects a catalog exceeding the panel-count safety limit', async () => {
+  let server;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      sendJson(response, route);
+    });
+    const panels = Array.from({ length: 101 }, (_, index) => `./p${index}.json`);
+    routes.set('/catalog.json', { schemaVersion: 1, panels });
+
+    await assert.rejects(
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      /100-panel limit/
+    );
+  } finally {
+    await server?.close();
+  }
+});
+
+test('listPanelCatalog rejects a non-remote source without contacting a network', async () => {
+  await assert.rejects(
+    listPanelCatalog({ type: 'local', name: 'workspace', root: '.', repositories: [] }),
+    /remote source/
+  );
+  await assert.rejects(listPanelCatalog(undefined), /remote source/);
 });

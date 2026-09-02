@@ -2,7 +2,12 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
-import { applyPanelInstallationPreview, installPanels, previewPanelInstallation } from './install-panels.mjs';
+import {
+  applyPanelInstallationPreview,
+  installPanels,
+  listPanelCatalog,
+  previewPanelInstallation,
+} from './install-panels.mjs';
 
 const MAX_REQUEST_BYTES = 256 * 1024;
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -132,6 +137,13 @@ const server = createServer(async (request, response) => {
   try {
     if (request.method === 'GET' && url.pathname === '/api/panels/config') {
       sendJson(response, 200, { config: await readConfig(), startupError: startupError || undefined });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/api/panels/catalog') {
+      const body = await readBody(request);
+      // Read-only: fetches catalog/manifest metadata for display, never bundle bytes, so it
+      // is deliberately not serialized() behind installs and creates no plan.
+      sendJson(response, 200, await listPanelCatalog(body?.source));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/preview') {
