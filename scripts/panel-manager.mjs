@@ -7,6 +7,7 @@ import {
   installPanels,
   listPanelCatalog,
   previewPanelInstallation,
+  resolveCatalogSource,
 } from './install-panels.mjs';
 
 const MAX_REQUEST_BYTES = 256 * 1024;
@@ -16,6 +17,11 @@ const configPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_CONFIG || '/state/p
 const defaultConfigPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_DEFAULT_CONFIG || '/config/panel-sources.json');
 const outputPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_OUTPUT || '/panels');
 const token = process.env.ROBOBOY_PANEL_MANAGER_TOKEN || '';
+// Panel installation adds code that runs against the robot, so it is authenticated unless a
+// deployment states otherwise. Turning that off is a deliberate choice, not a default.
+const allowUnauthenticated = ['1', 'true', 'yes', 'on'].includes(
+  (process.env.ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED || '').trim().toLowerCase()
+);
 const plans = new Map();
 let startupError = '';
 let operation = Promise.resolve();
@@ -37,6 +43,15 @@ const writeAtomic = async (path, value) => {
 };
 
 const readConfig = async () => JSON.parse(await readFile(configPath, 'utf8'));
+
+/** The configuration the deployment was shipped with, for sources it has not persisted yet. */
+const readDefaultConfig = async () => {
+  try {
+    return JSON.parse(await readFile(defaultConfigPath, 'utf8'));
+  } catch {
+    return { sources: [] };
+  }
+};
 
 const seedAndInstall = async () => {
   await mkdir(dirname(configPath), { recursive: true });
@@ -140,8 +155,7 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === 'GET' && url.pathname === '/api/panels/status') {
     sendJson(response, 200, {
-      available: true,
-      // Only when the deployment configured one; otherwise the API is open.
+      available: Boolean(token) || allowUnauthenticated,
       authenticationRequired: Boolean(token),
       configured: Boolean(token),
     });
@@ -157,9 +171,14 @@ const server = createServer(async (request, response) => {
     response.writeHead(204).end();
     return;
   }
-  // Panel management is open unless the deployment sets ROBOBOY_PANEL_MANAGER_TOKEN, which then
-  // becomes mandatory. Anyone who can reach this API can install panels, so a deployment exposed
-  // beyond a trusted network should set one.
+  if (!token && !allowUnauthenticated) {
+    sendJson(response, 503, {
+      error:
+        'Panel management requires ROBOBOY_PANEL_MANAGER_TOKEN. ' +
+        'Set ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1 to manage panels without one.',
+    });
+    return;
+  }
   if (token && !authorized(request)) {
     sendJson(response, 401, { error: 'A valid panel manager token is required.' });
     return;
@@ -172,9 +191,13 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/catalog') {
       const body = await readBody(request);
+      // The caller names a source; the deployment decides what that name means. Its persisted
+      // configuration is consulted first, then the one it was shipped with, so the URL fetched
+      // here always comes from an operator rather than from the request.
+      const source = resolveCatalogSource([await readConfig(), await readDefaultConfig()], body?.sourceName);
       // Read-only: fetches catalog/manifest metadata for display, never bundle bytes, so it
       // is deliberately not serialized() behind installs and creates no plan.
-      sendJson(response, 200, await listPanelCatalog(body?.source));
+      sendJson(response, 200, await listPanelCatalog(source));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/preview') {
@@ -241,7 +264,9 @@ server.listen(port, '0.0.0.0', () => {
     `[panel-manager] listening on port ${port}; panel management ${
       token
         ? 'requires ROBOBOY_PANEL_MANAGER_TOKEN'
-        : 'is open to anyone who can reach this API (set ROBOBOY_PANEL_MANAGER_TOKEN to require one)'
+        : allowUnauthenticated
+          ? 'is open to anyone who can reach this API (ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED)'
+          : 'is unavailable until ROBOBOY_PANEL_MANAGER_TOKEN is set'
     }`
   );
 });

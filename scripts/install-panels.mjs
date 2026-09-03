@@ -249,18 +249,42 @@ const headersFor = (source, url) => {
   return { Authorization: authorization };
 };
 
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Requests a URL, following redirects one hop at a time and checking every target against the
+ * source's allow-list before that hop is requested. Letting the runtime follow redirects would
+ * issue those requests first and leave only a check on where it ended up, which cannot stop a
+ * request to an address the allow-list never permitted. Headers are recomputed per hop, so
+ * credentials cannot travel to an origin the source did not mark as authenticated.
+ */
+const fetchAllowedOrigin = async (source, url, label) => {
+  let target = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    if (!source.allowedOrigins.has(target.origin)) {
+      throw new InstallError(`${label} uses unapproved origin ${target.origin}.`);
+    }
+
+    let response;
+    try {
+      response = await fetch(target, { headers: headersFor(source, target), redirect: 'manual' });
+    } catch (error) {
+      if (error instanceof InstallError) throw error;
+      throw new InstallError(`could not download ${label}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!REDIRECT_STATUSES.has(response.status)) return response;
+
+    const location = response.headers.get('location');
+    await response.body?.cancel().catch(() => undefined);
+    if (!location) throw new InstallError(`${label} redirected without a target.`);
+    target = validateUrl(location, target, `${label} redirect target`);
+  }
+  throw new InstallError(`${label} redirected more than ${MAX_REDIRECTS} times.`);
+};
+
 const fetchBytes = async (source, url, maximumBytes, label) => {
-  if (!source.allowedOrigins.has(url.origin)) throw new InstallError(`${label} uses unapproved origin ${url.origin}.`);
-  let response;
-  try {
-    response = await fetch(url, { headers: headersFor(source, url), redirect: 'follow' });
-  } catch (error) {
-    throw new InstallError(`could not download ${label}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const finalUrl = validateUrl(response.url || url.href, undefined, `${label} response URL`);
-  if (!source.allowedOrigins.has(finalUrl.origin)) {
-    throw new InstallError(`${label} redirected to unapproved origin ${finalUrl.origin}.`);
-  }
+  const response = await fetchAllowedOrigin(source, url, label);
   if (!response.ok) throw new InstallError(`could not download ${label}: HTTP ${response.status}.`);
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
@@ -492,6 +516,23 @@ const listRemoteCatalogPanels = async source => {
     panels.push({ id: manifest.id, name: manifest.name, description: manifest.description, version: manifest.version });
   }
   return panels;
+};
+
+/**
+ * Finds the remote source a catalog listing refers to in the deployment's own configuration.
+ * Callers name a source rather than supplying one, so the URL the manager connects to comes from
+ * configuration an operator wrote, never from the request.
+ */
+export const resolveCatalogSource = (configs, sourceName) => {
+  if (typeof sourceName !== 'string' || !sourceName.trim()) {
+    throw new InstallError('catalog listing requires the name of a configured source.');
+  }
+  for (const config of configs) {
+    const source = (config?.sources ?? []).find(candidate => candidate?.name === sourceName);
+    if (source?.type === 'remote') return source;
+    if (source) throw new InstallError(`source ${sourceName} is not a remote catalog.`);
+  }
+  throw new InstallError(`source ${sourceName} is not configured on this deployment.`);
 };
 
 export const listPanelCatalog = async candidate => {

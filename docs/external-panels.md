@@ -460,10 +460,12 @@ than relying on sibling working copies.
 
 ## Requiring A Token To Manage Panels
 
-Panel management is **open by default**: with no `ROBOBOY_PANEL_MANAGER_TOKEN` set, the dialog opens straight into
-the panel list and anyone who can reach `/api/panels` on that deployment can install a panel. Set the variable and
-the same API becomes token-only. The desktop app is unaffected either way, because it installs into its own storage
-and talks to no service.
+Panel management is **authenticated by default**. Installing a panel adds code that runs against the robot, so
+`/api/panels` requires `ROBOBOY_PANEL_MANAGER_TOKEN`; with no token set, management is unavailable rather than
+open. A deployment on a trusted network can drop that by setting
+`ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1`, which is a deliberate choice: anyone who can then reach the API
+can install a panel, and a direct call does not pass the permission review the dialog shows. The desktop app is
+unaffected either way, because it installs into its own storage and talks to no service.
 
 Which mode a deployment is in is stated in three places, so it never has to be guessed:
 
@@ -483,19 +485,26 @@ keep the value out of commits and Compose files. `ROBOBOY_PANEL_SECRETS_FILE` po
 secrets file is the only source for this value: a Compose `environment:` entry would win over `env_file` even when
 it resolves to nothing, so exporting the variable in the shell does not reach the manager.
 
-**To stop requiring one**, remove the value and recreate the manager:
+**To stop requiring one**, remove the value and say so explicitly, then recreate the manager:
 
 ```bash
-rm -f config/panel-secrets.env
+printf 'ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1\n' > config/panel-secrets.env
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d --force-recreate panel-manager
 ```
 
-Recreating the container is what applies the change; a plain `restart` reuses the previous environment. Rebuilding
-the image is only needed when `scripts/panel-manager.mjs` itself changed.
+Removing the file entirely leaves management unavailable, which is the safe reading of "no token configured"
+rather than an invitation to install panels unauthenticated.
 
-A token is worth setting whenever the deployment is reachable beyond a trusted network. Installing a panel adds code
-that runs in the app with whatever ROS permissions its manifest declares, and a direct call to `/api/panels` does not
-pass the permission review the dialog shows before applying a plan.
+### Which Catalogs May Be Listed
+
+Browsing a catalog is a request the deployment makes, so the deployment decides where. The manager takes the
+**name** of a source rather than a source: it looks that name up in its persisted configuration, then in the
+configuration it was shipped with, and reads the catalog URL from there. A caller can choose among the catalogs an
+operator configured and nothing else, so no request can point the manager at an address it was never given.
+
+To browse another inventory, add it to the sources configuration as a remote source and use it by name. Installing
+from a source is governed separately by that source's own `allowedOrigins`, and every redirect is checked against
+it before the next request is made, so an approved host cannot redirect the manager to one that was never approved.
 
 ## Remote Inventories And Private Panels
 

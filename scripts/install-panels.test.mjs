@@ -8,7 +8,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import { applyPanelInstallationPreview, listPanelCatalog, previewPanelInstallation } from './install-panels.mjs';
+import {
+  applyPanelInstallationPreview,
+  listPanelCatalog,
+  previewPanelInstallation,
+  resolveCatalogSource,
+} from './install-panels.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -606,6 +611,59 @@ test('listPanelCatalog lists every catalog panel by metadata only, without fetch
   }
 });
 
+test('a redirect to a disallowed origin is refused before it is requested', async () => {
+  let server;
+  let otherServer;
+  try {
+    let otherRequests = 0;
+    otherServer = await startFixtureServer((request, response) => {
+      otherRequests += 1;
+      response.writeHead(404).end();
+    });
+    server = await startFixtureServer((request, response) => {
+      response.writeHead(302, { location: `${otherServer.origin}/catalog.json` }).end();
+    });
+
+    await assert.rejects(
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      /unapproved origin/
+    );
+    // The point of checking before following: the disallowed host is never contacted at all.
+    assert.equal(otherRequests, 0);
+  } finally {
+    await server?.close();
+    await otherServer?.close();
+  }
+});
+
+test('a redirect within the allow-list is still followed', async () => {
+  let server;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      if (request.url === '/redirect.json') {
+        return response.writeHead(302, { location: '/catalog.json' }).end();
+      }
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      sendJson(response, route);
+    });
+    const panel = panelFixture('com.example.first', '1.0.0', server.origin, 'first/release');
+    routes.set('/catalog.json', { schemaVersion: 1, panels: ['./first.json'] });
+    routes.set('/first.json', panel.entry);
+    routes.set('/first/release/roboboy.panel.json', panel.manifest);
+
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/redirect.json` });
+
+    assert.deepEqual(
+      result.panels.map(entry => entry.id),
+      ['com.example.first']
+    );
+  } finally {
+    await server?.close();
+  }
+});
+
 test('listPanelCatalog rejects a catalog entry using a disallowed origin', async () => {
   let server;
   let otherServer;
@@ -675,4 +733,19 @@ test('listPanelCatalog rejects a non-remote source without contacting a network'
     /remote source/
   );
   await assert.rejects(listPanelCatalog(undefined), /remote source/);
+});
+
+test('resolveCatalogSource only accepts sources the deployment configured', () => {
+  const persisted = { sources: [{ type: 'remote', name: 'official', catalogUrl: 'https://catalog.example.com/catalog.json' }] };
+  const shipped = { sources: [{ type: 'remote', name: 'shipped', catalogUrl: 'https://shipped.example.com/c.json' }] };
+  const local = { sources: [{ type: 'local', name: 'workspace', root: '.', repositories: [] }] };
+
+  assert.equal(resolveCatalogSource([persisted, shipped], 'official').name, 'official');
+  // A source the deployment ships but has not persisted yet still resolves.
+  assert.equal(resolveCatalogSource([persisted, shipped], 'shipped').name, 'shipped');
+
+  assert.throws(() => resolveCatalogSource([persisted, shipped], 'unknown'), /not configured/);
+  assert.throws(() => resolveCatalogSource([local], 'workspace'), /not a remote catalog/);
+  assert.throws(() => resolveCatalogSource([persisted], ''), /name of a configured source/);
+  assert.throws(() => resolveCatalogSource([persisted], undefined), /name of a configured source/);
 });

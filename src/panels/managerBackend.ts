@@ -52,7 +52,7 @@ export const remotePanelManagerBackend: PanelManagerBackend = {
     }
   },
   loadConfig: token => loadPanelManagerConfig(token),
-  listCatalog: (token, source) => listPanelCatalog(token, source),
+  listCatalog: (token, source) => listPanelCatalog(token, source.name),
   preview: (token, config) => previewPanelManagerConfig(token, config),
   apply: (token, planId) => applyPanelManagerPlan(token, planId),
 };
