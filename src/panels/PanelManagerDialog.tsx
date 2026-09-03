@@ -339,6 +339,13 @@ const PanelManagerDialog = ({
                     Everything this app can run, with where it came from. Official and custom panels can be
                     installed or removed; panels that ship with the build can be switched off but not removed.
                   </p>
+                  <p className="panel-manager-auth-note">
+                    {isDesktopRuntime
+                      ? 'Panels install into this app only; nothing is sent to the robot.'
+                      : requiresToken
+                        ? 'Installing needs this deployment’s panel manager token.'
+                        : 'Installing needs no token: anyone who can reach this deployment can add a panel. Set ROBOBOY_PANEL_MANAGER_TOKEN on it to require one.'}
+                  </p>
                 </div>
               </div>
               {catalogLoading && <p className="panel-manager-catalog-status">Checking the official catalog…</p>}

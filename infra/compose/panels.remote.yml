@@ -4,8 +4,6 @@ services:
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.panel-manager
-    environment:
-      - ROBOBOY_PANEL_MANAGER_TOKEN=${ROBOBOY_PANEL_MANAGER_TOKEN:-}
     env_file:
       - path: ${ROBOBOY_PANEL_SECRETS_FILE:-./config/panel-secrets.env}
         required: false

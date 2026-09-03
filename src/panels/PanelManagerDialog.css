@@ -423,3 +423,10 @@
   font-variant: all-small-caps;
   letter-spacing: 0.04em;
 }
+
+/* Who can install panels here: stated where the installing happens. */
+.panel-manager-auth-note {
+  margin-top: 6px;
+  color: var(--text-muted-color, #6c757d);
+  font-size: 0.85em;
+}

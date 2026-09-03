@@ -424,7 +424,7 @@ same desired state again. For a command-line-only workflow, restart the manager 
 volume or use the staging commands above.
 
 ```bash
-export ROBOBOY_PANEL_MANAGER_TOKEN='use-a-long-random-deployment-secret'
+printf 'ROBOBOY_PANEL_MANAGER_TOKEN=%s\n' "$(openssl rand -hex 24)" > config/panel-secrets.env
 docker compose \
   -f docker-compose.yml \
   -f infra/compose/panels.yml \
@@ -454,6 +454,45 @@ The generated `.panel-stage/` directory is ignored by Git. The tracked `public/p
 empty default registry, and external bundle copies must not be committed to Robo-Boy. A production installer or
 deployment pipeline should perform the equivalent staging operation from immutable published release URLs rather
 than relying on sibling working copies.
+
+## Requiring A Token To Manage Panels
+
+Panel management is **open by default**: with no `ROBOBOY_PANEL_MANAGER_TOKEN` set, the dialog opens straight into
+the panel list and anyone who can reach `/api/panels` on that deployment can install a panel. Set the variable and
+the same API becomes token-only. The desktop app is unaffected either way, because it installs into its own storage
+and talks to no service.
+
+Which mode a deployment is in is stated in three places, so it never has to be guessed:
+
+- the manager logs it at startup (`docker compose logs panel-manager`),
+- `GET /api/panels/status` reports `authenticationRequired`, unauthenticated,
+- the **Manage installations…** dialog says whether installing needs a token.
+
+**To require a token**, put it in the deployment's ignored secrets file and recreate the manager:
+
+```bash
+printf 'ROBOBOY_PANEL_MANAGER_TOKEN=%s\n' "$(openssl rand -hex 24)" > config/panel-secrets.env
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d --force-recreate panel-manager
+```
+
+The dialog then asks for it once and remembers it in that browser. `config/panel-secrets.env` is ignored by Git;
+keep the value out of commits and Compose files. `ROBOBOY_PANEL_SECRETS_FILE` points at a different file. The
+secrets file is the only source for this value: a Compose `environment:` entry would win over `env_file` even when
+it resolves to nothing, so exporting the variable in the shell does not reach the manager.
+
+**To stop requiring one**, remove the value and recreate the manager:
+
+```bash
+rm -f config/panel-secrets.env
+docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d --force-recreate panel-manager
+```
+
+Recreating the container is what applies the change; a plain `restart` reuses the previous environment. Rebuilding
+the image is only needed when `scripts/panel-manager.mjs` itself changed.
+
+A token is worth setting whenever the deployment is reachable beyond a trusted network. Installing a panel adds code
+that runs in the app with whatever ROS permissions its manifest declares, and a direct call to `/api/panels` does not
+pass the permission review the dialog shows before applying a plan.
 
 ## Remote Inventories And Private Panels
 
@@ -565,7 +604,7 @@ The remote Docker overlay uses a deployment-owned named volume and does not moun
 extra configuration it reads `config/panel-sources.official.json` and installs the official catalog:
 
 ```bash
-ROBOBOY_PANEL_MANAGER_TOKEN='use-a-long-random-deployment-secret' \
+printf 'ROBOBOY_PANEL_MANAGER_TOKEN=%s\n' "$(openssl rand -hex 24)" > config/panel-secrets.env
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml build app panel-manager
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d
 ```

@@ -237,5 +237,11 @@ try {
 }
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`[panel-manager] listening on port ${port}; UI management ${token ? 'enabled' : 'disabled'}`);
+  console.log(
+    `[panel-manager] listening on port ${port}; panel management ${
+      token
+        ? 'requires ROBOBOY_PANEL_MANAGER_TOKEN'
+        : 'is open to anyone who can reach this API (set ROBOBOY_PANEL_MANAGER_TOKEN to require one)'
+    }`
+  );
 });
