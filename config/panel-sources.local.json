@@ -7,7 +7,12 @@
       "name": "local-workspace",
       "root": "../..",
       "rootEnv": "ROBOBOY_PANEL_WORKSPACE",
-      "repositories": ["robo-boy-hello-panel", "robo-boy-timeseries-panel", "robo-boy-webrtc-panel"]
+      "repositories": [
+        "robo-boy-hello-panel",
+        "robo-boy-timeseries-panel",
+        "robo-boy-webrtc-panel",
+        "robo-boy-microduck-control-panel"
+      ]
     }
   ],
   "selection": {
