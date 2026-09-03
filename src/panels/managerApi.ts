@@ -72,6 +72,13 @@ const managerRequest = async <T>(path: string, token: string, init?: RequestInit
   return body as T;
 };
 
+/** Unauthenticated by design: it reports whether anything else here needs a token. */
+export const fetchPanelManagerStatus = async (): Promise<{ authenticationRequired: boolean }> => {
+  const response = await fetch('/api/panels/status', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Panel manager returned HTTP ${response.status}.`);
+  return (await response.json()) as { authenticationRequired: boolean };
+};
+
 export const loadPanelManagerConfig = (token: string) =>
   managerRequest<{ config: PanelSourcesConfig; startupError?: string }>('config', token);
 

@@ -141,7 +141,8 @@ const server = createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/api/panels/status') {
     sendJson(response, 200, {
       available: true,
-      authenticationRequired: true,
+      // Only when the deployment configured one; otherwise the API is open.
+      authenticationRequired: Boolean(token),
       configured: Boolean(token),
     });
     return;
@@ -156,11 +157,10 @@ const server = createServer(async (request, response) => {
     response.writeHead(204).end();
     return;
   }
-  if (!token) {
-    sendJson(response, 503, { error: 'Panel management is disabled until ROBOBOY_PANEL_MANAGER_TOKEN is configured.' });
-    return;
-  }
-  if (!authorized(request)) {
+  // Panel management is open unless the deployment sets ROBOBOY_PANEL_MANAGER_TOKEN, which then
+  // becomes mandatory. Anyone who can reach this API can install panels, so a deployment exposed
+  // beyond a trusted network should set one.
+  if (token && !authorized(request)) {
     sendJson(response, 401, { error: 'A valid panel manager token is required.' });
     return;
   }

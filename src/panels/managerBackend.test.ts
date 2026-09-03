@@ -53,8 +53,8 @@ const config: PanelSourcesConfig = {
 };
 
 describe('desktop panel manager backend', () => {
-  it('needs no token, unlike the deployment manager service', () => {
-    expect(createLocalPanelManagerBackend(createMemoryPanelStore()).requiresToken).toBe(false);
+  it('needs no token, having no service to authenticate against', async () => {
+    expect(await createLocalPanelManagerBackend(createMemoryPanelStore()).requiresToken()).toBe(false);
   });
 
   it('previews an install, applies it, and then reports nothing left to change', async () => {

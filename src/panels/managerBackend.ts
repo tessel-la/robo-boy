@@ -11,6 +11,7 @@ import { LOCAL_PANEL_REGISTRY_URL, createLocalPanelFetcher, type LocalPanelStore
 import { localPanelStore } from './localPanels';
 import {
   applyPanelManagerPlan,
+  fetchPanelManagerStatus,
   listPanelCatalog,
   loadPanelManagerConfig,
   previewPanelManagerConfig,
@@ -29,8 +30,12 @@ import type { RoboBoyPanelManifest } from './types';
  * service; the desktop shell has no such service and installs into its own storage instead.
  */
 export interface PanelManagerBackend {
-  /** Desktop installs are local, so there is no service to authenticate against. */
-  requiresToken: boolean;
+  /**
+   * Whether this backend authenticates at all. A deployment only demands a token when it was
+   * configured with one, and desktop installs are local, so there is nothing to authenticate
+   * against; asking avoids putting a token prompt in front of users who need no token.
+   */
+  requiresToken(): Promise<boolean>;
   loadConfig(token: string): Promise<{ config: PanelSourcesConfig; startupError?: string }>;
   listCatalog(token: string, source: RemotePanelSourceConfig): Promise<{ panels: CatalogPanelSummary[] }>;
   preview(token: string, config: PanelSourcesConfig): Promise<PanelInstallPreview>;
@@ -38,7 +43,14 @@ export interface PanelManagerBackend {
 }
 
 export const remotePanelManagerBackend: PanelManagerBackend = {
-  requiresToken: true,
+  requiresToken: async () => {
+    try {
+      return (await fetchPanelManagerStatus()).authenticationRequired;
+    } catch {
+      // Unreachable manager: let the real request report why, rather than demanding a token.
+      return false;
+    }
+  },
   loadConfig: token => loadPanelManagerConfig(token),
   listCatalog: (token, source) => listPanelCatalog(token, source),
   preview: (token, config) => previewPanelManagerConfig(token, config),
@@ -75,7 +87,7 @@ export const createLocalPanelManagerBackend = (
   const installedFetcher = createLocalPanelFetcher(store);
 
   return {
-    requiresToken: false,
+    requiresToken: async () => false,
 
     async loadConfig() {
       const stored = await store.read(CONFIG_PATH);

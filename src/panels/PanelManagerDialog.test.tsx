@@ -8,6 +8,7 @@ const availableFrom = (panels: { id: string }[]): AvailablePanel[] =>
   panels.map(manifest => ({ manifest, origin: 'installed', isEnabled: true }) as AvailablePanel);
 
 const api = vi.hoisted(() => ({
+  status: vi.fn(),
   load: vi.fn(),
   preview: vi.fn(),
   apply: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('./managerApi', async importOriginal => {
   const original = await importOriginal<typeof import('./managerApi')>();
   return {
     ...original,
+    fetchPanelManagerStatus: api.status,
     loadPanelManagerConfig: api.load,
     previewPanelManagerConfig: api.preview,
     applyPanelManagerPlan: api.apply,
@@ -65,6 +67,8 @@ describe('PanelManagerDialog', () => {
     });
     api.apply.mockResolvedValue({ installed: 0 });
     api.catalog.mockResolvedValue({ panels: [] });
+    // A deployment without a configured token asks nothing of the user.
+    api.status.mockResolvedValue({ authenticationRequired: false });
   });
 
   it('keeps authentication explicit and previews removals before apply', async () => {
@@ -79,16 +83,14 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'deployment-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
-    expect(api.load).toHaveBeenCalledWith('deployment-secret');
+    expect(api.load).toHaveBeenCalledWith('');
 
     // Removing from the panel list previews the change straight away.
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await screen.findByText('remove Telemetry@2.0.0');
     expect(api.preview).toHaveBeenCalledWith(
-      'deployment-secret',
+      '',
       expect.objectContaining({ selection: { mode: 'none' } })
     );
     expect(api.apply).not.toHaveBeenCalled();
@@ -101,7 +103,7 @@ describe('PanelManagerDialog', () => {
       )
     );
     fireEvent.click(applyButton);
-    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('deployment-secret', 'sha256-plan'));
+    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'sha256-plan'));
     expect(onApplied).toHaveBeenCalled();
   });
 
@@ -122,8 +124,6 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
     fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
 
@@ -149,8 +149,6 @@ describe('PanelManagerDialog', () => {
         onApplied={vi.fn()}
       />
     );
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
@@ -159,7 +157,7 @@ describe('PanelManagerDialog', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
 
     await waitFor(() =>
-      expect(api.preview).toHaveBeenCalledWith('secret', expect.objectContaining({ selection: { mode: 'none' } }))
+      expect(api.preview).toHaveBeenCalledWith('', expect.objectContaining({ selection: { mode: 'none' } }))
     );
   });
 
@@ -174,8 +172,6 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
 
     fireEvent.change(screen.getByLabelText('Panel IDs'), {
@@ -185,7 +181,7 @@ describe('PanelManagerDialog', () => {
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        'secret',
+        '',
         expect.objectContaining({
           selection: { mode: 'include', panelIds: ['com.example.telemetry', 'com.example.camera'] },
         })
@@ -223,15 +219,13 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('ROS Time Series');
 
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        'secret',
+        '',
         expect.objectContaining({
           sources: expect.arrayContaining([expect.objectContaining({ catalogUrl: OFFICIAL_PANEL_SOURCE.catalogUrl })]),
           selection: { mode: 'include', panelIds: [panel.id, officialSummary.id] },
@@ -246,7 +240,7 @@ describe('PanelManagerDialog', () => {
       )
     );
     fireEvent.click(screen.getByRole('button', { name: 'Apply this exact plan' }));
-    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('secret', 'sha256-plan'));
+    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'sha256-plan'));
   });
 
   it('removes an official catalog panel with Remove, confirm, and Apply', async () => {
@@ -281,14 +275,12 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('ROS Time Series');
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
-      expect(api.preview).toHaveBeenCalledWith('secret', expect.objectContaining({ selection: { mode: 'none' } }))
+      expect(api.preview).toHaveBeenCalledWith('', expect.objectContaining({ selection: { mode: 'none' } }))
     );
   });
 
@@ -303,8 +295,6 @@ describe('PanelManagerDialog', () => {
         onApplied={vi.fn()}
       />
     );
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
 
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
@@ -329,8 +319,6 @@ describe('PanelManagerDialog', () => {
         onApplied={vi.fn()}
       />
     );
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
 
     expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
@@ -350,8 +338,6 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
 
     await screen.findByText("Couldn't load the official panel catalog: network down");
 
@@ -387,8 +373,6 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('ROS Time Series');
 
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
@@ -427,21 +411,20 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('ROS Time Series');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]);
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        'secret',
+        '',
         expect.objectContaining({ selection: { mode: 'include', panelIds: [panel.id, officialSummary.id] } })
       )
     );
   });
 
-  it('remembers the token across renders and auto-unlocks on the next mount', async () => {
+  it('asks for a token only when the deployment configured one, and then remembers it', async () => {
+    api.status.mockResolvedValue({ authenticationRequired: true });
     const { unmount } = render(
       <PanelManagerDialog
         installedPanels={[panel]}
@@ -452,8 +435,11 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'remembered-secret' } });
+    fireEvent.change(await screen.findByLabelText('Panel manager token'), {
+      target: { value: 'remembered-secret' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+
     await screen.findByText('Remote catalog');
     expect(window.localStorage.getItem('robo-boy-panel-manager-token')).toBe('remembered-secret');
     unmount();
@@ -471,5 +457,21 @@ describe('PanelManagerDialog', () => {
 
     await screen.findByText('Remote catalog');
     expect(api.load).toHaveBeenCalledWith('remembered-secret');
+  });
+
+  it('never asks for a token when the deployment has none', async () => {
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    await screen.findByText('Remote catalog');
+    expect(screen.queryByLabelText('Panel manager token')).not.toBeInTheDocument();
+    expect(api.load).toHaveBeenCalledWith('');
   });
 });

@@ -128,6 +128,8 @@ const PanelManagerDialog = ({
     [isDesktopRuntime]
   );
   const [token, setToken] = useState(loadStoredPanelManagerToken);
+  // null while the backend is still being asked whether it authenticates at all.
+  const [requiresToken, setRequiresToken] = useState<boolean | null>(null);
   const [config, setConfig] = useState<PanelSourcesConfig | null>(null);
   const [preview, setPreview] = useState<PanelInstallPreview | null>(null);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
@@ -190,12 +192,20 @@ const PanelManagerDialog = ({
     }
   };
 
-  // Auto-unlock once on mount if a token was remembered from a previous visit, so reopening
-  // the dialog in the same browser doesn't require retyping it every time.
+  // Open straight into the panel list when nothing has to be unlocked, and when a token was
+  // remembered from a previous visit, so reopening never means retyping it.
   useEffect(() => {
-    if (token || !backend.requiresToken) void unlock();
+    let cancelled = false;
+    void backend.requiresToken().then(required => {
+      if (cancelled) return;
+      setRequiresToken(required);
+      if (!required || token) void unlock();
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [backend]);
 
   const updateSource = (index: number, source: PanelSourceConfig) => {
     if (!config) return;
@@ -289,7 +299,7 @@ const PanelManagerDialog = ({
         </header>
 
         {!config ? (
-          !backend.requiresToken ? (
+          requiresToken !== true ? (
             <div className="panel-manager-unlock">
               <p>Loading installed panels…</p>
             </div>
