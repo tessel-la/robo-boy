@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
 import { connectPanelCapabilityBroker, getGrantedPanelEndpoints } from './capabilityBroker';
 import { ROBOBOY_PANEL_API_VERSION } from './constants';
-import { loadVerifiedExternalPanelSource } from './loader';
-import { createPanelSandboxDocument } from './sandboxRuntime';
+import { loadExternalPanelSource } from './localPanels';
 import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
 import { readPanelTheme } from './theme';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
@@ -38,6 +37,9 @@ type HostStatus = { phase: 'loading' } | { phase: 'ready' } | { phase: 'error'; 
 type TopicPickerState = { topics: RoboBoyRosTopic[]; selectedTopic: string; query: string };
 
 const PANEL_START_TIMEOUT_MS = 20_000;
+// The probe retries until the sandbox answers, so without a deadline a sandbox that never runs
+// leaves the panel on its loading overlay forever, with nothing reported to the user or the log.
+const SANDBOX_HANDSHAKE_TIMEOUT_MS = 10_000;
 const NO_APPROVED_ROS_TOPICS: readonly RoboBoyRosTopic[] = [];
 
 const createLogger = (panelId: string, instanceId: string): RoboBoyPanelLogger => {
@@ -78,7 +80,7 @@ const ExternalPanelHost = ({
   onStateChange,
   approvedRosTopics = NO_APPROVED_ROS_TOPICS,
   onApprovedRosTopicsChange,
-  sourceLoader = loadVerifiedExternalPanelSource,
+  sourceLoader = loadExternalPanelSource,
 }: ExternalPanelHostProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -101,7 +103,12 @@ const ExternalPanelHost = ({
   const panelRevision = `${manifest.id}:${manifest.version}:${manifest.integrity}`;
   const capabilities = useMemo(() => manifest.capabilities || [], [manifest.capabilities]);
   const logger = useMemo(() => createLogger(manifest.id, instanceId), [instanceId, manifest.id]);
-  const sandboxDocument = useMemo(() => createPanelSandboxDocument(window.location.origin), []);
+  // Served from its own URL, so the sandbox carries its own CSP instead of inheriting the host's.
+  const sandboxUrl = useMemo(() => {
+    const url = new URL('panel-sandbox.html', document.baseURI);
+    url.searchParams.set('parentOrigin', window.location.origin);
+    return url.href;
+  }, []);
   const filteredTopicOptions = useMemo(() => {
     if (!topicPicker) return [];
     const query = topicPicker.query.trim().toLowerCase();
@@ -393,6 +400,16 @@ const ExternalPanelHost = ({
       iframeRef.current?.contentWindow?.postMessage({ type: 'roboboy-panel-sandbox-probe' }, '*');
       probeTimer = window.setTimeout(probe, connectedSessionId ? 1_000 : 250);
     };
+    let handshakeTimer: number | null = window.setTimeout(() => {
+      handshakeTimer = null;
+      stopProbing();
+      logger.error('Panel sandbox failed.', 'The panel sandbox never reported that it started.');
+      setStatus({ phase: 'error', message: 'The panel sandbox did not start.' });
+    }, SANDBOX_HANDSHAKE_TIMEOUT_MS);
+    const clearHandshakeDeadline = () => {
+      if (handshakeTimer !== null) window.clearTimeout(handshakeTimer);
+      handshakeTimer = null;
+    };
     const handleSandboxReady = (event: MessageEvent) => {
       const iframeWindow = iframeRef.current?.contentWindow;
       if (
@@ -406,6 +423,7 @@ const ExternalPanelHost = ({
         return;
       }
       const isReload = connectedSessionId !== null;
+      clearHandshakeDeadline();
       connectedSessionId = event.data.sessionId;
       if (isReload) setStatus({ phase: 'loading' });
       connectSandboxRef.current();
@@ -415,9 +433,10 @@ const ExternalPanelHost = ({
     probe();
     return () => {
       stopProbing();
+      clearHandshakeDeadline();
       window.removeEventListener('message', handleSandboxReady);
     };
-  }, [panelRevision, retryKey]);
+  }, [logger, panelRevision, retryKey]);
 
   useEffect(
     () => () => {
@@ -438,7 +457,7 @@ const ExternalPanelHost = ({
         sandbox="allow-scripts allow-downloads allow-forms"
         allow={getIframeAllow(capabilities)}
         referrerPolicy="no-referrer"
-        srcDoc={sandboxDocument}
+        src={sandboxUrl}
       />
       {status.phase === 'loading' && (
         <div className="external-panel-status" role="status">

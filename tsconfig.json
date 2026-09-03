@@ -28,7 +28,13 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     /* Added for React JSX */
-    "jsxImportSource": "react"
+    "jsxImportSource": "react",
+    /* Type-check against the web stub so the desktop-only HTTP package is not required to
+       build the web app; Vite resolves the real package for the tauri build. */
+    "baseUrl": ".",
+    "paths": {
+      "@tauri-apps/plugin-http": ["src/panels/nativeHttpFetch.web.ts"]
+    }
   },
   "include": [
     "src"

@@ -8,9 +8,15 @@
   background: rgb(0 0 0 / 0.66);
 }
 
+.panel-manager-dialog,
+.panel-manager-dialog * {
+  box-sizing: border-box;
+}
+
 .panel-manager-dialog {
   width: min(920px, 100%);
   max-height: min(860px, 94dvh);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   color: var(--text-color);
@@ -24,16 +30,27 @@
 .panel-manager-dialog > header,
 .panel-manager-section-heading,
 .panel-manager-source-title,
-.panel-manager-installed li {
+.panel-manager-installed li,
+.panel-manager-catalog li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px 16px;
+}
+
+.panel-manager-installed li,
+.panel-manager-catalog li {
+  flex-wrap: wrap;
 }
 
 .panel-manager-dialog > header {
+  min-width: 0;
   padding: 18px 22px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.panel-manager-dialog > header > div {
+  min-width: 0;
 }
 
 .panel-manager-dialog h2,
@@ -75,8 +92,29 @@
 }
 
 .panel-manager-content {
-  overflow: auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 20px 22px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) transparent;
+}
+
+.panel-manager-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel-manager-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-manager-content::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--primary-color) 58%, transparent);
+  border-radius: 3px;
+}
+
+.panel-manager-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-color);
 }
 
 .panel-manager-content > section + section {
@@ -94,6 +132,7 @@
 
 .panel-manager-add-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -110,6 +149,7 @@
 
 .panel-manager-add-actions button,
 .panel-manager-installed button,
+.panel-manager-catalog button,
 .panel-manager-review button {
   display: inline-flex;
   align-items: center;
@@ -188,10 +228,43 @@
 
 .panel-manager-installed span {
   display: grid;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .panel-manager-installed small {
   color: var(--text-color-secondary);
+}
+
+.panel-manager-catalog {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.panel-manager-catalog li {
+  padding: 9px 11px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.panel-manager-catalog span {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.panel-manager-catalog small {
+  color: var(--text-color-secondary);
+}
+
+.panel-manager-catalog-status {
+  margin: 14px 0 0;
+  color: var(--text-color-secondary);
+  font-size: 0.82rem;
+  overflow-wrap: break-word;
 }
 
 .panel-manager-change-summary {
@@ -263,10 +336,20 @@
   gap: 0.55rem;
   font-size: 0.82rem;
   line-height: 1.35;
+  cursor: pointer;
 }
 
 .panel-manager-confirmation input {
-  margin-top: 0.15rem;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0.15rem 0 0;
+  accent-color: var(--primary-color);
+}
+
+.panel-manager-confirmation span {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .panel-manager-message {
@@ -275,13 +358,33 @@
   background: var(--background-secondary);
   border-top: 1px solid var(--border-color);
   font-size: 0.82rem;
+  overflow-wrap: break-word;
 }
 
 .panel-manager-message.error {
   color: var(--error-color);
 }
 
-@media (max-width: 640px) {
+.panel-manager-catalog-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+  padding: 9px 11px;
+  color: var(--error-color);
+  background: var(--background-secondary);
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.panel-manager-catalog-error span {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 768px) {
   .panel-manager-backdrop {
     padding: 0;
   }
@@ -307,4 +410,23 @@
   .panel-manager-selection .wide {
     grid-column: auto;
   }
+
+  .panel-manager-permissions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Origin and state for one panel: secondary to its name, but always visible. */
+.panel-manager-catalog-tags {
+  margin-top: 2px;
+  color: var(--text-muted-color, #6c757d);
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+/* Who can install panels here: stated where the installing happens. */
+.panel-manager-auth-note {
+  margin-top: 6px;
+  color: var(--text-muted-color, #6c757d);
+  font-size: 0.85em;
 }

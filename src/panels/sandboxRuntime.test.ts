@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPanelSandboxDocument, panelSandboxBootstrap } from './sandboxRuntime';
 
+// Mirrors what scripts/build-panel-sandbox.mjs bundles into the generated document.
+const bootstrapSource = `(${panelSandboxBootstrap.toString()})(new URLSearchParams(location.search).get('parentOrigin') ?? '');`;
+
 describe('panel sandbox document', () => {
   it('loads panel modules without leaking Vite runtime helpers into the iframe', () => {
-    const document = createPanelSandboxDocument('https://roboboy.test');
+    const document = createPanelSandboxDocument(bootstrapSource);
 
     expect(document).not.toContain('__vite__injectQuery');
     expect(document).toContain('__roboboyPanelModuleBridge_');
@@ -12,14 +15,29 @@ describe('panel sandbox document', () => {
   });
 
   it('uses secure randomness and binds window messages to the parent origin', () => {
-    const document = createPanelSandboxDocument('http://192.168.1.39');
+    const document = createPanelSandboxDocument(bootstrapSource);
 
     expect(document).toContain('crypto.getRandomValues(bytes)');
     expect(document).not.toContain('Math.random()');
     expect(document).toContain('event.source !== window.parent');
     expect(document).toContain('event.origin !== parentOrigin');
     expect(document).toMatch(/window\.parent\.postMessage\([^;]+,\s*parentOrigin\);/);
-    expect(document).toContain('(\"http://192.168.1.39\");');
+    // The document is a static build artifact, so the trusted origin arrives at runtime.
+    expect(document).toContain("new URLSearchParams(location.search).get('parentOrigin')");
+  });
+
+  it('injects its base stylesheet at runtime rather than shipping an inline <style>', () => {
+    // Tauri nonces every <style> element of an HTML asset, and a nonce in style-src makes
+    // 'unsafe-inline' inert -- which would block every style a panel injects at runtime.
+    expect(createPanelSandboxDocument(bootstrapSource)).not.toContain('<style');
+
+    document.head.innerHTML = '';
+    // Keep this bootstrap's window listener out of the other tests in this file.
+    const addEventListener = vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
+    panelSandboxBootstrap('https://roboboy.test');
+    addEventListener.mockRestore();
+
+    expect(document.head.querySelector('style')?.textContent).toContain('#panel-root');
   });
 
   it('provides the capability-scoped iframe runtime contract', async () => {
@@ -47,7 +65,9 @@ describe('panel sandbox document', () => {
         return instance;
       }),
     };
-    const append = vi.spyOn(document.head, 'append').mockImplementation(() => {
+    const append = vi.spyOn(document.head, 'append').mockImplementation((...nodes: unknown[]) => {
+      // The bootstrap also appends its base stylesheet; only the module loader carries the bridge.
+      if (!nodes.some(node => node instanceof HTMLScriptElement)) return;
       const bridgeKey = Object.getOwnPropertyNames(globalThis).find(name =>
         name.startsWith('__roboboyPanelModuleBridge_')
       );
@@ -151,7 +171,8 @@ describe('panel sandbox document', () => {
     expect(document.documentElement.style.getPropertyValue('unsafe')).toBe('');
     expect(createObjectURL).toHaveBeenCalledTimes(2);
     expect(revokeObjectURL).toHaveBeenCalledTimes(2);
-    expect(append).toHaveBeenCalledOnce();
+    // One module loader; the other append is the bootstrap's base stylesheet.
+    expect(append.mock.calls.filter(([node]) => node instanceof HTMLScriptElement)).toHaveLength(1);
 
     expect(context.storage.get('count', 0)).toBe(1);
     expect(context.storage.get('missing', 'fallback')).toBe('fallback');

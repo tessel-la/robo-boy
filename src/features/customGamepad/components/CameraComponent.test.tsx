@@ -51,6 +51,20 @@ describe('CameraComponent', () => {
     );
   });
 
+  it('does not stream a topic the robot is not publishing', () => {
+    // A saved gamepad layout outlives its topics, and streaming a dead one crashes the renderer.
+    const ros = {
+      isConnected: true,
+      getTopics: (onSuccess: (result: { topics: string[] }) => void) =>
+        onSuccess({ topics: ['/camera/other/compressed'] }),
+    };
+
+    render(<CameraComponent config={baseConfig} ros={ros as any} />);
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Camera topic is not being published')).toBeInTheDocument();
+  });
+
   it('shows a fallback state without a topic', () => {
     render(<CameraComponent config={{ ...baseConfig, action: undefined }} ros={{ isConnected: true } as any} />);
 

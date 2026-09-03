@@ -56,6 +56,16 @@
 		reverse_proxy unix//run/ollama-relay/ollama.sock
 	}
 
+	# Installed panel assets are public static files with no credentials attached. The packaged
+	# desktop shell reads this registry and its bundles cross-origin, so they need CORS; the web
+	# app is same-origin and unaffected. The ">" prefix replaces rather than appends, and defers
+	# until the upstream response is in hand: the app container reflects http(s) origins itself, and
+	# two Access-Control-Allow-Origin values make browsers reject the response outright.
+	handle /panels/* {
+		header >Access-Control-Allow-Origin "*"
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
+	}
+
 	# Route other requests to the Vite app container (Default Handler)
 	handle {
 		# Still proxy to HTTP endpoint of Vite container
@@ -105,6 +115,16 @@
 	handle @ollama_api {
 		uri strip_prefix /ollama
 		reverse_proxy unix//run/ollama-relay/ollama.sock
+	}
+
+	# Installed panel assets are public static files with no credentials attached. The packaged
+	# desktop shell reads this registry and its bundles cross-origin, so they need CORS; the web
+	# app is same-origin and unaffected. The ">" prefix replaces rather than appends, and defers
+	# until the upstream response is in hand: the app container reflects http(s) origins itself, and
+	# two Access-Control-Allow-Origin values make browsers reject the response outright.
+	handle /panels/* {
+		header >Access-Control-Allow-Origin "*"
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
 	}
 
 	# Route other requests to the Vite app container (Default Handler)

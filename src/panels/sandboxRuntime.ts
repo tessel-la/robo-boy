@@ -1,4 +1,9 @@
+const PANEL_SANDBOX_BASE_CSS = `html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color:var(--text-color,#212529);background:var(--background-color,#fff);font-family:var(--font-family-ui,system-ui,sans-serif);color-scheme:light dark}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 10px;color:var(--button-text-color,#fff);background:var(--primary-color,#32cd32);font-weight:600;cursor:pointer}button:hover{background:var(--primary-hover-color,var(--primary-color,#32cd32))}button:disabled{opacity:.48;cursor:default}input,select,textarea{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 9px;color:var(--text-color,#212529);background:var(--background-color,#fff)}:focus-visible{outline:2px solid var(--primary-color,#32cd32);outline-offset:2px}`;
+
 export const panelSandboxBootstrap = (parentOrigin: string) => {
+  const baseStyle = document.createElement('style');
+  baseStyle.textContent = PANEL_SANDBOX_BASE_CSS;
+  document.head.append(baseStyle);
   const createSecureId = () => {
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
@@ -318,7 +323,13 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
 const escapeHtmlAttribute = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export const createPanelSandboxDocument = (parentOrigin: string): string => {
+/**
+ * Builds the sandbox document served at `panel-sandbox.html`. It is generated at build time
+ * rather than embedded as `srcdoc`, because a `srcdoc` frame inherits the host page's CSP: the
+ * packaged shell serves a policy carrying script hashes, which makes the `'unsafe-inline'` this
+ * bootstrap relies on inert and stops the sandbox from ever starting.
+ */
+export const createPanelSandboxDocument = (bootstrapSource: string): string => {
   const csp = [
     "default-src 'none'",
     "script-src 'unsafe-inline' blob:",
@@ -332,7 +343,6 @@ export const createPanelSandboxDocument = (parentOrigin: string): string => {
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; ');
-  const serializedParentOrigin = JSON.stringify(parentOrigin).replace(/</g, '\\u003c');
-  const bootstrap = `(${panelSandboxBootstrap.toString()})(${serializedParentOrigin});`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color:var(--text-color,#212529);background:var(--background-color,#fff);font-family:var(--font-family-ui,system-ui,sans-serif);color-scheme:light dark}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 10px;color:var(--button-text-color,#fff);background:var(--primary-color,#32cd32);font-weight:600;cursor:pointer}button:hover{background:var(--primary-hover-color,var(--primary-color,#32cd32))}button:disabled{opacity:.48;cursor:default}input,select,textarea{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 9px;color:var(--text-color,#212529);background:var(--background-color,#fff)}:focus-visible{outline:2px solid var(--primary-color,#32cd32);outline-offset:2px}</style></head><body><div id="panel-root"></div><script>${bootstrap}<\/script></body></html>`;
+  const bootstrap = bootstrapSource.replace(/<\/script/gi, '<\\/script');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="panel-root"></div><script>${bootstrap}<\/script></body></html>`;
 };

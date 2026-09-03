@@ -291,12 +291,7 @@ jobs:
 
     - name: Install external panel test artifacts
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: |
-        mkdir -p .panel-stage/public
-        cp -a public/. .panel-stage/public/
-        node scripts/install-panels.mjs \
-          --config config/panel-sources.e2e.json \
-          --output .panel-stage/public/panels
+      run: node scripts/stage-local-panels.mjs --config config/panel-sources.e2e.json
 
     - name: Run E2E tests
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'

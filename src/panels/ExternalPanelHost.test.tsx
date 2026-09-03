@@ -91,8 +91,11 @@ describe('ExternalPanelHost sandbox', () => {
     expect(iframe).not.toBeNull();
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads allow-forms');
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
-    expect(iframe?.getAttribute('srcdoc')).toContain("default-src 'none'");
-    expect(iframe?.getAttribute('srcdoc')).toContain(JSON.stringify(window.location.origin));
+    // Loaded from its own URL rather than srcdoc, so it does not inherit the host page's CSP.
+    expect(iframe?.getAttribute('srcdoc')).toBeNull();
+    const sandboxSrc = new URL(iframe!.getAttribute('src')!, document.baseURI);
+    expect(sandboxSrc.pathname).toContain('panel-sandbox.html');
+    expect(sandboxSrc.searchParams.get('parentOrigin')).toBe(window.location.origin);
     expect(sourceLoader).not.toHaveBeenCalled();
 
     announceSandboxReady(iframe!);
@@ -157,6 +160,22 @@ describe('ExternalPanelHost sandbox', () => {
     announceSandboxReady(container.querySelector('iframe')!);
     act(() => broker.onMessage?.({ type: 'ready' }));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('reports an error when the sandbox never announces itself, instead of loading forever', async () => {
+    vi.useFakeTimers();
+    try {
+      renderHost();
+      expect(screen.getByRole('status')).toHaveTextContent('Loading Example panel');
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('The panel sandbox did not start.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not return to loading when equivalent manifest metadata is recreated', async () => {

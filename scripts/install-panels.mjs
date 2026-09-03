@@ -440,16 +440,23 @@ const validateRemoteManifest = (manifest, release) => {
 
 const shouldSelect = (selection, id) => selection.mode === 'all' || selection.panelIds.has(id);
 
-const discoverRemotePanels = async (source, selection) => {
-  if (selection.mode === 'none') return [];
+const fetchCatalogEntries = async source => {
   const catalog = await fetchJson(source, source.catalogUrl, `${source.name} catalog`);
   if (!catalog || catalog.schemaVersion !== 1 || !Array.isArray(catalog.panels)) {
     throw new InstallError(`${source.name} catalog is invalid.`);
   }
-  const releases = [];
   for (const listedPath of catalog.panels) {
     if (typeof listedPath !== 'string')
       throw new InstallError(`${source.name} catalog contains an invalid entry path.`);
+  }
+  return catalog.panels;
+};
+
+const discoverRemotePanels = async (source, selection) => {
+  if (selection.mode === 'none') return [];
+  const entries = await fetchCatalogEntries(source);
+  const releases = [];
+  for (const listedPath of entries) {
     const entryUrl = validateUrl(listedPath, source.catalogUrl, `${source.name} entry URL`);
     const release = validateInventoryEntry(await fetchJson(source, entryUrl, `${source.name} entry`), source);
     if (!shouldSelect(selection, release.entry.id)) continue;
@@ -464,6 +471,35 @@ const discoverRemotePanels = async (source, selection) => {
     releases.push({ manifest, bundle, integrity, source: { type: 'remote', name: source.name } });
   }
   return releases;
+};
+
+// Lists every panel in a remote catalog with no selection filtering, for browsing/display
+// only. Unlike discoverRemotePanels, this never fetches or hashes bundle bytes -- it stops
+// after the manifest, which is all display metadata (name/description/version) needs.
+const listRemoteCatalogPanels = async source => {
+  const entries = await fetchCatalogEntries(source);
+  if (entries.length > MAX_PANELS) {
+    throw new InstallError(`${source.name} catalog exceeds the ${MAX_PANELS}-panel limit.`);
+  }
+  const panels = [];
+  for (const listedPath of entries) {
+    const entryUrl = validateUrl(listedPath, source.catalogUrl, `${source.name} entry URL`);
+    const release = validateInventoryEntry(await fetchJson(source, entryUrl, `${source.name} entry`), source);
+    const manifest = validateRemoteManifest(
+      await fetchJson(source, release.manifestUrl, `${release.entry.id} manifest`),
+      release
+    );
+    panels.push({ id: manifest.id, name: manifest.name, description: manifest.description, version: manifest.version });
+  }
+  return panels;
+};
+
+export const listPanelCatalog = async candidate => {
+  if (!candidate || candidate.type !== 'remote') {
+    throw new InstallError('catalog listing requires a remote source.');
+  }
+  const [source] = validateSourceList([candidate], undefined);
+  return { panels: await listRemoteCatalogPanels(source) };
 };
 
 const discoverLocalPanels = async (source, selection) => {

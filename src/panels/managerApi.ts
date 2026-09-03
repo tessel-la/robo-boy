@@ -38,6 +38,14 @@ export interface PanelInstallPreview {
   changes: PanelInstallChange[];
 }
 
+export interface CatalogPanelSummary {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+}
+
+/** Same-origin by construction: this API exists only in the web deployment that serves the app. */
 const managerRequest = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`/api/panels/${path}`, {
     ...init,
@@ -64,6 +72,13 @@ const managerRequest = async <T>(path: string, token: string, init?: RequestInit
   return body as T;
 };
 
+/** Unauthenticated by design: it reports whether anything else here needs a token. */
+export const fetchPanelManagerStatus = async (): Promise<{ authenticationRequired: boolean }> => {
+  const response = await fetch('/api/panels/status', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Panel manager returned HTTP ${response.status}.`);
+  return (await response.json()) as { authenticationRequired: boolean };
+};
+
 export const loadPanelManagerConfig = (token: string) =>
   managerRequest<{ config: PanelSourcesConfig; startupError?: string }>('config', token);
 
@@ -77,4 +92,10 @@ export const applyPanelManagerPlan = (token: string, planId: string) =>
   managerRequest<{ installed: number }>('apply', token, {
     method: 'POST',
     body: JSON.stringify({ planId }),
+  });
+
+export const listPanelCatalog = (token: string, source: RemotePanelSourceConfig) =>
+  managerRequest<{ panels: CatalogPanelSummary[] }>('catalog', token, {
+    method: 'POST',
+    body: JSON.stringify({ source }),
   });

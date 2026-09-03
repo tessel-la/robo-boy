@@ -2,7 +2,12 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
-import { applyPanelInstallationPreview, installPanels, previewPanelInstallation } from './install-panels.mjs';
+import {
+  applyPanelInstallationPreview,
+  installPanels,
+  listPanelCatalog,
+  previewPanelInstallation,
+} from './install-panels.mjs';
 
 const MAX_REQUEST_BYTES = 256 * 1024;
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -59,6 +64,31 @@ const sendJson = (response, status, value) => {
   response.end(`${JSON.stringify(value)}\n`);
 };
 
+// The packaged desktop shell serves its own assets, so its requests to this API are cross-origin
+// and the webview refuses them without CORS. Authentication here is a bearer token rather than a
+// cookie, so permitting these fixed webview origins grants no ambient authority: a page that
+// cannot read the token still cannot call this API, and browsers will not let one forge Origin.
+// Tauri serves the shell from `tauri://localhost` on Linux/macOS and `http://tauri.localhost` on
+// Windows/Android; webviews may report a non-HTTP scheme as the opaque origin `null`, so all the
+// forms are accepted. This is not an authorisation boundary -- the bearer token is -- and no
+// browser lets a page forge Origin.
+const DESKTOP_ORIGINS = new Set([
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'null',
+]);
+
+const applyCorsHeaders = (request, response) => {
+  response.setHeader('vary', 'Origin');
+  const origin = request.headers.origin;
+  if (typeof origin !== 'string' || !DESKTOP_ORIGINS.has(origin)) return;
+  response.setHeader('access-control-allow-origin', origin);
+  response.setHeader('access-control-allow-headers', 'authorization, content-type');
+  response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  response.setHeader('access-control-max-age', '600');
+};
+
 const authorized = request => {
   if (!token) return false;
   const supplied = request.headers.authorization;
@@ -111,7 +141,8 @@ const server = createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/api/panels/status') {
     sendJson(response, 200, {
       available: true,
-      authenticationRequired: true,
+      // Only when the deployment configured one; otherwise the API is open.
+      authenticationRequired: Boolean(token),
       configured: Boolean(token),
     });
     return;
@@ -120,11 +151,16 @@ const server = createServer(async (request, response) => {
     sendJson(response, 404, { error: 'Not found.' });
     return;
   }
-  if (!token) {
-    sendJson(response, 503, { error: 'Panel management is disabled until ROBOBOY_PANEL_MANAGER_TOKEN is configured.' });
+  applyCorsHeaders(request, response);
+  if (request.method === 'OPTIONS') {
+    // A preflight never carries credentials, so it has to be answered before the auth checks.
+    response.writeHead(204).end();
     return;
   }
-  if (!authorized(request)) {
+  // Panel management is open unless the deployment sets ROBOBOY_PANEL_MANAGER_TOKEN, which then
+  // becomes mandatory. Anyone who can reach this API can install panels, so a deployment exposed
+  // beyond a trusted network should set one.
+  if (token && !authorized(request)) {
     sendJson(response, 401, { error: 'A valid panel manager token is required.' });
     return;
   }
@@ -132,6 +168,13 @@ const server = createServer(async (request, response) => {
   try {
     if (request.method === 'GET' && url.pathname === '/api/panels/config') {
       sendJson(response, 200, { config: await readConfig(), startupError: startupError || undefined });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/api/panels/catalog') {
+      const body = await readBody(request);
+      // Read-only: fetches catalog/manifest metadata for display, never bundle bytes, so it
+      // is deliberately not serialized() behind installs and creates no plan.
+      sendJson(response, 200, await listPanelCatalog(body?.source));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/preview') {
@@ -194,5 +237,11 @@ try {
 }
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`[panel-manager] listening on port ${port}; UI management ${token ? 'enabled' : 'disabled'}`);
+  console.log(
+    `[panel-manager] listening on port ${port}; panel management ${
+      token
+        ? 'requires ROBOBOY_PANEL_MANAGER_TOKEN'
+        : 'is open to anyone who can reach this API (set ROBOBOY_PANEL_MANAGER_TOKEN to require one)'
+    }`
+  );
 });

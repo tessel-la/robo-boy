@@ -119,6 +119,32 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
     setStatus(nextStatus);
   }, []);
 
+  // null until the topic list is known; an <img> pointed at a topic web_video_server is not
+  // publishing returns an empty multipart response, which crashes the WebKitGTK renderer.
+  const [publishedTopics, setPublishedTopics] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!ros?.isConnected || typeof ros.getTopics !== 'function') {
+      setPublishedTopics(null);
+      return;
+    }
+    let cancelled = false;
+    const record = (topics: string[]) => {
+      if (!cancelled) setPublishedTopics(topics);
+    };
+    try {
+      ros.getTopics(
+        (result: { topics?: string[] }) => record(result?.topics ?? []),
+        () => record([])
+      );
+    } catch {
+      record([]);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [ros, ros?.isConnected]);
+
   useEffect(() => {
     setImageUrl(null);
     lastRosFrameAtRef.current = -Infinity;
@@ -134,6 +160,10 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
     }
 
     if (transport === 'proxy') {
+      if (publishedTopics && !publishedTopics.includes(action.topic)) {
+        setStatusIfChanged('Camera topic is not being published');
+        return;
+      }
       setImageUrl(
         buildCameraStreamUrl({
           topic: action.topic,
@@ -196,6 +226,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
       topicRef.current = null;
     };
   }, [
+    publishedTopics,
     action?.topic,
     action?.messageType,
     isEditing,

@@ -3949,7 +3949,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
       {isPanelManagerOpen && (
         <PanelManagerDialog
-          installedPanels={installedPanelRegistry.panels}
+          installedPanels={installedPanelRegistry.managedPanels}
+          availablePanels={installedPanelRegistry.allPanels}
+          onPanelEnabledChange={installedPanelRegistry.setPanelEnabled}
           onClose={() => setIsPanelManagerOpen(false)}
           onApplied={installedPanelRegistry.refresh}
         />
