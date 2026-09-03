@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.0-alpha...robo-boy-v0.4.1-alpha) (2026-09-03)
+
+
+### Bug Fixes
+
+* find the installers where the artifact download actually puts them for build release ([488c970](https://github.com/tessel-la/robo-boy/commit/488c9704a68eef2986e0bb617e899ddd33a80c31))
+
 ## [0.4.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.3.1-alpha...robo-boy-v0.4.0-alpha) (2026-09-03)
 
 
