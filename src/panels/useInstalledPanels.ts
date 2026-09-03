@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { LOCAL_PANEL_REGISTRY_URL } from './localPanelStore';
-import { localPanelFetcher } from './localPanels';
+import { ensureLocalPanelsSeeded, localPanelFetcher } from './localPanels';
 import { loadInstalledPanelRegistry } from './registry';
 import type { InstalledPanelRegistryResult } from './types';
 
@@ -17,13 +17,12 @@ export const useInstalledPanels = (): InstalledPanelRegistryResult & {
   const [result, setResult] = useState<InstalledPanelRegistryResult>(EMPTY_RESULT);
   const [isLoading, setIsLoading] = useState(true);
 
-  const load = useCallback(
-    () =>
-      isDesktop
-        ? loadInstalledPanelRegistry(LOCAL_PANEL_REGISTRY_URL, localPanelFetcher)
-        : loadInstalledPanelRegistry(),
-    [isDesktop]
-  );
+  const load = useCallback(async () => {
+    if (!isDesktop) return loadInstalledPanelRegistry();
+    // A build that ships panels hands them to the store before its first read.
+    await ensureLocalPanelsSeeded();
+    return loadInstalledPanelRegistry(LOCAL_PANEL_REGISTRY_URL, localPanelFetcher);
+  }, [isDesktop]);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);

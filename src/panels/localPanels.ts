@@ -1,4 +1,5 @@
 import { loadVerifiedExternalPanelSource } from './loader';
+import { seedLocalPanelsFromBundle } from './localPanelSeed';
 import { LOCAL_PANEL_ORIGIN, createIndexedDbPanelStore, createLocalPanelFetcher } from './localPanelStore';
 import type { ResolvedPanelManifest } from './types';
 
@@ -16,3 +17,12 @@ const isLocallyInstalled = (manifest: ResolvedPanelManifest) =>
  */
 export const loadExternalPanelSource = (manifest: ResolvedPanelManifest): Promise<string> =>
   loadVerifiedExternalPanelSource(manifest, isLocallyInstalled(manifest) ? localPanelFetcher : fetch);
+
+let seeding: Promise<string[]> | null = null;
+
+/** Runs the one-time bundled-panel seed, at most once per session. */
+export const ensureLocalPanelsSeeded = (): Promise<string[]> =>
+  (seeding ??= seedLocalPanelsFromBundle(localPanelStore).catch(error => {
+    console.warn(`[external panels] ${error instanceof Error ? error.message : String(error)}`);
+    return [];
+  }));
