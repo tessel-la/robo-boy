@@ -7,6 +7,7 @@ import {
   installPanels,
   listPanelCatalog,
   previewPanelInstallation,
+  resolveCatalogSource,
 } from './install-panels.mjs';
 
 const MAX_REQUEST_BYTES = 256 * 1024;
@@ -42,6 +43,15 @@ const writeAtomic = async (path, value) => {
 };
 
 const readConfig = async () => JSON.parse(await readFile(configPath, 'utf8'));
+
+/** The configuration the deployment was shipped with, for sources it has not persisted yet. */
+const readDefaultConfig = async () => {
+  try {
+    return JSON.parse(await readFile(defaultConfigPath, 'utf8'));
+  } catch {
+    return { sources: [] };
+  }
+};
 
 const seedAndInstall = async () => {
   await mkdir(dirname(configPath), { recursive: true });
@@ -181,9 +191,13 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/catalog') {
       const body = await readBody(request);
+      // The caller names a source; the deployment decides what that name means. Its persisted
+      // configuration is consulted first, then the one it was shipped with, so the URL fetched
+      // here always comes from an operator rather than from the request.
+      const source = resolveCatalogSource([await readConfig(), await readDefaultConfig()], body?.sourceName);
       // Read-only: fetches catalog/manifest metadata for display, never bundle bytes, so it
       // is deliberately not serialized() behind installs and creates no plan.
-      sendJson(response, 200, await listPanelCatalog(body?.source));
+      sendJson(response, 200, await listPanelCatalog(source));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/panels/preview') {

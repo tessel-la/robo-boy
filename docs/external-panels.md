@@ -497,25 +497,14 @@ rather than an invitation to install panels unauthenticated.
 
 ### Which Catalogs May Be Listed
 
-Browsing a catalog is a request the deployment makes to a URL the caller supplies, so the manager only reads
-catalogs it has been told to trust. The official catalog origin is always allowed, which is why the panel dialog
-works with no configuration. To browse another inventory, list its origin:
+Browsing a catalog is a request the deployment makes, so the deployment decides where. The manager takes the
+**name** of a source rather than a source: it looks that name up in its persisted configuration, then in the
+configuration it was shipped with, and reads the catalog URL from there. A caller can choose among the catalogs an
+operator configured and nothing else, so no request can point the manager at an address it was never given.
 
-```bash
-ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS=https://packages.example.com,https://inventory.example.org
-```
-
-Entries add to the official origin rather than replacing it, so a partial value cannot leave the manager unable to
-list anything. Installing from a source is governed separately by that source's own `allowedOrigins`, and every
-redirect is checked against it before the next request is made, so an approved host cannot redirect the manager to
-one that was never approved.
-
-Recreating the container is what applies the change; a plain `restart` reuses the previous environment. Rebuilding
-the image is only needed when `scripts/panel-manager.mjs` itself changed.
-
-A token is worth setting whenever the deployment is reachable beyond a trusted network. Installing a panel adds code
-that runs in the app with whatever ROS permissions its manifest declares, and a direct call to `/api/panels` does not
-pass the permission review the dialog shows before applying a plan.
+To browse another inventory, add it to the sources configuration as a remote source and use it by name. Installing
+from a source is governed separately by that source's own `allowedOrigins`, and every redirect is checked against
+it before the next request is made, so an approved host cannot redirect the manager to one that was never approved.
 
 ## Remote Inventories And Private Panels
 

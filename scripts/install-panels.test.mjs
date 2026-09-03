@@ -8,7 +8,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import { applyPanelInstallationPreview, listPanelCatalog, previewPanelInstallation } from './install-panels.mjs';
+import {
+  applyPanelInstallationPreview,
+  listPanelCatalog,
+  previewPanelInstallation,
+  resolveCatalogSource,
+} from './install-panels.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,17 +66,6 @@ const startFixtureServer = async handler => {
     close: () =>
       new Promise((resolveClose, rejectClose) => server.close(error => (error ? rejectClose(error) : resolveClose()))),
   };
-};
-
-const listCatalogFrom = async catalogUrl => {
-  const previous = process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS;
-  process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS = new URL(catalogUrl).origin;
-  try {
-    return await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl });
-  } finally {
-    if (previous === undefined) delete process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS;
-    else process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS = previous;
-  }
 };
 
 const sendJson = (response, value) => {
@@ -606,32 +600,12 @@ test('listPanelCatalog lists every catalog panel by metadata only, without fetch
     // listPanelCatalog ever regressed into fetching bundle bytes, those requests would
     // 404 and this test would fail with an InstallError.
 
-    const result = await listCatalogFrom(`${server.origin}/catalog.json`);
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
 
     assert.deepEqual(result.panels, [
       { id: 'com.example.first', name: 'com.example.first', description: 'com.example.first test panel', version: '1.0.0' },
       { id: 'com.example.second', name: 'com.example.second', description: 'com.example.second test panel', version: '2.0.0' },
     ]);
-  } finally {
-    await server?.close();
-  }
-});
-
-test('refuses a catalog origin the deployment has not allowed', async () => {
-  let server;
-  try {
-    let requests = 0;
-    server = await startFixtureServer((request, response) => {
-      requests += 1;
-      response.writeHead(404).end();
-    });
-
-    // No allow-list configured, so only the official catalog is listable.
-    await assert.rejects(
-      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
-      /not listable/
-    );
-    assert.equal(requests, 0);
   } finally {
     await server?.close();
   }
@@ -651,7 +625,7 @@ test('a redirect to a disallowed origin is refused before it is requested', asyn
     });
 
     await assert.rejects(
-      listCatalogFrom(`${server.origin}/catalog.json`),
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
       /unapproved origin/
     );
     // The point of checking before following: the disallowed host is never contacted at all.
@@ -679,7 +653,7 @@ test('a redirect within the allow-list is still followed', async () => {
     routes.set('/first.json', panel.entry);
     routes.set('/first/release/roboboy.panel.json', panel.manifest);
 
-    const result = await listCatalogFrom(`${server.origin}/redirect.json`);
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/redirect.json` });
 
     assert.deepEqual(
       result.panels.map(entry => entry.id),
@@ -704,7 +678,7 @@ test('listPanelCatalog rejects a catalog entry using a disallowed origin', async
     routes.set('/catalog.json', { schemaVersion: 1, panels: [`${otherServer.origin}/entry.json`] });
 
     await assert.rejects(
-      listCatalogFrom(`${server.origin}/catalog.json`),
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
       /unapproved origin/
     );
   } finally {
@@ -724,7 +698,7 @@ test('listPanelCatalog resolves an empty catalog to an empty list', async () => 
     });
     routes.set('/catalog.json', { schemaVersion: 1, panels: [] });
 
-    const result = await listCatalogFrom(`${server.origin}/catalog.json`);
+    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
 
     assert.deepEqual(result.panels, []);
   } finally {
@@ -745,7 +719,7 @@ test('listPanelCatalog rejects a catalog exceeding the panel-count safety limit'
     routes.set('/catalog.json', { schemaVersion: 1, panels });
 
     await assert.rejects(
-      listCatalogFrom(`${server.origin}/catalog.json`),
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
       /100-panel limit/
     );
   } finally {
@@ -759,4 +733,19 @@ test('listPanelCatalog rejects a non-remote source without contacting a network'
     /remote source/
   );
   await assert.rejects(listPanelCatalog(undefined), /remote source/);
+});
+
+test('resolveCatalogSource only accepts sources the deployment configured', () => {
+  const persisted = { sources: [{ type: 'remote', name: 'official', catalogUrl: 'https://catalog.example.com/catalog.json' }] };
+  const shipped = { sources: [{ type: 'remote', name: 'shipped', catalogUrl: 'https://shipped.example.com/c.json' }] };
+  const local = { sources: [{ type: 'local', name: 'workspace', root: '.', repositories: [] }] };
+
+  assert.equal(resolveCatalogSource([persisted, shipped], 'official').name, 'official');
+  // A source the deployment ships but has not persisted yet still resolves.
+  assert.equal(resolveCatalogSource([persisted, shipped], 'shipped').name, 'shipped');
+
+  assert.throws(() => resolveCatalogSource([persisted, shipped], 'unknown'), /not configured/);
+  assert.throws(() => resolveCatalogSource([local], 'workspace'), /not a remote catalog/);
+  assert.throws(() => resolveCatalogSource([persisted], ''), /name of a configured source/);
+  assert.throws(() => resolveCatalogSource([persisted], undefined), /name of a configured source/);
 });

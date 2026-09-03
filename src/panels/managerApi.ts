@@ -94,8 +94,9 @@ export const applyPanelManagerPlan = (token: string, planId: string) =>
     body: JSON.stringify({ planId }),
   });
 
-export const listPanelCatalog = (token: string, source: RemotePanelSourceConfig) =>
+/** Names a source the deployment has configured; it owns the catalog URL, not the caller. */
+export const listPanelCatalog = (token: string, sourceName: string) =>
   managerRequest<{ panels: CatalogPanelSummary[] }>('catalog', token, {
     method: 'POST',
-    body: JSON.stringify({ source }),
+    body: JSON.stringify({ sourceName }),
   });

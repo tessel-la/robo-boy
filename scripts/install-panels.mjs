@@ -518,28 +518,21 @@ const listRemoteCatalogPanels = async source => {
   return panels;
 };
 
-const CATALOG_ALLOWED_ORIGINS_ENVIRONMENT = 'ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS';
-
-/** The catalog Robo-Boy ships a source for; always listable so the manager works unconfigured. */
-const OFFICIAL_CATALOG_ORIGIN = 'https://raw.githubusercontent.com';
-
 /**
- * Which catalogs this deployment may be asked to read. The caller of a catalog listing supplies
- * the URL, so without this the manager would connect wherever it was told to, including its own
- * loopback services. The official origin is always allowed and the environment variable adds to
- * it, so a partial value cannot leave the manager unable to list anything.
+ * Finds the remote source a catalog listing refers to in the deployment's own configuration.
+ * Callers name a source rather than supplying one, so the URL the manager connects to comes from
+ * configuration an operator wrote, never from the request.
  */
-const readCatalogAllowedOrigins = () => {
-  const origins = new Set([OFFICIAL_CATALOG_ORIGIN]);
-  const configured = process.env[CATALOG_ALLOWED_ORIGINS_ENVIRONMENT];
-  if (!configured) return origins;
-
-  for (const [index, entry] of configured.split(',').entries()) {
-    const trimmed = entry.trim();
-    if (!trimmed) continue;
-    origins.add(normalizeOrigin(trimmed, `${CATALOG_ALLOWED_ORIGINS_ENVIRONMENT} entry ${index + 1}`));
+export const resolveCatalogSource = (configs, sourceName) => {
+  if (typeof sourceName !== 'string' || !sourceName.trim()) {
+    throw new InstallError('catalog listing requires the name of a configured source.');
   }
-  return origins;
+  for (const config of configs) {
+    const source = (config?.sources ?? []).find(candidate => candidate?.name === sourceName);
+    if (source?.type === 'remote') return source;
+    if (source) throw new InstallError(`source ${sourceName} is not a remote catalog.`);
+  }
+  throw new InstallError(`source ${sourceName} is not configured on this deployment.`);
 };
 
 export const listPanelCatalog = async candidate => {
@@ -547,13 +540,6 @@ export const listPanelCatalog = async candidate => {
     throw new InstallError('catalog listing requires a remote source.');
   }
   const [source] = validateSourceList([candidate], undefined);
-  const allowedCatalogOrigins = readCatalogAllowedOrigins();
-  if (!allowedCatalogOrigins.has(source.catalogUrl.origin)) {
-    throw new InstallError(
-      `${source.name} catalog origin ${source.catalogUrl.origin} is not listable; ` +
-        `add it to ${CATALOG_ALLOWED_ORIGINS_ENVIRONMENT} to allow it.`
-    );
-  }
   return { panels: await listRemoteCatalogPanels(source) };
 };
 
