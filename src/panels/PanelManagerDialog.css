@@ -415,3 +415,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Origin and state for one panel: secondary to its name, but always visible. */
+.panel-manager-catalog-tags {
+  margin-top: 2px;
+  color: var(--text-muted-color, #6c757d);
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}

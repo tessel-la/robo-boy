@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
 import PanelManagerDialog from './PanelManagerDialog';
+import type { AvailablePanel } from './useInstalledPanels';
+
+const availableFrom = (panels: { id: string }[]): AvailablePanel[] =>
+  panels.map(manifest => ({ manifest, origin: 'installed', isEnabled: true }) as AvailablePanel);
 
 const api = vi.hoisted(() => ({
   load: vi.fn(),
@@ -65,15 +69,23 @@ describe('PanelManagerDialog', () => {
 
   it('keeps authentication explicit and previews removals before apply', async () => {
     const onApplied = vi.fn();
-    render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={onApplied} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={onApplied}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'deployment-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
     expect(api.load).toHaveBeenCalledWith('deployment-secret');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Plan removal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
+    // Removing from the panel list previews the change straight away.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await screen.findByText('remove Telemetry@2.0.0');
     expect(api.preview).toHaveBeenCalledWith(
       'deployment-secret',
@@ -100,7 +112,15 @@ describe('PanelManagerDialog', () => {
       panels: [panel],
       changes: [{ type: 'add', panel }],
     });
-    render(<PanelManagerDialog installedPanels={[]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -120,15 +140,23 @@ describe('PanelManagerDialog', () => {
         selection: { mode: 'include', panelIds: [panel.id, secondPanel.id] },
       },
     });
-    render(<PanelManagerDialog installedPanels={[panel, secondPanel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel, secondPanel]}
+        availablePanels={availableFrom([panel, secondPanel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
 
-    const removalButtons = screen.getAllByRole('button', { name: 'Plan removal' });
-    fireEvent.click(removalButtons[0]);
-    fireEvent.click(removalButtons[1]);
-    fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+    await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(1));
+    // The first panel now reads "Keep", so this is the second one.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith('secret', expect.objectContaining({ selection: { mode: 'none' } }))
@@ -136,7 +164,15 @@ describe('PanelManagerDialog', () => {
   });
 
   it('splits panel IDs typed with spaces, not just commas or newlines', async () => {
-    render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -177,7 +213,15 @@ describe('PanelManagerDialog', () => {
       panels: [timeseriesPanel],
       changes: [{ type: 'add', panel: timeseriesPanel }],
     });
-    render(<PanelManagerDialog installedPanels={[]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -227,7 +271,15 @@ describe('PanelManagerDialog', () => {
       panels: [],
       changes: [{ type: 'remove', panel: timeseriesPanel }],
     });
-    render(<PanelManagerDialog installedPanels={[timeseriesPanel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[timeseriesPanel]}
+        availablePanels={availableFrom([timeseriesPanel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -240,9 +292,63 @@ describe('PanelManagerDialog', () => {
     );
   });
 
+  it('offers a bundled panel a switch but never a removal', async () => {
+    const onPanelEnabledChange = vi.fn();
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={[{ manifest: panel, origin: 'bundled', isEnabled: true } as AvailablePanel]}
+        onPanelEnabledChange={onPanelEnabledChange}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    await screen.findByText('Remote catalog');
+
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+
+    expect(onPanelEnabledChange).toHaveBeenCalledWith('com.example.telemetry', false);
+  });
+
+  it('never reports a panel the app can already run as not installed', async () => {
+    // The catalog offers it and the build already ships it: it must not invite an install.
+    api.catalog.mockResolvedValue({
+      panels: [{ id: panel.id, name: panel.name, description: 'Robot telemetry.', version: '2.0.0' }],
+    });
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={[{ manifest: panel, origin: 'bundled', isEnabled: true } as AvailablePanel]}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    await screen.findByText('Remote catalog');
+
+    expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Not installed/)).not.toBeInTheDocument();
+    expect(screen.getByText(/ships with this build/)).toBeInTheDocument();
+  });
+
   it('shows a retry action when the official catalog fails to load', async () => {
     api.catalog.mockRejectedValueOnce(new Error('network down'));
-    render(<PanelManagerDialog installedPanels={[]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -271,7 +377,15 @@ describe('PanelManagerDialog', () => {
       },
     });
     api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [], changes: [] });
-    render(<PanelManagerDialog installedPanels={[]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -303,7 +417,15 @@ describe('PanelManagerDialog', () => {
       },
     });
     api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [], changes: [] });
-    render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -320,7 +442,15 @@ describe('PanelManagerDialog', () => {
   });
 
   it('remembers the token across renders and auto-unlocks on the next mount', async () => {
-    const { unmount } = render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    const { unmount } = render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'remembered-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
@@ -329,7 +459,15 @@ describe('PanelManagerDialog', () => {
     unmount();
 
     api.load.mockClear();
-    render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
 
     await screen.findByText('Remote catalog');
     expect(api.load).toHaveBeenCalledWith('remembered-secret');

@@ -13,13 +13,18 @@ import {
   type PanelSourceConfig,
   type PanelSourcesConfig,
 } from './managerApi';
+import type { AvailablePanel } from './useInstalledPanels';
 import type { ResolvedPanelManifest, RoboBoyPanelManifest } from './types';
 import './PanelManagerDialog.css';
 
 interface PanelManagerDialogProps {
+  /** Panels the manager owns, i.e. may install or remove. */
   installedPanels: ResolvedPanelManifest[];
+  /** Every panel the application can run right now, whatever its origin. */
+  availablePanels: AvailablePanel[];
   onClose: () => void;
   onApplied: () => Promise<void> | void;
+  onPanelEnabledChange: (panelId: string, isEnabled: boolean) => void;
 }
 
 const splitLines = (value: string): string[] =>
@@ -108,7 +113,13 @@ const storePanelManagerToken = (value: string) => {
   }
 };
 
-const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManagerDialogProps) => {
+const PanelManagerDialog = ({
+  installedPanels,
+  availablePanels,
+  onClose,
+  onApplied,
+  onPanelEnabledChange,
+}: PanelManagerDialogProps) => {
   // Desktop installs panels into the app's own storage; the web app drives the deployment's
   // manager service. Same dialog, different backend.
   const isDesktopRuntime = useRuntimeConfig().mode === 'desktop';
@@ -127,6 +138,17 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
   const [catalogError, setCatalogError] = useState('');
   const [catalogLoading, setCatalogLoading] = useState(false);
   const installedIds = useMemo(() => installedPanels.map(panel => panel.id), [installedPanels]);
+  const panelRows = useMemo(() => {
+    const rows = new Map<string, { id: string; name: string; description: string; available?: AvailablePanel; inCatalog: boolean }>();
+    for (const entry of catalog ?? []) {
+      rows.set(entry.id, { id: entry.id, name: entry.name, description: entry.description, inCatalog: true });
+    }
+    for (const panel of availablePanels) {
+      const { id, name, description } = panel.manifest;
+      rows.set(id, { id, name, description, available: panel, inCatalog: rows.get(id)?.inCatalog ?? false });
+    }
+    return [...rows.values()];
+  }, [availablePanels, catalog]);
   const skipNextResetRef = useRef(false);
 
   useEffect(() => {
@@ -195,11 +217,6 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
         ? { type, name: `remote-${config.sources.length + 1}`, catalogUrl: 'https://' }
         : { type, name: `local-${config.sources.length + 1}`, root: '/panel-workspace', repositories: [] };
     setConfig({ ...config, sources: [...config.sources, source] });
-  };
-
-  const removeInstalledPanel = (panelId: string) => {
-    if (!config) return;
-    setConfig(withPanelDeselected(config, installedIds, panelId));
   };
 
   const requestPreview = async (overrideConfig?: PanelSourcesConfig) => {
@@ -307,8 +324,11 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
             <section>
               <div className="panel-manager-section-heading">
                 <div>
-                  <h3>Official panels</h3>
-                  <p>Install or remove Robo-Boy's supported panels directly from the official catalog.</p>
+                  <h3>Panels</h3>
+                  <p>
+                    Everything this app can run, with where it came from. Official and custom panels can be
+                    installed or removed; panels that ship with the build can be switched off but not removed.
+                  </p>
                 </div>
               </div>
               {catalogLoading && <p className="panel-manager-catalog-status">Checking the official catalog…</p>}
@@ -320,32 +340,49 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
                   </button>
                 </div>
               )}
-              {!catalogLoading && !catalogError && catalog?.length === 0 && (
-                <p className="panel-manager-catalog-status">No official panels are available right now.</p>
+              {!catalogLoading && panelRows.length === 0 && (
+                <p className="panel-manager-catalog-status">No panels are available right now.</p>
               )}
-              {!catalogLoading && !catalogError && catalog && catalog.length > 0 && (
+              {panelRows.length > 0 && (
                 <ul className="panel-manager-catalog">
-                  {catalog.map(entry => {
-                    const installed = installedIds.includes(entry.id);
-                    const selected = isEffectivelySelected(config, entry.id);
+                  {panelRows.map(row => {
+                    const available = row.available;
+                    const isBundled = available?.origin === 'bundled';
+                    const isManaged = installedIds.includes(row.id);
+                    const selected = isManaged && isEffectivelySelected(config, row.id);
+                    const origin = isBundled ? 'Bundled' : row.inCatalog ? 'Official' : 'Custom';
+                    const state = !available ? 'Not installed' : available.isEnabled ? 'Enabled' : 'Disabled';
                     return (
-                      <li key={entry.id}>
+                      <li key={row.id}>
                         <span>
-                          <strong>{entry.name}</strong>
-                          <small>{entry.description}</small>
+                          <strong>{row.name}</strong>
+                          <small>{row.description}</small>
+                          <small className="panel-manager-catalog-tags">
+                            {origin} · {state}
+                            {isBundled ? ' · ships with this build' : ''}
+                          </small>
                         </span>
-                        {!installed && (
-                          <button type="button" onClick={() => installCatalogPanel(entry.id)} disabled={busy}>
+                        {available && (
+                          <button
+                            type="button"
+                            onClick={() => onPanelEnabledChange(row.id, !available.isEnabled)}
+                            disabled={busy}
+                          >
+                            {available.isEnabled ? 'Disable' : 'Enable'}
+                          </button>
+                        )}
+                        {!available && row.inCatalog && (
+                          <button type="button" onClick={() => installCatalogPanel(row.id)} disabled={busy}>
                             Install
                           </button>
                         )}
-                        {installed && selected && (
-                          <button type="button" onClick={() => removeCatalogPanel(entry.id)} disabled={busy}>
+                        {available && !isBundled && isManaged && selected && (
+                          <button type="button" onClick={() => removeCatalogPanel(row.id)} disabled={busy}>
                             Remove
                           </button>
                         )}
-                        {installed && !selected && (
-                          <button type="button" onClick={() => installCatalogPanel(entry.id)} disabled={busy}>
+                        {available && !isBundled && isManaged && !selected && (
+                          <button type="button" onClick={() => installCatalogPanel(row.id)} disabled={busy}>
                             Keep
                           </button>
                         )}
@@ -478,8 +515,8 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
             <section>
               <div className="panel-manager-section-heading">
                 <div>
-                  <h3>Installed selection</h3>
-                  <p>Removing a panel keeps its workspace tile unavailable so it can be restored later.</p>
+                  <h3>Advanced selection</h3>
+                  <p>The desired state the manager resolves. Panels above are the view of what it produced.</p>
                 </div>
               </div>
               <div className="panel-manager-selection">
@@ -515,23 +552,6 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
                   </label>
                 )}
               </div>
-              {installedPanels.length > 0 && (
-                <ul className="panel-manager-installed">
-                  {installedPanels.map(panel => (
-                    <li key={panel.id}>
-                      <span>
-                        <strong>{panel.name}</strong>
-                        <small>
-                          {panel.id}@{panel.version}
-                        </small>
-                      </span>
-                      <button type="button" onClick={() => removeInstalledPanel(panel.id)}>
-                        Plan removal
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </section>
 
             <section className="panel-manager-review">

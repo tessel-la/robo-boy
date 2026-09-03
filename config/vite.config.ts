@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -42,6 +43,12 @@ export default defineConfig(({ mode }) => ({
   // Explicit panel builds point this at the generated .panel-stage/public tree.
   publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
   resolve: {
+    // Only the packaged shell installs panels over Tauri's native HTTP client. Web builds
+    // resolve a stub instead, so running the web app never requires the desktop-only package.
+    alias:
+      mode === 'tauri'
+        ? {}
+        : { '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)) },
     // MainControlView is lazy-loaded after the connection screen. Keep hooks
     // and the renderer on one React instance across linked panel SDKs and
     // dependency-optimizer generations.
