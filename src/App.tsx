@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
+import TitleBar from './components/TitleBar';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import {
   CustomTheme,
@@ -196,6 +197,7 @@ function App() {
 
   return (
     <div className="App">
+      <TitleBar />
       <main>
         {!connectionParams ? (
           <EntrySection onConnect={handleConnect} />

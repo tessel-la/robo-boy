@@ -1,0 +1,122 @@
+/* Chrome for the undecorated desktop window. It reads from the same theme tokens as the rest
+   of the app, so a theme change carries the window frame with it. */
+.title-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 0 0 12px;
+  background-color: var(--background-secondary);
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.title-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.title-bar-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background-color: var(--primary-color);
+  box-shadow: 0 0 6px var(--primary-color-glow);
+}
+
+.title-bar-name {
+  font-family: var(--font-family-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--text-color-secondary);
+}
+
+.title-bar-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.title-bar-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-color-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.title-bar-button svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.title-bar-button:hover {
+  background-color: var(--background-dark-transparent);
+  color: var(--text-color);
+}
+
+.title-bar-button:focus-visible {
+  outline: 1px solid var(--primary-color);
+  outline-offset: -3px;
+}
+
+/* Closing is the one control that cannot be undone, so it is the one that reads as a warning. */
+.title-bar-button-close:hover {
+  background-color: var(--error-color);
+  color: #ffffff;
+}
+
+/* Resize edges. They sit above the page so a drag starts from the very border, and they are
+   invisible: the window frame is the app's own background. */
+.title-bar-resize {
+  position: fixed;
+  z-index: 2000;
+}
+
+.title-bar-resize-n,
+.title-bar-resize-s {
+  left: 4px;
+  right: 4px;
+  height: 4px;
+  cursor: ns-resize;
+}
+
+.title-bar-resize-e,
+.title-bar-resize-w {
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.title-bar-resize-n { top: 0; }
+.title-bar-resize-s { bottom: 0; }
+.title-bar-resize-w { left: 0; }
+.title-bar-resize-e { right: 0; }
+
+.title-bar-resize-ne,
+.title-bar-resize-nw,
+.title-bar-resize-se,
+.title-bar-resize-sw {
+  width: 8px;
+  height: 8px;
+}
+
+.title-bar-resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.title-bar-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.title-bar-resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.title-bar-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
