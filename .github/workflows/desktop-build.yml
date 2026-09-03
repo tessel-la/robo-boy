@@ -12,7 +12,7 @@ on:
         required: false
   workflow_dispatch:
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened]
     branches: [main]
 
 permissions:
@@ -25,11 +25,10 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.name }}
-    # On a pull request this only validates the revision that reached main, matching how the
-    # Docker build test is gated. Every other trigger is explicit.
+    # On a pull request this validates the promotion of dev into main before it lands, matching
+    # how the Docker build test is gated. Every other trigger is explicit.
     if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'dev')
+      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
     runs-on: ${{ matrix.runner }}
 
     strategy:
