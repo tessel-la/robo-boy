@@ -44,7 +44,11 @@ const CameraView: React.FC<CameraViewProps> = ({
       cameraTopic: cameraTopic,
     });
 
-    if (ros && ros.isConnected && cameraTopic) {
+    // Pointing an <img> at a topic web_video_server is not publishing returns an empty
+    // multipart response, which WebKitGTK 2.52.6 dereferences null on: it takes the whole
+    // renderer down, so the window freezes on its last frame. A saved layout outlives the
+    // topics it was built against, so availability is checked rather than assumed.
+    if (ros && ros.isConnected && cameraTopic && availableTopics.includes(cameraTopic)) {
       // Ensure topic is selected
       try {
         const url = buildCameraStreamUrl({
@@ -64,12 +68,15 @@ const CameraView: React.FC<CameraViewProps> = ({
       }
     } else {
       setStreamUrl(null);
-      setError(cameraTopic ? 'Connecting...' : 'No camera topic selected.');
+      if (!cameraTopic) setError('No camera topic selected.');
+      else if (!ros?.isConnected) setError('Connecting...');
+      else setError(`${cameraTopic} is not being published.`);
     }
   }, [
     ros,
     ros?.isConnected,
     cameraTopic,
+    availableTopics,
     // webVideoServerPort, // Removed dependency
     streamType,
     streamWidth,

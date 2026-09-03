@@ -113,10 +113,33 @@ describe('CameraView', () => {
     });
 
     it('should reject invalid topic query delimiters', () => {
-      render(<CameraView {...defaultProps} cameraTopic={'/camera/image_raw&x=<img src=x onerror=alert(1)>'} />);
+      const hostileTopic = '/camera/image_raw&x=<img src=x onerror=alert(1)>';
+      // Offered as available, so the URL builder is what has to reject it.
+      render(
+        <CameraView {...defaultProps} cameraTopic={hostileTopic} availableTopics={[hostileTopic]} />
+      );
 
       expect(screen.getByText('Failed to construct stream URL.')).toBeInTheDocument();
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+
+    it('does not stream a topic that is not being published', () => {
+      // A saved layout outlives its topics; streaming one anyway crashes the WebKitGTK renderer.
+      render(<CameraView {...defaultProps} cameraTopic="/focus_calibration_node/focus_image" />);
+
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      expect(screen.getByText('/focus_calibration_node/focus_image is not being published.')).toBeInTheDocument();
+    });
+
+    it('streams again once the topic is published', () => {
+      const { rerender } = render(
+        <CameraView {...defaultProps} cameraTopic="/camera/late" availableTopics={[]} />
+      );
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+
+      rerender(<CameraView {...defaultProps} cameraTopic="/camera/late" availableTopics={['/camera/late']} />);
+
+      expect(screen.getByRole('img')).toBeInTheDocument();
     });
   });
 
