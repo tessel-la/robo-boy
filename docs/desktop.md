@@ -6,10 +6,10 @@ Robo-Boy's desktop application is a thin Tauri shell around the same React appli
 
 The desktop frontend connects directly to these services on the selected ROS host:
 
-| Service | Default endpoint |
-| --- | --- |
-| rosbridge | `ws://HOST:9090` |
-| web_video_server | `http://HOST:8080` |
+| Service              | Default endpoint   |
+| -------------------- | ------------------ |
+| rosbridge            | `ws://HOST:9090`   |
+| web_video_server     | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
 
 Override the desktop direct-connect defaults with Vite environment variables when needed:
@@ -70,6 +70,10 @@ Compatibility mode disables WebKit's DMABUF renderer for that launch.
 On Windows, the desktop webview keeps Wry's default disabled Edge UI features and adds GPU rasterization hints through `additionalBrowserArgs` in `src-tauri/tauri.conf.json`. Desktop devtools are disabled in the packaged webview config to keep the runtime closer to production performance.
 
 ## Build An Installer
+
+That is the local equivalent of what CI runs for a release. Official installers for Linux, macOS, and
+Windows are built and attached to the GitHub Release automatically; see
+[Releases](development.md#desktop-installers).
 
 ```bash
 npm run desktop:build

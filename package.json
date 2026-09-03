@@ -27,7 +27,8 @@
     "e2e:stack": "playwright test --config config/playwright.config.ts",
     "e2e:ui": "playwright test --config config/playwright.config.ts --ui",
     "e2e:report": "playwright show-report playwright-report",
-    "panels:sandbox": "node scripts/build-panel-sandbox.mjs"
+    "panels:sandbox": "node scripts/build-panel-sandbox.mjs",
+    "check:release-panels": "node scripts/check-release-panels.mjs"
   },
   "dependencies": {
     "@tauri-apps/plugin-http": "^2.6.0",
