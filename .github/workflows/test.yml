@@ -244,7 +244,8 @@ jobs:
         files: ./coverage/lcov.info
         flags: unit
         name: unit-tests
-        fail_ci_if_error: false
+        fail_ci_if_error: true
+        handle_no_reports_found: true
         disable_search: true
         use_oidc: true
 
