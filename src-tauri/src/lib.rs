@@ -79,7 +79,8 @@ struct RendererFacts {
   forced: Option<bool>,
   wayland: bool,
   nvidia: bool,
-  gpu_count: usize,
+  /// Connected outputs are driven by more than one GPU, so a window can move between devices.
+  outputs_span_gpus: bool,
   /// Connected outputs whose pixel density implies different compositor scale factors.
   mixed_scales: bool,
 }
@@ -88,6 +89,8 @@ struct RendererFacts {
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct OutputFacts {
+  /// Index of the DRM card driving this output.
+  card: u32,
   width_px: u32,
   width_mm: u32,
 }
@@ -105,6 +108,14 @@ fn estimate_output_scale(output: OutputFacts) -> Option<u32> {
 }
 
 #[cfg(target_os = "linux")]
+fn outputs_span_multiple_gpus(outputs: &[OutputFacts]) -> bool {
+  let mut cards: Vec<u32> = outputs.iter().map(|output| output.card).collect();
+  cards.sort_unstable();
+  cards.dedup();
+  cards.len() > 1
+}
+
+#[cfg(target_os = "linux")]
 fn has_mixed_output_scales(outputs: &[OutputFacts]) -> bool {
   let mut seen: Vec<u32> = outputs.iter().filter_map(|o| estimate_output_scale(*o)).collect();
   seen.sort_unstable();
@@ -112,19 +123,24 @@ fn has_mixed_output_scales(outputs: &[OutputFacts]) -> bool {
   seen.len() > 1
 }
 
-/// WebKitGTK negotiates DMABUF buffers with a single render device. On a Wayland session driven
-/// by more than one GPU with the proprietary NVIDIA driver loaded -- a laptop with an external
-/// GPU, or a discrete card feeding an external monitor -- the buffers it hands the compositor can
-/// go unpresented, leaving a window that renders black or stops responding, typically after a
-/// resize moves the surface between outputs. Those setups start on the compatibility path instead;
-/// everything else keeps GPU rendering. Either choice can be overridden explicitly.
+/// WebKitGTK negotiates DMABUF buffers with a single render device, and the buffers can go
+/// unpresented when the compositor has to scan them out on a different one -- leaving a window
+/// that renders black or stops taking input, typically after a resize moves it between outputs.
+///
+/// That needs displays actually attached to more than one GPU, or outputs at different scales,
+/// which forces the same reallocation. Anything short of that keeps GPU rendering: the
+/// compatibility path costs real performance, so it is reserved for setups that can hit the bug
+/// rather than every machine that merely has a second GPU installed. Either choice can be
+/// overridden explicitly.
 #[cfg(target_os = "linux")]
 fn choose_linux_renderer(facts: RendererFacts) -> LinuxRenderer {
   if let Some(forced) = facts.forced {
     return if forced { LinuxRenderer::Compatibility } else { LinuxRenderer::Gpu };
   }
 
-  if facts.wayland && facts.nvidia && facts.gpu_count > 1 {
+  // Only when a window can actually cross between devices: a second GPU that drives no display
+  // never presents anything, so its mere presence is no reason to give up GPU rendering.
+  if facts.wayland && facts.nvidia && facts.outputs_span_gpus {
     return LinuxRenderer::Compatibility;
   }
 
@@ -147,24 +163,8 @@ fn parse_bool_env(value: &str) -> Option<bool> {
   }
 }
 
-#[cfg(target_os = "linux")]
-fn count_drm_cards() -> usize {
-  std::fs::read_dir("/sys/class/drm")
-    .map(|entries| {
-      entries
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-          let name = entry.file_name();
-          let name = name.to_string_lossy();
-          name.len() > 4 && name.starts_with("card") && name[4..].chars().all(|c| c.is_ascii_digit())
-        })
-        .count()
-    })
-    .unwrap_or(0)
-}
-
-/// Reads connected outputs straight from DRM: the preferred mode gives pixel width, and EDID
-/// byte 21 the physical width in centimetres.
+/// Reads connected outputs straight from DRM: the connector directory names the card driving it,
+/// the preferred mode gives pixel width, and EDID byte 21 the physical width in centimetres.
 #[cfg(target_os = "linux")]
 fn read_connected_outputs() -> Vec<OutputFacts> {
   let Ok(entries) = std::fs::read_dir("/sys/class/drm") else {
@@ -178,6 +178,12 @@ fn read_connected_outputs() -> Vec<OutputFacts> {
       continue;
     }
 
+    let card = entry
+      .file_name()
+      .to_string_lossy()
+      .strip_prefix("card")
+      .and_then(|rest| rest.split('-').next().and_then(|index| index.parse().ok()))
+      .unwrap_or(u32::MAX);
     let width_px = std::fs::read_to_string(path.join("modes"))
       .ok()
       .and_then(|modes| modes.lines().next().map(str::to_owned))
@@ -189,13 +195,14 @@ fn read_connected_outputs() -> Vec<OutputFacts> {
       .map(|edid| u32::from(edid[21]) * 10)
       .unwrap_or(0);
 
-    outputs.push(OutputFacts { width_px, width_mm });
+    outputs.push(OutputFacts { card, width_px, width_mm });
   }
   outputs
 }
 
 #[cfg(target_os = "linux")]
 fn detect_renderer_facts() -> RendererFacts {
+  let outputs = read_connected_outputs();
   RendererFacts {
     forced: std::env::var("ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING")
       .ok()
@@ -205,8 +212,8 @@ fn detect_renderer_facts() -> RendererFacts {
         .map(|value| value.eq_ignore_ascii_case("wayland"))
         .unwrap_or(false),
     nvidia: std::path::Path::new("/sys/module/nvidia").exists(),
-    gpu_count: count_drm_cards(),
-    mixed_scales: has_mixed_output_scales(&read_connected_outputs()),
+    outputs_span_gpus: outputs_span_multiple_gpus(&outputs),
+    mixed_scales: has_mixed_output_scales(&outputs),
   }
 }
 
@@ -233,9 +240,9 @@ fn configure_linux_webkit_runtime() {
   if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     eprintln!(
-      "[Robo-Boy] compatibility rendering enabled (wayland={}, nvidia={}, gpus={}, mixed_scales={}); \
-       set ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING=0 to force GPU rendering",
-      facts.wayland, facts.nvidia, facts.gpu_count, facts.mixed_scales
+      "[Robo-Boy] compatibility rendering enabled (wayland={}, nvidia={}, outputs_span_gpus={}, \
+       mixed_scales={}); set ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING=0 to force GPU rendering",
+      facts.wayland, facts.nvidia, facts.outputs_span_gpus, facts.mixed_scales
     );
   }
 }
@@ -246,19 +253,19 @@ fn configure_linux_webkit_runtime() {}
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
   use super::{
-    choose_linux_renderer, estimate_output_scale, has_mixed_output_scales, parse_bool_env, LinuxRenderer,
-    OutputFacts, RendererFacts,
+    choose_linux_renderer, estimate_output_scale, has_mixed_output_scales, outputs_span_multiple_gpus,
+    parse_bool_env, LinuxRenderer, OutputFacts, RendererFacts,
   };
 
   /// A 27-inch 4K panel and a 24-inch 1080p one: the everyday mixed-scale desk.
-  const UHD_27: OutputFacts = OutputFacts { width_px: 3840, width_mm: 597 };
-  const FHD_24: OutputFacts = OutputFacts { width_px: 1920, width_mm: 527 };
+  const UHD_27: OutputFacts = OutputFacts { card: 0, width_px: 3840, width_mm: 597 };
+  const FHD_24: OutputFacts = OutputFacts { card: 0, width_px: 1920, width_mm: 527 };
 
   const HYBRID_WAYLAND: RendererFacts = RendererFacts {
     forced: None,
     wayland: true,
     nvidia: true,
-    gpu_count: 2,
+    outputs_span_gpus: true,
     mixed_scales: false,
   };
 
@@ -270,10 +277,10 @@ mod tests {
   #[test]
   fn keeps_gpu_rendering_where_the_dmabuf_path_is_not_known_to_fail() {
     let x11 = RendererFacts { wayland: false, ..HYBRID_WAYLAND };
-    let single_gpu = RendererFacts { gpu_count: 1, ..HYBRID_WAYLAND };
+    let one_card_drives_the_displays = RendererFacts { outputs_span_gpus: false, ..HYBRID_WAYLAND };
     let without_nvidia = RendererFacts { nvidia: false, ..HYBRID_WAYLAND };
 
-    for facts in [x11, single_gpu, without_nvidia] {
+    for facts in [x11, one_card_drives_the_displays, without_nvidia] {
       assert_eq!(choose_linux_renderer(facts), LinuxRenderer::Gpu, "{facts:?}");
     }
   }
@@ -281,11 +288,23 @@ mod tests {
   #[test]
   fn starts_mixed_scale_wayland_desks_on_the_compatibility_path() {
     // No second GPU involved: differing output scales are enough on their own.
-    let mixed = RendererFacts { nvidia: false, gpu_count: 1, mixed_scales: true, ..HYBRID_WAYLAND };
+    let mixed =
+      RendererFacts { nvidia: false, outputs_span_gpus: false, mixed_scales: true, ..HYBRID_WAYLAND };
     let mixed_on_x11 = RendererFacts { wayland: false, ..mixed };
 
     assert_eq!(choose_linux_renderer(mixed), LinuxRenderer::Compatibility);
     assert_eq!(choose_linux_renderer(mixed_on_x11), LinuxRenderer::Gpu);
+  }
+
+  #[test]
+  fn a_second_gpu_counts_only_when_it_drives_a_display() {
+    let on_one_card = [UHD_27, FHD_24];
+    let across_cards = [UHD_27, OutputFacts { card: 1, ..FHD_24 }];
+
+    assert!(!outputs_span_multiple_gpus(&on_one_card));
+    assert!(outputs_span_multiple_gpus(&across_cards));
+    // A hybrid machine with nothing plugged into the second card keeps GPU rendering.
+    assert!(!outputs_span_multiple_gpus(&[UHD_27]));
   }
 
   #[test]
@@ -296,8 +315,8 @@ mod tests {
 
   #[test]
   fn ignores_outputs_the_kernel_cannot_measure() {
-    let no_size = OutputFacts { width_px: 3840, width_mm: 0 };
-    let no_mode = OutputFacts { width_px: 0, width_mm: 597 };
+    let no_size = OutputFacts { card: 0, width_px: 3840, width_mm: 0 };
+    let no_mode = OutputFacts { card: 0, width_px: 0, width_mm: 597 };
 
     assert_eq!(estimate_output_scale(no_size), None);
     assert_eq!(estimate_output_scale(no_mode), None);
@@ -316,7 +335,7 @@ mod tests {
   #[test]
   fn an_explicit_choice_wins_over_detection() {
     let forced_on =
-      RendererFacts { forced: Some(true), wayland: false, nvidia: false, gpu_count: 1, mixed_scales: false };
+      RendererFacts { forced: Some(true), wayland: false, nvidia: false, outputs_span_gpus: false, mixed_scales: false };
     let forced_off = RendererFacts { forced: Some(false), ..HYBRID_WAYLAND };
 
     assert_eq!(choose_linux_renderer(forced_on), LinuxRenderer::Compatibility);
