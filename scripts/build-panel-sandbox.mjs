@@ -5,7 +5,10 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const outputPath = resolve(root, 'public/panel-sandbox.html');
+// Vite serves ROBOBOY_PUBLIC_DIR when set, and a panel build stages a different tree; writing to
+// the served directory keeps the sandbox document reachable instead of 404ing there.
+const publicDir = resolve(root, process.env.ROBOBOY_PUBLIC_DIR || 'public');
+const outputPath = resolve(publicDir, 'panel-sandbox.html');
 
 const bundleToText = async (entry, format) => {
   const result = await build({
