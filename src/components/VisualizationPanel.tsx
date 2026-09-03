@@ -20,6 +20,7 @@ import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/Poi
 import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
 import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
 import './visualizers/TopicSettings.css';
+import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 
 // Import custom hooks
 import { useRos3dViewer } from '../hooks/useRos3dViewer';
@@ -95,7 +96,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   const panelRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const viewerIdRef = useRef(`ros3d-viewer-${uuidv4()}`);
   const [initialState] = useState(() => {
     const savedState = getVisualizationStateForKey(storageKey);
@@ -159,6 +159,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // --- Callback for handling TF messages (populates store & extracts frames) ---
   const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
+    if (!Array.isArray(message?.transforms)) {
+      console.warn('[TF] Ignoring malformed TF message:', message);
+      return;
+    }
+
     let _newFramesFound = false;
     setTransforms((prevTransforms: TransformStore) => {
       let currentFrames = new Set<string>();
@@ -173,6 +178,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         const transform: StoredTransform = { translation: new THREE.Vector3(tStamped.transform.translation.x, tStamped.transform.translation.y, tStamped.transform.translation.z), rotation: new THREE.Quaternion(tStamped.transform.rotation.x, tStamped.transform.rotation.y, tStamped.transform.rotation.z, tStamped.transform.rotation.w) };
         const existingEntry = newTransforms[childFrame];
         if (!existingEntry || !isStatic ||
+          existingEntry.parentFrame !== parentFrame ||
           !existingEntry.transform.translation.equals(transform.translation) ||
           !existingEntry.transform.rotation.equals(transform.rotation)) {
           newTransforms[childFrame] = { parentFrame, transform, isStatic };
@@ -297,7 +303,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   };
 
   // --- UI Handlers ---
-  const toggleSettingsPopup = () => setIsSettingsPopupOpen(prev => !prev);
+  const closeSettingsPopup = () => setIsSettingsPopupOpen(false);
 
   // Handler to open Add Viz Modal from Settings (close Settings, open Add)
   const openAddVizModalFromSettings = () => {
@@ -384,29 +390,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     console.log("Displayed TF frames changed to:", selectedFrames);
   };
 
-  // Effect to handle clicks outside the popups
+  // Visualization-specific editors still use their legacy popovers. The shared
+  // panel menu and add-visualization sheet handle their own outside clicks.
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const settingsPopupElement = panelRef.current?.querySelector('.settings-popup');
-      const settingsButton = settingsButtonRef.current;
-      if (isSettingsPopupOpen && settingsPopupElement && !settingsPopupElement.contains(event.target as Node) &&
-        (!settingsButton || !settingsButton.contains(event.target as Node))) {
-        setIsSettingsPopupOpen(false);
-      }
-      const addVizModalElement = panelRef.current?.querySelector('.add-viz-modal');
-      const addVizButton = panelRef.current?.querySelector('#add-viz-button');
-      if (isAddVizModalOpen && addVizModalElement && !addVizModalElement.contains(event.target as Node) &&
-        (!addVizButton || !addVizButton.contains(event.target as Node))) {
-        setIsAddVizModalOpen(false);
-      }
-
-      // Handle clicks outside the pointcloud settings popup
       const pcSettingsElement = panelRef.current?.querySelector('.point-cloud-settings-popup');
       if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
         setActiveSettingsVizId(null);
       }
     };
-    if (isSettingsPopupOpen || isAddVizModalOpen || activeSettingsVizId !== null) {
+    if (activeSettingsVizId !== null) {
       const timerId = setTimeout(() => {
         document.addEventListener('mousedown', handleClickOutside);
       }, 0);
@@ -416,7 +409,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
       };
     }
     return () => { };
-  }, [isSettingsPopupOpen, isAddVizModalOpen, activeSettingsVizId]);
+  }, [activeSettingsVizId]);
 
   // --- Effect to fetch ALL topics ONCE ---
   useEffect(() => {
@@ -562,42 +555,38 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
       {/* Main Viewer Div */}
       <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
 
-      {/* Settings Button */}
-      <button
-        ref={settingsButtonRef}
-        className="icon-button visualization-settings-button"
-        onClick={toggleSettingsPopup}
-        title="Settings"
-        aria-label="Settings"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </button>
-
-      {/* Settings Popup */}
-      {isSettingsPopupOpen && (
-        <SettingsPopup
-          onClose={toggleSettingsPopup}
-          fixedFrame={fixedFrame}
-          availableFrames={availableFrames}
-          displayedTfFrames={displayedTfFrames}
-          showTfFrameLabels={showTfFrameLabels}
-          onFixedFrameChange={handleFixedFrameChange}
-          onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
-          onShowTfFrameLabelsChange={setShowTfFrameLabels}
-          activeVisualizations={visualizations}
-          onRemoveVisualization={removeVisualization}
-          onAddVisualizationClick={openAddVizModalFromSettings}
-          onEditVisualization={openVisualizationSettings}
-          onUpdateVisualizationTopic={updateVisualizationTopic}
-          allTopics={allTopics}
-          tfAxesScale={tfAxesScale}
-          onTfAxesScaleChange={(newScale: number) => setTfAxesScale(newScale)}
-          toggleButtonRef={settingsButtonRef}
-        />
-      )}
+      <TreePanelMenu
+        open={isSettingsPopupOpen}
+        onOpen={() => setIsSettingsPopupOpen(true)}
+        onClose={closeSettingsPopup}
+        triggerBarClassName="visualization-float-bar"
+        triggerContent={<span className="visualization-menu-title">3D View</span>}
+        buttonLabel="Settings"
+        buttonTitle="3D view settings"
+        panelTestId="visualization-settings-panel"
+        panelLabel="3D view settings"
+        classNames={{ panel: 'visualization-menu-panel' }}
+        menuContent={
+          <SettingsPopup
+            onClose={closeSettingsPopup}
+            fixedFrame={fixedFrame}
+            availableFrames={availableFrames}
+            displayedTfFrames={displayedTfFrames}
+            showTfFrameLabels={showTfFrameLabels}
+            onFixedFrameChange={handleFixedFrameChange}
+            onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
+            onShowTfFrameLabelsChange={setShowTfFrameLabels}
+            activeVisualizations={visualizations}
+            onRemoveVisualization={removeVisualization}
+            onAddVisualizationClick={openAddVizModalFromSettings}
+            onEditVisualization={openVisualizationSettings}
+            onUpdateVisualizationTopic={updateVisualizationTopic}
+            allTopics={allTopics}
+            tfAxesScale={tfAxesScale}
+            onTfAxesScaleChange={(newScale: number) => setTfAxesScale(newScale)}
+          />
+        }
+      />
 
       {/* Add Visualization Modal */}
       {isAddVizModalOpen && (

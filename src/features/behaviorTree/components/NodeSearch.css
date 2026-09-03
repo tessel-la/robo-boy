@@ -33,7 +33,8 @@
 
 @container (max-width: 600px) {
   .bt-node-search {
-    top: calc(12px + 48px + 7px + 42px + 7px + 42px + 7px);
+    /* Four stacked execution controls: persistence, follow, run/pause, stop. */
+    top: calc(12px + 48px + 7px + 42px + 7px + 42px + 7px + 42px + 7px);
     right: 12px;
     width: 42px;
   }

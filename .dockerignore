@@ -1,0 +1,7 @@
+.git
+.panel-stage
+node_modules
+dist
+dev-dist
+playwright-report
+test-results

@@ -8,7 +8,9 @@
 
 ## Connect To A Robot
 
-Open Robo-Boy and submit the connection form. The browser connects to rosbridge through the current Robo-Boy host at `/websocket`; the value entered on the connection screen is retained as robot context, while the deployed proxy determines the actual WebSocket endpoint.
+Open Robo-Boy and submit the connection form. Quick Connect and Domain ID use the current Robo-Boy host's proxy routes. When you select **Host or IP**, the host entered on the connection screen is used as the ROS backend host for rosbridge, video, and mesh endpoints. Use **Ports** when rosbridge, video, or mesh resources are listening somewhere other than the defaults.
+
+Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
@@ -16,7 +18,7 @@ After rosbridge connects, the main control view discovers available ROS resource
 
 ### Camera
 
-Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the `/video_stream` proxy route.
+Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the active runtime endpoint, either the `/video_stream` proxy route or the selected backend host.
 
 ### 3D Visualization
 
@@ -34,6 +36,8 @@ Use the visualization settings to select a fixed frame, choose topics, configure
 ### Behavior Trees
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.
+
+Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets Robo-Boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
 
 Trees are stored in the current browser and can be imported or exported as JSON.
 
@@ -60,4 +64,4 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy currently has no application backend or user account. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin.
+Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.

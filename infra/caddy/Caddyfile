@@ -1,77 +1,137 @@
 # Caddyfile - Using mkcert
-
 {
-    debug
-    storage file_system /data/caddy_storage
+	debug
+	storage file_system /data/caddy_storage
 }
 
 # Listen on 443, serve both localhost and IP using mkcert files
-:443  {
-    # Point to the mounted mkcert certificate and key
-    tls /etc/caddy/certs/local-cert.pem /etc/caddy/certs/local-key.pem
+:{$HTTPS_PORT:443} {
+	# Point to the mounted mkcert certificate and key
+	tls /etc/caddy/certs/local-cert.pem /etc/caddy/certs/local-key.pem
 
-    log { 
-        output stdout 
-    }
+	log {
+		output stdout
+	}
 
-    # Order matters: More specific handlers first
+	# Order matters: More specific handlers first
 
-    # Route WebSocket requests to the ros-stack container
-    handle /websocket* {
-       uri strip_prefix /websocket
-       reverse_proxy host.docker.internal:9090
-    }
+	handle /api/panels* {
+		reverse_proxy http://panel-manager:4100
+	}
 
-    # Route video stream requests to the ros-stack container
-    handle /video_stream* {
-        uri strip_prefix /video_stream
-        reverse_proxy host.docker.internal:8080
-    }
+	# Route WebSocket requests to the ros-stack container
+	handle /websocket* {
+		uri strip_prefix /websocket
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$ROSBRIDGE_PORT:9090}
+	}
 
-    # Route mesh resource requests to the Python server on the host
-    handle /mesh_resources/* {
-        uri strip_prefix /mesh_resources
-        reverse_proxy host.docker.internal:8000
-    }
+	# Route video stream requests to the ros-stack container
+	handle /video_stream* {
+		uri strip_prefix /video_stream
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
+	}
 
-    # Route other requests to the Vite app container (Default Handler)
-    handle {
-        # Still proxy to HTTP endpoint of Vite container
-        reverse_proxy http://app:5173 
-    }
+	# MediaMTX WebRTC/WHEP signaling. WebRTC media is negotiated separately
+	# over the gateway's advertised ICE port (UDP 8189 by default).
+	handle /webrtc* {
+		uri strip_prefix /webrtc
+		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+			# MediaMTX returns an origin-relative WHEP session URL. Restore the
+			# public prefix so the panel's DELETE cleanup reaches this handler.
+			header_down Location ^/(.*)$ /webrtc/$1
+		}
+	}
+
+	# Proxy mesh resources to the configured backend. The backend owns the
+	# active robot assets; Robo Boy remains independent of robot and simulator.
+	handle_path /mesh_resources/* {
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+	}
+
+	# Keep the read/chat Ollama endpoints same-origin without exposing its
+	# model-management API through the public web proxy.
+	@ollama_api path /ollama/api/tags /ollama/api/chat
+	handle @ollama_api {
+		uri strip_prefix /ollama
+		reverse_proxy unix//run/ollama-relay/ollama.sock
+	}
+
+	# Installed panel assets are public static files with no credentials attached. The packaged
+	# desktop shell reads this registry and its bundles cross-origin, so they need CORS; the web
+	# app is same-origin and unaffected. The ">" prefix replaces rather than appends, and defers
+	# until the upstream response is in hand: the app container reflects http(s) origins itself, and
+	# two Access-Control-Allow-Origin values make browsers reject the response outright.
+	handle /panels/* {
+		header >Access-Control-Allow-Origin "*"
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
+	}
+
+	# Route other requests to the Vite app container (Default Handler)
+	handle {
+		# Still proxy to HTTP endpoint of Vite container
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
+	}
 }
 
 # HTTP port 80 - serve content directly without redirect
-:80 {
-    log { 
-        output stdout 
-    }
+:{$HTTP_PORT:80} {
+	log {
+		output stdout
+	}
 
-    # Order matters: More specific handlers first
+	# Order matters: More specific handlers first
 
-    # Route WebSocket requests to the ros-stack container
-    handle /websocket* {
-       uri strip_prefix /websocket
-       reverse_proxy host.docker.internal:9090
-    }
+	handle /api/panels* {
+		reverse_proxy http://panel-manager:4100
+	}
 
-    # Route video stream requests to the ros-stack container
-    handle /video_stream* {
-        uri strip_prefix /video_stream
-        reverse_proxy host.docker.internal:8080
-    }
+	# Route WebSocket requests to the ros-stack container
+	handle /websocket* {
+		uri strip_prefix /websocket
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$ROSBRIDGE_PORT:9090}
+	}
 
-    # Route mesh resource requests to the Python server on the host
-    handle /mesh_resources/* {
-        uri strip_prefix /mesh_resources
-        reverse_proxy host.docker.internal:8000
-    }
+	# Route video stream requests to the ros-stack container
+	handle /video_stream* {
+		uri strip_prefix /video_stream
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
+	}
 
-    # Route other requests to the Vite app container (Default Handler)
-    handle {
-        # Still proxy to HTTP endpoint of Vite container
-        reverse_proxy http://app:5173 
-    }
+	# Proxy WHEP signaling to the backend media gateway.
+	handle /webrtc* {
+		uri strip_prefix /webrtc
+		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+			header_down Location ^/(.*)$ /webrtc/$1
+		}
+	}
+
+	# Proxy mesh resources to the configured robot backend.
+	handle_path /mesh_resources/* {
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+	}
+
+	# Proxy only the Ollama endpoints used by the BT agent.
+	@ollama_api path /ollama/api/tags /ollama/api/chat
+	handle @ollama_api {
+		uri strip_prefix /ollama
+		reverse_proxy unix//run/ollama-relay/ollama.sock
+	}
+
+	# Installed panel assets are public static files with no credentials attached. The packaged
+	# desktop shell reads this registry and its bundles cross-origin, so they need CORS; the web
+	# app is same-origin and unaffected. The ">" prefix replaces rather than appends, and defers
+	# until the upstream response is in hand: the app container reflects http(s) origins itself, and
+	# two Access-Control-Allow-Origin values make browsers reject the response outright.
+	handle /panels/* {
+		header >Access-Control-Allow-Origin "*"
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
+	}
+
+	# Route other requests to the Vite app container (Default Handler)
+	handle {
+		# Still proxy to HTTP endpoint of Vite container
+		reverse_proxy http://app:{$FRONTEND_PORT:5173}
+	}
 }
 
 # Removed the duplicate localhost block

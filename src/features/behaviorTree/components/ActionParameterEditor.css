@@ -19,7 +19,7 @@
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 12px;
-  width: min(380px, 100%);
+  width: min(560px, 100%);
   max-width: 100%;
   height: min(680px, calc(100% - 24px));
   max-height: calc(100% - 24px);
@@ -247,6 +247,26 @@
 
 .ape-list-row:last-child {
   border-bottom: none;
+}
+
+.ape-list-row.connected {
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--primary-color, #4285f4);
+}
+
+.ape-connected-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 150px;
+  padding: 3px 7px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 14%, var(--card-bg, #fff));
+  color: var(--primary-color, #4285f4);
+  font-size: 9px;
+  font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Tappable (non-bool) rows */
@@ -670,5 +690,14 @@
   .ape-footer {
     padding: 8px 12px;
     padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+  }
+}
+.ape-binding-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+@media (max-width: 520px) {
+  .ape-binding-grid {
+    grid-template-columns: 1fr;
   }
 }

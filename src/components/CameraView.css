@@ -71,7 +71,7 @@
 }
 
 .camera-topic-selector.overlay select {
-  background-color: var(--input-background-color);
+  background-color: var(--input-background-color, var(--background-secondary));
   color: var(--text-color);
   border: 1px solid var(--border-color);
   padding: 3px 5px;
@@ -79,6 +79,11 @@
   border-radius: 3px;
   max-width: 200px;
   /* Limit width */
+}
+
+:root[data-runtime='tauri'] .camera-topic-selector.overlay select option {
+  background-color: var(--input-background-color, var(--background-secondary));
+  color: var(--text-color);
 }
 
 /* Optional: Hide label if not needed */

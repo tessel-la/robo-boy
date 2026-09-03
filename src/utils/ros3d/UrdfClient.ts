@@ -4,6 +4,7 @@ import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, StoredTransform } from '../tfUtils';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 /**
@@ -20,6 +21,7 @@ export class UrdfClient extends THREE.Object3D {
     private onComplete?: (model: THREE.Object3D) => void;
     private linkNameMap: Map<string, THREE.Object3D> = new Map();
     private colladaLoader: ColladaLoader;
+    private objLoader: OBJLoader;
     private stlLoader: STLLoader;
 
     constructor(options: {
@@ -38,6 +40,7 @@ export class UrdfClient extends THREE.Object3D {
         this.onComplete = options.onComplete;
 
         this.colladaLoader = new ColladaLoader();
+        this.objLoader = new OBJLoader();
         this.stlLoader = new STLLoader();
 
         this.rootObject.add(this);
@@ -49,7 +52,7 @@ export class UrdfClient extends THREE.Object3D {
             messageType: 'std_msgs/String',
             compression: 'none',
             throttle_rate: 0,
-            queue_size: 1,
+            queue_length: 1,
             latch: true,
         });
 
@@ -131,11 +134,8 @@ export class UrdfClient extends THREE.Object3D {
                         const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0, 0, 0];
                         const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0, 0, 0];
                         childObject.position.set(xyz[0], xyz[1], xyz[2]);
-                        // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
-                        // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
-                        // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
-                        // For Z-up coordinate system, we need to be careful about axis mapping
-                        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+                        // URDF fixed-axis RPY is Rz(yaw) * Ry(pitch) * Rx(roll).
+                        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX');
                         childObject.rotation.copy(euler);
 
                         console.log(`[UrdfClient] Joint ${jointName} origin: pos(${xyz.join(',')}) rot(${rpy.join(',')})`);
@@ -253,6 +253,18 @@ export class UrdfClient extends THREE.Object3D {
                         linkObject.add(daeMesh);
                         console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
                     }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
+                } else if (filename.toLowerCase().endsWith('.obj')) {
+                    this.objLoader.load(fullPath, (objMesh) => {
+                        objMesh.scale.copy(scaleVec);
+                        this.applyOrigin(visualElement, objMesh);
+                        if (urdfMaterial) {
+                            objMesh.traverse(child => {
+                                if (child instanceof THREE.Mesh) child.material = urdfMaterial;
+                            });
+                        }
+                        linkObject.add(objMesh);
+                        console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
+                    }, undefined, (error) => console.error(`[UrdfClient] Error loading OBJ ${fullPath}:`, error));
                 } else if (filename.toLowerCase().endsWith('.stl')) {
                     this.stlLoader.load(fullPath, (geometry) => {
                         const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
@@ -298,11 +310,8 @@ export class UrdfClient extends THREE.Object3D {
             const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0, 0, 0];
             object.position.set(xyz[0], xyz[1], xyz[2]);
 
-            // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
-            // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
-            // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
-            // For Z-up coordinate system, we need to be careful about axis mapping
-            const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+            // URDF fixed-axis RPY is Rz(yaw) * Ry(pitch) * Rx(roll).
+            const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX');
             object.rotation.copy(euler);
         }
     }

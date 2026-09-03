@@ -5,18 +5,13 @@ This document describes the current runtime and the boundaries future developmen
 ## System Overview
 
 ```text
-Browser
+Browser or Tauri webview
   React application
   ROSLIB WebSocket client
   Three.js visualization
         |
-        | HTTP/HTTPS and WebSocket
-        v
-Caddy
-  /                -> Vite app
-  /websocket       -> rosbridge :9090
-  /video_stream    -> web_video_server :8080
-  /mesh_resources  -> optional host mesh server :8000
+        | Web: Caddy routes or selected backend host
+        | Desktop: selected backend host ports
         |
         v
 ROS stack
@@ -27,7 +22,7 @@ ROS stack
 Robot or simulation nodes
 ```
 
-Robo-Boy is a browser application with no application server or database. Caddy provides one origin for the frontend and ROS-facing services. The `ros-stack` container uses host networking for DDS discovery, while the frontend and Caddy share the `app-net` bridge network.
+Robo-Boy has no application server or database. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
 
 ## Frontend Composition
 
@@ -46,7 +41,7 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 
 ## ROS Boundary
 
-`useRos` is the owner of the active `ROSLIB.Ros` instance. It derives the endpoint from the page origin and connects to `/websocket`, making deployment independent of a hardcoded host or port.
+`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect and Domain ID, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
 
 The connection object is passed to feature components. Code that creates a `ROSLIB.Topic`, `Service`, or action request must:
 
@@ -71,10 +66,11 @@ rosapi provides topic, service, action, and message-schema discovery. Robot-spec
 - `components/`: React Flow editor, toolbar, palette, node renderers, and parameter editors.
 - `services/rosDiscovery.ts`: ROS resource and schema discovery through rosapi.
 - `engine/executor.ts`: sequence, selector, parallel, action, service, and topic execution.
+- `engine/persistentExecutor.ts`: the versioned command/status transport for ROS-owned executions.
 - `storage/treeStorage.ts`: versioned browser persistence and JSON import/export.
 - Root helpers and types: node creation, ordering, layout, search, and templates.
 
-The editor owns graph state; the executor consumes a complete tree snapshot and emits execution events. Keep graph editing independent from ROS execution so both remain testable.
+The editor owns graph state; an executor consumes a complete tree snapshot and emits execution events. Local runs use the browser executor. Opt-in persistent runs are sent to `infra/ros/behavior_tree_runner.py`, which owns ROS clients independently of the browser and exposes reconnectable status over standard `std_msgs/String` topics. Keep graph editing independent from either execution transport so both remain testable.
 
 ### 3D Visualization
 
@@ -90,22 +86,43 @@ New visualization types should follow the same split: serializable configuration
 
 `src/features/theme/` owns theme creation and CSS generation. Built-in themes are CSS variable sets in `src/index.css`; custom themes generate a scoped style element and are persisted in browser storage. Components should consume theme variables rather than hardcoded palette colors.
 
+### Panel Hosting And External Panels
+
+`MainControlView` owns the unified workspace and persists panel instances by stable panel-definition ID. The common
+catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
+`src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
+`panels/installed.json` without importing panel code. The tracked default registry is empty; explicit panel builds
+generate a separate ignored public tree from a schema-v2 desired state that can combine remote inventories and
+explicitly listed local repositories. The generated registry locks exact versions, integrity, selection, and source
+provenance.
+
+Built-ins retain their existing React adapters and lifecycle behavior. External panels use the small,
+framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies a deployment-bundled release and transfers
+it into an opaque-origin iframe when its tile mounts. A private message channel supplies permission-checked
+ROS/network operations, per-instance storage, connection/viewport snapshots, logging, and fullscreen. The iframe
+cannot access the parent DOM, cookies, Robo-Boy browser storage, or undeclared runtime endpoints. Compose adds a
+separate authenticated manager for previewing and applying desired-state changes. Keep application stores and
+feature internals out of the public context. See
+[External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
+
 ## State And Persistence
 
 State is intentionally local to the browser:
 
-| State                        | Owner                     | Persistence                       |
-| ---------------------------- | ------------------------- | --------------------------------- |
-| Active ROS connection        | `useRos`                  | Memory only                       |
-| Current view and open panels | `MainControlView`         | Memory only                       |
-| Mobile single/split panels   | `MainControlView`         | `localStorage`                    |
-| Panel split                  | `useResizablePanels`      | `localStorage`                    |
-| Themes                       | `App` and theme utilities | `localStorage`                    |
-| Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON |
-| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON |
-| 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`        |
+| State                        | Owner                     | Persistence                                                      |
+| ---------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| Active ROS connection        | `useRos`                  | Memory only                                                      |
+| Persistent BT runtime        | ROS behavior-tree runner  | Memory until completion/restart                                  |
+| Current view and open panels | `MainControlView`         | Memory only                                                      |
+| Mobile single/split panels   | `MainControlView`         | `localStorage`                                                   |
+| Panel split                  | `useResizablePanels`      | `localStorage`                                                   |
+| Themes                       | `App` and theme utilities | `localStorage`                                                   |
+| Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON                                |
+| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
+| 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
+| External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
 
-Visited mobile panel types remain mounted while hidden so transient editor and runtime state survives panel switches. Live ROS clients and executions are still session-only and are not serialized across app reloads.
+Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
 Persist domain definitions, not live ROS clients, Three.js objects, React state, or callbacks. Parse stored data defensively and provide defaults for newly introduced fields.
 
@@ -123,6 +140,10 @@ App shell and shared components
 
 Feature modules should not import application-shell state. Pass connection objects and callbacks through props or narrow feature APIs. Shared helpers must remain independent of feature UI.
 
+External panels sit outside this internal dependency graph. They depend only on the versioned panel SDK contract
+(currently source-controlled under `panel-sdk/`) and receive narrow runtime services from the host context.
+Robo-Boy core may import SDK types; it must never import an external panel's source or package directly.
+
 ## Adding A Feature
 
 1. Put a cohesive user capability under `src/features/<feature>/` when it needs its own types, state transitions, persistence, or services.
@@ -136,7 +157,8 @@ Feature modules should not import application-shell state. Pass connection objec
 
 ## Operational Constraints
 
-- Caddy path routing is part of the frontend contract. Changes to `/websocket`, `/video_stream`, or `/mesh_resources` require coordinated frontend and proxy updates.
+- Caddy path routing is part of the frontend contract. Changes to `/websocket`, `/video_stream`, `/webrtc`, or `/mesh_resources` require coordinated frontend and proxy updates. `/webrtc` proxies media-gateway WHEP signaling through a host-network relay and shared Unix socket; its reserved `/_discovery/paths` child exposes only the active-path listing from the loopback MediaMTX API. Negotiated WebRTC media still reaches the gateway's advertised ICE candidates directly.
 - ROS 2 interface discovery depends on `ROS_DISTRO`, `ROS_DOMAIN_ID`, network compatibility, and mounted interface workspaces.
+- The ROS container derives from the official `ros:<distro>-ros-core-<ubuntu>` image. Keep `ROS_DISTRO` and `ROS_UBUNTU_CODENAME` paired when overriding them (for example, Jazzy/Noble or Humble/Jammy).
 - The production `infra/docker/Dockerfile` builds static assets and serves them with Nginx; the default Compose stack is development-oriented and serves Vite through Caddy.
 - Browser storage is origin-specific. Switching between HTTP, HTTPS, hostnames, or ports produces separate local datasets.

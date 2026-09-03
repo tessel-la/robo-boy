@@ -790,8 +790,8 @@
     max-width: calc(100% - 124px);
   }
   .tf-tree-live-button {
-    min-width: 44px;
-    width: 44px;
+    min-width: 36px;
+    width: 36px;
     padding: 0;
   }
   .tf-tree-live-button span {
@@ -799,7 +799,7 @@
   }
 
   .tf-tree-search {
-    width: 42px;
+    width: 36px;
     transition: width 0.18s ease;
   }
   .tf-tree-search:focus-within,
@@ -807,10 +807,10 @@
     width: calc(100% - 24px);
   }
   .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-field {
-    height: 42px;
+    height: 36px;
     justify-content: center;
     padding: 0;
-    border-radius: 21px;
+    border-radius: 18px;
   }
   .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-input {
     position: absolute;
@@ -872,12 +872,13 @@
   }
   .tf-tree-menu-button {
     max-width: min(96px, 32cqw);
-    height: 42px;
+    height: 34px;
   }
   .tf-tree-icon-button,
   .tf-tree-live-button {
-    width: 44px;
-    height: 44px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
   }
   .tf-tree-search {
     top: 64px;
@@ -896,6 +897,16 @@
   }
   .tf-tree-metrics span {
     font-size: 8px;
+  }
+}
+
+@media (min-width: 769px) {
+  @container (max-width: 700px) {
+    .tf-tree-live-button {
+      min-width: 44px;
+      width: 44px;
+      height: 44px;
+    }
   }
 }
 

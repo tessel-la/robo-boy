@@ -1,0 +1,27 @@
+{
+  "$schema": "./panel-sources.schema.json",
+  "schemaVersion": 2,
+  "sources": [
+    {
+      "type": "remote",
+      "name": "roboboy-official",
+      "catalogUrl": "https://raw.githubusercontent.com/tessel-la/robo-boy-panel-inventory/main/catalog.json",
+      "allowedOrigins": [
+        "https://github.com",
+        "https://objects.githubusercontent.com",
+        "https://release-assets.githubusercontent.com"
+      ]
+    },
+    {
+      "type": "local",
+      "name": "development-workspace",
+      "root": "../..",
+      "rootEnv": "ROBOBOY_PANEL_WORKSPACE",
+      "repositories": ["my-roboboy-panel"]
+    }
+  ],
+  "selection": {
+    "mode": "include",
+    "panelIds": ["la.tessel.roboboy.timeseries", "com.example.robot.my-panel"]
+  }
+}

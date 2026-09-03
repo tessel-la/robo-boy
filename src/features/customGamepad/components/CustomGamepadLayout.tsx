@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import type { Ros, Topic } from 'roslib';
 import ROSLIB from 'roslib';
 import { CustomGamepadLayout as LayoutType, DragState, DropPreview, GamepadComponentConfig, ROSTopicConfig } from '../types';
-import { buildStampedHeader, mergeJoyAxes } from '../rosMessageUtils';
+import {
+  buildStampedHeader,
+  buildTwistPayload,
+  isTwistMessageType,
+  mergeJoyAxes,
+} from '../rosMessageUtils';
 import GamepadComponent from './GamepadComponent';
 import './CustomGamepadLayout.css';
 
@@ -28,7 +33,22 @@ interface JoyTopicState {
   messageType: string;
 }
 
+interface TwistTopicState {
+  topic: Topic;
+  messageType: string;
+}
+
+const TWIST_AXES = [
+  'linear.x',
+  'linear.y',
+  'linear.z',
+  'angular.x',
+  'angular.y',
+  'angular.z',
+];
+
 const getJoyTopicKey = (action: ROSTopicConfig) => `${action.topic}\u0000${action.messageType}`;
+const getTwistTopicKey = (action: ROSTopicConfig) => `${action.topic}\u0000${action.messageType}`;
 
 const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   layout,
@@ -50,10 +70,14 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const joyTopicsRef = useRef<Map<string, JoyTopicState>>(new Map());
   const joyAxesRef = useRef<Map<string, number[]>>(new Map());
+  const twistTopicsRef = useRef<Map<string, TwistTopicState>>(new Map());
+  const twistAxesRef = useRef<Map<string, Record<string, number>>>(new Map());
 
   useEffect(() => {
     joyTopicsRef.current.clear();
     joyAxesRef.current.clear();
+    twistTopicsRef.current.clear();
+    twistAxesRef.current.clear();
     if (isEditing) return;
 
     const joyActions = layout.components
@@ -73,6 +97,22 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       joyAxesRef.current.set(key, []);
     });
 
+    const twistActions = layout.components
+      .filter(component => component.type === 'joystick')
+      .map(component => component.action as ROSTopicConfig | undefined)
+      .filter((action): action is ROSTopicConfig => Boolean(
+        action?.topic && action.messageType && isTwistMessageType(action.messageType)
+      ));
+
+    twistActions.forEach(action => {
+      const key = getTwistTopicKey(action);
+      if (twistTopicsRef.current.has(key)) return;
+      const topic = new ROSLIB.Topic({ ros, name: action.topic, messageType: action.messageType });
+      topic.advertise();
+      twistTopicsRef.current.set(key, { topic, messageType: action.messageType });
+      twistAxesRef.current.set(key, {});
+    });
+
     return () => {
       joyTopicsRef.current.forEach(({ topic, messageType }, key) => {
         const axes = joyAxesRef.current.get(key) || [];
@@ -87,6 +127,19 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       });
       joyTopicsRef.current.clear();
       joyAxesRef.current.clear();
+      twistTopicsRef.current.forEach(({ topic, messageType }, key) => {
+        const axes = twistAxesRef.current.get(key) || {};
+        if (Object.values(axes).some(value => value !== 0)) {
+          topic.publish(new ROSLIB.Message(buildTwistPayload({
+            messageType,
+            axes: TWIST_AXES,
+            values: TWIST_AXES.map(() => 0),
+          })));
+        }
+        topic.unadvertise();
+      });
+      twistTopicsRef.current.clear();
+      twistAxesRef.current.clear();
     };
   }, [isEditing, layout.components, ros]);
 
@@ -108,6 +161,30 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
       axes,
       buttons: [],
     }));
+    return true;
+  }, []);
+
+  const publishTwistAxes = useCallback((config: GamepadComponentConfig, values: number[]) => {
+    const action = config.action as ROSTopicConfig | undefined;
+    if (!action?.topic) return false;
+    const key = getTwistTopicKey(action);
+    const topicState = twistTopicsRef.current.get(key);
+    if (!topicState) return false;
+
+    const axes = { ...(twistAxesRef.current.get(key) || {}) };
+    (config.config?.axes || ['linear.x', 'linear.y']).forEach((axis, index) => {
+      const normalizedAxis = axis.replace(/^twist\./, '');
+      if (TWIST_AXES.includes(normalizedAxis) && index < values.length) {
+        axes[normalizedAxis] = values[index];
+      }
+    });
+    twistAxesRef.current.set(key, axes);
+    topicState.topic.publish(new ROSLIB.Message(buildTwistPayload({
+      messageType: action.messageType,
+      axes: TWIST_AXES,
+      values: TWIST_AXES.map(axis => axes[axis] || 0),
+      frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0',
+    })));
     return true;
   }, []);
 
@@ -399,6 +476,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
               onDragEnd={onDragEnd}
               scaleFactor={scaling.scaleFactor}
               onJoyAxesChange={publishJoyAxes}
+              onTwistAxesChange={publishTwistAxes}
             />
           );
         })}

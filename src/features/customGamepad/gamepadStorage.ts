@@ -14,6 +14,7 @@ export interface GamepadImportResult {
   success: boolean;
   imported: number;
   errors: string[];
+  idMap: Record<string, string>;
 }
 
 /**
@@ -209,7 +210,12 @@ export function downloadGamepadLayout(layoutId: string): boolean {
  * Import gamepad layouts from JSON
  */
 export function importGamepadLayouts(jsonData: string): GamepadImportResult {
-  const result = { success: false, imported: 0, errors: [] as string[] };
+  const result: GamepadImportResult = {
+    success: false,
+    imported: 0,
+    errors: [],
+    idMap: {},
+  };
   
   try {
     const importData = JSON.parse(jsonData);
@@ -219,8 +225,9 @@ export function importGamepadLayouts(jsonData: string): GamepadImportResult {
       return result;
     }
 
-    for (const layout of importData.layouts) {
+    for (const importedLayout of importData.layouts) {
       try {
+        const layout = JSON.parse(JSON.stringify(importedLayout)) as CustomGamepadLayout;
         // Validate layout structure
         if (!layout.id || !layout.name || !layout.components) {
           result.errors.push(`Invalid layout structure: ${layout.name || 'unnamed'}`);
@@ -228,10 +235,12 @@ export function importGamepadLayouts(jsonData: string): GamepadImportResult {
         }
 
         // Generate new ID if it conflicts with existing
-        const existingLayout = getGamepadLayout(layout.id);
+        const sourceId = layout.id;
+        const existingLayout = getGamepadLayout(sourceId);
         if (existingLayout) {
           layout.id = generateGamepadId(layout.name);
         }
+        result.idMap[sourceId] = layout.id;
 
         // Update metadata
         layout.metadata = {
@@ -267,7 +276,7 @@ export function importGamepadFile(file: File): Promise<GamepadImportResult> {
       resolve(importGamepadLayouts(String(event.target?.result || '')));
     };
     reader.onerror = () => {
-      resolve({ success: false, imported: 0, errors: ['Failed to read gamepad file'] });
+      resolve({ success: false, imported: 0, errors: ['Failed to read gamepad file'], idMap: {} });
     };
 
     reader.readAsText(file);

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { FiGrid, FiSliders, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { 
   CustomGamepadLayout, 
@@ -20,6 +21,8 @@ interface GamepadEditorProps {
   initialLayout?: CustomGamepadLayout | null;
   ros: Ros;
 }
+
+type EditorToolPanel = 'components' | 'layout';
 
 const GamepadEditor: React.FC<GamepadEditorProps> = ({
   isOpen,
@@ -73,25 +76,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsComponent, setSettingsComponent] = useState<GamepadComponentConfig | null>(null);
 
-  // Track expanded state of sidebar components
-  const [componentPaletteExpanded, setComponentPaletteExpanded] = useState(false);
-  const [gridSettingsExpanded, setGridSettingsExpanded] = useState(false);
-
-  // Handle component palette expansion with mutual exclusion
-  const handleComponentPaletteExpandedChange = useCallback((expanded: boolean) => {
-    setComponentPaletteExpanded(expanded);
-    if (expanded) {
-      setGridSettingsExpanded(false);
-    }
-  }, []);
-
-  // Handle grid settings expansion with mutual exclusion
-  const handleGridSettingsExpandedChange = useCallback((expanded: boolean) => {
-    setGridSettingsExpanded(expanded);
-    if (expanded) {
-      setComponentPaletteExpanded(false);
-    }
-  }, []);
+  const [activeToolPanel, setActiveToolPanel] = useState<EditorToolPanel | null>('components');
 
   const handleLayoutNameChange = useCallback((name: string) => {
     setLayout(prev => ({ ...prev, name }));
@@ -281,7 +266,12 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   }, [editorState.draggedComponent, layout.gridSize, handleAddComponent]);
 
   // Calculate grid position from mouse/touch event
-  const getGridPositionFromEvent = useCallback((clientX: number, clientY: number) => {
+  const getGridPositionFromEvent = useCallback((
+    clientX: number,
+    clientY: number,
+    itemWidth = 1,
+    itemHeight = 1
+  ) => {
     if (!designAreaRef.current) return null;
     
     // Try to find the grid element
@@ -292,23 +282,46 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       gridEl = designAreaRef.current;
     }
     
+    const cells = gridEl.querySelectorAll<HTMLElement>('.grid-background .grid-cell');
+    const firstCell = cells[0]?.getBoundingClientRect();
+    const nextColumn = layout.gridSize.width > 1 ? cells[1]?.getBoundingClientRect() : null;
+    const nextRow = layout.gridSize.height > 1
+      ? cells[layout.gridSize.width]?.getBoundingClientRect()
+      : null;
+
+    if (firstCell && firstCell.width > 0 && firstCell.height > 0) {
+      const columnStep = nextColumn ? nextColumn.left - firstCell.left : firstCell.width;
+      const rowStep = nextRow ? nextRow.top - firstCell.top : firstCell.height;
+
+      if (columnStep > 0 && rowStep > 0) {
+        const previewWidth = firstCell.width + (itemWidth - 1) * columnStep;
+        const previewHeight = firstCell.height + (itemHeight - 1) * rowStep;
+        const x = Math.round((clientX - firstCell.left - previewWidth / 2) / columnStep);
+        const y = Math.round((clientY - firstCell.top - previewHeight / 2) / rowStep);
+
+        return { x, y, cellWidth: firstCell.width, cellHeight: firstCell.height };
+      }
+    }
+
+    // Fallback for the first frame before the background cells have layout.
     const gridRect = gridEl.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(gridEl);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 8;
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 8;
-    
-    const innerWidth = Math.max(100, gridRect.width - paddingLeft * 2);
-    const innerHeight = Math.max(100, gridRect.height - paddingTop * 2);
-    
-    const cellWidth = innerWidth / layout.gridSize.width;
-    const cellHeight = innerHeight / layout.gridSize.height;
-    
-    // Calculate position relative to grid, clamping to valid range
-    const relX = clientX - gridRect.left - paddingLeft;
-    const relY = clientY - gridRect.top - paddingTop;
-    
-    const x = Math.max(0, Math.min(Math.floor(relX / cellWidth), layout.gridSize.width - 1));
-    const y = Math.max(0, Math.min(Math.floor(relY / cellHeight), layout.gridSize.height - 1));
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    const columnGap = parseFloat(computedStyle.columnGap) || 0;
+    const rowGap = parseFloat(computedStyle.rowGap) || 0;
+    const innerWidth = Math.max(1, gridRect.width - paddingLeft - paddingRight);
+    const innerHeight = Math.max(1, gridRect.height - paddingTop - paddingBottom);
+    const cellWidth = Math.max(1, (innerWidth - columnGap * (layout.gridSize.width - 1)) / layout.gridSize.width);
+    const cellHeight = Math.max(1, (innerHeight - rowGap * (layout.gridSize.height - 1)) / layout.gridSize.height);
+    const columnStep = cellWidth + columnGap;
+    const rowStep = cellHeight + rowGap;
+    const previewWidth = cellWidth + (itemWidth - 1) * columnStep;
+    const previewHeight = cellHeight + (itemHeight - 1) * rowStep;
+    const x = Math.round((clientX - gridRect.left - paddingLeft - previewWidth / 2) / columnStep);
+    const y = Math.round((clientY - gridRect.top - paddingTop - previewHeight / 2) / rowStep);
     
     return { x, y, cellWidth, cellHeight };
   }, [layout.gridSize]);
@@ -386,11 +399,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   const updateDropPreview = useCallback((clientX: number, clientY: number, dragState: EditorState['dragState']) => {
     if (!dragState) return;
     
-    const pos = getGridPositionFromEvent(clientX, clientY);
-    if (!pos) return;
-    
     const width = dragState.defaultSize?.width || 1;
     const height = dragState.defaultSize?.height || 1;
+    const pos = getGridPositionFromEvent(clientX, clientY, width, height);
+    if (!pos) return;
     
     const clampedX = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
     const clampedY = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
@@ -462,9 +474,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     
     // Calculate drop position fresh from event coordinates (don't rely on stale preview state)
     if (dragState) {
-      const pos = getGridPositionFromEvent(event.clientX, event.clientY);
       const width = dragState.defaultSize?.width || 1;
       const height = dragState.defaultSize?.height || 1;
+      const pos = getGridPositionFromEvent(event.clientX, event.clientY, width, height);
       
       // Use calculated position or fallback to (0,0)
       let dropX = pos ? pos.x : 0;
@@ -605,78 +617,80 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     <div className="gamepad-editor-overlay">
       <div className="gamepad-editor-modal" ref={modalRef}>
         <div className="editor-header">
-          <h2>Gamepad Editor</h2>
-          <button className="close-button" onClick={onClose}>×</button>
+          <div className="editor-title">
+            <span className="editor-kicker">Pad designer</span>
+            <h2>Gamepad Editor</h2>
+          </div>
+          <div className="editor-header-actions">
+            <button
+              type="button"
+              className={`editor-header-action ${activeToolPanel === 'components' ? 'is-active' : ''}`}
+              onClick={() => setActiveToolPanel(current => current === 'components' ? null : 'components')}
+              aria-pressed={activeToolPanel === 'components'}
+              aria-label="Components"
+            >
+              <FiGrid aria-hidden="true" />
+              <span>Components</span>
+            </button>
+            <button
+              type="button"
+              className={`editor-header-action ${activeToolPanel === 'layout' ? 'is-active' : ''}`}
+              onClick={() => setActiveToolPanel(current => current === 'layout' ? null : 'layout')}
+              aria-pressed={activeToolPanel === 'layout'}
+              aria-label="Layout settings"
+            >
+              <FiSliders aria-hidden="true" />
+              <span>Layout</span>
+            </button>
+            <button type="button" className="editor-close-button" onClick={onClose} aria-label="Close gamepad editor">
+              <FiX aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         <div className="editor-content">
-          <div className="design-tab">
-            <div className={`editor-sidebar ${componentPaletteExpanded ? 'component-palette-expanded' : ''} ${gridSettingsExpanded ? 'grid-settings-expanded' : ''}`}>
-              
-              {/* Buttons row - always visible at the top */}
-              <div className="sidebar-buttons-row">
-                <ComponentPalette
-                  selectedComponent={editorState.draggedComponent?.componentType || null}
-                  onComponentSelect={(componentType) => setEditorState(prev => ({
-                    ...prev,
-                    draggedComponent: {
-                      componentType: componentType as GamepadComponentConfig['type'],
-                      defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
-                    }
-                  }))}
-                  onDragStart={handlePaletteDragStart}
-                  onDragEnd={handleDragEnd}
-                  onExpandedChange={handleComponentPaletteExpandedChange}
-                  forceCollapsed={gridSettingsExpanded}
-                />
-
-                <GridSettingsMenu
-                  layoutName={layout.name}
-                  layoutDescription={layout.description || ''}
-                  gridWidth={layout.gridSize.width}
-                  gridHeight={layout.gridSize.height}
-                  onNameChange={handleLayoutNameChange}
-                  onDescriptionChange={handleLayoutDescriptionChange}
-                  onGridSizeChange={handleGridSizeChange}
-                  onExpandedChange={handleGridSettingsExpandedChange}
-                  forceCollapsed={componentPaletteExpanded}
-                />
-              </div>
-
-              {/* Expanded content area - full width when expanded */}
-              <div className="sidebar-expanded-content">
-                {componentPaletteExpanded && (
-                  <ComponentPalette
-                    selectedComponent={editorState.draggedComponent?.componentType || null}
-                    onComponentSelect={(componentType) => setEditorState(prev => ({
-                      ...prev,
-                      draggedComponent: {
-                        componentType: componentType as GamepadComponentConfig['type'],
-                        defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
-                      }
-                    }))}
-                    onDragStart={handlePaletteDragStart}
-                    onDragEnd={handleDragEnd}
-                    onExpandedChange={handleComponentPaletteExpandedChange}
-                    forceCollapsed={gridSettingsExpanded}
-                  />
-                )}
-
-                {gridSettingsExpanded && (
-                  <GridSettingsMenu
-                    layoutName={layout.name}
-                    layoutDescription={layout.description || ''}
-                    gridWidth={layout.gridSize.width}
-                    gridHeight={layout.gridSize.height}
-                    onNameChange={handleLayoutNameChange}
-                    onDescriptionChange={handleLayoutDescriptionChange}
-                    onGridSizeChange={handleGridSizeChange}
-                    onExpandedChange={handleGridSettingsExpandedChange}
-                    forceCollapsed={componentPaletteExpanded}
-                  />
-                )}
-              </div>
-            </div>
+          <div className={`editor-workspace ${activeToolPanel ? 'has-tools-panel' : ''}`}>
+            {activeToolPanel && (
+              <aside className="editor-tools-panel" aria-label={activeToolPanel === 'components' ? 'Components' : 'Layout settings'}>
+                <header className="editor-tools-header">
+                  <div>
+                    <span className="editor-kicker">Editor tools</span>
+                    <h3>{activeToolPanel === 'components' ? 'Components' : 'Layout settings'}</h3>
+                  </div>
+                  <button type="button" onClick={() => setActiveToolPanel(null)} aria-label="Close editor tools">
+                    <FiX aria-hidden="true" />
+                  </button>
+                </header>
+                <div className="editor-tools-scroll">
+                  {activeToolPanel === 'components' ? (
+                    <ComponentPalette
+                      contentOnly
+                      selectedComponent={editorState.draggedComponent?.componentType || null}
+                      onComponentSelect={(componentType) => setEditorState(prev => ({
+                        ...prev,
+                        draggedComponent: {
+                          componentType: componentType as GamepadComponentConfig['type'],
+                          defaultSize: componentLibrary.find(c => c.type === componentType)?.defaultSize || { width: 1, height: 1 }
+                        }
+                      }))}
+                      onDragStart={handlePaletteDragStart}
+                      onDragEnd={handleDragEnd}
+                    />
+                  ) : (
+                    <GridSettingsMenu
+                      contentOnly
+                      layoutName={layout.name}
+                      layoutDescription={layout.description || ''}
+                      gridWidth={layout.gridSize.width}
+                      gridHeight={layout.gridSize.height}
+                      onNameChange={handleLayoutNameChange}
+                      onDescriptionChange={handleLayoutDescriptionChange}
+                      onGridSizeChange={handleGridSizeChange}
+                    />
+                  )}
+                </div>
+              </aside>
+            )}
 
             <div 
               ref={designAreaRef}

@@ -3,11 +3,17 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
 import { throttle } from 'lodash-es';
-import { GamepadComponentConfig, JoyAxesPublisher, ROSTopicConfig } from '../types';
+import {
+  GamepadComponentConfig,
+  JoyAxesPublisher,
+  ROSTopicConfig,
+  TwistAxesPublisher,
+} from '../types';
 import {
   buildPoseStampedPayload,
   buildTwistPayload,
   isPoseStampedMessageType,
+  isTwistMessageType,
 } from '../rosMessageUtils';
 import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
 
@@ -26,6 +32,7 @@ interface JoystickComponentProps {
   isEditing?: boolean;
   scaleFactor?: number;
   onJoyAxesChange?: JoyAxesPublisher;
+  onTwistAxesChange?: TwistAxesPublisher;
 }
 
 const THROTTLE_INTERVAL = 100;
@@ -36,9 +43,12 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
   isEditing,
   scaleFactor: _scaleFactor = 1,
   onJoyAxesChange,
+  onTwistAxesChange,
 }) => {
   const topicRef = useRef<Topic | null>(null);
   const lastSentValues = useRef<number[]>([0, 0]);
+  const heldValuesRef = useRef<number[] | null>(null);
+  const holdTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const joystickSizeRef = useRef(100); // Use ref to hold joystick size
@@ -146,7 +156,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const maxValue = config.config?.max ?? config.config?.maxValue;
 
     // Only apply range mapping if custom range is explicitly set
-    const mappedValues = (minValue !== undefined && maxValue !== undefined) ?
+    const rangeMappedValues = (minValue !== undefined && maxValue !== undefined) ?
       values.map(value => {
         // Clamp to [-1, 1] first (joystick natural range)
         const clampedValue = Math.max(-1, Math.min(1, value));
@@ -156,9 +166,20 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       }) :
       values; // Use raw joystick values [-1, 1] when no custom range is set
 
+    const mappedValues = rangeMappedValues.map((value, index) =>
+      value * (config.config?.axisScales?.[index] ?? 1)
+    );
+
     const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
     if (isJoyMessage && onJoyAxesChange) {
       if (onJoyAxesChange(config, mappedValues)) {
+        lastSentValues.current = [...values];
+      }
+      return;
+    }
+
+    if (isTwistMessageType(action.messageType) && onTwistAxesChange) {
+      if (onTwistAxesChange(config, mappedValues)) {
         lastSentValues.current = [...values];
       }
       return;
@@ -190,12 +211,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
         axes: axes,
         buttons: []
       });
-    } else if (
-      action.messageType === 'geometry_msgs/Twist' ||
-      action.messageType === 'geometry_msgs/msg/Twist' ||
-      action.messageType === 'geometry_msgs/TwistStamped' ||
-      action.messageType === 'geometry_msgs/msg/TwistStamped'
-    ) {
+    } else if (isTwistMessageType(action.messageType)) {
       const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
       message = new ROSLIB.Message(buildTwistPayload({
         messageType: action.messageType,
@@ -231,12 +247,28 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       topicRef.current.publish(message);
       lastSentValues.current = [...values];
     }
-  }, [config, isEditing, onJoyAxesChange]);
+  }, [config, isEditing, onJoyAxesChange, onTwistAxesChange]);
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
     [publishMessage]
   );
+
+  const stopHeldPublishing = useCallback(() => {
+    heldValuesRef.current = null;
+    if (holdTimerRef.current !== null) {
+      window.clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  const publishWhileHeld = useCallback((values: number[]) => {
+    heldValuesRef.current = values;
+    if (holdTimerRef.current !== null) return;
+    holdTimerRef.current = window.setInterval(() => {
+      if (heldValuesRef.current) publishMessage(heldValuesRef.current);
+    }, THROTTLE_INTERVAL);
+  }, [publishMessage]);
 
   useEffect(() => {
     if (!config.action || isEditing) return;
@@ -245,6 +277,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     if (!action.topic || !action.messageType) return;
     const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
     if (isJoyMessage && onJoyAxesChange) return;
+    if (isTwistMessageType(action.messageType) && onTwistAxesChange) return;
 
     topicRef.current = new ROSLIB.Topic({
       ros: ros,
@@ -254,6 +287,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     topicRef.current.advertise();
 
     return () => {
+      stopHeldPublishing();
       // Send zero values on cleanup
       if (lastSentValues.current.some(v => v !== 0)) {
         publishThrottled.cancel();
@@ -262,7 +296,16 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, publishMessage, publishThrottled, isEditing, onJoyAxesChange]);
+  }, [
+    ros,
+    config.action,
+    publishMessage,
+    publishThrottled,
+    isEditing,
+    onJoyAxesChange,
+    onTwistAxesChange,
+    stopHeldPublishing,
+  ]);
 
   const handleMove = useCallback((event: IJoystickUpdateEvent) => {
     if (event.x === null || event.y === null || event.distance === null || isEditing) return;
@@ -271,6 +314,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const magnitude = event.distance / 100; // Normalize distance to 0-1.
 
     if (magnitude === 0) {
+      stopHeldPublishing();
       publishThrottled([0, 0]);
       return;
     }
@@ -283,14 +327,17 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     const x = magnitude * Math.cos(angleRad);
     const y = magnitude * Math.sin(angleRad);
 
-    publishThrottled([x, y]);
-  }, [publishThrottled, isEditing]);
+    const values = [x, y];
+    publishThrottled(values);
+    publishWhileHeld(values);
+  }, [publishThrottled, publishWhileHeld, stopHeldPublishing, isEditing]);
 
   const handleStop = useCallback(() => {
     if (isEditing) return;
+    stopHeldPublishing();
     publishThrottled.cancel();
     publishMessage([0, 0]);
-  }, [publishMessage, publishThrottled, isEditing]);
+  }, [publishMessage, publishThrottled, stopHeldPublishing, isEditing]);
 
   // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {

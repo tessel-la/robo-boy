@@ -84,6 +84,9 @@ html, body {
   height: 100dvh; /* Use dynamic viewport height for mobile browsers */
   overflow: hidden; /* Prevent scrolling */
   position: fixed; /* Prevent mobile browser address bar from causing scroll */
+  /* Keep the shell at native-app scale. Interactive surfaces such as the 3D
+     viewer opt into their own touch gestures locally. */
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -155,6 +158,25 @@ textarea {
     border-radius: 8px;
     width: calc(100% - 22px); /* Account for padding and border */
     transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+:root[data-runtime='tauri'] {
+    color-scheme: light;
+}
+
+:root[data-runtime='tauri'] * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root[data-runtime='tauri'][data-theme='dark'] {
+    color-scheme: dark;
+}
+
+:root[data-runtime='tauri'] select option,
+:root[data-runtime='tauri'] select optgroup {
+    background-color: var(--background-color);
+    color: var(--text-color);
 }
 
 label {

@@ -13,10 +13,13 @@ const NODE_TYPE_LABELS: Partial<Record<BehaviorNodeType, string>> = {
   [BehaviorNodeType.Parallel]: 'Parallel',
   [BehaviorNodeType.Retry]: 'Retry',
   [BehaviorNodeType.Repeat]: 'Repeat',
+  [BehaviorNodeType.Timeout]: 'Timeout',
+  [BehaviorNodeType.IfElse]: 'If / Else',
   [BehaviorNodeType.Subtree]: 'Subtree',
   [BehaviorNodeType.Action]: 'Action',
   [BehaviorNodeType.Service]: 'Service',
-  [BehaviorNodeType.Topic]: 'Topic',
+  [BehaviorNodeType.Topic]: 'Publisher',
+  [BehaviorNodeType.Subscriber]: 'Subscriber',
   [BehaviorNodeType.Condition]: 'Condition',
 };
 

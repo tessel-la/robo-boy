@@ -1,0 +1,357 @@
+import { BehaviorTreeAgentRequest } from './types';
+
+const SCHEMA = `Choose the response that matches the user's intent:
+- If the user asks a question, requests an explanation, review, diagnosis, or comparison without explicitly asking to create or modify a behavior tree, return ONLY {"kind":"explanation","message":"a clear, direct answer grounded in the supplied BT and ROS context"}.
+- If the user asks to create, change, fix, or extend a behavior tree, act autonomously and return ONLY one finished tree JSON object with this shape:
+{"name":"tree name","description":"short purpose","blackboardDefaults":{},"nodes":[{"id":"unique-id","type":"sequence|selector|parallel|retry|repeat|timeout|ifElse|action|service|topic|subscriber|subtree","label":"visible label","config":{},"tree":{...only for subtree}}],"edges":[{"source":"parent-id","target":"child-id","sourceHandle":"then|else only for ifElse"}]}
+Action config: {"actionName":"/name","actionType":"pkg/action/Type","parameters":{},"timeout":number,"inputBindings":[{"variable":"name","targetPath":"field.path"}],"outputBindings":[{"sourcePath":"field.path","variable":"name"}]}.
+Service config: {"serviceName":"/name","serviceType":"pkg/srv/Type","request":{},"timeout":number,"inputBindings":[],"outputBindings":[]}.
+Publisher topic config: {"topicName":"/name","messageType":"pkg/msg/Type","message":{},"publishOnce":true,"frequencyHz":number,"durationMs":number,"inputBindings":[]}.
+Subscriber config: {"topicName":"/name","messageType":"pkg/msg/Type","timeout":10000,"outputBindings":[{"sourcePath":"field.path","variable":"name"}]}.
+Timeout config: {"timeout":10000}. If/else config: {"variable":"blackboardName","operator":"truthy|falsy|equals|notEquals|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|exists","expectedValue":any}; connect its branches with sourceHandle "then" and "else".
+Retry/repeat config: {"iterationLimit":3}. A subtree node must contain a complete nested tree object in "tree".
+Edges are directed parent-to-child. Every non-root node should have one parent. Child edge array order is execution order. Use only resources supplied in context unless the user explicitly asks for placeholders.
+For every action and service, fill the complete parameters/request object from its supplied schema and defaults. Movement values such as x, y, z, yaw, distance, displacement, frame, and relative mode must reflect the user's request; do not silently omit them.
+Use blackboardDefaults and bindings when data must flow between subscriber, action, service, publisher, or if/else nodes. Do not invent bindings when static values are sufficient.
+Make reasonable assumptions instead of asking about routine details. In particular:
+- Map forward/backward to x and left/right to y using the robot context; when none is supplied, use ROS convention (+x forward, +y left, +z up).
+- Treat a requested displacement as relative motion, set unspecified displacement axes to 0, preserve/current-or-default yaw when unspecified, and use every remaining schema default.
+- Infer retries, timeout, tolerances, and optional values from context or safe defaults.
+- Put important assumptions in the tree description so the user can inspect them.
+Clarification is an exceptional fallback. Use it only when no safe executable tree can be produced because a truly safety-critical choice or the intended action itself is unknowable. Never ask about a field that has a schema default or a reasonable neutral value. If absolutely blocked, return ONLY {"kind":"clarification","question":"one short specific question","missing":["field"],"suggestions":["recommended concise answer","alternative"]}. Ask at most once in the entire conversation; if the agent has already asked a question, make the best remaining assumptions and finish the tree. Do not include markdown.`;
+
+export const buildBehaviorTreeAgentPrompt = (request: BehaviorTreeAgentRequest): string => {
+  const resources = request.rosResources;
+  const resourceContext = {
+    actions: resources.actions,
+    services: resources.services,
+    topics: resources.topics,
+  };
+  const treeContext =
+    request.treeContext ??
+    (request.currentTree
+      ? {
+          mode: 'open' as const,
+          openTree: request.currentTree,
+          note: 'The user shared the currently open behavior tree.',
+        }
+      : null);
+  const attachments = request.attachments ?? [];
+  const attachmentContext = attachments
+    .map(attachment =>
+      attachment.kind === 'text'
+        ? `File: ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)\n${attachment.content}`
+        : `Image: ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)`
+    )
+    .join('\n\n');
+  const parts = [
+    'You are a robotics behavior-tree architect and assistant. Answer questions directly, and build executable trees only when requested.',
+    SCHEMA,
+    request.settings.systemContext && `Additional agent instructions:\n${request.settings.systemContext}`,
+    request.settings.robotContext && `Robot and mission context:\n${request.settings.robotContext}`,
+    `Available ROS resources:\n${JSON.stringify(resourceContext)}`,
+    `Action and service input schemas (keyed by ROS type):\n${JSON.stringify(request.resourceSchemas)}`,
+    request.settings.includeCurrentTree && treeContext
+      ? `Behavior-tree context selected by the user:\n${JSON.stringify(treeContext)}`
+      : '',
+    attachmentContext && `User attachments:\n${attachmentContext}`,
+    request.conversation?.length
+      ? `Conversation so far:\n${request.conversation.map(message => `${message.role}: ${message.content}`).join('\n')}`
+      : '',
+    `Latest user message:\n${request.prompt}`,
+  ];
+  return parts.filter(Boolean).join('\n\n');
+};
+
+const readSse = async (
+  response: Response,
+  extract: (payload: any) => string | undefined,
+  onToken?: (text: string) => void
+): Promise<string> => {
+  if (!response.body) throw new Error('The provider returned no response body.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = '';
+  let streamDone = false;
+  const consumeBlock = (block: string) => {
+    for (const line of block.split(/\r?\n/)) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      const token = extract(JSON.parse(data));
+      if (token) {
+        result += token;
+        onToken?.(token);
+      }
+    }
+  };
+  while (!streamDone) {
+    const { value, done } = await reader.read();
+    streamDone = done;
+    buffer += decoder.decode(value, { stream: !streamDone });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() ?? '';
+    blocks.forEach(consumeBlock);
+  }
+  if (buffer.trim()) consumeBlock(buffer);
+  return result;
+};
+
+const readNdjson = async (
+  response: Response,
+  extract: (payload: any) => string | undefined,
+  onToken?: (text: string) => void
+): Promise<string> => {
+  if (!response.body) throw new Error('The provider returned no response body.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = '';
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const payload = JSON.parse(trimmed);
+    if (payload.error) throw new Error(String(payload.error));
+    const token = extract(payload);
+    if (token) {
+      result += token;
+      onToken?.(token);
+    }
+  };
+
+  let streamDone = false;
+  while (!streamDone) {
+    const { value, done } = await reader.read();
+    streamDone = done;
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+    lines.forEach(consumeLine);
+  }
+  if (buffer.trim()) consumeLine(buffer);
+  return result;
+};
+
+const checkedFetch = async (url: string, init: RequestInit): Promise<Response> => {
+  const response = await fetch(url, init);
+  if (response.ok) return response;
+  const body = await response.text();
+  let message = body;
+  try {
+    const payload = JSON.parse(body);
+    message = typeof payload?.error === 'string' ? payload.error : payload?.error?.message ?? body;
+  } catch {
+    /* keep raw body */
+  }
+  throw new Error(`${response.status} ${response.statusText}${message ? `: ${message.slice(0, 500)}` : ''}`);
+};
+
+const getOllamaApiBaseUrl = (baseUrl: string): string => {
+  const normalized = baseUrl.trim().replace(/\/+$/, '');
+  if (normalized.endsWith('/api')) return normalized;
+  if (normalized.endsWith('/v1')) return `${normalized.slice(0, -3)}/api`;
+  return `${normalized}/api`;
+};
+
+export const fetchOllamaModels = async (
+  baseUrl: string,
+  apiKey = '',
+  signal?: AbortSignal
+): Promise<string[]> => {
+  if (!baseUrl.trim()) throw new Error('Set the Ollama base URL before loading models.');
+  const headers: Record<string, string> = {};
+  if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`;
+  const apiBaseUrl = getOllamaApiBaseUrl(baseUrl);
+
+  try {
+    const response = await checkedFetch(`${apiBaseUrl}/tags`, { method: 'GET', signal, headers });
+    const payload = await response.json();
+    if (!Array.isArray(payload?.models)) throw new Error('Ollama returned an invalid model list.');
+    const names = payload.models
+      .map((model: any): unknown => model?.name ?? model?.model)
+      .filter((name: unknown): name is string => typeof name === 'string' && Boolean(name.trim()));
+    return Array.from(new Set<string>(names)).sort((left, right) => left.localeCompare(right));
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
+    const detail = cause instanceof Error ? cause.message : 'Unknown connection error';
+    throw new Error(
+      `Ollama model discovery failed at ${apiBaseUrl}: ${detail}. ` +
+      'For remote connections, make sure Ollama listens on the VPN or LAN interface.'
+    );
+  }
+};
+
+const blobToBase64 = async (blob: Blob): Promise<string> => {
+  const buffer =
+    typeof blob.arrayBuffer === 'function'
+      ? await blob.arrayBuffer()
+      : await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(reader.error ?? new Error('Could not read recorded audio.'));
+          reader.onload = () => resolve(reader.result as ArrayBuffer);
+          reader.readAsArrayBuffer(blob);
+        });
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+};
+
+export const transcribeAgentAudio = async (
+  audio: Blob,
+  settings: BehaviorTreeAgentRequest['settings'],
+  signal?: AbortSignal
+): Promise<string> => {
+  if (!settings.baseUrl.trim()) {
+    throw new Error('Set a base URL before using voice input.');
+  }
+  if (settings.provider === 'ollama') {
+    throw new Error('Ollama does not provide an audio transcription endpoint. Use browser voice recognition instead.');
+  }
+  if (settings.provider !== 'openai-compatible' && !settings.apiKey.trim()) {
+    throw new Error(`Add an API key for ${settings.provider} before using voice input.`);
+  }
+
+  if (settings.provider === 'gemini') {
+    const url = `${settings.baseUrl.replace(/\/$/, '')}/models/${encodeURIComponent(settings.model)}:generateContent`;
+    const response = await checkedFetch(url, {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: 'Transcribe this audio exactly. Return only the transcript without commentary.' },
+              { inlineData: { mimeType: audio.type || 'audio/webm', data: await blobToBase64(audio) } },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+    const payload = await response.json();
+    const transcript = payload.candidates?.[0]?.content?.parts
+      ?.map((part: any) => part.text ?? '')
+      .join('')
+      .trim();
+    if (!transcript) throw new Error('The speech model returned an empty transcript.');
+    return transcript;
+  }
+
+  const form = new FormData();
+  const extension = audio.type.includes('ogg') ? 'ogg' : audio.type.includes('mp4') ? 'm4a' : 'webm';
+  form.append('file', audio, `instruction.${extension}`);
+  form.append('model', settings.provider === 'openai' ? 'gpt-4o-mini-transcribe' : 'whisper-1');
+  const headers: Record<string, string> = {};
+  if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+  const response = await checkedFetch(`${settings.baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+    method: 'POST',
+    signal,
+    headers,
+    body: form,
+  });
+  const payload = await response.json();
+  const transcript = typeof payload.text === 'string' ? payload.text.trim() : '';
+  if (!transcript) throw new Error('The speech model returned an empty transcript.');
+  return transcript;
+};
+
+export const generateBehaviorTree = async (request: BehaviorTreeAgentRequest): Promise<string> => {
+  const { settings, signal, onProgress, onToken } = request;
+  const prompt = buildBehaviorTreeAgentPrompt(request);
+  const imageAttachments = (request.attachments ?? []).filter(attachment => attachment.kind === 'image');
+  onProgress?.(`Contacting ${settings.provider} (${settings.model})…`);
+
+  if (settings.provider === 'gemini') {
+    const url = `${settings.baseUrl.replace(/\/$/, '')}/models/${encodeURIComponent(settings.model)}:streamGenerateContent?alt=sse`;
+    const response = await checkedFetch(url, {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              ...imageAttachments.map(attachment => ({
+                inlineData: { mimeType: attachment.mimeType, data: attachment.content },
+              })),
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+      }),
+    });
+    onProgress?.('Receiving and assembling the tree…');
+    return readSse(
+      response,
+      payload => payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? '').join(''),
+      onToken
+    );
+  }
+
+  if (settings.provider === 'ollama') {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (settings.apiKey.trim()) headers.Authorization = `Bearer ${settings.apiKey.trim()}`;
+    const response = await checkedFetch(`${getOllamaApiBaseUrl(settings.baseUrl)}/chat`, {
+      method: 'POST',
+      signal,
+      headers,
+      body: JSON.stringify({
+        model: settings.model,
+        stream: true,
+        format: 'json',
+        options: { temperature: 0.2 },
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+            ...(imageAttachments.length > 0
+              ? { images: imageAttachments.map(attachment => attachment.content) }
+              : {}),
+          },
+        ],
+      }),
+    });
+    onProgress?.('Receiving and assembling the tree…');
+    return readNdjson(response, payload => payload.message?.content, onToken);
+  }
+
+  const url = `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+  const response = await checkedFetch(url, {
+    method: 'POST',
+    signal,
+    headers,
+    body: JSON.stringify({
+      model: settings.model,
+      stream: true,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content:
+            imageAttachments.length > 0
+              ? [
+                  { type: 'text', text: prompt },
+                  ...imageAttachments.map(attachment => ({
+                    type: 'image_url',
+                    image_url: { url: `data:${attachment.mimeType};base64,${attachment.content}` },
+                  })),
+                ]
+              : prompt,
+        },
+      ],
+    }),
+  });
+  onProgress?.('Receiving and assembling the tree…');
+  return readSse(response, payload => payload.choices?.[0]?.delta?.content, onToken);
+};

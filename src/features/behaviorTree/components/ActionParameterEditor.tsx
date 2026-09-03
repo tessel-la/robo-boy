@@ -1,15 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
-import { ROSActionNodeData } from '../types';
+import { BlackboardInputBinding, BlackboardOutputBinding, BlackboardValueType, ROSActionNodeData } from '../types';
 import { fetchActionGoalDetails, ActionFieldSchema } from '../services/rosDiscovery';
 import { ACTION_TEMPLATES } from '../actionTemplates';
+import BlackboardBindingEditor, { BlackboardPathSuggestion, completeBindings } from './BlackboardBindingEditor';
 import './ActionParameterEditor.css';
 
 interface ActionParameterEditorProps {
   nodeData: ROSActionNodeData;
   ros: Ros | null;
-  onSave: (parameters: Record<string, any>) => void;
+  onSave: (
+    parameters: Record<string, any>,
+    input?: BlackboardInputBinding[],
+    output?: BlackboardOutputBinding[]
+  ) => void;
   onClose: () => void;
+  blackboardVariables?: string[];
+  blackboardValues?: Record<string, unknown>;
+  blackboardTypes?: Record<string, BlackboardValueType>;
 }
 
 // ─── Type helpers ─────────────────────────────────────────────────────────────
@@ -71,11 +79,15 @@ function inferRosType(value: unknown): string {
 }
 
 function fieldsFromValues(vals: Record<string, any>): ActionFieldSchema[] {
-  return Object.keys(vals).map(name => ({
-    name,
-    rosType: inferRosType(vals[name]),
-    arrayLen: Array.isArray(vals[name]) ? vals[name].length : -1,
-  }));
+  return Object.keys(vals).map(name => {
+    const value = vals[name];
+    return {
+      name,
+      rosType: inferRosType(value),
+      arrayLen: Array.isArray(value) ? value.length : -1,
+      subfields: value && typeof value === 'object' && !Array.isArray(value) ? fieldsFromValues(value) : undefined,
+    };
+  });
 }
 
 function formatPreview(rosType: string, val: unknown, subfields?: ActionFieldSchema[]): string {
@@ -120,14 +132,16 @@ const FieldListRow: React.FC<{
   basePath: string[];
   onPush: (frame: NavFrame) => void;
   onInlineChange: (path: string[], val: unknown) => void;
-}> = ({ field, value, basePath, onPush, onInlineChange }) => {
+  connections: string[];
+}> = ({ field, value, basePath, onPush, onInlineChange, connections }) => {
   const fieldPath = [...basePath, field.name];
   const hasSubfields = (field.subfields?.length ?? 0) > 0;
 
   if (isBoolType(field.rosType)) {
     return (
-      <div className="ape-list-row">
+      <div className={`ape-list-row${connections.length ? ' connected' : ''}`}>
         <span className="ape-list-name">{field.name.toUpperCase()}</span>
+        {connections.length > 0 && <span className="ape-connected-badge">← {connections.join(', ')}</span>}
         <button
           className={`ape-toggle${value ? ' on' : ''}`}
           onClick={() => onInlineChange(fieldPath, !value)}
@@ -147,7 +161,7 @@ const FieldListRow: React.FC<{
 
   return (
     <button
-      className="ape-list-row ape-list-row-tap"
+      className={`ape-list-row ape-list-row-tap${connections.length ? ' connected' : ''}`}
       type="button"
       onClick={() => onPush(hasSubfields ? { kind: 'list', path: fieldPath } : { kind: 'edit', path: basePath, field })}
     >
@@ -156,6 +170,7 @@ const FieldListRow: React.FC<{
         {hasSubfields && <span className="ape-type-badge">{shortType}</span>}
       </div>
       <div className="ape-list-right">
+        {connections.length > 0 && <span className="ape-connected-badge">← {connections.length === 1 ? connections[0] : `${connections.length} values`}</span>}
         <span className="ape-list-preview">{preview}</span>
         <span className="ape-chevron">›</span>
       </div>
@@ -266,12 +281,30 @@ const FieldEditView: React.FC<{
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData, ros, onSave, onClose }) => {
+const fieldPaths = (fields: ActionFieldSchema[], prefix = ''): BlackboardPathSuggestion[] =>
+  fields.flatMap(field => {
+    const path = prefix ? `${prefix}.${field.name}` : field.name;
+    return field.subfields?.length
+      ? [{ path, rosType: field.rosType }, ...fieldPaths(field.subfields, path)]
+      : [{ path, rosType: field.rosType }];
+  });
+
+const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({
+  nodeData,
+  ros,
+  onSave,
+  onClose,
+  blackboardVariables = [],
+  blackboardValues = {},
+  blackboardTypes = {},
+}) => {
   const [fields, setFields] = useState<ActionFieldSchema[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('{}');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [inputBindings, setInputBindings] = useState<BlackboardInputBinding[]>(() => nodeData.inputBindings || []);
+  const [outputBindings, setOutputBindings] = useState<BlackboardOutputBinding[]>(() => nodeData.outputBindings || []);
   const [isLoading, setIsLoading] = useState(false);
   const [navStack, setNavStack] = useState<NavFrame[]>([{ kind: 'list', path: [] }]);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
@@ -348,15 +381,17 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
   };
 
   const handleSave = () => {
+    const parsedInput = completeBindings(inputBindings);
+    const parsedOutput = completeBindings(outputBindings);
     if (viewMode === 'json') {
       try {
-        onSave(JSON.parse(jsonText));
+        onSave(JSON.parse(jsonText), parsedInput, parsedOutput);
         onClose();
       } catch {
         setJsonError('Invalid JSON — fix before saving');
       }
     } else {
-      onSave(values);
+      onSave(values, parsedInput, parsedOutput);
       onClose();
     }
   };
@@ -455,6 +490,27 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
 
         {/* Body */}
         <div className="ape-body">
+          {!canGoBack && (
+            <div className="ape-binding-grid">
+              <BlackboardBindingEditor
+                direction="input"
+                bindings={inputBindings}
+                onChange={bindings => setInputBindings(bindings as BlackboardInputBinding[])}
+                blackboardVariables={blackboardVariables}
+                blackboardValues={blackboardValues}
+                blackboardTypes={blackboardTypes}
+                pathSuggestions={fieldPaths(fields)}
+                pathLabel="Goal field"
+              />
+              <BlackboardBindingEditor
+                direction="output"
+                bindings={outputBindings}
+                onChange={bindings => setOutputBindings(bindings as BlackboardOutputBinding[])}
+                blackboardVariables={blackboardVariables}
+                pathLabel="Result field"
+              />
+            </div>
+          )}
           {viewMode === 'json' ? (
             <div className="ape-json-view">
               <textarea
@@ -488,6 +544,9 @@ const ActionParameterEditor: React.FC<ActionParameterEditorProps> = ({ nodeData,
                   basePath={currentFrame.path}
                   onPush={pushFrame}
                   onInlineChange={setValueAtPath}
+                  connections={inputBindings
+                    .filter(binding => binding.targetPath === [...currentFrame.path, f.name].join('.') || binding.targetPath.startsWith(`${[...currentFrame.path, f.name].join('.')}.`))
+                    .map(binding => binding.variable)}
                 />
               ))}
             </div>

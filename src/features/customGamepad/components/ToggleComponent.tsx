@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { executeRosOperation } from '../../../utils/rosOperations';
 
 interface ToggleComponentProps {
   config: GamepadComponentConfig;
@@ -13,6 +14,8 @@ interface ToggleComponentProps {
 const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
   const topicRef = useRef<Topic | null>(null);
   const [isOn, setIsOn] = useState(false);
+  const [operationStatus, setOperationStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const operationController = useRef<AbortController | null>(null);
 
   const publishMessage = useCallback((state: boolean) => {
     if (!topicRef.current || isEditing) return;
@@ -37,7 +40,7 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
   }, [config, isEditing]);
 
   useEffect(() => {
-    if (!config.action || isEditing) return;
+    if (!config.action || config.eventOperations || isEditing) return;
 
     const action = config.action as ROSTopicConfig;
     if (!action.topic || !action.messageType) return;
@@ -58,15 +61,35 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
       topicRef.current?.unadvertise();
       topicRef.current = null;
     };
-  }, [ros, config.action, isEditing]);
+  }, [ros, config.action, config.eventOperations, isEditing]);
 
-  const handleToggle = useCallback(() => {
-    if (isEditing) return;
+  useEffect(() => () => operationController.current?.abort(), []);
+
+  const handleToggle = useCallback(async () => {
+    if (isEditing || operationController.current) return;
     
     const newState = !isOn;
     setIsOn(newState);
-    publishMessage(newState);
-  }, [isOn, publishMessage, isEditing]);
+    const operation = config.eventOperations?.[newState ? 'on' : 'off'];
+    if (!operation) {
+      publishMessage(newState);
+      return;
+    }
+    const controller = new AbortController();
+    operationController.current = controller;
+    setOperationStatus('pending');
+    try {
+      await executeRosOperation(ros, operation, controller.signal);
+      setOperationStatus('success');
+    } catch {
+      if (!controller.signal.aborted) {
+        setOperationStatus('error');
+        setIsOn(!newState);
+      }
+    } finally {
+      operationController.current = null;
+    }
+  }, [config.eventOperations, isOn, publishMessage, isEditing, ros]);
 
   const toggleStyle: React.CSSProperties = {
     width: '100%',
@@ -112,7 +135,7 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
   };
 
   return (
-    <div className="toggle-component" style={toggleStyle}>
+    <div className={`toggle-component operation-${operationStatus}`} style={toggleStyle}>
       {config.label && (
         <div style={labelStyle}>
           {config.label}
@@ -127,6 +150,9 @@ const ToggleComponent: React.FC<ToggleComponentProps> = ({ config, ros, isEditin
       </div>
       <div style={{ fontSize: `${0.8 * scaleFactor}em`, color: 'var(--text-color-secondary)' }}>
         {isOn ? 'ON' : 'OFF'}
+      </div>
+      <div className="component-operation-status" role="status" aria-live="polite">
+        {operationStatus === 'pending' ? 'Calling' : operationStatus === 'error' ? 'Failed' : ''}
       </div>
     </div>
   );

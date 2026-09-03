@@ -12,7 +12,7 @@ interface UseTfTreeResult {
   refresh: () => void;
 }
 
-export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
+export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => {
   const [state, setState] = useState<TfTreeState>(createEmptyTfTreeState);
   const [isPaused, setIsPaused] = useState(false);
   const [subscriptionRevision, setSubscriptionRevision] = useState(0);
@@ -40,21 +40,25 @@ export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
   );
 
   useEffect(() => {
-    if (!ros) return;
+    if (!ros || !isActive) {
+      if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+      return;
+    }
 
     const dynamicTopic = new ROSLIB.Topic({
       ros,
       name: '/tf',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 10,
-      throttle_rate: 0,
+      queue_length: 1,
+      throttle_rate: 50,
       compression: 'cbor',
     });
     const staticTopic = new ROSLIB.Topic({
       ros,
       name: '/tf_static',
       messageType: 'tf2_msgs/TFMessage',
-      queue_size: 10,
+      queue_length: 1,
       throttle_rate: 0,
       compression: 'cbor',
     });
@@ -68,7 +72,7 @@ export const useTfTree = (ros: Ros | null): UseTfTreeResult => {
       if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     };
-  }, [consume, ros, subscriptionRevision]);
+  }, [consume, isActive, ros, subscriptionRevision]);
 
   const pause = useCallback(() => {
     pausedRef.current = true;

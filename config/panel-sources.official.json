@@ -1,0 +1,19 @@
+{
+  "$schema": "./panel-sources.schema.json",
+  "schemaVersion": 2,
+  "sources": [
+    {
+      "type": "remote",
+      "name": "roboboy-official",
+      "catalogUrl": "https://raw.githubusercontent.com/tessel-la/robo-boy-panel-inventory/main/catalog.json",
+      "allowedOrigins": [
+        "https://github.com",
+        "https://objects.githubusercontent.com",
+        "https://release-assets.githubusercontent.com"
+      ]
+    }
+  ],
+  "selection": {
+    "mode": "all"
+  }
+}

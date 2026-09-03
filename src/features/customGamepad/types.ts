@@ -37,6 +37,12 @@ export interface GamepadComponentConfig {
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
+  eventOperations?: {
+    press?: RosOperation;
+    release?: RosOperation;
+    on?: RosOperation;
+    off?: RosOperation;
+  };
   style?: {
     color?: string;
     size?: 'small' | 'medium' | 'large';
@@ -46,6 +52,7 @@ export interface GamepadComponentConfig {
     // Joystick specific
     maxValue?: number;
     axes?: string[]; // Which axes to map to
+    axisScales?: number[]; // Optional per-axis output scaling after range mapping
     poseStampedFrameId?: string;
     poseStampedReferenceMode?: 'frame' | 'tf' | 'odometry';
     poseStampedReferenceFrameId?: string;
@@ -95,6 +102,11 @@ export interface GamepadComponentConfig {
 }
 
 export type JoyAxesPublisher = (
+  config: GamepadComponentConfig,
+  values: number[]
+) => boolean;
+
+export type TwistAxesPublisher = (
   config: GamepadComponentConfig,
   values: number[]
 ) => boolean;
@@ -165,3 +177,4 @@ export interface EditorState {
   showGrid: boolean;
   snapToGrid: boolean;
 } 
+import type { RosOperation } from '../../utils/rosOperations';

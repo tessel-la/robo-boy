@@ -18,7 +18,11 @@ interface ComponentPaletteProps {
   onDragEnd?: () => void;
   onExpandedChange?: (expanded: boolean) => void;
   forceCollapsed?: boolean;
+  contentOnly?: boolean;
 }
+
+const TOUCH_HOLD_DURATION_MS = 420;
+const TOUCH_MOVE_TOLERANCE_PX = 8;
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   selectedComponent,
@@ -26,11 +30,14 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   onDragStart,
   onDragEnd,
   onExpandedChange,
-  forceCollapsed = false
+  forceCollapsed = false,
+  contentOnly = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredComponent, setHoveredComponent] = useState<string | null>(null);
   const [draggingComponent, setDraggingComponent] = useState<string | null>(null);
+  const [holdingComponent, setHoldingComponent] = useState<string | null>(null);
+  const suppressNativeDragRef = useRef(false);
 
   // Mock ros object for preview components
   const mockRos = {
@@ -122,6 +129,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent, componentType: string) => {
+    // Touch placement is handled by the editor's custom gesture flow. Cancelling
+    // the parallel native drag prevents the browser's square drag preview.
+    if (suppressNativeDragRef.current) {
+      e.preventDefault();
+      return;
+    }
+
     setDraggingComponent(componentType);
     onDragStart?.(componentType);
     onComponentSelect(componentType); // Also set as selected for visual feedback
@@ -161,42 +175,85 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     onDragEnd?.();
   };
 
-  // Touch handling - for touch devices, start drag on touch move
+  // A stationary hold anywhere on a card starts dragging. Moving first cancels
+  // the hold so the same surface still behaves like a normal scrolling list.
   const touchStartRef = useRef<{ x: number; y: number; componentType: string } | null>(null);
+  const touchHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchCardRef = useRef<HTMLElement | null>(null);
   const isDraggingRef = useRef(false);
-  const DRAG_THRESHOLD = 5; // Lower threshold for easier drag initiation
+
+  const cancelTouchHold = useCallback(() => {
+    if (touchHoldTimeoutRef.current) clearTimeout(touchHoldTimeoutRef.current);
+    touchHoldTimeoutRef.current = null;
+    setHoldingComponent(null);
+  }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent, componentType: string) => {
     const touch = e.touches[0];
+    const card = e.currentTarget as HTMLElement;
+    if (touchCardRef.current && touchCardRef.current !== card) {
+      touchCardRef.current.draggable = true;
+    }
+    touchCardRef.current = card;
+    suppressNativeDragRef.current = true;
+    card.draggable = false;
+    const bounds = card.getBoundingClientRect();
+    const originX = touch.clientX - bounds.left;
+    const originY = touch.clientY - bounds.top;
+    const radius = Math.max(
+      Math.hypot(originX, originY),
+      Math.hypot(bounds.width - originX, originY),
+      Math.hypot(originX, bounds.height - originY),
+      Math.hypot(bounds.width - originX, bounds.height - originY)
+    );
+
+    card.style.setProperty('--hold-origin-x', `${originX}px`);
+    card.style.setProperty('--hold-origin-y', `${originY}px`);
+    card.style.setProperty('--hold-radius', `${radius}px`);
+    cancelTouchHold();
     touchStartRef.current = {
       x: touch.clientX,
       y: touch.clientY,
       componentType
     };
     isDraggingRef.current = false;
-    // Immediately signal selection for visual feedback
-    onComponentSelect(componentType);
-  }, [onComponentSelect]);
+    setHoldingComponent(componentType);
+    touchHoldTimeoutRef.current = setTimeout(() => {
+      if (touchStartRef.current?.componentType !== componentType) return;
+      touchHoldTimeoutRef.current = null;
+      isDraggingRef.current = true;
+      setHoldingComponent(null);
+      setDraggingComponent(componentType);
+      onComponentSelect(componentType);
+      onDragStart?.(componentType);
+    }, TOUCH_HOLD_DURATION_MS);
+  }, [cancelTouchHold, onComponentSelect, onDragStart]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
+    if (!touchStartRef.current || isDraggingRef.current) return;
     
     const touch = e.touches[0];
-    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
-    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
     
-    // If moved beyond threshold, start dragging
-    if (!isDraggingRef.current && (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD)) {
-      isDraggingRef.current = true;
-      setDraggingComponent(touchStartRef.current.componentType);
-      onDragStart?.(touchStartRef.current.componentType);
+    if (Math.hypot(deltaX, deltaY) > TOUCH_MOVE_TOLERANCE_PX) {
+      cancelTouchHold();
+      touchStartRef.current = null;
     }
-  }, [onDragStart]);
+  }, [cancelTouchHold]);
 
   const handleTouchEnd = useCallback(() => {
-    // Just clear local refs - parent will handle state clearing via global touch handler
+    cancelTouchHold();
+    if (touchCardRef.current) touchCardRef.current.draggable = true;
+    touchCardRef.current = null;
+    suppressNativeDragRef.current = false;
     touchStartRef.current = null;
     isDraggingRef.current = false;
+  }, [cancelTouchHold]);
+
+  useEffect(() => () => {
+    if (touchHoldTimeoutRef.current) clearTimeout(touchHoldTimeoutRef.current);
+    if (touchCardRef.current) touchCardRef.current.draggable = true;
   }, []);
 
   // Determine if we're in the buttons row (parent has sidebar-buttons-row class)
@@ -214,7 +271,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   return (
     <div ref={containerRef} className={`component-palette ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Collapsed State - only shown in buttons row */}
-      {isInButtonsRow && (
+      {!contentOnly && isInButtonsRow && (
         <div className="palette-collapsed">
           <div className="collapsed-content">
             <h3 className="collapsed-title">component</h3>
@@ -236,31 +293,33 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       )}
 
       {/* Expanded State - shown when in expanded area */}
-      {!isInButtonsRow && (
+      {(contentOnly || !isInButtonsRow) && (
         <>
           <div className="palette-content">
             <div className="palette-hint">
-              <span>Drag & drop to add components</span>
+              <span>Press and hold a component to drag it onto the grid</span>
             </div>
             <div className="component-grid">
               {componentLibrary.map(component => {
                 const isSelected = selectedComponent === component.type;
                 const isHovered = hoveredComponent === component.type;
                 const isDragging = draggingComponent === component.type;
+                const isHolding = holdingComponent === component.type;
                 
                 return (
                   <div
                     key={component.type}
-                    className={`component-card ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''}`}
+                    className={`component-card ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''} ${isHolding ? 'is-holding' : ''}`}
                     draggable
                     onDragStart={(e) => handleDragStart(e, component.type)}
                     onDragEnd={handleDragEnd}
                     onTouchStart={(e) => handleTouchStart(e, component.type)}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchEnd}
                     onMouseEnter={() => setHoveredComponent(component.type)}
                     onMouseLeave={() => setHoveredComponent(null)}
-                    title={`Drag to add ${component.name}`}
+                    title={`Press and hold to drag ${component.name}`}
                   >
                     <div className="component-info">
                       <div className="component-preview">
@@ -273,11 +332,6 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                     </div>
                     <div className="component-size">
                       {component.defaultSize.width}×{component.defaultSize.height}
-                    </div>
-                    <div className="drag-indicator">
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                      </svg>
                     </div>
                   </div>
                 );

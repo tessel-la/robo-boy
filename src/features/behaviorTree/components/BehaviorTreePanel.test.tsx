@@ -24,6 +24,16 @@ const executorMock = vi.hoisted(() => ({
   }>,
 }));
 
+const rosDiscoveryMock = vi.hoisted(() => ({
+  discoverAllROSResources: vi.fn(),
+  fetchActionGoalDetails: vi.fn(),
+  fetchServiceRequestSchema: vi.fn(),
+}));
+
+const agentClientMock = vi.hoisted(() => ({
+  generateBehaviorTree: vi.fn(),
+}));
+
 const createRect = (x: number, y: number, width: number, height: number): DOMRect => ({
   x,
   y,
@@ -35,6 +45,12 @@ const createRect = (x: number, y: number, width: number, height: number): DOMRec
   bottom: y + height,
   toJSON: () => ({}),
 } as DOMRect);
+
+const setCanvasRect = (rect = createRect(0, 0, 800, 600)): HTMLElement => {
+  const canvas = document.querySelector('.bt-canvas') as HTMLElement;
+  canvas.getBoundingClientRect = () => rect;
+  return canvas;
+};
 
 const createMatchMedia =
   (matches: boolean) =>
@@ -140,6 +156,9 @@ vi.mock('../engine/executor', () => ({
     }
   ),
 }));
+
+vi.mock('../services/rosDiscovery', () => rosDiscoveryMock);
+vi.mock('../agent/agentClient', () => agentClientMock);
 
 vi.mock('reactflow', () => ({
   default: (props: {
@@ -295,9 +314,32 @@ describe('BehaviorTreePanel', () => {
     reactFlowMock.setCenter.mockReset();
     reactFlowMock.fitView.mockReset();
     executorMock.instances = [];
+    rosDiscoveryMock.discoverAllROSResources.mockReset();
+    rosDiscoveryMock.fetchActionGoalDetails.mockReset();
+    rosDiscoveryMock.fetchServiceRequestSchema.mockReset();
+    agentClientMock.generateBehaviorTree.mockReset();
+    rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({ actions: [], services: [], topics: [] });
+    rosDiscoveryMock.fetchActionGoalDetails.mockResolvedValue(null);
+    rosDiscoveryMock.fetchServiceRequestSchema.mockResolvedValue(null);
+    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
+      name: 'Generated',
+      nodes: [{ id: 'generated-root', type: 'sequence', label: 'Generated root' }],
+      edges: [],
+    }));
     window.matchMedia = createMatchMedia(false);
     window.confirm = vi.fn(() => true);
     localStorage.clear();
+  });
+
+  it('persists the keep-running execution preference', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    const toggle = screen.getByRole('checkbox', { name: 'Keep running' });
+
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+
+    expect(toggle).toBeChecked();
+    expect(localStorage.getItem('robo-boy-bt-persistent-execution')).toBe('true');
   });
 
   it('does not open the node palette until the user toggles it', () => {
@@ -308,6 +350,136 @@ describe('BehaviorTreePanel', () => {
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
 
     expect(screen.getByTestId('bt-node-palette')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close node palette' }));
+    expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
+  });
+
+  it('closes the desktop palette after adding a node', async () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    setCanvasRect();
+
+    fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    fireEvent.click(screen.getByText('Sequence'));
+
+    expect(screen.queryByTestId('bt-node-palette')).not.toBeInTheDocument();
+    await waitFor(() => {
+      const latestProps = reactFlowMock.render.mock.lastCall?.[0] as { nodes: Array<Record<string, any>> };
+      expect(latestProps.nodes.some(node => node.type === 'sequence')).toBe(true);
+    });
+  });
+
+  it('opens and closes the AI behavior tree agent', () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    expect(screen.getByTestId('bt-agent-panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Describe the behavior')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    fireEvent.pointerDown(document.querySelector('.bt-agent-overlay')!);
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+  });
+
+  it('opens a compact inline agent instruction at the canvas pointer with Ctrl+I', async () => {
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+
+    fireEvent.pointerMove(screen.getByTestId('bt-canvas'), { clientX: 240, clientY: 180 });
+    fireEvent.keyDown(window, { key: 'i', ctrlKey: true });
+
+    const prompt = await screen.findByLabelText('Inline AI instruction');
+    await waitFor(() => expect(prompt).toHaveFocus());
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Send inline AI instruction').querySelector('.bt-agent-inline-ai-icon')).toBeInTheDocument();
+
+    fireEvent.change(prompt, { target: { value: 'Add a stop action to this sequence' } });
+    fireEvent.submit(prompt.closest('form')!);
+
+    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+    await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalled());
+  });
+
+  it('previews agent changes on the canvas and accepts them from the popup', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'agent-current-tree',
+            name: 'Agent Current Tree',
+            nodes: [
+              {
+                id: 'root',
+                type: 'sequence',
+                position: { x: 0, y: 0 },
+                data: { label: 'Root', type: 'sequence' },
+              },
+              {
+                id: 'move',
+                type: 'action',
+                position: { x: 0, y: 120 },
+                data: { label: 'Move', actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 0 } },
+              },
+            ],
+            edges: [{ id: 'root-move', source: 'root', target: 'move' }],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+    rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({
+      actions: [{ name: '/move', type: 'robot/action/Move', namespace: '/move' }],
+      services: [],
+      topics: [],
+    });
+    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
+      name: 'Accepted Agent Tree',
+      description: 'Move farther',
+      nodes: [
+        { id: 'root', type: 'sequence', label: 'Root' },
+        { id: 'move', type: 'action', label: 'Move', config: { actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1, y: 0 } } },
+        { id: 'wait', type: 'timeout', label: 'Wait', config: { timeout: 500 } },
+      ],
+      edges: [
+        { source: 'root', target: 'move' },
+        { source: 'root', target: 'wait' },
+      ],
+    }));
+
+    render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    setCanvasRect();
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Agent Current Tree'));
+    await screen.findByTestId('rf-node-move');
+
+    fireEvent.click(screen.getByTestId('bt-open-agent'));
+    fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move one meter and wait' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+
+    const banner = await screen.findByTestId('bt-agent-canvas-preview-banner');
+    expect(banner).toHaveTextContent('Agent preview');
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add subtree' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit' }));
+    await waitFor(() => {
+      expect(reactFlowMock.fitView).toHaveBeenCalledWith(expect.objectContaining({ padding: 0.2, maxZoom: 1.15 }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('bt-agent-canvas-preview-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-wait')).toBeInTheDocument();
+    });
   });
 
   it('uses a touch-friendly connection radius', () => {
@@ -322,6 +494,45 @@ describe('BehaviorTreePanel', () => {
         selectionOnDrag: false,
       })
     );
+  });
+
+  it('does not ask React Flow to fit a hidden behavior tree canvas', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'hidden-tree',
+            name: 'Hidden Tree',
+            nodes: [
+              {
+                id: 'hidden-node',
+                type: 'sequence',
+                position: { x: null, y: 'not-a-number' },
+                data: { label: 'Hidden Node', type: 'sequence' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive={false} />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('Hidden Tree'));
+
+    await screen.findByTestId('rf-node-hidden-node');
+    expect(reactFlowMock.render.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ fitView: false })
+    );
+    expect(reactFlowMock.fitView).not.toHaveBeenCalled();
+    const latestProps = reactFlowMock.render.mock.lastCall?.[0] as { nodes: Array<Record<string, any>> };
+    expect(latestProps.nodes[0].position).toEqual({ x: 0, y: 0 });
   });
 
   it('offers a responsive tree arrangement action', () => {
@@ -502,6 +713,7 @@ describe('BehaviorTreePanel', () => {
     );
 
     render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Follow Tree'));
     await screen.findByTestId('rf-node-node-follow');
@@ -737,6 +949,7 @@ describe('BehaviorTreePanel', () => {
     );
 
     render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Center Tree'));
 
@@ -1099,6 +1312,7 @@ describe('BehaviorTreePanel', () => {
     });
 
     fireEvent.click(screen.getByTestId('bt-palette-toggle'));
+    setCanvasRect();
     fireEvent.click(screen.getByText('Retry'));
     await waitFor(() => {
       const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {

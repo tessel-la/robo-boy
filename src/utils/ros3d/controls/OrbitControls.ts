@@ -19,7 +19,6 @@ export class OrbitControls {
     private state = this.STATE.NONE;
 
     private spherical = new THREE.Spherical();
-    private _sphericalDelta = new THREE.Spherical();
     private scale = 1;
     private panOffset = new THREE.Vector3();
 
@@ -34,6 +33,7 @@ export class OrbitControls {
     // Track touch points for multi-touch gestures
     private prevTouchDistance = -1;
     private prevTouchMidpoint = new THREE.Vector2();
+    private readonly EPS = 0.000001;
 
     // Double-tap detection
     private lastTapTime = 0;
@@ -81,12 +81,13 @@ export class OrbitControls {
 
         // Add event listeners
         this.element.addEventListener('mousedown', this.onMouseDown, false);
-        this.element.addEventListener('wheel', this.onMouseWheel, false);
+        this.element.addEventListener('wheel', this.onMouseWheel, { passive: false });
 
         // Add touch event listeners
-        this.element.addEventListener('touchstart', this.onTouchStart, false);
-        this.element.addEventListener('touchmove', this.onTouchMove, false);
-        this.element.addEventListener('touchend', this.onTouchEnd, false);
+        this.element.addEventListener('touchstart', this.onTouchStart, { passive: false });
+        this.element.addEventListener('touchmove', this.onTouchMove, { passive: false });
+        this.element.addEventListener('touchend', this.onTouchEnd, { passive: false });
+        this.element.addEventListener('touchcancel', this.onTouchEnd, { passive: false });
 
         // Initial update
         this.update();
@@ -101,6 +102,27 @@ export class OrbitControls {
         this.spherical.setFromVector3(offset);
     }
 
+    private rotate(deltaX: number, deltaY: number, speed: number = this.rotateSpeed): void {
+        const element = this.element === document.body ? document.body : this.element;
+        if (element.clientHeight <= 0) return;
+
+        const worldUp = new THREE.Vector3(0, 0, 1);
+        const offset = new THREE.Vector3().subVectors(this.camera.position, this.target);
+        const toYUp = new THREE.Quaternion().setFromUnitVectors(worldUp, new THREE.Vector3(0, 1, 0));
+
+        offset.applyQuaternion(toYUp);
+        this.spherical.setFromVector3(offset);
+        this.spherical.theta -= 2 * Math.PI * deltaX / element.clientHeight * speed;
+        this.spherical.phi -= 2 * Math.PI * deltaY / element.clientHeight * speed;
+        this.spherical.phi = THREE.MathUtils.clamp(this.spherical.phi, this.EPS, Math.PI - this.EPS);
+        this.spherical.makeSafe();
+
+        offset.setFromSpherical(this.spherical).applyQuaternion(toYUp.invert());
+        this.camera.position.copy(this.target).add(offset);
+        this.camera.up.copy(worldUp);
+        this.camera.lookAt(this.target);
+    }
+
     private onMouseDown(event: MouseEvent): void {
         if (!this.enabled) return;
 
@@ -108,8 +130,13 @@ export class OrbitControls {
 
         switch (event.button) {
             case this.mouseButtons.LEFT:
-                this.state = this.STATE.ROTATE;
-                this.rotateStart.set(event.clientX, event.clientY);
+                if (event.ctrlKey) {
+                    this.state = this.STATE.PAN;
+                    this.panStart.set(event.clientX, event.clientY);
+                } else {
+                    this.state = this.STATE.ROTATE;
+                    this.rotateStart.set(event.clientX, event.clientY);
+                }
                 break;
             case this.mouseButtons.MIDDLE:
                 // Middle click (wheel button) for pan/translate
@@ -139,53 +166,7 @@ export class OrbitControls {
             case this.STATE.ROTATE:
                 this.rotateEnd.set(event.clientX, event.clientY);
                 this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-
-                // Get element dimensions for rotation calculations
-                const element = this.element === document.body ? document.body : this.element;
-                const elementWidth = element.clientWidth;
-                const elementHeight = element.clientHeight;
-
-                // Scale factor for rotation (adjust as needed for sensitivity)
-                const rotateSpeed = this.rotateSpeed;
-
-                // Completely separate axis handling for Z-up system
-                // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-                const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-
-                // Apply rotation around world Z axis (phi in spherical coordinates)
-                const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-                    new THREE.Vector3(0, 0, 1),
-                    -horizontalRotationAngle
-                );
-
-                // Apply Z-axis rotation to current camera position
-                const cameraPosition = new THREE.Vector3().subVectors(
-                    this.camera.position,
-                    this.target
-                );
-                cameraPosition.applyQuaternion(rotationZ);
-
-                // Vertical movement (Y) - rotate around local X axis (polar angle)
-                // First get the right vector (perpendicular to camera direction and Z-up)
-                const forward = cameraPosition.clone().normalize();
-                const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-
-                // Calculate vertical rotation angle
-                const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-
-                // Apply rotation around right vector
-                const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-                cameraPosition.applyQuaternion(rotationX);
-
-                // Update camera position based on rotated vector
-                this.camera.position.copy(this.target).add(cameraPosition);
-
-                // Ensure camera up vector stays aligned with world Z
-                this.camera.up.set(0, 0, 1);
-
-                // Look at target
-                this.camera.lookAt(this.target);
-
+                this.rotate(this.rotateDelta.x, this.rotateDelta.y);
                 this.rotateStart.copy(this.rotateEnd);
                 break;
 
@@ -219,27 +200,19 @@ export class OrbitControls {
         // Detect trackpad pinch-zoom (Ctrl + wheel) or regular mouse wheel
         if (event.ctrlKey) {
             // Trackpad pinch-to-zoom (Ctrl is automatically added by browser)
-            // Inverted: pinch out = zoom out, pinch in = zoom in
             if (event.deltaY < 0) {
-                this.dollyOut();
-            } else {
                 this.dollyIn();
-            }
-        } else if (Math.abs(event.deltaX) > 0 || Math.abs(event.deltaY) > 0) {
-            // Trackpad two-finger pan OR mouse wheel
-            // If deltaX is significant, treat as trackpad pan
-            if (Math.abs(event.deltaX) > 1 || (Math.abs(event.deltaY) > 1 && event.deltaMode === 0)) {
-                // Trackpad pan - invert X only, keep Y natural for up/down
-                this.pan(event.deltaX * 0.5, -event.deltaY * 0.5);
-                this.update();
             } else {
-                // Regular mouse wheel - zoom
-                if (event.deltaY < 0) {
-                    this.dollyIn();
-                } else {
-                    this.dollyOut();
-                }
+                this.dollyOut();
             }
+        } else if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+            // Horizontal trackpad scrolling pans; vertical wheel movement keeps
+            // the conventional zoom behavior used by desktop 3D tools.
+            this.pan(event.deltaX * 0.5, 0);
+        } else if (event.deltaY < 0) {
+            this.dollyIn();
+        } else if (event.deltaY > 0) {
+            this.dollyOut();
         }
 
         this.update();
@@ -309,52 +282,7 @@ export class OrbitControls {
                     );
                     this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
 
-                    // Get element dimensions for rotation calculations
-                    const element = this.element === document.body ? document.body : this.element;
-                    const elementWidth = element.clientWidth;
-                    const elementHeight = element.clientHeight;
-
-                    // Scale factor for rotation - reduced for touch (0.4x) for smoother control
-                    const rotateSpeed = this.rotateSpeed * 0.4;
-
-                    // Completely separate axis handling for Z-up system
-                    // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-                    const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-
-                    // Apply rotation around world Z axis (phi in spherical coordinates)
-                    const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-                        new THREE.Vector3(0, 0, 1),
-                        -horizontalRotationAngle
-                    );
-
-                    // Apply Z-axis rotation to current camera position
-                    const cameraPosition = new THREE.Vector3().subVectors(
-                        this.camera.position,
-                        this.target
-                    );
-                    cameraPosition.applyQuaternion(rotationZ);
-
-                    // Vertical movement (Y) - rotate around local X axis (polar angle)
-                    // First get the right vector (perpendicular to camera direction and Z-up)
-                    const forward = cameraPosition.clone().normalize();
-                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-
-                    // Calculate vertical rotation angle
-                    const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-
-                    // Apply rotation around right vector
-                    const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-                    cameraPosition.applyQuaternion(rotationX);
-
-                    // Update camera position based on rotated vector
-                    this.camera.position.copy(this.target).add(cameraPosition);
-
-                    // Ensure camera up vector stays aligned with world Z
-                    this.camera.up.set(0, 0, 1);
-
-                    // Look at target
-                    this.camera.lookAt(this.target);
-
+                    this.rotate(this.rotateDelta.x, this.rotateDelta.y, this.rotateSpeed * 0.4);
                     this.rotateStart.copy(this.rotateEnd);
                 }
                 break;
@@ -369,35 +297,14 @@ export class OrbitControls {
                 const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
                 const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
 
-                if (this.prevTouchDistance > 0) {
-                    // Calculate distance change ratio (for pinch detection)
-                    const distanceChange = touchDistance - this.prevTouchDistance;
-                    const pinchRatio = Math.abs(distanceChange) / this.prevTouchDistance;
-
-                    // Calculate midpoint movement
+                if (this.prevTouchDistance > 0 && touchDistance > 0) {
                     const midpointDeltaX = midX - this.prevTouchMidpoint.x;
                     const midpointDeltaY = midY - this.prevTouchMidpoint.y;
-                    const midpointMovement = Math.sqrt(midpointDeltaX * midpointDeltaX + midpointDeltaY * midpointDeltaY);
-
-                    // Pinch zoom: significant change in finger distance (>4% of current spread)
-                    // This triggers when fingers move toward/away from each other
-                    // Inverted: pinch out (spread fingers) = zoom out, pinch in = zoom in
-                    if (pinchRatio > 0.04) {
-                        if (distanceChange > 0) {
-                            this.dollyOut();
-                        } else {
-                            this.dollyIn();
-                        }
-                    }
-                    // Pan: significant midpoint movement with relatively stable finger distance
-                    // Threshold of 8px to avoid accidental triggering, pinchRatio < 3% for stability
-                    else if (midpointMovement > 8 && pinchRatio < 0.03) {
-                        this.panEnd.set(midX, midY);
-                        this.panDelta.subVectors(this.panEnd, this.panStart);
-                        // Multiply pan delta for faster movement, invert X only (Y inverted for up/down)
-                        this.pan(-this.panDelta.x * 2.5, this.panDelta.y * 2.5);
-                        this.panStart.copy(this.panEnd);
-                    }
+                    this.scale *= this.prevTouchDistance / touchDistance;
+                    // Pan follows the midpoint incrementally, including slow
+                    // movements that previously never crossed the per-frame
+                    // threshold. It can happen alongside a pinch gesture.
+                    this.pan(-midpointDeltaX * 2.5, midpointDeltaY * 2.5);
                 }
 
                 // Update tracking values
@@ -455,11 +362,11 @@ export class OrbitControls {
     }
 
     private dollyIn(): void {
-        this.scale /= 0.95;
+        this.scale *= 0.95;
     }
 
     private dollyOut(): void {
-        this.scale *= 0.95;
+        this.scale /= 0.95;
     }
 
     public update(): void {
@@ -538,5 +445,6 @@ export class OrbitControls {
         this.element.removeEventListener('touchstart', this.onTouchStart, false);
         this.element.removeEventListener('touchmove', this.onTouchMove, false);
         this.element.removeEventListener('touchend', this.onTouchEnd, false);
+        this.element.removeEventListener('touchcancel', this.onTouchEnd, false);
     }
 }

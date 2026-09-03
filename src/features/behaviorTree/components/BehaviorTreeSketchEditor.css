@@ -1,0 +1,307 @@
+.bt-sketch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 420;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: var(--card-bg, #ffffff);
+}
+
+.bt-sketch-editor {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: none;
+}
+
+.bt-sketch-header,
+.bt-sketch-footer,
+.bt-sketch-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.bt-sketch-header {
+  min-height: 42px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px 5px 10px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.bt-sketch-header h3 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.bt-sketch-header button,
+.bt-sketch-toolbar button,
+.bt-sketch-history-actions button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 5px;
+  background: var(--background-color, #ffffff);
+  color: var(--text-secondary, #6c757d);
+  cursor: pointer;
+}
+
+.bt-sketch-header button:hover,
+.bt-sketch-toolbar button:hover:not(:disabled),
+.bt-sketch-history-actions button:hover:not(:disabled),
+.bt-sketch-toolbar button.active {
+  border-color: var(--primary-color, #4285f4);
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 10%, var(--background-color, #ffffff));
+  color: var(--primary-color, #4285f4);
+}
+
+.bt-sketch-toolbar button:disabled,
+.bt-sketch-history-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bt-sketch-toolbar {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.bt-sketch-tool-group,
+.bt-sketch-colors,
+.bt-sketch-history-actions,
+.bt-sketch-width {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.bt-sketch-tool-group {
+  padding-right: 6px;
+  border-right: 1px solid var(--border-color, #dee2e6);
+}
+
+.bt-sketch-colors button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border: 2px solid var(--card-bg, #ffffff);
+  border-radius: 50%;
+  background: var(--sketch-color);
+  box-shadow: 0 0 0 1px var(--border-color, #dee2e6);
+}
+
+.bt-sketch-colors button.active {
+  border-color: var(--card-bg, #ffffff);
+  background: var(--sketch-color);
+  box-shadow: 0 0 0 2px var(--primary-color, #4285f4);
+}
+
+.bt-sketch-colors button:hover:not(:disabled) {
+  background: var(--sketch-color);
+}
+
+.bt-sketch-custom-color {
+  position: relative;
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 50%;
+  background: var(--background-color, #ffffff);
+}
+
+.bt-sketch-custom-color input {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+.bt-sketch-width {
+  flex: 1 1 110px;
+  color: var(--text-secondary, #6c757d);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.bt-sketch-width input {
+  min-width: 70px;
+  flex: 1 1 auto;
+  accent-color: var(--primary-color, #4285f4);
+}
+
+.bt-sketch-canvas-stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 8px;
+  background: var(--background-secondary, #f4f6f8);
+}
+
+.bt-sketch-inline-text {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  width: min(190px, calc(100% - 16px));
+  min-width: 72px;
+  min-height: 32px;
+  padding: 5px 7px;
+  transform: translateY(-50%);
+  border: 1px solid var(--primary-color, #4285f4);
+  border-radius: 4px;
+  outline: none;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #4285f4) 16%, transparent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.bt-sketch-inline-text.inside-rectangle {
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.bt-sketch-canvas-stage canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 3 / 2;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.bt-sketch-footer {
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 7px;
+  border-top: 1px solid var(--border-color, #dee2e6);
+}
+
+.bt-sketch-footer button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 5px;
+  background: var(--background-color, #ffffff);
+  color: var(--text-color, #212529);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bt-sketch-footer button.primary {
+  border-color: var(--primary-color, #4285f4);
+  background: var(--primary-color, #4285f4);
+  color: var(--button-text-color, #ffffff);
+}
+
+.bt-sketch-footer button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .bt-sketch-overlay {
+    inset: 0;
+    padding: 0;
+    background: var(--card-bg, #ffffff);
+  }
+
+  .bt-sketch-editor {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bt-sketch-toolbar {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .bt-sketch-header button,
+  .bt-sketch-toolbar button,
+  .bt-sketch-history-actions button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+
+  .bt-sketch-colors {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 2px;
+  }
+
+  .bt-sketch-colors button {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+  }
+
+  .bt-sketch-width {
+    order: 4;
+    flex-basis: calc(100% - 76px);
+  }
+
+  .bt-sketch-history-actions {
+    margin-left: auto;
+  }
+
+  .bt-sketch-canvas-stage {
+    padding: 5px;
+  }
+
+  .bt-sketch-footer {
+    padding: 6px 7px calc(6px + env(safe-area-inset-bottom));
+  }
+}
+
+@container (max-width: 700px) {
+  .bt-sketch-overlay {
+    inset: 0;
+    padding: 0;
+  }
+
+  .bt-sketch-editor {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

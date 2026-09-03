@@ -212,14 +212,40 @@ jobs:
             }
           }
 
+    # Codecov reports only that a file was missing, which says nothing about what the run
+    # produced. Recording the directory turns the next failure into something diagnosable
+    # instead of a dead end.
+    - name: Record coverage output
+      if: always() && steps.unit_tests.outputs.status != ''
+      run: |
+        {
+          echo "### Coverage Output"
+          echo ""
+          echo "Unit test exit status: ${{ steps.unit_tests.outputs.status }}"
+          echo ""
+          echo '```'
+          find coverage -maxdepth 1 -printf '%10s  %p\n' 2>&1 | head -20
+          echo '```'
+          if [ -f coverage/lcov.info ]; then
+            echo "lcov.info present, $(wc -c < coverage/lcov.info) bytes."
+          else
+            echo "lcov.info missing, so there is nothing for Codecov to upload."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: Upload coverage to Codecov
-      if: steps.unit_tests.outputs.status == '0'
+      if: >-
+        steps.unit_tests.outputs.status == '0' &&
+        (github.event_name == 'pull_request' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/dev'))
       uses: codecov/codecov-action@v5
       with:
         files: ./coverage/lcov.info
         flags: unit
         name: unit-tests
         fail_ci_if_error: true
+        handle_no_reports_found: true
         disable_search: true
         use_oidc: true
 
@@ -246,6 +272,30 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/checkout@v4
 
+    - name: Checkout Hello Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/robo-boy-hello-panel
+        ref: 45323eb6fac60899dbc6e7d609fe7c23e71d8ef5
+        path: .panel-workspace/robo-boy-hello-panel
+
+    - name: Checkout Time Series Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/roboboy-timeseries-panel
+        ref: f536db29d339a8d3c856525face31d8588d9308c
+        path: .panel-workspace/robo-boy-timeseries-panel
+
+    - name: Checkout WebRTC Panel test artifact
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/roboboy-webrtc-panel
+        ref: 4f3251c3e4f86210eceab679c3e92c097675b2a3
+        path: .panel-workspace/robo-boy-webrtc-panel
+
     - name: Setup Node.js
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
@@ -261,9 +311,15 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npx playwright install --with-deps chromium
 
+    - name: Install external panel test artifacts
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: node scripts/stage-local-panels.mjs --config config/panel-sources.e2e.json
+
     - name: Run E2E tests
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       id: e2e_tests
+      env:
+        ROBOBOY_PUBLIC_DIR: ${{ github.workspace }}/.panel-stage/public
       run: |
         set +e
         npm run e2e 2>&1 | tee playwright-output.log

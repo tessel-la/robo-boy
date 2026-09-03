@@ -3,6 +3,7 @@ import { Ros } from 'roslib';
 import * as ROS3D from '../utils/ros3d'; // Adjusted path if utils/ros3d.ts is the entry point
 import { Object3D } from 'three';
 import { CustomTFProvider } from '../utils/tfUtils'; // Import CustomTFProvider
+import { useRuntimeConfig } from '../runtime/runtimeConfig';
 
 interface UseUrdfClientProps {
   ros: Ros | null;
@@ -24,11 +25,19 @@ export function useUrdfClient({
   dependenciesReady,
   robotDescriptionTopic = '/robot_description',
 }: UseUrdfClientProps) {
+  const { meshResourcesBaseUrl } = useRuntimeConfig();
   const urdfClientRef = useRef<ROS3D.UrdfClient | null>(null);
   const [isUrdfLoaded, setIsUrdfLoaded] = useState(false);
 
   useEffect(() => {
-    if (dependenciesReady && isRosConnected && ros && ros3dViewer.current && tfClient.current && !urdfClientRef.current) {
+    if (
+      dependenciesReady &&
+      isRosConnected &&
+      ros &&
+      ros3dViewer.current &&
+      tfClient.current &&
+      !urdfClientRef.current
+    ) {
       console.log('[useUrdfClient] Initializing UrdfClient...');
 
       const urdfClient = new ROS3D.UrdfClient({
@@ -36,6 +45,7 @@ export function useUrdfClient({
         tfClient: tfClient.current,
         rootObject: ros3dViewer.current.scene, // Add to the main viewer scene
         robotDescriptionTopic: robotDescriptionTopic,
+        path: meshResourcesBaseUrl,
         onComplete: (model: Object3D) => {
           console.log('[useUrdfClient] URDF model loaded successfully.', model);
           setIsUrdfLoaded(true);
@@ -43,7 +53,10 @@ export function useUrdfClient({
         },
       });
       urdfClientRef.current = urdfClient;
-    } else if ((!dependenciesReady || !isRosConnected || !ros3dViewer.current || !tfClient.current) && urdfClientRef.current) {
+    } else if (
+      (!dependenciesReady || !isRosConnected || !ros3dViewer.current || !tfClient.current) &&
+      urdfClientRef.current
+    ) {
       console.log('[useUrdfClient] Cleaning up UrdfClient...');
       urdfClientRef.current.dispose();
       urdfClientRef.current = null;
@@ -59,7 +72,7 @@ export function useUrdfClient({
         setIsUrdfLoaded(false);
       }
     };
-  }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic]);
+  }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl]);
 
   return { urdfClient: urdfClientRef.current, isUrdfLoaded };
 }

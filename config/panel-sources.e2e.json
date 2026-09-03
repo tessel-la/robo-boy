@@ -1,0 +1,16 @@
+{
+  "$schema": "./panel-sources.schema.json",
+  "schemaVersion": 2,
+  "sources": [
+    {
+      "type": "local",
+      "name": "e2e-pinned-panels",
+      "root": "../.panel-workspace",
+      "rootEnv": "ROBOBOY_PANEL_WORKSPACE",
+      "repositories": ["robo-boy-hello-panel", "robo-boy-timeseries-panel", "robo-boy-webrtc-panel"]
+    }
+  ],
+  "selection": {
+    "mode": "all"
+  }
+}

@@ -6,15 +6,19 @@ services:
       dockerfile: infra/docker/Dockerfile.dev
     volumes:
       - .:/app
-      - /app/node_modules 
-    command: npm run dev -- --host 0.0.0.0
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5173}
     ipc: host
     environment:
       - NODE_ENV=development
-    # Remove ports mapping if Caddy handles external access
-    # ports:
-    #   - "127.0.0.1:5173:5173" 
-    networks: # Assign to custom network
+      - FRONTEND_PORT=${FRONTEND_PORT:-5173}
+      - VITE_ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - VITE_VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
+      - VITE_MESH_RESOURCES_PORT=${MESH_RESOURCES_PORT:-8000}
+      - VITE_OLLAMA_PORT=${OLLAMA_PORT:-11434}
+      - VITE_WEB_BACKEND_MODE=${VITE_WEB_BACKEND_MODE:-auto}
+      - PANEL_MANAGER_PROXY_TARGET=${PANEL_MANAGER_PROXY_TARGET:-http://panel-manager:4100}
+    networks:
       - app-net
 
   # Caddy Reverse Proxy
@@ -23,21 +27,60 @@ services:
     restart: unless-stopped
     ipc: host
     ports:
-      - "80:80"    # Bind to all host interfaces
-      - "443:443"  # Bind to all host interfaces
-      - "0.0.0.0:443:443/udp" # Bind to all host interfaces
+      - '${HTTP_PORT:-80}:${HTTP_PORT:-80}'
+      - '${HTTPS_PORT:-443}:${HTTPS_PORT:-443}'
+      - '0.0.0.0:${HTTPS_PORT:-443}:${HTTPS_PORT:-443}/udp'
+    environment:
+      - HTTP_PORT=${HTTP_PORT:-80}
+      - HTTPS_PORT=${HTTPS_PORT:-443}
+      - BACKEND_HOST=${BACKEND_HOST:-host.docker.internal}
+      - FRONTEND_PORT=${FRONTEND_PORT:-5173}
+      - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
+      - MESH_RESOURCES_PORT=${MESH_RESOURCES_PORT:-8000}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
+      - ollama-relay-socket:/run/ollama-relay
+      - webrtc-relay-socket:/run/webrtc-relay
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
       - app
+      - ollama-relay
+      - webrtc-relay
       - ros-stack
     networks:
       - app-net
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
+
+  # Transport adapter between the Docker bridge and an external Ollama API.
+  # The application only knows its same-origin /ollama route; deployments may
+  # point this relay at any URL without changing frontend or Caddy networking.
+  ollama-relay:
+    image: caddy:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - OLLAMA_BACKEND_URL=${OLLAMA_BACKEND_URL:-http://127.0.0.1:11434}
+    volumes:
+      - ./infra/caddy/OllamaRelay.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ollama-relay-socket:/run/ollama-relay
+
+  # MediaMTX runs on the host network so its ICE candidates include physical
+  # and VPN interfaces. This relay exposes only its HTTP/WHEP signaling API to
+  # Caddy through a Unix socket shared with the bridge network.
+  webrtc-relay:
+    image: caddy:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - WEBRTC_BACKEND_URL=${WEBRTC_BACKEND_URL:-http://127.0.0.1:8889}
+      - WEBRTC_DISCOVERY_BACKEND_URL=${WEBRTC_DISCOVERY_BACKEND_URL:-http://127.0.0.1:9997}
+    volumes:
+      - ./infra/caddy/WebRtcRelay.Caddyfile:/etc/caddy/Caddyfile:ro
+      - webrtc-relay-socket:/run/webrtc-relay
 
   # ROS 2 Stack (Rosbridge + Image Publisher)
   # network_mode: host so ROS 2 DDS multicast discovery works with other
@@ -53,14 +96,19 @@ services:
       dockerfile: infra/docker/Dockerfile.ros # Use the ROS Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME:-noble}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+      - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
       # Switch between Fast DDS and Cyclone DDS by setting RMW_IMPLEMENTATION.
       # Fast DDS keeps UDP transport by default to avoid shared-memory issues
       # across host-networked containers running as different users.
@@ -71,8 +119,9 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  ollama-relay-socket:
+  webrtc-relay-socket:
 
-# Define the custom bridge network
 networks:
   app-net:
     driver: bridge

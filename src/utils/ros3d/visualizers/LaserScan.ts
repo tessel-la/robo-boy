@@ -89,7 +89,7 @@ export class LaserScan extends THREE.Object3D {
             name: this.topicName,
             messageType: 'sensor_msgs/msg/LaserScan',
             throttle_rate: 33, // ~30Hz for smooth updates
-            queue_size: 1,
+            queue_length: 1,
             compression: 'cbor'
         });
 

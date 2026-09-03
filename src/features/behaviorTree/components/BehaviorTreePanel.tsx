@@ -40,8 +40,19 @@ import type { BehaviorTreeInteractionMode } from './BehaviorTreeToolbar';
 import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
+import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
+import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
+import { buildTreeDiff, summarizeTreeChanges } from './BehaviorTreeAgentPreview';
 import { BehaviorTreeExecutor } from '../engine/executor';
+import {
+  loadPersistentExecutionPreference,
+  PersistentBehaviorTreeExecutor,
+  PersistentExecutionStatus,
+  savePersistentExecutionPreference,
+} from '../engine/persistentExecutor';
+import type { BehaviorTreeAgentCheckpoint } from '../agent/types';
 import { arrangeBehaviorTree } from '../layoutUtils';
+import { listBlackboardVariables } from '../blackboard';
 import {
   exportBehaviorTree,
   saveBehaviorTree,
@@ -73,6 +84,9 @@ import {
   ROSActionInfo,
   ROSServiceInfo,
   ROSTopicInfo,
+  BlackboardInputBinding,
+  BlackboardOutputBinding,
+  BlackboardValueType,
 } from '../types';
 import {
   areTreePathsEqual,
@@ -105,6 +119,7 @@ export interface BehaviorTreeExecutionSnapshot {
   activeNodeLabel?: string;
   status?: ExecutionStatus | 'paused' | 'completed' | 'stopped' | 'error';
   startedAt?: number;
+  isPersistent?: boolean;
 }
 
 export interface BehaviorTreeExecutionControls {
@@ -171,6 +186,18 @@ const PALETTE_ADD_NODE_COLUMNS = 3;
 const NODE_POSITION_COLLISION_X = 160;
 const NODE_POSITION_COLLISION_Y = 110;
 const MANUAL_EDGE_SELECTION_SUPPRESSION_MS = 160;
+const AGENT_PREVIEW_ID_PREFIX = 'agent-preview:';
+const MIN_FLOW_VIEWPORT_SIZE = 1;
+
+const getReactFlowChangeElementId = (change: unknown): string | null => {
+  if (!change || typeof change !== 'object') return null;
+  const candidate = change as { id?: unknown; item?: { id?: unknown } };
+  if (typeof candidate.id === 'string') return candidate.id;
+  return typeof candidate.item?.id === 'string' ? candidate.item.id : null;
+};
+
+const isAgentPreviewChange = (change: unknown) =>
+  getReactFlowChangeElementId(change)?.startsWith(AGENT_PREVIEW_ID_PREFIX) ?? false;
 
 const getKnownReactFlowElementId = (
   element: Element,
@@ -218,6 +245,38 @@ const createViewportRect = (left: number, top: number, right: number, bottom: nu
 } as DOMRect);
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const isFinitePoint = (position: { x: number; y: number }) =>
+  Number.isFinite(position.x) && Number.isFinite(position.y);
+
+const finiteCoordinate = (value: unknown, fallback = 0): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeCanvasPosition = (position: unknown): { x: number; y: number } => {
+  const record = position && typeof position === 'object' ? position as { x?: unknown; y?: unknown } : {};
+  return {
+    x: finiteCoordinate(record.x),
+    y: finiteCoordinate(record.y),
+  };
+};
+
+const finiteDimension = (value: unknown): number | undefined => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const isFlowViewportReady = (element: HTMLElement | null): boolean => {
+  if (!element) return false;
+  const rect = element.getBoundingClientRect();
+  return (
+    Number.isFinite(rect.width) &&
+    Number.isFinite(rect.height) &&
+    rect.width > MIN_FLOW_VIEWPORT_SIZE &&
+    rect.height > MIN_FLOW_VIEWPORT_SIZE
+  );
+};
 
 const findOpenPaletteAddPosition = (
   position: { x: number; y: number },
@@ -461,9 +520,23 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [rootTree, setRootTree] = useState<BehaviorTree | null>(null);
   const [treePath, setTreePath] = useState<string[]>([]);
+  const blackboardVariables = useMemo(() => listBlackboardVariables({
+    nodes,
+    blackboardDefaults: currentTree?.blackboardDefaults,
+  }), [nodes, currentTree?.blackboardDefaults]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const [inlineAgentPosition, setInlineAgentPosition] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const [agentPreviewTree, setAgentPreviewTree] = useState<BehaviorTree | null>(null);
+  const [agentPreviewDimensions, setAgentPreviewDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
   const [selectionActionAnchor, setSelectionActionAnchor] = useState<SelectionActionAnchor | null>(null);
@@ -473,6 +546,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [canvasInteractionMode, setCanvasInteractionMode] =
     useState<BehaviorTreeInteractionMode>('pan');
   const [isFollowMode, setIsFollowMode] = useState(false);
+  const [persistentExecution, setPersistentExecution] = useState(loadPersistentExecutionPreference);
   // Action node currently being edited via the parameter editor modal.
   const [editingAction, setEditingAction] = useState<
     { nodeId: string; data: ROSActionNodeData } | null
@@ -482,6 +556,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   >(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [editingIterationNodeId, setEditingIterationNodeId] = useState<string | null>(null);
+  const [editingConfigNodeId, setEditingConfigNodeId] = useState<string | null>(null);
+  const [liveBlackboard, setLiveBlackboard] = useState<Record<string, unknown>>({});
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
   const [subtreeReturnAnchor, setSubtreeReturnAnchor] = useState<{ x: number; y: number } | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
@@ -490,7 +566,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     treeName: '',
   });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
+  const persistentExecutorRef = useRef<PersistentBehaviorTreeExecutor | null>(null);
+  const persistentSessionIdRef = useRef<string | undefined>(undefined);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
@@ -517,6 +596,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const nodeMultiSelectSnapshotRef = useRef<Set<string> | null>(null);
   const isFollowModeRef = useRef(false);
   const followExecutionFrameRef = useRef<number | null>(null);
+  const agentPreviewFitTimerRef = useRef<number | null>(null);
 
   const { screenToFlowPosition, fitView, getZoom, setCenter } = useReactFlow();
 
@@ -529,6 +609,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const resetTransientNodeState = useCallback((treeNodes: BehaviorTreeNode[]): BehaviorTreeNode[] => {
     return treeNodes.map((node) => ({
       ...node,
+      position: normalizeCanvasPosition(node.position),
+      positionAbsolute: undefined,
+      width: finiteDimension(node.width),
+      height: finiteDimension(node.height),
       selected: false,
       dragging: false,
       data: {
@@ -566,10 +650,40 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const centerTreeInView = useCallback(() => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) return;
         fitView({ padding: 0.22, duration: 380, maxZoom: 1.1 });
       });
     });
-  }, [fitView]);
+  }, [fitView, isActive]);
+
+  const fitAgentPreviewInView = useCallback(() => {
+    if (agentPreviewFitTimerRef.current !== null) {
+      window.clearTimeout(agentPreviewFitTimerRef.current);
+    }
+
+    let attempts = 0;
+    const tryFit = () => {
+      agentPreviewFitTimerRef.current = null;
+      if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) {
+        if (attempts >= 10) return;
+        attempts += 1;
+        agentPreviewFitTimerRef.current = window.setTimeout(tryFit, 50);
+        return;
+      }
+      const fitted = fitView({ padding: 0.2, duration: 420, maxZoom: 1.15 });
+      if (fitted || attempts >= 10) return;
+      attempts += 1;
+      agentPreviewFitTimerRef.current = window.setTimeout(tryFit, 50);
+    };
+
+    window.requestAnimationFrame(tryFit);
+  }, [fitView, isActive]);
+
+  useEffect(() => () => {
+    if (agentPreviewFitTimerRef.current !== null) {
+      window.clearTimeout(agentPreviewFitTimerRef.current);
+    }
+  }, []);
 
   const syncEditorState = useCallback(
     (tree: BehaviorTree, nextPath: string[], options: SyncEditorOptions = {}) => {
@@ -591,6 +705,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setSelectedEdges([]);
       selectedNodeIdsRef.current = new Set();
       selectedEdgeIdsRef.current = new Set();
+      manualEdgeSelectionRef.current = null;
+      nodeMultiSelectSnapshotRef.current = null;
+      boxSelectionActiveRef.current = false;
+      boxSelectionNodeIdsRef.current = null;
+      boxSelectionEdgeIdsRef.current = null;
+      boxSelectionEndedAtRef.current = 0;
+      boxSelectionPointerDownRef.current = false;
+      boxSelectionEndPendingRef.current = false;
+      customBoxSelectionGestureRef.current = null;
+      customBoxSelectionRectRef.current = null;
+      setCustomBoxSelection(null);
       setOrderingParentId(null);
       setRenamingNodeId(null);
       setEditingIterationNodeId(null);
@@ -855,6 +980,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const onConnect = useCallback(
     (connection: Connection) => {
       if (isExecuting) return;
+      const source = nodes.find(node => node.id === connection.source);
+      if (!source) return;
+      if (source.type === BehaviorNodeType.Timeout && edges.some(edge => edge.source === source.id)) return;
+      if (source.type === BehaviorNodeType.IfElse) {
+        const handle = connection.sourceHandle;
+        if (!handle || !['then', 'else'].includes(handle)) return;
+        if (edges.some(edge => edge.source === source.id && edge.sourceHandle === handle)) return;
+        persistEditorTree(nodes, addEdge(connection, edges));
+        return;
+      }
       persistEditorTree(nodes, addEdge(normalizeEdge(connection), edges));
     },
     [edges, isExecuting, nodes, persistEditorTree]
@@ -996,14 +1131,35 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onNodesChange = useCallback(
     (changes: Parameters<typeof applyNodeChanges>[0]) => {
-      const nextNodes = applyNodeChanges(changes, nodes) as BehaviorTreeNode[];
+      const previewMeasurements = changes.flatMap(change => {
+        if (change.type !== 'dimensions' || !isAgentPreviewChange(change) || !change.dimensions) return [];
+        return [{ id: change.id, dimensions: change.dimensions }];
+      });
+      if (previewMeasurements.length > 0) {
+        setAgentPreviewDimensions(previous => {
+          let changed = false;
+          const next = { ...previous };
+          previewMeasurements.forEach(({ id, dimensions }) => {
+            const current = previous[id];
+            if (current?.width === dimensions.width && current.height === dimensions.height) return;
+            next[id] = dimensions;
+            changed = true;
+          });
+          return changed ? next : previous;
+        });
+      }
 
-      const shouldOnlyUpdateViewportState = changes.every((change) => {
+      const editorChanges = changes.filter(change => !isAgentPreviewChange(change));
+      if (editorChanges.length === 0) return;
+      const nextNodes = (applyNodeChanges(editorChanges, nodes) as BehaviorTreeNode[])
+        .filter(node => !node.id.startsWith(AGENT_PREVIEW_ID_PREFIX));
+
+      const shouldOnlyUpdateViewportState = editorChanges.every((change) => {
         if (change.type === 'select' || change.type === 'dimensions') return true;
         return change.type === 'position' && 'dragging' in change && change.dragging === true;
       });
 
-      if (changes.every((change) => change.type === 'select')) {
+      if (editorChanges.every((change) => change.type === 'select')) {
         const manualEdgeSelection = getManualEdgeSelectionOverride();
         if (manualEdgeSelection) {
           commitSelectionState(manualEdgeSelection.nodeIds, manualEdgeSelection.edgeIds);
@@ -1056,9 +1212,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const onEdgesChange = useCallback(
     (changes: Parameters<typeof applyEdgeChanges>[0]) => {
-      const nextEdges = applyEdgeChanges(changes, edges);
+      const editorChanges = changes.filter(change => !isAgentPreviewChange(change));
+      if (editorChanges.length === 0) return;
+      const nextEdges = applyEdgeChanges(editorChanges, edges)
+        .filter(edge => !edge.id.startsWith(AGENT_PREVIEW_ID_PREFIX));
 
-      if (changes.every((change) => change.type === 'select')) {
+      if (editorChanges.every((change) => change.type === 'select')) {
         const manualEdgeSelection = getManualEdgeSelectionOverride();
         if (manualEdgeSelection) {
           commitSelectionState(manualEdgeSelection.nodeIds, manualEdgeSelection.edgeIds);
@@ -1099,8 +1258,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       event.preventDefault();
       if (isExecuting) return;
 
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!reactFlowBounds) return;
+      if (!isFlowViewportReady(reactFlowWrapper.current)) return;
 
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
@@ -1118,6 +1276,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         x: event.clientX - 75,
         y: event.clientY - 40,
       });
+      if (!isFinitePoint(position)) return;
 
       addNodeAtPosition(data.nodeType, position, data.item);
     },
@@ -1318,6 +1477,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setEditingAction({ nodeId: node.id, data: node.data as ROSActionNodeData });
     } else if (node.type === BehaviorNodeType.Service) {
       setEditingService({ nodeId: node.id, data: node.data as ROSServiceNodeData });
+    } else if (
+      node.type === BehaviorNodeType.Topic ||
+      node.type === BehaviorNodeType.Subscriber ||
+      node.type === BehaviorNodeType.Timeout ||
+      node.type === BehaviorNodeType.IfElse
+    ) {
+      setEditingConfigNodeId(node.id);
     } else if (isIteratingControlNode(node)) {
       setEditingIterationNodeId(node.id);
     } else if (isOrderedControlNode(node as BehaviorTreeNode)) {
@@ -1365,6 +1531,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (
         node.type !== BehaviorNodeType.Action &&
         node.type !== BehaviorNodeType.Service &&
+        node.type !== BehaviorNodeType.Topic &&
+        node.type !== BehaviorNodeType.Subscriber &&
+        node.type !== BehaviorNodeType.Timeout &&
+        node.type !== BehaviorNodeType.IfElse &&
         node.type !== BehaviorNodeType.Subtree &&
         !isIteratingControlNode(node) &&
         !isOrderedControlNode(node as BehaviorTreeNode)
@@ -1412,13 +1582,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [commitSelectionState]);
 
   const handleSaveActionParameters = useCallback(
-    (parameters: Record<string, any>) => {
+    (parameters: Record<string, any>, inputBindings: BlackboardInputBinding[] = [], outputBindings: BlackboardOutputBinding[] = []) => {
       if (!editingAction) return;
       const { nodeId } = editingAction;
       persistEditorTree(
         nodes.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, parameters } };
+          return { ...node, data: { ...node.data, parameters, inputBindings, outputBindings } };
         }),
         edges
       );
@@ -1427,19 +1597,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const handleSaveServiceRequest = useCallback(
-    (request: Record<string, any>) => {
+    (request: Record<string, any>, inputBindings: BlackboardInputBinding[] = [], outputBindings: BlackboardOutputBinding[] = []) => {
       if (!editingService) return;
       const { nodeId } = editingService;
       persistEditorTree(
         nodes.map((node) => {
           if (node.id !== nodeId) return node;
-          return { ...node, data: { ...node.data, request } };
+          return { ...node, data: { ...node.data, request, inputBindings, outputBindings } };
         }),
         edges
       );
     },
     [editingService, edges, nodes, persistEditorTree]
   );
+
+  const editingConfigNode = useMemo(
+    () => (nodes as BehaviorTreeNode[]).find(node => node.id === editingConfigNodeId) ?? null,
+    [nodes, editingConfigNodeId]
+  );
+
+  const handleSaveNodeConfig = useCallback((data: BehaviorTreeNode['data']) => {
+    if (!editingConfigNodeId) return;
+    persistEditorTree(
+      nodes.map(node => node.id === editingConfigNodeId ? { ...node, data } : node),
+      edges
+    );
+  }, [editingConfigNodeId, edges, nodes, persistEditorTree]);
+
+  const handleBlackboardDefaultsChange = useCallback((defaults: Record<string, unknown>, types: Record<string, BlackboardValueType>) => {
+    persistEditorTree(nodes, edges, { blackboardDefaults: defaults, blackboardTypes: types });
+  }, [edges, nodes, persistEditorTree]);
 
   const handleSave = useCallback(() => {
     const activeTree = currentTreeRef.current;
@@ -1514,9 +1701,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     persistEditorTree(arrangeBehaviorTree(nodes as BehaviorTreeNode[], edges), edges);
     window.requestAnimationFrame(() => {
+      if (!isActive || !isFlowViewportReady(reactFlowWrapper.current)) return;
       fitView({ padding: 0.18, duration: 450, maxZoom: 1.15 });
     });
-  }, [edges, fitView, nodes, persistEditorTree]);
+  }, [edges, fitView, isActive, nodes, persistEditorTree]);
 
   const handleRename = useCallback((name: string) => {
     const activeTree = currentTreeRef.current;
@@ -1573,6 +1761,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (!node) return;
 
       const position = node.positionAbsolute ?? node.position;
+      if (!isActive || !isFinitePoint(position) || !isFlowViewportReady(reactFlowWrapper.current)) return;
       const centerX = position.x + (node.width ?? 150) / 2;
       const centerY = position.y + (node.height ?? 80) / 2;
 
@@ -1589,7 +1778,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         });
       });
     },
-    [getZoom, setCenter]
+    [getZoom, isActive, setCenter]
   );
 
   const updateDisplayedNodeStatus = useCallback((nodeId: string, status: ExecutionStatus) => {
@@ -1651,6 +1840,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             status,
           }));
         }
+      }
+
+      if (event.type === 'blackboardUpdated' && event.data?.blackboard) {
+        setLiveBlackboard(event.data.blackboard as Record<string, unknown>);
       }
 
       if (event.type === 'started') {
@@ -1736,7 +1929,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     };
     executionNodeLabels.current = collectExecutionNodeLabels(treeToExecute);
     executionStartedAt.current = Date.now();
-    executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
+    setLiveBlackboard(treeToExecute.blackboardDefaults || {});
+    if (persistentExecution) {
+      if (!persistentExecutorRef.current) {
+        persistentExecutorRef.current = new PersistentBehaviorTreeExecutor(ros);
+      }
+      persistentSessionIdRef.current = persistentExecutorRef.current.start(treeToExecute);
+    } else {
+      executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
+    }
     setIsExecuting(true);
     setIsPaused(false);
     setExecutionSnapshot({
@@ -1746,20 +1947,34 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       activeNodeLabel: 'Starting',
       status: ExecutionStatus.Running,
       startedAt: executionStartedAt.current,
+      isPersistent: persistentExecution,
     });
-    executorRef.current.start();
-  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent]);
+    if (!persistentExecution) executorRef.current?.start();
+  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent, persistentExecution]);
 
   const handlePause = useCallback(() => {
-    executorRef.current?.pause();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.pause(persistentSessionIdRef.current);
+    } else {
+      executorRef.current?.pause();
+    }
   }, []);
 
   const handleResume = useCallback(() => {
-    executorRef.current?.resume();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.resume(persistentSessionIdRef.current);
+    } else {
+      executorRef.current?.resume();
+    }
   }, []);
 
   const handleStop = useCallback(() => {
-    if (executorRef.current) executorRef.current.stop();
+    if (persistentSessionIdRef.current) {
+      persistentExecutorRef.current?.stop(persistentSessionIdRef.current);
+      persistentSessionIdRef.current = undefined;
+    } else if (executorRef.current) {
+      executorRef.current.stop();
+    }
     setIsExecuting(false);
     setIsPaused(false);
     setRootTree((previousRootTree) => {
@@ -1794,6 +2009,69 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       status: 'stopped',
     }));
   }, [resetTransientEdgeState, resetTransientNodeState]);
+
+  const handlePersistentStatus = useCallback((status: PersistentExecutionStatus) => {
+    const isActiveSession = status.state === 'running' || status.state === 'paused';
+
+    if (isActiveSession && status.sessionId) {
+      persistentSessionIdRef.current = status.sessionId;
+      if (status.tree) {
+        executionNodeLabels.current = collectExecutionNodeLabels(status.tree);
+        if (rootTreeRef.current?.id !== status.tree.id) {
+          loadRootTree(status.tree);
+        }
+      }
+      executionStartedAt.current = status.startedAt;
+      setIsExecuting(true);
+      setIsPaused(status.state === 'paused');
+      setLiveBlackboard(status.blackboard || status.tree?.blackboardDefaults || {});
+      setExecutionSnapshot({
+        isExecuting: true,
+        isPaused: status.state === 'paused',
+        treeName: status.treeName || status.tree?.name || 'Behavior tree',
+        activeNodeId: status.activeNodeId,
+        activeNodeLabel: status.activeNodeLabel || (status.state === 'paused' ? 'Paused' : 'Running'),
+        status: status.state === 'paused' ? 'paused' : ExecutionStatus.Running,
+        startedAt: status.startedAt,
+        isPersistent: true,
+      });
+
+      Object.entries(status.nodeStatuses || {}).forEach(([key, nodeStatus]) => {
+        const separator = key.indexOf('::');
+        const pathText = separator >= 0 ? key.slice(0, separator) : 'root';
+        const nodeId = separator >= 0 ? key.slice(separator + 2) : key;
+        const executionStatus = nodeStatus === 'running'
+          ? ExecutionStatus.Running
+          : nodeStatus === 'success'
+            ? ExecutionStatus.Success
+            : ExecutionStatus.Failure;
+        handleExecutionEvent({
+          type: nodeStatus === 'running' ? 'nodeRunning' : nodeStatus === 'success' ? 'nodeSuccess' : 'nodeFailure',
+          nodeId,
+          timestamp: Date.now(),
+          data: { status: executionStatus, treePath: pathText === 'root' ? [] : pathText.split('/') },
+        });
+      });
+    }
+
+    if (status.event) handleExecutionEvent(status.event);
+    if (status.state === 'idle' && persistentSessionIdRef.current === status.sessionId) {
+      persistentSessionIdRef.current = undefined;
+    }
+  }, [handleExecutionEvent, loadRootTree]);
+
+  useEffect(() => {
+    if (!ros || !isConnected || typeof (ros as any).callOnConnection !== 'function') return;
+    const client = new PersistentBehaviorTreeExecutor(ros);
+    persistentExecutorRef.current = client;
+    const unsubscribe = client.subscribe(handlePersistentStatus);
+
+    return () => {
+      unsubscribe();
+      if (persistentExecutorRef.current === client) persistentExecutorRef.current = null;
+      // Deliberately do not send stop here: the ROS runner owns persistent sessions.
+    };
+  }, [handlePersistentStatus, isConnected, ros]);
 
   const restoreRootTreeSnapshot = useCallback(
     (snapshot: HistorySnapshot) => {
@@ -1842,9 +2120,40 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     isRestoringHistory.current = false;
   }, [createHistorySnapshot, restoreRootTreeSnapshot]);
 
+  const restoreAgentCheckpoint = useCallback((checkpoint: BehaviorTreeAgentCheckpoint) => {
+    pushUndoSnapshot();
+    isRestoringHistory.current = true;
+    restoreRootTreeSnapshot(checkpoint);
+    setCanUndo(true);
+    setCanRedo(false);
+    isRestoringHistory.current = false;
+  }, [pushUndoSnapshot, restoreRootTreeSnapshot]);
+
   useEffect(() => {
     onExecutionChange?.(executionSnapshot);
   }, [executionSnapshot, onExecutionChange]);
+
+  const openInlineAgentPrompt = useCallback(() => {
+    const panel = reactFlowWrapper.current?.closest('.behavior-tree-panel');
+    if (!(panel instanceof HTMLElement)) return;
+    const bounds = panel.getBoundingClientRect();
+    const pointer = lastCanvasPointerRef.current ?? {
+      x: bounds.left + bounds.width / 2,
+      y: bounds.top + bounds.height / 2,
+    };
+    const localX = Number.isFinite(pointer.x) ? pointer.x - bounds.left : bounds.width / 2;
+    const localY = Number.isFinite(pointer.y) ? pointer.y - bounds.top : bounds.height / 2;
+    const width = Math.min(360, Math.max(180, bounds.width - 24));
+    const left = localX + width + 24 <= bounds.width
+      ? localX + 12
+      : Math.max(12, localX - width - 12);
+    const top = localY + 66 <= bounds.height
+      ? Math.max(62, localY + 12)
+      : Math.max(62, localY - 58);
+
+    setIsAgentOpen(false);
+    setInlineAgentPosition({ left, top, width });
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1852,6 +2161,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const isEditableTarget =
         target instanceof HTMLElement &&
         (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+      if (
+        isActive &&
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'i'
+      ) {
+        event.preventDefault();
+        openInlineAgentPrompt();
+        return;
+      }
 
       if (isEditableTarget) return;
 
@@ -1867,7 +2186,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRedo, handleUndo, isExecuting]);
+  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt]);
 
   useEffect(() => {
     onExecutionControlsChange?.({ stop: handleStop });
@@ -1979,24 +2298,134 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     ) => {
       if (isExecuting) return;
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= MIN_FLOW_VIEWPORT_SIZE ||
+        bounds.height <= MIN_FLOW_VIEWPORT_SIZE
+      ) {
+        return;
+      }
 
       const position = screenToFlowPosition({
         x: bounds.left + bounds.width / 2,
         y: bounds.top + bounds.height / 2,
       });
+      if (!isFinitePoint(position)) return;
 
       addNodeAtPosition(nodeType, position, item, { avoidOverlap: true });
 
-      // Close palette on mobile after adding
-      if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
-        setIsPaletteCollapsed(true);
-      }
+      setIsPaletteCollapsed(true);
     },
     [addNodeAtPosition, isExecuting, screenToFlowPosition]
   );
 
   const behaviorNodes = useMemo(() => nodes as BehaviorTreeNode[], [nodes]);
+  const agentPreviewDiff = useMemo(
+    () => agentPreviewTree && currentTree ? buildTreeDiff(currentTree, agentPreviewTree) : null,
+    [agentPreviewTree, currentTree]
+  );
+  const canvasNodes = useMemo<BehaviorTreeNode[]>(() => {
+    if (!agentPreviewTree || !agentPreviewDiff) return behaviorNodes;
+    const currentNodeById = new Map(behaviorNodes.map(node => [node.id, node]));
+    const proposedNodeById = new Map(agentPreviewTree.nodes.map(node => [node.id, node]));
+    const anchorOffsets = Array.from(agentPreviewDiff.currentToProposed.entries()).flatMap(
+      ([currentId, proposedId]) => {
+        const currentNode = currentNodeById.get(currentId);
+        const proposedNode = proposedNodeById.get(proposedId);
+        return currentNode &&
+          proposedNode &&
+          isFinitePoint(currentNode.position) &&
+          isFinitePoint(proposedNode.position)
+          ? [{ x: currentNode.position.x - proposedNode.position.x, y: currentNode.position.y - proposedNode.position.y }]
+          : [];
+      }
+    );
+    const finiteCurrentRights = behaviorNodes
+      .filter(node => isFinitePoint(node.position))
+      .map(node => node.position.x + (node.width ?? 180))
+      .filter(Number.isFinite);
+    const finiteProposedLefts = agentPreviewTree.nodes
+      .filter(node => isFinitePoint(node.position))
+      .map(node => node.position.x)
+      .filter(Number.isFinite);
+    const fallbackCurrentRight = Math.max(0, ...finiteCurrentRights);
+    const proposedLeft = Math.min(0, ...finiteProposedLefts);
+    const previewOffset = anchorOffsets.length > 0
+      ? {
+          x: anchorOffsets.reduce((sum, offset) => sum + offset.x, 0) / anchorOffsets.length,
+          y: anchorOffsets.reduce((sum, offset) => sum + offset.y, 0) / anchorOffsets.length,
+        }
+      : { x: fallbackCurrentRight - proposedLeft + 100, y: 0 };
+    const currentNodes = behaviorNodes.map(node => {
+      const change = agentPreviewDiff.currentNodes.get(node.id);
+      if (change === 'removed') {
+        return { ...node, className: `${node.className ?? ''} bt-agent-canvas-removed`.trim() };
+      }
+      if (change === 'changed') {
+        const proposedId = agentPreviewDiff.currentToProposed.get(node.id);
+        const proposedNode = proposedId ? proposedNodeById.get(proposedId) : undefined;
+        if (proposedNode) {
+          return {
+            ...node,
+            type: proposedNode.type,
+            className: `${node.className ?? ''} bt-agent-canvas-changed`.trim(),
+            data: {
+              ...proposedNode.data,
+              isHighlighted: node.data.isHighlighted,
+              status: node.data.status,
+            },
+          };
+        }
+      }
+      return node;
+    });
+    const proposedNodes = agentPreviewTree.nodes.flatMap(node => {
+      const change = agentPreviewDiff.proposedNodes.get(node.id) ?? 'added';
+      if (change !== 'added') return [];
+      if (!isFinitePoint(node.position)) return [];
+      const previewId = `${AGENT_PREVIEW_ID_PREFIX}${node.id}`;
+      const measured = agentPreviewDimensions[previewId];
+      return [{
+        ...node,
+        id: previewId,
+        position: {
+          x: node.position.x + previewOffset.x,
+          y: node.position.y + previewOffset.y,
+        },
+        width: measured && Number.isFinite(measured.width) ? measured.width : node.width,
+        height: measured && Number.isFinite(measured.height) ? measured.height : node.height,
+        className: `${node.className ?? ''} bt-agent-canvas-proposed bt-agent-canvas-added`.trim(),
+        selectable: false,
+        draggable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+        data: { ...node.data, isHighlighted: false },
+      }];
+    });
+    return [...currentNodes, ...proposedNodes];
+  }, [agentPreviewDiff, agentPreviewDimensions, agentPreviewTree, behaviorNodes]);
+  const agentPreviewSummary = useMemo(
+    () => agentPreviewTree && currentTree ? summarizeTreeChanges(currentTree, agentPreviewTree) : null,
+    [agentPreviewTree, currentTree]
+  );
+  const selectedTreeContext = useMemo<BehaviorTree | null>(() => {
+    if (!currentTree || selectedNodes.length === 0) return null;
+    const selectedIds = new Set(selectedNodes.map(node => node.id));
+    const contextNodes = behaviorNodes.filter(node => selectedIds.has(node.id));
+    if (contextNodes.length === 0) return null;
+
+    return {
+      ...currentTree,
+      id: `${currentTree.id}-selection`,
+      name: `${currentTree.name} — selected part`,
+      description: `Selected context from ${currentTree.name}`,
+      nodes: contextNodes,
+      edges: edges.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)),
+    };
+  }, [behaviorNodes, currentTree, edges, selectedNodes]);
   const displayedEdges = useMemo(() => {
     const nodeStatusById = new Map(
       behaviorNodes.map((node) => [node.id, node.data.status ?? ExecutionStatus.Idle])
@@ -2028,6 +2457,86 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       };
     });
   }, [behaviorNodes, edges]);
+  const canvasEdges = useMemo(() => {
+    if (!agentPreviewTree || !agentPreviewDiff) return displayedEdges;
+    const proposedToCurrent = new Map(
+      Array.from(agentPreviewDiff.currentToProposed.entries()).map(([currentId, proposedId]) => [proposedId, currentId])
+    );
+    const canvasNodeIds = new Set(canvasNodes.map(node => node.id));
+    const getPreviewEndpoint = (proposedId: string) => {
+      const currentId = proposedToCurrent.get(proposedId);
+      return currentId ?? `${AGENT_PREVIEW_ID_PREFIX}${proposedId}`;
+    };
+    const currentEdges = displayedEdges.map(edge =>
+      agentPreviewDiff.currentEdges.get(edge.id) === 'removed'
+        ? {
+            ...edge,
+            animated: false,
+            className: `${edge.className ?? ''} bt-agent-canvas-edge-removed`.trim(),
+            style: { ...edge.style, stroke: '#db4b58', strokeDasharray: '7 5', opacity: .75 },
+          }
+        : edge
+    );
+    const proposedEdges = agentPreviewTree.edges
+      .filter(edge => agentPreviewDiff.proposedEdges.get(edge.id) === 'added')
+      .map(edge => {
+        const source = getPreviewEndpoint(edge.source);
+        const target = getPreviewEndpoint(edge.target);
+        return {
+        ...edge,
+        id: `${AGENT_PREVIEW_ID_PREFIX}${edge.id}`,
+        source,
+        target,
+        selectable: false,
+        deletable: false,
+        focusable: false,
+        animated: true,
+        className: 'bt-agent-canvas-edge-added',
+        label: '+',
+        labelStyle: { fill: '#2eaa54', fontWeight: 800 },
+        style: { stroke: '#2eaa54', strokeWidth: 3, opacity: .9 },
+        };
+      })
+      .filter(edge => canvasNodeIds.has(edge.source) && canvasNodeIds.has(edge.target));
+    return [...currentEdges, ...proposedEdges];
+  }, [agentPreviewDiff, agentPreviewTree, canvasNodes, displayedEdges]);
+
+  const clearAgentPreview = useCallback(() => {
+    setAgentPreviewTree(null);
+    setAgentPreviewDimensions({});
+  }, []);
+
+  const applyAgentPreview = useCallback((mode: 'replace' | 'subtree') => {
+    if (!agentPreviewTree) return;
+    if (mode === 'replace') {
+      persistEditorTree(agentPreviewTree.nodes, agentPreviewTree.edges, {
+        name: agentPreviewTree.name,
+        description: agentPreviewTree.description,
+        blackboardDefaults: agentPreviewTree.blackboardDefaults,
+        blackboardTypes: agentPreviewTree.blackboardTypes,
+      });
+    } else {
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= MIN_FLOW_VIEWPORT_SIZE ||
+        bounds.height <= MIN_FLOW_VIEWPORT_SIZE
+      ) {
+        return;
+      }
+      const position = screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+      if (!isFinitePoint(position)) return;
+      addNodeAtPosition(BehaviorNodeType.Subtree, position, agentPreviewTree, { avoidOverlap: true });
+    }
+    setIsAgentOpen(false);
+    clearAgentPreview();
+    window.requestAnimationFrame(() => centerTreeInView());
+  }, [addNodeAtPosition, agentPreviewTree, centerTreeInView, clearAgentPreview, persistEditorTree, screenToFlowPosition]);
 
   const updateSubtreeReturnAnchor = useCallback(() => {
     if (treePathRef.current.length === 0) {
@@ -2176,6 +2685,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleCanvasPointerMoveCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      lastCanvasPointerRef.current = { x: event.clientX, y: event.clientY };
       const gesture = customBoxSelectionGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
@@ -2228,6 +2738,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     boxSelectionEndedAtRef.current = 0;
     manualEdgeSelectionRef.current = null;
     setOrderingParentId(null);
+    setIsPaletteCollapsed(true);
+    setInlineAgentPosition(null);
     setSelectedNodes([]);
     setSelectedEdges([]);
     applySelectionState(new Set(), new Set());
@@ -2549,6 +3061,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const handleSearchSelect = useCallback(
     (node: BehaviorTreeNode) => {
       const position = node.positionAbsolute ?? node.position;
+      if (!isActive || !isFinitePoint(position) || !isFlowViewportReady(reactFlowWrapper.current)) return;
       const centerX = position.x + (node.width ?? 150) / 2;
       const centerY = position.y + (node.height ?? 80) / 2;
       const selectedNode = { ...node, selected: true, dragging: false };
@@ -2559,11 +3072,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       setOrderingParentId(null);
       setCenter(centerX, centerY, { zoom: Math.max(getZoom(), 1), duration: 400 });
     },
-    [applySelectionState, getZoom, setCenter]
+    [applySelectionState, getZoom, isActive, setCenter]
   );
 
   return (
-    <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
+    <div className={`behavior-tree-panel${isAgentOpen ? ' bt-agent-open' : ''}`} data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
         currentTree={currentTree}
         isExecuting={isExecuting}
@@ -2575,6 +3088,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         canRedo={canRedo}
         interactionMode={canvasInteractionMode}
         isFollowMode={isFollowMode}
+        persistentExecution={persistentExecution}
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
@@ -2595,7 +3109,18 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             return nextEnabled;
           })
         }
+        onPersistentExecutionChange={(enabled) => {
+          setPersistentExecution(enabled);
+          savePersistentExecutionPreference(enabled);
+        }}
+        onOpenAgent={() => {
+          setInlineAgentPosition(null);
+          setIsAgentOpen(true);
+        }}
         onRename={handleRename}
+        blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
+        blackboardTypes={currentTree?.blackboardTypes || {}}
+        onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
       />
 
       {saveNotice && (
@@ -2642,6 +3167,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       )}
 
       <div className="bt-content">
+        {!isPaletteCollapsed && (
+          <button
+            type="button"
+            className="bt-palette-backdrop"
+            onClick={() => setIsPaletteCollapsed(true)}
+            aria-label="Close node palette"
+          />
+        )}
         <NodePalette
           ros={ros}
           isConnected={isConnected}
@@ -2661,17 +3194,17 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           data-testid="bt-canvas"
         >
           <ReactFlow
-            nodes={nodes}
-            edges={displayedEdges}
+            nodes={canvasNodes}
+            edges={canvasEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onDrop={onDrop}
             onDragOver={onDragOver}
             onNodesDelete={onNodesDelete}
-            onNodeClick={onNodeClick}
-            onNodeDoubleClick={onNodeDoubleClick}
-            onEdgeClick={onEdgeClick}
+            onNodeClick={(event, node) => !node.id.startsWith(AGENT_PREVIEW_ID_PREFIX) && onNodeClick(event, node)}
+            onNodeDoubleClick={(event, node) => !node.id.startsWith(AGENT_PREVIEW_ID_PREFIX) && onNodeDoubleClick(event, node)}
+            onEdgeClick={(event, edge) => !edge.id.startsWith(AGENT_PREVIEW_ID_PREFIX) && onEdgeClick(event, edge)}
             onPaneClick={handlePaneClick}
             onSelectionChange={onSelectionChange}
             onSelectionStart={handleSelectionStart}
@@ -2686,7 +3219,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             panOnDrag={canvasInteractionMode === 'pan'}
             selectionOnDrag={false}
             connectionRadius={48}
-            fitView
+            fitView={isActive}
             minZoom={0.1}
             maxZoom={2}
             deleteKeyCode={isExecuting ? null : ['Backspace', 'Delete']}
@@ -2862,13 +3395,65 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               onClose={() => setOrderingParentId(null)}
             />
           )}
+          {agentPreviewTree && agentPreviewSummary && (
+            <div className="bt-agent-canvas-preview-banner" data-testid="bt-agent-canvas-preview-banner">
+              <span className="pulse" aria-hidden="true" />
+              <strong>Agent preview</strong>
+              <span className="added">+{agentPreviewSummary.added}</span>
+              <span className="changed">~{agentPreviewSummary.changed}</span>
+              <span className="removed">−{agentPreviewSummary.removed}</span>
+              <div className="bt-agent-canvas-preview-actions">
+                <button type="button" className="fit" onClick={fitAgentPreviewInView}>Fit</button>
+                <button
+                  type="button"
+                  className="reject"
+                  onClick={clearAgentPreview}
+                >Reject</button>
+                <button
+                  type="button"
+                  className="subtree"
+                  onClick={() => applyAgentPreview('subtree')}
+                >Add subtree</button>
+                <button
+                  type="button"
+                  className="accept"
+                  onClick={() => applyAgentPreview('replace')}
+                >Accept</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <BehaviorTreeAgentPanel
+        open={isAgentOpen}
+        ros={ros}
+        isConnected={isConnected}
+        currentTree={currentTree}
+        selectedTreeContext={selectedTreeContext}
+        previewTree={agentPreviewTree}
+        inlinePosition={inlineAgentPosition}
+        onInlineClose={() => setInlineAgentPosition(null)}
+        onClose={() => setIsAgentOpen(false)}
+        captureCheckpoint={createHistorySnapshot}
+        onRestoreCheckpoint={restoreAgentCheckpoint}
+        onNotify={showSaveNotice}
+        onPreviewChange={tree => {
+          setAgentPreviewTree(tree);
+          setAgentPreviewDimensions({});
+          if (tree) {
+            fitAgentPreviewInView();
+          }
+        }}
+      />
 
       {editingAction && (
         <ActionParameterEditor
           nodeData={editingAction.data}
           ros={ros}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
           onSave={handleSaveActionParameters}
           onClose={() => setEditingAction(null)}
         />
@@ -2877,6 +3462,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         <ServiceParameterEditor
           nodeData={editingService.data}
           ros={ros}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
           onSave={handleSaveServiceRequest}
           onClose={() => setEditingService(null)}
         />
@@ -2894,6 +3482,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           node={editingIterationNode}
           onSave={handleSaveIterationLimit}
           onClose={() => setEditingIterationNodeId(null)}
+        />
+      )}
+      {editingConfigNode && (
+        <BehaviorNodeConfigEditor
+          node={editingConfigNode}
+          blackboardVariables={blackboardVariables}
+          blackboardValues={currentTree?.blackboardDefaults || {}}
+          blackboardTypes={currentTree?.blackboardTypes || {}}
+          onSave={handleSaveNodeConfig}
+          onClose={() => setEditingConfigNodeId(null)}
         />
       )}
     </div>

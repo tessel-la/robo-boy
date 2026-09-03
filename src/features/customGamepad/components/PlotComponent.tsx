@@ -25,6 +25,7 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
     if (configuredPaths && configuredPaths.length > 0) return configuredPaths;
     return [config.config?.fieldPath || action?.field || 'data'];
   }, [action?.field, config.config?.fieldPath, config.config?.fieldPaths]);
+  const fieldPathsKey = fieldPaths.join('\u0000');
   const timeWindowSec = config.config?.timeWindowSec ?? 10;
   const sampleLimit = Math.max(120, Math.min(1000, Math.round(timeWindowSec * 30)));
   const autoScale = config.config?.autoScale !== false;
@@ -129,7 +130,7 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
   }, [
     action?.messageType,
     action?.topic,
-    fieldPaths,
+    fieldPathsKey,
     isEditing,
     ros,
     ros?.isConnected,

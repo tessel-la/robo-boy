@@ -214,7 +214,7 @@ export function usePointCloudClient({
       max_pts: options.maxPoints ?? (isMobile() ? 100000 : 200000),
       throttle_rate: options.throttleRate ?? 33, // ~30Hz
       compression: 'cbor' as const,
-      queue_size: 1,
+      queue_length: 1,
       fixedFrame: fixedFrame,
       messageHandler: function (message: any) {
         try {

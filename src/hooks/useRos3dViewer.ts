@@ -8,6 +8,8 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
   const gridClient = useRef<ROS3D.Grid | null>(null);
   const orbitControlsRef = useRef<any | null>(null);
   const resizeObserver = useRef<ResizeObserver | null>(null);
+  const resizeFrameId = useRef<number | null>(null);
+  const pendingResize = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     const currentViewerRef = viewerRef.current;
@@ -21,6 +23,22 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
         resizeObserver.current.unobserve(currentViewerRef);
         console.log('[useRos3dViewer Cleanup] ResizeObserver detached.');
         resizeObserver.current = null;
+      }
+      if (resizeFrameId.current !== null) {
+        cancelAnimationFrame(resizeFrameId.current);
+        resizeFrameId.current = null;
+        pendingResize.current = null;
+      }
+
+      if (orbitControlsRef.current) {
+        try {
+          if (typeof orbitControlsRef.current.dispose === 'function') {
+            orbitControlsRef.current.dispose();
+          }
+        } catch (e) {
+          console.warn('[useRos3dViewer Cleanup] Error disposing OrbitControls:', e);
+        }
+        orbitControlsRef.current = null;
       }
 
       // Helper function to recursively dispose of resources in the scene graph
@@ -82,7 +100,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
       }
       ros3dViewer.current = null;
       gridClient.current = null;
-      orbitControlsRef.current = null;
       console.log('[useRos3dViewer Cleanup] Viewer refs nulled.');
     };
 
@@ -134,7 +151,17 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
               if (entry && ros3dViewer.current) {
                 const { width, height } = entry.contentRect;
                 if (width > 0 && height > 0) {
-                  ros3dViewer.current.resize(width, height);
+                  pendingResize.current = { width, height };
+                  if (resizeFrameId.current === null) {
+                    resizeFrameId.current = requestAnimationFrame(() => {
+                      resizeFrameId.current = null;
+                      const nextSize = pendingResize.current;
+                      pendingResize.current = null;
+                      if (nextSize && ros3dViewer.current) {
+                        ros3dViewer.current.resize(nextSize.width, nextSize.height);
+                      }
+                    });
+                  }
                 }
               }
             });
@@ -142,7 +169,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
             resizeObserver.current = observer; // Store observer ref
             console.log('[useRos3dViewer Setup] ResizeObserver is now observing the viewer container.');
             // ---------------------------
-
           } catch (error) {
             console.error("[useRos3dViewer Setup] Error initializing ROS3D Viewer/Components:", error);
             cleanupViewer(); // Cleanup on error

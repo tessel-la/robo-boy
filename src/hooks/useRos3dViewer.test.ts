@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRos3dViewer } from './useRos3dViewer';
 import * as ROS3D from '../utils/ros3d';
 
@@ -162,7 +162,27 @@ describe('useRos3dViewer', () => {
         expect(disposeRendererMock).toHaveBeenCalled();
     });
 
-    it('should resize viewer on observation', () => {
+    it('should dispose camera controls on unmount', () => {
+        const disposeControlsMock = vi.fn();
+        (ROS3D.Viewer as any).mockImplementation(function () {
+            return {
+                addObject: vi.fn(),
+                scene: {},
+                camera: {},
+                resize: vi.fn()
+            };
+        });
+        (ROS3D.OrbitControls as any).mockImplementation(function () {
+            return { dispose: disposeControlsMock };
+        });
+
+        const { unmount } = renderHook(() => useRos3dViewer(viewerRef, true));
+        unmount();
+
+        expect(disposeControlsMock).toHaveBeenCalledOnce();
+    });
+
+    it('should resize viewer on observation', async () => {
         const resizeMock = vi.fn();
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
@@ -185,7 +205,9 @@ describe('useRos3dViewer', () => {
                     contentRect: { width: 800, height: 600 }
                 }]);
             });
-            expect(resizeMock).toHaveBeenCalledWith(800, 600);
+            await waitFor(() => {
+                expect(resizeMock).toHaveBeenCalledWith(800, 600);
+            });
         }
     });
 });

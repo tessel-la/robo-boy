@@ -1,6 +1,7 @@
 import type { Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import type { GamepadComponentConfig } from './types';
+export { buildCameraStreamUrl } from '../../utils/cameraStreamUrl';
 
 export interface TopicInfo {
   name: string;
@@ -46,20 +47,18 @@ export const CAMERA_MESSAGE_TYPES = [
   'sensor_msgs/msg/CompressedImage',
 ];
 
-export const JOY_MESSAGE_TYPES = [
-  'sensor_msgs/Joy',
-  'sensor_msgs/msg/Joy',
+export const JOY_MESSAGE_TYPES = ['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'];
+
+export const TWIST_MESSAGE_TYPES = [
+  'geometry_msgs/Twist',
+  'geometry_msgs/msg/Twist',
+  'geometry_msgs/TwistStamped',
+  'geometry_msgs/msg/TwistStamped',
 ];
 
-export const POSE_STAMPED_MESSAGE_TYPES = [
-  'geometry_msgs/PoseStamped',
-  'geometry_msgs/msg/PoseStamped',
-];
+export const POSE_STAMPED_MESSAGE_TYPES = ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'];
 
-export const ODOMETRY_MESSAGE_TYPES = [
-  'nav_msgs/Odometry',
-  'nav_msgs/msg/Odometry',
-];
+export const ODOMETRY_MESSAGE_TYPES = ['nav_msgs/Odometry', 'nav_msgs/msg/Odometry'];
 
 const DYNAMIC_ARRAY_PREVIEW_LENGTH = 8;
 
@@ -156,6 +155,10 @@ export function isJoyMessageType(type: string): boolean {
   return JOY_MESSAGE_TYPES.includes(type);
 }
 
+export function isTwistMessageType(type: string): boolean {
+  return TWIST_MESSAGE_TYPES.includes(type);
+}
+
 export function isPoseStampedMessageType(type: string): boolean {
   return POSE_STAMPED_MESSAGE_TYPES.includes(type);
 }
@@ -195,9 +198,7 @@ export function buildStampedHeader(messageType: string, frameId: string, date = 
   const nanos = Math.floor((millis - seconds * 1000) * 1_000_000);
 
   return {
-    stamp: messageType.includes('/msg/')
-      ? { sec: seconds, nanosec: nanos }
-      : { secs: seconds, nsecs: nanos },
+    stamp: messageType.includes('/msg/') ? { sec: seconds, nanosec: nanos } : { secs: seconds, nsecs: nanos },
     frame_id: frameId,
   };
 }
@@ -257,15 +258,9 @@ export function mergeJoyAxes(
   return axes;
 }
 
-function writePoseAxis(
-  position: Record<'x' | 'y' | 'z', number>,
-  axisPath: string,
-  value: number
-) {
+function writePoseAxis(position: Record<'x' | 'y' | 'z', number>, axisPath: string, value: number) {
   const normalized = axisPath.replace(/^pose\./, '');
-  const component = normalized.startsWith('position.')
-    ? normalized.split('.')[1]
-    : normalized;
+  const component = normalized.startsWith('position.') ? normalized.split('.')[1] : normalized;
 
   if (component === 'x' || component === 'y' || component === 'z') {
     position[component] = value;
@@ -287,12 +282,8 @@ export function buildPoseStampedPayload({
   latestReferenceTransform?: TransformLike | null;
   date?: Date;
 }) {
-  const frameId = config.config?.poseStampedFrameId?.trim()
-    || latestOdometry?.header?.frame_id?.trim()
-    || 'map';
-  const axesConfig = config.config?.axes?.length
-    ? config.config.axes
-    : ['position.x', 'position.y'];
+  const frameId = config.config?.poseStampedFrameId?.trim() || latestOdometry?.header?.frame_id?.trim() || 'map';
+  const axesConfig = config.config?.axes?.length ? config.config.axes : ['position.x', 'position.y'];
   const offset = { x: 0, y: 0, z: 0 };
 
   axesConfig.forEach((axis, index) => {
@@ -303,17 +294,17 @@ export function buildPoseStampedPayload({
 
   const odometryPose = latestOdometry?.pose?.pose;
   const useOdometry = config.config?.poseStampedReferenceMode === 'odometry' && !!odometryPose;
-  const useReferenceTransform = config.config?.poseStampedReferenceMode === 'tf'
-    && !!latestReferenceTransform;
+  const useReferenceTransform = config.config?.poseStampedReferenceMode === 'tf' && !!latestReferenceTransform;
   const basePosition = odometryPose?.position;
   const referenceTranslation = latestReferenceTransform?.translation;
   const referenceRotation = latestReferenceTransform?.rotation;
-  const quaternionLength = Math.hypot(
-    referenceRotation?.x ?? 0,
-    referenceRotation?.y ?? 0,
-    referenceRotation?.z ?? 0,
-    referenceRotation?.w ?? 1
-  ) || 1;
+  const quaternionLength =
+    Math.hypot(
+      referenceRotation?.x ?? 0,
+      referenceRotation?.y ?? 0,
+      referenceRotation?.z ?? 0,
+      referenceRotation?.w ?? 1
+    ) || 1;
   const normalizedReferenceRotation = {
     x: (referenceRotation?.x ?? 0) / quaternionLength,
     y: (referenceRotation?.y ?? 0) / quaternionLength,
@@ -331,26 +322,26 @@ export function buildPoseStampedPayload({
   };
   const position = useReferenceTransform
     ? {
-      x: (referenceTranslation?.x ?? 0) + rotatedOffset.x,
-      y: (referenceTranslation?.y ?? 0) + rotatedOffset.y,
-      z: (referenceTranslation?.z ?? 0) + rotatedOffset.z,
-    }
+        x: (referenceTranslation?.x ?? 0) + rotatedOffset.x,
+        y: (referenceTranslation?.y ?? 0) + rotatedOffset.y,
+        z: (referenceTranslation?.z ?? 0) + rotatedOffset.z,
+      }
     : {
-      x: (useOdometry ? basePosition?.x ?? 0 : 0) + offset.x,
-      y: (useOdometry ? basePosition?.y ?? 0 : 0) + offset.y,
-      z: (useOdometry ? basePosition?.z ?? 0 : 0) + offset.z,
-    };
+        x: (useOdometry ? (basePosition?.x ?? 0) : 0) + offset.x,
+        y: (useOdometry ? (basePosition?.y ?? 0) : 0) + offset.y,
+        z: (useOdometry ? (basePosition?.z ?? 0) : 0) + offset.z,
+      };
   const odometryOrientation = odometryPose?.orientation;
   const orientation = useReferenceTransform
     ? normalizedReferenceRotation
-    : (useOdometry && config.config?.poseStampedUseOdometryOrientation !== false)
-    ? {
-      x: odometryOrientation?.x ?? 0,
-      y: odometryOrientation?.y ?? 0,
-      z: odometryOrientation?.z ?? 0,
-      w: odometryOrientation?.w ?? 1,
-    }
-    : { x: 0, y: 0, z: 0, w: 1 };
+    : useOdometry && config.config?.poseStampedUseOdometryOrientation !== false
+      ? {
+          x: odometryOrientation?.x ?? 0,
+          y: odometryOrientation?.y ?? 0,
+          z: odometryOrientation?.z ?? 0,
+          w: odometryOrientation?.w ?? 1,
+        }
+      : { x: 0, y: 0, z: 0, w: 1 };
 
   return {
     header: buildStampedHeader(messageType, frameId, date),
@@ -359,24 +350,6 @@ export function buildPoseStampedPayload({
       orientation,
     },
   };
-}
-
-export function buildCameraStreamUrl({
-  topic,
-  streamType = 'mjpeg',
-  width,
-  height,
-}: {
-  topic: string;
-  streamType?: string;
-  width?: number;
-  height?: number;
-}): string {
-  let url = `/video_stream/stream?topic=${topic}`;
-  if (streamType) url += `&type=${streamType}`;
-  if (width) url += `&width=${width}`;
-  if (height) url += `&height=${height}`;
-  return url;
 }
 
 function isNumericRosType(type: string): boolean {
@@ -388,12 +361,7 @@ function findTypedef(typedefs: FieldTypedef[], type: string): FieldTypedef | und
   return typedefs.find(item => item.type === type || item.type.split('/').pop() === lastPart);
 }
 
-function appendIndexedFields(
-  fields: NumericFieldOption[],
-  prefix: string,
-  fieldType: string,
-  arrayLen: number
-) {
+function appendIndexedFields(fields: NumericFieldOption[], prefix: string, fieldType: string, arrayLen: number) {
   const length = arrayLen > 0 ? arrayLen : DYNAMIC_ARRAY_PREVIEW_LENGTH;
   for (let index = 0; index < length; index += 1) {
     const path = `${prefix}[${index}]`;

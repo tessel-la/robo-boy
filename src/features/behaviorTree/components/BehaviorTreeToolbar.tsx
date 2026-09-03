@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
-import { BehaviorNodeType, BehaviorTree } from '../types';
+import BlackboardEditor from './BlackboardEditor';
+import { BehaviorNodeType, BehaviorTree, BlackboardValueType } from '../types';
 import {
   BEHAVIOR_TREE_STORAGE_EVENT,
   listBehaviorTrees,
@@ -23,6 +25,7 @@ interface BehaviorTreeToolbarProps {
   canRedo: boolean;
   interactionMode: BehaviorTreeInteractionMode;
   isFollowMode: boolean;
+  persistentExecution: boolean;
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
@@ -37,7 +40,12 @@ interface BehaviorTreeToolbarProps {
   onRedo: () => void;
   onInteractionModeChange: (mode: BehaviorTreeInteractionMode) => void;
   onToggleFollowMode: () => void;
+  onPersistentExecutionChange: (enabled: boolean) => void;
+  onOpenAgent: () => void;
   onRename: (name: string) => void;
+  blackboardValues: Record<string, unknown>;
+  blackboardTypes: Record<string, BlackboardValueType>;
+  onBlackboardDefaultsChange: (values: Record<string, unknown>, types: Record<string, BlackboardValueType>) => void;
 }
 
 const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
@@ -51,6 +59,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   canRedo,
   interactionMode,
   isFollowMode,
+  persistentExecution,
   onSave,
   onLoad,
   onNew,
@@ -65,7 +74,12 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onRedo,
   onInteractionModeChange,
   onToggleFollowMode,
+  onPersistentExecutionChange,
+  onOpenAgent,
   onRename,
+  blackboardValues,
+  blackboardTypes,
+  onBlackboardDefaultsChange,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
@@ -277,6 +291,16 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         </div>
       </div>
 
+      <div className="bt-menu-section">
+        <label className="bt-menu-label">Blackboard {isExecuting ? '(live)' : '(defaults)'}</label>
+        <BlackboardEditor
+          values={blackboardValues}
+          types={blackboardTypes}
+          readOnly={isExecuting}
+          onChange={onBlackboardDefaultsChange}
+        />
+      </div>
+
       <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
     </>
   );
@@ -334,6 +358,29 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               </svg>
             </button>
             <button
+              className="bt-float-icon-btn bt-agent-tree-btn"
+              onClick={onOpenAgent}
+              disabled={isEditingLocked}
+              title="Create tree with AI"
+              aria-label="Create tree with AI"
+              data-testid="bt-open-agent"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3z" />
+                <path d="M18.5 13l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2zM5.5 14l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z" />
+              </svg>
+            </button>
+            <button
               className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'select' ? ' active' : ''}`}
               onClick={() => onInteractionModeChange('select')}
               title="Select nodes by dragging"
@@ -341,20 +388,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               aria-pressed={interactionMode === 'select'}
               data-testid="bt-select-mode"
             >
-              <svg className="bt-select-tool-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect
-                  x="3.5"
-                  y="3.5"
-                  width="11.5"
-                  height="11.5"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeDasharray="3.4 2.6"
-                />
-                <path d="M12.7 12.7l7.1 7.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16.6 20.2l3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
+              <MdSelectAll className="bt-select-tool-icon" aria-hidden="true" />
             </button>
             <button
               className={`bt-float-icon-btn bt-interaction-mode-btn${interactionMode === 'pan' ? ' active' : ''}`}
@@ -460,6 +494,28 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
+        <label
+          className={`bt-persistent-toggle${persistentExecution ? ' active' : ''}`}
+          title="Keep this tree running in ROS if Robo-Boy is closed"
+        >
+          <input
+            type="checkbox"
+            checked={persistentExecution}
+            disabled={isExecuting}
+            onChange={event => onPersistentExecutionChange(event.target.checked)}
+          />
+          <svg className="bt-persistent-toggle-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="4" y="3" width="16" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <rect x="4" y="14" width="16" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="8" cy="6.5" r="1" fill="currentColor" />
+            <circle cx="8" cy="17.5" r="1" fill="currentColor" />
+            <path d="M12 6.5h5M12 17.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          <span className="bt-persistent-toggle-track" aria-hidden="true">
+            <span />
+          </span>
+          <span className="bt-persistent-toggle-label">Keep running</span>
+        </label>
         <button
           className={`bt-float-icon-btn bt-follow-mode-btn${isFollowMode ? ' active' : ''}`}
           onClick={onToggleFollowMode}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { ROSServiceNodeData, ExecutionStatus } from '../../types';
 import './NodeStyles.css';
+import DataFlowSummary from './DataFlowSummary';
 
 const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }) => {
   const statusClass = data.status || ExecutionStatus.Idle;
@@ -13,12 +14,12 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
       }`}
     >
       <Handle type="target" position={Position.Top} className="bt-handle" />
-      
+
       <div className="bt-node-header">
         <span className="bt-node-icon">🔧</span>
         <span className="bt-node-type">Service</span>
       </div>
-      
+
       <div className="bt-node-content">
         <div className="bt-node-label" title={data.label}>
           {data.label}
@@ -32,13 +33,14 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
           </div>
         )}
       </div>
-      
+      <DataFlowSummary inputs={data.inputBindings} outputs={data.outputBindings} />
+
       {data.status && (
         <div className="bt-node-status">
           <div className={`bt-status-indicator status-${statusClass}`} />
         </div>
       )}
-      
+
       {/* Service nodes are leaves — no outgoing connections */}
     </div>
   );

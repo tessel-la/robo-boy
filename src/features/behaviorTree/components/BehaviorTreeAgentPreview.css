@@ -1,0 +1,73 @@
+.bt-agent-preview { display: grid; gap: 11px; margin-top: 14px; padding: 14px; border: 1px solid color-mix(in srgb, var(--primary-color, #4285f4) 28%, transparent); border-radius: 15px; background: color-mix(in srgb, var(--card-bg, #fff) 96%, var(--primary-color, #4285f4)); box-shadow: 0 8px 24px rgba(10, 20, 38, .08); }
+.bt-agent-preview-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.bt-agent-preview-header span { color: var(--text-secondary, #68707c); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.bt-agent-preview-header h3 { margin: 2px 0 0; font-size: 15px; }
+.bt-agent-diff { display: flex; gap: 5px; }
+.bt-agent-diff span { min-width: 26px; padding: 4px 6px; border-radius: 8px; text-align: center; font-size: 11px; }
+.bt-agent-diff .added { background: rgba(46, 160, 67, .14); color: #2e9144; }
+.bt-agent-diff .changed { background: rgba(210, 153, 34, .16); color: #a06c00; }
+.bt-agent-diff .removed { background: rgba(220, 53, 69, .13); color: #c33; }
+.bt-agent-preview-description { margin: 0; color: var(--text-secondary, #68707c); font-size: 11px; line-height: 1.4; }
+.bt-agent-preview-on-canvas { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 11px; background: color-mix(in srgb, var(--primary-color, #4285f4) 9%, transparent); color: var(--primary-color, #4285f4); }
+.bt-agent-preview-on-canvas > span { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--card-bg, #fff); font-size: 18px; }
+.bt-agent-preview-on-canvas div { display: grid; gap: 2px; }
+.bt-agent-preview-on-canvas small { color: var(--text-secondary, #68707c); font-size: 9px; line-height: 1.35; }
+.bt-agent-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bt-agent-preview-modes, .bt-agent-preview-zoom { display: flex; padding: 3px; border-radius: 10px; background: var(--hover-bg, #eef1f5); }
+.bt-agent-preview-modes button, .bt-agent-preview-zoom button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary, #68707c); font-size: 10px; font-weight: 700; cursor: pointer; }
+.bt-agent-preview-modes button.active { background: var(--card-bg, #fff); color: var(--primary-color, #4285f4); box-shadow: 0 1px 5px rgba(12, 22, 38, .1); }
+.bt-agent-preview-modes button:disabled { opacity: .35; }
+.bt-agent-preview-zoom button:first-child, .bt-agent-preview-zoom button:last-child { width: 32px; padding: 0; font-size: 17px; }
+.bt-agent-preview-zoom button:nth-child(2) { min-width: 46px; padding-inline: 4px; }
+.bt-agent-preview-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--text-secondary, #68707c); font-size: 9px; }
+.bt-agent-preview-legend span::before { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: var(--border-color, #aaa); content: ''; }
+.bt-agent-preview-legend span.added::before { background: #2eaa54; }
+.bt-agent-preview-legend span.changed::before { background: #d49a20; }
+.bt-agent-preview-legend span.removed::before { background: #db4b58; }
+.bt-agent-preview-legend span:last-child { margin-left: auto; }
+.bt-agent-preview-canvas { max-height: 240px; overflow: auto; border: 1px solid var(--border-color, #dfe3e8); border-radius: 12px; background: var(--hover-bg, #f7f8fa); touch-action: pan-x pan-y; }
+.bt-agent-preview-canvas svg { display: block; min-width: 100%; min-height: 145px; max-height: 230px; transition: width .15s ease; }
+.bt-agent-preview-canvas line { stroke: var(--primary-color, #4285f4); stroke-width: 2; opacity: .6; }
+.bt-agent-preview-canvas line.added { stroke: #2eaa54; stroke-width: 3; }
+.bt-agent-preview-canvas line.removed { stroke: #db4b58; stroke-dasharray: 6 4; opacity: .72; }
+.bt-agent-preview-canvas rect { fill: var(--card-bg, #fff); stroke: var(--primary-color, #4285f4); stroke-width: 1.5; }
+.bt-agent-preview-canvas text { fill: var(--text-color, #333); font-size: 10px; font-weight: 700; }
+.bt-agent-preview-canvas text.type { fill: var(--text-secondary, #68707c); font-size: 8px; font-weight: 500; }
+.bt-agent-preview-node { cursor: pointer; outline: none; }
+.bt-agent-preview-node.added rect { fill: color-mix(in srgb, #2eaa54 10%, var(--card-bg, #fff)); stroke: #2eaa54; stroke-width: 2.2; }
+.bt-agent-preview-node.changed rect { fill: color-mix(in srgb, #d49a20 12%, var(--card-bg, #fff)); stroke: #d49a20; stroke-width: 2.2; }
+.bt-agent-preview-node.removed { opacity: .68; }
+.bt-agent-preview-node.removed rect { fill: color-mix(in srgb, #db4b58 8%, var(--card-bg, #fff)); stroke: #db4b58; stroke-width: 2; stroke-dasharray: 6 3; }
+.bt-agent-preview-node.selected rect, .bt-agent-preview-node:focus rect { stroke-width: 3.5; filter: drop-shadow(0 3px 5px rgba(20, 30, 45, .2)); }
+.bt-agent-node-inspector { display: grid; gap: 7px; padding: 11px; border: 1px solid var(--border-color, #dfe3e8); border-left: 4px solid var(--primary-color, #4285f4); border-radius: 10px; background: var(--card-bg, #fff); font-size: 10px; }
+.bt-agent-node-inspector.added { border-left-color: #2eaa54; }
+.bt-agent-node-inspector.changed { border-left-color: #d49a20; }
+.bt-agent-node-inspector.removed { border-left-color: #db4b58; }
+.bt-agent-node-inspector > div { display: flex; justify-content: space-between; gap: 8px; }
+.bt-agent-node-inspector span { color: var(--text-secondary, #68707c); text-transform: capitalize; }
+.bt-agent-node-inspector code { color: var(--primary-color, #4285f4); overflow-wrap: anywhere; }
+.bt-agent-node-inspector pre { max-height: 150px; overflow: auto; margin: 0; padding: 8px; border-radius: 8px; background: var(--hover-bg, #f7f8fa); font-size: 10px; white-space: pre-wrap; }
+.bt-agent-node-inspector p { margin: 0; color: var(--text-secondary, #68707c); }
+.bt-agent-preview-inputs { display: grid; gap: 6px; font-size: 11px; }
+.bt-agent-preview-inputs details { border: 1px solid var(--border-color, #dfe3e8); border-radius: 10px; overflow: hidden; }
+.bt-agent-preview-inputs summary { min-height: 42px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; cursor: pointer; }
+.bt-agent-preview-inputs code { overflow: hidden; color: var(--text-secondary, #68707c); font-size: 9px; text-overflow: ellipsis; }
+.bt-agent-preview-inputs pre { max-height: 180px; overflow: auto; margin: 0; padding: 9px; border-top: 1px solid var(--border-color, #dfe3e8); background: var(--hover-bg, #f7f8fa); font-size: 10px; white-space: pre-wrap; }
+.bt-agent-review-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.bt-agent-review-actions button { min-height: 42px; border: 0; border-radius: 10px; padding: 9px 11px; background: var(--primary-color, #4285f4); color: var(--button-text, #fff); font-size: 11px; font-weight: 750; cursor: pointer; }
+.bt-agent-review-actions button.reject { margin-right: auto; border: 1px solid color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); background: transparent; color: var(--error-color, #d32f2f); }
+.bt-agent-review-actions button.secondary { border: 1px solid var(--border-color, #dfe3e8); background: transparent; color: var(--text-color, #333); }
+
+@media (max-width: 768px) {
+  .bt-agent-preview { margin: 12px -2px 0; padding: 12px; }
+  .bt-agent-preview-canvas { max-height: 210px; }
+  .bt-agent-preview-canvas svg { min-width: 340px; min-height: 150px; }
+  .bt-agent-preview-toolbar { align-items: stretch; flex-direction: column; }
+  .bt-agent-preview-modes { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .bt-agent-preview-modes button { min-height: 38px; }
+  .bt-agent-preview-zoom { align-self: flex-end; }
+  .bt-agent-preview-legend span:last-child { width: 100%; margin: 0; }
+  .bt-agent-review-actions { position: sticky; bottom: -14px; z-index: 4; margin: 0 -12px -12px; padding: 10px 12px; border-top: 1px solid color-mix(in srgb, var(--border-color, #dfe3e8) 75%, transparent); background: color-mix(in srgb, var(--card-bg, #fff) 94%, transparent); backdrop-filter: blur(14px); }
+  .bt-agent-review-actions button.reject { width: 100%; margin: 0; order: 3; }
+  .bt-agent-review-actions button:not(.reject) { flex: 1; }
+}

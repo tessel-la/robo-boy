@@ -4,6 +4,8 @@ import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { CustomTFProvider, StoredTransform } from './tfUtils';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
 
@@ -17,6 +19,16 @@ interface UrdfModelCacheEntry {
 
 const urdfModelCache = new Map<string, UrdfModelCacheEntry>();
 
+const isDesktopRuntime = (): boolean =>
+  typeof document !== 'undefined' && document.documentElement.dataset.runtime === 'tauri';
+
+const getRendererPixelRatio = (): number => {
+  if (typeof window === 'undefined') return 1;
+
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  return isDesktopRuntime() ? Math.min(devicePixelRatio, 1) : devicePixelRatio;
+};
+
 function getUrdfCacheKey(ros: Ros, topic: string): string {
   const rosUrl = (ros as any)?.url || 'default-ros';
   return `${rosUrl}:${topic}`;
@@ -29,6 +41,8 @@ class Viewer {
   renderer: THREE.WebGLRenderer;
   fixedFrame: string = '';
   private animationId: number | null = null;
+  private renderWidth = 0;
+  private renderHeight = 0;
 
   constructor(options: {
     divID: string;
@@ -93,9 +107,14 @@ class Viewer {
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
-      antialias: options.antialias,
+      antialias: isDesktopRuntime() ? false : options.antialias,
+      powerPreference: 'high-performance',
+      stencil: false,
     });
+    this.renderer.setPixelRatio(getRendererPixelRatio());
     this.renderer.setSize(options.width, options.height);
+    this.renderWidth = options.width;
+    this.renderHeight = options.height;
     // Enable shadows if needed
     this.renderer.shadowMap.enabled = false; // Keep disabled for performance
     
@@ -113,6 +132,10 @@ class Viewer {
 
   // Resize viewer
   resize(width: number, height: number): void {
+    if (width === this.renderWidth && height === this.renderHeight) return;
+
+    this.renderWidth = width;
+    this.renderHeight = height;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
@@ -559,7 +582,7 @@ class PointCloud2 extends THREE.Object3D {
         messageType: 'sensor_msgs/PointCloud2',
         compression: this.compression,
         throttle_rate: this.throttleRate,
-        queue_size: 1 // Keep only the latest message
+        queue_length: 1 // Keep only the latest message
       });
 
       this.rosTopicInstance.subscribe(this.processMessage.bind(this));
@@ -953,7 +976,6 @@ class OrbitControls {
   private state = this.STATE.NONE;
   
   private spherical = new THREE.Spherical();
-  private sphericalDelta = new THREE.Spherical();
   private scale = 1;
   private panOffset = new THREE.Vector3();
   
@@ -966,8 +988,8 @@ class OrbitControls {
   private panDelta = new THREE.Vector2();
   
   // Track touch points for multi-touch gestures
-  private touches = { ONE: 0, TWO: 1 };
   private prevTouchDistance = -1;
+  private prevTouchMidpoint = new THREE.Vector2();
   
   private EPS = 0.000001;
   
@@ -1010,12 +1032,13 @@ class OrbitControls {
     
     // Add event listeners
     this.element.addEventListener('mousedown', this.onMouseDown, false);
-    this.element.addEventListener('wheel', this.onMouseWheel, false);
+    this.element.addEventListener('wheel', this.onMouseWheel, { passive: false });
     
     // Add touch event listeners
-    this.element.addEventListener('touchstart', this.onTouchStart, false);
-    this.element.addEventListener('touchmove', this.onTouchMove, false);
-    this.element.addEventListener('touchend', this.onTouchEnd, false);
+    this.element.addEventListener('touchstart', this.onTouchStart, { passive: false });
+    this.element.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    this.element.addEventListener('touchend', this.onTouchEnd, { passive: false });
+    this.element.addEventListener('touchcancel', this.onTouchEnd, { passive: false });
     
     // Initial update
     this.update();
@@ -1029,6 +1052,27 @@ class OrbitControls {
     // Convert from cartesian to spherical coordinates
     this.spherical.setFromVector3(offset);
   }
+
+  private rotate(deltaX: number, deltaY: number, speed: number = this.rotateSpeed): void {
+    const element = this.element === document.body ? document.body : this.element;
+    if (element.clientHeight <= 0) return;
+
+    const worldUp = new THREE.Vector3(0, 0, 1);
+    const offset = new THREE.Vector3().subVectors(this.camera.position, this.target);
+    const toYUp = new THREE.Quaternion().setFromUnitVectors(worldUp, new THREE.Vector3(0, 1, 0));
+
+    offset.applyQuaternion(toYUp);
+    this.spherical.setFromVector3(offset);
+    this.spherical.theta -= 2 * Math.PI * deltaX / element.clientHeight * speed;
+    this.spherical.phi -= 2 * Math.PI * deltaY / element.clientHeight * speed;
+    this.spherical.phi = THREE.MathUtils.clamp(this.spherical.phi, this.EPS, Math.PI - this.EPS);
+    this.spherical.makeSafe();
+
+    offset.setFromSpherical(this.spherical).applyQuaternion(toYUp.invert());
+    this.camera.position.copy(this.target).add(offset);
+    this.camera.up.copy(worldUp);
+    this.camera.lookAt(this.target);
+  }
   
   private onMouseDown(event: MouseEvent): void {
     if (!this.enabled) return;
@@ -1037,11 +1081,17 @@ class OrbitControls {
     
     switch (event.button) {
       case this.mouseButtons.LEFT:
-        this.state = this.STATE.ROTATE;
-        this.rotateStart.set(event.clientX, event.clientY);
+        if (event.ctrlKey) {
+          this.state = this.STATE.PAN;
+          this.panStart.set(event.clientX, event.clientY);
+        } else {
+          this.state = this.STATE.ROTATE;
+          this.rotateStart.set(event.clientX, event.clientY);
+        }
         break;
       case this.mouseButtons.MIDDLE:
-        this.state = this.STATE.DOLLY;
+        this.state = this.STATE.PAN;
+        this.panStart.set(event.clientX, event.clientY);
         break;
       case this.mouseButtons.RIGHT:
         this.state = this.STATE.PAN;
@@ -1066,53 +1116,7 @@ class OrbitControls {
       case this.STATE.ROTATE:
         this.rotateEnd.set(event.clientX, event.clientY);
         this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-        
-        // Get element dimensions for rotation calculations
-        const element = this.element === document.body ? document.body : this.element;
-        const elementWidth = element.clientWidth;
-        const elementHeight = element.clientHeight;
-        
-        // Scale factor for rotation (adjust as needed for sensitivity)
-        const rotateSpeed = this.rotateSpeed;
-        
-        // Completely separate axis handling for Z-up system
-        // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-        const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-        
-        // Apply rotation around world Z axis (phi in spherical coordinates)
-        const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 0, 1), 
-          -horizontalRotationAngle
-        );
-        
-        // Apply Z-axis rotation to current camera position
-        const cameraPosition = new THREE.Vector3().subVectors(
-          this.camera.position,
-          this.target
-        );
-        cameraPosition.applyQuaternion(rotationZ);
-        
-        // Vertical movement (Y) - rotate around local X axis (polar angle)
-        // First get the right vector (perpendicular to camera direction and Z-up)
-        const forward = cameraPosition.clone().normalize();
-        const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-        
-        // Calculate vertical rotation angle
-        const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-        
-        // Apply rotation around right vector
-        const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-        cameraPosition.applyQuaternion(rotationX);
-        
-        // Update camera position based on rotated vector
-        this.camera.position.copy(this.target).add(cameraPosition);
-        
-        // Ensure camera up vector stays aligned with world Z
-        this.camera.up.set(0, 0, 1);
-        
-        // Look at target
-        this.camera.lookAt(this.target);
-        
+        this.rotate(this.rotateDelta.x, this.rotateDelta.y);
         this.rotateStart.copy(this.rotateEnd);
         break;
         
@@ -1141,7 +1145,7 @@ class OrbitControls {
     
     if (event.deltaY < 0) {
       this.dollyIn();
-    } else {
+    } else if (event.deltaY > 0) {
       this.dollyOut();
     }
     
@@ -1171,6 +1175,7 @@ class OrbitControls {
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         this.panStart.set(x, y);
+        this.prevTouchMidpoint.set(x, y);
         this.state = this.STATE.PAN;
         break;
         
@@ -1192,53 +1197,7 @@ class OrbitControls {
             event.touches[0].clientY
           );
           this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
-          
-          // Get element dimensions for rotation calculations
-          const element = this.element === document.body ? document.body : this.element;
-          const elementWidth = element.clientWidth;
-          const elementHeight = element.clientHeight;
-          
-          // Scale factor for rotation (adjust as needed for sensitivity)
-          const rotateSpeed = this.rotateSpeed;
-          
-          // Completely separate axis handling for Z-up system
-          // Horizontal movement (X) - rotate around Z axis (azimuthal angle)
-          const horizontalRotationAngle = 2 * Math.PI * this.rotateDelta.x / elementWidth * rotateSpeed;
-          
-          // Apply rotation around world Z axis (phi in spherical coordinates)
-          const rotationZ = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(0, 0, 1), 
-            -horizontalRotationAngle
-          );
-          
-          // Apply Z-axis rotation to current camera position
-          const cameraPosition = new THREE.Vector3().subVectors(
-            this.camera.position,
-            this.target
-          );
-          cameraPosition.applyQuaternion(rotationZ);
-          
-          // Vertical movement (Y) - rotate around local X axis (polar angle)
-          // First get the right vector (perpendicular to camera direction and Z-up)
-          const forward = cameraPosition.clone().normalize();
-          const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), forward).normalize();
-          
-          // Calculate vertical rotation angle
-          const verticalRotationAngle = 2 * Math.PI * this.rotateDelta.y / elementHeight * rotateSpeed;
-          
-          // Apply rotation around right vector
-          const rotationX = new THREE.Quaternion().setFromAxisAngle(right, verticalRotationAngle);
-          cameraPosition.applyQuaternion(rotationX);
-          
-          // Update camera position based on rotated vector
-          this.camera.position.copy(this.target).add(cameraPosition);
-          
-          // Ensure camera up vector stays aligned with world Z
-          this.camera.up.set(0, 0, 1);
-          
-          // Look at target
-          this.camera.lookAt(this.target);
-          
+          this.rotate(this.rotateDelta.x, this.rotateDelta.y);
           this.rotateStart.copy(this.rotateEnd);
         }
         break;
@@ -1249,14 +1208,10 @@ class OrbitControls {
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         const touchDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // If we have a previous distance, use it for pinch zoom
+        // Scale the camera distance by the inverse change in finger spacing:
+        // spreading fingers zooms in and pinching them together zooms out.
         if (this.prevTouchDistance > 0 && touchDistance > 0) {
-          // If new distance is greater, zoom in, otherwise zoom out
-          if (touchDistance > this.prevTouchDistance) {
-            this.dollyIn();
-          } else {
-            this.dollyOut();
-          }
+          this.scale *= this.prevTouchDistance / touchDistance;
           this.prevTouchDistance = touchDistance;
         }
         
@@ -1264,11 +1219,12 @@ class OrbitControls {
         const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
         const y = (event.touches[0].clientY + event.touches[1].clientY) / 2;
         this.panEnd.set(x, y);
-        this.panDelta.subVectors(this.panEnd, this.panStart);
+        this.panDelta.subVectors(this.panEnd, this.prevTouchMidpoint);
         
         this.pan(this.panDelta.x, this.panDelta.y);
         
         this.panStart.copy(this.panEnd);
+        this.prevTouchMidpoint.copy(this.panEnd);
         break;
     }
     
@@ -1320,11 +1276,11 @@ class OrbitControls {
   }
   
   private dollyIn(): void {
-    this.scale /= 0.95;
+    this.scale *= 0.95;
   }
   
   private dollyOut(): void {
-    this.scale *= 0.95;
+    this.scale /= 0.95;
   }
   
   public update(): void {
@@ -1370,6 +1326,7 @@ class OrbitControls {
     this.element.removeEventListener('touchstart', this.onTouchStart, false);
     this.element.removeEventListener('touchmove', this.onTouchMove, false);
     this.element.removeEventListener('touchend', this.onTouchEnd, false);
+    this.element.removeEventListener('touchcancel', this.onTouchEnd, false);
   }
 }
 
@@ -1386,6 +1343,7 @@ class UrdfClient extends THREE.Object3D {
   private onComplete?: (model: THREE.Object3D) => void;
   private linkNameMap: Map<string, THREE.Object3D> = new Map();
   private colladaLoader: ColladaLoader;
+  private objLoader: OBJLoader;
   private stlLoader: STLLoader;
   private cacheKey: string;
   private disposed = false;
@@ -1399,17 +1357,19 @@ class UrdfClient extends THREE.Object3D {
     tfClient: CustomTFProvider;
     rootObject: THREE.Object3D;
     robotDescriptionTopic?: string;
+    path?: string;
     onComplete?: (model: THREE.Object3D) => void;
     // Removed loader option, will use internal Collada and STL loaders
   }) {
     super();
     this.ros = options.ros;
     this.tfClient = options.tfClient;
-    this.path = '/mesh_resources/'; // Hardcoded path
+    this.path = options.path || '/mesh_resources';
     this.rootObject = options.rootObject;
     this.onComplete = options.onComplete;
 
     this.colladaLoader = new ColladaLoader();
+    this.objLoader = new OBJLoader();
     this.stlLoader = new STLLoader();
     this.userData.preserveAcrossViewerCleanup = true;
 
@@ -1450,7 +1410,7 @@ class UrdfClient extends THREE.Object3D {
       messageType: 'std_msgs/String',
       compression: 'none',
       throttle_rate: 0,
-      queue_size: 1,
+      queue_length: 1,
       latch: true,
     });
 
@@ -1537,11 +1497,10 @@ class UrdfClient extends THREE.Object3D {
             const xyz = originElement.getAttribute('xyz')?.split(' ').map(Number) || [0,0,0];
             const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
             childObject.position.set(xyz[0], xyz[1], xyz[2]);
-            // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
-            // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
-            // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
-            // For Z-up coordinate system, we need to be careful about axis mapping
-            const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+            // URDF RPY is a fixed-axis X-Y-Z rotation, represented by
+            // Rz(yaw) * Ry(pitch) * Rx(roll). Three.js's equivalent Euler
+            // composition is ZYX while retaining x=roll, y=pitch, z=yaw.
+            const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX');
             childObject.rotation.copy(euler);
             
             console.log(`[UrdfClient] Joint ${jointName} origin: pos(${xyz.join(',')}) rot(${rpy.join(',')})`);
@@ -1666,6 +1625,57 @@ class UrdfClient extends THREE.Object3D {
             linkObject.add(daeMesh);
             console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
           }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
+        } else if (filename.toLowerCase().endsWith('.obj')) {
+          const addObjMesh = (objMesh: THREE.Group) => {
+            objMesh.scale.copy(scaleVec);
+            this.applyOrigin(visualElement, objMesh);
+            if (urdfMaterial) {
+              objMesh.traverse(child => {
+                if (child instanceof THREE.Mesh) child.material = urdfMaterial;
+              });
+            }
+            linkObject.add(objMesh);
+            console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
+          };
+          const loadObj = (loader: OBJLoader) => {
+            loader.load(
+              fullPath,
+              addObjMesh,
+              undefined,
+              (error) => console.error(`[UrdfClient] Error loading OBJ ${fullPath}:`, error),
+            );
+          };
+
+          // Native Panda visuals carry the end-effector buttons and colored
+          // trim in a companion MTL file. Geometry-only mobile meshes use an
+          // explicit URDF color and intentionally skip material discovery.
+          const hasCompanionMaterial =
+            !urdfMaterial &&
+            /\/visual\//i.test(fullPath) &&
+            !/_mobile\.obj(?:$|[?#])/i.test(fullPath);
+
+          if (hasCompanionMaterial) {
+            const materialPath = fullPath.replace(/\.obj(?=$|[?#])/i, '.mtl');
+            const resourcePath = fullPath.slice(0, fullPath.lastIndexOf('/') + 1);
+            const materialLoader = new MTLLoader();
+            materialLoader.setResourcePath(resourcePath);
+            materialLoader.load(
+              materialPath,
+              (materials) => {
+                materials.preload();
+                const materialAwareLoader = new OBJLoader();
+                materialAwareLoader.setMaterials(materials);
+                loadObj(materialAwareLoader);
+              },
+              undefined,
+              (error) => {
+                console.warn(`[UrdfClient] MTL unavailable for ${fullPath}; using OBJ defaults.`, error);
+                loadObj(this.objLoader);
+              },
+            );
+          } else {
+            loadObj(this.objLoader);
+          }
         } else if (filename.toLowerCase().endsWith('.stl')) {
           this.stlLoader.load(fullPath, (geometry) => {
             const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
@@ -1711,11 +1721,8 @@ class UrdfClient extends THREE.Object3D {
         const rpy = originElement.getAttribute('rpy')?.split(' ').map(Number) || [0,0,0];
         object.position.set(xyz[0], xyz[1], xyz[2]);
         
-        // Convert URDF RPY (roll-pitch-yaw) to THREE.js Euler angles
-        // URDF RPY is intrinsic rotations: first roll around X, then pitch around Y, then yaw around Z
-        // THREE.js Euler with 'XYZ' order applies extrinsic rotations in X, Y, Z order
-        // For Z-up coordinate system, we need to be careful about axis mapping
-        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'XYZ');
+        // URDF fixed-axis RPY is Rz(yaw) * Ry(pitch) * Rx(roll).
+        const euler = new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX');
         object.rotation.copy(euler);
     }
   }
@@ -1732,9 +1739,10 @@ class UrdfClient extends THREE.Object3D {
       return resolved;
     }
 
-    // Handle localhost:8000 URLs by replacing them with /mesh_resources
+    // Normalize mesh URLs emitted by robot descriptions to the configured resource server.
     if (filePath.startsWith('http://localhost:8000/')) {
-      const resolved = filePath.replace('http://localhost:8000/', '/mesh_resources/');
+      const basePath = this.path.endsWith('/') ? this.path : `${this.path}/`;
+      const resolved = filePath.replace('http://localhost:8000/', basePath);
       console.log(`[UrdfClient] Resolved localhost path: ${filePath} -> ${resolved}`);
       return resolved;
     }
@@ -1749,31 +1757,37 @@ class UrdfClient extends THREE.Object3D {
     return filePath;
   }
   
-  private loadMaterial(materialElement?: Element): THREE.Material {
+  private loadMaterial(materialElement?: Element): THREE.Material | null {
+    if (!materialElement) return null;
+
+    const colorElement = materialElement.getElementsByTagName('color')[0];
+    const textureElement = materialElement.getElementsByTagName('texture')[0];
+    if (!colorElement && !textureElement) {
+      // A name-only URDF material is a reference, not an instruction to
+      // replace the mesh's authored MTL materials with the default gray.
+      return null;
+    }
+
     let color = new THREE.Color(0xcccccc); // Default light grey instead of darker grey
     let texture = null;
 
-    if (materialElement) {
-        const colorElement = materialElement.getElementsByTagName('color')[0];
-        if (colorElement) {
-            const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
-            if (rgba && rgba.length === 4) {
-                color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
-            }
+    if (colorElement) {
+        const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
+        if (rgba && rgba.length === 4) {
+            color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
         }
-        const textureElement = materialElement.getElementsByTagName('texture')[0];
-        if (textureElement) {
-            const filename = textureElement.getAttribute('filename');
-            if (filename) {
-                // Basic texture loading, assuming PNG or JPG
-                // Proper path resolution for textures is also needed here
-                const texturePath = this.resolvePackagePath(filename);
-                try {
-                    texture = new THREE.TextureLoader().load(texturePath);
-                    console.log(`[UrdfClient] Loading texture: ${texturePath}`);
-                } catch (e) {
-                    console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
-                }
+    }
+    if (textureElement) {
+        const filename = textureElement.getAttribute('filename');
+        if (filename) {
+            // Basic texture loading, assuming PNG or JPG
+            // Proper path resolution for textures is also needed here
+            const texturePath = this.resolvePackagePath(filename);
+            try {
+                texture = new THREE.TextureLoader().load(texturePath);
+                console.log(`[UrdfClient] Loading texture: ${texturePath}`);
+            } catch (e) {
+                console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
             }
         }
     }

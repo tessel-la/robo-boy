@@ -1,0 +1,22 @@
+{
+  "name": "@tessel-la/roboboy-panel-sdk",
+  "version": "2.0.0",
+  "description": "Type-only public API for independently developed Robo-Boy panels",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tessel-la/robo-boy.git",
+    "directory": "panel-sdk"
+  },
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "index.d.ts",
+    "README.md"
+  ]
+}

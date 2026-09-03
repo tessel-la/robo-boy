@@ -1,0 +1,43 @@
+services:
+  panel-manager:
+    image: ${ROBOBOY_PANEL_MANAGER_IMAGE:-roboboy-panel-manager:local}
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.panel-manager
+    env_file:
+      - path: ${ROBOBOY_PANEL_SECRETS_FILE:-./config/panel-secrets.env}
+        required: false
+    volumes:
+      - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.official.json}:/config/panel-sources.json:ro
+      - roboboy-installed-panels:/panels
+      - roboboy-panel-manager-state:/state
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  app:
+    depends_on:
+      panel-manager:
+        condition: service_healthy
+    volumes:
+      - roboboy-installed-panels:${ROBOBOY_PANEL_WEB_ROOT:-/app/public/panels}:ro
+
+  caddy:
+    depends_on:
+      panel-manager:
+        condition: service_healthy
+
+volumes:
+  roboboy-installed-panels:
+  roboboy-panel-manager-state:

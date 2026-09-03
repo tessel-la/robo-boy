@@ -85,6 +85,27 @@ describe('useTfTree', () => {
     expect(result.current.isPaused).toBe(false);
   });
 
+  it('unsubscribes while inactive and resumes without clearing the known tree', () => {
+    const ros = {} as never;
+    const { result, rerender } = renderHook(
+      ({ active }) => useTfTree(ros, active),
+      { initialProps: { active: true } }
+    );
+
+    act(() => {
+      topicMock.instances[0].callback?.(message('map', 'base'));
+      vi.advanceTimersByTime(50);
+    });
+    const originalTopics = [...topicMock.instances];
+
+    rerender({ active: false });
+    expect(originalTopics.every(instance => instance.unsubscribe.mock.calls.length === 1)).toBe(true);
+
+    rerender({ active: true });
+    expect(topicMock.instances.slice(2).map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
+    expect(result.current.state.transformsByChild.has('base')).toBe(true);
+  });
+
   it('rebuilds both subscriptions without clearing the known TF tree', () => {
     const ros = {} as never;
     const { result } = renderHook(() => useTfTree(ros));
