@@ -70,7 +70,7 @@ const CameraView: React.FC<CameraViewProps> = ({
       setStreamUrl(null);
       if (!cameraTopic) setError('No camera topic selected.');
       else if (!ros?.isConnected) setError('Connecting...');
-      else setError(`${cameraTopic} is not being published.`);
+      else setError('Camera topic is not being published.');
     }
   }, [
     ros,

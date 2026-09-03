@@ -161,7 +161,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ config, ros, isEditin
 
     if (transport === 'proxy') {
       if (publishedTopics && !publishedTopics.includes(action.topic)) {
-        setStatusIfChanged(`${action.topic} is not being published`);
+        setStatusIfChanged('Camera topic is not being published');
         return;
       }
       setImageUrl(

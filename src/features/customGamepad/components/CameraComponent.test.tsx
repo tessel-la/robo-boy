@@ -62,7 +62,7 @@ describe('CameraComponent', () => {
     render(<CameraComponent config={baseConfig} ros={ros as any} />);
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByText('/camera/image_raw/compressed is not being published')).toBeInTheDocument();
+    expect(screen.getByText('Camera topic is not being published')).toBeInTheDocument();
   });
 
   it('shows a fallback state without a topic', () => {

@@ -128,7 +128,7 @@ describe('CameraView', () => {
       render(<CameraView {...defaultProps} cameraTopic="/focus_calibration_node/focus_image" />);
 
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
-      expect(screen.getByText('/focus_calibration_node/focus_image is not being published.')).toBeInTheDocument();
+      expect(screen.getByText('Camera topic is not being published.')).toBeInTheDocument();
     });
 
     it('streams again once the topic is published', () => {
