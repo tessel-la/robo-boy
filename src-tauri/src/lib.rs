@@ -80,6 +80,36 @@ struct RendererFacts {
   wayland: bool,
   nvidia: bool,
   gpu_count: usize,
+  /// Connected outputs whose pixel density implies different compositor scale factors.
+  mixed_scales: bool,
+}
+
+/// One connected output, as far as the kernel describes it before any toolkit starts.
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OutputFacts {
+  width_px: u32,
+  width_mm: u32,
+}
+
+/// The integer scale a compositor is likely to pick for an output, by the usual 96 dpi rule.
+/// `None` when the kernel reports no usable physical size, which rules the output out rather
+/// than letting a bogus density decide the renderer.
+#[cfg(target_os = "linux")]
+fn estimate_output_scale(output: OutputFacts) -> Option<u32> {
+  if output.width_px == 0 || output.width_mm == 0 {
+    return None;
+  }
+  let dpi = f64::from(output.width_px) / (f64::from(output.width_mm) / 25.4);
+  Some(((dpi / 96.0).round() as u32).max(1))
+}
+
+#[cfg(target_os = "linux")]
+fn has_mixed_output_scales(outputs: &[OutputFacts]) -> bool {
+  let mut seen: Vec<u32> = outputs.iter().filter_map(|o| estimate_output_scale(*o)).collect();
+  seen.sort_unstable();
+  seen.dedup();
+  seen.len() > 1
 }
 
 /// WebKitGTK negotiates DMABUF buffers with a single render device. On a Wayland session driven
@@ -95,6 +125,13 @@ fn choose_linux_renderer(facts: RendererFacts) -> LinuxRenderer {
   }
 
   if facts.wayland && facts.nvidia && facts.gpu_count > 1 {
+    return LinuxRenderer::Compatibility;
+  }
+
+  // Outputs at different scales make the toolkit reallocate buffers whenever a window crosses
+  // between them, which is the other way the same rendering path drops frames or loses its
+  // input region -- and it needs no second GPU to happen.
+  if facts.wayland && facts.mixed_scales {
     return LinuxRenderer::Compatibility;
   }
 
@@ -126,6 +163,37 @@ fn count_drm_cards() -> usize {
     .unwrap_or(0)
 }
 
+/// Reads connected outputs straight from DRM: the preferred mode gives pixel width, and EDID
+/// byte 21 the physical width in centimetres.
+#[cfg(target_os = "linux")]
+fn read_connected_outputs() -> Vec<OutputFacts> {
+  let Ok(entries) = std::fs::read_dir("/sys/class/drm") else {
+    return Vec::new();
+  };
+
+  let mut outputs = Vec::new();
+  for entry in entries.filter_map(|entry| entry.ok()) {
+    let path = entry.path();
+    if std::fs::read_to_string(path.join("status")).map(|s| s.trim() != "connected").unwrap_or(true) {
+      continue;
+    }
+
+    let width_px = std::fs::read_to_string(path.join("modes"))
+      .ok()
+      .and_then(|modes| modes.lines().next().map(str::to_owned))
+      .and_then(|mode| mode.split_once('x').and_then(|(width, _)| width.trim().parse().ok()))
+      .unwrap_or(0);
+    let width_mm = std::fs::read(path.join("edid"))
+      .ok()
+      .filter(|edid| edid.len() > 21)
+      .map(|edid| u32::from(edid[21]) * 10)
+      .unwrap_or(0);
+
+    outputs.push(OutputFacts { width_px, width_mm });
+  }
+  outputs
+}
+
 #[cfg(target_os = "linux")]
 fn detect_renderer_facts() -> RendererFacts {
   RendererFacts {
@@ -138,6 +206,7 @@ fn detect_renderer_facts() -> RendererFacts {
         .unwrap_or(false),
     nvidia: std::path::Path::new("/sys/module/nvidia").exists(),
     gpu_count: count_drm_cards(),
+    mixed_scales: has_mixed_output_scales(&read_connected_outputs()),
   }
 }
 
@@ -164,9 +233,9 @@ fn configure_linux_webkit_runtime() {
   if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     eprintln!(
-      "[Robo-Boy] compatibility rendering enabled (wayland={}, nvidia={}, gpus={}); \
+      "[Robo-Boy] compatibility rendering enabled (wayland={}, nvidia={}, gpus={}, mixed_scales={}); \
        set ROBOBOY_DESKTOP_COMPATIBILITY_RENDERING=0 to force GPU rendering",
-      facts.wayland, facts.nvidia, facts.gpu_count
+      facts.wayland, facts.nvidia, facts.gpu_count, facts.mixed_scales
     );
   }
 }
@@ -176,13 +245,21 @@ fn configure_linux_webkit_runtime() {}
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
-  use super::{choose_linux_renderer, parse_bool_env, LinuxRenderer, RendererFacts};
+  use super::{
+    choose_linux_renderer, estimate_output_scale, has_mixed_output_scales, parse_bool_env, LinuxRenderer,
+    OutputFacts, RendererFacts,
+  };
+
+  /// A 27-inch 4K panel and a 24-inch 1080p one: the everyday mixed-scale desk.
+  const UHD_27: OutputFacts = OutputFacts { width_px: 3840, width_mm: 597 };
+  const FHD_24: OutputFacts = OutputFacts { width_px: 1920, width_mm: 527 };
 
   const HYBRID_WAYLAND: RendererFacts = RendererFacts {
     forced: None,
     wayland: true,
     nvidia: true,
     gpu_count: 2,
+    mixed_scales: false,
   };
 
   #[test]
@@ -202,8 +279,44 @@ mod tests {
   }
 
   #[test]
+  fn starts_mixed_scale_wayland_desks_on_the_compatibility_path() {
+    // No second GPU involved: differing output scales are enough on their own.
+    let mixed = RendererFacts { nvidia: false, gpu_count: 1, mixed_scales: true, ..HYBRID_WAYLAND };
+    let mixed_on_x11 = RendererFacts { wayland: false, ..mixed };
+
+    assert_eq!(choose_linux_renderer(mixed), LinuxRenderer::Compatibility);
+    assert_eq!(choose_linux_renderer(mixed_on_x11), LinuxRenderer::Gpu);
+  }
+
+  #[test]
+  fn reads_output_scale_from_pixel_density() {
+    assert_eq!(estimate_output_scale(UHD_27), Some(2));
+    assert_eq!(estimate_output_scale(FHD_24), Some(1));
+  }
+
+  #[test]
+  fn ignores_outputs_the_kernel_cannot_measure() {
+    let no_size = OutputFacts { width_px: 3840, width_mm: 0 };
+    let no_mode = OutputFacts { width_px: 0, width_mm: 597 };
+
+    assert_eq!(estimate_output_scale(no_size), None);
+    assert_eq!(estimate_output_scale(no_mode), None);
+    // One measurable output and one unmeasurable is not evidence of mixed scales.
+    assert!(!has_mixed_output_scales(&[UHD_27, no_size]));
+  }
+
+  #[test]
+  fn spots_only_genuinely_differing_scales() {
+    assert!(has_mixed_output_scales(&[UHD_27, FHD_24]));
+    assert!(!has_mixed_output_scales(&[FHD_24, FHD_24]));
+    assert!(!has_mixed_output_scales(&[UHD_27]));
+    assert!(!has_mixed_output_scales(&[]));
+  }
+
+  #[test]
   fn an_explicit_choice_wins_over_detection() {
-    let forced_on = RendererFacts { forced: Some(true), wayland: false, nvidia: false, gpu_count: 1 };
+    let forced_on =
+      RendererFacts { forced: Some(true), wayland: false, nvidia: false, gpu_count: 1, mixed_scales: false };
     let forced_off = RendererFacts { forced: Some(false), ..HYBRID_WAYLAND };
 
     assert_eq!(choose_linux_renderer(forced_on), LinuxRenderer::Compatibility);
