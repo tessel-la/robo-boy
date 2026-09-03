@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { installLocalPanels } from './localPanelInstaller';
 import {
+  BUNDLED_PANEL_REGISTRY_PATH,
   LOCAL_PANEL_REGISTRY_PATH,
   LOCAL_PANEL_REGISTRY_URL,
   createLocalPanelFetcher,
@@ -93,6 +94,23 @@ describe('desktop panel installation', () => {
     await expect(installLocalPanels({ source, selection: { mode: 'all' } }, store, fetcher)).rejects.toThrow(
       /unapproved origin/
     );
+  });
+
+  it('leaves panels that came with the build alone when a plan is applied', async () => {
+    const { fetcher } = await buildFetcher();
+    // A manager plan describes external panels only; it must not decide the fate of bundled ones,
+    // which are absent from the catalog and would otherwise be pruned away for good.
+    const store = createMemoryPanelStore({
+      [BUNDLED_PANEL_REGISTRY_PATH]: '{"schemaVersion":1,"panels":[]}',
+      'bundled/la.tessel.roboboy.microduck-control/1.0.0/index.js': 'export default {};\n',
+    });
+
+    await installLocalPanels({ source, selection: { mode: 'include', panelIds: [] } }, store, fetcher);
+
+    expect(await store.read('bundled/la.tessel.roboboy.microduck-control/1.0.0/index.js')).toBe(
+      'export default {};\n'
+    );
+    expect(await store.read(BUNDLED_PANEL_REGISTRY_PATH)).not.toBeNull();
   });
 
   it('installs only the selected panels and drops what is no longer selected', async () => {

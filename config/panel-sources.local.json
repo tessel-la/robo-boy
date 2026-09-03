@@ -10,8 +10,7 @@
       "repositories": [
         "robo-boy-hello-panel",
         "robo-boy-timeseries-panel",
-        "robo-boy-webrtc-panel",
-        "robo-boy-microduck-control-panel"
+        "robo-boy-webrtc-panel"
       ]
     }
   ],

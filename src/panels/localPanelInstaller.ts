@@ -1,4 +1,10 @@
-import { LOCAL_PANEL_REGISTRY_PATH, LOCAL_PANEL_REGISTRY_URL, type LocalPanelStore } from './localPanelStore';
+import {
+  BUNDLED_PANEL_PREFIX,
+  BUNDLED_PANEL_REGISTRY_PATH,
+  LOCAL_PANEL_REGISTRY_PATH,
+  LOCAL_PANEL_REGISTRY_URL,
+  type LocalPanelStore,
+} from './localPanelStore';
 import { parseInstalledPanelRegistry } from './registry';
 import { getSha256Integrity } from './sha256';
 
@@ -177,10 +183,16 @@ export const installLocalPanels = async (
     throw new LocalInstallError(parsed.issues.map(issue => issue.message).join(' '));
   }
 
-  const keep = new Set([LOCAL_PANEL_REGISTRY_PATH, ...bundles.keys()]);
   for (const [path, contents] of bundles) await store.write(path, contents);
   await store.write(LOCAL_PANEL_REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`);
-  for (const path of await store.list()) if (!keep.has(path)) await store.remove(path);
+
+  // A plan describes externally installed panels only. Panels that came with the build, and the
+  // stored configuration, are outside its scope and must survive it.
+  for (const path of await store.list()) {
+    if (bundles.has(path) || !path.endsWith('/index.js')) continue;
+    if (path.startsWith(BUNDLED_PANEL_PREFIX) || path === BUNDLED_PANEL_REGISTRY_PATH) continue;
+    await store.remove(path);
+  }
 
   return { installed: parsed.panels.map(panel => panel.id) };
 };

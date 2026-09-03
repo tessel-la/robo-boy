@@ -10,12 +10,22 @@ export interface LocalPanelStore {
   list(): Promise<string[]>;
 }
 
+/** Panels installed at runtime through the manager. Owned by the user's desired state. */
 export const LOCAL_PANEL_REGISTRY_PATH = 'installed.json';
+
+/**
+ * Panels shipped inside the build. Kept in their own registry and path prefix so that applying a
+ * manager plan -- which describes only externally installed panels -- can never remove them.
+ */
+export const BUNDLED_PANEL_REGISTRY_PATH = 'bundled.json';
+export const BUNDLED_PANEL_PREFIX = 'bundled/';
 
 /** Synthetic origin for locally installed panels; never resolved over the network. */
 export const LOCAL_PANEL_ORIGIN = 'https://panels.robo-boy.localhost';
 
 export const LOCAL_PANEL_REGISTRY_URL = `${LOCAL_PANEL_ORIGIN}/${LOCAL_PANEL_REGISTRY_PATH}`;
+
+export const BUNDLED_PANEL_REGISTRY_URL = `${LOCAL_PANEL_ORIGIN}/${BUNDLED_PANEL_REGISTRY_PATH}`;
 
 export const createMemoryPanelStore = (initial: Record<string, string> = {}): LocalPanelStore => {
   const entries = new Map(Object.entries(initial));

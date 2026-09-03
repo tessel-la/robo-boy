@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLocalPanelManagerBackend } from './managerBackend';
-import { createMemoryPanelStore } from './localPanelStore';
+import { BUNDLED_PANEL_REGISTRY_PATH, createMemoryPanelStore } from './localPanelStore';
 import { getSha256Integrity } from './sha256';
 import type { PanelSourcesConfig } from './managerApi';
 
@@ -80,6 +80,18 @@ describe('desktop panel manager backend', () => {
     const cleared = { ...config, selection: { mode: 'include' as const, panelIds: [] } };
 
     expect((await backend.preview('', cleared)).changes).toEqual([expect.objectContaining({ type: 'remove' })]);
+  });
+
+  it('does not offer to remove a panel that came with the build', async () => {
+    const store = createMemoryPanelStore({
+      [BUNDLED_PANEL_REGISTRY_PATH]: '{"schemaVersion":1,"panels":[]}',
+      'bundled/la.tessel.roboboy.microduck-control/1.0.0/index.js': 'export default {};\n',
+    });
+    const backend = createLocalPanelManagerBackend(store, await buildFetcher());
+
+    const preview = await backend.preview('', { ...config, selection: { mode: 'include', panelIds: [] } });
+
+    expect(preview.changes).toEqual([]);
   });
 
   it('refuses to apply a plan it did not issue', async () => {
