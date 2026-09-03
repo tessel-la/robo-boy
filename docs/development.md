@@ -241,7 +241,14 @@ production build rather than any hand-packaging:
 | Windows  | `windows-latest` | `.exe` (NSIS)     |
 
 Linux builds on the oldest supported runner deliberately: the binary links against that runner's glibc and
-will not start on anything older.
+will not start on anything older. macOS builds for both architectures, because the
+runners are Apple Silicon and a default build would produce a disk image Intel Macs cannot run.
+
+The Linux leg matches what is built by hand today, so it is the proven one. The macOS and Windows legs have
+never run here: they cannot be exercised from a Linux machine, since cross-compiling them needs the Apple
+SDK and the MSVC toolchain respectively. That is what the validation run on promotion to `main` is for --
+it exercises all three before any release depends on them. Until it has passed once, treat those two legs
+as unproven rather than assumed working.
 
 It runs in two situations, and never on a feature pull request or a push to `dev`:
 
