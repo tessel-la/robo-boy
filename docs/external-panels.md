@@ -320,6 +320,9 @@ storage. Its explicitly staged artifact declares only `network` and `storage`.
 
 ## Create, Install, And Register A Panel
 
+For the workflow around this reference -- getting a panel into the web app or into a desktop build without
+publishing it -- see [Adding a custom panel](custom-panels.md).
+
 Smallest viable standalone repository:
 
 ```text
