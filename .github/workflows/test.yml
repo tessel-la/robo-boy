@@ -224,7 +224,7 @@ jobs:
           echo "Unit test exit status: ${{ steps.unit_tests.outputs.status }}"
           echo ""
           echo '```'
-          ls -la coverage 2>&1 | head -20
+          find coverage -maxdepth 1 -printf '%10s  %p\n' 2>&1 | head -20
           echo '```'
           if [ -f coverage/lcov.info ]; then
             echo "lcov.info present, $(wc -c < coverage/lcov.info) bytes."
