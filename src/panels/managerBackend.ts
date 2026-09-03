@@ -20,6 +20,7 @@ import {
   type PanelSourcesConfig,
   type RemotePanelSourceConfig,
 } from './managerApi';
+import { panelInstallFetch } from './panelInstallFetch';
 import { loadInstalledPanelRegistry } from './registry';
 import type { RoboBoyPanelManifest } from './types';
 
@@ -67,7 +68,7 @@ const selectionOf = (config: PanelSourcesConfig): LocalPanelSelection =>
 
 export const createLocalPanelManagerBackend = (
   store: LocalPanelStore = localPanelStore,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = panelInstallFetch
 ): PanelManagerBackend => {
   const plans = new Map<string, PanelSourcesConfig>();
   // Must read back through the same store this backend writes to, not the module singleton.

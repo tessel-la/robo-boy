@@ -7,6 +7,10 @@ pub fn run() {
   let debug_page_load = std::env::var_os("ROBOBOY_DESKTOP_DEBUG").is_some();
 
   tauri::Builder::default()
+    // Panel installation runs in the app, but the official inventory serves manifests and
+    // bundles as GitHub release assets, which send no CORS headers and are therefore
+    // unreachable from the webview. This client performs those requests natively instead.
+    .plugin(tauri_plugin_http::init())
     .setup(|app| {
       use tauri::Manager;
 

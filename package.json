@@ -30,6 +30,7 @@
     "panels:sandbox": "node scripts/build-panel-sandbox.mjs"
   },
   "dependencies": {
+    "@tauri-apps/plugin-http": "^2.6.0",
     "@types/lodash-es": "^4.17.12",
     "@types/three": "^0.160.0",
     "animejs": "^3.2.1",
