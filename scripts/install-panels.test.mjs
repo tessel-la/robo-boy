@@ -63,6 +63,17 @@ const startFixtureServer = async handler => {
   };
 };
 
+const listCatalogFrom = async catalogUrl => {
+  const previous = process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS;
+  process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS = new URL(catalogUrl).origin;
+  try {
+    return await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl });
+  } finally {
+    if (previous === undefined) delete process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS;
+    else process.env.ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS = previous;
+  }
+};
+
 const sendJson = (response, value) => {
   response.setHeader('content-type', 'application/json');
   response.end(JSON.stringify(value));
@@ -595,12 +606,32 @@ test('listPanelCatalog lists every catalog panel by metadata only, without fetch
     // listPanelCatalog ever regressed into fetching bundle bytes, those requests would
     // 404 and this test would fail with an InstallError.
 
-    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
+    const result = await listCatalogFrom(`${server.origin}/catalog.json`);
 
     assert.deepEqual(result.panels, [
       { id: 'com.example.first', name: 'com.example.first', description: 'com.example.first test panel', version: '1.0.0' },
       { id: 'com.example.second', name: 'com.example.second', description: 'com.example.second test panel', version: '2.0.0' },
     ]);
+  } finally {
+    await server?.close();
+  }
+});
+
+test('refuses a catalog origin the deployment has not allowed', async () => {
+  let server;
+  try {
+    let requests = 0;
+    server = await startFixtureServer((request, response) => {
+      requests += 1;
+      response.writeHead(404).end();
+    });
+
+    // No allow-list configured, so only the official catalog is listable.
+    await assert.rejects(
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      /not listable/
+    );
+    assert.equal(requests, 0);
   } finally {
     await server?.close();
   }
@@ -620,7 +651,7 @@ test('a redirect to a disallowed origin is refused before it is requested', asyn
     });
 
     await assert.rejects(
-      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      listCatalogFrom(`${server.origin}/catalog.json`),
       /unapproved origin/
     );
     // The point of checking before following: the disallowed host is never contacted at all.
@@ -648,11 +679,7 @@ test('a redirect within the allow-list is still followed', async () => {
     routes.set('/first.json', panel.entry);
     routes.set('/first/release/roboboy.panel.json', panel.manifest);
 
-    const result = await listPanelCatalog({
-      type: 'remote',
-      name: 'official',
-      catalogUrl: `${server.origin}/redirect.json`,
-    });
+    const result = await listCatalogFrom(`${server.origin}/redirect.json`);
 
     assert.deepEqual(
       result.panels.map(entry => entry.id),
@@ -677,7 +704,7 @@ test('listPanelCatalog rejects a catalog entry using a disallowed origin', async
     routes.set('/catalog.json', { schemaVersion: 1, panels: [`${otherServer.origin}/entry.json`] });
 
     await assert.rejects(
-      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      listCatalogFrom(`${server.origin}/catalog.json`),
       /unapproved origin/
     );
   } finally {
@@ -697,7 +724,7 @@ test('listPanelCatalog resolves an empty catalog to an empty list', async () => 
     });
     routes.set('/catalog.json', { schemaVersion: 1, panels: [] });
 
-    const result = await listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` });
+    const result = await listCatalogFrom(`${server.origin}/catalog.json`);
 
     assert.deepEqual(result.panels, []);
   } finally {
@@ -718,7 +745,7 @@ test('listPanelCatalog rejects a catalog exceeding the panel-count safety limit'
     routes.set('/catalog.json', { schemaVersion: 1, panels });
 
     await assert.rejects(
-      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      listCatalogFrom(`${server.origin}/catalog.json`),
       /100-panel limit/
     );
   } finally {

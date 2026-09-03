@@ -16,6 +16,11 @@ const configPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_CONFIG || '/state/p
 const defaultConfigPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_DEFAULT_CONFIG || '/config/panel-sources.json');
 const outputPath = resolve(process.env.ROBOBOY_PANEL_MANAGER_OUTPUT || '/panels');
 const token = process.env.ROBOBOY_PANEL_MANAGER_TOKEN || '';
+// Panel installation adds code that runs against the robot, so it is authenticated unless a
+// deployment states otherwise. Turning that off is a deliberate choice, not a default.
+const allowUnauthenticated = ['1', 'true', 'yes', 'on'].includes(
+  (process.env.ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED || '').trim().toLowerCase()
+);
 const plans = new Map();
 let startupError = '';
 let operation = Promise.resolve();
@@ -140,8 +145,7 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === 'GET' && url.pathname === '/api/panels/status') {
     sendJson(response, 200, {
-      available: true,
-      // Only when the deployment configured one; otherwise the API is open.
+      available: Boolean(token) || allowUnauthenticated,
       authenticationRequired: Boolean(token),
       configured: Boolean(token),
     });
@@ -157,9 +161,14 @@ const server = createServer(async (request, response) => {
     response.writeHead(204).end();
     return;
   }
-  // Panel management is open unless the deployment sets ROBOBOY_PANEL_MANAGER_TOKEN, which then
-  // becomes mandatory. Anyone who can reach this API can install panels, so a deployment exposed
-  // beyond a trusted network should set one.
+  if (!token && !allowUnauthenticated) {
+    sendJson(response, 503, {
+      error:
+        'Panel management requires ROBOBOY_PANEL_MANAGER_TOKEN. ' +
+        'Set ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1 to manage panels without one.',
+    });
+    return;
+  }
   if (token && !authorized(request)) {
     sendJson(response, 401, { error: 'A valid panel manager token is required.' });
     return;
@@ -241,7 +250,9 @@ server.listen(port, '0.0.0.0', () => {
     `[panel-manager] listening on port ${port}; panel management ${
       token
         ? 'requires ROBOBOY_PANEL_MANAGER_TOKEN'
-        : 'is open to anyone who can reach this API (set ROBOBOY_PANEL_MANAGER_TOKEN to require one)'
+        : allowUnauthenticated
+          ? 'is open to anyone who can reach this API (ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED)'
+          : 'is unavailable until ROBOBOY_PANEL_MANAGER_TOKEN is set'
     }`
   );
 });

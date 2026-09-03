@@ -460,10 +460,12 @@ than relying on sibling working copies.
 
 ## Requiring A Token To Manage Panels
 
-Panel management is **open by default**: with no `ROBOBOY_PANEL_MANAGER_TOKEN` set, the dialog opens straight into
-the panel list and anyone who can reach `/api/panels` on that deployment can install a panel. Set the variable and
-the same API becomes token-only. The desktop app is unaffected either way, because it installs into its own storage
-and talks to no service.
+Panel management is **authenticated by default**. Installing a panel adds code that runs against the robot, so
+`/api/panels` requires `ROBOBOY_PANEL_MANAGER_TOKEN`; with no token set, management is unavailable rather than
+open. A deployment on a trusted network can drop that by setting
+`ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1`, which is a deliberate choice: anyone who can then reach the API
+can install a panel, and a direct call does not pass the permission review the dialog shows. The desktop app is
+unaffected either way, because it installs into its own storage and talks to no service.
 
 Which mode a deployment is in is stated in three places, so it never has to be guessed:
 
@@ -483,12 +485,30 @@ keep the value out of commits and Compose files. `ROBOBOY_PANEL_SECRETS_FILE` po
 secrets file is the only source for this value: a Compose `environment:` entry would win over `env_file` even when
 it resolves to nothing, so exporting the variable in the shell does not reach the manager.
 
-**To stop requiring one**, remove the value and recreate the manager:
+**To stop requiring one**, remove the value and say so explicitly, then recreate the manager:
 
 ```bash
-rm -f config/panel-secrets.env
+printf 'ROBOBOY_PANEL_MANAGER_ALLOW_UNAUTHENTICATED=1\n' > config/panel-secrets.env
 docker compose -f docker-compose.yml -f infra/compose/panels.remote.yml up -d --force-recreate panel-manager
 ```
+
+Removing the file entirely leaves management unavailable, which is the safe reading of "no token configured"
+rather than an invitation to install panels unauthenticated.
+
+### Which Catalogs May Be Listed
+
+Browsing a catalog is a request the deployment makes to a URL the caller supplies, so the manager only reads
+catalogs it has been told to trust. The official catalog origin is always allowed, which is why the panel dialog
+works with no configuration. To browse another inventory, list its origin:
+
+```bash
+ROBOBOY_PANEL_CATALOG_ALLOWED_ORIGINS=https://packages.example.com,https://inventory.example.org
+```
+
+Entries add to the official origin rather than replacing it, so a partial value cannot leave the manager unable to
+list anything. Installing from a source is governed separately by that source's own `allowedOrigins`, and every
+redirect is checked against it before the next request is made, so an approved host cannot redirect the manager to
+one that was never approved.
 
 Recreating the container is what applies the change; a plain `restart` reuses the previous environment. Rebuilding
 the image is only needed when `scripts/panel-manager.mjs` itself changed.
