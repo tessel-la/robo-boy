@@ -4,13 +4,13 @@
   "version": "0.3.1-alpha",
   "type": "module",
   "scripts": {
-    "dev": "vite --config config/vite.config.ts --host",
+    "dev": "npm run panels:sandbox && vite --config config/vite.config.ts --host",
     "panels:stage-local": "node scripts/stage-local-panels.mjs",
     "dev:panels": "node scripts/run-with-local-panels.mjs dev",
-    "build": "tsc && vite build --config config/vite.config.ts",
+    "build": "npm run panels:sandbox && tsc && vite build --config config/vite.config.ts",
     "build:panels": "node scripts/run-with-local-panels.mjs build",
-    "dev:tauri": "vite --config config/vite.config.ts --host --mode tauri",
-    "build:tauri": "tsc && vite build --config config/vite.config.ts --mode tauri && node scripts/check-tauri-build.cjs",
+    "dev:tauri": "npm run panels:sandbox && vite --config config/vite.config.ts --host --mode tauri",
+    "build:tauri": "npm run panels:sandbox && tsc && vite build --config config/vite.config.ts --mode tauri && node scripts/check-tauri-build.cjs",
     "build:tauri:panels": "node scripts/run-with-local-panels.mjs build:tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
@@ -26,7 +26,8 @@
     "e2e": "playwright test --config config/playwright.config.ts",
     "e2e:stack": "playwright test --config config/playwright.config.ts",
     "e2e:ui": "playwright test --config config/playwright.config.ts --ui",
-    "e2e:report": "playwright show-report playwright-report"
+    "e2e:report": "playwright show-report playwright-report",
+    "panels:sandbox": "node scripts/build-panel-sandbox.mjs"
   },
   "dependencies": {
     "@types/lodash-es": "^4.17.12",

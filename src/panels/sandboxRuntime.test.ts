@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPanelSandboxDocument, panelSandboxBootstrap } from './sandboxRuntime';
 
+// Mirrors what scripts/build-panel-sandbox.mjs bundles into the generated document.
+const bootstrapSource = `(${panelSandboxBootstrap.toString()})(new URLSearchParams(location.search).get('parentOrigin') ?? '');`;
+
 describe('panel sandbox document', () => {
   it('loads panel modules without leaking Vite runtime helpers into the iframe', () => {
-    const document = createPanelSandboxDocument('https://roboboy.test');
+    const document = createPanelSandboxDocument(bootstrapSource);
 
     expect(document).not.toContain('__vite__injectQuery');
     expect(document).toContain('__roboboyPanelModuleBridge_');
@@ -12,14 +15,15 @@ describe('panel sandbox document', () => {
   });
 
   it('uses secure randomness and binds window messages to the parent origin', () => {
-    const document = createPanelSandboxDocument('http://192.168.1.39');
+    const document = createPanelSandboxDocument(bootstrapSource);
 
     expect(document).toContain('crypto.getRandomValues(bytes)');
     expect(document).not.toContain('Math.random()');
     expect(document).toContain('event.source !== window.parent');
     expect(document).toContain('event.origin !== parentOrigin');
     expect(document).toMatch(/window\.parent\.postMessage\([^;]+,\s*parentOrigin\);/);
-    expect(document).toContain('(\"http://192.168.1.39\");');
+    // The document is a static build artifact, so the trusted origin arrives at runtime.
+    expect(document).toContain("new URLSearchParams(location.search).get('parentOrigin')");
   });
 
   it('provides the capability-scoped iframe runtime contract', async () => {

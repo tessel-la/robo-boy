@@ -91,8 +91,11 @@ describe('ExternalPanelHost sandbox', () => {
     expect(iframe).not.toBeNull();
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads allow-forms');
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
-    expect(iframe?.getAttribute('srcdoc')).toContain("default-src 'none'");
-    expect(iframe?.getAttribute('srcdoc')).toContain(JSON.stringify(window.location.origin));
+    // Loaded from its own URL rather than srcdoc, so it does not inherit the host page's CSP.
+    expect(iframe?.getAttribute('srcdoc')).toBeNull();
+    const sandboxSrc = new URL(iframe!.getAttribute('src')!, document.baseURI);
+    expect(sandboxSrc.pathname).toContain('panel-sandbox.html');
+    expect(sandboxSrc.searchParams.get('parentOrigin')).toBe(window.location.origin);
     expect(sourceLoader).not.toHaveBeenCalled();
 
     announceSandboxReady(iframe!);

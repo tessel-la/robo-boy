@@ -177,3 +177,6 @@ config/panel-sources.json
 config/panel-secrets.env
 .windsurf/
 skills-lock.json
+
+# Generated from src/panels/sandboxRuntime.ts by scripts/build-panel-sandbox.mjs
+public/panel-sandbox.html
