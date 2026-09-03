@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           missing=''
           for extension in deb rpm dmg exe; do
-            if ! ls installers/*."${extension}" >/dev/null 2>&1; then
+            if [ -z "$(find installers -type f -name "*.${extension}" -print -quit)" ]; then
               missing="${missing} ${extension}"
             fi
           done
@@ -74,10 +74,13 @@ jobs:
             echo "::error::release is missing installers for:${missing}"
             exit 1
           fi
-          ls -la installers
+          find installers -type f
 
       - name: Attach installers to the GitHub release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "${TAG_NAME}" installers/* --clobber --repo "${GITHUB_REPOSITORY}"
+        run: |
+          set -euo pipefail
+          mapfile -t installers < <(find installers -type f)
+          gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"
