@@ -34,19 +34,38 @@ const parseArguments = argv => {
   return options;
 };
 
-const runInstaller = (config, output) =>
+const runScript = (label, script, scriptArguments, environment = process.env) =>
   new Promise((resolveRun, rejectRun) => {
-    const child = spawn(
-      process.execPath,
-      [resolve(projectRoot, 'scripts/install-panels.mjs'), '--config', config, '--output', resolve(output, 'panels')],
-      { cwd: projectRoot, env: process.env, stdio: 'inherit' }
-    );
+    const child = spawn(process.execPath, [resolve(projectRoot, script), ...scriptArguments], {
+      cwd: projectRoot,
+      env: environment,
+      stdio: 'inherit',
+    });
     child.on('error', rejectRun);
     child.on('exit', (code, signal) => {
-      if (signal) rejectRun(new Error(`panel installer exited after signal ${signal}`));
-      else if (code !== 0) rejectRun(new Error(`panel installer exited with code ${code}`));
+      if (signal) rejectRun(new Error(`${label} exited after signal ${signal}`));
+      else if (code !== 0) rejectRun(new Error(`${label} exited with code ${code}`));
       else resolveRun();
     });
+  });
+
+const runInstaller = (config, output) =>
+  runScript('panel installer', 'scripts/install-panels.mjs', [
+    '--config',
+    config,
+    '--output',
+    resolve(output, 'panels'),
+  ]);
+
+/**
+ * Generated public assets belong to the staged tree, not to whatever `public/` happened to hold
+ * when it was copied. Producing them here means a staged tree is complete on its own, in a fresh
+ * checkout as much as on a machine that has built before.
+ */
+const runSandboxGenerator = output =>
+  runScript('panel sandbox generator', 'scripts/build-panel-sandbox.mjs', [], {
+    ...process.env,
+    ROBOBOY_PUBLIC_DIR: output,
   });
 
 const options = parseArguments(process.argv.slice(2));
@@ -57,6 +76,7 @@ try {
   await cp(resolve(projectRoot, 'public'), options.output, { recursive: true });
   console.log(`[panel-stage] using ${relative(projectRoot, options.config) || options.config}`);
   await runInstaller(options.config, options.output);
+  await runSandboxGenerator(options.output);
   console.log(`[panel-stage] prepared public assets in ${options.output}`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
