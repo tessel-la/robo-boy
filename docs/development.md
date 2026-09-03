@@ -229,4 +229,59 @@ Breaking changes can also be marked with a `BREAKING CHANGE:` footer in the comm
 
 When the Release Please pull request is merged into `main`, the workflow creates the Git tag and GitHub Release, and updates the package version and `CHANGELOG.md` as part of the release pull request.
 
+### Desktop Installers
+
+The `Desktop Build` workflow builds the native installers on their own runners, with the ordinary Tauri
+production build rather than any hand-packaging:
+
+| Platform | Runner           | Installer         |
+| -------- | ---------------- | ----------------- |
+| Linux    | `ubuntu-22.04`   | `.deb` and `.rpm` |
+| macOS    | `macos-latest`   | `.dmg`            |
+| Windows  | `windows-latest` | `.exe` (NSIS)     |
+
+Linux builds on the oldest supported runner deliberately: the binary links against that runner's glibc and
+will not start on anything older. macOS builds for both architectures, because the
+runners are Apple Silicon and a default build would produce a disk image Intel Macs cannot run.
+
+The Linux leg matches what is built by hand today, so it is the proven one. The macOS and Windows legs have
+never run here: they cannot be exercised from a Linux machine, since cross-compiling them needs the Apple
+SDK and the MSVC toolchain respectively. That is what the validation run on promotion to `main` is for --
+it exercises all three before any release depends on them. Until it has passed once, treat those two legs
+as unproven rather than assumed working.
+
+It runs in two situations, and never on a feature pull request or a push to `dev`:
+
+1. **When `dev` is promoted into `main`**, as validation. Nothing is published; the installers are kept as
+   workflow artifacts so a broken desktop build is found before a release depends on it.
+2. **When Release Please creates a release.** The installers are then built from the release tag and
+   attached to that GitHub Release, which is where users download Robo-Boy.
+
+Building at release time rather than reusing the validation artifacts is deliberate: the release commit is
+what carries the bumped version, so anything built before it would be labelled with the previous one.
+
+Every platform builds the same tag, so all installers share one revision and one version. That version comes
+from `package.json`, which Release Please already bumps; `src-tauri/tauri.conf.json` reads it from there
+rather than repeating it, so there is nothing to keep in sync by hand.
+
+Publication fails loudly rather than quietly shipping less than expected: the release job checks that a
+`.deb`, `.rpm`, `.dmg`, and `.exe` are all present and fails the workflow if any platform did not produce
+one. A partial release is visible in the Actions tab rather than silently published.
+
+Release installers contain **no panels**. They run the ordinary build, which uses the tracked public tree,
+so no local panel directory is mounted, staged, or copied in; a released app obtains panels from the
+official catalog at runtime exactly as a clean installation does. `npm run check:release-panels` enforces
+this on every platform and fails the build if any panel asset reached the frontend output, so the
+`*:panels` development builds cannot leak a local panel into an official artifact. Building with local
+panels stays available for development, as described in [Adding a custom panel](custom-panels.md).
+
+The workflows need no secrets beyond the repository token. `RELEASE_PLEASE_TOKEN` remains optional and is
+used where it is already configured; the release job needs `contents: write`, which it declares itself.
+
+Neither macOS nor Windows artifacts are signed. macOS shows an unidentified-developer warning unless the
+user opens the app through the context menu, and Windows shows a SmartScreen prompt. Signing is not wired
+up: it needs certificates in repository secrets and, on macOS, notarization credentials. The build is
+structured so that adding them later means adding the signing environment to the existing platform legs,
+not restructuring the pipeline.
+
 Every push to `main`, including a development promotion or merged Release Please pull request, runs the `Sync main to dev` workflow. It merges `main` back into `dev` so release versions and changelog updates remain in both branches. If that workflow reports a merge conflict, reconcile `main` into a branch based on the latest `dev` and merge that fix before the next promotion.
