@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
+import { createLocalPanelManagerBackend, remotePanelManagerBackend } from './managerBackend';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
 import {
   applyPanelManagerPlan,
@@ -108,7 +109,13 @@ const storePanelManagerToken = (value: string) => {
 };
 
 const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManagerDialogProps) => {
-  const { panelManagerBaseUrl } = useRuntimeConfig();
+  // Desktop installs panels into the app's own storage; the web app drives the deployment's
+  // manager service. Same dialog, different backend.
+  const isDesktopRuntime = useRuntimeConfig().mode === 'desktop';
+  const backend = useMemo(
+    () => (isDesktopRuntime ? createLocalPanelManagerBackend() : remotePanelManagerBackend),
+    [isDesktopRuntime]
+  );
   const [token, setToken] = useState(loadStoredPanelManagerToken);
   const [config, setConfig] = useState<PanelSourcesConfig | null>(null);
   const [preview, setPreview] = useState<PanelInstallPreview | null>(null);
@@ -136,7 +143,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const result = await listPanelCatalog(panelManagerBaseUrl, currentToken, OFFICIAL_PANEL_SOURCE);
+      const result = await backend.listCatalog(currentToken, OFFICIAL_PANEL_SOURCE);
       setCatalog(result.panels);
     } catch (nextError) {
       setCatalogError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -149,7 +156,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setBusy(true);
     setError('');
     try {
-      const result = await loadPanelManagerConfig(panelManagerBaseUrl, token);
+      const result = await backend.loadConfig(token);
       setConfig(result.config);
       if (result.startupError) setNotice(`The last startup install failed: ${result.startupError}`);
       storePanelManagerToken(token);
@@ -164,7 +171,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
   // Auto-unlock once on mount if a token was remembered from a previous visit, so reopening
   // the dialog in the same browser doesn't require retyping it every time.
   useEffect(() => {
-    if (token) void unlock();
+    if (token || !backend.requiresToken) void unlock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -202,7 +209,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setError('');
     setNotice('');
     try {
-      const result = await previewPanelManagerConfig(panelManagerBaseUrl, token, target);
+      const result = await backend.preview(token, target);
       skipNextResetRef.current = true;
       setConfig(target);
       setPreview(result);
@@ -229,7 +236,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setBusy(true);
     setError('');
     try {
-      const result = await applyPanelManagerPlan(panelManagerBaseUrl, token, preview.planId);
+      const result = await backend.apply(token, preview.planId);
       setNotice(
         `Applied successfully. ${result.installed} external panel${result.installed === 1 ? '' : 's'} installed.`
       );
@@ -265,30 +272,36 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
         </header>
 
         {!config ? (
-          <div className="panel-manager-unlock">
-            <p>
-              Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next
-              time.
-            </p>
-            <label>
-              Panel manager token
-              <input
-                type="password"
-                value={token}
-                onChange={event => setToken(event.target.value)}
-                autoComplete="off"
-                onKeyDown={event => event.key === 'Enter' && void unlock()}
-              />
-            </label>
-            <button
-              type="button"
-              className="panel-manager-primary"
-              onClick={() => void unlock()}
-              disabled={busy || !token}
-            >
-              {busy ? 'Checking…' : 'Unlock'}
-            </button>
-          </div>
+          !backend.requiresToken ? (
+            <div className="panel-manager-unlock">
+              <p>Loading installed panels…</p>
+            </div>
+          ) : (
+            <div className="panel-manager-unlock">
+              <p>
+                Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next
+                time.
+              </p>
+              <label>
+                Panel manager token
+                <input
+                  type="password"
+                  value={token}
+                  onChange={event => setToken(event.target.value)}
+                  autoComplete="off"
+                  onKeyDown={event => event.key === 'Enter' && void unlock()}
+                />
+              </label>
+              <button
+                type="button"
+                className="panel-manager-primary"
+                onClick={() => void unlock()}
+                disabled={busy || !token}
+              >
+                {busy ? 'Checking…' : 'Unlock'}
+              </button>
+            </div>
+          )
         ) : (
           <div className="panel-manager-content">
             <section>

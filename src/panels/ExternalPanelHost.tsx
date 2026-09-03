@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
 import { connectPanelCapabilityBroker, getGrantedPanelEndpoints } from './capabilityBroker';
 import { ROBOBOY_PANEL_API_VERSION } from './constants';
-import { loadVerifiedExternalPanelSource } from './loader';
+import { loadExternalPanelSource } from './localPanels';
 import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
 import { readPanelTheme } from './theme';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
@@ -80,7 +80,7 @@ const ExternalPanelHost = ({
   onStateChange,
   approvedRosTopics = NO_APPROVED_ROS_TOPICS,
   onApprovedRosTopicsChange,
-  sourceLoader = loadVerifiedExternalPanelSource,
+  sourceLoader = loadExternalPanelSource,
 }: ExternalPanelHostProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);

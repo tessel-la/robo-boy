@@ -70,13 +70,12 @@ describe('PanelManagerDialog', () => {
     fireEvent.change(screen.getByLabelText('Panel manager token'), { target: { value: 'deployment-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await screen.findByText('Remote catalog');
-    expect(api.load).toHaveBeenCalledWith('', 'deployment-secret');
+    expect(api.load).toHaveBeenCalledWith('deployment-secret');
 
     fireEvent.click(screen.getByRole('button', { name: 'Plan removal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
     await screen.findByText('remove Telemetry@2.0.0');
     expect(api.preview).toHaveBeenCalledWith(
-      '',
       'deployment-secret',
       expect.objectContaining({ selection: { mode: 'none' } })
     );
@@ -90,7 +89,7 @@ describe('PanelManagerDialog', () => {
       )
     );
     fireEvent.click(applyButton);
-    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'deployment-secret', 'sha256-plan'));
+    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('deployment-secret', 'sha256-plan'));
     expect(onApplied).toHaveBeenCalled();
   });
 
@@ -132,7 +131,7 @@ describe('PanelManagerDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
 
     await waitFor(() =>
-      expect(api.preview).toHaveBeenCalledWith('', 'secret', expect.objectContaining({ selection: { mode: 'none' } }))
+      expect(api.preview).toHaveBeenCalledWith('secret', expect.objectContaining({ selection: { mode: 'none' } }))
     );
   });
 
@@ -150,7 +149,6 @@ describe('PanelManagerDialog', () => {
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        '',
         'secret',
         expect.objectContaining({
           selection: { mode: 'include', panelIds: ['com.example.telemetry', 'com.example.camera'] },
@@ -189,7 +187,6 @@ describe('PanelManagerDialog', () => {
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        '',
         'secret',
         expect.objectContaining({
           sources: expect.arrayContaining([expect.objectContaining({ catalogUrl: OFFICIAL_PANEL_SOURCE.catalogUrl })]),
@@ -205,7 +202,7 @@ describe('PanelManagerDialog', () => {
       )
     );
     fireEvent.click(screen.getByRole('button', { name: 'Apply this exact plan' }));
-    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'secret', 'sha256-plan'));
+    await waitFor(() => expect(api.apply).toHaveBeenCalledWith('secret', 'sha256-plan'));
   });
 
   it('removes an official catalog panel with Remove, confirm, and Apply', async () => {
@@ -239,7 +236,7 @@ describe('PanelManagerDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
-      expect(api.preview).toHaveBeenCalledWith('', 'secret', expect.objectContaining({ selection: { mode: 'none' } }))
+      expect(api.preview).toHaveBeenCalledWith('secret', expect.objectContaining({ selection: { mode: 'none' } }))
     );
   });
 
@@ -283,7 +280,7 @@ describe('PanelManagerDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
 
     await waitFor(() => expect(api.preview).toHaveBeenCalled());
-    const [, , sentConfig] = api.preview.mock.calls[0];
+    const [, sentConfig] = api.preview.mock.calls[0];
     expect(sentConfig.sources).toHaveLength(1);
     expect(sentConfig.sources[0].name).toBe('my-custom-name');
   });
@@ -316,7 +313,6 @@ describe('PanelManagerDialog', () => {
 
     await waitFor(() =>
       expect(api.preview).toHaveBeenCalledWith(
-        '',
         'secret',
         expect.objectContaining({ selection: { mode: 'include', panelIds: [panel.id, officialSummary.id] } })
       )
@@ -336,6 +332,6 @@ describe('PanelManagerDialog', () => {
     render(<PanelManagerDialog installedPanels={[panel]} onClose={vi.fn()} onApplied={vi.fn()} />);
 
     await screen.findByText('Remote catalog');
-    expect(api.load).toHaveBeenCalledWith('', 'remembered-secret');
+    expect(api.load).toHaveBeenCalledWith('remembered-secret');
   });
 });

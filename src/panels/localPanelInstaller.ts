@@ -19,6 +19,13 @@ export interface LocalPanelSelection {
 
 export class LocalInstallError extends Error {}
 
+export interface CatalogPanelSummary {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+}
+
 const bundlePath = (id: string, version: string) => `${id}/${version}/index.js`;
 
 const readBounded = async (response: Response, limit: number, label: string): Promise<Uint8Array> => {
@@ -46,67 +53,122 @@ const resolveAllowed = (value: string, base: URL, allowed: Set<string>, label: s
  * run the server-side installer behind, so it performs the same fetch-and-verify work here and
  * hands the result to the existing registry parser before anything is written.
  */
-export const installLocalPanels = async (
-  { source, selection }: { source: RemotePanelSource; selection: LocalPanelSelection },
-  store: LocalPanelStore,
-  fetcher: typeof fetch = fetch
-): Promise<{ installed: string[] }> => {
+interface CollectedPanel {
+  manifest: Record<string, unknown>;
+  bundle?: string;
+}
+
+/**
+ * Walks a remote catalog once. `withBundles` is what separates browsing from installing: listing
+ * never downloads bundle bytes, so opening the manager stays cheap.
+ */
+const collectCatalog = async (
+  source: RemotePanelSource,
+  selection: LocalPanelSelection,
+  withBundles: boolean,
+  fetcher: typeof fetch
+): Promise<CollectedPanel[]> => {
   const catalogUrl = new URL(source.catalogUrl);
   const allowed = new Set([catalogUrl.origin, ...(source.allowedOrigins ?? [])].map(origin => new URL(origin).origin));
 
-  const catalog = JSON.parse(
-    new TextDecoder().decode(
-      await readBounded(await fetcher(catalogUrl.href, { cache: 'no-cache' }), MAX_JSON_BYTES, `${source.name} catalog`)
-    )
-  );
+  const catalog = await readJson(fetcher, catalogUrl, allowed, `${source.name} catalog`, catalogUrl);
   if (catalog?.schemaVersion !== 1 || !Array.isArray(catalog.panels)) {
     throw new LocalInstallError(`${source.name} catalog is invalid.`);
   }
   if (catalog.panels.length > MAX_PANELS) throw new LocalInstallError(`${source.name} catalog lists too many panels.`);
 
   const wanted = selection.mode === 'include' ? new Set(selection.panelIds ?? []) : null;
-  const manifests: Record<string, unknown>[] = [];
-  const bundles = new Map<string, string>();
+  const collected: CollectedPanel[] = [];
 
   for (const entryPath of catalog.panels) {
     if (typeof entryPath !== 'string') throw new LocalInstallError(`${source.name} catalog has an invalid entry.`);
-    const entryUrl = resolveAllowed(entryPath, catalogUrl, allowed, `${source.name} catalog entry`);
-    const entry = JSON.parse(
-      new TextDecoder().decode(
-        await readBounded(await fetcher(entryUrl.href, { cache: 'no-cache' }), MAX_JSON_BYTES, 'Catalog entry')
-      )
-    );
+    const entry = await readJson(fetcher, entryPath, allowed, `${source.name} catalog entry`, catalogUrl);
     if (entry?.schemaVersion !== 1 || typeof entry.id !== 'string') {
       throw new LocalInstallError(`${source.name} catalog entry is invalid.`);
     }
     if (wanted && !wanted.has(entry.id)) continue;
 
-    const distribution = entry.latest?.distribution;
+    const distribution = (entry.latest as Record<string, unknown> | undefined)?.distribution as
+      | Record<string, string>
+      | undefined;
     if (distribution?.type !== 'javascript-bundle') {
       throw new LocalInstallError(`${entry.id} has an unsupported distribution.`);
     }
-    const manifestUrl = resolveAllowed(distribution.manifestUrl, catalogUrl, allowed, `${entry.id} manifestUrl`);
-    const bundleUrl = resolveAllowed(distribution.bundleUrl, catalogUrl, allowed, `${entry.id} bundleUrl`);
 
-    const manifest = JSON.parse(
-      new TextDecoder().decode(
-        await readBounded(await fetcher(manifestUrl.href, { cache: 'no-cache' }), MAX_JSON_BYTES, `${entry.id} manifest`)
-      )
-    );
+    const manifest = await readJson(fetcher, distribution.manifestUrl, allowed, `${entry.id} manifest`, catalogUrl);
     if (manifest?.id !== entry.id) throw new LocalInstallError(`${entry.id} manifest does not match its catalog entry.`);
+    if (!withBundles) {
+      collected.push({ manifest });
+      continue;
+    }
     if (Array.isArray(manifest.assets) && manifest.assets.length > 0) {
       throw new LocalInstallError(`${entry.id} ships additional assets, which desktop installs do not support yet.`);
     }
 
-    const bundle = await readBounded(await fetcher(bundleUrl.href, { cache: 'no-cache' }), MAX_BUNDLE_BYTES, `${entry.id} bundle`);
+    const bundleUrl = resolveAllowed(distribution.bundleUrl, catalogUrl, allowed, `${entry.id} bundleUrl`);
+    const bundle = await readBounded(
+      await fetcher(bundleUrl.href, { cache: 'no-cache' }),
+      MAX_BUNDLE_BYTES,
+      `${entry.id} bundle`
+    );
     const integrity = await getSha256Integrity(bundle);
     if (integrity !== manifest.integrity || integrity !== distribution.integrity) {
       throw new LocalInstallError(`${entry.id} failed integrity verification and was not installed.`);
     }
-
-    bundles.set(bundlePath(entry.id, manifest.version), new TextDecoder('utf-8', { fatal: true }).decode(bundle));
-    manifests.push({ ...manifest, entryPoint: `./${bundlePath(entry.id, manifest.version)}` });
+    collected.push({ manifest, bundle: new TextDecoder('utf-8', { fatal: true }).decode(bundle) });
   }
+
+  return collected;
+};
+
+const readJson = async (
+  fetcher: typeof fetch,
+  value: string | URL,
+  allowed: Set<string>,
+  label: string,
+  base: URL
+): Promise<Record<string, any>> => {
+  const url = value instanceof URL ? value : resolveAllowed(value, base, allowed, label);
+  const bytes = await readBounded(await fetcher(url.href, { cache: 'no-cache' }), MAX_JSON_BYTES, label);
+  return JSON.parse(new TextDecoder().decode(bytes));
+};
+
+/** Panels a source offers, as metadata only. */
+export const listLocalCatalog = async (
+  source: RemotePanelSource,
+  fetcher: typeof fetch = fetch
+): Promise<CatalogPanelSummary[]> =>
+  (await collectCatalog(source, { mode: 'all' }, false, fetcher)).map(({ manifest }) => ({
+    id: String(manifest.id),
+    name: String(manifest.name),
+    description: String(manifest.description),
+    version: String(manifest.version),
+  }));
+
+/** Manifests a desired state resolves to, without downloading or installing anything. */
+export const previewLocalPanels = async (
+  { source, selection }: { source: RemotePanelSource; selection: LocalPanelSelection },
+  fetcher: typeof fetch = fetch
+): Promise<Record<string, unknown>[]> =>
+  (await collectCatalog(source, selection, false, fetcher)).map(({ manifest }) => manifest);
+
+/**
+ * Installs panels into the desktop shell's own storage. The packaged app has no reverse proxy to
+ * run the server-side installer behind, so it performs the same fetch-and-verify work here and
+ * hands the result to the existing registry parser before anything is written.
+ */
+export const installLocalPanels = async (
+  { source, selection }: { source: RemotePanelSource; selection: LocalPanelSelection },
+  store: LocalPanelStore,
+  fetcher: typeof fetch = fetch
+): Promise<{ installed: string[] }> => {
+  const collected = await collectCatalog(source, selection, true, fetcher);
+  const bundles = new Map<string, string>();
+  const manifests = collected.map(({ manifest, bundle }) => {
+    const path = bundlePath(String(manifest.id), String(manifest.version));
+    bundles.set(path, bundle!);
+    return { ...manifest, entryPoint: `./${path}` };
+  });
 
   const registry = { schemaVersion: 1, panels: manifests };
   // Refuse to install anything the runtime would later reject.
