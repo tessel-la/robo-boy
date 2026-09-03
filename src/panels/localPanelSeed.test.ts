@@ -56,12 +56,72 @@ describe('bundled panel seeding', () => {
     expect(registry.panels.map(panel => panel.id)).toEqual(['la.tessel.roboboy.microduck-control']);
   });
 
-  it('never overwrites panels the user has already installed', async () => {
+  it('adds bundled panels without disturbing what the user already installed', async () => {
     const { fetcher } = await buildFetcher();
-    const store = createMemoryPanelStore({ [LOCAL_PANEL_REGISTRY_PATH]: '{"schemaVersion":1,"panels":[]}' });
+    const userPanel = {
+      schemaVersion: 1,
+      id: 'com.example.user-installed',
+      name: 'User installed',
+      description: 'Installed by the user from the catalog.',
+      version: '3.1.0',
+      entryPoint: './com.example.user-installed/3.1.0/index.js',
+      integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
+      compatibility: { panelApi: '^2.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
+      capabilities: [],
+      author: { name: 'Example' },
+      repository: 'https://github.com/example/user-installed',
+    };
+    const store = createMemoryPanelStore({
+      [LOCAL_PANEL_REGISTRY_PATH]: JSON.stringify({ schemaVersion: 1, panels: [userPanel] }),
+    });
+
+    expect(await seedLocalPanelsFromBundle(store, fetcher, BASE)).toEqual(['la.tessel.roboboy.microduck-control']);
+
+    const registry = JSON.parse((await store.read(LOCAL_PANEL_REGISTRY_PATH))!);
+    expect(registry.panels.map((panel: { id: string }) => panel.id)).toEqual([
+      'com.example.user-installed',
+      'la.tessel.roboboy.microduck-control',
+    ]);
+  });
+
+  it('leaves a bundled panel the user removed removed', async () => {
+    const { fetcher } = await buildFetcher();
+    // Already offered once, and absent from the registry: the user took it out on purpose.
+    const store = createMemoryPanelStore({
+      [LOCAL_PANEL_REGISTRY_PATH]: '{"schemaVersion":1,"panels":[]}',
+      'bundled-seed.json': JSON.stringify({ seeded: ['la.tessel.roboboy.microduck-control@1.0.0'] }),
+    });
 
     expect(await seedLocalPanelsFromBundle(store, fetcher, BASE)).toEqual([]);
-    expect(await store.read(LOCAL_PANEL_REGISTRY_PATH)).toBe('{"schemaVersion":1,"panels":[]}');
+    expect(JSON.parse((await store.read(LOCAL_PANEL_REGISTRY_PATH))!).panels).toEqual([]);
+  });
+
+  it('keeps the installed version when a bundled panel shares its ID', async () => {
+    const { fetcher } = await buildFetcher();
+    const store = createMemoryPanelStore({
+      [LOCAL_PANEL_REGISTRY_PATH]: JSON.stringify({
+        schemaVersion: 1,
+        panels: [
+          {
+            schemaVersion: 1,
+            id: 'la.tessel.roboboy.microduck-control',
+            name: 'Microduck control',
+            description: 'A newer build the user installed.',
+            version: '2.5.0',
+            entryPoint: './la.tessel.roboboy.microduck-control/2.5.0/index.js',
+            integrity: 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=',
+            compatibility: { panelApi: '^2.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
+            capabilities: [],
+            author: { name: 'Tessel LA' },
+            repository: 'https://github.com/tessel-la/robo-boy-microduck-control-panel',
+          },
+        ],
+      }),
+    });
+
+    expect(await seedLocalPanelsFromBundle(store, fetcher, BASE)).toEqual([]);
+    const registry = JSON.parse((await store.read(LOCAL_PANEL_REGISTRY_PATH))!);
+    expect(registry.panels.map((panel: { version: string }) => panel.version)).toEqual(['2.5.0']);
   });
 
   it('seeds nothing when the build ships no bundled panels', async () => {
