@@ -606,6 +606,63 @@ test('listPanelCatalog lists every catalog panel by metadata only, without fetch
   }
 });
 
+test('a redirect to a disallowed origin is refused before it is requested', async () => {
+  let server;
+  let otherServer;
+  try {
+    let otherRequests = 0;
+    otherServer = await startFixtureServer((request, response) => {
+      otherRequests += 1;
+      response.writeHead(404).end();
+    });
+    server = await startFixtureServer((request, response) => {
+      response.writeHead(302, { location: `${otherServer.origin}/catalog.json` }).end();
+    });
+
+    await assert.rejects(
+      listPanelCatalog({ type: 'remote', name: 'official', catalogUrl: `${server.origin}/catalog.json` }),
+      /unapproved origin/
+    );
+    // The point of checking before following: the disallowed host is never contacted at all.
+    assert.equal(otherRequests, 0);
+  } finally {
+    await server?.close();
+    await otherServer?.close();
+  }
+});
+
+test('a redirect within the allow-list is still followed', async () => {
+  let server;
+  try {
+    const routes = new Map();
+    server = await startFixtureServer((request, response) => {
+      if (request.url === '/redirect.json') {
+        return response.writeHead(302, { location: '/catalog.json' }).end();
+      }
+      const route = routes.get(request.url ?? '');
+      if (!route) return response.writeHead(404).end();
+      sendJson(response, route);
+    });
+    const panel = panelFixture('com.example.first', '1.0.0', server.origin, 'first/release');
+    routes.set('/catalog.json', { schemaVersion: 1, panels: ['./first.json'] });
+    routes.set('/first.json', panel.entry);
+    routes.set('/first/release/roboboy.panel.json', panel.manifest);
+
+    const result = await listPanelCatalog({
+      type: 'remote',
+      name: 'official',
+      catalogUrl: `${server.origin}/redirect.json`,
+    });
+
+    assert.deepEqual(
+      result.panels.map(entry => entry.id),
+      ['com.example.first']
+    );
+  } finally {
+    await server?.close();
+  }
+});
+
 test('listPanelCatalog rejects a catalog entry using a disallowed origin', async () => {
   let server;
   let otherServer;
