@@ -159,6 +159,22 @@ describe('ExternalPanelHost sandbox', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  it('reports an error when the sandbox never announces itself, instead of loading forever', async () => {
+    vi.useFakeTimers();
+    try {
+      renderHost();
+      expect(screen.getByRole('status')).toHaveTextContent('Loading Example panel');
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('The panel sandbox did not start.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not return to loading when equivalent manifest metadata is recreated', async () => {
     const { container, props, rerender } = renderHost();
     announceSandboxReady(container.querySelector('iframe')!);

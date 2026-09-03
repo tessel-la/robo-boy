@@ -45,8 +45,13 @@ export interface CatalogPanelSummary {
   version: string;
 }
 
-const managerRequest = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`/api/panels/${path}`, {
+/**
+ * `baseUrl` is empty in the browser, where the page and `/api/panels` share an origin. The
+ * packaged desktop shell serves its own assets, so it must name the deployment's proxy origin
+ * explicitly -- otherwise the request resolves against the app bundle and returns index.html.
+ */
+const managerRequest = async <T>(baseUrl: string, path: string, token: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(`${baseUrl}/api/panels/${path}`, {
     ...init,
     cache: 'no-store',
     headers: {
@@ -71,23 +76,23 @@ const managerRequest = async <T>(path: string, token: string, init?: RequestInit
   return body as T;
 };
 
-export const loadPanelManagerConfig = (token: string) =>
-  managerRequest<{ config: PanelSourcesConfig; startupError?: string }>('config', token);
+export const loadPanelManagerConfig = (baseUrl: string, token: string) =>
+  managerRequest<{ config: PanelSourcesConfig; startupError?: string }>(baseUrl, 'config', token);
 
-export const previewPanelManagerConfig = (token: string, config: PanelSourcesConfig) =>
-  managerRequest<PanelInstallPreview>('preview', token, {
+export const previewPanelManagerConfig = (baseUrl: string, token: string, config: PanelSourcesConfig) =>
+  managerRequest<PanelInstallPreview>(baseUrl, 'preview', token, {
     method: 'POST',
     body: JSON.stringify({ config }),
   });
 
-export const applyPanelManagerPlan = (token: string, planId: string) =>
-  managerRequest<{ installed: number }>('apply', token, {
+export const applyPanelManagerPlan = (baseUrl: string, token: string, planId: string) =>
+  managerRequest<{ installed: number }>(baseUrl, 'apply', token, {
     method: 'POST',
     body: JSON.stringify({ planId }),
   });
 
-export const listPanelCatalog = (token: string, source: RemotePanelSourceConfig) =>
-  managerRequest<{ panels: CatalogPanelSummary[] }>('catalog', token, {
+export const listPanelCatalog = (baseUrl: string, token: string, source: RemotePanelSourceConfig) =>
+  managerRequest<{ panels: CatalogPanelSummary[] }>(baseUrl, 'catalog', token, {
     method: 'POST',
     body: JSON.stringify({ source }),
   });

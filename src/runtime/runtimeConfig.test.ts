@@ -14,6 +14,8 @@ describe('resolveRuntimeEndpoints', () => {
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
       ollamaBaseUrl: '/ollama',
+      panelManagerBaseUrl: '',
+      panelRegistryUrl: '',
       mode: 'web',
       host: 'robot.local',
     });
@@ -31,6 +33,8 @@ describe('resolveRuntimeEndpoints', () => {
       videoStreamBaseUrl: 'http://192.168.1.20:8080',
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
+      panelManagerBaseUrl: '',
+      panelRegistryUrl: '',
       mode: 'web',
       host: '192.168.1.20',
     });
@@ -61,6 +65,8 @@ describe('resolveRuntimeEndpoints', () => {
       videoStreamBaseUrl: 'http://robot.tailnet.ts.net:8080',
       meshResourcesBaseUrl: 'http://robot.tailnet.ts.net:8000',
       ollamaBaseUrl: 'http://robot.tailnet.ts.net:11434',
+      panelManagerBaseUrl: '',
+      panelRegistryUrl: '',
       mode: 'web',
       host: 'robot.tailnet.ts.net',
     });
@@ -80,6 +86,7 @@ describe('resolveRuntimeEndpoints', () => {
         videoStreamPort: '8080',
         meshResourcesPort: '8000',
         ollamaPort: '11434',
+        webProxyPort: '80',
         webBackendMode: 'proxy',
       }
     );
@@ -89,14 +96,16 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.meshResourcesBaseUrl).toBe('/mesh_resources');
   });
 
-  it('connects the desktop shell directly to an installed ROS stack', () => {
+  it('routes the desktop shell through the deployment proxy on one port', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '192.168.1.20' }, true);
 
     expect(endpoints).toEqual({
-      rosbridgeUrl: 'ws://192.168.1.20:9090',
-      videoStreamBaseUrl: 'http://192.168.1.20:8080',
-      meshResourcesBaseUrl: 'http://192.168.1.20:8000',
+      rosbridgeUrl: 'ws://192.168.1.20:80/websocket',
+      videoStreamBaseUrl: 'http://192.168.1.20:80/video_stream',
+      meshResourcesBaseUrl: 'http://192.168.1.20:80/mesh_resources',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
+      panelManagerBaseUrl: 'http://192.168.1.20:80',
+      panelRegistryUrl: 'http://192.168.1.20:80/panels/installed.json',
       mode: 'desktop',
       host: '192.168.1.20',
     });
@@ -114,22 +123,41 @@ describe('resolveRuntimeEndpoints', () => {
 
   it('wraps IPv6 hosts when constructing service URLs', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '[::1]' }, true);
-    expect(endpoints.rosbridgeUrl).toBe('ws://[::1]:9090');
+    expect(endpoints.rosbridgeUrl).toBe('ws://[::1]:80/websocket');
   });
 
-  it('allows desktop direct-connect ports to be overridden', () => {
+  it('still supports desktop direct-connect ports as an explicit escape hatch', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.local' }, true, undefined, {
       rosbridgePort: '19090',
       videoStreamPort: '18080',
       meshResourcesPort: '18000',
       ollamaPort: '11435',
-      webBackendMode: 'auto',
+      webProxyPort: '80',
+      webBackendMode: 'direct',
     });
 
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
     expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
     expect(endpoints.ollamaBaseUrl).toBe('http://robot.local:11435');
+    // Neither the panel manager nor the panel registry has a direct port, so both stay on the
+    // proxy origin either way.
+    expect(endpoints.panelManagerBaseUrl).toBe('http://robot.local:80');
+    expect(endpoints.panelRegistryUrl).toBe('http://robot.local:80/panels/installed.json');
+  });
+
+  it('serves the desktop shell a proxy port override', () => {
+    const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.local' }, true, undefined, {
+      rosbridgePort: '9090',
+      videoStreamPort: '8080',
+      meshResourcesPort: '8000',
+      ollamaPort: '11434',
+      webProxyPort: '8443',
+      webBackendMode: 'auto',
+    });
+
+    expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:8443/websocket');
+    expect(endpoints.panelManagerBaseUrl).toBe('http://robot.local:8443');
   });
 
   it('allows the landing page connection to override service ports', () => {
@@ -163,7 +191,8 @@ describe('resolveRuntimeEndpoints', () => {
         videoStreamPort: '18,080',
         meshResourcesPort: '18,000',
       },
-      true
+      false,
+      { protocol: 'http:', hostname: 'operator.local', host: 'operator.local' }
     );
 
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');

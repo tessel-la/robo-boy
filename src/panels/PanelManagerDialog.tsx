@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiPlus, FiTrash2, FiX } from 'react-icons/fi';
+import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
 import {
   applyPanelManagerPlan,
@@ -107,6 +108,7 @@ const storePanelManagerToken = (value: string) => {
 };
 
 const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManagerDialogProps) => {
+  const { panelManagerBaseUrl } = useRuntimeConfig();
   const [token, setToken] = useState(loadStoredPanelManagerToken);
   const [config, setConfig] = useState<PanelSourcesConfig | null>(null);
   const [preview, setPreview] = useState<PanelInstallPreview | null>(null);
@@ -134,7 +136,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const result = await listPanelCatalog(currentToken, OFFICIAL_PANEL_SOURCE);
+      const result = await listPanelCatalog(panelManagerBaseUrl, currentToken, OFFICIAL_PANEL_SOURCE);
       setCatalog(result.panels);
     } catch (nextError) {
       setCatalogError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -147,7 +149,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setBusy(true);
     setError('');
     try {
-      const result = await loadPanelManagerConfig(token);
+      const result = await loadPanelManagerConfig(panelManagerBaseUrl, token);
       setConfig(result.config);
       if (result.startupError) setNotice(`The last startup install failed: ${result.startupError}`);
       storePanelManagerToken(token);
@@ -200,7 +202,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setError('');
     setNotice('');
     try {
-      const result = await previewPanelManagerConfig(token, target);
+      const result = await previewPanelManagerConfig(panelManagerBaseUrl, token, target);
       skipNextResetRef.current = true;
       setConfig(target);
       setPreview(result);
@@ -227,7 +229,7 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
     setBusy(true);
     setError('');
     try {
-      const result = await applyPanelManagerPlan(token, preview.planId);
+      const result = await applyPanelManagerPlan(panelManagerBaseUrl, token, preview.planId);
       setNotice(
         `Applied successfully. ${result.installed} external panel${result.installed === 1 ? '' : 's'} installed.`
       );
@@ -264,7 +266,10 @@ const PanelManagerDialog = ({ installedPanels, onClose, onApplied }: PanelManage
 
         {!config ? (
           <div className="panel-manager-unlock">
-            <p>Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next time.</p>
+            <p>
+              Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next
+              time.
+            </p>
             <label>
               Panel manager token
               <input

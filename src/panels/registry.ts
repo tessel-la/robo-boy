@@ -398,6 +398,20 @@ export const getInstalledPanelRegistryUrl = (): string => {
   return new URL(configuredPath || DEFAULT_INSTALLED_PANEL_REGISTRY_PATH, document.baseURI).href;
 };
 
+/**
+ * Picks the registry a runtime should read. A build-time `VITE_PANEL_REGISTRY_URL` always wins,
+ * which is how a build that bundles its own panels pins them. Otherwise the desktop shell reads
+ * the deployment's registry (`runtimeRegistryUrl`), since its own bundled copy is fixed at build
+ * time and would never reflect panels installed through the manager. The web app has no runtime
+ * URL and keeps resolving same-origin.
+ */
+export const resolveInstalledPanelRegistryUrl = (runtimeRegistryUrl = ''): string => {
+  const configuredPath = import.meta.env.VITE_PANEL_REGISTRY_URL?.trim();
+  if (configuredPath) return new URL(configuredPath, document.baseURI).href;
+  if (runtimeRegistryUrl) return runtimeRegistryUrl;
+  return new URL(DEFAULT_INSTALLED_PANEL_REGISTRY_PATH, document.baseURI).href;
+};
+
 export const loadInstalledPanelRegistry = async (
   registryUrl = getInstalledPanelRegistryUrl(),
   fetcher: typeof fetch = fetch

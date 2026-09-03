@@ -64,6 +64,31 @@ const sendJson = (response, status, value) => {
   response.end(`${JSON.stringify(value)}\n`);
 };
 
+// The packaged desktop shell serves its own assets, so its requests to this API are cross-origin
+// and the webview refuses them without CORS. Authentication here is a bearer token rather than a
+// cookie, so permitting these fixed webview origins grants no ambient authority: a page that
+// cannot read the token still cannot call this API, and browsers will not let one forge Origin.
+// Tauri serves the shell from `tauri://localhost` on Linux/macOS and `http://tauri.localhost` on
+// Windows/Android; webviews may report a non-HTTP scheme as the opaque origin `null`, so all the
+// forms are accepted. This is not an authorisation boundary -- the bearer token is -- and no
+// browser lets a page forge Origin.
+const DESKTOP_ORIGINS = new Set([
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'null',
+]);
+
+const applyCorsHeaders = (request, response) => {
+  response.setHeader('vary', 'Origin');
+  const origin = request.headers.origin;
+  if (typeof origin !== 'string' || !DESKTOP_ORIGINS.has(origin)) return;
+  response.setHeader('access-control-allow-origin', origin);
+  response.setHeader('access-control-allow-headers', 'authorization, content-type');
+  response.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  response.setHeader('access-control-max-age', '600');
+};
+
 const authorized = request => {
   if (!token) return false;
   const supplied = request.headers.authorization;
@@ -123,6 +148,12 @@ const server = createServer(async (request, response) => {
   }
   if (!url.pathname.startsWith('/api/panels/')) {
     sendJson(response, 404, { error: 'Not found.' });
+    return;
+  }
+  applyCorsHeaders(request, response);
+  if (request.method === 'OPTIONS') {
+    // A preflight never carries credentials, so it has to be answered before the auth checks.
+    response.writeHead(204).end();
     return;
   }
   if (!token) {

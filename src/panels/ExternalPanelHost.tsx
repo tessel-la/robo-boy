@@ -38,6 +38,9 @@ type HostStatus = { phase: 'loading' } | { phase: 'ready' } | { phase: 'error'; 
 type TopicPickerState = { topics: RoboBoyRosTopic[]; selectedTopic: string; query: string };
 
 const PANEL_START_TIMEOUT_MS = 20_000;
+// The probe retries until the sandbox answers, so without a deadline a sandbox that never runs
+// leaves the panel on its loading overlay forever, with nothing reported to the user or the log.
+const SANDBOX_HANDSHAKE_TIMEOUT_MS = 10_000;
 const NO_APPROVED_ROS_TOPICS: readonly RoboBoyRosTopic[] = [];
 
 const createLogger = (panelId: string, instanceId: string): RoboBoyPanelLogger => {
@@ -393,6 +396,16 @@ const ExternalPanelHost = ({
       iframeRef.current?.contentWindow?.postMessage({ type: 'roboboy-panel-sandbox-probe' }, '*');
       probeTimer = window.setTimeout(probe, connectedSessionId ? 1_000 : 250);
     };
+    let handshakeTimer: number | null = window.setTimeout(() => {
+      handshakeTimer = null;
+      stopProbing();
+      logger.error('Panel sandbox failed.', 'The panel sandbox never reported that it started.');
+      setStatus({ phase: 'error', message: 'The panel sandbox did not start.' });
+    }, SANDBOX_HANDSHAKE_TIMEOUT_MS);
+    const clearHandshakeDeadline = () => {
+      if (handshakeTimer !== null) window.clearTimeout(handshakeTimer);
+      handshakeTimer = null;
+    };
     const handleSandboxReady = (event: MessageEvent) => {
       const iframeWindow = iframeRef.current?.contentWindow;
       if (
@@ -406,6 +419,7 @@ const ExternalPanelHost = ({
         return;
       }
       const isReload = connectedSessionId !== null;
+      clearHandshakeDeadline();
       connectedSessionId = event.data.sessionId;
       if (isReload) setStatus({ phase: 'loading' });
       connectSandboxRef.current();
@@ -415,9 +429,10 @@ const ExternalPanelHost = ({
     probe();
     return () => {
       stopProbing();
+      clearHandshakeDeadline();
       window.removeEventListener('message', handleSandboxReady);
     };
-  }, [panelRevision, retryKey]);
+  }, [logger, panelRevision, retryKey]);
 
   useEffect(
     () => () => {

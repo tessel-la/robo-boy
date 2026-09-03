@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadInstalledPanelRegistry, parseInstalledPanelRegistry } from './registry';
+import { loadInstalledPanelRegistry, parseInstalledPanelRegistry, resolveInstalledPanelRegistryUrl } from './registry';
 
 const registryUrl = 'https://roboboy.test/panels/installed.json';
 const integrity = 'sha256-awLjC3PnQMe3GqvsLNqbulVO7zysg4XTJoKvBkR3kDk=';
@@ -201,5 +201,19 @@ describe('installed panel registry', () => {
       panels: [],
       issues: [expect.objectContaining({ code: 'registry-unavailable', message: expect.stringContaining('offline') })],
     });
+  });
+});
+
+describe('resolveInstalledPanelRegistryUrl', () => {
+  it('reads the deployment registry when a runtime URL is supplied', () => {
+    // The desktop shell's own bundled registry is fixed at build time, so panels installed
+    // through the manager would otherwise never appear to it.
+    expect(resolveInstalledPanelRegistryUrl('http://robot.local:80/panels/installed.json')).toBe(
+      'http://robot.local:80/panels/installed.json'
+    );
+  });
+
+  it('falls back to the same-origin registry without a runtime URL', () => {
+    expect(resolveInstalledPanelRegistryUrl('')).toBe(new URL('panels/installed.json', document.baseURI).href);
   });
 });
