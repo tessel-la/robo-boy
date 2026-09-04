@@ -297,6 +297,27 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('keeps the replace menu open while its own list is scrolled, and closes it when the page moves', async () => {
+    renderMainControlView();
+    expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Replace Camera'));
+    const menu = document.querySelector('.workspace-add-menu-floating') as HTMLElement;
+    expect(menu).toBeInTheDocument();
+
+    // Reaching the panels further down the list must not dismiss the list.
+    fireEvent.scroll(menu);
+    expect(document.querySelector('.workspace-add-menu-floating')).toBeInTheDocument();
+
+    // Movement behind it still does: the menu stays where it was placed.
+    fireEvent.scroll(document.querySelector('.main-control-view') as Element);
+    expect(document.querySelector('.workspace-add-menu-floating')).not.toBeInTheDocument();
+  });
+
   it('sizes the panel catalog to the room beneath its button so the whole list stays on screen', async () => {
     renderMainControlView();
     expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();

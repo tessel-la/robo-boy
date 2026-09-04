@@ -1427,7 +1427,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   useEffect(() => {
     if (!workspaceReplacementPanelId) return;
 
-    const closeReplacementMenu = () => {
+    // The menu is placed against a button and stays where it was put, so anything moving behind
+    // it leaves it pointing at nothing. Its own list scrolling is not that: the scroll listener
+    // runs on capture and therefore also hears the menu scroll itself, which would shut it the
+    // moment someone tried to reach the panels further down.
+    const closeReplacementMenu = (event?: Event) => {
+      const scrolled = event?.target;
+      if (scrolled instanceof Node && workspaceReplaceMenuRef.current?.contains(scrolled)) return;
+
       setIsWorkspaceAddMenuOpen(false);
       setWorkspaceReplacementPanelId(null);
       setWorkspaceReplaceMenuStyle(null);
