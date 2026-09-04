@@ -448,6 +448,8 @@
   max-height: min(520px, calc(100vh - 64px));
   overflow: auto;
   z-index: 1200;
+  /* WORKSPACE_MENU_CHROME in MainControlView.tsx mirrors this padding and border: the measured
+     height is the room on screen, and this box sits inside it. */
   padding: 10px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -611,7 +613,6 @@
 }
 
 .workspace-add-menu {
-  box-sizing: border-box;
   position: absolute;
   top: calc(100% + 8px);
   left: 0;

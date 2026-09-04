@@ -308,8 +308,9 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
 
     const menu = document.querySelector('.workspace-add-menu') as HTMLElement;
-    // Room left under the button, less the gap it sits on and a margin from the bottom edge.
-    expect(menu.style.maxHeight).toBe(`${window.innerHeight - 120 - 8 - 12}px`);
+    // Room left under the button, less the gap it sits on, a margin from the bottom edge, and
+    // the menu's own padding and border, which sit outside the height being capped.
+    expect(menu.style.maxHeight).toBe(`${window.innerHeight - 120 - 8 - 12 - 22}px`);
   });
 
   const pressWith = (element: Element, pointerType: string) =>

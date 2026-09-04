@@ -1003,6 +1003,8 @@ const applyWorkspaceDropPlacement = (
 const WORKSPACE_MENU_GAP = 8;
 const WORKSPACE_MENU_MARGIN = 12;
 const WORKSPACE_MENU_MIN_HEIGHT = 180;
+// Padding and border of .workspace-add-menu, which sit outside the height it is capped to.
+const WORKSPACE_MENU_CHROME = 22;
 
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const runtimeEndpoints = useRuntimeConfig();
@@ -1409,7 +1411,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       const control = workspaceAddControlRef.current;
       if (!control) return;
       const room =
-        window.innerHeight - control.getBoundingClientRect().bottom - WORKSPACE_MENU_GAP - WORKSPACE_MENU_MARGIN;
+        window.innerHeight -
+        control.getBoundingClientRect().bottom -
+        WORKSPACE_MENU_GAP -
+        WORKSPACE_MENU_MARGIN -
+        WORKSPACE_MENU_CHROME;
       setWorkspaceAddMenuMaxHeight(Math.max(WORKSPACE_MENU_MIN_HEIGHT, room));
     };
 
@@ -2485,7 +2491,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const spaceBelow = viewportHeight - buttonRect.bottom - margin - gap;
     const spaceAbove = buttonRect.top - margin - gap;
     const openUpward = spaceBelow < 260 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(WORKSPACE_MENU_MIN_HEIGHT, Math.min(380, openUpward ? spaceAbove : spaceBelow));
+    const maxHeight = Math.max(
+      WORKSPACE_MENU_MIN_HEIGHT,
+      Math.min(380, (openUpward ? spaceAbove : spaceBelow) - WORKSPACE_MENU_CHROME)
+    );
     const left = clamp(buttonRect.right - menuWidth, margin, viewportWidth - menuWidth - margin);
     const top = openUpward ? buttonRect.top - gap : buttonRect.bottom + gap;
 
