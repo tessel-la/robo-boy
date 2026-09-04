@@ -43,8 +43,9 @@ describe('TitleBar', () => {
   it('drives the window from its own controls', async () => {
     render(<TitleBar />);
 
-    // Without a drag region the undecorated window could not be moved at all.
-    expect(document.querySelector('.title-bar')).toHaveAttribute('data-tauri-drag-region');
+    // Without a drag region the undecorated window could not be moved at all, and only "deep"
+    // extends that to the strip's contents rather than the strip element alone.
+    expect(document.querySelector('.title-bar')).toHaveAttribute('data-tauri-drag-region', 'deep');
 
     fireEvent.click(screen.getByLabelText('Minimise'));
     fireEvent.click(screen.getByLabelText('Maximise'));

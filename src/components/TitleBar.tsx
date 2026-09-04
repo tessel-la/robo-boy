@@ -65,7 +65,7 @@ const TitleBar: React.FC = () => {
 
   return (
     <>
-      <header className="title-bar" data-tauri-drag-region>
+      <header className="title-bar" data-tauri-drag-region="deep">
         <div className="title-bar-brand">
           <span className="title-bar-mark" aria-hidden="true" />
           <span className="title-bar-name">ROBO&middot;BOY</span>

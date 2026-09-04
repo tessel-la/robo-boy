@@ -1,11 +1,15 @@
 /* Chrome for the undecorated desktop window. It reads from the same theme tokens as the rest
    of the app, so a theme change carries the window frame with it. */
 .title-bar {
-  flex: 0 0 auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 34px;
+  height: var(--title-bar-height);
   padding: 0 0 0 12px;
   background-color: var(--background-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -18,7 +22,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  pointer-events: none;
 }
 
 .title-bar-mark {

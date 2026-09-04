@@ -160,8 +160,14 @@ textarea {
     transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
+:root {
+    /* No window chrome in a browser: the tab already has one. */
+    --title-bar-height: 0px;
+}
+
 :root[data-runtime='tauri'] {
     color-scheme: light;
+    --title-bar-height: 34px;
 }
 
 :root[data-runtime='tauri'] * {
