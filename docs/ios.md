@@ -174,15 +174,17 @@ chosen host, resolved in `src/runtime/runtimeConfig.tsx`. Only the chrome differ
   has no window controls, so `drawsOwnWindowChrome()` keeps `TitleBar` out of the mobile shell.
 - `main.tsx` marks the document `data-shell="mobile"` and opts the viewport into the full screen, so
   the app lays out between the status bar and the home indicator rather than under them.
+- The desktop shell draws the app at 90% zoom, which suits a window the person sized themselves. A
+  phone gives the app the whole screen, where the same zoom leaves a tenth of it showing the window
+  background instead, so `configure_ui_zoom` applies it on desktop only.
 
 ## Known Rough Edges
 
-The app builds, and its `Info.plist` has been checked against a packaged artifact. Nothing below has
-been exercised on a device yet:
+The app has been built, installed and launched on an iPhone. These have not been exercised:
 
 - **Status bar contrast.** The system draws the status bar over the app's own themed background and
-  picks its text colour from the phone's light/dark setting, not from the Robo-Boy theme. A light
-  phone running a dark Robo-Boy theme may read poorly.
+  picks its text colour from the phone's light/dark setting, not from the Robo-Boy theme. It reads
+  correctly with a light theme on a light phone; a dark Robo-Boy theme on a light phone may not.
 - **Panel installation.** External panels install through the same in-app path as desktop, over
   Tauri's native HTTP client. It is untested on iOS.
 - **Voice control** needs iOS 14.3 or later, which is where `getUserMedia` arrived in `WKWebView`.
