@@ -27,10 +27,10 @@ origin, add `tauri://*,http://tauri.localhost,https://tauri.localhost` to `OLLAM
 
 Quick Connect uses `localhost`. To connect to another computer, open the advanced connection options, select **Host or IP**, and enter its hostname or IP address. Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
 
-The existing `ros-stack` Compose service satisfies the local contract:
+The existing `ros-stack` Compose service satisfies the local contract on its own. Neither Caddy nor the web
+frontend is needed, so no certificate has to be created:
 
 ```bash
-cp config/env/no-overlay.env.example .env
 docker compose up -d --build ros-stack
 ```
 

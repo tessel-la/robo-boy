@@ -12,7 +12,36 @@
 
 Robo-Boy is a web and desktop interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. Both interfaces use the same React codebase; the desktop package is a lightweight Tauri shell and connects to a separately installed ROS stack.
 
+## Start With The Desktop App
+
+The shortest route. The desktop app needs only the ROS services, so there is no certificate to create and no
+proxy to run.
+
+1. Install a package for the current release:
+   [`.deb`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-amd64.deb) ·
+   [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) ·
+   [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) ·
+   [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe)
+
+2. Start the ROS services on the computer that runs ROS:
+
+   ```bash
+   git clone git@github.com:tessel-la/robo-boy.git
+   cd robo-boy
+   docker compose up -d --build ros-stack
+   ```
+
+3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
+   or IP** when it runs elsewhere.
+
+See [Desktop application](docs/desktop.md) for the port contract and remote hosts.
+
 ## Start With Docker
+
+Use this when Robo-Boy has to be opened in a browser, including from a phone or another computer. A browser
+needs HTTPS before it grants a page a camera, and the app and the robot services have to share one origin;
+Caddy and a locally trusted certificate supply both.
+
 
 ### Prerequisites
 
@@ -27,7 +56,6 @@ cd robo-boy
 mkcert -install
 mkdir -p infra/caddy/certs
 mkcert -key-file infra/caddy/certs/local-key.pem -cert-file infra/caddy/certs/local-cert.pem localhost 127.0.0.1 ::1 YOUR_HOST_IP
-cp config/env/no-overlay.env.example .env
 docker compose up -d --build
 ```
 
