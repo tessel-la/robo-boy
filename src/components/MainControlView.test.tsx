@@ -297,6 +297,39 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  const pressWith = (element: Element, pointerType: string) =>
+    fireEvent(element, Object.assign(new Event('pointerdown', { bubbles: true }), { pointerType }));
+
+  it('lets a touch swipe scroll the panel catalog instead of dragging a panel out of it', async () => {
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+    const option = screen.getByRole('button', { name: 'Camera' });
+    expect(option).toHaveAttribute('draggable', 'true');
+
+    // A touch press cannot start a drag, so the browser is free to scroll the catalog with it.
+    pressWith(option, 'touch');
+    expect(option.draggable).toBe(false);
+
+    // The tap that follows still selects, and no delay was introduced to decide that.
+    fireEvent.click(option);
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it('keeps dragging a panel out of the catalog with a mouse', async () => {
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+    const option = screen.getByRole('button', { name: 'Camera' });
+
+    pressWith(option, 'touch');
+    expect(option.draggable).toBe(false);
+
+    // The same button on the same device drags again as soon as a mouse is what pressed it.
+    pressWith(option, 'mouse');
+    expect(option.draggable).toBe(true);
+  });
+
   it('adds an installed external panel through the common workspace catalog', async () => {
     renderMainControlView();
 

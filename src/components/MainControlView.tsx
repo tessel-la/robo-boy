@@ -3158,11 +3158,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           ),
         ].join('\n')
       : undefined;
+    // Dragging a panel out of the catalogue is a pointer affordance: HTML5 drag and drop never
+    // runs from a touch, where leaving the button draggable makes the browser read a swipe as a
+    // drag and refuse to scroll the catalogue, so the press lands as a selection instead. Marking
+    // the button undraggable for the press that is about to happen returns the swipe to the list,
+    // and the tap that follows still adds the panel. Each press sets this for its own pointer, so
+    // a mouse on the same device keeps dragging.
+    const canDragFromMenu = !isReplacementMenu;
+    const handlePanelPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.draggable = canDragFromMenu && event.pointerType !== 'touch';
+    };
+
     const renderPanelButton = (panel: PanelCatalogEntry) => (
       <button
         key={panel.id}
         type="button"
-        draggable={!isReplacementMenu}
+        draggable={canDragFromMenu}
+        onPointerDown={handlePanelPointerDown}
         onDragStart={event => handleWorkspaceDragStart(event, panel.id)}
         onDragEnd={handleWorkspaceDragEnd}
         onClick={() => handleAddWorkspacePanel(panel.id)}
