@@ -297,6 +297,76 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('keeps the replace menu open while its own list is scrolled, and closes it when the page moves', async () => {
+    renderMainControlView();
+    expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Replace Camera'));
+    const menu = document.querySelector('.workspace-add-menu-floating') as HTMLElement;
+    expect(menu).toBeInTheDocument();
+
+    // Reaching the panels further down the list must not dismiss the list.
+    fireEvent.scroll(menu);
+    expect(document.querySelector('.workspace-add-menu-floating')).toBeInTheDocument();
+
+    // Movement behind it still does: the menu stays where it was placed.
+    fireEvent.scroll(document.querySelector('.main-control-view') as Element);
+    expect(document.querySelector('.workspace-add-menu-floating')).not.toBeInTheDocument();
+  });
+
+  it('sizes the panel catalog to the room beneath its button so the whole list stays on screen', async () => {
+    renderMainControlView();
+    expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();
+
+    // The catalog hangs below this control, and jsdom lays everything out at zero.
+    const control = document.querySelector('.workspace-add-control') as HTMLElement;
+    control.getBoundingClientRect = () => ({ bottom: 120 }) as DOMRect;
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+
+    const menu = document.querySelector('.workspace-add-menu') as HTMLElement;
+    // Room left under the button, less the gap it sits on, a margin from the bottom edge, and
+    // the menu's own padding and border, which sit outside the height being capped.
+    expect(menu.style.maxHeight).toBe(`${window.innerHeight - 120 - 8 - 12 - 22}px`);
+  });
+
+  const pressWith = (element: Element, pointerType: string) =>
+    fireEvent(element, Object.assign(new Event('pointerdown', { bubbles: true }), { pointerType }));
+
+  it('lets a touch swipe scroll the panel catalog instead of dragging a panel out of it', async () => {
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+    const option = screen.getByRole('button', { name: 'Camera' });
+    expect(option).toHaveAttribute('draggable', 'true');
+
+    // A touch press cannot start a drag, so the browser is free to scroll the catalog with it.
+    pressWith(option, 'touch');
+    expect(option.draggable).toBe(false);
+
+    // The tap that follows still selects, and no delay was introduced to decide that.
+    fireEvent.click(option);
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it('keeps dragging a panel out of the catalog with a mouse', async () => {
+    renderMainControlView();
+
+    fireEvent.click((await screen.findAllByLabelText('Add workspace panel'))[0]);
+    const option = screen.getByRole('button', { name: 'Camera' });
+
+    pressWith(option, 'touch');
+    expect(option.draggable).toBe(false);
+
+    // The same button on the same device drags again as soon as a mouse is what pressed it.
+    pressWith(option, 'mouse');
+    expect(option.draggable).toBe(true);
+  });
+
   it('adds an installed external panel through the common workspace catalog', async () => {
     renderMainControlView();
 

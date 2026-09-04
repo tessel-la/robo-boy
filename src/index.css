@@ -107,6 +107,41 @@ body {
   position: relative;
 }
 
+/* Scrollbars are chrome too, so they read from the active theme like everything else. This is
+   the treatment the panel tab strip already used, applied everywhere instead of once. Both
+   syntaxes are needed: the standard properties are what Firefox reads, the pseudo-elements are
+   what the Chromium browsers and the WebKit-based desktop shell read. Both of the standard
+   properties inherit, so declaring them on the root reaches every scrollable element. */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--background-secondary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color);
+  /* Inset by the track colour so the thumb reads as a bar rather than filling the gutter. */
+  border: 2px solid var(--background-secondary);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-hover-color);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--background-secondary);
+}
+
 main {
   flex-grow: 1;
   /* padding: 20px; No padding here, let MainControlView handle it */
@@ -160,8 +195,14 @@ textarea {
     transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
+:root {
+    /* No window chrome in a browser: the tab already has one. */
+    --title-bar-height: 0px;
+}
+
 :root[data-runtime='tauri'] {
     color-scheme: light;
+    --title-bar-height: 34px;
 }
 
 :root[data-runtime='tauri'] * {

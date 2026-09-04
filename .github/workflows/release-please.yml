@@ -61,20 +61,35 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
 
-      - name: Verify every platform produced an installer
+      # A built installer carries the version in its name, so nothing can link to one before the
+      # release exists. Each is copied to a name that does not change, giving
+      # /releases/latest/download a target that keeps working across releases. The versioned file
+      # is published as well, so a downloaded installer still says which version it is.
+      - name: Verify every platform produced an installer and name a stable copy
         run: |
           set -euo pipefail
+          declare -A stable_name=(
+            [deb]=Robo-Boy-linux-amd64.deb
+            [rpm]=Robo-Boy-linux-x86_64.rpm
+            [dmg]=Robo-Boy-macos-universal.dmg
+            [exe]=Robo-Boy-windows-x64-setup.exe
+          )
+          mkdir -p stable
           missing=''
           for extension in deb rpm dmg exe; do
-            if [ -z "$(find installers -type f -name "*.${extension}" -print -quit)" ]; then
-              missing="${missing} ${extension}"
-            fi
+            mapfile -t built < <(find installers -type f -name "*.${extension}")
+            case "${#built[@]}" in
+              0) missing="${missing} ${extension}" ;;
+              1) cp "${built[0]}" "stable/${stable_name[${extension}]}" ;;
+              *) echo "::error::found ${#built[@]} .${extension} installers, so no stable name can name one"
+                 exit 1 ;;
+            esac
           done
           if [ -n "${missing}" ]; then
             echo "::error::release is missing installers for:${missing}"
             exit 1
           fi
-          find installers -type f
+          find installers stable -type f
 
       - name: Attach installers to the GitHub release
         env:
@@ -82,5 +97,5 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          mapfile -t installers < <(find installers -type f)
+          mapfile -t installers < <(find installers stable -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"

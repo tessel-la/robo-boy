@@ -48,7 +48,10 @@ export default defineConfig(({ mode }) => ({
     alias:
       mode === 'tauri'
         ? {}
-        : { '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)) },
+        : {
+            '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)),
+            '@tauri-apps/api/window': fileURLToPath(new URL('../src/runtime/nativeWindow.web.ts', import.meta.url)),
+          },
     // MainControlView is lazy-loaded after the connection screen. Keep hooks
     // and the renderer on one React instance across linked panel SDKs and
     // dependency-optimizer generations.
