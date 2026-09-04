@@ -81,6 +81,8 @@ npm run desktop:build
 
 Installers are written below `src-tauri/target/release/bundle/`. Building installers does not build or package the ROS image. Each target operating system should build and sign its own artifacts.
 
-## Web And Future Mobile
+## Web And Mobile
 
-The web build uses same-origin Caddy routes (`/websocket`, `/video_stream`, and `/mesh_resources`) for proxy-backed connections and can use direct backend host URLs when the advanced host connection points at another machine. Runtime endpoint selection lives in `src/runtime/runtimeConfig.tsx`; future Tauri mobile targets can use the same direct, remote-host contract as desktop without forking feature code.
+The web build uses same-origin Caddy routes (`/websocket`, `/video_stream`, and `/mesh_resources`) for proxy-backed connections and can use direct backend host URLs when the advanced host connection points at another machine. Runtime endpoint selection lives in `src/runtime/runtimeConfig.tsx`.
+
+The iOS shell uses that same direct, remote-host contract, so no feature code is forked for it. Only the chrome differs: a phone draws its own bars around the app and has no window controls, so `drawsOwnWindowChrome()` keeps the title bar out of it. See [iOS application](ios.md) for building and installing.

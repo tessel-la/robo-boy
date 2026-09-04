@@ -34,7 +34,7 @@ proxy to run.
 3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
    or IP** when it runs elsewhere.
 
-See [Desktop application](docs/desktop.md) for the port contract and remote hosts.
+See [Desktop application](docs/desktop.md) for the port contract and remote hosts, and [iOS application](docs/ios.md) to build the same app for a phone.
 
 ## Start With Docker
 

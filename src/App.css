@@ -16,6 +16,12 @@
   contain: layout;
 }
 
+/* Held in landscape, a phone's rounded corners and camera cut into the sides of the screen. */
+:root[data-shell='mobile'] .App {
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+}
+
 .App main {
   flex: 1; /* Allow main content to take up space */
   overflow: hidden; /* Prevent scrolling in main */

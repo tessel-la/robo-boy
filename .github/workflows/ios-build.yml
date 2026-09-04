@@ -1,0 +1,111 @@
+name: iOS Build
+
+# Builds an unsigned iOS app on a hosted macOS runner, so the iOS target can be built without
+# owning a Mac. It signs nothing and publishes nothing: signing needs an Apple account, and the
+# artifact is meant to be re-signed by whoever installs it. Run it from the Actions tab.
+#
+# A macOS runner costs ten times a Linux one, so this never runs on a whole branch: only on demand,
+# and on the pull requests that change what the iOS build is made of. Frontend changes are already
+# proven by the desktop build, which shares the same frontend.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the branch this is run from.
+        type: string
+        required: false
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, dev]
+    paths:
+      - '.github/workflows/ios-build.yml'
+      - 'src-tauri/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: iOS app (unsigned)
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out the revision to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Xcode project is generated output, not tracked. Project generation insists on a
+      # signing team even though this build signs nothing, so a placeholder stands in unless a
+      # real Team ID is configured for the repository.
+      - name: Generate the Xcode project
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
+        run: npm run ios:init
+
+      # xcodebuild compiles the Rust library and packages the app, but only `tauri ios build`
+      # would run the frontend build for it, so it runs here explicitly.
+      - name: Build the frontend
+        run: npm run build:tauri
+
+      - name: Verify the build bundles no panels
+        run: npm run check:release-panels
+
+      - name: Build the app without signing it
+        run: |
+          project="$(find src-tauri/gen/apple -maxdepth 1 -name '*.xcodeproj' | head -1)"
+          if [ -z "${project}" ]; then
+            echo "::error::no Xcode project was generated under src-tauri/gen/apple"
+            exit 1
+          fi
+          scheme="$(xcodebuild -project "${project}" -list -json \
+            | python3 -c 'import json,sys; s=json.load(sys.stdin)["project"]["schemes"]; print(next((n for n in s if n.endswith("_iOS")), s[0]))')"
+          echo "building ${scheme} from ${project}"
+          xcodebuild -project "${project}" -scheme "${scheme}" \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      # An .ipa is a zip of a Payload directory. Building one by hand rather than exporting an
+      # archive is what keeps this free of an Apple account.
+      - name: Package the .ipa
+        run: |
+          app="$(find build/Build/Products -maxdepth 2 -name '*.app' | head -1)"
+          if [ -z "${app}" ]; then
+            echo "::error::the build produced no .app bundle"
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "${app}" Payload/
+          zip -qry Robo-Boy-unsigned.ipa Payload
+
+      - name: Upload the unsigned app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned
+          if-no-files-found: error
+          retention-days: 14
+          path: Robo-Boy-unsigned.ipa

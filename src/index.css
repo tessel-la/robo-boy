@@ -209,6 +209,13 @@ textarea {
     --title-bar-height: 34px;
 }
 
+/* The packaged shell on a phone or tablet. There are no window controls to draw, and the room the
+   app has is the screen less the bars the system keeps for itself. */
+:root[data-shell='mobile'] {
+    --title-bar-height: env(safe-area-inset-top, 0px);
+    --app-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
 :root[data-runtime='tauri'] * {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;

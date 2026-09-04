@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged into the generated iOS Info.plist by the Tauri CLI, so it survives `tauri ios init`. -->
+
+	<!-- iOS 14 and later blocks an app from reaching other devices on the network until the
+	     person allows it, and refuses to show the prompt at all without this text. Robo-Boy has
+	     nothing to talk to without it: rosbridge, the video server and the mesh server all run on
+	     the ROS computer. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Robo-Boy connects to the ROS 2 computer on your network to control the robot and show its cameras and 3D views.</string>
+
+	<!-- The voice pad and the agent's speech input record only while held. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Robo-Boy records only while you hold the voice control, to send a spoken command to the robot.</string>
+
+	<!-- App Transport Security otherwise refuses plain http:// and ws://, which is all rosbridge
+	     and web_video_server speak. This lifts that for private and link-local addresses only, so
+	     the rest of the app keeps ATS. A robot reached over the public internet in the clear would
+	     additionally need NSAllowsArbitraryLoadsInWebContent; prefer a VPN, whose addresses are
+	     private and already covered. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
+	<!-- A gamepad is held sideways. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

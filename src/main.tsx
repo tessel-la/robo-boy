@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { isMobilePlatform } from './runtime/runtimeConfig.tsx';
 import './index.css';
 
 const roboBoyWindow = window as typeof window & {
@@ -11,6 +12,21 @@ const roboBoyWindow = window as typeof window & {
 
 if (window.location.protocol === 'tauri:' || roboBoyWindow.__TAURI__ || roboBoyWindow.__TAURI_INTERNALS__) {
   document.documentElement.setAttribute('data-runtime', 'tauri');
+
+  // A desktop window is undecorated and leaves its chrome to the app; a phone draws its own bars
+  // around the app instead. The stylesheet needs that apart before React mounts, so that the app
+  // never lays out under a title bar that is not there.
+  if (isMobilePlatform()) {
+    document.documentElement.setAttribute('data-shell', 'mobile');
+
+    // `env(safe-area-inset-*)` only reports the room the system bars take once the page has asked
+    // for the whole screen.
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const content = viewport?.getAttribute('content');
+    if (viewport && content && !content.includes('viewport-fit')) {
+      viewport.setAttribute('content', `${content}, viewport-fit=cover`);
+    }
+  }
 }
 
 roboBoyWindow.__ROBOBOY_APP_STARTED = true;
