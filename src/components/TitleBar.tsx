@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { Window } from '@tauri-apps/api/window';
+import type { DesktopWindow, ResizeDirection } from '../runtime/desktopWindow';
 import { getDesktopWindow } from '../runtime/desktopWindow';
 import { isDesktopRuntime } from '../runtime/runtimeConfig';
 import './TitleBar.css';
 
-const withAppWindow = async (run: (appWindow: Window) => unknown): Promise<void> => {
+const withAppWindow = async (run: (appWindow: DesktopWindow) => unknown): Promise<void> => {
   await run(await getDesktopWindow());
 };
 
@@ -19,11 +19,7 @@ const RESIZE_EDGES = [
   { edge: 'nw', direction: 'NorthWest' },
   { edge: 'se', direction: 'SouthEast' },
   { edge: 'sw', direction: 'SouthWest' },
-] as const;
-
-// The window API keeps its direction union private, so it is taken from the table above:
-// an edge that does not name a real direction stops being a type error waiting to happen.
-type ResizeDirection = (typeof RESIZE_EDGES)[number]['direction'];
+] as const satisfies readonly { edge: string; direction: ResizeDirection }[];
 
 const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);

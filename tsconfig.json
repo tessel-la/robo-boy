@@ -33,7 +33,8 @@
        build the web app; Vite resolves the real package for the tauri build. */
     "baseUrl": ".",
     "paths": {
-      "@tauri-apps/plugin-http": ["src/panels/nativeHttpFetch.web.ts"]
+      "@tauri-apps/plugin-http": ["src/panels/nativeHttpFetch.web.ts"],
+      "@tauri-apps/api/window": ["src/runtime/nativeWindow.web.ts"]
     }
   },
   "include": [
