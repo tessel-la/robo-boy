@@ -2,17 +2,21 @@
 
 The `ros-stack` service uses host networking so ROS 2 DDS discovery works with host-networked robot and simulation containers. Custom message, service, and action definitions must also be available inside `ros-stack`; Compose overrides mount their built install workspaces under `/overlay_ws`.
 
-Select an overlay by copying one example to `.env`. Docker Compose reads `COMPOSE_FILE` from that file on subsequent commands.
+Select an overlay through `COMPOSE_FILE`, which Docker Compose reads from `.env` on every subsequent command.
+Without it Compose uses `docker-compose.yml` alone, which is the no-overlay configuration.
 
-```bash
-# No robot-specific workspace
-cp config/env/no-overlay.env.example .env
-
+```dotenv
 # Aerostack workspace
-cp config/env/aerostack.env.example .env
+COMPOSE_FILE=docker-compose.yml:infra/compose/aerostack.yml
 
 # Manipulator simulation workspace
-cp config/env/manipulator.env.example .env
+COMPOSE_FILE=docker-compose.yml:infra/compose/manipulator.yml
+```
+
+The same value works for a single command without writing the file:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:infra/compose/aerostack.yml docker compose up -d --build
 ```
 
 After changing overlays, recreate the ROS service:
@@ -56,7 +60,7 @@ The Aerostack override mounts `~/.aerostack2_install` at `/overlay_ws/aerostack2
 
 ```bash
 docker cp aerial_sim_cont:/root/aerostack2_ws/install ~/.aerostack2_install
-cp config/env/aerostack.env.example .env
+echo COMPOSE_FILE=docker-compose.yml:infra/compose/aerostack.yml >> .env
 docker compose up -d --build
 ```
 
@@ -71,7 +75,7 @@ cd /path/to/manipulator-sim
 docker compose up -d --build
 
 cd /path/to/robo-boy
-cp config/env/manipulator.env.example .env
+echo COMPOSE_FILE=docker-compose.yml:infra/compose/manipulator.yml >> .env
 docker compose up -d --build
 ```
 

@@ -26,10 +26,11 @@ FRONTEND_PORT=3000 npm run dev
 
 ## Complete Development Stack
 
-Generate the certificate as described in the root README, select a Compose configuration, and start the stack:
+Generate the certificate as described in the root README and start the stack. Every ROS and DDS setting has a
+default, so this configuration needs no environment file; see [Robot workspace overlays](robot-overlays.md) to
+select one:
 
 ```bash
-cp config/env/no-overlay.env.example .env
 docker compose up -d --build
 ```
 
