@@ -2,7 +2,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
+    min-height: var(--app-height);
     padding: 20px;
     box-sizing: border-box;
 }
