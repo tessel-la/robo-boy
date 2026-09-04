@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.2-alpha...robo-boy-v0.4.3-alpha) (2026-09-04)
+
+
+### Bug Fixes
+
+* size the app to its own height rather than the screen's ([#116](https://github.com/tessel-la/robo-boy/issues/116)) ([5d8f985](https://github.com/tessel-la/robo-boy/commit/5d8f9851378e1b7a63468389a3834987b343e972))
+* size the app to its own height rather than the screen's ([#116](https://github.com/tessel-la/robo-boy/issues/116)) ([1a568bf](https://github.com/tessel-la/robo-boy/commit/1a568bfa4d2e239bcfa417f7e5d29be7b1564394))
+
 ## [0.4.2-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.1-alpha...robo-boy-v0.4.2-alpha) (2026-09-04)
 
 
