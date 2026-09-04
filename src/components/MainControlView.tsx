@@ -999,6 +999,13 @@ const applyWorkspaceDropPlacement = (
   };
 };
 
+// Both placements of the panel catalog sit against a button and must stay inside the screen.
+const WORKSPACE_MENU_GAP = 8;
+const WORKSPACE_MENU_MARGIN = 12;
+const WORKSPACE_MENU_MIN_HEIGHT = 180;
+// Padding and border of .workspace-add-menu, which sit outside the height it is capped to.
+const WORKSPACE_MENU_CHROME = 22;
+
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
@@ -1041,6 +1048,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
   const [workspaceReplaceMenuStyle, setWorkspaceReplaceMenuStyle] = useState<React.CSSProperties | null>(null);
+  const [workspaceAddMenuMaxHeight, setWorkspaceAddMenuMaxHeight] = useState<number | null>(null);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
   const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
@@ -1389,10 +1397,44 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     };
   }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
 
+  // The toolbar catalog hangs below its button inside a pane that hides its overflow, so a menu
+  // taller than the room beneath that button is cropped instead of scrolled, and its stylesheet
+  // height cannot account for how far down the screen the menu starts. Measuring the room keeps
+  // the whole list reachable.
+  useEffect(() => {
+    if (!isWorkspaceAddMenuOpen || workspaceReplacementPanelId) {
+      setWorkspaceAddMenuMaxHeight(null);
+      return;
+    }
+
+    const measureAvailableHeight = () => {
+      const control = workspaceAddControlRef.current;
+      if (!control) return;
+      const room =
+        window.innerHeight -
+        control.getBoundingClientRect().bottom -
+        WORKSPACE_MENU_GAP -
+        WORKSPACE_MENU_MARGIN -
+        WORKSPACE_MENU_CHROME;
+      setWorkspaceAddMenuMaxHeight(Math.max(WORKSPACE_MENU_MIN_HEIGHT, room));
+    };
+
+    measureAvailableHeight();
+    window.addEventListener('resize', measureAvailableHeight);
+    return () => window.removeEventListener('resize', measureAvailableHeight);
+  }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+
   useEffect(() => {
     if (!workspaceReplacementPanelId) return;
 
-    const closeReplacementMenu = () => {
+    // The menu is placed against a button and stays where it was put, so anything moving behind
+    // it leaves it pointing at nothing. Its own list scrolling is not that: the scroll listener
+    // runs on capture and therefore also hears the menu scroll itself, which would shut it the
+    // moment someone tried to reach the panels further down.
+    const closeReplacementMenu = (event?: Event) => {
+      const scrolled = event?.target;
+      if (scrolled instanceof Node && workspaceReplaceMenuRef.current?.contains(scrolled)) return;
+
       setIsWorkspaceAddMenuOpen(false);
       setWorkspaceReplacementPanelId(null);
       setWorkspaceReplaceMenuStyle(null);
@@ -2450,13 +2492,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const buttonRect = event.currentTarget.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const margin = 12;
-    const gap = 8;
+    const margin = WORKSPACE_MENU_MARGIN;
+    const gap = WORKSPACE_MENU_GAP;
     const menuWidth = Math.min(300, viewportWidth - margin * 2);
     const spaceBelow = viewportHeight - buttonRect.bottom - margin - gap;
     const spaceAbove = buttonRect.top - margin - gap;
     const openUpward = spaceBelow < 260 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(180, Math.min(380, openUpward ? spaceAbove : spaceBelow));
+    const maxHeight = Math.max(
+      WORKSPACE_MENU_MIN_HEIGHT,
+      Math.min(380, (openUpward ? spaceAbove : spaceBelow) - WORKSPACE_MENU_CHROME)
+    );
     const left = clamp(buttonRect.right - menuWidth, margin, viewportWidth - menuWidth - margin);
     const top = openUpward ? buttonRect.top - gap : buttonRect.bottom + gap;
 
@@ -3158,11 +3203,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           ),
         ].join('\n')
       : undefined;
+    // Dragging a panel out of the catalogue is a pointer affordance: HTML5 drag and drop never
+    // runs from a touch, where leaving the button draggable makes the browser read a swipe as a
+    // drag and refuse to scroll the catalogue, so the press lands as a selection instead. Marking
+    // the button undraggable for the press that is about to happen returns the swipe to the list,
+    // and the tap that follows still adds the panel. Each press sets this for its own pointer, so
+    // a mouse on the same device keeps dragging.
+    const canDragFromMenu = !isReplacementMenu;
+    const handlePanelPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.draggable = canDragFromMenu && event.pointerType !== 'touch';
+    };
+
     const renderPanelButton = (panel: PanelCatalogEntry) => (
       <button
         key={panel.id}
         type="button"
-        draggable={!isReplacementMenu}
+        draggable={canDragFromMenu}
+        onPointerDown={handlePanelPointerDown}
         onDragStart={event => handleWorkspaceDragStart(event, panel.id)}
         onDragEnd={handleWorkspaceDragEnd}
         onClick={() => handleAddWorkspacePanel(panel.id)}
@@ -3179,7 +3236,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         className={`workspace-add-menu ${isReplacementMenu ? 'workspace-add-menu-floating' : ''}`}
         ref={isReplacementMenu ? workspaceReplaceMenuRef : undefined}
         role="menu"
-        style={isReplacementMenu ? workspaceReplaceMenuStyle || undefined : undefined}
+        style={
+          isReplacementMenu
+            ? workspaceReplaceMenuStyle || undefined
+            : workspaceAddMenuMaxHeight === null
+              ? undefined
+              : { maxHeight: workspaceAddMenuMaxHeight }
+        }
       >
         <div className="workspace-add-menu-section">
           <span className="workspace-add-menu-title">
