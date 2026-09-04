@@ -51,10 +51,14 @@ distribute through TestFlight.
 npm run ios:init
 ```
 
-This writes `src-tauri/gen/apple/`, an Xcode project generated from `src-tauri/tauri.conf.json`, the
-app icons in `src-tauri/icons/ios/`, and `src-tauri/Info.ios.plist`. It is generated output and is
-not tracked by git — rerun the command after changing any of those inputs, and never edit the
-generated project by hand.
+This writes `src-tauri/gen/apple/`, an Xcode project generated from `src-tauri/tauri.conf.json` and
+`src-tauri/Info.ios.plist`. It is generated output and is not tracked by git — rerun the command
+after changing either of those, and never edit the generated project by hand.
+
+The script also copies `src-tauri/icons/ios/` over the generated icon set. `tauri ios init` fills
+that set from its own template using the same file names, so without the copy the app builds and
+installs carrying the Tauri logo rather than Robo-Boy's. Regenerate the icons themselves with
+`npm run tauri icon -- src-tauri/icons/icon.png` when the logo changes.
 
 ## Run It
 

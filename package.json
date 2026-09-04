@@ -14,7 +14,7 @@
     "build:tauri:panels": "node scripts/run-with-local-panels.mjs build:tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "ios:init": "tauri ios init",
+    "ios:init": "tauri ios init && cp -f src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/",
     "ios:dev": "tauri ios dev",
     "ios:build": "tauri ios build",
     "tauri": "tauri",

@@ -64,7 +64,17 @@ jobs:
       - name: Generate the Xcode project
         env:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
-        run: npm run ios:init
+        run: |
+          npm run ios:init
+
+          # `tauri ios init` scaffolds the icon set from its own template, so the app shipped with
+          # the Tauri logo until `ios:init` started copying this repository's icons over it.
+          # Matching checksums are what say the app carries its own icon.
+          echo "--- app icons ---"
+          for icon in 'AppIcon-60x60@3x.png' 'AppIcon-512@2x.png'; do
+            shasum -a 256 "src-tauri/icons/ios/${icon}" \
+              "src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/${icon}"
+          done
 
       # The generated project is where signing has to be turned off: an xcconfig only reaches the
       # project level, and XcodeGen writes its settings on the target, which wins. Patching the
