@@ -66,41 +66,91 @@ jobs:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
         run: npm run ios:init
 
-      # xcodebuild compiles the Rust library and packages the app, but only `tauri ios build`
-      # would run the frontend build for it, so it runs here explicitly.
-      - name: Build the frontend
-        run: npm run build:tauri
-
-      - name: Verify the build bundles no panels
-        run: npm run check:release-panels
-
-      - name: Build the app without signing it
+      # The generated project is where signing has to be turned off: an xcconfig only reaches the
+      # project level, and XcodeGen writes its settings on the target, which wins. Patching the
+      # spec it generates from and regenerating puts them where they take effect.
+      #
+      # Without this the build stops at `No Accounts` -- Tauri runs xcodebuild with
+      # `-allowProvisioningUpdates`, which asks Apple for a profile the runner has no account to
+      # request.
+      - name: Build the project unsigned
         run: |
           project="$(find src-tauri/gen/apple -maxdepth 1 -name '*.xcodeproj' | head -1)"
           if [ -z "${project}" ]; then
             echo "::error::no Xcode project was generated under src-tauri/gen/apple"
             exit 1
           fi
-          scheme="$(xcodebuild -project "${project}" -list -json \
-            | python3 -c 'import json,sys; s=json.load(sys.stdin)["project"]["schemes"]; print(next((n for n in s if n.endswith("_iOS")), s[0]))')"
-          echo "building ${scheme} from ${project}"
-          xcodebuild -project "${project}" -scheme "${scheme}" \
-            -configuration Release -sdk iphoneos -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
+          echo "project=${project}" >> "$GITHUB_ENV"
 
-      # An .ipa is a zip of a Payload directory. Building one by hand rather than exporting an
-      # archive is what keeps this free of an Apple account.
-      - name: Package the .ipa
+          echo "--- generated spec, before ---"
+          cat src-tauri/gen/apple/project.yml
+
+          # Ruby rather than Python: YAML is in its standard library, and PyYAML is not promised
+          # on a runner.
+          ruby - src-tauri/gen/apple/project.yml <<'RUBY'
+          require 'yaml'
+
+          UNSIGNED = {
+            'CODE_SIGNING_ALLOWED' => 'NO',
+            'CODE_SIGNING_REQUIRED' => 'NO',
+            'CODE_SIGN_IDENTITY' => '',
+            'CODE_SIGN_STYLE' => 'Manual',
+            'DEVELOPMENT_TEAM' => '',
+            'PROVISIONING_PROFILE_SPECIFIER' => '',
+          }
+
+          # XcodeGen takes `settings` either as build settings directly or under a `base` key.
+          def force_unsigned(node)
+            settings = (node['settings'] ||= {})
+            (settings['base'].is_a?(Hash) ? settings['base'] : settings).merge!(UNSIGNED)
+          end
+
+          spec = YAML.load_file(ARGV[0])
+          force_unsigned(spec)
+          (spec['targets'] || {}).each_value { |target| force_unsigned(target) }
+          File.write(ARGV[0], spec.to_yaml)
+          RUBY
+
+          (cd src-tauri/gen/apple && xcodegen generate)
+
+          xcodebuild -project "${project}" -list
+          echo "--- resolved signing settings ---"
+          xcodebuild -project "${project}" -scheme robo-boy_iOS -configuration release \
+            -showBuildSettings 2>/dev/null \
+            | grep -E 'CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING' || true
+
+      # The Rust build phase expects to be a child of the Tauri CLI: it talks back to the parent
+      # over an address file the parent writes, and aborts without one. Driving xcodebuild directly
+      # panics on the missing file, so the build has to be run through `tauri ios build`.
+      - name: Build and package the app
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
         run: |
-          app="$(find build/Build/Products -maxdepth 2 -name '*.app' | head -1)"
-          if [ -z "${app}" ]; then
-            echo "::error::the build produced no .app bundle"
-            exit 1
+          status=0
+          npm run ios:build -- --export-method debugging || status=$?
+          echo "tauri ios build exited with ${status}"
+
+          # Tauri exports an .ipa only once it can sign one. Unsigned, the app is left where
+          # xcodebuild put it, which is as good a place to take it from.
+          ipa="$(find src-tauri/gen/apple -name '*.ipa' | head -1)"
+          app="$(find "${HOME}/Library/Developer/Xcode/DerivedData" src-tauri/gen/apple \
+            -type d -name '*.app' -path '*/Products/*' 2>/dev/null | head -1)"
+
+          if [ -n "${ipa}" ]; then
+            echo "taking the exported ${ipa}"
+            cp "${ipa}" Robo-Boy-unsigned.ipa
+          elif [ -n "${app}" ]; then
+            echo "packaging ${app}"
+            mkdir -p Payload
+            cp -R "${app}" Payload/
+            zip -qry Robo-Boy-unsigned.ipa Payload
+          else
+            echo "::error::the build produced neither an .ipa nor an .app"
+            exit "${status:-1}"
           fi
-          mkdir -p Payload
-          cp -R "${app}" Payload/
-          zip -qry Robo-Boy-unsigned.ipa Payload
+
+      - name: Verify the build bundles no panels
+        run: npm run check:release-panels
 
       - name: Upload the unsigned app
         uses: actions/upload-artifact@v4

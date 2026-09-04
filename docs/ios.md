@@ -15,7 +15,7 @@ error: unrecognized subcommand 'ios'
 
 Everything in this repository that iOS needs is committed and platform-independent, so a Mac only
 has to clone the branch and run the commands below. Without one, rent a hosted Mac for the build
-step: see [Building Without A Mac](#building-without-a-mac).
+step: see [Building Without A Mac](#building-without-a-mac), which is how the app is built today.
 
 ## Prerequisites
 
@@ -124,33 +124,35 @@ Two things on the ROS side decide whether this works:
 ## Building Without A Mac
 
 The `iOS Build` workflow builds the app on a GitHub-hosted macOS runner, so no Mac of your own is
-involved. It produces `ios-unsigned`, an artifact holding `Robo-Boy-unsigned.ipa`, which is attached
-to the run and downloadable from its summary page.
+involved. It produces `ios-unsigned`, an artifact holding `Robo-Boy-unsigned.ipa` (about 5 MB),
+downloadable from the run's summary page.
 
 It runs on any pull request that changes `src-tauri/` or the workflow itself, and on demand from the
 repository's **Actions** tab → **iOS Build** → **Run workflow**. GitHub only lists a workflow for
-manual runs once it is on the default branch, so until this lands, the pull request is how to run
-it.
+manual runs once it is on the default branch, so on a branch the pull request is how to run it.
 
-The workflow deliberately signs nothing, because signing needs an Apple account and the runner has
-none. That splits installing into a separate step, and which one applies depends on the account you
-have:
+The runner holds no signing certificate, and Xcode will not build an app for a device without
+deciding how to sign it, so the workflow patches the generated project to sign nothing at all
+(`CODE_SIGN_STYLE = Manual` with no team, written into the XcodeGen spec and regenerated — an
+xcconfig cannot do it, because it applies at the project level and XcodeGen writes the team on the
+target). Compiling and linking then succeed; only Tauri's final export step fails, which is
+expected, and the app is taken from Xcode's derived data and zipped into an `.ipa` by hand.
+
+**A consequence worth knowing:** the artifact is a real arm64 device build with the right
+`Info.plist`, but it carries no signature, so iOS will not install it as-is. Which step comes next
+depends on the account you have:
 
 - **No Apple Developer account.** Re-sign the `.ipa` with your own free Apple ID and install it,
   using [Sideloadly](https://sideloadly.io) on Windows or macOS, or
   [AltServer-Linux](https://github.com/NyaMisty/AltServer-Linux) on Linux. The signature lasts seven
   days, after which the app has to be reinstalled.
 - **A paid Apple Developer account ($99/year).** Add the distribution certificate and provisioning
-  profile to the repository's secrets, sign in the workflow, and upload to TestFlight. The app then
-  installs on the phone straight from TestFlight, with no computer involved at all, and the
-  signature lasts a year. This repository does not do that yet.
+  profile to the repository's secrets and sign in the workflow instead of stripping signing out of
+  it, then upload to TestFlight. The app installs on the phone straight from TestFlight with no
+  computer involved, and the signature lasts a year. This repository does not do that yet.
 
 Nothing in that route needs the local `ios:*` commands, but it is also slower to iterate on than a
 real Mac: every change is a full CI run.
-
-> The workflow has not been run yet. It is written from Tauri's documented iOS build, and the first
-> run is likely to need a correction or two — the scheme name and the derived-data layout are the
-> parts most likely to differ.
 
 ## App Transport Security
 
@@ -175,7 +177,8 @@ chosen host, resolved in `src/runtime/runtimeConfig.tsx`. Only the chrome differ
 
 ## Known Rough Edges
 
-These have not been exercised on a device yet:
+The app builds, and its `Info.plist` has been checked against a packaged artifact. Nothing below has
+been exercised on a device yet:
 
 - **Status bar contrast.** The system draws the status bar over the app's own themed background and
   picks its text colour from the phone's light/dark setting, not from the Robo-Boy theme. A light
@@ -183,3 +186,4 @@ These have not been exercised on a device yet:
 - **Panel installation.** External panels install through the same in-app path as desktop, over
   Tauri's native HTTP client. It is untested on iOS.
 - **Voice control** needs iOS 14.3 or later, which is where `getUserMedia` arrived in `WKWebView`.
+  The app's minimum is 14.0, so on 14.0 to 14.2 everything else works and the voice pad does not.
