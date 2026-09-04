@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.2-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.1-alpha...robo-boy-v0.4.2-alpha) (2026-09-04)
+
+
+### Bug Fixes
+
+* check pull request titles on the way into dev as well ([9f5fae3](https://github.com/tessel-la/robo-boy/commit/9f5fae31852be141017542ac1f2645ed4961c48b))
+* check pull request titles on the way into dev as well ([#111](https://github.com/tessel-la/robo-boy/issues/111)) ([9f5fae3](https://github.com/tessel-la/robo-boy/commit/9f5fae31852be141017542ac1f2645ed4961c48b))
+* Check pull request titles on the way into dev as well ([#111](https://github.com/tessel-la/robo-boy/issues/111)) ([2b7b70b](https://github.com/tessel-la/robo-boy/commit/2b7b70b1f81f39d991d6029e83d648caa544032c))
+
 ## [0.4.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.0-alpha...robo-boy-v0.4.1-alpha) (2026-09-03)
 
 
