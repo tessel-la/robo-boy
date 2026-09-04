@@ -391,8 +391,8 @@
 
   .panel-manager-dialog {
     width: 100%;
-    max-height: 100dvh;
-    height: 100dvh;
+    max-height: var(--app-height);
+    height: var(--app-height);
     border-radius: 0;
   }
 

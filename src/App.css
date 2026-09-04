@@ -1,7 +1,6 @@
 .App {
   /* text-align: center; */ /* Remove if using flex for centering */
-  height: 100vh; /* Fixed height for viewport */
-  height: 100dvh; /* Use dynamic viewport height for mobile browsers */
+  height: var(--app-height);
   display: flex;
   flex-direction: column; /* Stack children vertically */
   overflow: hidden; /* Prevent scrolling at App level */
@@ -14,7 +13,6 @@
 
 :root[data-runtime='tauri'] .App {
   top: var(--title-bar-height);
-  height: auto;
   contain: layout;
 }
 
