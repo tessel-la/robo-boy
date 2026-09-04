@@ -297,6 +297,21 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('sizes the panel catalog to the room beneath its button so the whole list stays on screen', async () => {
+    renderMainControlView();
+    expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();
+
+    // The catalog hangs below this control, and jsdom lays everything out at zero.
+    const control = document.querySelector('.workspace-add-control') as HTMLElement;
+    control.getBoundingClientRect = () => ({ bottom: 120 }) as DOMRect;
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+
+    const menu = document.querySelector('.workspace-add-menu') as HTMLElement;
+    // Room left under the button, less the gap it sits on and a margin from the bottom edge.
+    expect(menu.style.maxHeight).toBe(`${window.innerHeight - 120 - 8 - 12}px`);
+  });
+
   const pressWith = (element: Element, pointerType: string) =>
     fireEvent(element, Object.assign(new Event('pointerdown', { bubbles: true }), { pointerType }));
 

@@ -611,6 +611,7 @@
 }
 
 .workspace-add-menu {
+  box-sizing: border-box;
   position: absolute;
   top: calc(100% + 8px);
   left: 0;

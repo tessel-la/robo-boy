@@ -999,6 +999,11 @@ const applyWorkspaceDropPlacement = (
   };
 };
 
+// Both placements of the panel catalog sit against a button and must stay inside the screen.
+const WORKSPACE_MENU_GAP = 8;
+const WORKSPACE_MENU_MARGIN = 12;
+const WORKSPACE_MENU_MIN_HEIGHT = 180;
+
 const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
@@ -1041,6 +1046,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
   const [workspaceReplaceMenuStyle, setWorkspaceReplaceMenuStyle] = useState<React.CSSProperties | null>(null);
+  const [workspaceAddMenuMaxHeight, setWorkspaceAddMenuMaxHeight] = useState<number | null>(null);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
   const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
@@ -1387,6 +1393,29 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
+  }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+
+  // The toolbar catalog hangs below its button inside a pane that hides its overflow, so a menu
+  // taller than the room beneath that button is cropped instead of scrolled, and its stylesheet
+  // height cannot account for how far down the screen the menu starts. Measuring the room keeps
+  // the whole list reachable.
+  useEffect(() => {
+    if (!isWorkspaceAddMenuOpen || workspaceReplacementPanelId) {
+      setWorkspaceAddMenuMaxHeight(null);
+      return;
+    }
+
+    const measureAvailableHeight = () => {
+      const control = workspaceAddControlRef.current;
+      if (!control) return;
+      const room =
+        window.innerHeight - control.getBoundingClientRect().bottom - WORKSPACE_MENU_GAP - WORKSPACE_MENU_MARGIN;
+      setWorkspaceAddMenuMaxHeight(Math.max(WORKSPACE_MENU_MIN_HEIGHT, room));
+    };
+
+    measureAvailableHeight();
+    window.addEventListener('resize', measureAvailableHeight);
+    return () => window.removeEventListener('resize', measureAvailableHeight);
   }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
 
   useEffect(() => {
@@ -2450,13 +2479,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     const buttonRect = event.currentTarget.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const margin = 12;
-    const gap = 8;
+    const margin = WORKSPACE_MENU_MARGIN;
+    const gap = WORKSPACE_MENU_GAP;
     const menuWidth = Math.min(300, viewportWidth - margin * 2);
     const spaceBelow = viewportHeight - buttonRect.bottom - margin - gap;
     const spaceAbove = buttonRect.top - margin - gap;
     const openUpward = spaceBelow < 260 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(180, Math.min(380, openUpward ? spaceAbove : spaceBelow));
+    const maxHeight = Math.max(WORKSPACE_MENU_MIN_HEIGHT, Math.min(380, openUpward ? spaceAbove : spaceBelow));
     const left = clamp(buttonRect.right - menuWidth, margin, viewportWidth - menuWidth - margin);
     const top = openUpward ? buttonRect.top - gap : buttonRect.bottom + gap;
 
@@ -3191,7 +3220,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         className={`workspace-add-menu ${isReplacementMenu ? 'workspace-add-menu-floating' : ''}`}
         ref={isReplacementMenu ? workspaceReplaceMenuRef : undefined}
         role="menu"
-        style={isReplacementMenu ? workspaceReplaceMenuStyle || undefined : undefined}
+        style={
+          isReplacementMenu
+            ? workspaceReplaceMenuStyle || undefined
+            : workspaceAddMenuMaxHeight === null
+              ? undefined
+              : { maxHeight: workspaceAddMenuMaxHeight }
+        }
       >
         <div className="workspace-add-menu-section">
           <span className="workspace-add-menu-title">
