@@ -1,8 +1,7 @@
 .main-control-view {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Ensure it tries to fill the viewport height */
-  height: 100dvh; /* Use dynamic viewport height for mobile browsers */
+  height: var(--app-height);
   /* Remove padding-top, handled by content area now */
   padding: 0;
   gap: 0; /* Remove gap, handled by content area padding */
@@ -168,8 +167,7 @@
   flex-direction: column;
   align-items: stretch;
   overflow: hidden;
-  height: 100vh;
-  height: 100dvh; /* Use dynamic viewport height */
+  height: var(--app-height);
   width: 100%;
   box-sizing: border-box;
   position: relative;

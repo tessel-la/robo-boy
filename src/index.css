@@ -198,6 +198,10 @@ textarea {
 :root {
     /* No window chrome in a browser: the tab already has one. */
     --title-bar-height: 0px;
+    /* The room the app has to lay out in, which is the screen less any chrome drawn above it.
+       Use this rather than viewport units for anything meant to fill the app. */
+    --app-height: calc(100vh - var(--title-bar-height));
+    --app-height: calc(100dvh - var(--title-bar-height));
 }
 
 :root[data-runtime='tauri'] {
