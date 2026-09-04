@@ -198,6 +198,9 @@ textarea {
 :root {
     /* No window chrome in a browser: the tab already has one. */
     --title-bar-height: 0px;
+    /* The room the system keeps at the top of the screen for its own bar. Zero anywhere the app is
+       not drawn behind one. */
+    --safe-area-top: 0px;
     /* The room the app has to lay out in, which is the screen less any chrome drawn above it.
        Use this rather than viewport units for anything meant to fill the app. */
     --app-height: calc(100vh - var(--title-bar-height));
@@ -209,11 +212,13 @@ textarea {
     --title-bar-height: 34px;
 }
 
-/* The packaged shell on a phone or tablet. There are no window controls to draw, and the room the
-   app has is the screen less the bars the system keeps for itself. */
+/* The packaged shell on a phone or tablet. There are no window controls to draw, and the system
+   draws its bars over the app rather than beside it -- so the app fills the screen exactly as it
+   does in a browser, and the top bar pads itself to keep its controls out from under the clock.
+   Insetting the app instead left a band of page background above it and a dead strip below. */
 :root[data-shell='mobile'] {
-    --title-bar-height: env(safe-area-inset-top, 0px);
-    --app-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    --title-bar-height: 0px;
+    --safe-area-top: env(safe-area-inset-top, 0px);
 }
 
 :root[data-runtime='tauri'] * {

@@ -20,7 +20,9 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px; /* Reduced padding */
+  /* The bar runs under the system's own top bar so the two read as one strip, and pads itself by
+     the same amount so its controls stay clear of the clock and the camera. */
+  padding: calc(5px + var(--safe-area-top)) 10px 5px; /* Reduced padding */
   background-color: var(--navbar-bg, #333);
   color: var(--navbar-text, white);
   position: fixed;
@@ -29,7 +31,7 @@
   width: 100%;
   z-index: 1000;
   box-sizing: border-box;
-  height: 40px; /* Reduced height */
+  height: calc(40px + var(--safe-area-top)); /* Reduced height */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); /* Adjusted shadow */
   border-bottom-left-radius: 10px; /* Round bottom-left corner */
   border-bottom-right-radius: 10px; /* Round bottom-right corner */
@@ -161,7 +163,7 @@
 /* Main Content Area Styles */
 .main-content-area {
   padding: 10px; /* Reduced from 15px */
-  padding-top: calc(40px + 10px); /* Top bar height + padding */
+  padding-top: calc(40px + 10px + var(--safe-area-top)); /* Top bar height + padding */
   padding-bottom: 10px;
   display: flex;
   flex-direction: column;
@@ -2169,7 +2171,7 @@ body.no-scroll {
 @media (max-width: 768px) {
   .main-content-area {
     padding: 5px; /* Reduced from 10px */
-    padding-top: calc(40px + 5px); /* Reduced from 10px */
+    padding-top: calc(40px + 5px + var(--safe-area-top)); /* Reduced from 10px */
     padding-bottom: 5px; /* Ensure bottom padding is also reduced */
   }
 
