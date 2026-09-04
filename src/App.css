@@ -12,6 +12,12 @@
   bottom: 0;
 }
 
+:root[data-runtime='tauri'] .App {
+  top: var(--title-bar-height);
+  height: auto;
+  contain: layout;
+}
+
 .App main {
   flex: 1; /* Allow main content to take up space */
   overflow: hidden; /* Prevent scrolling in main */

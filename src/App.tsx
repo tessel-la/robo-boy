@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
+import TitleBar from './components/TitleBar';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import {
   CustomTheme,
@@ -195,40 +196,43 @@ function App() {
   ];
 
   return (
-    <div className="App">
-      <main>
-        {!connectionParams ? (
-          <EntrySection onConnect={handleConnect} />
-        ) : (
-          <RuntimeConfigProvider connectionParams={connectionParams}>
-            <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
-              <MainControlView
-                connectionParams={connectionParams}
-                onDisconnect={handleDisconnect}
-                // Potentially pass theme management functions down if needed
-              />
-            </Suspense>
-          </RuntimeConfigProvider>
+    <>
+      <TitleBar />
+      <div className="App">
+        <main>
+          {!connectionParams ? (
+            <EntrySection onConnect={handleConnect} />
+          ) : (
+            <RuntimeConfigProvider connectionParams={connectionParams}>
+              <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
+                <MainControlView
+                  connectionParams={connectionParams}
+                  onDisconnect={handleDisconnect}
+                  // Potentially pass theme management functions down if needed
+                />
+              </Suspense>
+            </RuntimeConfigProvider>
+          )}
+        </main>
+        <ThemeSelector
+          currentThemeId={selectedThemeId}
+          selectTheme={selectTheme}
+          themes={allThemesForSelector}
+          openThemeCreator={openThemeCreator}
+          deleteTheme={deleteCustomTheme}
+        />
+        {isThemeCreatorOpen && (
+          <Suspense fallback={null}>
+            <ThemeCreator
+              isOpen
+              onClose={closeThemeCreator}
+              onSave={handleSaveTheme}
+              existingTheme={themeToEdit}
+            />
+          </Suspense>
         )}
-      </main>
-      <ThemeSelector
-        currentThemeId={selectedThemeId}
-        selectTheme={selectTheme}
-        themes={allThemesForSelector}
-        openThemeCreator={openThemeCreator}
-        deleteTheme={deleteCustomTheme}
-      />
-      {isThemeCreatorOpen && (
-        <Suspense fallback={null}>
-          <ThemeCreator
-            isOpen
-            onClose={closeThemeCreator}
-            onSave={handleSaveTheme}
-            existingTheme={themeToEdit}
-          />
-        </Suspense>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
 
