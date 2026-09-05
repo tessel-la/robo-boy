@@ -18,15 +18,19 @@ webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: true
 
+# TCP only. Plain RTP/RTCP exist for RTSP over UDP, which nothing here uses: every client reads WHEP,
+# and a publisher pushing RTSP does it over TCP. They were two more host ports to collide over --
+# 8000 in particular is the port this project already documents for the mesh server.
 rtsp: true
 rtspAddress: :8554
-rtspTransports: [tcp, udp]
-rtpAddress: :8000
-rtcpAddress: :8001
+rtspTransports: [tcp]
 
+# Every protocol nobody here reads is another host port to collide over, and MoQ additionally
+# writes itself a certificate on first start.
 hls: false
 rtmp: false
 srt: false
+moq: false
 
 paths:
   # The ROS stack already serves every image topic as MJPEG; this re-encodes one of them on demand,
