@@ -56,7 +56,14 @@ By default it re-encodes one MJPEG topic from the ROS stack, on demand, so nothi
 watches. Point it elsewhere with `WEBRTC_SOURCE_TOPIC`, or publish RTSP into any other path name and it appears
 in discovery by itself.
 
-A simulator that runs its own gateway binds the same ports, so only one of them can be up at a time.
+A simulator that runs its own gateway binds the same ports, so only one of them can be up at a time. This one
+gives up after a few attempts rather than restarting forever, so a stack with a simulator's gateway already
+running reports the Robo-Boy gateway as stopped — which it is — instead of permanently degraded. Stop the
+simulator's gateway and start this one, or leave the simulator's serving and use it: the panel reads whichever
+gateway holds the ports.
+
+It binds four: 8889 for WHEP, 9997 for the API, 8554 for RTSP publishers, and 8189 for ICE. Everything else
+MediaMTX can serve is switched off, since an unread protocol is only another port to collide over.
 
 ## Development
 
