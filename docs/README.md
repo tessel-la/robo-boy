@@ -10,6 +10,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Development guide](development.md): run the frontend locally, test changes, inspect services, work with the Docker stack, and follow the release process.
 - [Application](application.md): run and package the Tauri frontend against a separately installed ROS stack.
 - [iOS application](ios.md): build the Tauri iOS shell on a hosted Mac or your own, sideload the unsigned app, and connect it to a ROS stack on the network.
+- [Android application](android.md): build, run, and install the Tauri app on a phone, with the Wear OS boundary documented.
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.

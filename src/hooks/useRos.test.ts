@@ -250,4 +250,30 @@ describe('useRos', () => {
 
     expect(closeMock).toHaveBeenCalled();
   });
+
+  it('reconnects with the same parameters after returning from standby', () => {
+    const rosInstances: Array<{ on: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = [];
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      const instance = { on: vi.fn(), close: vi.fn() };
+      rosInstances.push(instance);
+      return instance;
+    });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+
+    const { result } = renderHook(() => useRos());
+    act(() => result.current.connect(mockParams));
+    const firstConnection = rosInstances[0].on.mock.calls.find(call => call[0] === 'connection')?.[1];
+    act(() => firstConnection?.());
+
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(ROSLIB.Ros).toHaveBeenCalledTimes(2);
+    expect(ROSLIB.Ros).toHaveBeenLastCalledWith({ url: 'ws://localhost/websocket' });
+    expect(rosInstances[0].close).toHaveBeenCalled();
+  });
 });

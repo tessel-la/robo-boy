@@ -28,6 +28,10 @@ export const useRos = (): UseRosReturn => {
   const rosInstanceRef = useRef<Ros | null>(null);
   // Ref to track if a connection attempt is in progress to avoid overlaps
   const isConnectingRef = useRef<boolean>(false);
+  // Keep the last user-selected endpoint so a browser returning from standby can restore the
+  // same connection without sending the user back through the entry form.
+  const lastConnectionParamsRef = useRef<ConnectionParams | null>(null);
+  const wasHiddenRef = useRef(false);
 
   // Stable disconnect function
   const disconnect = useCallback(() => {
@@ -59,6 +63,7 @@ export const useRos = (): UseRosReturn => {
       }
 
       // 2. Reset State First
+      lastConnectionParamsRef.current = params;
       console.log('[connect] Resetting connection state before new attempt.');
       setIsConnected(false);
       setRos(null);
@@ -130,6 +135,43 @@ export const useRos = (): UseRosReturn => {
     },
     [disconnect]
   ); // connect should be stable
+
+  // Mobile browsers commonly suspend a WebSocket while the screen is off. Recreate the
+  // connection when the page becomes visible again (and when the network comes back) using the
+  // same endpoint the user originally selected. This is deliberately owned by useRos so every
+  // ROS consumer gets identical recovery behavior.
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    const reconnect = () => {
+      const params = lastConnectionParamsRef.current;
+      if (!params || isConnectingRef.current) return;
+      disconnect();
+      connect(params);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHiddenRef.current = true;
+        return;
+      }
+      if (wasHiddenRef.current) {
+        wasHiddenRef.current = false;
+        reconnect();
+      }
+    };
+
+    const handleOnline = () => {
+      if (!isConnectedRef.current) reconnect();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [connect, disconnect]);
 
   // Cleanup on unmount
   useEffect(() => {
