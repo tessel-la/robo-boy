@@ -10,7 +10,7 @@
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
 </p>
 
-Robo-Boy is a web, desktop, and iPhone interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. All three run the same React codebase; the desktop and iPhone packages are lightweight Tauri shells and connect to a separately installed ROS stack.
+Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. All interfaces run the same React codebase; the native packages are lightweight Tauri shells and connect to a separately installed ROS stack.
 
 ## Start With The App
 
@@ -35,10 +35,11 @@ proxy to run.
    docker compose up -d --build ros-stack
    ```
 
-3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
-   or IP** when it runs elsewhere, which on a phone it always is.
+3. Open the app. It asks for the address of the computer running ROS — `localhost` when that is the same
+   computer — and remembers it, so later launches offer **Quick Connect** straight to it.
 
-See [Application](docs/application.md) for the port contract and remote hosts.
+See [Application](docs/application.md) for desktop setup, or [Android application](docs/android.md)
+to run the same controller from Android Studio on a phone.
 
 ## Start With Docker
 

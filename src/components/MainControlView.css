@@ -722,6 +722,23 @@
   padding: 4px 6px;
   border-radius: 6px;
   line-height: 1;
+  background: transparent;
+  border: none;
+  font: inherit;
+}
+
+/* Only a dropped connection is worth reaching for; the rest of the time this reads as status, and
+   a pointer over it would promise something it does not do. */
+.top-bar .connection-status-icon:disabled {
+  cursor: default;
+}
+
+.top-bar .connection-status-icon:not(:disabled) {
+  cursor: pointer;
+}
+
+.top-bar .connection-status-icon:not(:disabled):hover {
+  background-color: var(--background-dark-transparent);
 }
 
 .top-bar .connection-status-icon svg {
@@ -735,6 +752,10 @@
 
 .top-bar .connection-status-icon.disconnected {
   color: var(--warning-color, #ffc107);
+}
+
+.top-bar .connection-status-icon.connecting {
+  color: var(--text-color-secondary, rgba(255, 255, 255, 0.55));
 }
 
 .top-bar .disconnect-button-icon {

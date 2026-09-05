@@ -81,9 +81,16 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [recentConnections, setRecentConnections] = useState<RecentConnection[]>(() => loadRecentConnections());
+
+  // Where Quick Connect goes: the host the page was served from in a browser, and in the packaged
+  // app the last one that worked. A packaged app on its first launch has neither, so there is
+  // nothing to connect quickly to and the form that asks for a host is the screen itself.
+  const currentHostname = getDefaultConnectionHost() || recentConnections[0]?.host || '';
+  const needsConnectionTarget = !currentHostname;
+
+  const [showAdvanced, setShowAdvanced] = useState(needsConnectionTarget);
   const logoRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,8 +103,6 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
     hover: '',
   });
 
-  // Get current hostname for quick connect
-  const currentHostname = getDefaultConnectionHost();
   const defaultServicePorts = getDefaultServicePorts();
 
   const normalizeSelectedPorts = (ports = servicePorts): RuntimeServicePorts => {
@@ -352,38 +357,47 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
         </div>
 
         <div className="connection-options">
-          <button
-            className="quick-connect-btn"
-            onClick={handleQuickConnect}
-            title={`Connect to ${currentHostname}`}
-            ref={quickConnectRef}
-            style={{
-              position: 'relative',
-              transition: 'opacity 0.1s ease',
-            }}
-            disabled={isTransitioning}
-          >
-            Quick Connect
-            <span className="quick-connect-ip">{currentHostname}</span>
-          </button>
+          {needsConnectionTarget ? (
+            <p className="connection-prompt">
+              Enter the address of the computer running the ROS stack. It is remembered for next time.
+            </p>
+          ) : (
+            <>
+              <button
+                className="quick-connect-btn"
+                onClick={handleQuickConnect}
+                title={`Connect to ${currentHostname}`}
+                ref={quickConnectRef}
+                style={{
+                  position: 'relative',
+                  transition: 'opacity 0.1s ease',
+                }}
+                disabled={isTransitioning}
+              >
+                Quick Connect
+                <span className="quick-connect-ip">{currentHostname}</span>
+              </button>
 
-          <button
-            type="button"
-            className="advanced-toggle"
-            onClick={toggleAdvanced}
-            title="Advanced Options"
-            style={{
-              padding: '12px 16px',
-              minWidth: '48px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <span className="advanced-toggle-content">
-              <GearIcon />
-            </span>
-          </button>
+              {/* Nothing to collapse back to while the form is the only way to connect. */}
+              <button
+                type="button"
+                className="advanced-toggle"
+                onClick={toggleAdvanced}
+                title="Advanced Options"
+                style={{
+                  padding: '12px 16px',
+                  minWidth: '48px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <span className="advanced-toggle-content">
+                  <GearIcon />
+                </span>
+              </button>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} ref={formRef} className={`advanced-form ${showAdvanced ? 'visible' : ''}`}>
             <div className="form-group">

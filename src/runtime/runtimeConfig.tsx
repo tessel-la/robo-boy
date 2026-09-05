@@ -180,8 +180,16 @@ export function RuntimeConfigProvider({
 
 export const useRuntimeConfig = (): RuntimeEndpoints => useContext(RuntimeConfigContext);
 
+/**
+ * The host to offer before anyone has picked one.
+ *
+ * A browser has an obvious answer: the page was served from somewhere, and the robot services sit
+ * beside it. The packaged app was served from nowhere, and its ROS stack is as likely to be on a
+ * robot across the room as on the machine it is running on -- so it has no answer, and says so
+ * rather than naming localhost and offering to connect somewhere nobody asked for.
+ */
 export const getDefaultConnectionHost = (): string => {
-  return isDesktopRuntime() ? 'localhost' : getBrowserLocation().hostname;
+  return isDesktopRuntime() ? '' : getBrowserLocation().hostname;
 };
 
 export const getDefaultServicePorts = (): RuntimeServicePorts => {

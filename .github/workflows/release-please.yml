@@ -57,15 +57,26 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
+  android:
+    name: Build the Android app
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/android-build.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+
   publish-installers:
     name: Attach installers to the release
-    needs: [release-please, desktop, iphone]
+    needs: [release-please, desktop, iphone, android]
     # Runs even when the iPhone build failed, which is what makes that build optional; the desktop
     # installers are still required, and a release without them publishes nothing.
     if: >-
       ${{ !cancelled()
       && needs.release-please.outputs.release_created == 'true'
-      && needs.desktop.result == 'success' }}
+      && needs.desktop.result == 'success'
+      && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -84,6 +95,13 @@ jobs:
         with:
           path: iphone
           pattern: ios-*
+          merge-multiple: true
+
+      - name: Download the built Android app
+        uses: actions/download-artifact@v4
+        with:
+          path: android
+          pattern: robo-boy-android-debug
           merge-multiple: true
 
       # A built installer carries the version in its name, so nothing can link to one before the
@@ -125,11 +143,21 @@ jobs:
 
           find installers stable iphone -type f
 
+      - name: Name the Android APK
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find android -type f -name '*.apk')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::expected one Android APK, found ${#apks[@]}"
+            exit 1
+          fi
+          cp "${apks[0]}" android/Robo-Boy-android-debug.apk
+
       - name: Attach installers to the GitHub release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          mapfile -t installers < <(find installers stable iphone -type f)
+          mapfile -t installers < <(find installers stable iphone android -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"

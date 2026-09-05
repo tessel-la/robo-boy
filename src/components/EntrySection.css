@@ -87,6 +87,16 @@
     gap: 15px;
 }
 
+/* Shown in place of Quick Connect when there is nowhere to quickly connect to. */
+.connection-prompt {
+    width: 70%;
+    margin: 0;
+    text-align: center;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--text-color-secondary);
+}
+
 /* Quick Connect Button */
 .quick-connect-btn {
     width: 70%;
