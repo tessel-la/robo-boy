@@ -35,8 +35,8 @@ proxy to run.
    docker compose up -d --build ros-stack
    ```
 
-3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
-   or IP** when it runs elsewhere, which on a phone it always is.
+3. Open the app. It asks for the address of the computer running ROS — `localhost` when that is the same
+   computer — and remembers it, so later launches offer **Quick Connect** straight to it.
 
 See [Application](docs/application.md) for the port contract and remote hosts.
 
