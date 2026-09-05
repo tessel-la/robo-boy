@@ -131,6 +131,10 @@ Every release carries the app, built on a GitHub-hosted macOS runner, so no Mac 
 involved:
 [`Robo-Boy-iphone-unsigned.ipa`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-iphone-unsigned.ipa).
 
+That build is best effort. It cannot be signed, so it is not allowed to hold back a release that has
+four working installers; when it fails, the release publishes without it and says so. A release
+missing its `.ipa` is that, rather than a broken link.
+
 The `iOS Build` workflow that produces it is triggered like the desktop one: by a release, by the
 pull request that promotes `dev` into `main`, and on demand from the repository's **Actions** tab →
 **iOS Build** → **Run workflow**. A macOS runner costs ten times a Linux one, which is why it does

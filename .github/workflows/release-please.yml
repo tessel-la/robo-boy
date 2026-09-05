@@ -45,6 +45,8 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
+  # Best effort, unlike the installers. The iPhone app is the one build that cannot be signed, and
+  # a release of four working installers should not be withheld because it failed.
   iphone:
     name: Build the iPhone app
     needs: release-please
@@ -58,7 +60,12 @@ jobs:
   publish-installers:
     name: Attach installers to the release
     needs: [release-please, desktop, iphone]
-    if: needs.release-please.outputs.release_created == 'true'
+    # Runs even when the iPhone build failed, which is what makes that build optional; the desktop
+    # installers are still required, and a release without them publishes nothing.
+    if: >-
+      ${{ !cancelled()
+      && needs.release-please.outputs.release_created == 'true'
+      && needs.desktop.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -73,6 +80,7 @@ jobs:
 
       - name: Download the built iPhone app
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: iphone
           pattern: ios-*
@@ -109,9 +117,10 @@ jobs:
 
           # The iPhone app needs no stable copy: it is published unsigned, so its name carries the
           # platform rather than a version, and the version it was built from is inside the bundle.
+          # Its absence is reported rather than fatal, so the installers still reach the release.
+          mkdir -p iphone
           if [ ! -f iphone/Robo-Boy-iphone-unsigned.ipa ]; then
-            echo "::error::release is missing the iPhone app"
-            exit 1
+            echo "::warning::no iPhone app in this release; the iOS build produced none"
           fi
 
           find installers stable iphone -type f
