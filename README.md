@@ -10,18 +10,22 @@
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
 </p>
 
-Robo-Boy is a web and desktop interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. Both interfaces use the same React codebase; the desktop package is a lightweight Tauri shell and connects to a separately installed ROS stack.
+Robo-Boy is a web, desktop, and iPhone interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. All three run the same React codebase; the desktop and iPhone packages are lightweight Tauri shells and connect to a separately installed ROS stack.
 
-## Start With The Desktop App
+## Start With The App
 
-The shortest route. The desktop app needs only the ROS services, so there is no certificate to create and no
+The shortest route. The app needs only the ROS services, so there is no certificate to create and no
 proxy to run.
 
 1. Install a package for the current release:
    [`.deb`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-amd64.deb) ·
    [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) ·
    [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) ·
-   [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe)
+   [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe) ·
+   [iPhone](docs/ios.md)
+
+   The iPhone build is unsigned, because signing an iOS app needs an Apple account, so it is
+   sideloaded rather than downloaded.
 
 2. Start the ROS services on the computer that runs ROS:
 
@@ -32,9 +36,9 @@ proxy to run.
    ```
 
 3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
-   or IP** when it runs elsewhere.
+   or IP** when it runs elsewhere, which on a phone it always is.
 
-See [Desktop application](docs/desktop.md) for the port contract and remote hosts, and [iOS application](docs/ios.md) to build the same app for a phone.
+See [Desktop application](docs/desktop.md) for the port contract and remote hosts.
 
 ## Start With Docker
 
