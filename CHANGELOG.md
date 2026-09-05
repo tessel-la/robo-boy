@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.5.0-alpha...robo-boy-v0.6.0-alpha) (2026-09-05)
+
+
+### Features
+
+* add Android app shell and standby reconnect ([#123](https://github.com/tessel-la/robo-boy/issues/123)) ([c6afcdc](https://github.com/tessel-la/robo-boy/commit/c6afcdc8ec768432693058366bb4a37899feee0f))
+* release Android app support ([7bd5fb2](https://github.com/tessel-la/robo-boy/commit/7bd5fb252b31ea704ee95173db18fa7f59a1d139))
+
+
+### Bug Fixes
+
+* improve desktop app connection and reconnect from the status light instead of restarting the app ([43c632e](https://github.com/tessel-la/robo-boy/commit/43c632ef2567b18c59367cdefc22aac01fb0bd24))
+
 ## [0.5.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.3-alpha...robo-boy-v0.5.0-alpha) (2026-09-05)
 
 

@@ -1,7 +1,7 @@
 {
   "name": "robot-web-controller",
   "private": true,
-  "version": "0.5.0-alpha",
+  "version": "0.6.0-alpha",
   "type": "module",
   "scripts": {
     "dev": "npm run panels:sandbox && vite --config config/vite.config.ts --host",
