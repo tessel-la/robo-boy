@@ -65,6 +65,37 @@ export const isDesktopRuntime = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 };
 
+/** The facts about the device that separate a phone or tablet from a desktop window. */
+export interface BrowserPlatform {
+  userAgent: string;
+  maxTouchPoints: number;
+}
+
+const getBrowserPlatform = (): BrowserPlatform =>
+  typeof navigator === 'undefined'
+    ? { userAgent: '', maxTouchPoints: 0 }
+    : { userAgent: navigator.userAgent, maxTouchPoints: navigator.maxTouchPoints };
+
+/**
+ * Whether the app is drawn on a touch device rather than in a desktop window.
+ *
+ * iPadOS gives full-screen web views a Mac user agent, so a Mac claim only holds where the screen
+ * also cannot be touched.
+ */
+export const isMobilePlatform = (platform: BrowserPlatform = getBrowserPlatform()): boolean => {
+  const { userAgent, maxTouchPoints } = platform;
+  return /iPhone|iPad|iPod|Android/i.test(userAgent) || (/Macintosh/i.test(userAgent) && maxTouchPoints > 1);
+};
+
+/**
+ * Whether the app has to draw the window frame itself.
+ *
+ * The desktop window is undecorated, so its title bar and resize edges are the app's to draw. A
+ * phone has no window controls at all: the system draws its own bars around the app, and there is
+ * nothing there to minimise, maximise or close.
+ */
+export const drawsOwnWindowChrome = (): boolean => isDesktopRuntime() && !isMobilePlatform();
+
 const formatUrlHost = (host: string): string => (host.includes(':') ? `[${host}]` : host);
 
 const isSameHost = (configuredHost: string, location: BrowserLocation): boolean => {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { resolveRuntimeEndpoints } from './runtimeConfig';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { drawsOwnWindowChrome, isMobilePlatform, resolveRuntimeEndpoints } from './runtimeConfig';
 
 describe('resolveRuntimeEndpoints', () => {
   it('keeps the same-origin proxy contract for domain-based web connections', () => {
@@ -169,5 +169,46 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
     expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
+  });
+});
+
+describe('isMobilePlatform', () => {
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15';
+  const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15';
+  const LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15';
+
+  it('spots the devices that draw their own bars around the app', () => {
+    expect(isMobilePlatform({ userAgent: IPHONE, maxTouchPoints: 5 })).toBe(true);
+    expect(isMobilePlatform({ userAgent: LINUX, maxTouchPoints: 0 })).toBe(false);
+  });
+
+  // iPadOS claims to be a Mac in a full-screen web view, and only the touch screen tells them apart.
+  it('reads a touchable Mac as an iPad', () => {
+    expect(isMobilePlatform({ userAgent: MAC, maxTouchPoints: 5 })).toBe(true);
+    expect(isMobilePlatform({ userAgent: MAC, maxTouchPoints: 0 })).toBe(false);
+  });
+});
+
+describe('drawsOwnWindowChrome', () => {
+  const shellWindow = window as typeof window & { __TAURI_INTERNALS__?: unknown };
+
+  afterEach(() => {
+    delete shellWindow.__TAURI_INTERNALS__;
+    vi.unstubAllGlobals();
+  });
+
+  const runOn = (userAgent: string, maxTouchPoints: number) => {
+    shellWindow.__TAURI_INTERNALS__ = {};
+    vi.stubGlobal('navigator', { ...navigator, userAgent, maxTouchPoints });
+    return drawsOwnWindowChrome();
+  };
+
+  it("is the app's job only in an undecorated desktop window", () => {
+    expect(runOn('Mozilla/5.0 (X11; Linux x86_64)', 0)).toBe(true);
+    expect(runOn('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)', 5)).toBe(false);
+  });
+
+  it('leaves the browser its own chrome', () => {
+    expect(drawsOwnWindowChrome()).toBe(false);
   });
 });

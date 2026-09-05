@@ -36,6 +36,10 @@ const parsePort = (value: string | undefined, fallback: number): number => {
   return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
 };
 
+// Set by the Tauri CLI when it serves the frontend to a phone or tablet.
+const devHost = process.env.TAURI_DEV_HOST;
+const devPort = parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173);
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
@@ -64,8 +68,14 @@ export default defineConfig(({ mode }) => ({
     include: ['react', 'react-dom', 'react-dom/client', 'semver'],
   },
   server: {
-    host: '0.0.0.0', // Listen on all interfaces within the container
-    port: parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173),
+    // `tauri ios dev` runs the app on a device that reaches this server over the network, and
+    // names the address it will use. Everywhere else, listen on all interfaces within the container.
+    host: devHost || '0.0.0.0',
+    port: devPort,
+    // A device is told one port up front, so silently moving to the next free one would leave it
+    // loading nothing.
+    strictPort: Boolean(devHost),
+    hmr: devHost ? { protocol: 'ws', host: devHost, port: devPort + 1 } : undefined,
     proxy: {
       '/api/panels': {
         target: process.env.PANEL_MANAGER_PROXY_TARGET ?? 'http://127.0.0.1:4100',

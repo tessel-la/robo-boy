@@ -30,10 +30,23 @@ describe('TitleBar', () => {
 
   afterEach(() => {
     delete desktopWindow.__TAURI_INTERNALS__;
+    vi.unstubAllGlobals();
   });
 
   it('stays out of the browser, which keeps its own window chrome', () => {
     delete desktopWindow.__TAURI_INTERNALS__;
+
+    const { container } = render(<TitleBar />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('stays off a phone, which has no window controls to drive', () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15',
+      maxTouchPoints: 5,
+    });
 
     const { container } = render(<TitleBar />);
 

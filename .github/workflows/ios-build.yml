@@ -1,0 +1,178 @@
+name: iOS Build
+
+# Builds an unsigned iOS app on a hosted macOS runner, so the iOS target can be built without
+# owning a Mac. It signs nothing and publishes nothing: signing needs an Apple account, and the
+# artifact is meant to be re-signed by whoever installs it. Run it from the Actions tab.
+#
+# Triggered like the desktop build, for the same reason: a macOS runner costs ten times a Linux
+# one, so this runs when a release needs the app, on the pull request that promotes dev into main,
+# and on demand while the iOS build itself is being worked on.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the triggering revision.
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the branch this is run from.
+        type: string
+        required: false
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: iOS app (unsigned)
+    # On a pull request this validates the promotion of dev into main before it lands, matching how
+    # the desktop build is gated. Every other trigger is explicit.
+    if: >-
+      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out the revision to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Xcode project is generated output, not tracked. Project generation insists on a
+      # signing team even though this build signs nothing, so a placeholder stands in unless a
+      # real Team ID is configured for the repository.
+      - name: Generate the Xcode project
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
+        run: |
+          npm run ios:init
+
+          # `tauri ios init` scaffolds the icon set from its own template, so the app shipped with
+          # the Tauri logo until `ios:init` started copying this repository's icons over it.
+          # Matching checksums are what say the app carries its own icon.
+          echo "--- app icons ---"
+          for icon in 'AppIcon-60x60@3x.png' 'AppIcon-512@2x.png'; do
+            shasum -a 256 "src-tauri/icons/ios/${icon}" \
+              "src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/${icon}"
+          done
+
+      # The generated project is where signing has to be turned off: an xcconfig only reaches the
+      # project level, and XcodeGen writes its settings on the target, which wins. Patching the
+      # spec it generates from and regenerating puts them where they take effect.
+      #
+      # Without this the build stops at `No Accounts` -- Tauri runs xcodebuild with
+      # `-allowProvisioningUpdates`, which asks Apple for a profile the runner has no account to
+      # request.
+      - name: Build the project unsigned
+        run: |
+          project="$(find src-tauri/gen/apple -maxdepth 1 -name '*.xcodeproj' | head -1)"
+          if [ -z "${project}" ]; then
+            echo "::error::no Xcode project was generated under src-tauri/gen/apple"
+            exit 1
+          fi
+          echo "project=${project}" >> "$GITHUB_ENV"
+
+          echo "--- generated spec, before ---"
+          cat src-tauri/gen/apple/project.yml
+
+          # Ruby rather than Python: YAML is in its standard library, and PyYAML is not promised
+          # on a runner.
+          ruby - src-tauri/gen/apple/project.yml <<'RUBY'
+          require 'yaml'
+
+          UNSIGNED = {
+            'CODE_SIGNING_ALLOWED' => 'NO',
+            'CODE_SIGNING_REQUIRED' => 'NO',
+            'CODE_SIGN_IDENTITY' => '',
+            'CODE_SIGN_STYLE' => 'Manual',
+            'DEVELOPMENT_TEAM' => '',
+            'PROVISIONING_PROFILE_SPECIFIER' => '',
+          }
+
+          # XcodeGen takes `settings` either as build settings directly or under a `base` key.
+          def force_unsigned(node)
+            settings = (node['settings'] ||= {})
+            (settings['base'].is_a?(Hash) ? settings['base'] : settings).merge!(UNSIGNED)
+          end
+
+          spec = YAML.load_file(ARGV[0])
+          force_unsigned(spec)
+          (spec['targets'] || {}).each_value { |target| force_unsigned(target) }
+          File.write(ARGV[0], spec.to_yaml)
+          RUBY
+
+          (cd src-tauri/gen/apple && xcodegen generate)
+
+          xcodebuild -project "${project}" -list
+          echo "--- resolved signing settings ---"
+          xcodebuild -project "${project}" -scheme robo-boy_iOS -configuration release \
+            -showBuildSettings 2>/dev/null \
+            | grep -E 'CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING' || true
+
+      # The Rust build phase expects to be a child of the Tauri CLI: it talks back to the parent
+      # over an address file the parent writes, and aborts without one. Driving xcodebuild directly
+      # panics on the missing file, so the build has to be run through `tauri ios build`.
+      - name: Build and package the app
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM || '0000000000' }}
+        run: |
+          status=0
+          npm run ios:build -- --export-method debugging || status=$?
+          echo "tauri ios build exited with ${status}"
+
+          # Tauri exports an .ipa only once it can sign one. Unsigned, the app is left where
+          # xcodebuild put it, which is as good a place to take it from.
+          ipa="$(find src-tauri/gen/apple -name '*.ipa' | head -1)"
+          app="$(find "${HOME}/Library/Developer/Xcode/DerivedData" src-tauri/gen/apple \
+            -type d -name '*.app' -path '*/Products/*' 2>/dev/null | head -1)"
+
+          if [ -n "${ipa}" ]; then
+            echo "taking the exported ${ipa}"
+            cp "${ipa}" Robo-Boy-iphone-unsigned.ipa
+          elif [ -n "${app}" ]; then
+            echo "packaging ${app}"
+            mkdir -p Payload
+            cp -R "${app}" Payload/
+            zip -qry Robo-Boy-iphone-unsigned.ipa Payload
+          else
+            echo "::error::the build produced neither an .ipa nor an .app"
+            exit "${status:-1}"
+          fi
+
+      - name: Verify the build bundles no panels
+        run: npm run check:release-panels
+
+      - name: Upload the unsigned app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned
+          if-no-files-found: error
+          retention-days: 14
+          path: Robo-Boy-iphone-unsigned.ipa

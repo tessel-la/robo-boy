@@ -159,7 +159,7 @@ docker compose up -d --build ros-stack
 npm run desktop:dev
 ```
 
-See [Desktop application](desktop.md) for the port contract and installer build command.
+See [Application](application.md) for the port contract and installer build command.
 
 ## Useful Commands
 

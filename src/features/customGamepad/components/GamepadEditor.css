@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: calc(16px + var(--safe-area-top)) 16px calc(16px + var(--safe-area-bottom));
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.56);
   animation: gamepad-editor-overlay-in 140ms ease-out;

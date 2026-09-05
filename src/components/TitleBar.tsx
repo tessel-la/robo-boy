@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { DesktopWindow, ResizeDirection } from '../runtime/desktopWindow';
 import { getDesktopWindow } from '../runtime/desktopWindow';
-import { isDesktopRuntime } from '../runtime/runtimeConfig';
+import { drawsOwnWindowChrome } from '../runtime/runtimeConfig';
 import './TitleBar.css';
 
 const withAppWindow = async (run: (appWindow: DesktopWindow) => unknown): Promise<void> => {
@@ -25,7 +25,7 @@ const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
+    if (!drawsOwnWindowChrome()) return;
 
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -57,7 +57,7 @@ const TitleBar: React.FC = () => {
     void withAppWindow(appWindow => appWindow.startResizeDragging(direction));
   }, []);
 
-  if (!isDesktopRuntime()) return null;
+  if (!drawsOwnWindowChrome()) return null;
 
   return (
     <>
