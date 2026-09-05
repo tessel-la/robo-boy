@@ -198,15 +198,33 @@ textarea {
 :root {
     /* No window chrome in a browser: the tab already has one. */
     --title-bar-height: 0px;
+    /* The room the system keeps at the edges of the screen for its own bars. Zero anywhere the app
+       is not drawn behind them. */
+    --safe-area-top: 0px;
+    --safe-area-bottom: 0px;
     /* The room the app has to lay out in, which is the screen less any chrome drawn above it.
        Use this rather than viewport units for anything meant to fill the app. */
     --app-height: calc(100vh - var(--title-bar-height));
     --app-height: calc(100dvh - var(--title-bar-height));
+    /* What something laid over the whole screen can fill without running under those bars. The app
+       itself is drawn behind them on purpose; a dialog put there would be unreadable. */
+    --safe-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
+    --safe-height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom));
 }
 
 :root[data-runtime='tauri'] {
     color-scheme: light;
     --title-bar-height: 34px;
+}
+
+/* The packaged shell on a phone or tablet. There are no window controls to draw, and the system
+   draws its bars over the app rather than beside it -- so the app fills the screen exactly as it
+   does in a browser, and the top bar pads itself to keep its controls out from under the clock.
+   Insetting the app instead left a band of page background above it and a dead strip below. */
+:root[data-shell='mobile'] {
+    --title-bar-height: 0px;
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 :root[data-runtime='tauri'] * {

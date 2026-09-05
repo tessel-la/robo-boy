@@ -2,8 +2,6 @@
 pub fn run() {
   configure_linux_webkit_runtime();
 
-  const DESKTOP_UI_ZOOM: f64 = 0.9;
-
   let debug_page_load = std::env::var_os("ROBOBOY_DESKTOP_DEBUG").is_some();
 
   tauri::Builder::default()
@@ -12,13 +10,7 @@ pub fn run() {
     // unreachable from the webview. This client performs those requests natively instead.
     .plugin(tauri_plugin_http::init())
     .setup(|app| {
-      use tauri::Manager;
-
-      if let Some(webview_window) = app.get_webview_window("main") {
-        if let Err(error) = webview_window.set_zoom(DESKTOP_UI_ZOOM) {
-          eprintln!("[Robo-Boy] failed to set desktop UI zoom: {error}");
-        }
-      }
+      configure_ui_zoom(app);
 
       Ok(())
     })
@@ -62,6 +54,28 @@ pub fn run() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+
+/// Draws the app a little smaller than life, which is what the desktop layout was tuned against.
+///
+/// Desktop only. A window is a size the person chose and the app is drawn inside it, so zooming
+/// out just fits more in. A phone hands the app the whole screen instead, and the same zoom shrinks
+/// the rendered viewport against a fixed frame -- leaving the window's own background down the
+/// right and bottom edges, with the app in the remaining nine tenths.
+#[cfg(desktop)]
+fn configure_ui_zoom(app: &tauri::App) {
+  use tauri::Manager;
+
+  const DESKTOP_UI_ZOOM: f64 = 0.9;
+
+  if let Some(webview_window) = app.get_webview_window("main") {
+    if let Err(error) = webview_window.set_zoom(DESKTOP_UI_ZOOM) {
+      eprintln!("[Robo-Boy] failed to set desktop UI zoom: {error}");
+    }
+  }
+}
+
+#[cfg(mobile)]
+fn configure_ui_zoom(_app: &tauri::App) {}
 
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

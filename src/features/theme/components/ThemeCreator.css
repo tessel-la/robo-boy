@@ -10,6 +10,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: var(--safe-area-top) 0 var(--safe-area-bottom);
+    box-sizing: border-box;
     z-index: 1100; /* Above theme selector */
     opacity: 0;
     visibility: hidden;

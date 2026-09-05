@@ -8,7 +8,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
   extension-path decisions, SDK stability, and verification expectations for coding agents.
 - [User guide](user-guide.md): connect to ROS, use cameras and 3D views, build control pads, edit behavior trees, and manage themes.
 - [Development guide](development.md): run the frontend locally, test changes, inspect services, work with the Docker stack, and follow the release process.
-- [Desktop application](desktop.md): run and package the Tauri frontend against a separately installed ROS stack.
+- [Application](application.md): run and package the Tauri frontend against a separately installed ROS stack.
+- [iOS application](ios.md): build the Tauri iOS shell on a hosted Mac or your own, sideload the unsigned app, and connect it to a ROS stack on the network.
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.
@@ -30,5 +31,5 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 | End-to-end tests                 | `e2e/`                                        |
 | Build and test configuration     | `config/`                                     |
 | Runtime infrastructure           | `docker-compose.yml`, `infra/`                |
-| Desktop shell and runtime URLs   | `src-tauri/`, `src/runtime/`                  |
+| Native shells and runtime URLs   | `src-tauri/`, `src/runtime/`                  |
 | Panel catalog, SDK, and loader   | `src/panels/`, `panel-sdk/`, `public/panels/` |
