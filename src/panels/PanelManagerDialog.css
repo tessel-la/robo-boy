@@ -4,7 +4,8 @@
   z-index: 12000;
   display: grid;
   place-items: center;
-  padding: 20px;
+  /* The dim covers the whole screen; the dialog inside it stays clear of the system's bars. */
+  padding: calc(20px + var(--safe-area-top)) 20px calc(20px + var(--safe-area-bottom));
   background: rgb(0 0 0 / 0.66);
 }
 
@@ -15,7 +16,7 @@
 
 .panel-manager-dialog {
   width: min(920px, 100%);
-  max-height: min(860px, 94dvh);
+  max-height: min(860px, calc(var(--safe-height) * 0.94));
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -386,13 +387,13 @@
 
 @media (max-width: 768px) {
   .panel-manager-backdrop {
-    padding: 0;
+    padding: var(--safe-area-top) 0 var(--safe-area-bottom);
   }
 
   .panel-manager-dialog {
     width: 100%;
-    max-height: var(--app-height);
-    height: var(--app-height);
+    max-height: var(--safe-height);
+    height: var(--safe-height);
     border-radius: 0;
   }
 

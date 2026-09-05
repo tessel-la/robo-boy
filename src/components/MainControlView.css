@@ -2200,11 +2200,12 @@ body.no-scroll {
   .workspace-template-menu,
   .workspace-add-menu {
     position: fixed;
-    top: 46px;
+    /* Hangs off the bottom of the top bar, which is itself taller by whatever the system reserves. */
+    top: calc(46px + var(--safe-area-top));
     right: 8px;
     left: 8px;
     width: auto;
-    max-height: calc(100dvh - 56px);
+    max-height: calc(var(--safe-height) - 56px);
   }
 
   .mobile-workspace .resize-handle {
