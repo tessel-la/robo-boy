@@ -1,6 +1,8 @@
-# Desktop Application
+# Application
 
-Robo-Boy's desktop application is a thin Tauri shell around the same React application used by the web deployment. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
+Robo-Boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
+
+Everything past the runtime contract is about the desktop build. See [iOS application](ios.md) for building, signing and installing on a phone.
 
 ## Runtime Contract
 

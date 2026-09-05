@@ -4,10 +4,16 @@ name: iOS Build
 # owning a Mac. It signs nothing and publishes nothing: signing needs an Apple account, and the
 # artifact is meant to be re-signed by whoever installs it. Run it from the Actions tab.
 #
-# A macOS runner costs ten times a Linux one, so this never runs on a whole branch: only on demand,
-# and on the pull requests that change what the iOS build is made of. Frontend changes are already
-# proven by the desktop build, which shares the same frontend.
+# Triggered like the desktop build, for the same reason: a macOS runner costs ten times a Linux
+# one, so this runs when a release needs the app, on the pull request that promotes dev into main,
+# and on demand while the iOS build itself is being worked on.
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the triggering revision.
+        type: string
+        required: false
   workflow_dispatch:
     inputs:
       ref:
@@ -16,10 +22,7 @@ on:
         required: false
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [main, dev]
-    paths:
-      - '.github/workflows/ios-build.yml'
-      - 'src-tauri/**'
+    branches: [main]
 
 permissions:
   contents: read
@@ -31,6 +34,10 @@ concurrency:
 jobs:
   build:
     name: iOS app (unsigned)
+    # On a pull request this validates the promotion of dev into main before it lands, matching how
+    # the desktop build is gated. Every other trigger is explicit.
+    if: >-
+      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
     runs-on: macos-latest
 
     steps:
@@ -148,12 +155,12 @@ jobs:
 
           if [ -n "${ipa}" ]; then
             echo "taking the exported ${ipa}"
-            cp "${ipa}" Robo-Boy-unsigned.ipa
+            cp "${ipa}" Robo-Boy-iphone-unsigned.ipa
           elif [ -n "${app}" ]; then
             echo "packaging ${app}"
             mkdir -p Payload
             cp -R "${app}" Payload/
-            zip -qry Robo-Boy-unsigned.ipa Payload
+            zip -qry Robo-Boy-iphone-unsigned.ipa Payload
           else
             echo "::error::the build produced neither an .ipa nor an .app"
             exit "${status:-1}"
@@ -168,4 +175,4 @@ jobs:
           name: ios-unsigned
           if-no-files-found: error
           retention-days: 14
-          path: Robo-Boy-unsigned.ipa
+          path: Robo-Boy-iphone-unsigned.ipa

@@ -45,9 +45,19 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
+  iphone:
+    name: Build the iPhone app
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+
   publish-installers:
     name: Attach installers to the release
-    needs: [release-please, desktop]
+    needs: [release-please, desktop, iphone]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -59,6 +69,13 @@ jobs:
         with:
           path: installers
           pattern: desktop-*
+          merge-multiple: true
+
+      - name: Download the built iPhone app
+        uses: actions/download-artifact@v4
+        with:
+          path: iphone
+          pattern: ios-*
           merge-multiple: true
 
       # A built installer carries the version in its name, so nothing can link to one before the
@@ -89,7 +106,15 @@ jobs:
             echo "::error::release is missing installers for:${missing}"
             exit 1
           fi
-          find installers stable -type f
+
+          # The iPhone app needs no stable copy: it is published unsigned, so its name carries the
+          # platform rather than a version, and the version it was built from is inside the bundle.
+          if [ ! -f iphone/Robo-Boy-iphone-unsigned.ipa ]; then
+            echo "::error::release is missing the iPhone app"
+            exit 1
+          fi
+
+          find installers stable iphone -type f
 
       - name: Attach installers to the GitHub release
         env:
@@ -97,5 +122,5 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          mapfile -t installers < <(find installers stable -type f)
+          mapfile -t installers < <(find installers stable iphone -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"

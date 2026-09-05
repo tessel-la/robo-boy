@@ -96,7 +96,7 @@ For a build that runs without a laptop attached:
 npm run ios:build
 ```
 
-The signed `.ipa` is written under `src-tauri/gen/apple/build/`. Install it with Xcode's Devices and
+The `.ipa` is written under `src-tauri/gen/apple/build/`. Install it with Xcode's Devices and
 Simulators window (Window → Devices and Simulators → drag the `.ipa` onto Installed Apps), or upload
 it to TestFlight with a paid account.
 
@@ -127,13 +127,15 @@ Two things on the ROS side decide whether this works:
 
 ## Building Without A Mac
 
-The `iOS Build` workflow builds the app on a GitHub-hosted macOS runner, so no Mac of your own is
-involved. It produces `ios-unsigned`, an artifact holding `Robo-Boy-unsigned.ipa` (about 5 MB),
-downloadable from the run's summary page.
+Every release carries the app, built on a GitHub-hosted macOS runner, so no Mac of your own is
+involved:
+[`Robo-Boy-iphone-unsigned.ipa`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-iphone-unsigned.ipa).
 
-It runs on any pull request that changes `src-tauri/` or the workflow itself, and on demand from the
-repository's **Actions** tab → **iOS Build** → **Run workflow**. GitHub only lists a workflow for
-manual runs once it is on the default branch, so on a branch the pull request is how to run it.
+The `iOS Build` workflow that produces it is triggered like the desktop one: by a release, by the
+pull request that promotes `dev` into `main`, and on demand from the repository's **Actions** tab →
+**iOS Build** → **Run workflow**. A macOS runner costs ten times a Linux one, which is why it does
+not run on every branch. Its artifact is also downloadable from any run's summary page, which is how
+to get a build of something not yet released.
 
 The runner holds no signing certificate, and Xcode will not build an app for a device without
 deciding how to sign it, so the workflow patches the generated project to sign nothing at all

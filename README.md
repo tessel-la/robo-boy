@@ -22,10 +22,10 @@ proxy to run.
    [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) ·
    [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) ·
    [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe) ·
-   [iPhone](docs/ios.md)
+   [`.ipa`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-iphone-unsigned.ipa)
 
-   The iPhone build is unsigned, because signing an iOS app needs an Apple account, so it is
-   sideloaded rather than downloaded.
+   The iPhone package is unsigned, because signing an iOS app needs an Apple account. Sign it with
+   your own and sideload it: [iOS application](docs/ios.md).
 
 2. Start the ROS services on the computer that runs ROS:
 
@@ -38,7 +38,7 @@ proxy to run.
 3. Open the app. Use **Quick Connect** when ROS runs on the same computer, or the advanced options and **Host
    or IP** when it runs elsewhere, which on a phone it always is.
 
-See [Desktop application](docs/desktop.md) for the port contract and remote hosts.
+See [Application](docs/application.md) for the port contract and remote hosts.
 
 ## Start With Docker
 
