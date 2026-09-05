@@ -1,19 +1,25 @@
 name: Android Build
 
-# This repository is the Android build sandbox. Every change to the Android shell is proved by a
-# signed debug APK that can be installed without a Play signing key.
+# Every Android change is proved by a signed debug APK that can be installed without a Play signing
+# key. The same workflow is callable by Release Please so the official release carries the APK.
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the triggering revision.
+        type: string
+        required: false
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [dev, main]
   pull_request:
-    branches: [main]
+    branches: [dev, main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-build-${{ github.ref }}
+  group: android-build-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -28,6 +34,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,6 +60,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
