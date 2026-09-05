@@ -82,29 +82,6 @@ services:
       - ./infra/caddy/WebRtcRelay.Caddyfile:/etc/caddy/Caddyfile:ro
       - webrtc-relay-socket:/run/webrtc-relay
 
-  # The WebRTC gateway. Host networking so its ICE candidates carry the physical and VPN addresses
-  # a remote client has to reach it on, and so its API and WHEP ports are reachable without a proxy
-  # in front of them. It is a peer of the ROS stack rather than part of it: the two start together
-  # and stop independently.
-  #
-  # A simulator that runs its own gateway binds these same ports, so only one of them can be up.
-  webrtc-gateway:
-    image: bluenviron/mediamtx:1.20.1-ffmpeg
-    # Only one gateway can hold these ports. When a simulator is already running its own, this one
-    # cannot start, and giving up is the honest outcome: restarting forever would report a stack
-    # that is degraded rather than one that has nothing to do.
-    restart: on-failure:3
-    network_mode: host
-    ipc: host
-    environment:
-      # Whatever the ROS stack is already serving as MJPEG, re-encoded only while someone watches.
-      - WEBRTC_SOURCE_URL=${WEBRTC_SOURCE_URL:-http://127.0.0.1:${VIDEO_STREAM_PORT:-8080}/stream?topic=${WEBRTC_SOURCE_TOPIC:-/camera/image_raw}&type=mjpeg}
-      - MTX_RTSPADDRESS=:${STREAM_RTSP_PORT:-8554}
-      - MTX_WEBRTCADDRESS=:${WEBRTC_PORT:-8889}
-      - MTX_APIADDRESS=:${WEBRTC_DISCOVERY_PORT:-9997}
-    volumes:
-      - ./config/mediamtx.yml:/mediamtx.yml:ro
-
   # ROS 2 Stack (Rosbridge + Image Publisher)
   # network_mode: host so ROS 2 DDS multicast discovery works with other
   # host-networked containers (e.g. aerial_sim_cont). Port mappings are
