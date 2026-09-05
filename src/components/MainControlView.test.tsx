@@ -18,10 +18,18 @@ const saveGamepadFromEditor = vi.fn();
 const useInstalledPanels = vi.fn();
 const externalPanelHostProps = vi.fn();
 
+// The connection the view is handed. Most tests want a live one; the status button needs a dropped
+// one to have anything to do.
+const rosConnection: { isConnected: boolean; connectionStatus: 'connected' | 'connecting' | 'disconnected' } = {
+  isConnected: true,
+  connectionStatus: 'connected',
+};
+
 vi.mock('../hooks/useRos', () => ({
   useRos: () => ({
     ros: mockRos,
-    isConnected: true,
+    isConnected: rosConnection.isConnected,
+    connectionStatus: rosConnection.connectionStatus,
     connect,
     disconnect,
   }),
@@ -226,6 +234,8 @@ describe('MainControlView desktop workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    rosConnection.isConnected = true;
+    rosConnection.connectionStatus = 'connected';
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
     ]);
@@ -282,6 +292,31 @@ describe('MainControlView desktop workspace', () => {
         dispatchEvent: vi.fn(),
       })),
     });
+  });
+
+  it('reconnects from the status button instead of making the app be closed and reopened', () => {
+    rosConnection.isConnected = false;
+    rosConnection.connectionStatus = 'disconnected';
+    renderMainControlView();
+    // Mounting connects once on its own, which is not what this is about.
+    connect.mockClear();
+
+    fireEvent.click(screen.getByLabelText('Status: Disconnected. Click to reconnect'));
+
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith(connectionParams);
+  });
+
+  it('offers nothing to press while the connection is up or on its way', () => {
+    const { unmount } = renderMainControlView();
+    expect(screen.getByLabelText('Status: Connected')).toBeDisabled();
+    unmount();
+
+    rosConnection.isConnected = false;
+    rosConnection.connectionStatus = 'connecting';
+    renderMainControlView();
+
+    expect(screen.getByLabelText('Status: Connecting')).toBeDisabled();
   });
 
   it('starts with one unified empty workspace and adds panels', async () => {

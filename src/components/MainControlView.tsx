@@ -1575,6 +1575,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     onDisconnect(); // Call App's disconnect handler to go back to EntrySection
   };
 
+  // A bridge that went away is the usual reason to want the whole app restarted, when the same
+  // parameters are still here and the hook only needs asking again.
+  const handleReconnect = () => {
+    connect(connectionParams);
+  };
+
+  const connectionStatusLabel = {
+    connected: 'Status: Connected',
+    connecting: 'Status: Connecting',
+    disconnected: 'Status: Disconnected. Click to reconnect',
+  }[connectionStatus];
+
   useEffect(() => {
     if (isConnected) saveRecentConnection(connectionParams);
   }, [connectionParams, isConnected]);
@@ -3695,14 +3707,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           )}
         </div>
         <div className="status-controls">
-          <div
-            className={`connection-status-icon ${isConnected ? 'connected' : 'disconnected'}`}
-            title={isConnected ? 'Status: Connected' : 'Status: Disconnected'}
-            aria-label={isConnected ? 'Status: Connected' : 'Status: Disconnected'}
-            role="status"
+          <button
+            type="button"
+            className={`connection-status-icon ${connectionStatus}`}
+            onClick={handleReconnect}
+            // Connected or already trying, there is nothing to ask for: it reads as status again.
+            disabled={connectionStatus !== 'disconnected'}
+            title={connectionStatusLabel}
+            aria-label={connectionStatusLabel}
+            aria-live="polite"
           >
             {isConnected ? icons.connected : icons.disconnected}
-          </div>
+          </button>
           <button
             onClick={handleInternalDisconnect}
             className="disconnect-button-icon"
