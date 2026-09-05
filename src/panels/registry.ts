@@ -26,7 +26,7 @@ const PANEL_CAPABILITIES = new Set<RoboBoyPanelCapability>([
   'camera',
   'microphone',
 ]);
-const HOST_ENDPOINTS = new Set(['videoStream']);
+const HOST_ENDPOINTS = new Set(['videoStream', 'webrtcWhep', 'webrtcDiscovery']);
 const ROS_RESOURCE_PATTERN = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
 
 interface ParseRegistryOptions {

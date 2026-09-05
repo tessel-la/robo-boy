@@ -15,7 +15,14 @@ export type RoboBoyPanelCapability =
   | 'camera'
   | 'microphone';
 
-export type RoboBoyHostEndpoint = 'videoStream';
+/**
+ * Named host services a panel may ask for.
+ *
+ * `webrtcWhep` and `webrtcDiscovery` are the stream gateway, which is a deployment of its own and
+ * need not be running beside anything else. `videoStream` also reaches it, for panels written
+ * before it had endpoints of its own.
+ */
+export type RoboBoyHostEndpoint = 'videoStream' | 'webrtcWhep' | 'webrtcDiscovery';
 
 export interface RoboBoyPanelRosPermissions {
   discover?: boolean;

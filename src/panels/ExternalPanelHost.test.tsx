@@ -56,7 +56,7 @@ const renderHost = (overrides: Partial<React.ComponentProps<typeof ExternalPanel
     ros: {} as never,
     connectionStatus: 'connected',
     connectionGeneration: 1,
-    runtime: { target: 'web', endpoints: { videoStream: 'https://robot.test/stream' } },
+    runtime: { target: 'web', endpoints: { webrtcWhep: 'http://robot.local:8889/', webrtcDiscovery: 'http://robot.local:9997/v3/paths/list', videoStream: 'https://robot.test/stream' } },
     isActive: true,
     state: { count: 2 },
     onStateChange,
