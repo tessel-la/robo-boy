@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { drawsOwnWindowChrome, isMobilePlatform, resolveRuntimeEndpoints } from './runtimeConfig';
+import {
+  drawsOwnWindowChrome,
+  getDefaultConnectionHost,
+  isMobilePlatform,
+  resolveRuntimeEndpoints,
+} from './runtimeConfig';
 
 describe('resolveRuntimeEndpoints', () => {
   it('keeps the same-origin proxy contract for domain-based web connections', () => {
@@ -210,5 +215,25 @@ describe('drawsOwnWindowChrome', () => {
 
   it('leaves the browser its own chrome', () => {
     expect(drawsOwnWindowChrome()).toBe(false);
+  });
+});
+
+describe('getDefaultConnectionHost', () => {
+  const packagedApp = window as typeof window & { __TAURI_INTERNALS__?: unknown };
+
+  afterEach(() => {
+    delete packagedApp.__TAURI_INTERNALS__;
+  });
+
+  it('offers the host a browser was served from', () => {
+    expect(getDefaultConnectionHost()).toBe(window.location.hostname);
+  });
+
+  // The ROS stack is as likely to be on a robot as on this machine, and naming localhost would
+  // offer to connect somewhere nobody asked for.
+  it('has nothing to offer the packaged app, which was served from nowhere', () => {
+    packagedApp.__TAURI_INTERNALS__ = {};
+
+    expect(getDefaultConnectionHost()).toBe('');
   });
 });

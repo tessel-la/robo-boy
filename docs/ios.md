@@ -108,10 +108,9 @@ Device Management.
 
 ## Connecting To ROS
 
-The phone is not the ROS computer, so **Quick Connect will not work**: it uses `localhost`, which on
-a phone means the phone. Open the advanced connection options, choose **Host or IP**, and enter the
-ROS computer's LAN or VPN address. From there the contract is the same as the desktop app's, on the
-same ports:
+The app asks for a host on its first launch, which is the one to answer with: the ROS computer's LAN
+or VPN address, never the phone's own. From there the contract is the same as the desktop app's, on
+the same ports:
 
 | Service              | Default endpoint   |
 | -------------------- | ------------------ |
