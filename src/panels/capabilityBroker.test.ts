@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  isGrantedHostEndpointUrl,
   connectPanelCapabilityBroker,
   getGrantedPanelEndpoints,
   normalizeRosMessage,
@@ -235,6 +236,28 @@ describe('panel capability broker', () => {
     fetcher.mockRestore();
   });
 
+  // The gateway is granted by naming it, not by working it out from the video server, so a panel
+  // that asks for it directly gets exactly the same reach as one written before it had a name.
+  it('grants the stream gateway to a panel that names it, and nothing beside it', () => {
+    const endpoints = {
+      videoStream: 'https://robot.example:8080',
+      webrtcWhep: 'https://gateway.example:8889/',
+      webrtcDiscovery: 'https://gateway.example:9997/v3/paths/list',
+    };
+    const gatewayManifest: ResolvedPanelManifest = {
+      ...manifest,
+      permissions: { network: { hostEndpoints: ['webrtcWhep', 'webrtcDiscovery'] } },
+    };
+    const reaches = (url: string) => isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(url));
+
+    expect(reaches('https://gateway.example:8889/camera/whep')).toBe(true);
+    expect(reaches('https://gateway.example:9997/v3/paths/list')).toBe(true);
+    // A gateway somewhere other than the robot is the point: nothing infers it from videoStream.
+    expect(reaches('https://robot.example:8889/camera/whep')).toBe(false);
+    expect(reaches('https://gateway.example:8889/admin')).toBe(false);
+    expect(reaches('https://gateway.example:9997/v3/config')).toBe(false);
+  });
+
   it('limits a host endpoint grant to its known service routes', async () => {
     const endpointOnlyManifest: ResolvedPanelManifest = {
       ...manifest,
@@ -259,7 +282,11 @@ describe('panel capability broker', () => {
         manifest: endpointOnlyManifest,
         ros: null,
         runtime: { target: 'web' },
-        runtimeEndpoints: { videoStream: 'https://robot.example:8080' },
+        runtimeEndpoints: {
+          videoStream: 'https://robot.example:8080',
+          webrtcWhep: 'https://robot.example:8889/',
+          webrtcDiscovery: 'https://robot.example:9997/v3/paths/list',
+        },
         hostElement: document.createElement('div'),
         logger: console,
       },

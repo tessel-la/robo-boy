@@ -7,6 +7,15 @@ export interface RuntimeEndpoints {
   videoStreamBaseUrl: string;
   meshResourcesBaseUrl: string;
   ollamaBaseUrl: string;
+  /**
+   * The WebRTC stream gateway, named directly rather than worked out from the video server.
+   *
+   * It is a deployment of its own: it may run beside Robo-Boy, inside a simulator, or not at all,
+   * and a ROS stack with nothing else running is a perfectly good reason to want it. Everything
+   * that reaches it reads these, so where it lives is decided once, here.
+   */
+  webrtcWhepBaseUrl: string;
+  webrtcDiscoveryUrl: string;
   mode: 'web' | 'desktop';
   host: string;
 }
@@ -16,6 +25,8 @@ export interface RuntimePortConfig {
   videoStreamPort: string;
   meshResourcesPort: string;
   ollamaPort: string;
+  webrtcPort: string;
+  webrtcDiscoveryPort: string;
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
@@ -42,6 +53,10 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   videoStreamPort: normalizeRuntimePort(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
   meshResourcesPort: normalizeRuntimePort(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
   ollamaPort: normalizeRuntimePort(import.meta.env.VITE_OLLAMA_PORT, '11434'),
+  // MediaMTX serves WHEP and its read-only path list on separate ports, so a gateway that is not
+  // the stock one can be reached without either of them being written into a caller.
+  webrtcPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_PORT, '8889'),
+  webrtcDiscoveryPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_DISCOVERY_PORT, '9997'),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
 });
 
@@ -121,6 +136,8 @@ const resolveDirectEndpoints = (
     videoStreamBaseUrl: `${httpScheme}://${urlHost}:${ports.videoStreamPort}`,
     meshResourcesBaseUrl: `${httpScheme}://${urlHost}:${ports.meshResourcesPort}`,
     ollamaBaseUrl: `${httpScheme}://${urlHost}:${ports.ollamaPort}`,
+    webrtcWhepBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcPort}/`,
+    webrtcDiscoveryUrl: `${httpScheme}://${urlHost}:${ports.webrtcDiscoveryPort}/v3/paths/list`,
     mode,
     host,
   };
@@ -157,6 +174,9 @@ export function resolveRuntimeEndpoints(
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
       ollamaBaseUrl: '/ollama',
+      // Same-origin, because a browser on an HTTPS page cannot reach the gateway's own ports.
+      webrtcWhepBaseUrl: '/webrtc/',
+      webrtcDiscoveryUrl: '/webrtc/_discovery/paths',
       mode: 'web',
       host: location.hostname,
     };

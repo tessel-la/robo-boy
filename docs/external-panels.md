@@ -210,8 +210,11 @@ workspace imports cannot create them. ROS messages are normalized
 to JSON at this boundary, so non-finite ROS floating-point values become `null` without dropping the rest of the
 message; non-JSON and oversized payloads are rejected. Network requests accept only
 declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:
-`videoStream`, for example, permits only its known discovery and WHEP routes rather than the complete service
-origin. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
+each permits only the routes beneath the endpoint the runtime resolved, rather than the complete service origin.
+`webrtcWhep` and `webrtcDiscovery` name the WebRTC stream gateway, which is a deployment of its own and needs
+nothing else of Robo-Boy running; where it lives is decided in `src/runtime/runtimeConfig.tsx` and configurable
+through `VITE_WEBRTC_PORT` and `VITE_WEBRTC_DISCOVERY_PORT`, so no caller writes its ports down. `videoStream`
+reaches the same gateway for panels published before it had endpoints of its own. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
 headers are filtered, responses are size-capped, and concurrent requests time out. The sandbox has no parent DOM,
 Robo-Boy storage, cookies, or raw host objects.
 

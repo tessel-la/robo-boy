@@ -1013,6 +1013,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       target: runtimeEndpoints.mode,
       endpoints: {
         videoStream: runtimeEndpoints.videoStreamBaseUrl,
+        webrtcWhep: runtimeEndpoints.webrtcWhepBaseUrl,
+        webrtcDiscovery: runtimeEndpoints.webrtcDiscoveryUrl,
       },
     }),
     [runtimeEndpoints]

@@ -23,7 +23,7 @@ const CAPABILITIES = new Set([
   'camera',
   'microphone',
 ]);
-const HOST_ENDPOINTS = new Set(['videoStream']);
+const HOST_ENDPOINTS = new Set(['videoStream', 'webrtcWhep', 'webrtcDiscovery']);
 const ROS_RESOURCE = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
 
 export class InstallError extends Error {}
