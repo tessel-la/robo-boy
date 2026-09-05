@@ -1,0 +1,43 @@
+# WebRTC gateway for Robo-Boy.
+#
+# Deliberately its own service rather than part of the ROS stack image: it is useful with only the
+# ROS stack running, useful with a simulator publishing into it instead, and useful not at all when
+# nobody wants video. Starting the ROS stack starts it, and stopping it leaves ROS alone.
+logLevel: info
+
+# Reachable from the network, unlike a gateway that only serves its own host. A remote desktop app
+# discovers streams here directly, which is what lets it work with no proxy in front. Ports 8889,
+# 9997 and 8554 have to be open to the clients that use them.
+api: true
+apiAddress: :9997
+
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ['*']
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: true
+
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp, udp]
+rtpAddress: :8000
+rtcpAddress: :8001
+
+hls: false
+rtmp: false
+srt: false
+
+paths:
+  # The ROS stack already serves every image topic as MJPEG; this re-encodes one of them on demand,
+  # so nothing transcodes until somebody actually watches. Point WEBRTC_SOURCE_TOPIC at the topic
+  # you want, or publish RTSP into any other path name and it appears in discovery on its own.
+  robot_camera:
+    runOnDemand: >-
+      ffmpeg -nostdin -hide_banner -loglevel warning
+      -fflags nobuffer -flags low_delay
+      -i "$WEBRTC_SOURCE_URL"
+      -an -c:v libx264 -preset ultrafast -tune zerolatency
+      -profile:v baseline -pix_fmt yuv420p -g 15 -keyint_min 15 -bf 0
+      -rtsp_transport tcp -f rtsp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: true

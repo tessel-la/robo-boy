@@ -13,6 +13,8 @@ The desktop frontend connects directly to these services on the selected ROS hos
 | rosbridge            | `ws://HOST:9090`   |
 | web_video_server     | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
+| WebRTC gateway       | `http://HOST:8889` |
+| Gateway discovery    | `http://HOST:9997` |
 
 Override the desktop direct-connect defaults with Vite environment variables when needed:
 
@@ -39,6 +41,22 @@ docker compose up -d --build ros-stack
 ```
 
 The optional mesh server must allow cross-origin requests when the desktop app loads URDF meshes directly from port 8000.
+
+## WebRTC Gateway
+
+`webrtc-gateway` is a MediaMTX beside the ROS stack rather than inside it. The two start together and stop
+independently, so video can be running with nothing else up, and the ROS stack can run with no gateway at all.
+
+It binds its WHEP and API ports on every interface, so the desktop app reaches it directly and needs no proxy in
+front. Open 8889 and 9997 to the clients that use them, and 8554 for anything publishing RTSP into it. A browser
+cannot reach those ports from an HTTPS page, so the web deployment keeps going through Caddy's same-origin
+`/webrtc` route instead; both paths end at this one gateway.
+
+By default it re-encodes one MJPEG topic from the ROS stack, on demand, so nothing transcodes until somebody
+watches. Point it elsewhere with `WEBRTC_SOURCE_TOPIC`, or publish RTSP into any other path name and it appears
+in discovery by itself.
+
+A simulator that runs its own gateway binds the same ports, so only one of them can be up at a time.
 
 ## Development
 
