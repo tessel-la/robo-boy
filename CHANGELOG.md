@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.3-alpha...robo-boy-v0.5.0-alpha) (2026-09-05)
+
+
+### Features
+
+* iOS build pipeline ([429c90e](https://github.com/tessel-la/robo-boy/commit/429c90e547b4b8e77ab91549d299fd3c1a63c187))
+
 ## [0.4.3-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.4.2-alpha...robo-boy-v0.4.3-alpha) (2026-09-04)
 
 
