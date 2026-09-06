@@ -23,6 +23,11 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-http = "2"
 
+# Reaches the WebKitGTK settings behind the Linux webview. Same crate and version the webview
+# layer already builds, so this adds no second copy of it.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "2.0.2", features = ["v2_38"] }
+
 # Mobile bundles pay for the Rust shell byte-for-byte. Keep production artifacts compact while
 # preserving debug profiles for local diagnosis.
 [profile.release]
