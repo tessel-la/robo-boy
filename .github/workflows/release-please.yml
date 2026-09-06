@@ -64,6 +64,7 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/android-build.yml
+    secrets: inherit
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
@@ -101,7 +102,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: android
-          pattern: robo-boy-android-debug
+          pattern: robo-boy-android
           merge-multiple: true
 
       # A built installer carries the version in its name, so nothing can link to one before the
@@ -151,7 +152,7 @@ jobs:
             echo "::error::expected one Android APK, found ${#apks[@]}"
             exit 1
           fi
-          cp "${apks[0]}" android/Robo-Boy-android-debug.apk
+          cp "${apks[0]}" android/Robo-Boy-android.apk
 
       - name: Attach installers to the GitHub release
         env:
