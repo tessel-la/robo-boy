@@ -7,6 +7,7 @@ import {
   resourceMatches,
 } from './capabilityBroker';
 import type { ResolvedPanelManifest } from './types';
+import { resolveRuntimeEndpoints } from '../runtime/runtimeConfig';
 
 const manifest: ResolvedPanelManifest = {
   schemaVersion: 1,
@@ -327,5 +328,42 @@ describe('panel capability broker', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     disconnect();
     fetcher.mockRestore();
+  });
+});
+
+// The whole chain the WebRTC panel depends on, in one place: what the runtime resolves for a
+// deployment, what the panel builds from it, and whether the broker lets that through. It is wired
+// across three files and two repositories, so nothing else notices when one end moves.
+describe('stream gateway endpoints reach the panel', () => {
+  const gatewayManifest: ResolvedPanelManifest = {
+    ...manifest,
+    permissions: { network: { hostEndpoints: ['webrtcWhep', 'webrtcDiscovery'] } },
+  };
+
+  // Exactly what robo-boy-webrtc-panel does with the base it is handed.
+  const panelWhepUrl = (whepBase: string, streamPath: string) =>
+    new URL(`${streamPath}/whep`, new URL(whepBase, document.baseURI)).toString();
+
+  it.each([
+    ['browser behind the proxy', { ros2Option: 'ip' as const, ros2Value: '' }, false],
+    ['packaged app, direct', { ros2Option: 'ip' as const, ros2Value: 'robot.local' }, true],
+  ])('grants what the panel builds for a %s', (_label, params, desktop) => {
+    const runtime = resolveRuntimeEndpoints(params, desktop, {
+      protocol: 'https:',
+      hostname: 'roboboy.test',
+      host: 'roboboy.test',
+    });
+    const endpoints = {
+      webrtcWhep: new URL(runtime.webrtcWhepBaseUrl, document.baseURI).href,
+      webrtcDiscovery: new URL(runtime.webrtcDiscoveryUrl, document.baseURI).href,
+    };
+
+    const whep = panelWhepUrl(endpoints.webrtcWhep, 'manipulator_wrist_camera');
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(whep))).toBe(true);
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(endpoints.webrtcDiscovery))).toBe(true);
+
+    // The gateway's other control routes stay out of reach in every deployment.
+    const control = new URL('../v3/config/global/get', endpoints.webrtcDiscovery).toString();
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(control))).toBe(false);
   });
 });
