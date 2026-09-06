@@ -54,8 +54,14 @@ npm run android:build -- --debug --target aarch64
 adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
 ```
 
-The debug APK is signed with Android's development key. Production Play Store delivery needs a
-private release signing key and is intentionally not configured in this sandbox.
+The debug APK is signed with Android's development key and installs as
+`la.tessel.roboboy.debug`, alongside the production app. It is intentionally large because it
+retains Rust native symbols for diagnosis.
+
+Production builds use the package id `la.tessel.roboboy`, enable Android/Rust size optimization,
+and must use the permanent project signing key. Local release signing reads these environment
+variables: `ANDROID_RELEASE_KEYSTORE_PATH`, `ANDROID_RELEASE_KEYSTORE_PASSWORD`,
+`ANDROID_RELEASE_KEY_ALIAS`, and `ANDROID_RELEASE_KEY_PASSWORD`. Never commit the key or passwords.
 
 ## Connect To ROS
 
@@ -78,9 +84,11 @@ control is used; denying it leaves the rest of Robo-Boy usable.
 
 ## CI APK
 
-The **Android Build** workflow builds the same project on every pull request and push to `main`.
-Its `robo-boy-android-debug` artifact contains a signed, installable APK and needs no repository
-secrets. Download the artifact from the workflow run, unzip it, and install it with `adb install`.
+The **Android Build** workflow builds the same project on every pull request and push to `dev` or
+`main`. Its `robo-boy-android` artifact contains the optimized, production-signed APK. The signing
+key and passwords are repository secrets; losing that key prevents existing installations from
+accepting future updates. Download the artifact from the workflow run, unzip it, and install it
+with `adb install`.
 
 ## Wear OS Direction
 
