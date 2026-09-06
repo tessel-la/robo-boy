@@ -230,6 +230,8 @@ export interface RoboBoyPanelNetworkResponse {
   };
   text(): Promise<string>;
   json<T extends RoboBoyJsonValue = RoboBoyJsonValue>(): Promise<T>;
+  /** The response as bytes, for media and anything else that is not text. */
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 export interface RoboBoyPanelNetwork {

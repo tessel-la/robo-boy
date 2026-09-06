@@ -259,6 +259,60 @@ describe('panel capability broker', () => {
     expect(reaches('https://gateway.example:9997/v3/config')).toBe(false);
   });
 
+  // A media segment is not text: decoding it on the way through would corrupt the bytes and put
+  // any panel that plays media outside the broker, which is the only way out a panel has.
+  it('carries bytes through the broker without decoding them', async () => {
+    const segment = new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0xff, 0xfe, 0x80, 0x01]);
+    const port = {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: vi.fn(),
+      start: vi.fn(),
+      close: vi.fn(),
+    } as unknown as MessagePort;
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      url: 'https://robot.example:8888/camera/seg1.mp4',
+      headers: new Headers({ 'content-type': 'video/mp4' }),
+      arrayBuffer: async () => segment.buffer,
+    } as Response);
+
+    const disconnect = connectPanelCapabilityBroker(
+      port,
+      {
+        manifest: {
+          ...manifest,
+          capabilities: ['network'],
+          permissions: { network: { hostEndpoints: ['webrtcHls'] } },
+        },
+        ros: null,
+        runtime: { target: 'desktop' },
+        runtimeEndpoints: { webrtcHls: 'https://robot.example:8888/' },
+        hostElement: document.createElement('div'),
+        logger: console,
+      },
+      vi.fn()
+    );
+
+    port.onmessage?.({
+      data: {
+        type: 'request',
+        requestId: 'segment',
+        method: 'network.fetch',
+        params: { url: 'https://robot.example:8888/camera/seg1.mp4' },
+      },
+    } as MessageEvent);
+
+    await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalled());
+    const calls = (port.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const [message] = calls[calls.length - 1];
+    expect(message.error).toBeUndefined();
+    expect(new Uint8Array(message.value.body)).toEqual(segment);
+
+    disconnect();
+    fetcher.mockRestore();
+  });
+
   it('limits a host endpoint grant to its known service routes', async () => {
     const endpointOnlyManifest: ResolvedPanelManifest = {
       ...manifest,
@@ -275,7 +329,7 @@ describe('panel capability broker', () => {
       statusText: 'OK',
       url: 'https://robot.example:8889/camera/whep',
       headers: new Headers({ 'content-type': 'application/sdp', server: 'private-server' }),
-      text: async () => 'answer',
+      arrayBuffer: async () => new TextEncoder().encode('answer').buffer,
     } as Response);
     const disconnect = connectPanelCapabilityBroker(
       port,

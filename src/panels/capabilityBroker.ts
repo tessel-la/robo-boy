@@ -196,18 +196,22 @@ const requireJsonPayload = (value: unknown, label: string): RoboBoyJsonObject =>
   return value;
 };
 
-const readBoundedResponseText = async (response: Response): Promise<string> => {
+/**
+ * Reads a response as bytes, under the same cap text was read under.
+ *
+ * Bytes are what a response actually is; text and JSON are readings of them. Decoding here instead
+ * would put a panel that wants media -- a video segment, an image, a point cloud -- outside the
+ * broker, which is the one way out a panel has.
+ */
+const readBoundedResponseBytes = async (response: Response): Promise<ArrayBuffer> => {
   if (!response.body) {
-    const body = await response.text();
-    if (new TextEncoder().encode(body).byteLength > MAX_NETWORK_BYTES) {
-      throw new Error('Network response is too large.');
-    }
-    return body;
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > MAX_NETWORK_BYTES) throw new Error('Network response is too large.');
+    return buffer;
   }
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const chunks: Uint8Array[] = [];
   let size = 0;
-  let body = '';
   let streamComplete = false;
   try {
     while (!streamComplete) {
@@ -219,12 +223,18 @@ const readBoundedResponseText = async (response: Response): Promise<string> => {
         await reader.cancel();
         throw new Error('Network response is too large.');
       }
-      body += decoder.decode(value, { stream: true });
+      chunks.push(value);
     }
-    return body + decoder.decode();
   } finally {
     reader.releaseLock();
   }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body.buffer;
 };
 
 const respond = (port: MessagePort, requestId: string, value?: unknown, error?: unknown) => {
@@ -408,7 +418,7 @@ const handleRequest = async (
       if (Number.isFinite(declaredLength) && declaredLength > MAX_NETWORK_BYTES) {
         throw new Error('Network response is too large.');
       }
-      const body = await readBoundedResponseText(response);
+      const body = await readBoundedResponseBytes(response);
       return {
         status: response.status,
         statusText: response.statusText,
