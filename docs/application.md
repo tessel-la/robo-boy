@@ -73,6 +73,31 @@ Compatibility mode disables WebKit's DMABUF renderer for that launch.
 
 On Windows, the desktop webview keeps Wry's default disabled Edge UI features and adds GPU rasterization hints through `additionalBrowserArgs` in `src-tauri/tauri.conf.json`. Desktop devtools are disabled in the packaged webview config to keep the runtime closer to production performance.
 
+## WebRTC On The Linux Desktop
+
+The desktop shell renders in the system's WebKitGTK rather than a webview Robo-Boy ships, so whether
+WebRTC exists at all is the distribution's build choice. Where it is compiled out there is no
+`RTCPeerConnection`, and a panel that plays a WHEP stream fails on that missing reference rather than
+on the network. Ubuntu 26.04 is one such distribution, in both its GTK3 (`webkit2gtk-4.1`) and GTK4
+(`webkitgtk-6.0`) builds.
+
+Check the host before assuming a stream problem is a stream problem:
+
+```bash
+strings "$(ldconfig -p | awk '/libwebkit2gtk-4.1.so.0/{print $NF; exit}')" | grep -qx webrtcbin && echo "WebRTC available" || echo "WebRTC not built into this WebKitGTK"
+```
+
+Installing GStreamer's WebRTC plugins does not change the answer. WebKitGTK negotiates through
+GStreamer, so a host needs those elements *as well*, but when the engine was built without the
+backend it never names them and no amount of plugins makes the API appear.
+
+WebKitGTK also leaves `enable-webrtc` off by default, so the shell turns it on as the main window is
+created. That is required wherever the backend is compiled in, and harmless where it is not.
+
+Browsers carry their own WebRTC stack, so the same panel works in the web build on the same machine.
+Where the desktop shell cannot play a WHEP stream, use a browser, or the camera view, which reads the
+MJPEG endpoint and needs no WebRTC.
+
 ## Build An Installer
 
 That is the local equivalent of what CI runs for a release. Official installers for Linux, macOS, and
