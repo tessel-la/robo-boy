@@ -4,6 +4,7 @@ import {
   detectPhysicalGamepadProfile,
   findPhysicalGamepad,
   getPhysicalGamepadControlLabel,
+  normalizePhysicalGamepadPublishHz,
   snapshotPhysicalGamepad,
 } from './physicalGamepad';
 
@@ -34,6 +35,14 @@ describe('physical gamepad normalization', () => {
     expect(applyGamepadDeadzone(0.07, 0.08)).toBe(0);
     expect(applyGamepadDeadzone(-0.54, 0.08)).toBeCloseTo(-0.5);
     expect(applyGamepadDeadzone(2, 0.08)).toBe(1);
+  });
+
+  it('defaults and clamps the Joy publish rate', () => {
+    expect(normalizePhysicalGamepadPublishHz(undefined)).toBe(20);
+    expect(normalizePhysicalGamepadPublishHz(Number.NaN)).toBe(20);
+    expect(normalizePhysicalGamepadPublishHz(0)).toBe(1);
+    expect(normalizePhysicalGamepadPublishHz(30)).toBe(30);
+    expect(normalizePhysicalGamepadPublishHz(120)).toBe(60);
   });
 
   it('normalizes the standard four axes and seventeen buttons', () => {

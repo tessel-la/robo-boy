@@ -28,9 +28,9 @@ Layouts are stored in `localStorage` under `robo-boy-custom-gamepads`. Exported 
 
 ## Physical Controllers
 
-The physical-gamepad component uses the browser's standard Gamepad API mapping: four axes and 17 buttons. It can auto-detect Xbox/XInput, PlayStation, and Logitech IDs or use an explicitly selected visual profile. It publishes a complete `sensor_msgs/Joy` message at 20 Hz while connected and immediately publishes a neutral message when the controller disappears or the component unmounts.
+The physical-gamepad component uses the browser's standard Gamepad API mapping: four axes and 17 buttons. It can auto-detect Xbox/XInput, PlayStation, and Logitech IDs or use an explicitly selected visual profile. It publishes a complete `sensor_msgs/Joy` message at a configurable 1-60 Hz (20 Hz by default) while connected and immediately publishes a neutral message when the controller disappears or the component unmounts.
 
-Each standard button—including triggers, stick clicks, D-pad directions, center buttons, and home—has independent press and release operations. Operations reuse the same topic, service, and action executor as ordinary pad buttons. Stick deadzone and a preferred browser controller index are saved with the layout. Non-standard browser mappings are displayed with a warning because their raw axis and button order is device- and browser-specific.
+Each standard button—including triggers, stick clicks, D-pad directions, center buttons, and home—has independent press and release operations. Operations reuse the same topic, service, and action executor as ordinary pad buttons. Publish rate, stick deadzone, and a preferred browser controller index are saved with the layout. Non-standard browser mappings are displayed with a warning because their raw axis and button order is device- and browser-specific.
 
 ## Runtime Flow
 

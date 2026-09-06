@@ -10,6 +10,7 @@ import {
 import type { RosOperation } from '../../../utils/rosOperations';
 import RosEventOperationsEditor from './RosEventOperationsEditor';
 import PhysicalGamepadSettings from './PhysicalGamepadSettings';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ, normalizePhysicalGamepadPublishHz } from '../physicalGamepad';
 import RangeSlider from './RangeSlider';
 import ValueControl from './ValueControl';
 import { getDynamicRangeStep, roundToStepPrecision } from '../rangeUtils';
@@ -251,6 +252,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [physicalGamepadProfile, setPhysicalGamepadProfile] = useState<PhysicalGamepadProfile>('auto');
   const [physicalGamepadIndex, setPhysicalGamepadIndex] = useState<number | undefined>();
   const [physicalGamepadDeadzone, setPhysicalGamepadDeadzone] = useState(0.08);
+  const [physicalGamepadPublishHz, setPhysicalGamepadPublishHz] = useState(DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ);
   const [physicalGamepadBindings, setPhysicalGamepadBindings] = useState<Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>>({});
 
   // Camera-specific settings
@@ -434,6 +436,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setPhysicalGamepadProfile('auto');
       setPhysicalGamepadIndex(undefined);
       setPhysicalGamepadDeadzone(0.08);
+      setPhysicalGamepadPublishHz(DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ);
       setPhysicalGamepadBindings({});
       setHeartbeatMode('boolean');
       setHeartbeatTimeoutMs(2000);
@@ -530,6 +533,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           setPhysicalGamepadProfile(component.config.physicalGamepadProfile || 'auto');
           setPhysicalGamepadIndex(component.config.physicalGamepadIndex);
           setPhysicalGamepadDeadzone(component.config.physicalGamepadDeadzone ?? 0.08);
+          setPhysicalGamepadPublishHz(normalizePhysicalGamepadPublishHz(component.config.physicalGamepadPublishHz));
           setPhysicalGamepadBindings(component.config.physicalGamepadBindings || {});
         } else if (component.type === 'button') {
           setButtonIndex(component.config.buttonIndex ?? 0);
@@ -778,6 +782,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         physicalGamepadProfile,
         physicalGamepadIndex,
         physicalGamepadDeadzone: Math.max(0, Math.min(0.5, physicalGamepadDeadzone)),
+        physicalGamepadPublishHz: normalizePhysicalGamepadPublishHz(physicalGamepadPublishHz),
         physicalGamepadBindings,
       };
     } else if (component.type === 'button') {
@@ -939,11 +944,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                 profile={physicalGamepadProfile}
                 preferredIndex={physicalGamepadIndex}
                 deadzone={physicalGamepadDeadzone}
+                publishHz={physicalGamepadPublishHz}
                 bindings={physicalGamepadBindings}
                 ros={ros || null}
                 onProfileChange={setPhysicalGamepadProfile}
                 onPreferredIndexChange={setPhysicalGamepadIndex}
                 onDeadzoneChange={setPhysicalGamepadDeadzone}
+                onPublishHzChange={setPhysicalGamepadPublishHz}
                 onBindingsChange={setPhysicalGamepadBindings}
               />
             </div>

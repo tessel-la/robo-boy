@@ -35,7 +35,7 @@ describe('defaultLayouts', () => {
     expect(defaultPhysicalGamepadLayout.components[0]).toMatchObject({
       type: 'physical-gamepad',
       action: { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
-      config: { physicalGamepadProfile: 'auto', physicalGamepadDeadzone: 0.08 },
+      config: { physicalGamepadProfile: 'auto', physicalGamepadDeadzone: 0.08, physicalGamepadPublishHz: 20 },
     });
   });
 

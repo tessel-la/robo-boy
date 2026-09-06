@@ -143,4 +143,25 @@ describe('PhysicalGamepadComponent', () => {
     unmount();
     expect(mocks.unadvertise).toHaveBeenCalledOnce();
   });
+
+  it('publishes Joy at the configured rate while keeping button edges immediate', async () => {
+    const tenHzConfig: GamepadComponentConfig = {
+      ...config,
+      config: { ...config.config, physicalGamepadPublishHz: 10 },
+    };
+    render(<PhysicalGamepadComponent config={tenHzConfig} ros={{} as any} />);
+
+    runFrame(100);
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
+
+    gamepads = [makeGamepad(0)];
+    runFrame(116);
+    await waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
+
+    runFrame(199);
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
+    runFrame(200);
+    expect(mocks.publish).toHaveBeenCalledTimes(2);
+  });
 });

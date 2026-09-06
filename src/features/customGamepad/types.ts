@@ -93,6 +93,7 @@ export interface GamepadComponentConfig {
     physicalGamepadProfile?: PhysicalGamepadProfile;
     physicalGamepadIndex?: number;
     physicalGamepadDeadzone?: number;
+    physicalGamepadPublishHz?: number;
     physicalGamepadBindings?: Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>;
 
     // Button specific

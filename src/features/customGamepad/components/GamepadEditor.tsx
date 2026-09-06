@@ -7,6 +7,7 @@ import {
   EditorState
 } from '../types';
 import { componentLibrary } from '../defaultLayouts';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
 import ComponentPalette from './ComponentPalette';
@@ -146,7 +147,11 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
           : componentType === 'heartbeat'
             ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
             : componentType === 'physical-gamepad'
-              ? { physicalGamepadProfile: 'auto' as const, physicalGamepadDeadzone: 0.08 }
+              ? {
+                physicalGamepadProfile: 'auto' as const,
+                physicalGamepadDeadzone: 0.08,
+                physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+              }
               : componentType === 'dpad'
                 ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
                 : componentType === 'joystick'

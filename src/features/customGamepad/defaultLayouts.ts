@@ -1,4 +1,5 @@
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from './physicalGamepad';
 
 // Generic ROS Joy starting point.
 export const defaultDualJoystickHeartbeatLayout: CustomGamepadLayout = {
@@ -86,6 +87,7 @@ export const defaultPhysicalGamepadLayout: CustomGamepadLayout = {
       config: {
         physicalGamepadProfile: 'auto',
         physicalGamepadDeadzone: 0.08,
+        physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
       },
     },
   ],

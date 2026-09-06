@@ -1,5 +1,15 @@
 import type { PhysicalGamepadControlId, PhysicalGamepadProfile } from './types';
 
+export const DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ = 20;
+export const MIN_PHYSICAL_GAMEPAD_PUBLISH_HZ = 1;
+export const MAX_PHYSICAL_GAMEPAD_PUBLISH_HZ = 60;
+
+export const normalizePhysicalGamepadPublishHz = (value: number | undefined): number => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ;
+  return Math.max(MIN_PHYSICAL_GAMEPAD_PUBLISH_HZ, Math.min(MAX_PHYSICAL_GAMEPAD_PUBLISH_HZ, numericValue));
+};
+
 export const PHYSICAL_GAMEPAD_CONTROLS: ReadonlyArray<{
   id: PhysicalGamepadControlId;
   buttonIndex: number;

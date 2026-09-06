@@ -21,15 +21,18 @@ vi.mock('./RosEventOperationsEditor', () => ({
 describe('PhysicalGamepadSettings', () => {
   it('offers all standard buttons and saves operations under the selected control', () => {
     const onBindingsChange = vi.fn();
+    const onPublishHzChange = vi.fn();
     render(
       <PhysicalGamepadSettings
         profile="playstation"
         deadzone={0.08}
+        publishHz={20}
         bindings={{}}
         ros={null}
         onProfileChange={vi.fn()}
         onPreferredIndexChange={vi.fn()}
         onDeadzoneChange={vi.fn()}
+        onPublishHzChange={onPublishHzChange}
         onBindingsChange={onBindingsChange}
       />
     );
@@ -44,5 +47,10 @@ describe('PhysicalGamepadSettings', () => {
         press: { kind: 'topic', name: '/pressed', messageType: 'std_msgs/msg/Bool', payload: { data: true } },
       },
     });
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Joy publish rate (Hz)' }), {
+      target: { value: '30' },
+    });
+    expect(onPublishHzChange).toHaveBeenCalledWith(30);
   });
 });

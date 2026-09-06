@@ -1,7 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import type { Ros } from 'roslib';
 import type { RosOperation } from '../../../utils/rosOperations';
-import { getPhysicalGamepadControlLabel, PHYSICAL_GAMEPAD_CONTROLS } from '../physicalGamepad';
+import {
+  getPhysicalGamepadControlLabel,
+  MAX_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+  MIN_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+  PHYSICAL_GAMEPAD_CONTROLS,
+} from '../physicalGamepad';
 import type { PhysicalGamepadBinding, PhysicalGamepadControlId, PhysicalGamepadProfile } from '../types';
 import RosEventOperationsEditor from './RosEventOperationsEditor';
 
@@ -9,11 +14,13 @@ interface Props {
   profile: PhysicalGamepadProfile;
   preferredIndex?: number;
   deadzone: number;
+  publishHz: number;
   bindings: Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>;
   ros: Ros | null;
   onProfileChange: (value: PhysicalGamepadProfile) => void;
   onPreferredIndexChange: (value: number | undefined) => void;
   onDeadzoneChange: (value: number) => void;
+  onPublishHzChange: (value: number) => void;
   onBindingsChange: (value: Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>) => void;
 }
 
@@ -21,11 +28,13 @@ const PhysicalGamepadSettings: React.FC<Props> = ({
   profile,
   preferredIndex,
   deadzone,
+  publishHz,
   bindings,
   ros,
   onProfileChange,
   onPreferredIndexChange,
   onDeadzoneChange,
+  onPublishHzChange,
   onBindingsChange,
 }) => {
   const [selectedControl, setSelectedControl] = useState<PhysicalGamepadControlId>('face-bottom');
@@ -85,6 +94,21 @@ const PhysicalGamepadSettings: React.FC<Props> = ({
           value={deadzone}
           onChange={event => onDeadzoneChange(Number(event.target.value))}
         />
+      </div>
+      <div className="setting-group">
+        <label htmlFor="physical-gamepad-publish-hz">Joy publish rate (Hz)</label>
+        <input
+          id="physical-gamepad-publish-hz"
+          type="number"
+          min={MIN_PHYSICAL_GAMEPAD_PUBLISH_HZ}
+          max={MAX_PHYSICAL_GAMEPAD_PUBLISH_HZ}
+          step="1"
+          value={publishHz}
+          onChange={event => onPublishHzChange(Number(event.target.value))}
+        />
+        <small className="settings-help">
+          {MIN_PHYSICAL_GAMEPAD_PUBLISH_HZ}-{MAX_PHYSICAL_GAMEPAD_PUBLISH_HZ} Hz. Button operations still run immediately.
+        </small>
       </div>
 
       <h4>

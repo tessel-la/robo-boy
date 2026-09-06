@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { componentLibrary } from '../defaultLayouts';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { GamepadComponentConfig } from '../types';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
@@ -82,7 +83,11 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
             : componentType === 'heartbeat'
               ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
               : componentType === 'physical-gamepad'
-                ? { physicalGamepadProfile: 'xbox' as const, physicalGamepadDeadzone: 0.08 }
+                ? {
+                  physicalGamepadProfile: 'xbox' as const,
+                  physicalGamepadDeadzone: 0.08,
+                  physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+                }
                 : {}
     };
 

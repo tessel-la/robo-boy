@@ -8,6 +8,7 @@ import {
   EMPTY_GAMEPAD_SNAPSHOT,
   findPhysicalGamepad,
   getPhysicalGamepadControlLabel,
+  normalizePhysicalGamepadPublishHz,
   PHYSICAL_GAMEPAD_CONTROLS,
   physicalGamepadSnapshotKey,
   snapshotPhysicalGamepad,
@@ -20,8 +21,6 @@ interface Props {
   ros: Ros;
   isEditing?: boolean;
 }
-
-const JOY_PUBLISH_INTERVAL_MS = 50;
 
 const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = false }) => {
   const [snapshot, setSnapshot] = useState<PhysicalGamepadSnapshot>(EMPTY_GAMEPAD_SNAPSHOT);
@@ -38,6 +37,7 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
   const profile = detectPhysicalGamepadProfile(config.config?.physicalGamepadProfile, connection?.id);
   const action = config.action as ROSTopicConfig | undefined;
   const bindings = config.config?.physicalGamepadBindings;
+  const publishIntervalMs = 1000 / normalizePhysicalGamepadPublishHz(config.config?.physicalGamepadPublishHz);
 
   const publishJoy = useCallback(
     (next: PhysicalGamepadSnapshot) => {
@@ -129,7 +129,7 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
         snapshotKeyRef.current = nextKey;
         setSnapshot(next);
       }
-      if (changed || justConnected || now - lastPublishedAtRef.current >= JOY_PUBLISH_INTERVAL_MS) {
+      if (justConnected || now - lastPublishedAtRef.current >= publishIntervalMs) {
         publishJoy(next);
         lastPublishedAtRef.current = now;
       }
@@ -146,6 +146,7 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
     config.config?.physicalGamepadDeadzone,
     config.config?.physicalGamepadIndex,
     isEditing,
+    publishIntervalMs,
     publishJoy,
     runOperation,
   ]);
