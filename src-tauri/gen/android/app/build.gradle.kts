@@ -13,6 +13,17 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val releaseKeystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("ANDROID_RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     compileSdk = 36
     namespace = "la.tessel.roboboy"
@@ -25,6 +36,16 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("production") {
+                storeFile = file(checkNotNull(releaseKeystorePath))
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -41,6 +62,7 @@ android {
             }
         }
         getByName("release") {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("production")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

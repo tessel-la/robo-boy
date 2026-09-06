@@ -22,3 +22,12 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-http = "2"
+
+# Mobile bundles pay for the Rust shell byte-for-byte. Keep production artifacts compact while
+# preserving debug profiles for local diagnosis.
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
