@@ -91,7 +91,9 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android build packages
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.0.12077973'
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.0.12077973'
+          echo "${ANDROID_HOME}/build-tools/36.0.0" >> "${GITHUB_PATH}"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
