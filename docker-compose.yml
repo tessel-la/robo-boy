@@ -48,7 +48,6 @@ services:
     depends_on:
       - app
       - ollama-relay
-      - webrtc-relay
       - ros-stack
     networks:
       - app-net
@@ -68,10 +67,20 @@ services:
       - ./infra/caddy/OllamaRelay.Caddyfile:/etc/caddy/Caddyfile:ro
       - ollama-relay-socket:/run/ollama-relay
 
-  # MediaMTX runs on the host network so its ICE candidates include physical
-  # and VPN interfaces. This relay exposes only its HTTP/WHEP signaling API to
-  # Caddy through a Unix socket shared with the bridge network.
+  # Optional, and off unless asked for. Robo-Boy starts no media gateway: a simulator or the
+  # operator provides one, and the packaged apps reach it directly without passing through here at
+  # all. Only a browser needs this, and only because two things are true at once -- an HTTPS page
+  # cannot fetch the gateway's plaintext port, and the gateway's ports are not reachable from
+  # Caddy's bridge network the way rosbridge and the video server are.
+  #
+  # Running on the host network sidesteps that: it reaches the gateway on loopback and hands the
+  # result to Caddy over a Unix socket, which crosses no network at all. A deployment whose
+  # firewall permits the bridge to reach the gateway can skip this and point WEBRTC_BACKEND_URL
+  # straight at it instead.
+  #
+  #   docker compose --profile webrtc up -d
   webrtc-relay:
+    profiles: [webrtc]
     image: caddy:latest
     restart: unless-stopped
     network_mode: host

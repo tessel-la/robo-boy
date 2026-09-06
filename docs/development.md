@@ -40,7 +40,7 @@ The stack starts:
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
-- `webrtc-relay`: host-network adapter from Caddy's Unix socket to MediaMTX's WHEP signaling API.
+- `webrtc-relay`: optional, and started only with `--profile webrtc`. A transport from Caddy to a media gateway Robo-Boy does not run.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
@@ -91,13 +91,27 @@ a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localh
 
 In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 
-The optional camera gateway is reached through the same-origin `/webrtc` route for WHEP signaling. Caddy reaches
-host-network MediaMTX through `webrtc-relay` and a shared Unix socket, avoiding Docker host-gateway firewall
-differences. Its ICE media port is negotiated by WebRTC and must be reachable directly from clients (the Genesis
-gateway uses UDP `8189`). RTSP remains a direct gateway service on port `8554` for native clients; browsers use
-WHEP/WebRTC instead.
-The gateway control API stays bound to host loopback. The relay exposes only `GET /webrtc/_discovery/paths`,
-which maps to MediaMTX's active-path listing; configuration and mutation endpoints are not proxied.
+The camera gateway is external. Robo-Boy starts no media server and does not care which one you run: a
+simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through Robo-Boy
+to reach it** — they address the gateway directly — so a client connected to nothing but the ROS stack still
+gets WebRTC, provided a gateway is reachable from it.
+
+Only browsers need Robo-Boy in the path, because an HTTPS page may not fetch the gateway's plaintext port. The
+same-origin `/webrtc` route serves them, and its upstream is a deployment choice:
+
+| Upstream                 | Requires                                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webrtc-relay` (default) | `docker compose --profile webrtc up -d`. Nothing of the host: it reaches the gateway on loopback.                                                                         |
+| The gateway directly     | `WEBRTC_UPSTREAM` and `WEBRTC_DISCOVERY_UPSTREAM`, a firewall that lets Caddy's bridge reach the gateway's ports, and a gateway whose API allowlist includes that subnet. |
+
+Without either, `/webrtc` returns a proxy error and the panel reports no streams. Nothing else in Robo-Boy is
+affected, and the packaged apps are unaffected entirely.
+
+Exactly one read-only resource is exposed: `GET /webrtc/_discovery/paths`, mapped to the gateway's active-path
+listing, with any other method refused. The relay carries signaling and that resource on separate sockets, so
+the pass-through route cannot reach the control API by asking for it. ICE media is negotiated separately and
+never passes through Caddy, so the gateway's ICE port (UDP `8189` by default) must be reachable directly from
+clients. RTSP stays a direct gateway service on `8554` for native clients; browsers use WHEP instead.
 
 Normal development discovers an empty tracked registry at `public/panels/installed.json`. Run
 `npm run dev:panels` to verify and stage the local repositories selected by
