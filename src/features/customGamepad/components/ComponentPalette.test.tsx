@@ -12,6 +12,7 @@ vi.mock('./SliderComponent', () => ({ default: () => <span /> }));
 vi.mock('./CameraComponent', () => ({ default: () => <span /> }));
 vi.mock('./PlotComponent', () => ({ default: () => <span /> }));
 vi.mock('./HeartbeatComponent', () => ({ default: () => <span /> }));
+vi.mock('./PhysicalGamepadComponent', () => ({ default: () => <span /> }));
 
 describe('ComponentPalette touch gestures', () => {
   afterEach(() => vi.useRealTimers());

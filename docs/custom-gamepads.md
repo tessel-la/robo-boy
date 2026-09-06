@@ -14,16 +14,25 @@ Layouts are stored in `localStorage` under `robo-boy-custom-gamepads`. Exported 
 
 ## Supported Components
 
-| Component | Primary role                                                            |
-| --------- | ----------------------------------------------------------------------- |
-| Joystick  | Publish continuous axes, including Joy, Twist, and PoseStamped mappings |
-| Button    | Publish pressed and released values or indexed Joy buttons              |
-| D-pad     | Publish discrete directional input                                      |
-| Toggle    | Maintain and publish an on/off state                                    |
-| Slider    | Publish a bounded numeric value                                         |
-| Camera    | Display a proxied or ROS-delivered image stream                         |
-| Plot      | Subscribe to numeric fields and render recent samples                   |
-| Heartbeat | Monitor boolean state or recurring messages                             |
+| Component       | Primary role                                                                      |
+| --------------- | --------------------------------------------------------------------------------- |
+| Joystick        | Publish continuous virtual axes, including Joy, Twist, and PoseStamped mappings  |
+| Physical gamepad | Read and visualize a browser-connected Xbox, PlayStation, or Logitech controller |
+| Button          | Publish pressed and released values or indexed Joy buttons                        |
+| D-pad           | Publish discrete directional input                                                |
+| Toggle          | Maintain and publish an on/off state                                              |
+| Slider          | Publish a bounded numeric value                                                   |
+| Camera          | Display a proxied or ROS-delivered image stream                                   |
+| Plot            | Subscribe to numeric fields and render recent samples                             |
+| Heartbeat       | Monitor boolean state or recurring messages                                       |
+
+## Physical Controllers
+
+The physical-gamepad component uses the browser's standard Gamepad API mapping: four axes and 17 buttons. It can auto-detect Xbox/XInput, PlayStation, and Logitech IDs or use an explicitly selected visual profile. It publishes a complete `sensor_msgs/Joy` message at a configurable 1-60 Hz (20 Hz by default) while connected and immediately publishes a neutral message when the controller disappears or the component unmounts.
+
+The responsive visualization uses the full built-in pad width on phones and works in portrait or landscape. Web, iOS, and Android use the same browser Gamepad API path; a controller must be paired with the device and a button may need to be pressed after the app gains focus. If the platform WebView does not expose the API, the pad reports that explicitly. Hiding or suspending the app publishes a neutral Joy message before polling pauses.
+
+Each standard button—including triggers, stick clicks, D-pad directions, center buttons, and home—has independent press and release operations. Operations reuse the same topic, service, and action executor as ordinary pad buttons. Publish rate, stick deadzone, and a preferred browser controller index are saved with the layout. Non-standard browser mappings are displayed with a warning because their raw axis and button order is device- and browser-specific.
 
 ## Runtime Flow
 
@@ -43,6 +52,7 @@ Layouts are stored in `localStorage` under `robo-boy-custom-gamepads`. Exported 
 | Built-in templates and palette           | `src/features/customGamepad/defaultLayouts.ts`                  |
 | Import, export, and persistence          | `src/features/customGamepad/gamepadStorage.ts`                  |
 | ROS message conversion and introspection | `src/features/customGamepad/rosMessageUtils.ts`                 |
+| Physical-controller normalization        | `src/features/customGamepad/physicalGamepad.ts`                 |
 | Editor                                   | `src/features/customGamepad/components/GamepadEditor.tsx`       |
 | Runtime renderer                         | `src/features/customGamepad/components/CustomGamepadLayout.tsx` |
 | Component dispatch and editor shell      | `src/features/customGamepad/components/GamepadComponent.tsx`    |

@@ -9,6 +9,7 @@ import SliderComponent from './SliderComponent';
 import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
 import HeartbeatComponent from './HeartbeatComponent';
+import PhysicalGamepadComponent from './PhysicalGamepadComponent';
 import './GamepadComponent.css';
 
 interface GamepadComponentProps {
@@ -361,6 +362,8 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
             onTwistAxesChange={onTwistAxesChange}
           />
         );
+      case 'physical-gamepad':
+        return <PhysicalGamepadComponent {...commonProps} />;
       case 'button':
         return <ButtonComponent {...commonProps} />;
       case 'dpad':

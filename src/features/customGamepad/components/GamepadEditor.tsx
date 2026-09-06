@@ -7,6 +7,7 @@ import {
   EditorState
 } from '../types';
 import { componentLibrary } from '../defaultLayouts';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
 import ComponentPalette from './ComponentPalette';
@@ -110,6 +111,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       case 'joystick':
         action = { topic: '/joystick', messageType: 'sensor_msgs/Joy', field: 'axes' };
         break;
+      case 'physical-gamepad':
+        action = { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' };
+        break;
       case 'dpad':
         action = { topic: '/dpad', messageType: 'sensor_msgs/Joy', field: 'buttons' };
         break;
@@ -142,11 +146,17 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
           ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
           : componentType === 'heartbeat'
             ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
-          : componentType === 'dpad'
-            ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
-            : componentType === 'joystick'
-              ? { min: -1, max: 1, sliderMin: -1, sliderMax: 1, axes: ['0', '1'] }
-              : undefined;
+            : componentType === 'physical-gamepad'
+              ? {
+                physicalGamepadProfile: 'auto' as const,
+                physicalGamepadDeadzone: 0.08,
+                physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+              }
+              : componentType === 'dpad'
+                ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
+                : componentType === 'joystick'
+                  ? { min: -1, max: 1, sliderMin: -1, sliderMax: 1, axes: ['0', '1'] }
+                  : undefined;
 
     const newComponent: GamepadComponentConfig = {
       id: `${componentType}-${Date.now()}`,

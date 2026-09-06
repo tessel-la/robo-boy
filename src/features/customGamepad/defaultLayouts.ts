@@ -1,4 +1,5 @@
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from './physicalGamepad';
 
 // Generic ROS Joy starting point.
 export const defaultDualJoystickHeartbeatLayout: CustomGamepadLayout = {
@@ -66,6 +67,41 @@ export const defaultDualJoystickHeartbeatLayout: CustomGamepadLayout = {
   }
 };
 
+export const defaultPhysicalGamepadLayout: CustomGamepadLayout = {
+  id: 'default-physical-gamepad',
+  name: 'Physical Gamepad',
+  description: 'Live Xbox, PlayStation, or Logitech controller with configurable ROS controls',
+  gridSize: { width: 8, height: 4 },
+  cellSize: 80,
+  components: [
+    {
+      id: 'physical-gamepad',
+      type: 'physical-gamepad',
+      position: { x: 0, y: 0, width: 8, height: 4 },
+      label: 'Physical Gamepad',
+      action: {
+        topic: '/joy',
+        messageType: 'sensor_msgs/msg/Joy',
+        field: 'axes',
+      },
+      config: {
+        physicalGamepadProfile: 'auto',
+        physicalGamepadDeadzone: 0.08,
+        physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+      },
+    },
+  ],
+  rosConfig: {
+    defaultTopic: '/joy',
+    defaultMessageType: 'sensor_msgs/msg/Joy',
+  },
+  metadata: {
+    created: new Date().toISOString(),
+    modified: new Date().toISOString(),
+    version: '1.0.0',
+  },
+};
+
 // Default library items
 export const defaultGamepadLibrary: GamepadLibraryItem[] = [
   {
@@ -74,6 +110,13 @@ export const defaultGamepadLibrary: GamepadLibraryItem[] = [
     description: 'Generic four-axis Joy controller with a heartbeat monitor',
     layout: defaultDualJoystickHeartbeatLayout,
     isDefault: true
+  },
+  {
+    id: 'physical-gamepad',
+    name: 'Physical Gamepad',
+    description: 'Live Xbox, PlayStation, or Logitech controller with configurable ROS controls',
+    layout: defaultPhysicalGamepadLayout,
+    isDefault: true,
   }
 ];
 
@@ -85,6 +128,13 @@ export const componentLibrary = [
     description: 'Analog stick for continuous control',
     defaultSize: { width: 2, height: 2 },
     icon: '🕹️'
+  },
+  {
+    type: 'physical-gamepad' as const,
+    name: 'Physical Gamepad',
+    description: 'Connected Xbox, PlayStation, or Logitech controller',
+    defaultSize: { width: 6, height: 4 },
+    icon: '🎮'
   },
   {
     type: 'button' as const,
