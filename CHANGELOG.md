@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.6.0-alpha...robo-boy-v0.6.1-alpha) (2026-09-06)
+
+
+### Bug Fixes
+
+* **android:** ship optimized signed release APK ([4879380](https://github.com/tessel-la/robo-boy/commit/487938024af439334580bc7022cb394e8bba9ae6))
+* **android:** ship optimized signed release APK ([639cf4b](https://github.com/tessel-la/robo-boy/commit/639cf4bbb21277be6873a0eef324d96d549e0a4a))
+* **android:** ship the signed release APK ([f76922f](https://github.com/tessel-la/robo-boy/commit/f76922f98124e9c8d453ab43511e74575761b63a))
+* **ci:** add build-tools to PATH for release signature verification ([db85737](https://github.com/tessel-la/robo-boy/commit/db8573706e1a67de3e7b7e243084ff6d58e836d9))
+
 ## [0.6.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.5.0-alpha...robo-boy-v0.6.0-alpha) (2026-09-05)
 
 
