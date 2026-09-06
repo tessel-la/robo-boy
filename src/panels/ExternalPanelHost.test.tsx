@@ -91,6 +91,9 @@ describe('ExternalPanelHost sandbox', () => {
     expect(iframe).not.toBeNull();
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-downloads allow-forms');
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    // That opaque origin makes the frame cross-origin, which withholds autoplay unless granted,
+    // leaving a panel that plays a stream unable to start one.
+    expect(iframe?.getAttribute('allow')).toContain('autoplay');
     // Loaded from its own URL rather than srcdoc, so it does not inherit the host page's CSP.
     expect(iframe?.getAttribute('srcdoc')).toBeNull();
     const sandboxSrc = new URL(iframe!.getAttribute('src')!, document.baseURI);
