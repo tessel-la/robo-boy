@@ -571,7 +571,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .component-settings-modal-overlay {
-    padding: 10px;
+    padding: calc(8px + var(--safe-area-top)) 8px calc(8px + var(--safe-area-bottom));
   }
 
   .enhanced-component-settings-modal {
@@ -608,6 +608,27 @@
   .cancel-btn,
   .save-btn {
     width: 100%;
+  }
+
+  .physical-gamepad-settings input:not([type="range"]),
+  .physical-gamepad-settings select,
+  .physical-gamepad-settings textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .physical-gamepad-settings input[type="range"] {
+    min-height: 44px;
+  }
+
+  .physical-control-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .physical-control-picker button {
+    min-height: 44px;
+    touch-action: manipulation;
   }
 }
 

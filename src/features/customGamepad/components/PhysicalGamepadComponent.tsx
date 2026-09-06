@@ -37,6 +37,7 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
   const profile = detectPhysicalGamepadProfile(config.config?.physicalGamepadProfile, connection?.id);
   const action = config.action as ROSTopicConfig | undefined;
   const bindings = config.config?.physicalGamepadBindings;
+  const gamepadApiSupported = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function';
   const publishIntervalMs = 1000 / normalizePhysicalGamepadPublishHz(config.config?.physicalGamepadPublishHz);
 
   const publishJoy = useCallback(
@@ -83,7 +84,7 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
   }, [action?.messageType, action?.topic, isEditing, publishJoy, ros]);
 
   useEffect(() => {
-    if (isEditing || typeof navigator.getGamepads !== 'function') return;
+    if (isEditing || !gamepadApiSupported) return;
     let frameId = 0;
     let stopped = false;
 
@@ -96,6 +97,10 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
       connectionKeyRef.current = '';
       setSnapshot(EMPTY_GAMEPAD_SNAPSHOT);
       setConnection(null);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') disconnect();
     };
 
     const poll = (now: number) => {
@@ -136,15 +141,20 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
       frameId = requestAnimationFrame(poll);
     };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', disconnect);
     frameId = requestAnimationFrame(poll);
     return () => {
       stopped = true;
       cancelAnimationFrame(frameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', disconnect);
       disconnect();
     };
   }, [
     config.config?.physicalGamepadDeadzone,
     config.config?.physicalGamepadIndex,
+    gamepadApiSupported,
     isEditing,
     publishIntervalMs,
     publishJoy,
@@ -179,9 +189,11 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
         <span className={`physical-gamepad-dot ${connection ? 'connected' : ''}`} />
         {isEditing
           ? `${profile} preview`
-          : connection
-            ? `#${connection.index} ${connection.id}`
-            : 'Press a controller button to connect'}
+          : !gamepadApiSupported
+            ? 'Controller input unavailable on this device'
+            : connection
+              ? `#${connection.index} ${connection.id}`
+              : 'Press a controller button to connect'}
       </div>
       <svg viewBox="0 0 400 250" role="img" aria-label={`${profile} gamepad visualization`}>
         <path
@@ -282,6 +294,11 @@ const PhysicalGamepadComponent: React.FC<Props> = ({ config, ros, isEditing = fa
       {connection && connection.mapping !== 'standard' && (
         <small className="physical-gamepad-warning">
           Non-standard browser mapping; verify control indices before driving.
+        </small>
+      )}
+      {!isEditing && !gamepadApiSupported && (
+        <small className="physical-gamepad-warning">
+          This browser or app WebView does not expose the Gamepad API.
         </small>
       )}
       {operationError && (

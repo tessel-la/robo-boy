@@ -144,6 +144,33 @@ describe('PhysicalGamepadComponent', () => {
     expect(mocks.unadvertise).toHaveBeenCalledOnce();
   });
 
+  it('publishes neutral input when a phone or browser suspends the page', () => {
+    render(<PhysicalGamepadComponent config={config} ros={{} as any} />);
+    runFrame(100);
+    mocks.publish.mockClear();
+
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+
+    expect(mocks.publish).toHaveBeenCalledOnce();
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        axes: [0, 0, 0, 0],
+        buttons: Array(17).fill(0),
+      })
+    );
+  });
+
+  it('explains when a mobile WebView does not expose controller input', () => {
+    Reflect.deleteProperty(navigator, 'getGamepads');
+
+    render(<PhysicalGamepadComponent config={config} ros={{} as any} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Controller input unavailable on this device');
+    expect(screen.getByText('This browser or app WebView does not expose the Gamepad API.')).toBeInTheDocument();
+    expect(frames).toHaveLength(0);
+  });
+
   it('publishes Joy at the configured rate while keeping button edges immediate', async () => {
     const tenHzConfig: GamepadComponentConfig = {
       ...config,

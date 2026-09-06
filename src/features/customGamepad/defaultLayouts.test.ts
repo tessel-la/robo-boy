@@ -34,6 +34,7 @@ describe('defaultLayouts', () => {
     });
     expect(defaultPhysicalGamepadLayout.components[0]).toMatchObject({
       type: 'physical-gamepad',
+      position: { x: 0, y: 0, width: 8, height: 4 },
       action: { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
       config: { physicalGamepadProfile: 'auto', physicalGamepadDeadzone: 0.08, physicalGamepadPublishHz: 20 },
     });

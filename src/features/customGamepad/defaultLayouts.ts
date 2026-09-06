@@ -77,7 +77,7 @@ export const defaultPhysicalGamepadLayout: CustomGamepadLayout = {
     {
       id: 'physical-gamepad',
       type: 'physical-gamepad',
-      position: { x: 1, y: 0, width: 6, height: 4 },
+      position: { x: 0, y: 0, width: 8, height: 4 },
       label: 'Physical Gamepad',
       action: {
         topic: '/joy',
