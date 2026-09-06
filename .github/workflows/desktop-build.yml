@@ -77,6 +77,12 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          # rust-cache buckets by the coarse Linux/Windows/macOS runner.os, not the specific
+          # ubuntu-latest vs ubuntu-22.04 image, so give each matrix leg its own bucket. This
+          # matters most for Linux: it is deliberately pinned to ubuntu-22.04's older glibc, and
+          # without this key it could restore host-target build scripts cached by another Linux
+          # job on ubuntu-latest's newer glibc, which then fail to run here.
+          shared-key: desktop-${{ matrix.artifact }}
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
