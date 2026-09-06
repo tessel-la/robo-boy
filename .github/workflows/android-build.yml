@@ -104,6 +104,11 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          # rust-cache buckets by the coarse Linux/Windows/macOS runner.os, not the specific
+          # ubuntu-latest vs ubuntu-22.04 image. Without this key, this job's host-target build
+          # scripts (compiled against ubuntu-latest's glibc) could be restored into the Linux
+          # desktop installer job's target/ dir, which is pinned to ubuntu-22.04's older glibc.
+          shared-key: android
 
       - name: Install dependencies
         run: npm ci
