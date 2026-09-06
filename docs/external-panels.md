@@ -352,7 +352,7 @@ Install the type-only SDK directly from its versioned GitHub release:
 ```bash
 cd my-roboboy-panel
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.0.0/tessel-la-roboboy-panel-sdk-2.0.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.1.0/tessel-la-roboboy-panel-sdk-2.1.0.tgz
 ```
 
 After building `dist/index.js`, calculate its SRI value and copy the complete `sha256-...` value into the panel
