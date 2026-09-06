@@ -118,6 +118,7 @@ export interface PanelHostRuntime {
     videoStream: string;
     webrtcWhep: string;
     webrtcDiscovery: string;
+    webrtcHls: string;
   };
 }
 

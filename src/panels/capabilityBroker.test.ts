@@ -345,7 +345,9 @@ describe('stream gateway endpoints reach the panel', () => {
     new URL(`${streamPath}/whep`, new URL(whepBase, document.baseURI)).toString();
 
   it.each([
-    ['browser behind the proxy', { ros2Option: 'ip' as const, ros2Value: '' }, false],
+    // A domain connection is what actually stays on the same origin; an empty IP falls through to
+    // a direct localhost backend, which is a different deployment entirely.
+    ['browser behind the proxy', { ros2Option: 'domain' as const, ros2Value: 10 }, false],
     ['packaged app, direct', { ros2Option: 'ip' as const, ros2Value: 'robot.local' }, true],
   ])('grants what the panel builds for a %s', (_label, params, desktop) => {
     const runtime = resolveRuntimeEndpoints(params, desktop, {
@@ -365,5 +367,27 @@ describe('stream gateway endpoints reach the panel', () => {
     // The gateway's other control routes stay out of reach in every deployment.
     const control = new URL('../v3/config/global/get', endpoints.webrtcDiscovery).toString();
     expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(control))).toBe(false);
+
+    // The HLS fallback is granted where the gateway is addressable directly, and simply does not
+    // exist behind the proxy -- a browser has WebRTC and never reaches for it.
+    const hlsManifest: ResolvedPanelManifest = {
+      ...manifest,
+      permissions: { network: { hostEndpoints: ['webrtcHls'] } },
+    };
+    const withHls = { ...endpoints, webrtcHls: runtime.webrtcHlsBaseUrl };
+    if (desktop) {
+      expect(runtime.webrtcHlsBaseUrl).toBe('http://robot.local:8888/');
+      for (const file of ['index.m3u8', 'video1_stream.m3u8', 'abc_video1_init.mp4', 'abc_video1_seg10.mp4']) {
+        const url = new URL(`manipulator_wrist_camera/${file}`, runtime.webrtcHlsBaseUrl);
+        expect(isGrantedHostEndpointUrl(hlsManifest, withHls, url)).toBe(true);
+      }
+      // Still one stream path deep: nothing else on that port is reachable.
+      const deep = new URL('manipulator_wrist_camera/nested/secret.mp4', runtime.webrtcHlsBaseUrl);
+      expect(isGrantedHostEndpointUrl(hlsManifest, withHls, deep)).toBe(false);
+    } else {
+      expect(runtime.webrtcHlsBaseUrl).toBe('');
+      const url = new URL('https://roboboy.test:8888/manipulator_wrist_camera/index.m3u8');
+      expect(isGrantedHostEndpointUrl(hlsManifest, withHls, url)).toBe(false);
+    }
   });
 });

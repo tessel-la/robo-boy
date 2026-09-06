@@ -16,6 +16,12 @@ export interface RuntimeEndpoints {
    */
   webrtcWhepBaseUrl: string;
   webrtcDiscoveryUrl: string;
+  /**
+   * The same stream over HLS, for webviews that cannot speak WebRTC at all. Empty where the
+   * gateway is not addressable directly, which is every browser behind the proxy -- and no loss,
+   * since a browser has WebRTC and never needs the fallback.
+   */
+  webrtcHlsBaseUrl: string;
   mode: 'web' | 'desktop';
   host: string;
 }
@@ -27,6 +33,7 @@ export interface RuntimePortConfig {
   ollamaPort: string;
   webrtcPort: string;
   webrtcDiscoveryPort: string;
+  webrtcHlsPort: string;
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
@@ -57,6 +64,7 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   // the stock one can be reached without either of them being written into a caller.
   webrtcPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_PORT, '8889'),
   webrtcDiscoveryPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_DISCOVERY_PORT, '9997'),
+  webrtcHlsPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_HLS_PORT, '8888'),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
 });
 
@@ -138,6 +146,7 @@ const resolveDirectEndpoints = (
     ollamaBaseUrl: `${httpScheme}://${urlHost}:${ports.ollamaPort}`,
     webrtcWhepBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcPort}/`,
     webrtcDiscoveryUrl: `${httpScheme}://${urlHost}:${ports.webrtcDiscoveryPort}/v3/paths/list`,
+    webrtcHlsBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcHlsPort}/`,
     mode,
     host,
   };
@@ -177,6 +186,9 @@ export function resolveRuntimeEndpoints(
       // Same-origin, because a browser on an HTTPS page cannot reach the gateway's own ports.
       webrtcWhepBaseUrl: '/webrtc/',
       webrtcDiscoveryUrl: '/webrtc/_discovery/paths',
+      // No proxy route: the fallback exists for webviews without WebRTC, and every browser that
+      // reaches this branch has it. Nothing is published that nothing would use.
+      webrtcHlsBaseUrl: '',
       mode: 'web',
       host: location.hostname,
     };

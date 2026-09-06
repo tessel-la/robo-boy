@@ -20,6 +20,7 @@ describe('resolveRuntimeEndpoints', () => {
       meshResourcesBaseUrl: '/mesh_resources',
       ollamaBaseUrl: '/ollama',
       webrtcWhepBaseUrl: '/webrtc/',
+      webrtcHlsBaseUrl: '',
       webrtcDiscoveryUrl: '/webrtc/_discovery/paths',
       mode: 'web',
       host: 'robot.local',
@@ -39,6 +40,7 @@ describe('resolveRuntimeEndpoints', () => {
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
+      webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
       webrtcDiscoveryUrl: 'http://192.168.1.20:9997/v3/paths/list',
       mode: 'web',
       host: '192.168.1.20',
@@ -71,6 +73,7 @@ describe('resolveRuntimeEndpoints', () => {
       meshResourcesBaseUrl: 'http://robot.tailnet.ts.net:8000',
       ollamaBaseUrl: 'http://robot.tailnet.ts.net:11434',
       webrtcWhepBaseUrl: 'http://robot.tailnet.ts.net:8889/',
+      webrtcHlsBaseUrl: 'http://robot.tailnet.ts.net:8888/',
       webrtcDiscoveryUrl: 'http://robot.tailnet.ts.net:9997/v3/paths/list',
       mode: 'web',
       host: 'robot.tailnet.ts.net',
@@ -93,6 +96,7 @@ describe('resolveRuntimeEndpoints', () => {
         ollamaPort: '11434',
         webrtcPort: '8889',
         webrtcDiscoveryPort: '9997',
+  webrtcHlsPort: '8888',
         webBackendMode: 'proxy',
       }
     );
@@ -111,6 +115,7 @@ describe('resolveRuntimeEndpoints', () => {
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
+      webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
       webrtcDiscoveryUrl: 'http://192.168.1.20:9997/v3/paths/list',
       mode: 'desktop',
       host: '192.168.1.20',
@@ -138,7 +143,8 @@ describe('resolveRuntimeEndpoints', () => {
       videoStreamPort: '18080',
       meshResourcesPort: '18000',
       ollamaPort: '11435',
-      webrtcPort: '8889', webrtcDiscoveryPort: '9997', webBackendMode: 'auto',
+      webrtcPort: '8889', webrtcDiscoveryPort: '9997',
+  webrtcHlsPort: '8888', webBackendMode: 'auto',
     });
 
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');

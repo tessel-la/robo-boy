@@ -100,6 +100,7 @@ export interface GrantedRuntimeEndpoints {
   videoStream?: string;
   webrtcWhep?: string;
   webrtcDiscovery?: string;
+  webrtcHls?: string;
 }
 
 const normalizeHeaders = (value: unknown): Record<string, string> => {
@@ -123,6 +124,9 @@ const normalizeHeaders = (value: unknown): Record<string, string> => {
 /** The only shape a WHEP request takes: one stream path directly beneath the gateway. */
 const GATEWAY_WHEP_PATH = /^[A-Za-z0-9][A-Za-z0-9_-]*\/whep(?:\/.*)?$/;
 
+/** One stream path beneath the gateway, then a single playlist or segment file inside it. */
+const GATEWAY_HLS_PATH = /^[A-Za-z0-9][A-Za-z0-9_-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 /**
  * Whether a URL sits beneath a granted endpoint, matching the rest of its path.
  *
@@ -144,7 +148,7 @@ export const isGrantedHostEndpointUrl = (
   runtimeEndpoints: GrantedRuntimeEndpoints,
   url: URL
 ): boolean => {
-  const { webrtcWhep, webrtcDiscovery } = runtimeEndpoints;
+  const { webrtcWhep, webrtcDiscovery, webrtcHls } = runtimeEndpoints;
   const reachesGateway = () =>
     (webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false) ||
     (webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false);
@@ -153,6 +157,7 @@ export const isGrantedHostEndpointUrl = (
     if (endpoint === 'webrtcWhep')
       return webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false;
     if (endpoint === 'webrtcDiscovery') return webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false;
+    if (endpoint === 'webrtcHls') return webrtcHls ? isBeneathEndpoint(webrtcHls, url, GATEWAY_HLS_PATH) : false;
     // Panels published before the gateway had endpoints of its own ask for the video server and
     // mean the gateway. They are answered from the gateway's endpoints rather than from a second
     // account of where it lives.
