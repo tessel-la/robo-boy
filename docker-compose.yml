@@ -67,20 +67,17 @@ services:
       - ./infra/caddy/OllamaRelay.Caddyfile:/etc/caddy/Caddyfile:ro
       - ollama-relay-socket:/run/ollama-relay
 
-  # Optional, and off unless asked for. Robo-Boy starts no media gateway: a simulator or the
-  # operator provides one, and the packaged apps reach it directly without passing through here at
-  # all. Only a browser needs this, and only because two things are true at once -- an HTTPS page
-  # cannot fetch the gateway's plaintext port, and the gateway's ports are not reachable from
-  # Caddy's bridge network the way rosbridge and the video server are.
+  # Part of the web deployment, beside Caddy, for a media gateway Robo-Boy does not run. Only a
+  # browser needs it, and only because two things are true at once: an HTTPS page cannot fetch the
+  # gateway's plaintext port, and the gateway's ports are not reachable from Caddy's bridge network
+  # the way rosbridge and the video server are. Running on the host network sidesteps both -- it
+  # reaches the gateway on loopback and hands the result to Caddy over a Unix socket.
   #
-  # Running on the host network sidesteps that: it reaches the gateway on loopback and hands the
-  # result to Caddy over a Unix socket, which crosses no network at all. A deployment whose
-  # firewall permits the bridge to reach the gateway can skip this and point WEBRTC_BACKEND_URL
-  # straight at it instead.
-  #
-  #   docker compose --profile webrtc up -d
+  # It is not part of the ROS side and nothing there depends on it: `up -d ros-stack` starts the
+  # robot services alone, and the packaged apps address the gateway directly without passing
+  # through here at all. A deployment whose firewall lets the bridge reach the gateway, and whose
+  # gateway admits that subnet, can drop this service and point WEBRTC_UPSTREAM straight at it.
   webrtc-relay:
-    profiles: [webrtc]
     image: caddy:latest
     restart: unless-stopped
     network_mode: host
