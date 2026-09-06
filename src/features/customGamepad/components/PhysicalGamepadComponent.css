@@ -1,0 +1,118 @@
+.physical-gamepad {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  color: var(--text-color);
+  background: radial-gradient(circle at 50% 40%, var(--background-secondary), var(--card-bg));
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.physical-gamepad-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 18px;
+  padding: 4px 8px 0;
+  color: var(--text-secondary);
+  font-size: clamp(8px, 2.4cqw, 12px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.physical-gamepad-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--secondary-color);
+}
+
+.physical-gamepad-dot.connected {
+  background: var(--primary-color);
+  box-shadow: 0 0 8px var(--primary-color-glow);
+}
+
+.physical-gamepad svg {
+  display: block;
+  width: 100%;
+  height: calc(100% - 22px);
+  min-height: 0;
+}
+
+.physical-gamepad-body {
+  fill: var(--background-secondary);
+  stroke: var(--border-color-light);
+  stroke-width: 4;
+  filter: drop-shadow(0 8px 8px var(--background-dark-transparent));
+}
+
+.physical-control circle,
+.physical-control rect,
+.physical-control path,
+.physical-control:is(circle, rect, path),
+.physical-dpad rect {
+  fill: var(--card-bg);
+  stroke: var(--border-color-light);
+  stroke-width: 2;
+  transition:
+    fill 70ms ease,
+    filter 70ms ease,
+    transform 70ms ease;
+}
+
+.physical-control text {
+  fill: var(--text-color);
+  font-family: var(--font-family-ui);
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.physical-control.is-active circle,
+.physical-control.is-active rect,
+.physical-control.is-active path,
+.physical-control.is-active:is(circle, rect, path),
+.physical-control.is-active .stick-knob {
+  fill: var(--primary-color);
+  stroke: var(--primary-hover-color);
+  filter: drop-shadow(0 0 6px var(--primary-color-glow));
+}
+
+.physical-control.is-active text {
+  fill: var(--button-text-color);
+}
+
+.physical-control .stick-well {
+  fill: var(--background-color);
+}
+
+.physical-control .stick-knob {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.physical-gamepad-warning {
+  padding: 0 8px 5px;
+  color: var(--error-color);
+  font-size: 9px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .physical-control circle,
+  .physical-control rect,
+  .physical-control path {
+    transition: none;
+  }
+}
