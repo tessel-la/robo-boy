@@ -40,7 +40,7 @@ The stack starts:
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
-- `webrtc-relay`: optional, and started only with `--profile webrtc`. A transport from Caddy to a media gateway Robo-Boy does not run.
+- `webrtc-relay`: part of the web deployment beside Caddy. A transport to a media gateway Robo-Boy does not run, needed only by browsers.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
@@ -101,11 +101,13 @@ same-origin `/webrtc` route serves them, and its upstream is a deployment choice
 
 | Upstream                 | Requires                                                                                                                                                                  |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `webrtc-relay` (default) | `docker compose --profile webrtc up -d`. Nothing of the host: it reaches the gateway on loopback.                                                                         |
+| `webrtc-relay` (default) | Nothing of the host: it runs beside Caddy and reaches the gateway on loopback.                                                                                            |
 | The gateway directly     | `WEBRTC_UPSTREAM` and `WEBRTC_DISCOVERY_UPSTREAM`, a firewall that lets Caddy's bridge reach the gateway's ports, and a gateway whose API allowlist includes that subnet. |
 
-Without either, `/webrtc` returns a proxy error and the panel reports no streams. Nothing else in Robo-Boy is
-affected, and the packaged apps are unaffected entirely.
+The relay belongs to the web deployment, not to the robot side. `docker compose up -d ros-stack` starts the ROS
+services alone and nothing there depends on it, while a packaged client addresses the gateway directly. Without
+a gateway running anywhere, `/webrtc` returns a proxy error and the panel reports no streams; nothing else in
+Robo-Boy is affected.
 
 Exactly one read-only resource is exposed: `GET /webrtc/_discovery/paths`, mapped to the gateway's active-path
 listing, with any other method refused. The relay carries signaling and that resource on separate sockets, so
