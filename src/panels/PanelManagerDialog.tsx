@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiPlus, FiTrash2, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { createLocalPanelManagerBackend, remotePanelManagerBackend } from './managerBackend';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
 import {
-  applyPanelManagerPlan,
-  listPanelCatalog,
-  loadPanelManagerConfig,
-  previewPanelManagerConfig,
   type CatalogPanelSummary,
   type PanelInstallPreview,
   type PanelSourceConfig,
@@ -122,6 +118,30 @@ const storePanelManagerToken = (value: string) => {
   }
 };
 
+interface PanelToggleProps {
+  panelName: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+const PanelToggle = ({ panelName, checked, disabled, onChange }: PanelToggleProps) => (
+  <label className="panel-manager-toggle">
+    <span className="panel-manager-toggle-label">{checked ? 'Enabled' : 'Disabled'}</span>
+    <input
+      type="checkbox"
+      role="switch"
+      aria-label={`${panelName} enabled`}
+      checked={checked}
+      disabled={disabled}
+      onChange={event => onChange(event.target.checked)}
+    />
+    <span className="panel-manager-toggle-track" aria-hidden="true">
+      <span />
+    </span>
+  </label>
+);
+
 const PanelManagerDialog = ({
   installedPanels,
   availablePanels,
@@ -151,17 +171,43 @@ const PanelManagerDialog = ({
   const installedIds = useMemo(() => installedPanels.map(panel => panel.id), [installedPanels]);
   const officialSource = useMemo(() => (config ? findOfficialSource(config) : undefined), [config]);
   const panelRows = useMemo(() => {
-    const rows = new Map<string, { id: string; name: string; description: string; available?: AvailablePanel; inCatalog: boolean }>();
+    const rows = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        description: string;
+        version: string;
+        available?: AvailablePanel;
+        inCatalog: boolean;
+      }
+    >();
     for (const entry of catalog ?? []) {
-      rows.set(entry.id, { id: entry.id, name: entry.name, description: entry.description, inCatalog: true });
+      rows.set(entry.id, {
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        version: entry.version,
+        inCatalog: true,
+      });
     }
     for (const panel of availablePanels) {
-      const { id, name, description } = panel.manifest;
-      rows.set(id, { id, name, description, available: panel, inCatalog: rows.get(id)?.inCatalog ?? false });
+      const { id, name, description, version } = panel.manifest;
+      rows.set(id, {
+        id,
+        name,
+        description,
+        version,
+        available: panel,
+        inCatalog: rows.get(id)?.inCatalog ?? false,
+      });
     }
     return [...rows.values()];
   }, [availablePanels, catalog]);
+  const installedCount = panelRows.filter(row => row.available).length;
+  const availableCount = panelRows.length - installedCount;
   const skipNextResetRef = useRef(false);
+  const [pendingPanelId, setPendingPanelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (skipNextResetRef.current) {
@@ -240,10 +286,11 @@ const PanelManagerDialog = ({
     setConfig({ ...config, sources: [...config.sources, source] });
   };
 
-  const requestPreview = async (overrideConfig?: PanelSourcesConfig) => {
+  const requestPreview = async (overrideConfig?: PanelSourcesConfig, panelId?: string) => {
     const target = overrideConfig ?? config;
     if (!target) return;
     setBusy(true);
+    setPendingPanelId(panelId ?? null);
     setError('');
     setNotice('');
     try {
@@ -256,17 +303,18 @@ const PanelManagerDialog = ({
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setBusy(false);
+      setPendingPanelId(null);
     }
   };
 
   const installCatalogPanel = (panelId: string) => {
     if (!config) return;
-    void requestPreview(withCatalogPanelSelected(config, installedIds, panelId));
+    void requestPreview(withCatalogPanelSelected(config, installedIds, panelId), panelId);
   };
 
   const removeCatalogPanel = (panelId: string) => {
     if (!config) return;
-    void requestPreview(withPanelDeselected(config, installedIds, panelId));
+    void requestPreview(withPanelDeselected(config, installedIds, panelId), panelId);
   };
 
   const applyPreview = async () => {
@@ -310,16 +358,17 @@ const PanelManagerDialog = ({
         </header>
 
         {!config ? (
-          requiresToken !== true ? (
-            <div className="panel-manager-unlock">
-              <p>Loading installed panels…</p>
-            </div>
-          ) : (
+          requiresToken === true ? (
             <div className="panel-manager-unlock">
               <p>
                 Enter the deployment token. It's remembered in this browser so you won't need to re-enter it here next
                 time.
               </p>
+              {error && (
+                <p className="panel-manager-inline-error" role="alert">
+                  {error}
+                </p>
+              )}
               <label>
                 Panel manager token
                 <input
@@ -339,17 +388,30 @@ const PanelManagerDialog = ({
                 {busy ? 'Checking…' : 'Unlock'}
               </button>
             </div>
+          ) : error ? (
+            <div className="panel-manager-unlock panel-manager-load-error" role="alert">
+              <strong>Couldn&apos;t load panels</strong>
+              <p>{error}</p>
+              <button type="button" className="panel-manager-button" onClick={() => void unlock()} disabled={busy}>
+                {busy ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          ) : (
+            <div className="panel-manager-unlock panel-manager-loading" role="status">
+              <span className="panel-manager-spinner" aria-hidden="true" />
+              <div>
+                <strong>Loading panels</strong>
+                <p>Checking this deployment and its configured sources…</p>
+              </div>
+            </div>
           )
         ) : (
           <div className="panel-manager-content">
-            <section>
+            <section className="panel-manager-panels-section">
               <div className="panel-manager-section-heading">
                 <div>
                   <h3>Panels</h3>
-                  <p>
-                    Everything this app can run, with where it came from. Official and custom panels can be
-                    installed or removed; panels that ship with the build can be switched off but not removed.
-                  </p>
+                  <p>Install panels for this deployment, then switch installed panels on or off for this browser.</p>
                   <p className="panel-manager-auth-note">
                     {isDesktopRuntime
                       ? 'Panels install into this app only; nothing is sent to the robot.'
@@ -358,15 +420,26 @@ const PanelManagerDialog = ({
                         : 'Installing needs no token: anyone who can reach this deployment can add a panel. Set ROBOBOY_PANEL_MANAGER_TOKEN on it to require one.'}
                   </p>
                 </div>
+                {panelRows.length > 0 && (
+                  <span
+                    className="panel-manager-panel-count"
+                    aria-label={`${installedCount} installed, ${availableCount} available`}
+                  >
+                    {installedCount} installed
+                    {availableCount > 0 ? ` · ${availableCount} available` : ''}
+                  </span>
+                )}
               </div>
               {!officialSource && (
-                <p className="panel-manager-catalog-status">
-                  This deployment installs panels from its own configured sources, so the official catalog is
-                  not offered here.
+                <p className="panel-manager-catalog-status panel-manager-empty-state">
+                  This deployment installs panels from its own configured sources, so the official catalog is not
+                  offered here.
                 </p>
               )}
               {officialSource && catalogLoading && (
-                <p className="panel-manager-catalog-status">Checking the official catalog…</p>
+                <p className="panel-manager-catalog-status" role="status">
+                  Checking the official catalog…
+                </p>
               )}
               {officialSource && !catalogLoading && catalogError && (
                 <div className="panel-manager-catalog-error" role="alert">
@@ -377,7 +450,10 @@ const PanelManagerDialog = ({
                 </div>
               )}
               {!catalogLoading && panelRows.length === 0 && (
-                <p className="panel-manager-catalog-status">No panels are available right now.</p>
+                <div className="panel-manager-empty-state">
+                  <strong>No panels available</strong>
+                  <p>There are no installed panels or panels offered by the configured catalog right now.</p>
+                </div>
               )}
               {panelRows.length > 0 && (
                 <ul className="panel-manager-catalog">
@@ -387,41 +463,96 @@ const PanelManagerDialog = ({
                     const isManaged = installedIds.includes(row.id);
                     const selected = isManaged && isEffectivelySelected(config, row.id);
                     const origin = isBundled ? 'Bundled' : row.inCatalog ? 'Official' : 'Custom';
-                    const state = !available ? 'Not installed' : available.isEnabled ? 'Enabled' : 'Disabled';
+                    const plannedChange = preview?.changes.find(change => change.panel.id === row.id)?.type;
+                    const isPendingInstall = plannedChange === 'add';
+                    const isPendingRemoval = plannedChange === 'remove';
+                    const isPendingUpdate = plannedChange === 'update';
                     return (
-                      <li key={row.id}>
-                        <span>
-                          <strong>{row.name}</strong>
-                          <small>{row.description}</small>
-                          <small className="panel-manager-catalog-tags">
-                            {origin} · {state}
-                            {isBundled ? ' · ships with this build' : ''}
-                          </small>
-                        </span>
-                        {available && (
-                          <button
-                            type="button"
-                            onClick={() => onPanelEnabledChange(row.id, !available.isEnabled)}
-                            disabled={busy}
-                          >
-                            {available.isEnabled ? 'Disable' : 'Enable'}
-                          </button>
-                        )}
-                        {!available && row.inCatalog && (
-                          <button type="button" onClick={() => installCatalogPanel(row.id)} disabled={busy}>
-                            Install
-                          </button>
-                        )}
-                        {available && !isBundled && isManaged && selected && (
-                          <button type="button" onClick={() => removeCatalogPanel(row.id)} disabled={busy}>
-                            Remove
-                          </button>
-                        )}
-                        {available && !isBundled && isManaged && !selected && (
-                          <button type="button" onClick={() => installCatalogPanel(row.id)} disabled={busy}>
-                            Keep
-                          </button>
-                        )}
+                      <li
+                        key={row.id}
+                        className="panel-manager-panel-card"
+                        data-state={
+                          isPendingRemoval
+                            ? 'pending-removal'
+                            : isPendingInstall || isPendingUpdate
+                              ? 'pending-install'
+                              : available?.isEnabled
+                                ? 'enabled'
+                                : available
+                                  ? 'disabled'
+                                  : 'available'
+                        }
+                      >
+                        <div className="panel-manager-panel-copy">
+                          <div className="panel-manager-panel-title">
+                            <strong>{row.name}</strong>
+                            <span className="panel-manager-version">v{row.version}</span>
+                          </div>
+                          <p>{row.description || 'No description provided.'}</p>
+                          <span className="panel-manager-panel-id" title={row.id}>
+                            {row.id}
+                          </span>
+                          <div className="panel-manager-panel-tags" aria-label="Panel status">
+                            <span data-kind="origin">{origin}</span>
+                            <span data-kind={available ? 'installed' : 'available'}>
+                              {available ? 'Installed' : 'Available'}
+                            </span>
+                            {isPendingInstall && <span data-kind="pending">Pending install</span>}
+                            {isPendingRemoval && <span data-kind="danger">Pending removal</span>}
+                            {isPendingUpdate && <span data-kind="pending">Update ready</span>}
+                          </div>
+                          {isBundled && <small className="panel-manager-bundled-note">Ships with this build</small>}
+                        </div>
+                        <div className="panel-manager-panel-actions">
+                          {available && (
+                            <PanelToggle
+                              panelName={row.name}
+                              checked={available.isEnabled}
+                              disabled={busy}
+                              onChange={isEnabled => onPanelEnabledChange(row.id, isEnabled)}
+                            />
+                          )}
+                          {!available && row.inCatalog && !isPendingInstall && (
+                            <button
+                              type="button"
+                              className="panel-manager-button panel-manager-install-button"
+                              onClick={() => installCatalogPanel(row.id)}
+                              disabled={busy}
+                            >
+                              {busy && pendingPanelId === row.id ? 'Preparing…' : 'Install'}
+                            </button>
+                          )}
+                          {!available && row.inCatalog && isPendingInstall && (
+                            <button
+                              type="button"
+                              className="panel-manager-button"
+                              onClick={() => removeCatalogPanel(row.id)}
+                              disabled={busy}
+                            >
+                              {busy && pendingPanelId === row.id ? 'Preparing…' : 'Cancel install'}
+                            </button>
+                          )}
+                          {available && !isBundled && isManaged && selected && !isPendingRemoval && (
+                            <button
+                              type="button"
+                              className="panel-manager-button panel-manager-remove-button"
+                              onClick={() => removeCatalogPanel(row.id)}
+                              disabled={busy}
+                            >
+                              {busy && pendingPanelId === row.id ? 'Preparing…' : 'Remove'}
+                            </button>
+                          )}
+                          {available && !isBundled && isManaged && (!selected || isPendingRemoval) && (
+                            <button
+                              type="button"
+                              className="panel-manager-button"
+                              onClick={() => installCatalogPanel(row.id)}
+                              disabled={busy}
+                            >
+                              {busy && pendingPanelId === row.id ? 'Preparing…' : 'Keep installed'}
+                            </button>
+                          )}
+                        </div>
                       </li>
                     );
                   })}
@@ -429,175 +560,192 @@ const PanelManagerDialog = ({
               )}
             </section>
 
-            <section>
-              <div className="panel-manager-section-heading">
-                <div>
-                  <h3>Sources</h3>
+            <details className="panel-manager-disclosure">
+              <summary>
+                <span>
+                  <strong>Panel sources</strong>
+                  <small>{config.sources.length} configured · Advanced</small>
+                </span>
+                <FiChevronDown aria-hidden="true" />
+              </summary>
+              <div className="panel-manager-disclosure-content">
+                <div className="panel-manager-section-heading">
                   <p>Credentials stay in server environment variables; this form stores only their names.</p>
+                  <div className="panel-manager-add-actions">
+                    <button type="button" onClick={() => addSource('remote')}>
+                      <FiPlus /> Remote
+                    </button>
+                    <button type="button" onClick={() => addSource('local')}>
+                      <FiPlus /> Local
+                    </button>
+                  </div>
                 </div>
-                <div className="panel-manager-add-actions">
-                  <button type="button" onClick={() => addSource('remote')}>
-                    <FiPlus /> Remote
-                  </button>
-                  <button type="button" onClick={() => addSource('local')}>
-                    <FiPlus /> Local
-                  </button>
+                <div className="panel-manager-sources">
+                  {config.sources.map((source, index) => (
+                    <article key={`${source.type}-${index}`} className="panel-manager-source">
+                      <div className="panel-manager-source-title">
+                        <strong>{source.type === 'remote' ? 'Remote catalog' : 'Mounted workspace'}</strong>
+                        <button
+                          type="button"
+                          className="panel-manager-icon-button"
+                          onClick={() => removeSource(index)}
+                          aria-label={`Remove source ${source.name}`}
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                      <div className="panel-manager-fields">
+                        <label>
+                          Name
+                          <input
+                            value={source.name}
+                            onChange={event => updateSource(index, { ...source, name: event.target.value })}
+                          />
+                        </label>
+                        {source.type === 'remote' ? (
+                          <>
+                            <label className="wide">
+                              Catalog URL
+                              <input
+                                value={source.catalogUrl}
+                                onChange={event => updateSource(index, { ...source, catalogUrl: event.target.value })}
+                              />
+                            </label>
+                            <label className="wide">
+                              Allowed release origins
+                              <textarea
+                                value={(source.allowedOrigins || []).join('\n')}
+                                onChange={event =>
+                                  updateSource(index, { ...source, allowedOrigins: splitLines(event.target.value) })
+                                }
+                                placeholder="https://releases.example.com"
+                              />
+                            </label>
+                            <label>
+                              Authorization environment
+                              <input
+                                value={source.authorizationEnv || ''}
+                                onChange={event =>
+                                  updateSource(index, { ...source, authorizationEnv: event.target.value || undefined })
+                                }
+                                placeholder="ROBOBOY_PANEL_SOURCE_PRIVATE_AUTHORIZATION"
+                              />
+                            </label>
+                            <label className="wide">
+                              Credentialed origins
+                              <textarea
+                                value={(source.authenticatedOrigins || []).join('\n')}
+                                onChange={event =>
+                                  updateSource(index, {
+                                    ...source,
+                                    authenticatedOrigins: splitLines(event.target.value),
+                                  })
+                                }
+                                placeholder="Defaults to the catalog origin"
+                              />
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <label>
+                              Mounted root
+                              <input
+                                value={source.root || ''}
+                                onChange={event =>
+                                  updateSource(index, { ...source, root: event.target.value || undefined })
+                                }
+                              />
+                            </label>
+                            <label>
+                              Root environment
+                              <input
+                                value={source.rootEnv || ''}
+                                onChange={event =>
+                                  updateSource(index, { ...source, rootEnv: event.target.value || undefined })
+                                }
+                                placeholder="ROBOBOY_PANEL_WORKSPACE"
+                              />
+                            </label>
+                            <label className="wide">
+                              Repository directories
+                              <textarea
+                                value={source.repositories.join('\n')}
+                                onChange={event =>
+                                  updateSource(index, { ...source, repositories: splitLines(event.target.value) })
+                                }
+                                placeholder="my-panel"
+                              />
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  ))}
                 </div>
               </div>
-              <div className="panel-manager-sources">
-                {config.sources.map((source, index) => (
-                  <article key={`${source.type}-${index}`} className="panel-manager-source">
-                    <div className="panel-manager-source-title">
-                      <strong>{source.type === 'remote' ? 'Remote catalog' : 'Mounted workspace'}</strong>
-                      <button
-                        type="button"
-                        className="panel-manager-icon-button"
-                        onClick={() => removeSource(index)}
-                        aria-label={`Remove source ${source.name}`}
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </div>
-                    <div className="panel-manager-fields">
-                      <label>
-                        Name
-                        <input
-                          value={source.name}
-                          onChange={event => updateSource(index, { ...source, name: event.target.value })}
-                        />
-                      </label>
-                      {source.type === 'remote' ? (
-                        <>
-                          <label className="wide">
-                            Catalog URL
-                            <input
-                              value={source.catalogUrl}
-                              onChange={event => updateSource(index, { ...source, catalogUrl: event.target.value })}
-                            />
-                          </label>
-                          <label className="wide">
-                            Allowed release origins
-                            <textarea
-                              value={(source.allowedOrigins || []).join('\n')}
-                              onChange={event =>
-                                updateSource(index, { ...source, allowedOrigins: splitLines(event.target.value) })
-                              }
-                              placeholder="https://releases.example.com"
-                            />
-                          </label>
-                          <label>
-                            Authorization environment
-                            <input
-                              value={source.authorizationEnv || ''}
-                              onChange={event =>
-                                updateSource(index, { ...source, authorizationEnv: event.target.value || undefined })
-                              }
-                              placeholder="ROBOBOY_PANEL_SOURCE_PRIVATE_AUTHORIZATION"
-                            />
-                          </label>
-                          <label className="wide">
-                            Credentialed origins
-                            <textarea
-                              value={(source.authenticatedOrigins || []).join('\n')}
-                              onChange={event =>
-                                updateSource(index, {
-                                  ...source,
-                                  authenticatedOrigins: splitLines(event.target.value),
-                                })
-                              }
-                              placeholder="Defaults to the catalog origin"
-                            />
-                          </label>
-                        </>
-                      ) : (
-                        <>
-                          <label>
-                            Mounted root
-                            <input
-                              value={source.root || ''}
-                              onChange={event =>
-                                updateSource(index, { ...source, root: event.target.value || undefined })
-                              }
-                            />
-                          </label>
-                          <label>
-                            Root environment
-                            <input
-                              value={source.rootEnv || ''}
-                              onChange={event =>
-                                updateSource(index, { ...source, rootEnv: event.target.value || undefined })
-                              }
-                              placeholder="ROBOBOY_PANEL_WORKSPACE"
-                            />
-                          </label>
-                          <label className="wide">
-                            Repository directories
-                            <textarea
-                              value={source.repositories.join('\n')}
-                              onChange={event =>
-                                updateSource(index, { ...source, repositories: splitLines(event.target.value) })
-                              }
-                              placeholder="my-panel"
-                            />
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            </details>
 
-            <section>
-              <div className="panel-manager-section-heading">
-                <div>
-                  <h3>Advanced selection</h3>
-                  <p>The desired state the manager resolves. Panels above are the view of what it produced.</p>
-                </div>
-              </div>
-              <div className="panel-manager-selection">
-                <label>
-                  Mode
-                  <select
-                    value={config.selection.mode}
-                    onChange={event => {
-                      const mode = event.target.value as 'all' | 'include' | 'none';
-                      setConfig({
-                        ...config,
-                        selection: mode === 'include' ? { mode, panelIds: installedIds } : { mode },
-                      });
-                    }}
-                  >
-                    <option value="all">All discovered panels</option>
-                    <option value="include">Only listed panel IDs</option>
-                    <option value="none">No external panels</option>
-                  </select>
-                </label>
-                {config.selection.mode === 'include' && (
-                  <label className="wide">
-                    Panel IDs
-                    <textarea
-                      value={config.selection.panelIds.join('\n')}
-                      onChange={event =>
+            <details className="panel-manager-disclosure">
+              <summary>
+                <span>
+                  <strong>Selection rules</strong>
+                  <small>Mode: {config.selection.mode === 'include' ? 'listed panels' : config.selection.mode}</small>
+                </span>
+                <FiChevronDown aria-hidden="true" />
+              </summary>
+              <div className="panel-manager-disclosure-content">
+                <p className="panel-manager-disclosure-description">
+                  The desired state the manager resolves. Panels above are the view of what it produced.
+                </p>
+                <div className="panel-manager-selection">
+                  <label>
+                    Mode
+                    <select
+                      value={config.selection.mode}
+                      onChange={event => {
+                        const mode = event.target.value as 'all' | 'include' | 'none';
                         setConfig({
                           ...config,
-                          selection: { mode: 'include', panelIds: splitLines(event.target.value) },
-                        })
-                      }
-                    />
+                          selection: mode === 'include' ? { mode, panelIds: installedIds } : { mode },
+                        });
+                      }}
+                    >
+                      <option value="all">All discovered panels</option>
+                      <option value="include">Only listed panel IDs</option>
+                      <option value="none">No external panels</option>
+                    </select>
                   </label>
-                )}
+                  {config.selection.mode === 'include' && (
+                    <label className="wide">
+                      Panel IDs
+                      <textarea
+                        value={config.selection.panelIds.join('\n')}
+                        onChange={event =>
+                          setConfig({
+                            ...config,
+                            selection: { mode: 'include', panelIds: splitLines(event.target.value) },
+                          })
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
-            </section>
+            </details>
 
             <section className="panel-manager-review">
               <div className="panel-manager-section-heading">
                 <div>
-                  <h3>Review</h3>
-                  <p>Preview verifies manifests and bundle hashes without changing the active registry.</p>
+                  <h3>{preview ? 'Ready to apply' : 'Review changes'}</h3>
+                  <p>
+                    {preview
+                      ? 'Verified against the selected sources. Review access before applying this exact plan.'
+                      : 'Preview verifies manifests and bundle hashes without changing the active registry.'}
+                  </p>
                 </div>
                 <button
                   type="button"
+                  className="panel-manager-button"
                   onClick={() => void requestPreview()}
                   disabled={busy || config.sources.length === 0}
                 >
@@ -606,7 +754,7 @@ const PanelManagerDialog = ({
               </div>
               {preview && (
                 <>
-                  <div className="panel-manager-change-summary">
+                  <div className="panel-manager-change-summary" role="status">
                     {preview.changes.length === 0
                       ? 'No installed-panel changes.'
                       : preview.changes.map(change => (
@@ -652,7 +800,7 @@ const PanelManagerDialog = ({
             </section>
           </div>
         )}
-        {error && (
+        {config && error && (
           <div className="panel-manager-message error" role="alert">
             {error}
           </div>

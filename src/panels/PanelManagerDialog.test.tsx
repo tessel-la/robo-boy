@@ -89,10 +89,7 @@ describe('PanelManagerDialog', () => {
     // Removing from the panel list previews the change straight away.
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await screen.findByText('remove Telemetry@2.0.0');
-    expect(api.preview).toHaveBeenCalledWith(
-      '',
-      expect.objectContaining({ selection: { mode: 'none' } })
-    );
+    expect(api.preview).toHaveBeenCalledWith('', expect.objectContaining({ selection: { mode: 'none' } }));
     expect(api.apply).not.toHaveBeenCalled();
 
     const applyButton = screen.getByRole('button', { name: 'Apply this exact plan' });
@@ -153,7 +150,7 @@ describe('PanelManagerDialog', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
     await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(1));
-    // The first panel now reads "Keep", so this is the second one.
+    // The first panel now reads "Keep installed", so this is the second one.
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
 
     await waitFor(() =>
@@ -300,7 +297,9 @@ describe('PanelManagerDialog', () => {
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    const toggle = screen.getByRole('switch', { name: 'Telemetry enabled' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
 
     expect(onPanelEnabledChange).toHaveBeenCalledWith('com.example.telemetry', false);
   });
@@ -323,7 +322,78 @@ describe('PanelManagerDialog', () => {
 
     expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Not installed/)).not.toBeInTheDocument();
-    expect(screen.getByText(/ships with this build/)).toBeInTheDocument();
+    expect(screen.getByText(/Ships with this build/)).toBeInTheDocument();
+  });
+
+  it('makes disabled and available states explicit', async () => {
+    api.catalog.mockResolvedValue({
+      panels: [
+        {
+          id: secondPanel.id,
+          name: secondPanel.name,
+          description: secondPanel.description,
+          version: secondPanel.version,
+        },
+      ],
+    });
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={[{ manifest: panel, origin: 'installed', isEnabled: false } as AvailablePanel]}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    await screen.findByText('Camera');
+
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Telemetry enabled' })).not.toBeChecked();
+    expect(screen.getByText('Installed')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Install' })).toBeEnabled();
+  });
+
+  it('shows pending install and removal states after verification', async () => {
+    const officialSummary = {
+      id: secondPanel.id,
+      name: secondPanel.name,
+      description: secondPanel.description,
+      version: secondPanel.version,
+    };
+    api.catalog.mockResolvedValue({ panels: [officialSummary] });
+    api.preview
+      .mockResolvedValueOnce({
+        planId: 'install-plan',
+        expiresInSeconds: 600,
+        panels: [secondPanel],
+        changes: [{ type: 'add', panel: secondPanel }],
+      })
+      .mockResolvedValueOnce({
+        planId: 'remove-plan',
+        expiresInSeconds: 600,
+        panels: [secondPanel],
+        changes: [{ type: 'remove', panel }],
+      });
+    render(
+      <PanelManagerDialog
+        installedPanels={[panel]}
+        availablePanels={availableFrom([panel])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    await screen.findByText('Camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(await screen.findByText('Pending install')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel install' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText('Pending removal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep installed' })).toBeEnabled();
   });
 
   it('does not offer the official catalog on a deployment that does not configure it', async () => {
@@ -364,13 +434,34 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-
     await screen.findByText("Couldn't load the official panel catalog: network down");
 
     api.catalog.mockResolvedValueOnce({ panels: [] });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     await waitFor(() => expect(api.catalog).toHaveBeenCalledTimes(2));
+  });
+
+  it('replaces the startup loading state with a recoverable error', async () => {
+    api.load.mockRejectedValueOnce(new Error('deployment offline'));
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText("Couldn't load panels")).toBeInTheDocument();
+    expect(screen.getByText('deployment offline')).toBeInTheDocument();
+    expect(screen.queryByText('Loading panels')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await screen.findByText('Panel sources');
+    expect(api.load).toHaveBeenCalledTimes(2);
   });
 
   it('does not duplicate the official source when it is already configured under a custom name', async () => {
