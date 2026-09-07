@@ -15,7 +15,15 @@ export type RoboBoyPanelCapability =
   | 'camera'
   | 'microphone';
 
-export type RoboBoyHostEndpoint = 'videoStream';
+/**
+ * Named host services a panel may ask for.
+ *
+ * `webrtcWhep`, `webrtcDiscovery` and `webrtcHls` are the stream gateway, which is a deployment of
+ * its own and need not be running beside anything else. `webrtcHls` carries the same stream for
+ * webviews that cannot speak WebRTC, and is empty where the gateway is not directly addressable.
+ * `videoStream` also reaches the gateway, for panels written before it had endpoints of its own.
+ */
+export type RoboBoyHostEndpoint = 'videoStream' | 'webrtcWhep' | 'webrtcDiscovery' | 'webrtcHls';
 
 export interface RoboBoyPanelRosPermissions {
   discover?: boolean;
@@ -222,6 +230,8 @@ export interface RoboBoyPanelNetworkResponse {
   };
   text(): Promise<string>;
   json<T extends RoboBoyJsonValue = RoboBoyJsonValue>(): Promise<T>;
+  /** The response as bytes, for media and anything else that is not text. */
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 export interface RoboBoyPanelNetwork {

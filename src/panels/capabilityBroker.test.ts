@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  isGrantedHostEndpointUrl,
   connectPanelCapabilityBroker,
   getGrantedPanelEndpoints,
   normalizeRosMessage,
   resourceMatches,
 } from './capabilityBroker';
 import type { ResolvedPanelManifest } from './types';
+import { resolveRuntimeEndpoints } from '../runtime/runtimeConfig';
 
 const manifest: ResolvedPanelManifest = {
   schemaVersion: 1,
@@ -235,6 +237,82 @@ describe('panel capability broker', () => {
     fetcher.mockRestore();
   });
 
+  // The gateway is granted by naming it, not by working it out from the video server, so a panel
+  // that asks for it directly gets exactly the same reach as one written before it had a name.
+  it('grants the stream gateway to a panel that names it, and nothing beside it', () => {
+    const endpoints = {
+      videoStream: 'https://robot.example:8080',
+      webrtcWhep: 'https://gateway.example:8889/',
+      webrtcDiscovery: 'https://gateway.example:9997/v3/paths/list',
+    };
+    const gatewayManifest: ResolvedPanelManifest = {
+      ...manifest,
+      permissions: { network: { hostEndpoints: ['webrtcWhep', 'webrtcDiscovery'] } },
+    };
+    const reaches = (url: string) => isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(url));
+
+    expect(reaches('https://gateway.example:8889/camera/whep')).toBe(true);
+    expect(reaches('https://gateway.example:9997/v3/paths/list')).toBe(true);
+    // A gateway somewhere other than the robot is the point: nothing infers it from videoStream.
+    expect(reaches('https://robot.example:8889/camera/whep')).toBe(false);
+    expect(reaches('https://gateway.example:8889/admin')).toBe(false);
+    expect(reaches('https://gateway.example:9997/v3/config')).toBe(false);
+  });
+
+  // A media segment is not text: decoding it on the way through would corrupt the bytes and put
+  // any panel that plays media outside the broker, which is the only way out a panel has.
+  it('carries bytes through the broker without decoding them', async () => {
+    const segment = new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0xff, 0xfe, 0x80, 0x01]);
+    const port = {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: vi.fn(),
+      start: vi.fn(),
+      close: vi.fn(),
+    } as unknown as MessagePort;
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      url: 'https://robot.example:8888/camera/seg1.mp4',
+      headers: new Headers({ 'content-type': 'video/mp4' }),
+      arrayBuffer: async () => segment.buffer,
+    } as Response);
+
+    const disconnect = connectPanelCapabilityBroker(
+      port,
+      {
+        manifest: {
+          ...manifest,
+          capabilities: ['network'],
+          permissions: { network: { hostEndpoints: ['webrtcHls'] } },
+        },
+        ros: null,
+        runtime: { target: 'desktop' },
+        runtimeEndpoints: { webrtcHls: 'https://robot.example:8888/' },
+        hostElement: document.createElement('div'),
+        logger: console,
+      },
+      vi.fn()
+    );
+
+    port.onmessage?.({
+      data: {
+        type: 'request',
+        requestId: 'segment',
+        method: 'network.fetch',
+        params: { url: 'https://robot.example:8888/camera/seg1.mp4' },
+      },
+    } as MessageEvent);
+
+    await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalled());
+    const calls = (port.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const [message] = calls[calls.length - 1];
+    expect(message.error).toBeUndefined();
+    expect(new Uint8Array(message.value.body)).toEqual(segment);
+
+    disconnect();
+    fetcher.mockRestore();
+  });
+
   it('limits a host endpoint grant to its known service routes', async () => {
     const endpointOnlyManifest: ResolvedPanelManifest = {
       ...manifest,
@@ -251,7 +329,7 @@ describe('panel capability broker', () => {
       statusText: 'OK',
       url: 'https://robot.example:8889/camera/whep',
       headers: new Headers({ 'content-type': 'application/sdp', server: 'private-server' }),
-      text: async () => 'answer',
+      arrayBuffer: async () => new TextEncoder().encode('answer').buffer,
     } as Response);
     const disconnect = connectPanelCapabilityBroker(
       port,
@@ -259,7 +337,11 @@ describe('panel capability broker', () => {
         manifest: endpointOnlyManifest,
         ros: null,
         runtime: { target: 'web' },
-        runtimeEndpoints: { videoStream: 'https://robot.example:8080' },
+        runtimeEndpoints: {
+          videoStream: 'https://robot.example:8080',
+          webrtcWhep: 'https://robot.example:8889/',
+          webrtcDiscovery: 'https://robot.example:9997/v3/paths/list',
+        },
         hostElement: document.createElement('div'),
         logger: console,
       },
@@ -300,5 +382,66 @@ describe('panel capability broker', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     disconnect();
     fetcher.mockRestore();
+  });
+});
+
+// The whole chain the WebRTC panel depends on, in one place: what the runtime resolves for a
+// deployment, what the panel builds from it, and whether the broker lets that through. It is wired
+// across three files and two repositories, so nothing else notices when one end moves.
+describe('stream gateway endpoints reach the panel', () => {
+  const gatewayManifest: ResolvedPanelManifest = {
+    ...manifest,
+    permissions: { network: { hostEndpoints: ['webrtcWhep', 'webrtcDiscovery'] } },
+  };
+
+  // Exactly what robo-boy-webrtc-panel does with the base it is handed.
+  const panelWhepUrl = (whepBase: string, streamPath: string) =>
+    new URL(`${streamPath}/whep`, new URL(whepBase, document.baseURI)).toString();
+
+  it.each([
+    // A domain connection is what actually stays on the same origin; an empty IP falls through to
+    // a direct localhost backend, which is a different deployment entirely.
+    ['browser behind the proxy', { ros2Option: 'domain' as const, ros2Value: 10 }, false],
+    ['packaged app, direct', { ros2Option: 'ip' as const, ros2Value: 'robot.local' }, true],
+  ])('grants what the panel builds for a %s', (_label, params, desktop) => {
+    const runtime = resolveRuntimeEndpoints(params, desktop, {
+      protocol: 'https:',
+      hostname: 'roboboy.test',
+      host: 'roboboy.test',
+    });
+    const endpoints = {
+      webrtcWhep: new URL(runtime.webrtcWhepBaseUrl, document.baseURI).href,
+      webrtcDiscovery: new URL(runtime.webrtcDiscoveryUrl, document.baseURI).href,
+    };
+
+    const whep = panelWhepUrl(endpoints.webrtcWhep, 'manipulator_wrist_camera');
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(whep))).toBe(true);
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(endpoints.webrtcDiscovery))).toBe(true);
+
+    // The gateway's other control routes stay out of reach in every deployment.
+    const control = new URL('../v3/config/global/get', endpoints.webrtcDiscovery).toString();
+    expect(isGrantedHostEndpointUrl(gatewayManifest, endpoints, new URL(control))).toBe(false);
+
+    // The HLS fallback is granted where the gateway is addressable directly, and simply does not
+    // exist behind the proxy -- a browser has WebRTC and never reaches for it.
+    const hlsManifest: ResolvedPanelManifest = {
+      ...manifest,
+      permissions: { network: { hostEndpoints: ['webrtcHls'] } },
+    };
+    const withHls = { ...endpoints, webrtcHls: runtime.webrtcHlsBaseUrl };
+    if (desktop) {
+      expect(runtime.webrtcHlsBaseUrl).toBe('http://robot.local:8888/');
+      for (const file of ['index.m3u8', 'video1_stream.m3u8', 'abc_video1_init.mp4', 'abc_video1_seg10.mp4']) {
+        const url = new URL(`manipulator_wrist_camera/${file}`, runtime.webrtcHlsBaseUrl);
+        expect(isGrantedHostEndpointUrl(hlsManifest, withHls, url)).toBe(true);
+      }
+      // Still one stream path deep: nothing else on that port is reachable.
+      const deep = new URL('manipulator_wrist_camera/nested/secret.mp4', runtime.webrtcHlsBaseUrl);
+      expect(isGrantedHostEndpointUrl(hlsManifest, withHls, deep)).toBe(false);
+    } else {
+      expect(runtime.webrtcHlsBaseUrl).toBe('');
+      const url = new URL('https://roboboy.test:8888/manipulator_wrist_camera/index.m3u8');
+      expect(isGrantedHostEndpointUrl(hlsManifest, withHls, url)).toBe(false);
+    }
   });
 });

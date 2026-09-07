@@ -31,11 +31,30 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
 	}
 
-	# MediaMTX WebRTC/WHEP signaling. WebRTC media is negotiated separately
-	# over the gateway's advertised ICE port (UDP 8189 by default).
+	# WHEP signaling for whatever media gateway this deployment runs. Robo-Boy starts none, and the
+	# packaged apps address one directly without passing through here; a browser cannot, because an
+	# HTTPS page may not fetch the gateway's plaintext port.
+	#
+	# The upstream defaults to the optional relay, which needs nothing of the host. Point these at
+	# the gateway instead where the firewall lets this network reach it and the gateway's API
+	# accepts this subnet.
+	#
+	# One read-only resource is exposed. The rest of the control API, which can change
+	# configuration and drop sessions, is not mapped into this namespace at all.
+	handle /webrtc/_discovery/paths {
+		@get method GET
+		handle @get {
+			rewrite * /v3/paths/list
+			reverse_proxy {$WEBRTC_DISCOVERY_UPSTREAM:unix//run/webrtc-relay/api.sock}
+		}
+		respond "Method not allowed" 405
+	}
+
+	# WebRTC media is negotiated separately over the gateway's advertised ICE port (UDP 8189 by
+	# default) and never passes through this proxy.
 	handle /webrtc* {
 		uri strip_prefix /webrtc
-		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+		reverse_proxy {$WEBRTC_UPSTREAM:unix//run/webrtc-relay/whep.sock} {
 			# MediaMTX returns an origin-relative WHEP session URL. Restore the
 			# public prefix so the panel's DELETE cleanup reaches this handler.
 			header_down Location ^/(.*)$ /webrtc/$1
@@ -97,10 +116,19 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$VIDEO_STREAM_PORT:8080}
 	}
 
-	# Proxy WHEP signaling to the backend media gateway.
+	# WHEP signaling for the deployment's media gateway; see the HTTPS block.
+	handle /webrtc/_discovery/paths {
+		@get method GET
+		handle @get {
+			rewrite * /v3/paths/list
+			reverse_proxy {$WEBRTC_DISCOVERY_UPSTREAM:unix//run/webrtc-relay/api.sock}
+		}
+		respond "Method not allowed" 405
+	}
+
 	handle /webrtc* {
 		uri strip_prefix /webrtc
-		reverse_proxy unix//run/webrtc-relay/webrtc.sock {
+		reverse_proxy {$WEBRTC_UPSTREAM:unix//run/webrtc-relay/whep.sock} {
 			header_down Location ^/(.*)$ /webrtc/$1
 		}
 	}

@@ -71,6 +71,24 @@ describe('bundled panel seeding', () => {
     expect(await store.read('bundled/la.tessel.roboboy.duck/1.0.0/index.js')).not.toBeNull();
   });
 
+  // A rebuilt panel keeps its version, so the store held bytes from the previous build for the
+  // life of the install -- and served them against a manifest they no longer matched.
+  it('replaces a stale bundle left by an earlier build of the same version', async () => {
+    const id = 'la.tessel.roboboy.duck';
+    const stalePath = `bundled/${id}/1.0.0/index.js`;
+    const store = createMemoryPanelStore({ [stalePath]: "export default { id: 'stale' };\n" });
+
+    const seeded = await seedLocalPanelsFromBundle(store, await buildFetcher([id]), BASE);
+
+    expect(seeded).toEqual([id]);
+    expect(await store.read(stalePath)).toBe(sourceFor(id));
+    // What the store serves now matches the integrity the registry files it under.
+    const registry = JSON.parse((await store.read(BUNDLED_PANEL_REGISTRY_PATH))!);
+    expect(await getSha256Integrity(new TextEncoder().encode((await store.read(stalePath))!))).toBe(
+      registry.panels[0].integrity
+    );
+  });
+
   it('never touches panels installed through the manager', async () => {
     const store = createMemoryPanelStore({ [LOCAL_PANEL_REGISTRY_PATH]: JSON.stringify(userInstalled) });
 

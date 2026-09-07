@@ -59,6 +59,10 @@ const getInitialViewportSnapshot = (isActive: boolean): RoboBoyPanelViewportSnap
 
 const getIframeAllow = (capabilities: readonly string[]): string | undefined => {
   const permissions = [
+    // The sandbox has an opaque origin, so it counts as cross-origin and Permissions Policy
+    // withholds autoplay by default. A panel that plays a stream would then be refused playback it
+    // never asked a person for, and could only report that it was waiting to be tapped.
+    'autoplay',
     capabilities.includes('camera') ? 'camera' : '',
     capabilities.includes('microphone') ? 'microphone' : '',
     capabilities.includes('web-bluetooth') ? 'bluetooth' : '',

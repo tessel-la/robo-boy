@@ -95,7 +95,8 @@ describe('panel sandbox document', () => {
             status: 200,
             statusText: 'OK',
             headers: { 'content-type': 'application/json' },
-            body: '{"stream":"ready"}',
+            // The host answers in bytes now; text and JSON are readings of them.
+            body: new TextEncoder().encode('{"stream":"ready"}').buffer,
           },
         };
         queueMicrotask(() =>
@@ -246,6 +247,7 @@ describe('panel sandbox document', () => {
     expect(response.statusText).toBe('OK');
     expect(response.headers.get('Content-Type')).toBe('application/json');
     await expect(response.text()).resolves.toBe('{"stream":"ready"}');
+    expect(new TextDecoder().decode(await response.arrayBuffer())).toBe('{"stream":"ready"}');
     await expect(response.json()).resolves.toEqual({ stream: 'ready' });
 
     const alreadyAborted = new AbortController();

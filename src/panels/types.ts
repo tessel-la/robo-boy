@@ -116,6 +116,9 @@ export interface PanelHostRuntime {
   target: RoboBoyPanelRuntime['target'];
   endpoints: {
     videoStream: string;
+    webrtcWhep: string;
+    webrtcDiscovery: string;
+    webrtcHls: string;
   };
 }
 

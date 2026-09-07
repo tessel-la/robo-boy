@@ -3,24 +3,26 @@
 	auto_https off
 }
 
-# MediaMTX uses host networking so it can expose ICE candidates on physical
-# and VPN interfaces. Bridge the signaling API back to the public proxy over a
-# Unix socket instead of depending on host-gateway firewall behavior.
+# Transport only, to a gateway Robo-Boy does not run. Loopback here means no bridge-to-host firewall
+# rule and no allowlist entry for a Docker subnet is needed on either side; a deployment that has
+# arranged both can leave this out and point the proxy straight at the gateway.
+#
+# Signaling and the control API are carried on separate sockets so that the public proxy's
+# pass-through route cannot reach the control API by asking for it.
 :80 {
-	bind unix//run/webrtc-relay/webrtc.sock|0666
+	bind unix//run/webrtc-relay/whep.sock|0666
+	reverse_proxy {$WEBRTC_BACKEND_URL:http://127.0.0.1:8889}
+}
 
-	# Expose one read-only discovery resource. The rest of MediaMTX's control
-	# API remains loopback-only and is not reachable through Robo-Boy.
-	handle /_discovery/paths {
-		@get method GET
-		handle @get {
-			rewrite * /v3/paths/list
-			reverse_proxy {$WEBRTC_DISCOVERY_BACKEND_URL:http://127.0.0.1:9997}
-		}
-		respond "Method not allowed" 405
+:81 {
+	bind unix//run/webrtc-relay/api.sock|0666
+
+	# Exactly the one resource the proxy maps here, and nothing the control API can otherwise do.
+	handle /v3/paths/list {
+		reverse_proxy {$WEBRTC_DISCOVERY_BACKEND_URL:http://127.0.0.1:9997}
 	}
 
 	handle {
-		reverse_proxy {$WEBRTC_BACKEND_URL:http://127.0.0.1:8889}
+		respond "Not found" 404
 	}
 }

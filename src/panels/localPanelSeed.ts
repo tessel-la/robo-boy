@@ -48,7 +48,14 @@ export const seedLocalPanelsFromBundle = async (
 
   for (const manifest of candidates) {
     const path = `${BUNDLED_PANEL_PREFIX}${manifest.id}/${manifest.version}/index.js`;
-    const existing = await store.read(path);
+    const cached = await store.read(path);
+    // Reusing what the store already holds is an optimisation, never a way past verification: a
+    // rebuilt bundle keeps its version, so bytes that no longer match the manifest they are filed
+    // under would otherwise be served for the life of the install.
+    const existing =
+      cached !== null && (await getSha256Integrity(new TextEncoder().encode(cached))) === manifest.integrity
+        ? cached
+        : null;
     const source =
       existing ??
       (await (async () => {
