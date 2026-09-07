@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.6.1-alpha...robo-boy-v0.7.0-alpha) (2026-09-07)
+
+
+### Features
+
+* add configurable physical gamepad ([34adc85](https://github.com/tessel-la/robo-boy/commit/34adc855661cf97fb7ab5a05e23cbc6b94475b53))
+* add configurable physical gamepad ([683e5ee](https://github.com/tessel-la/robo-boy/commit/683e5ee579394db273e5a7f7b7fc48d3d1788ec2))
+* configure physical gamepad publish rate ([026c5c1](https://github.com/tessel-la/robo-boy/commit/026c5c1376eab82fcb97f1414a63944cc9e56c66))
+* decouple WebRTC stream gateway ([#131](https://github.com/tessel-la/robo-boy/issues/131)) ([19e4153](https://github.com/tessel-la/robo-boy/commit/19e415385e97cf8d9d32318f1b63c48ea2561d7c))
+* optimize physical gamepad for mobile ([1261d8f](https://github.com/tessel-la/robo-boy/commit/1261d8f3872bcc88af5ca828f813456988157069))
+* promote stream gateway and physical gamepad updates ([ec66b74](https://github.com/tessel-la/robo-boy/commit/ec66b749fa0fbe3b2c14257f5a40e73c59c2f283))
+
 ## [0.6.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.6.0-alpha...robo-boy-v0.6.1-alpha) (2026-09-06)
 
 
