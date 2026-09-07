@@ -211,16 +211,23 @@ to JSON at this boundary, so non-finite ROS floating-point values become `null` 
 message; non-JSON and oversized payloads are rejected. Network requests accept only
 declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:
 each permits only the routes beneath the endpoint the runtime resolved, rather than the complete service origin.
-`webrtcWhep` and `webrtcDiscovery` name the WebRTC stream gateway, which is a deployment of its own and needs
-nothing else of Robo-Boy running; where it lives is decided in `src/runtime/runtimeConfig.tsx` and configurable
-through `VITE_WEBRTC_PORT` and `VITE_WEBRTC_DISCOVERY_PORT`, so no caller writes its ports down. `videoStream`
-reaches the same gateway for panels published before it had endpoints of its own. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
-headers are filtered, responses are size-capped, and concurrent requests time out. The sandbox has no parent DOM,
+`webrtcWhep`, `webrtcDiscovery` and `webrtcHls` name the WebRTC stream gateway, which is a deployment of its own
+and needs nothing else of Robo-Boy running; where it lives is decided in `src/runtime/runtimeConfig.tsx` and
+configurable through `VITE_WEBRTC_PORT`, `VITE_WEBRTC_DISCOVERY_PORT` and `VITE_WEBRTC_HLS_PORT`, so no caller
+writes its ports down. `webrtcHls` carries the same stream for a webview that cannot speak WebRTC at all -- see
+[WebRTC on the Linux desktop](application.md#webrtc-on-the-linux-desktop) -- and is empty where the gateway is
+not directly addressable, which is every browser behind the proxy. `videoStream` reaches the same gateway for
+panels published before it had endpoints of its own. Redirect targets are checked, ambient credentials are omitted, privileged headers are blocked, response
+headers are filtered, responses are size-capped, and concurrent requests time out. A response is carried as
+bytes, so `arrayBuffer()` returns exactly what the server sent and `text()` and `json()` are readings of it; a
+panel that plays media or reads any other binary format needs no way out of the sandbox to do it. The sandbox has no parent DOM,
 Robo-Boy storage, cookies, or raw host objects.
 
 The iframe permits form event handling so panel configuration forms can submit to their own JavaScript listeners.
 Its CSP keeps `form-action 'none'`, so native form navigation and form-data submission outside the sandbox remain
-blocked.
+blocked. It is also granted `autoplay`: the sandbox's opaque origin makes it cross-origin, which withholds
+playback by default, and a panel showing a stream would otherwise be refused playback it never asked a person
+for.
 
 Broker request and subscription identifiers are scoped to each private `MessagePort` and do not depend on secure-
 context-only browser APIs. SDK ROS subscriptions therefore behave the same on `localhost`, plain-HTTP LAN addresses,

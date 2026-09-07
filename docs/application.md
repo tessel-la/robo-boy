@@ -95,8 +95,20 @@ WebKitGTK also leaves `enable-webrtc` off by default, so the shell turns it on a
 created. That is required wherever the backend is compiled in, and harmless where it is not.
 
 Browsers carry their own WebRTC stack, so the same panel works in the web build on the same machine.
-Where the desktop shell cannot play a WHEP stream, use a browser, or the camera view, which reads the
-MJPEG endpoint and needs no WebRTC.
+This is a WebKitGTK property, not a desktop one: the Windows, macOS, iOS and Android shells all use
+engines with WebRTC compiled in.
+
+A panel does not have to give up where it is missing. The stream gateway can publish the same H.264
+over HLS -- `hls: true` in its configuration -- and Robo-Boy names that as the `webrtcHls` endpoint,
+which a panel may declare alongside `webrtcWhep`. Every one of these engines has Media Source
+Extensions even where it has no WebRTC, so a panel can feed the buffer itself and play the same
+camera; the official WebRTC panel does exactly that when `RTCPeerConnection` is missing. Latency is
+seconds rather than milliseconds, so it is a fallback and not the path to prefer.
+
+One trap if you write such a panel: a panel's frame has an opaque origin, so the object URL a player
+would normally make for its MediaSource comes back as `blob:null/...` and a media element refuses to
+load it. Attach the source with `srcObject` instead, which needs no URL. The camera view avoids all
+of this by reading the MJPEG endpoint, which needs neither WebRTC nor Media Source Extensions.
 
 ## Build An Installer
 

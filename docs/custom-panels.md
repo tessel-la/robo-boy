@@ -122,13 +122,18 @@ Staging prefers that file when it exists and falls back to the tracked configura
 command changes. Then build the desktop app and its installer:
 
 ```bash
-npm run build:tauri:panels
-npm run tauri build -- --bundles deb
+npm run panels:stage-local
+ROBOBOY_PUBLIC_DIR="$PWD/.panel-stage/public" npm run tauri build -- --bundles deb
 ```
 
-`build:tauri:panels` stages the panels into a generated public tree and builds the frontend from it, so the
-bundles ship inside the binary. Use `-- --config <path>` on any `*:panels` command to stage a different
-selection. Staging prints which configuration it used.
+Staging writes the panels into a generated public tree and prints which configuration it used. Keeping
+`ROBOBOY_PUBLIC_DIR` in the environment for the second command is what makes them ship: `tauri build` runs its
+own `beforeBuildCommand`, which rebuilds the frontend and would otherwise take the empty `public/panels`,
+discarding everything staged and producing an installer with no panels in it and no error to say so.
+
+`npm run build:tauri:panels` stages and builds the frontend alone, which is enough to run it in a browser but
+does not produce an installer. Use `-- --config <path>` on any `*:panels` command to stage a different
+selection.
 
 ### What happens on first run
 
