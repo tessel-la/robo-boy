@@ -11,6 +11,7 @@ import {
   type CatalogPanelSummary,
   type PanelInstallPreview,
   type PanelSourceConfig,
+  type RemotePanelSourceConfig,
   type PanelSourcesConfig,
 } from './managerApi';
 import type { AvailablePanel } from './useInstalledPanels';
@@ -33,12 +34,20 @@ const splitLines = (value: string): string[] =>
     .map(item => item.trim())
     .filter(Boolean);
 
-const ensureOfficialSourcePresent = (config: PanelSourcesConfig): PanelSourceConfig[] => {
-  const alreadyPresent = config.sources.some(
-    source => source.type === 'remote' && source.catalogUrl === OFFICIAL_PANEL_SOURCE.catalogUrl
+/**
+ * The deployment's own entry for the official catalog, whatever it named it. The manager resolves a
+ * catalog by the source name its configuration gives -- the URL it fetches comes from an operator,
+ * never from the browser -- so browsing is possible only through an entry that is already there.
+ * A deployment serving its own sources, such as a workspace of local checkouts, has none.
+ */
+const findOfficialSource = (config: PanelSourcesConfig): RemotePanelSourceConfig | undefined =>
+  config.sources.find(
+    (source): source is RemotePanelSourceConfig =>
+      source.type === 'remote' && source.catalogUrl === OFFICIAL_PANEL_SOURCE.catalogUrl
   );
-  return alreadyPresent ? config.sources : [...config.sources, OFFICIAL_PANEL_SOURCE];
-};
+
+const ensureOfficialSourcePresent = (config: PanelSourcesConfig): PanelSourceConfig[] =>
+  findOfficialSource(config) ? config.sources : [...config.sources, OFFICIAL_PANEL_SOURCE];
 
 const withPanelDeselected = (
   config: PanelSourcesConfig,
@@ -140,6 +149,7 @@ const PanelManagerDialog = ({
   const [catalogError, setCatalogError] = useState('');
   const [catalogLoading, setCatalogLoading] = useState(false);
   const installedIds = useMemo(() => installedPanels.map(panel => panel.id), [installedPanels]);
+  const officialSource = useMemo(() => (config ? findOfficialSource(config) : undefined), [config]);
   const panelRows = useMemo(() => {
     const rows = new Map<string, { id: string; name: string; description: string; available?: AvailablePanel; inCatalog: boolean }>();
     for (const entry of catalog ?? []) {
@@ -163,11 +173,11 @@ const PanelManagerDialog = ({
     setNotice('');
   }, [config]);
 
-  const loadCatalog = async (currentToken: string) => {
+  const loadCatalog = async (currentToken: string, source: RemotePanelSourceConfig) => {
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const result = await backend.listCatalog(currentToken, OFFICIAL_PANEL_SOURCE);
+      const result = await backend.listCatalog(currentToken, source);
       setCatalog(result.panels);
     } catch (nextError) {
       setCatalogError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -184,7 +194,8 @@ const PanelManagerDialog = ({
       setConfig(result.config);
       if (result.startupError) setNotice(`The last startup install failed: ${result.startupError}`);
       storePanelManagerToken(token);
-      void loadCatalog(token);
+      const official = findOfficialSource(result.config);
+      if (official) void loadCatalog(token, official);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -348,11 +359,19 @@ const PanelManagerDialog = ({
                   </p>
                 </div>
               </div>
-              {catalogLoading && <p className="panel-manager-catalog-status">Checking the official catalog…</p>}
-              {!catalogLoading && catalogError && (
+              {!officialSource && (
+                <p className="panel-manager-catalog-status">
+                  This deployment installs panels from its own configured sources, so the official catalog is
+                  not offered here.
+                </p>
+              )}
+              {officialSource && catalogLoading && (
+                <p className="panel-manager-catalog-status">Checking the official catalog…</p>
+              )}
+              {officialSource && !catalogLoading && catalogError && (
                 <div className="panel-manager-catalog-error" role="alert">
                   <span>Couldn&apos;t load the official panel catalog: {catalogError}</span>
-                  <button type="button" onClick={() => void loadCatalog(token)}>
+                  <button type="button" onClick={() => void loadCatalog(token, officialSource)}>
                     Retry
                   </button>
                 </div>

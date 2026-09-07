@@ -3,6 +3,7 @@ import {
   componentLibrary,
   defaultDualJoystickHeartbeatLayout,
   defaultGamepadLibrary,
+  defaultPhysicalGamepadLayout,
 } from './defaultLayouts';
 import type { CustomGamepadLayout, GamepadLibraryItem } from './types';
 
@@ -17,13 +18,25 @@ describe('defaultLayouts', () => {
     expect(layout.metadata.version).toBeTruthy();
   };
 
-  it('provides one generic dual-joystick heartbeat template', () => {
+  it('provides the generic and physical-controller templates', () => {
     validateLayout(defaultDualJoystickHeartbeatLayout);
-    expect(defaultGamepadLibrary).toHaveLength(1);
+    validateLayout(defaultPhysicalGamepadLayout);
+    expect(defaultGamepadLibrary).toHaveLength(2);
     expect(defaultGamepadLibrary[0]).toMatchObject({
       id: 'dual-joystick-heartbeat',
       name: 'Dual Joystick + Heartbeat',
       isDefault: true,
+    });
+    expect(defaultGamepadLibrary[1]).toMatchObject({
+      id: 'physical-gamepad',
+      name: 'Physical Gamepad',
+      isDefault: true,
+    });
+    expect(defaultPhysicalGamepadLayout.components[0]).toMatchObject({
+      type: 'physical-gamepad',
+      position: { x: 0, y: 0, width: 8, height: 4 },
+      action: { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
+      config: { physicalGamepadProfile: 'auto', physicalGamepadDeadzone: 0.08, physicalGamepadPublishHz: 20 },
     });
   });
 
@@ -69,6 +82,7 @@ describe('defaultLayouts', () => {
   it('keeps all editor component types available', () => {
     expect(componentLibrary.map(component => component.type)).toEqual([
       'joystick',
+      'physical-gamepad',
       'button',
       'dpad',
       'toggle',

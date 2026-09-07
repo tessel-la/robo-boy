@@ -1,5 +1,33 @@
 // Types for the custom gamepad system
 
+import type { RosOperation } from '../../utils/rosOperations';
+
+export type PhysicalGamepadProfile = 'auto' | 'xbox' | 'playstation' | 'logitech';
+
+export type PhysicalGamepadControlId =
+  | 'face-bottom'
+  | 'face-right'
+  | 'face-left'
+  | 'face-top'
+  | 'left-bumper'
+  | 'right-bumper'
+  | 'left-trigger'
+  | 'right-trigger'
+  | 'select'
+  | 'start'
+  | 'left-stick'
+  | 'right-stick'
+  | 'dpad-up'
+  | 'dpad-down'
+  | 'dpad-left'
+  | 'dpad-right'
+  | 'home';
+
+export interface PhysicalGamepadBinding {
+  press?: RosOperation;
+  release?: RosOperation;
+}
+
 export interface GridPosition {
   x: number;
   y: number;
@@ -33,7 +61,7 @@ export enum ComponentInteractionMode {
 
 export interface GamepadComponentConfig {
   id: string;
-  type: 'joystick' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot' | 'heartbeat';
+  type: 'joystick' | 'physical-gamepad' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot' | 'heartbeat';
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
@@ -60,6 +88,13 @@ export interface GamepadComponentConfig {
     poseStampedOdometryMessageType?: string;
     poseStampedUseOdometryOrientation?: boolean;
     twistStampedFrameId?: string;
+
+    // Physical gamepad specific
+    physicalGamepadProfile?: PhysicalGamepadProfile;
+    physicalGamepadIndex?: number;
+    physicalGamepadDeadzone?: number;
+    physicalGamepadPublishHz?: number;
+    physicalGamepadBindings?: Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>;
 
     // Button specific
     buttonIndex?: number;
@@ -176,5 +211,4 @@ export interface EditorState {
   cellSize: number;
   showGrid: boolean;
   snapToGrid: boolean;
-} 
-import type { RosOperation } from '../../utils/rosOperations';
+}

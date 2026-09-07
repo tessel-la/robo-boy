@@ -28,6 +28,57 @@
   font-family: inherit;
 }
 
+.physical-gamepad-settings .settings-help {
+  margin: -4px 0 12px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.physical-binding-count {
+  color: var(--text-secondary);
+  font-size: 0.78em;
+  font-weight: 500;
+}
+
+.physical-control-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.physical-control-picker button {
+  min-height: 36px;
+  padding: 6px 8px;
+  color: var(--text-color);
+  background: var(--background-secondary);
+  border-color: var(--border-color);
+  font-size: 0.78rem;
+}
+
+.physical-control-picker button.configured {
+  border-color: var(--primary-color);
+}
+
+.physical-control-picker button.configured::after {
+  content: ' •';
+  color: var(--primary-color);
+}
+
+.physical-control-picker button.selected {
+  color: var(--button-text-color);
+  background: var(--primary-color);
+  border-color: var(--primary-hover-color);
+}
+
+.physical-control-binding {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
 /* Modal Header */
 .modal-header {
   display: flex;
@@ -520,7 +571,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .component-settings-modal-overlay {
-    padding: 10px;
+    padding: calc(8px + var(--safe-area-top)) 8px calc(8px + var(--safe-area-bottom));
   }
 
   .enhanced-component-settings-modal {
@@ -557,6 +608,27 @@
   .cancel-btn,
   .save-btn {
     width: 100%;
+  }
+
+  .physical-gamepad-settings input:not([type="range"]),
+  .physical-gamepad-settings select,
+  .physical-gamepad-settings textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .physical-gamepad-settings input[type="range"] {
+    min-height: 44px;
+  }
+
+  .physical-control-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .physical-control-picker button {
+    min-height: 44px;
+    touch-action: manipulation;
   }
 }
 

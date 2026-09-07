@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Ros } from 'roslib';
-import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import {
+  GamepadComponentConfig,
+  PhysicalGamepadBinding,
+  PhysicalGamepadControlId,
+  PhysicalGamepadProfile,
+  ROSTopicConfig,
+} from '../types';
 import type { RosOperation } from '../../../utils/rosOperations';
 import RosEventOperationsEditor from './RosEventOperationsEditor';
+import PhysicalGamepadSettings from './PhysicalGamepadSettings';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ, normalizePhysicalGamepadPublishHz } from '../physicalGamepad';
 import RangeSlider from './RangeSlider';
 import ValueControl from './ValueControl';
 import { getDynamicRangeStep, roundToStepPrecision } from '../rangeUtils';
@@ -137,6 +145,7 @@ const getMessageTypeConfig = (type: string) => {
 // Define allowed message types for each component type
 const COMPONENT_MESSAGE_TYPES: Record<string, string[]> = {
   'joystick': ['sensor_msgs/Joy', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped', 'geometry_msgs/PoseStamped', 'std_msgs/Float32', 'std_msgs/Float64', 'std_msgs/Int32'],
+  'physical-gamepad': ['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'],
   'button': ['std_msgs/Bool', 'std_msgs/Int32', 'geometry_msgs/Twist', 'geometry_msgs/TwistStamped'],
   'dpad': ['sensor_msgs/Joy', 'geometry_msgs/PoseStamped'],
   'toggle': ['std_msgs/Bool'], // Toggle only supports Boolean
@@ -238,6 +247,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [buttonIndex, setButtonIndex] = useState(0);
   const [momentary, setMomentary] = useState(true);
   const [eventOperations, setEventOperations] = useState<Partial<Record<'press' | 'release' | 'on' | 'off', RosOperation>>>({});
+
+  // Physical gamepad-specific settings
+  const [physicalGamepadProfile, setPhysicalGamepadProfile] = useState<PhysicalGamepadProfile>('auto');
+  const [physicalGamepadIndex, setPhysicalGamepadIndex] = useState<number | undefined>();
+  const [physicalGamepadDeadzone, setPhysicalGamepadDeadzone] = useState(0.08);
+  const [physicalGamepadPublishHz, setPhysicalGamepadPublishHz] = useState(DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ);
+  const [physicalGamepadBindings, setPhysicalGamepadBindings] = useState<Partial<Record<PhysicalGamepadControlId, PhysicalGamepadBinding>>>({});
 
   // Camera-specific settings
   const [cameraTransport, setCameraTransport] = useState<'proxy' | 'ros'>('proxy');
@@ -354,6 +370,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           defaultMessageType = 'sensor_msgs/Joy';
           defaultField = 'axes';
           break;
+        case 'physical-gamepad':
+          defaultTopic = '/joy';
+          defaultMessageType = 'sensor_msgs/msg/Joy';
+          defaultField = 'axes';
+          break;
         case 'camera':
           defaultTopic = '/camera/image_raw/compressed';
           defaultMessageType = 'sensor_msgs/CompressedImage';
@@ -412,6 +433,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setDpadButtonMapping({ up: 0, right: 1, down: 2, left: 3 });
       setButtonIndex(0);
       setMomentary(true);
+      setPhysicalGamepadProfile('auto');
+      setPhysicalGamepadIndex(undefined);
+      setPhysicalGamepadDeadzone(0.08);
+      setPhysicalGamepadPublishHz(DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ);
+      setPhysicalGamepadBindings({});
       setHeartbeatMode('boolean');
       setHeartbeatTimeoutMs(2000);
       setHeartbeatFieldPath(action?.field || 'data');
@@ -503,6 +529,12 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           setPoseStampedOdometryTopic(component.config.poseStampedOdometryTopic || '/odom');
           setPoseStampedOdometryMessageType(component.config.poseStampedOdometryMessageType || 'nav_msgs/Odometry');
           setPoseStampedUseOdometryOrientation(component.config.poseStampedUseOdometryOrientation !== false);
+        } else if (component.type === 'physical-gamepad') {
+          setPhysicalGamepadProfile(component.config.physicalGamepadProfile || 'auto');
+          setPhysicalGamepadIndex(component.config.physicalGamepadIndex);
+          setPhysicalGamepadDeadzone(component.config.physicalGamepadDeadzone ?? 0.08);
+          setPhysicalGamepadPublishHz(normalizePhysicalGamepadPublishHz(component.config.physicalGamepadPublishHz));
+          setPhysicalGamepadBindings(component.config.physicalGamepadBindings || {});
         } else if (component.type === 'button') {
           setButtonIndex(component.config.buttonIndex ?? 0);
           setMomentary(component.config.momentary ?? true);
@@ -644,6 +676,17 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       }
     }
 
+    if (component.type === 'physical-gamepad') {
+      if (!['sensor_msgs/Joy', 'sensor_msgs/msg/Joy'].includes(messageType)) {
+        setErrorMessage('Physical gamepads publish sensor_msgs/Joy messages.');
+        return;
+      }
+      if (field !== 'axes') {
+        setErrorMessage('Physical gamepads publish complete Joy axes and buttons.');
+        return;
+      }
+    }
+
     if (component.type === 'camera' && !CAMERA_MESSAGE_TYPES.includes(messageType)) {
       setErrorMessage('Camera components can only use Image or CompressedImage message types.');
       return;
@@ -733,6 +776,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       };
       // Remove legacy maxValue if it exists
       delete updatedConfig.maxValue;
+    } else if (component.type === 'physical-gamepad') {
+      updatedConfig = {
+        ...updatedConfig,
+        physicalGamepadProfile,
+        physicalGamepadIndex,
+        physicalGamepadDeadzone: Math.max(0, Math.min(0.5, physicalGamepadDeadzone)),
+        physicalGamepadPublishHz: normalizePhysicalGamepadPublishHz(physicalGamepadPublishHz),
+        physicalGamepadBindings,
+      };
     } else if (component.type === 'button') {
       updatedConfig = {
         ...updatedConfig,
@@ -883,6 +935,24 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   onChange={setEventOperations}
                 />
               </div>
+            </div>
+          )}
+
+          {component.type === 'physical-gamepad' && (
+            <div className="settings-section">
+              <PhysicalGamepadSettings
+                profile={physicalGamepadProfile}
+                preferredIndex={physicalGamepadIndex}
+                deadzone={physicalGamepadDeadzone}
+                publishHz={physicalGamepadPublishHz}
+                bindings={physicalGamepadBindings}
+                ros={ros || null}
+                onProfileChange={setPhysicalGamepadProfile}
+                onPreferredIndexChange={setPhysicalGamepadIndex}
+                onDeadzoneChange={setPhysicalGamepadDeadzone}
+                onPublishHzChange={setPhysicalGamepadPublishHz}
+                onBindingsChange={setPhysicalGamepadBindings}
+              />
             </div>
           )}
 

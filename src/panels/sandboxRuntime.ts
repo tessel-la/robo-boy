@@ -197,7 +197,10 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
                 cache: request.cache,
               },
               request.signal
-            )) as { status: number; statusText: string; headers: Record<string, string>; body: string };
+            )) as { status: number; statusText: string; headers: Record<string, string>; body: ArrayBuffer };
+            // The body arrives as bytes and stays that way; text and JSON are readings of it, and
+            // each reader gets its own copy so one cannot hand another a consumed buffer.
+            const decode = () => new TextDecoder().decode(response.body);
             return {
               ok: response.status >= 200 && response.status < 300,
               status: response.status,
@@ -205,8 +208,9 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
               headers: Object.freeze({
                 get: (name: string) => response.headers[name.toLowerCase()] ?? null,
               }),
-              text: async () => response.body,
-              json: async () => JSON.parse(response.body),
+              text: async () => decode(),
+              json: async () => JSON.parse(decode()),
+              arrayBuffer: async () => response.body.slice(0),
             };
           },
         }

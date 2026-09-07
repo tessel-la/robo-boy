@@ -27,7 +27,7 @@ interface CapabilityBrokerOptions {
   manifest: ResolvedPanelManifest;
   ros: Ros | null;
   runtime: RoboBoyPanelRuntime;
-  runtimeEndpoints: { videoStream?: string };
+  runtimeEndpoints: GrantedRuntimeEndpoints;
   hostElement: HTMLElement;
   requestRosTopicSelection?: (
     topics: Array<{ name: string; messageType: string }>,
@@ -95,6 +95,14 @@ const requireResourcePermission = (
   return resource;
 };
 
+/** The host endpoints a panel may be granted, by the id its manifest names them with. */
+export interface GrantedRuntimeEndpoints {
+  videoStream?: string;
+  webrtcWhep?: string;
+  webrtcDiscovery?: string;
+  webrtcHls?: string;
+}
+
 const normalizeHeaders = (value: unknown): Record<string, string> => {
   if (value === undefined) return {};
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -113,35 +121,54 @@ const normalizeHeaders = (value: unknown): Record<string, string> => {
   return headers;
 };
 
-const isVideoStreamEndpointUrl = (endpoint: string, url: URL): boolean => {
+/** The only shape a WHEP request takes: one stream path directly beneath the gateway. */
+const GATEWAY_WHEP_PATH = /^[A-Za-z0-9][A-Za-z0-9_-]*\/whep(?:\/.*)?$/;
+
+/** One stream path beneath the gateway, then a single playlist or segment file inside it. */
+const GATEWAY_HLS_PATH = /^[A-Za-z0-9][A-Za-z0-9_-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * Whether a URL sits beneath a granted endpoint, matching the rest of its path.
+ *
+ * The endpoint is whatever the runtime resolved -- a same-origin route behind the proxy, the
+ * gateway's own host and port without one -- so neither shape is written down here.
+ */
+const isBeneathEndpoint = (endpoint: string, url: URL, path: RegExp): boolean => {
   const base = new URL(endpoint, document.baseURI);
-  const proxyBacked =
-    endpoint.startsWith('/') || (base.origin === window.location.origin && base.pathname === '/video_stream');
-  if (proxyBacked) {
-    return (
-      url.origin === window.location.origin &&
-      (url.pathname === '/webrtc/_discovery/paths' ||
-        /^\/webrtc\/[A-Za-z0-9][A-Za-z0-9_-]*\/whep(?:\/.*)?$/.test(url.pathname))
-    );
-  }
-  if (url.protocol !== base.protocol || url.hostname !== base.hostname) return false;
-  if (url.port === '9997') return url.pathname === '/v3/paths/list';
-  return url.port === '8889' && /^\/[A-Za-z0-9][A-Za-z0-9_-]*\/whep(?:\/.*)?$/.test(url.pathname);
+  if (url.origin !== base.origin) return false;
+  const prefix = base.pathname.endsWith('/') ? base.pathname : `${base.pathname}/`;
+  return url.pathname.startsWith(prefix) && path.test(url.pathname.slice(prefix.length));
 };
 
-const isGrantedHostEndpointUrl = (
+const isEndpoint = (endpoint: string, url: URL): boolean =>
+  url.href === new URL(endpoint, document.baseURI).href;
+
+export const isGrantedHostEndpointUrl = (
   manifest: ResolvedPanelManifest,
-  runtimeEndpoints: { videoStream?: string },
+  runtimeEndpoints: GrantedRuntimeEndpoints,
   url: URL
-): boolean =>
-  (manifest.permissions?.network?.hostEndpoints || []).some(endpoint => {
-    const value = runtimeEndpoints[endpoint];
-    return endpoint === 'videoStream' && value ? isVideoStreamEndpointUrl(value, url) : false;
+): boolean => {
+  const { webrtcWhep, webrtcDiscovery, webrtcHls } = runtimeEndpoints;
+  const reachesGateway = () =>
+    (webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false) ||
+    (webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false);
+
+  return (manifest.permissions?.network?.hostEndpoints || []).some(endpoint => {
+    if (endpoint === 'webrtcWhep')
+      return webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false;
+    if (endpoint === 'webrtcDiscovery') return webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false;
+    if (endpoint === 'webrtcHls') return webrtcHls ? isBeneathEndpoint(webrtcHls, url, GATEWAY_HLS_PATH) : false;
+    // Panels published before the gateway had endpoints of its own ask for the video server and
+    // mean the gateway. They are answered from the gateway's endpoints rather than from a second
+    // account of where it lives.
+    if (endpoint === 'videoStream') return reachesGateway();
+    return false;
   });
+};
 
 const allowedNetworkUrl = (
   manifest: ResolvedPanelManifest,
-  runtimeEndpoints: { videoStream?: string },
+  runtimeEndpoints: GrantedRuntimeEndpoints,
   value: unknown
 ) => {
   if (typeof value !== 'string' || value.length > 4096) throw new Error('Network URL is invalid.');
@@ -169,18 +196,22 @@ const requireJsonPayload = (value: unknown, label: string): RoboBoyJsonObject =>
   return value;
 };
 
-const readBoundedResponseText = async (response: Response): Promise<string> => {
+/**
+ * Reads a response as bytes, under the same cap text was read under.
+ *
+ * Bytes are what a response actually is; text and JSON are readings of them. Decoding here instead
+ * would put a panel that wants media -- a video segment, an image, a point cloud -- outside the
+ * broker, which is the one way out a panel has.
+ */
+const readBoundedResponseBytes = async (response: Response): Promise<ArrayBuffer> => {
   if (!response.body) {
-    const body = await response.text();
-    if (new TextEncoder().encode(body).byteLength > MAX_NETWORK_BYTES) {
-      throw new Error('Network response is too large.');
-    }
-    return body;
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > MAX_NETWORK_BYTES) throw new Error('Network response is too large.');
+    return buffer;
   }
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const chunks: Uint8Array[] = [];
   let size = 0;
-  let body = '';
   let streamComplete = false;
   try {
     while (!streamComplete) {
@@ -192,12 +223,18 @@ const readBoundedResponseText = async (response: Response): Promise<string> => {
         await reader.cancel();
         throw new Error('Network response is too large.');
       }
-      body += decoder.decode(value, { stream: true });
+      chunks.push(value);
     }
-    return body + decoder.decode();
   } finally {
     reader.releaseLock();
   }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body.buffer;
 };
 
 const respond = (port: MessagePort, requestId: string, value?: unknown, error?: unknown) => {
@@ -381,7 +418,7 @@ const handleRequest = async (
       if (Number.isFinite(declaredLength) && declaredLength > MAX_NETWORK_BYTES) {
         throw new Error('Network response is too large.');
       }
-      const body = await readBoundedResponseText(response);
+      const body = await readBoundedResponseBytes(response);
       return {
         status: response.status,
         statusText: response.statusText,
@@ -483,7 +520,7 @@ export const connectPanelCapabilityBroker = (
 
 export const getGrantedPanelEndpoints = (
   manifest: ResolvedPanelManifest,
-  runtimeEndpoints: { videoStream?: string }
+  runtimeEndpoints: GrantedRuntimeEndpoints
 ): Record<string, string> =>
   Object.fromEntries(
     (manifest.permissions?.network?.hostEndpoints || [])

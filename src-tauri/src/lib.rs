@@ -11,6 +11,7 @@ pub fn run() {
     .plugin(tauri_plugin_http::init())
     .setup(|app| {
       configure_ui_zoom(app);
+      configure_webrtc(app);
 
       Ok(())
     })
@@ -76,6 +77,38 @@ fn configure_ui_zoom(app: &tauri::App) {
 
 #[cfg(mobile)]
 fn configure_ui_zoom(_app: &tauri::App) {}
+
+/// Linux only. WebKitGTK compiles the WebRTC bindings in but leaves the setting off, so the webview
+/// defines no RTCPeerConnection at all and a panel streaming over WHEP fails on the reference
+/// rather than on the connection. Every other platform's webview exposes it already.
+///
+/// Turning it on is necessary but not sufficient: the engine negotiates through GStreamer, so a
+/// host also needs the WebRTC elements installed (gstreamer1.0-plugins-bad and gstreamer1.0-nice on
+/// Debian and Ubuntu). Without them the setting applies and the API stays undefined.
+#[cfg(target_os = "linux")]
+fn configure_webrtc(app: &tauri::App) {
+  use tauri::Manager;
+
+  let Some(webview_window) = app.get_webview_window("main") else {
+    return;
+  };
+
+  let result = webview_window.with_webview(|webview| {
+    use webkit2gtk::{SettingsExt, WebViewExt};
+
+    match webview.inner().settings() {
+      Some(settings) => settings.set_enable_webrtc(true),
+      None => eprintln!("[Robo-Boy] webview exposed no settings; WebRTC stays disabled"),
+    }
+  });
+
+  if let Err(error) = result {
+    eprintln!("[Robo-Boy] failed to enable WebRTC in the webview: {error}");
+  }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configure_webrtc(_app: &tauri::App) {}
 
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

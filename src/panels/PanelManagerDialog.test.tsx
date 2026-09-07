@@ -55,7 +55,7 @@ describe('PanelManagerDialog', () => {
     api.load.mockResolvedValue({
       config: {
         schemaVersion: 2,
-        sources: [{ type: 'remote', name: 'official', catalogUrl: 'https://panels.example/catalog.json' }],
+        sources: [{ type: 'remote', name: 'roboboy-official', catalogUrl: OFFICIAL_PANEL_SOURCE.catalogUrl }],
         selection: { mode: 'include', panelIds: [panel.id] },
       },
     });
@@ -326,6 +326,32 @@ describe('PanelManagerDialog', () => {
     expect(screen.getByText(/ships with this build/)).toBeInTheDocument();
   });
 
+  it('does not offer the official catalog on a deployment that does not configure it', async () => {
+    api.load.mockResolvedValue({
+      config: {
+        schemaVersion: 2,
+        sources: [{ type: 'local', name: 'local-workspace', repositories: ['/panel-workspace/hello'] }],
+        selection: { mode: 'all' },
+      },
+    });
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={availableFrom([])}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    await screen.findByText(/installs panels from its own configured sources/);
+
+    // Asking would fail every time, so the dialog never asks and never reports a failure.
+    expect(api.catalog).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Couldn't load the official panel catalog/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
   it('shows a retry action when the official catalog fails to load', async () => {
     api.catalog.mockRejectedValueOnce(new Error('network down'));
     render(
@@ -396,7 +422,7 @@ describe('PanelManagerDialog', () => {
     api.load.mockResolvedValue({
       config: {
         schemaVersion: 2,
-        sources: [{ type: 'remote', name: 'official', catalogUrl: 'https://panels.example/catalog.json' }],
+        sources: [{ type: 'remote', name: 'roboboy-official', catalogUrl: OFFICIAL_PANEL_SOURCE.catalogUrl }],
         selection: { mode: 'all' },
       },
     });

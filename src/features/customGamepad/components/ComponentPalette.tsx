@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { componentLibrary } from '../defaultLayouts';
+import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { GamepadComponentConfig } from '../types';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
@@ -9,6 +10,7 @@ import SliderComponent from './SliderComponent';
 import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
 import HeartbeatComponent from './HeartbeatComponent';
+import PhysicalGamepadComponent from './PhysicalGamepadComponent';
 import './ComponentPalette.css';
 
 interface ComponentPaletteProps {
@@ -80,7 +82,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
             ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true }
             : componentType === 'heartbeat'
               ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
-            : {}
+              : componentType === 'physical-gamepad'
+                ? {
+                  physicalGamepadProfile: 'xbox' as const,
+                  physicalGamepadDeadzone: 0.08,
+                  physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
+                }
+                : {}
     };
 
     const previewStyle: React.CSSProperties = {
@@ -112,6 +120,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       <div style={containerStyle}>
         {componentType === 'button' && <ButtonComponent {...componentProps} />}
         {componentType === 'joystick' && <JoystickComponent {...componentProps} />}
+        {componentType === 'physical-gamepad' && <PhysicalGamepadComponent {...componentProps} />}
         {componentType === 'dpad' && <DPadComponent {...componentProps} />}
         {componentType === 'toggle' && <ToggleComponent {...componentProps} />}
         {componentType === 'slider' && <SliderComponent {...componentProps} />}
