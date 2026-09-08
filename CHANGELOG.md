@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.7.0-alpha...robo-boy-v0.8.0-alpha) (2026-09-07)
+
+
+### Features
+
+* polish external panel manager UI and responsiveness ([3a64379](https://github.com/tessel-la/robo-boy/commit/3a643795841c7631f17caa549ea249b3c7db8992))
+
 ## [0.7.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.6.1-alpha...robo-boy-v0.7.0-alpha) (2026-09-07)
 
 
