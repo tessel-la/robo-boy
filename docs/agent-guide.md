@@ -32,6 +32,7 @@ Before implementation:
 | Build an external panel               | [External panels](external-panels.md), [SDK README](../panel-sdk/README.md)        | `panel-sdk/index.d.ts`, sibling reference panel, staging scripts                     |
 | Change the panel SDK or loader        | [External panels](external-panels.md), [Application architecture](architecture.md) | `panel-sdk/`, `src/panels/`, installer/stager scripts and all related tests          |
 | Change behavior trees or 3D rendering | [User guide](user-guide.md), [Application architecture](architecture.md)           | owning feature, hooks/services, ROS/Three.js adapters, disposal tests                |
+| Change the global AI assistant        | [AI assistant](ai-assistant.md), [Application architecture](architecture.md)       | `src/features/assistant/`, `BehaviorTreePanel`'s bridge registration, `MainControlView`'s mount point |
 
 ## Source-Of-Truth Hierarchy
 

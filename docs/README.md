@@ -13,6 +13,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Android application](android.md): build, run, and install the Tauri app on a phone, with the Wear OS boundary documented.
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
+- [AI assistant](ai-assistant.md): the global assistant's capabilities, trust model, provider support, and privacy/credential handling.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.
 - [Adding a custom panel](custom-panels.md): get a panel you wrote into the web app and into a desktop build,
   the four kinds of panel, enable/disable, and what an update changes.

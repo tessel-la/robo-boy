@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 
+// Relocated near-verbatim from the former behaviorTree/components/AgentSpeechTextarea.tsx — this
+// widget is generic (voice-to-text into a textarea), not BT-specific. CSS classes renamed from
+// `bt-agent-*` to `assistant-*`; styles live in AssistantPanel.css (this component owns no CSS of
+// its own, matching the original).
+
 interface SpeechRecognitionResultLike {
   isFinal?: boolean;
   0?: { transcript?: string };
@@ -34,7 +39,7 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
 };
 
-interface AgentSpeechTextareaProps {
+interface AssistantSpeechTextareaProps {
   id: string;
   label: string;
   value: string;
@@ -57,7 +62,7 @@ const speechErrorMessage = (code?: string) => {
   return 'Voice recognition stopped unexpectedly.';
 };
 
-const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
+const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   id,
   label,
   value,
@@ -231,11 +236,11 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
   };
 
   return (
-    <div className={`${className} bt-agent-speech-field`.trim()}>
-      <label className="bt-agent-field-label" htmlFor={id}>
+    <div className={`${className} assistant-speech-field`.trim()}>
+      <label className="assistant-field-label" htmlFor={id}>
         {label}
       </label>
-      <span className="bt-agent-textarea-shell">
+      <span className="assistant-textarea-shell">
         <textarea
           id={id}
           ref={textareaRef}
@@ -248,7 +253,7 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
         />
         <button
           type="button"
-          className={`bt-agent-mic${isListening ? ' listening' : ''}`}
+          className={`assistant-mic${isListening ? ' listening' : ''}`}
           onClick={handleVoiceClick}
           disabled={isRequestingPermission || isTranscribing}
           aria-label={`${isListening ? 'Stop' : 'Start'} voice input for ${label}`}
@@ -259,13 +264,13 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
         </button>
       </span>
       {isRequestingPermission && (
-        <span className="bt-agent-speech-status" role="status">
+        <span className="assistant-speech-status" role="status">
           Requesting microphone permission…
         </span>
       )}
       {isListening && (
-        <span className="bt-agent-speech-status is-listening" role="status">
-          <span className="bt-agent-listening-wave" aria-hidden="true">
+        <span className="assistant-speech-status is-listening" role="status">
+          <span className="assistant-listening-wave" aria-hidden="true">
             <i />
             <i />
             <i />
@@ -275,12 +280,12 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
         </span>
       )}
       {isTranscribing && (
-        <span className="bt-agent-speech-status" role="status">
+        <span className="assistant-speech-status" role="status">
           Transcribing audio…
         </span>
       )}
       {speechError && (
-        <span className="bt-agent-speech-error" role="alert">
+        <span className="assistant-speech-error" role="alert">
           {speechError}
         </span>
       )}
@@ -288,4 +293,4 @@ const AgentSpeechTextarea: React.FC<AgentSpeechTextareaProps> = ({
   );
 };
 
-export default AgentSpeechTextarea;
+export default AssistantSpeechTextarea;

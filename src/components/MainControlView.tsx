@@ -62,6 +62,9 @@ import {
   type WorkspaceLayoutState,
   type WorkspaceSplitAxis,
 } from './workspaceLayout';
+import GlobalAssistant, { type GlobalAssistantHandle } from '../features/assistant/components/GlobalAssistant';
+import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceSnapshot';
+import type { BehaviorTreeAssistantBridge } from '../features/assistant/types';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -994,6 +997,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentBtSessionId = useRef<string | undefined>(undefined);
   const { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect } = useRos(); // Use the hook
+  const assistantRef = useRef<GlobalAssistantHandle>(null);
+  const handleOpenAssistant = useCallback((context: { panelId: string }) => {
+    assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
+  }, []);
+  const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
+    assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
+  }, []);
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
@@ -2737,6 +2747,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               onExecutionControlsChange={controls => {
                 btExecutionControls.current = controls;
               }}
+              panelId="primary"
+              onOpenAssistant={handleOpenAssistant}
+              onRegisterAssistantBridge={handleRegisterAssistantBridge}
             />
           ) : (
             <div className="placeholder">Connect to ROS to use Behavior Trees</div>
@@ -3017,6 +3030,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           onExecutionControlsChange={controls => {
             btExecutionControls.current = controls;
           }}
+          panelId={panel.id}
+          onOpenAssistant={handleOpenAssistant}
+          onRegisterAssistantBridge={handleRegisterAssistantBridge}
         />
       );
     }
@@ -3953,6 +3969,33 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           ros={ros}
         />
       )}
+
+      {/* Global AI assistant — a single top-level mount per docs/architecture.md's "Adding a
+          Feature" guidance; all conversation/provider/tool logic lives in the feature module, not
+          here. The workspace snapshot below is a bounded, serializable read of state this
+          component already owns (see docs/ai-assistant.md's capability matrix). */}
+      <GlobalAssistant
+        ref={assistantRef}
+        ros={ros}
+        isConnected={isConnected}
+        connectionGeneration={connectionGeneration}
+        workspace={buildWorkspaceSnapshot({
+          connectionStatus,
+          panels: [
+            ...workspacePanels.map(panel => ({ id: panel.id, type: panel.type, title: panel.title })),
+            ...activePanels.map(panel => ({ id: panel.id, type: panel.type, title: panel.name })),
+          ],
+          selectedPadLayoutId:
+            workspacePanels.find(panel => panel.type === 'pad')?.layoutId ??
+            activePanels.find(panel => panel.id === selectedPanelId)?.layoutId ??
+            null,
+          // The active BT bridge (registered by whichever BehaviorTreePanel is mounted) already
+          // supplies the live current-tree chip with richer data than an id here would; not
+          // duplicating that plumbing at the workspace-snapshot level is a deliberate v1 scope
+          // limit, documented in docs/ai-assistant.md.
+          openBehaviorTreeId: null,
+        })}
+      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import AgentSpeechTextarea from './AgentSpeechTextarea';
+import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 
 class MockSpeechRecognition {
   static instance: MockSpeechRecognition | null = null;
@@ -27,7 +27,7 @@ const getUserMedia = vi.fn();
 const SpeechHarness = () => {
   const [value, setValue] = useState('Keep clear');
   return (
-    <AgentSpeechTextarea
+    <AssistantSpeechTextarea
       id="speech-field"
       label="Robot context"
       value={value}
@@ -37,7 +37,7 @@ const SpeechHarness = () => {
   );
 };
 
-describe('AgentSpeechTextarea', () => {
+describe('AssistantSpeechTextarea', () => {
   beforeEach(() => {
     trackStop.mockReset();
     getUserMedia.mockReset();
@@ -66,7 +66,7 @@ describe('AgentSpeechTextarea', () => {
 
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Listening'));
-    expect(document.querySelectorAll('.bt-agent-listening-wave i')).toHaveLength(4);
+    expect(document.querySelectorAll('.assistant-listening-wave i')).toHaveLength(4);
     expect(trackStop).toHaveBeenCalledOnce();
     expect(MockSpeechRecognition.instance).toMatchObject({
       continuous: true,
@@ -122,7 +122,7 @@ describe('AgentSpeechTextarea', () => {
     const transcribe = vi.fn().mockResolvedValue('dock at station two');
     const Harness = () => {
       const [value, setValue] = useState('');
-      return <AgentSpeechTextarea id="recorded" label="Behavior" value={value} onChange={setValue} rows={3} onTranscribeAudio={transcribe} />;
+      return <AssistantSpeechTextarea id="recorded" label="Behavior" value={value} onChange={setValue} rows={3} onTranscribeAudio={transcribe} />;
     };
     render(<Harness />);
 
