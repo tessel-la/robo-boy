@@ -162,3 +162,19 @@ jobs:
           set -euo pipefail
           mapfile -t installers < <(find installers stable iphone android -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"
+
+  publish-apt:
+    name: Publish the APT repository
+    needs: [release-please, publish-installers]
+    if: >-
+      ${{ !cancelled()
+      && needs.release-please.outputs.release_created == 'true'
+      && needs.publish-installers.result == 'success' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publish-apt.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

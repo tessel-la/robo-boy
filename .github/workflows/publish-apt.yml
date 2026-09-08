@@ -1,0 +1,110 @@
+name: Publish APT Repository
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: GitHub release tag whose Debian package should be published
+        required: true
+        type: string
+    secrets:
+      APT_SIGNING_KEY:
+        description: ASCII-armored private OpenPGP key used only for APT metadata
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, sign, and deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out repository tooling
+        uses: actions/checkout@v4
+
+      - name: Download the released Debian package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir package
+          gh release download "$TAG_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'Robo-Boy-linux-amd64.deb' \
+            --dir package
+          test "$(find package -maxdepth 1 -type f -name '*.deb' | wc -l)" -eq 1
+
+          case "$TAG_NAME" in
+            robo-boy-v*) expected_version=${TAG_NAME#robo-boy-v} ;;
+            *) echo "::error::unexpected Robo-Boy release tag: $TAG_NAME"; exit 1 ;;
+          esac
+          package_version=$(dpkg-deb --field package/Robo-Boy-linux-amd64.deb Version)
+          if [ "$package_version" != "$expected_version" ]; then
+            echo "::error::release tag is $expected_version but the Debian package is $package_version"
+            exit 1
+          fi
+
+      - name: Build APT metadata
+        run: scripts/build-apt-repository.sh package/Robo-Boy-linux-amd64.deb repository
+
+      - name: Sign APT metadata
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/roboboy-apt-gnupg"
+          install -d -m 0700 "$GNUPGHOME"
+          printf '%s' "$APT_SIGNING_KEY" | gpg --batch --import
+
+          mapfile -t signing_keys < <(
+            gpg --batch --with-colons --list-secret-keys |
+              awk -F: '$1 == "sec" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }'
+          )
+          if [ "${#signing_keys[@]}" -ne 1 ]; then
+            echo "::error::APT_SIGNING_KEY must contain exactly one primary private key"
+            exit 1
+          fi
+          signing_key=${signing_keys[0]}
+
+          gpg --batch --yes --local-user "$signing_key" \
+            --clearsign \
+            --output repository/dists/stable/InRelease \
+            repository/dists/stable/Release
+          gpg --batch --yes --local-user "$signing_key" \
+            --armor --detach-sign \
+            --output repository/dists/stable/Release.gpg \
+            repository/dists/stable/Release
+          gpg --batch --yes \
+            --output repository/roboboy-archive-keyring.gpg \
+            --export "$signing_key"
+          gpg --batch --fingerprint "$signing_key"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload APT repository
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repository
+
+      - name: Deploy APT repository
+        id: deployment
+        uses: actions/deploy-pages@v4

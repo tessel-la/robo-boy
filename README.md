@@ -17,7 +17,20 @@ Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and vi
 The shortest route. The app needs only the ROS services, so there is no certificate to create and no
 proxy to run.
 
-1. Install a package for the current release:
+1. On Debian or Ubuntu, add the signed Robo-Boy repository and install the app:
+
+   ```bash
+   sudo install -d -m 0755 /etc/apt/keyrings
+   curl -fsSL https://tessel-la.github.io/robo-boy/roboboy-archive-keyring.gpg \
+     | sudo tee /etc/apt/keyrings/roboboy-archive-keyring.gpg >/dev/null
+   echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/roboboy-archive-keyring.gpg] https://tessel-la.github.io/robo-boy stable main" \
+     | sudo tee /etc/apt/sources.list.d/roboboy.list >/dev/null
+   sudo apt update
+   sudo apt install robo-boy
+   ```
+
+   Future releases then arrive with the machine's normal `apt update` and `apt upgrade`. Alternatively,
+   download a package for the current release directly:
    [`.deb`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-amd64.deb) ·
    [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) ·
    [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) ·

@@ -292,8 +292,36 @@ this on every platform and fails the build if any panel asset reached the fronte
 `*:panels` development builds cannot leak a local panel into an official artifact. Building with local
 panels stays available for development, as described in [Adding a custom panel](custom-panels.md).
 
-The workflows need no secrets beyond the repository token. `RELEASE_PLEASE_TOKEN` remains optional and is
-used where it is already configured; the release job needs `contents: write`, which it declares itself.
+The installer workflows need no secrets beyond the repository token. `RELEASE_PLEASE_TOKEN` remains optional and
+is used where it is already configured; the release job needs `contents: write`, which it declares itself.
+
+### APT Repository
+
+After the installers are attached, `Publish APT Repository` downloads the release's stable-name `.deb`, verifies
+that it is the `robo-boy` `amd64` package, creates a `stable/main` APT index, signs the index, and deploys it to
+GitHub Pages. The Pages deployment intentionally contains only the newest package: GitHub Releases remains the
+immutable archive, while the APT endpoint owns the current upgrade path.
+
+One-time repository setup is required:
+
+1. Create a dedicated OpenPGP signing key whose identity clearly names the Robo-Boy APT archive. Keep its offline
+   backup secure; every installed machine trusts this key to authorize package updates.
+2. Add the ASCII-armored private key as the Actions secret `APT_SIGNING_KEY`. The workflow requires exactly one
+   unencrypted primary private key so unattended signing either succeeds or fails visibly.
+3. In **Settings → Pages**, select **GitHub Actions** as the source.
+4. Run `Publish APT Repository` manually with the newest existing tag once. Later Release Please runs invoke it
+   automatically after all installers have reached the GitHub Release.
+
+The workflow prints the public-key fingerprint. Publish that fingerprint through an independently controlled
+channel so users can verify the initial key download. Rotating the signing key requires publishing the replacement
+key to already-installed clients before signing exclusively with it; replacing the Pages keyring and signature in
+one release would strand those clients.
+
+Test repository generation locally without publishing:
+
+```bash
+scripts/build-apt-repository.sh path/to/Robo-Boy-linux-amd64.deb /tmp/roboboy-apt
+```
 
 Neither macOS nor Windows artifacts are signed. macOS shows an unidentified-developer warning unless the
 user opens the app through the context menu, and Windows shows a SmartScreen prompt. Signing is not wired
