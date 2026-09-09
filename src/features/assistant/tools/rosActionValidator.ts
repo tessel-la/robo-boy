@@ -12,7 +12,7 @@ export interface RosActionValidationIssue {
  * This catches a hallucinated topic/service/action name or a wrong message type; it does not
  * (yet) diff the payload's fields against the message's full schema — the model receives the
  * exact schema for BT-tool turns (`fetchBehaviorTreeSchemas`) but a standalone `rosAction`
- * proposal only gets this name/type check plus the JSON-shape/size cap in `rosActionGuard.ts`.
+ * proposal only gets this name/type check because chat renders it for review and never executes it.
  * Documented as a known limitation, not silently assumed complete.
  */
 export const validateRosActionProposal = (

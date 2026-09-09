@@ -4,62 +4,94 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 
 ## User Workflow
 
-1. Click the assistant launcher (bottom-left, fixed) from any view.
-2. On desktop it opens as a floating, resizable, non-modal panel; on mobile it opens as a draggable bottom sheet that leaves the workspace above it visible and usable. Neither blocks interaction with the rest of the app — dismiss with the close button or Escape.
-3. Ask a question, or attach files, a sketch, or your voice (Web Speech API, or record-and-transcribe when unavailable).
-4. Pin extra context with the `+` button or by typing `@` inline (all saved Pads, all saved Behavior Trees, `/rosout`, or a fresh ROS graph refresh). Every context chip is visible and individually removable.
-5. Review any proposed change before it takes effect — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
+1. Press the assistant launcher, fixed in the bottom-left corner. It is the mirror image of the theme button in the bottom-right and takes its size and inset from the same `--floating-action-*` tokens in `src/index.css`, so the pair always match.
+2. On desktop the assistant is a fixed left-side panel (`clamp(420px, 32vw, 480px)`) running the full height under the app bar. It is non-modal — the workspace to its right stays live — and it does not drag, resize, or minimize. Below 768px it fills the screen under the app bar as a modal dialog with a focus trap, the system back gesture closes it, and the theme button hides for as long as it is open rather than floating over the composer.
+3. Ask a question, or attach files, a sketch, or your voice (Web Speech API, or record-and-transcribe when the browser has no recognizer).
+4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
+5. Review any proposed change in the editor that owns it — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
 
 Settings (provider, model, API key, instructions) live in the gear icon inside the panel and persist to this browser only.
 
+## Context
+
+Context reaches a turn two ways, and neither is silent.
+
+**Automatic.** A bounded workspace snapshot (connection status, open panels and their configuration, the selected Pad, the open Behavior Tree, the current and saved layouts) plus the cached ROS graph. The `Context` line above the composer names what is in play, and every reply carries a `Context used` disclosure listing each item with its source, age, and whether a reconnect has made it stale. Automatic context is always on: there is nothing to switch off and then be unable to restore.
+
+**Tagged.** Type `@` for the inline picker, or open the `Context` browser for the grouped, searchable catalog — current workspace, Pads, Behavior Trees, ROS topics/services/actions/nodes/parameters, and TF/`/rosout`. Both write the resource into the prompt as a readable `@Camera` or `@/cmd_vel`.
+
+**The mention is the tag.** There is no separate chip strip above the composer to keep in sync or to spend transcript space on. A turn carries exactly the resources its text still mentions, so deleting the text removes the context. The mention is coloured by source as it is written — a backdrop behind the textarea paints the marks, since a textarea cannot style its own content — and stays coloured in the transcript once sent. Repeating or editing an earlier message re-sends it with the same tags, because retrieved resources outlive the prompt that tagged them; each one carries its age and reconnect generation into `Context used`.
+
+Tagging several resources works while earlier ones are still loading — retrievals run alongside each other, and a send waits for any that are still in flight so a prompt never goes out missing the context it names.
+
+What a tag actually retrieves is exact, not summarized: a Pad or Behavior Tree tag carries its complete JSON; a topic tag carries the live message schema plus a bounded sample; a service or action tag carries its request or goal schema.
+
 ## Capability Matrix
 
-| Capability | Read automatically | Retrieve on demand | Propose (needs accept) | Execute only after explicit confirm | Not accessible |
-| --- | --- | --- | --- | --- | --- |
-| Connection status | ✅ | | | | |
-| Open workspace panels / selected Pad | ✅ (bounded snapshot) | | | | |
-| ROS topics/services/actions + schemas | | ✅ (cached, reconnect-aware) | | | |
-| TF diagnostics / two-frame transform | | ✅ (on-demand, no background subscription) | | | |
-| `/rosout` recent messages | | ✅ (bounded ring buffer, only while the panel is open) | | | |
-| Pad JSON | | ✅ | | | |
-| Pad create / repair | | | ✅ (goes through the existing Pad save flow) | | |
-| Behavior Tree JSON | | ✅ | | | |
-| Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | | |
-| Topic publish / service call / action goal | | | ✅ (shown as a card with target, type, and payload) | ✅ (single explicit click, capped, cancellable) | |
-| `/diagnostics`, ROS 2 lifecycle state | | | | | ❌ (see [Known limitations](#known-limitations)) |
-| Provider API key | | | | | ❌ (never placed in context, logs, or prompts) |
-| External-panel internals | | | | | ❌ (no dependency edge between the assistant and `src/panels/`) |
-| Filesystem / shell / ROS CLI | | | | | ❌ (does not exist anywhere in the app, on any platform) |
+| Capability | Read automatically | Retrieve on demand | Propose (reviewed in its own editor) | Not accessible |
+| --- | --- | --- | --- | --- |
+| Connection status | ✅ | | | |
+| Open panels / layouts / selected Pad | ✅ (bounded snapshot) | | | |
+| ROS topics/services/actions + schemas | | ✅ (cached, reconnect-aware) | | |
+| ROS nodes and parameters | | ✅ (rosapi, serialized) | | |
+| TF snapshot, two-frame transform / distance | | ✅ (on demand, no background subscription) | | |
+| `/rosout` recent messages | | ✅ (bounded: up to 40 messages over 4s, on demand) | | |
+| Pad JSON | | ✅ (complete layout) | | |
+| Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
+| Behavior Tree JSON | | ✅ (complete tree) | | |
+| Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | |
+| Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |
+| External panel JSON / internals | | | | ❌ (no dependency edge to `src/panels/`; the assistant generates Pads, not external panels) |
+| ROS 2 lifecycle state | | | | ❌ (see [Known limitations](#known-limitations)) |
+| Provider API key | | | | ❌ (never placed in context, logs, or prompts) |
+| Filesystem / shell / ROS CLI / raw ROSLIB objects | | | | ❌ (does not exist anywhere in the app, on any platform) |
 
 ## Trust Model
 
-Three tiers, and the assistant never silently crosses from one to the next:
+Two tiers, and the assistant never silently crosses from one to the next:
 
-1. **Read-only inspection** — ROS graph discovery, TF lookups, `/rosout`, workspace/Pad/BT reads. No confirmation needed; every value shown carries its source and fetch time, and is marked stale if a reconnect happened since.
-2. **Proposals** — a Pad, a Behavior Tree, or a ROS action the assistant wants to create or change. Nothing is written or sent until the user clicks an explicit accept/save/run action. Pad and BT proposals are validated (topic/service/action existence and message-type match) against the live ROS graph before that button is even shown as clean.
-3. **Robot-affecting execution** — a topic publish, service call, or action goal. This is a proposal *and* an execution: the guard in `src/features/assistant/tools/rosActionGuard.ts` enforces a JSON-object/size cap, checks the ROS connection has not changed since the proposal was made (and again after the call returns), and delegates the actual call to the same `executeRosOperation` the Pad/BT editors already use (same timeout and cancellation behavior). There is no batching or looping — one explicit click runs exactly one action.
+1. **Read-only inspection** — ROS graph discovery, schemas and bounded samples, TF lookups, `/rosout`, workspace/Pad/BT reads. No confirmation needed; every value shown carries its source and fetch time, and is marked stale if a reconnect happened since.
+2. **Proposals** — a Pad, a Behavior Tree, or a ROS operation. Nothing is written, saved, or sent until the user acts in the editor that owns it. Pad and BT proposals are validated (topic/service/action existence and message-type match) against the live ROS graph, and a Pad proposal is normalized, binding-checked and overlap-repaired before it opens in the Pad editor.
+
+**Robot-affecting execution never happens from chat.** A proposed publish, service call, or action goal renders as a review-only card with its target, type, and payload; there is no button that runs it. To act on one, put it into a Pad or a Behavior Tree and run it there, where the existing review, validation, and cancellation behavior applies. The former `tools/rosActionGuard.ts` execution path is removed, not disabled.
+
+Whole-conversation history is sent to the provider on every turn (see [Known limitations](#known-limitations)).
 
 ## Architecture
 
 `src/features/assistant/` is a self-contained feature module (see [Application architecture](architecture.md#global-ai-assistant)):
 
 - `providers/` — one file per vendor (OpenAI, Gemini, Ollama, OpenAI-compatible, Anthropic) behind a single `sendChat` contract, using real multi-turn message arrays.
-- `context/` — `rosGraphCache.ts` (TTL + single-flight + reconnect-generation invalidation around the existing `discoverAllROSResources`), `tfContext.ts` (on-demand transform lookup, no background subscription), `rosoutBuffer.ts` (bounded ring buffer), `workspaceSnapshot.ts` (pure builder consumed by `MainControlView`).
-- `tools/` — `padValidator.ts` (whole-Pad-vs-ROS check), `rosActionGuard.ts` / `rosActionValidator.ts` (the trust-model tier 3 gate), `behaviorTreeTool.ts` (reuses the kept `treeGeneration.ts` parser).
-- `components/` — `GlobalAssistant.tsx` (conversation/provider/context state, exposes an imperative `open()`/`registerBehaviorTreeBridge()` handle), `AssistantPanel.tsx` (non-modal desktop panel / mobile bottom sheet), `AssistantSettingsPopover.tsx`, and the relocated `AssistantSpeechTextarea.tsx` / `AssistantSketchEditor.tsx`.
+- `context/` — `rosGraphCache.ts` (TTL + single-flight + reconnect-generation invalidation around the existing `discoverAllROSResources`), `rosContext.ts` (exact interface/schema lookups, bounded topic sampling, bounded `/rosout` capture), `tfContext.ts` (on-demand transform and distance, no background subscription), `workspaceSnapshot.ts` (pure builder consumed by `MainControlView`).
+- `tools/` — `padGeneration.ts` (proposal normalization, binding validation, overlap repair), `padValidator.ts` (whole-Pad-vs-ROS check), `rosActionValidator.ts` (existence and type check for review-only operation cards), `behaviorTreeTool.ts` (reuses the kept `treeGeneration.ts` parser).
+- `components/` — `GlobalAssistant.tsx` (conversation/provider/context state, exposes an imperative `open()`/`registerBehaviorTreeBridge()` handle), `AssistantPanel.tsx` (the desktop side panel / mobile full-screen dialog), `AssistantSettingsPopover.tsx`, and the relocated `AssistantSpeechTextarea.tsx` / `AssistantSketchEditor.tsx`.
+
+Every rosapi call in the app goes through the shared serialized queue in `src/utils/rosapiQueue.ts`. rosbridge answers rosapi requests one at a time, and a burst of concurrent calls — which context discovery would otherwise produce — is how that service is made to drop replies.
+
+Each ROS connection carries a generation number. Retrieved context records the generation it was read at; a reconnect marks that data stale rather than presenting it as current, and in-flight context work is aborted rather than allowed to land against a different robot.
 
 ### Behavior Tree integration
 
 A mounted `BehaviorTreePanel` registers a `BehaviorTreeAssistantBridge` (`getCurrentTree`, `getSelectedTreeContext`, `captureCheckpoint`, `applyPreview`, `restoreCheckpoint`, `notify`) — the same seven-callback shape it used to pass to its own embedded chat panel, now formalized as the seam to the global assistant. The panel's diff/canvas-overlay/accept-mode/checkpoint logic is unchanged; the assistant only calls `applyPreview(tree)` where the old embedded panel used to. The toolbar's "Create tree with AI" button and Ctrl/Cmd+I open the global assistant with that panel's bridge pinned instead of embedding a second chat surface.
 
+### Pad integration
+
+A Pad proposal is handed to `MainControlView`, which opens the existing Pad editor in create or edit mode against the proposed layout. Nothing is written to the Pad library until the user saves there.
+
 ## Migration From The BT-Owned Assistant
 
-The former `src/features/behaviorTree/agent/agentClient.ts` and `agentStorage.ts`, and the component `BehaviorTreeAgentPanel.tsx`, are removed. `treeGeneration.ts` (LLM-output parsing/repair) and `BehaviorTreeAgentPreview.tsx` (diff/summary, used by the canvas overlay) are unchanged. `AgentSpeechTextarea.tsx` and `BehaviorTreeSketchEditor.tsx` moved to `src/features/assistant/components/` under new names (`AssistantSpeechTextarea.tsx`, `AssistantSketchEditor.tsx`) with no behavior change beyond CSS class renaming.
+The former `src/features/behaviorTree/agent/agentClient.ts` and `agentStorage.ts`, and the component `BehaviorTreeAgentPanel.tsx`, are removed. `treeGeneration.ts` (LLM-output parsing/repair) and `BehaviorTreeAgentPreview.tsx` (diff/summary, used by the canvas overlay) are unchanged. `AgentSpeechTextarea.tsx` and `BehaviorTreeSketchEditor.tsx` moved to `src/features/assistant/components/` under new names (`AssistantSpeechTextarea.tsx`, `AssistantSketchEditor.tsx`).
 
 Two deliberate scope reductions relative to the old BT-only chat:
 
-- The BT agent's canvas-anchored Ctrl+I micro-form is gone; Ctrl+I now opens the (lightweight, non-modal) global assistant panel with the tree pinned, since the micro-form's reason to exist — avoiding a heavy modal — no longer applies.
-- The `@mention` picker is simpler: it reuses the same "+" context-picker options rather than a bespoke per-node autocomplete list.
+- The BT agent's canvas-anchored Ctrl+I micro-form is gone; Ctrl+I now opens the global assistant panel with the tree pinned, since the micro-form's reason to exist — avoiding a heavy modal — no longer applies.
+- The `@mention` picker reuses the same context-catalog options as the `Context` browser rather than a bespoke per-node autocomplete list.
+
+## Voice Input
+
+Voice uses the Web Speech API where the browser provides it, and otherwise records audio and sends it to the configured provider for transcription. Both need microphone permission, and the browser only grants that on a secure origin: a phone browsing Robo-Boy over plain `http://<LAN-IP>` cannot record, and no frontend code can work around that. Use HTTPS, `localhost`, or the packaged app.
+
+The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`. The webview asks for the pair in a single request (wry's `RustWebChromeClient.onPermissionRequest`) and an undeclared permission comes back denied, which denies the whole request. `NSMicrophoneUsageDescription` covers the same ground on iOS.
 
 ## Privacy And Credentials
 
@@ -73,11 +105,15 @@ The assistant has no dependency edge to or from `src/panels/` — it cannot be r
 
 ## Known Limitations
 
-- **`/diagnostics` and ROS 2 lifecycle state are not read.** No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk `discoverAllROSResources` already guards against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
-- **ROS action proposals are checked for existence and top-level message-type match, not full field-level payload schema.** A Behavior Tree proposal does get the full schema (via `fetchBehaviorTreeSchemas`); a standalone "publish/call/send" proposal only gets the JSON-shape/size cap plus the name/type check.
+- **The whole conversation is sent on every turn**, bounded only by the 100-message persistence cap. There is no summarization or sliding window, so a long conversation with several tagged Pads or Behavior Trees can grow the request past a small model's context window.
+- **`/diagnostics` and ROS 2 lifecycle state are not read.** No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk the shared queue and `discoverAllROSResources` already guard against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
+- **ROS operation proposals are checked for existence and top-level message-type match, not full field-level payload schema.** A Behavior Tree or Pad proposal does get the full schema; a standalone publish/call/send card only gets the name/type check. Since nothing runs from chat, this bounds a review aid rather than an execution gate.
+- **Only Pads are generated, not external panels.** An external panel is a versioned, sandboxed artifact under `src/panels/`, outside the assistant's dependency boundary.
+- **The composer's tag colouring is a backdrop, not styled text.** A textarea cannot carry inline styling, so the marks are painted by a mirrored layer behind it. It must keep the same font, padding and wrapping as the textarea to stay aligned; a `contenteditable` composer would style the text directly but cost IME, undo, and mobile-keyboard behavior that currently works.
+- **Re-typing a mention by hand reuses the resource read for it earlier in the conversation** rather than re-reading it. Selecting it again from the picker forces a fresh read, and `Context used` always shows the age of what was actually sent.
 - **Domain-fragment prompt routing (whether to include the BT/Pad schema text for a turn) is keyword-based**, not a real intent classifier.
 - **The assistant is not available before connecting** (on the entry/connect screen). Adding this would require lifting `useRos()` out of `MainControlView`, a materially separate and independently risky refactor; see [Application architecture](architecture.md#ros-boundary).
-- **No live-provider or live-ROS validation was performed as part of building this feature** — all automated coverage uses a mocked provider `fetch` and the existing `e2e/helpers/rosMock.ts`.
+- **No live-provider or live-ROS validation was performed as part of building this feature** — all automated coverage uses a mocked provider `fetch` and the existing `e2e/helpers/rosMock.ts`. No physical iOS or Android microphone testing has been done.
 
 ## Future: External-Agent (MCP) Integration
 

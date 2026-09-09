@@ -51,6 +51,19 @@ interface AssistantSpeechTextareaProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement>;
   onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
   onTranscribeAudio?: (audio: Blob) => Promise<string>;
+  /** Grow the textarea with its content instead of scrolling inside a fixed box. */
+  autoGrow?: boolean;
+  /**
+   * Renders a control row under the textarea. The voice button joins `start` there instead of
+   * sitting inside the textarea, so a composer can group it with its own tools.
+   */
+  toolbar?: { start?: React.ReactNode; end?: React.ReactNode };
+  /**
+   * A copy of `value` rendered behind the textarea so parts of the draft can be highlighted. A
+   * textarea cannot style its own content; the backdrop supplies the marks and the real text sits
+   * on top of them, so it must lay out identically (same font, padding, wrapping, scroll).
+   */
+  highlight?: React.ReactNode;
 }
 
 const speechErrorMessage = (code?: string) => {
@@ -74,7 +87,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   textareaRef,
   onKeyDown,
   onTranscribeAudio,
+  autoGrow,
+  toolbar,
+  highlight,
 }) => {
+  const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -90,6 +108,13 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
+
+  useEffect(() => {
+    const node = textareaNodeRef.current;
+    if (!autoGrow || !node) return;
+    node.style.height = 'auto';
+    node.style.height = `${node.scrollHeight}px`;
+  }, [autoGrow, value]);
 
   useEffect(
     () => () => {
@@ -235,34 +260,52 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     }
   };
 
+  const voiceButton = (
+    <button
+      type="button"
+      className={`assistant-mic${isListening ? ' listening' : ''}`}
+      onClick={handleVoiceClick}
+      disabled={isRequestingPermission || isTranscribing}
+      aria-label={`${isListening ? 'Stop' : 'Start'} voice input for ${label}`}
+      aria-pressed={isListening}
+      title={isListening ? 'Stop voice input' : 'Start voice input'}
+    >
+      {isListening ? <FaStop aria-hidden="true" /> : <FaMicrophone aria-hidden="true" />}
+    </button>
+  );
+
   return (
     <div className={`${className} assistant-speech-field`.trim()}>
       <label className="assistant-field-label" htmlFor={id}>
         {label}
       </label>
-      <span className="assistant-textarea-shell">
+      <span className={`assistant-textarea-shell${toolbar ? ' has-toolbar' : ''}${highlight ? ' has-highlight' : ''}`}>
+        {highlight ? <div className="assistant-textarea-highlight" ref={highlightRef} aria-hidden="true">{highlight}</div> : null}
         <textarea
           id={id}
-          ref={textareaRef}
+          ref={node => {
+            textareaNodeRef.current = node;
+            if (textareaRef) (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+          }}
           rows={rows}
           value={value}
           onChange={event => onChange(event.target.value)}
           onKeyDown={onKeyDown}
+          onScroll={highlight ? event => { if (highlightRef.current) highlightRef.current.scrollTop = event.currentTarget.scrollTop; } : undefined}
           placeholder={placeholder}
           autoFocus={autoFocus}
         />
-        <button
-          type="button"
-          className={`assistant-mic${isListening ? ' listening' : ''}`}
-          onClick={handleVoiceClick}
-          disabled={isRequestingPermission || isTranscribing}
-          aria-label={`${isListening ? 'Stop' : 'Start'} voice input for ${label}`}
-          aria-pressed={isListening}
-          title={isListening ? 'Stop voice input' : 'Start voice input'}
-        >
-          {isListening ? <FaStop aria-hidden="true" /> : <FaMicrophone aria-hidden="true" />}
-        </button>
+        {!toolbar && voiceButton}
       </span>
+      {toolbar && (
+        <div className="assistant-speech-toolbar">
+          <div className="assistant-speech-toolbar-start">
+            {toolbar.start}
+            {voiceButton}
+          </div>
+          {toolbar.end}
+        </div>
+      )}
       {isRequestingPermission && (
         <span className="assistant-speech-status" role="status">
           Requesting microphone permission…

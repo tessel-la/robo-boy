@@ -1,6 +1,7 @@
 import type { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { ROSDiscoveryResult, ROSActionInfo, ROSServiceInfo, ROSTopicInfo } from '../types';
+import { runSerializedRosapi } from '../../../utils/rosapiQueue';
 
 /**
  * Discover available ROS actions.
@@ -246,7 +247,7 @@ export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
 /**
  * Discover all available ROS resources (actions, services, topics)
  */
-export const discoverAllROSResources = async (ros: Ros): Promise<ROSDiscoveryResult> => {
+const discoverAllROSResourcesUnserialized = async (ros: Ros): Promise<ROSDiscoveryResult> => {
   try {
     // Keep rosapi introspection serialized. Opening the BT panel can trigger
     // hundreds of service/type requests, and overlapping those calls has caused
@@ -269,6 +270,9 @@ export const discoverAllROSResources = async (ros: Ros): Promise<ROSDiscoveryRes
     };
   }
 };
+
+export const discoverAllROSResources = (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult> =>
+  runSerializedRosapi(ros, () => discoverAllROSResourcesUnserialized(ros), signal);
 
 /**
  * Get service type for a specific service
@@ -714,7 +718,7 @@ async function queryActionGoalDetails(ros: Ros, actionType: string): Promise<Act
  *
  * Tries the same two type-string formats as fetchActionGoalSchema.
  */
-export const fetchActionGoalDetails = async (ros: Ros, actionType: string): Promise<ActionGoalDetails | null> => {
+const fetchActionGoalDetailsUnserialized = async (ros: Ros, actionType: string): Promise<ActionGoalDetails | null> => {
   const actionGoalResult = await queryActionGoalDetails(ros, actionType);
   if (actionGoalResult !== null) {
     console.log(`[BT] fetchActionGoalDetails "${actionType}" via /rosapi/action_goal_details:`, actionGoalResult);
@@ -737,6 +741,13 @@ export const fetchActionGoalDetails = async (ros: Ros, actionType: string): Prom
   console.warn(`[BT] fetchActionGoalDetails: no schema for "${actionType}"`);
   return null;
 };
+
+export const fetchActionGoalDetails = (
+  ros: Ros,
+  actionType: string,
+  signal?: AbortSignal
+): Promise<ActionGoalDetails | null> =>
+  runSerializedRosapi(ros, () => fetchActionGoalDetailsUnserialized(ros, actionType), signal);
 
 /**
  * Primary strategy for service request schema: calls the dedicated
@@ -805,7 +816,7 @@ async function queryServiceRequestDetails(ros: Ros, serviceType: string): Promis
  * std_srvs/srv/Trigger. Jazzy rosapi can crash when it tries to instantiate a
  * service class as a message class.
  */
-export const fetchServiceRequestSchema = async (ros: Ros, serviceType: string): Promise<ActionGoalDetails | null> => {
+const fetchServiceRequestSchemaUnserialized = async (ros: Ros, serviceType: string): Promise<ActionGoalDetails | null> => {
   if (!serviceType || serviceType === 'unknown') return null;
 
   // Strategy 0: dedicated rosapi endpoint (most reliable)
@@ -835,6 +846,23 @@ export const fetchServiceRequestSchema = async (ros: Ros, serviceType: string): 
 
   console.warn(`[BT] fetchServiceRequestSchema: no schema found for "${serviceType}"`);
   return null;
+};
+
+export const fetchServiceRequestSchema = (
+  ros: Ros,
+  serviceType: string,
+  signal?: AbortSignal
+): Promise<ActionGoalDetails | null> =>
+  runSerializedRosapi(ros, () => fetchServiceRequestSchemaUnserialized(ros, serviceType), signal);
+
+/** Full field/default schema for an ordinary topic message type. */
+export const fetchMessageSchema = (
+  ros: Ros,
+  messageType: string,
+  signal?: AbortSignal
+): Promise<ActionGoalDetails | null> => {
+  if (!messageType || messageType === 'unknown') return Promise.resolve(null);
+  return runSerializedRosapi(ros, () => queryMessageDetailsFull(ros, messageType), signal);
 };
 
 /**

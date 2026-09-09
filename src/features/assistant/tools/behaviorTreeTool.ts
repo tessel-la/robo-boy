@@ -13,15 +13,16 @@ import type { AssistantResponse } from '../types';
  */
 export const fetchBehaviorTreeSchemas = async (
   ros: Ros,
-  discovery: ROSDiscoveryResult
+  discovery: ROSDiscoveryResult,
+  signal?: AbortSignal
 ): Promise<BehaviorTreeResourceSchemas> => {
   const schemas: BehaviorTreeResourceSchemas = { actions: {}, services: {} };
   for (const actionType of Array.from(new Set(discovery.actions.map(action => action.type).filter(Boolean)))) {
-    const details = await fetchActionGoalDetails(ros, actionType);
+    const details = await fetchActionGoalDetails(ros, actionType, signal);
     if (details) schemas.actions[actionType] = details;
   }
   for (const serviceType of Array.from(new Set(discovery.services.map(service => service.type).filter(Boolean)))) {
-    const details = await fetchServiceRequestSchema(ros, serviceType);
+    const details = await fetchServiceRequestSchema(ros, serviceType, signal);
     if (details) schemas.services[serviceType] = details;
   }
   return schemas;

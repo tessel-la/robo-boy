@@ -35,6 +35,9 @@ export interface AssistantMessage {
   content: string;
   attachments: AssistantAttachment[];
   contextChipIds: string[];
+  /** Human-readable snapshot of explicitly tagged resources for this turn. Kept on the in-memory
+   * message so tags remain visible even if the composer pin is removed later. */
+  contextTags?: Array<{ id: string; label: string; mention?: string; source: AssistantContextSourceKind }>;
   checkpoint: BehaviorTreeAgentCheckpoint | null;
   createdAt: number;
   /** Present on an assistant-role message that carries a structured proposal (Pad, BT, or ROS
@@ -46,6 +49,18 @@ export interface AssistantMessage {
   /** `connectionGeneration` captured when a `rosAction` proposal was created — read by the guard
    * at confirm-time, not re-read live, so a reconnect between proposal and click is caught. */
   proposedAtGeneration?: number;
+  /** What was actually sent with the turn that produced this message, rendered as a collapsed
+   * "Context used" disclosure under the reply. This is how provenance stays visible without
+   * cluttering the composer with pre-declared chips (see docs/ai-assistant.md). */
+  contextUsed?: AssistantContextUsage[];
+}
+
+export interface AssistantContextUsage {
+  label: string;
+  source: AssistantContextSourceKind;
+  /** Seconds between the data being fetched and the turn being sent. */
+  ageSeconds: number;
+  stale?: boolean;
 }
 
 /** The subset of a message actually persisted to localStorage — never attachments (large,
@@ -63,6 +78,9 @@ export type AssistantContextSourceKind = 'workspace' | 'ros' | 'tf' | 'rosout' |
 export interface AssistantContextChip {
   id: string;
   label: string;
+  /** How the resource is written as an `@` mention in the prompt, when that differs from the
+   * chip's type-prefixed label. Defaults to `label`. */
+  mention?: string;
   source: AssistantContextSourceKind;
   automatic: boolean;
   fetchedAt: number;
@@ -77,6 +95,16 @@ export interface WorkspaceSnapshotPanel {
   id: string;
   type: string;
   title: string;
+  selected?: boolean;
+  /** Host-owned configuration only. External-panel iframe state is never read through this field. */
+  configuration?: Record<string, unknown>;
+}
+
+export interface WorkspaceLayoutContext {
+  id: string | null;
+  title: string;
+  panels: WorkspaceSnapshotPanel[];
+  layout?: unknown;
 }
 
 /** Bounded, serializable "what's open right now" snapshot computed by MainControlView — the
@@ -85,9 +113,38 @@ export interface WorkspaceSnapshotPanel {
 export interface WorkspaceSnapshot {
   connectionStatus: 'disconnected' | 'connecting' | 'connected';
   openPanels: WorkspaceSnapshotPanel[];
+  viewMode?: string;
+  workspaceMode?: 'desktop' | 'mobile-single' | 'mobile-split' | 'standard';
   selectedPadLayoutId: string | null;
   openBehaviorTreeId: string | null;
+  currentLayout?: WorkspaceLayoutContext;
+  savedLayouts: WorkspaceLayoutContext[];
   fetchedAt: number;
+}
+
+/**
+ * Everything the assistant gathers by itself for a turn. This is never surfaced as removable
+ * chips: auto-context is always on, so there is nothing for a user to accidentally switch off and
+ * then be unable to restore. Only explicit `@`/`+` pins are user-managed.
+ */
+export interface AssistantAutoContext {
+  workspace: WorkspaceSnapshot;
+  ros?: {
+    resources: unknown;
+    fetchedAt: number;
+    generation: number;
+    stale: boolean;
+  };
+  openBehaviorTree?: { name: string; tree: unknown };
+  selectedBehaviorTreeNodes?: unknown;
+  selectedPad?: { name: string; layout: CustomGamepadLayout };
+  padLibrary: Array<{ id: string; name: string; componentCount: number; isDefault: boolean }>;
+  behaviorTreeLibrary: Array<{ id: string; name: string; nodeCount: number }>;
+  interfaceSchemas?: {
+    topics: Record<string, unknown>;
+    services: Record<string, unknown>;
+    actions: Record<string, unknown>;
+  };
 }
 
 /** Registered by a mounted BehaviorTreePanel so the global assistant can preview/accept BT edits

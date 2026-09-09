@@ -1,7 +1,7 @@
 import { parseBehaviorTreeToolResponse } from './tools/behaviorTreeTool';
+import { normalizePadLayout } from './tools/padGeneration';
 import type { AssistantResponse } from './types';
 import type { BehaviorTreeResourceSchemas } from '../behaviorTree/agent/types';
-import type { CustomGamepadLayout } from '../customGamepad/types';
 import type { RosOperation } from '../../utils/rosOperations';
 
 const stripCodeFence = (value: string): string => {
@@ -54,11 +54,8 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
     case 'tree':
       return parseBehaviorTreeToolResponse(trimmed, schemas);
     case 'padProposal': {
-      const layout = value.layout as CustomGamepadLayout | undefined;
-      if (!layout || typeof layout !== 'object' || !Array.isArray(layout.components)) {
-        throw new Error('The model returned an invalid Pad layout.');
-      }
-      return { kind: 'padProposal', layout, issues: [] };
+      // Repair/normalize before anything downstream sees it — see tools/padGeneration.ts.
+      return { kind: 'padProposal', layout: normalizePadLayout(value.layout), issues: [] };
     }
     case 'rosAction': {
       const operation = value.operation;

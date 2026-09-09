@@ -17,8 +17,8 @@
 /* New Button Styles */
 .theme-selector-container { /* New container for positioning */
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: var(--floating-action-inset);
+  right: var(--floating-action-inset);
   z-index: 1000; /* Ensure it's above other content */
 }
 
@@ -27,8 +27,8 @@
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
+  width: var(--floating-action-size);
+  height: var(--floating-action-size);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -43,8 +43,8 @@
 }
 
 .icon-wrapper {
-  width: 32px; /* Increased size again */
-  height: 32px; /* Increased size again */
+  width: var(--floating-action-icon);
+  height: var(--floating-action-icon);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -59,7 +59,7 @@
 /* Popup Menu Styles */
 .theme-popup-menu {
   position: absolute;
-  bottom: 65px; /* Position above the button */
+  bottom: calc(var(--floating-action-size) + 15px); /* Position above the button */
   right: 0;
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
@@ -184,40 +184,3 @@
     background-color: var(--border-color);
     border-color: var(--text-secondary);
 }
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-  .theme-selector-container {
-    bottom: 15px;
-    right: 15px;
-  }
-  .theme-selector-button {
-    width: 45px;
-    height: 45px;
-  }
-  .icon-wrapper {
-    width: 28px; /* Adjusted size */
-    height: 28px; /* Adjusted size */
-  }
-  .theme-popup-menu {
-    bottom: 60px; /* Adjust popup position */
-  }
-}
-
-@media (max-width: 480px) {
-  .theme-selector-container {
-    bottom: 10px;
-    right: 10px;
-  }
-  .theme-selector-button {
-    width: 40px;
-    height: 40px;
-  }
-  .icon-wrapper {
-    width: 24px; /* Adjusted size */
-    height: 24px; /* Adjusted size */
-  }
-  .theme-popup-menu {
-    bottom: 55px; /* Adjust popup position */
-  }
-} 

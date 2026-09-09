@@ -31,14 +31,37 @@ describe('parseAssistantResponse', () => {
     if (response.kind === 'behaviorTree') expect(response.tree.name).toBe('Generated');
   });
 
-  it('parses a Pad proposal', () => {
-    const layout = { id: 'p1', name: 'New Pad', gridSize: { width: 4, height: 4 }, cellSize: 60, components: [], rosConfig: {}, metadata: {} };
+  it('parses and normalizes a Pad proposal', () => {
+    const layout = {
+      id: 'p1',
+      name: 'New Pad',
+      gridSize: { width: 4, height: 4 },
+      cellSize: 60,
+      components: [
+        {
+          id: 'stick',
+          type: 'joystick',
+          position: { x: 0, y: 0, width: 2, height: 2 },
+          action: { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
+        },
+      ],
+      rosConfig: {},
+      metadata: {},
+    };
     const response = parseAssistantResponse(JSON.stringify({ kind: 'padProposal', layout }), schemas);
-    expect(response).toEqual({ kind: 'padProposal', layout, issues: [] });
+    expect(response.kind).toBe('padProposal');
+    if (response.kind !== 'padProposal') return;
+    expect(response.layout.components).toHaveLength(1);
+    expect(response.layout.components[0].action).toEqual({ topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' });
+    // rosConfig and metadata are filled in from the pad's own primary binding.
+    expect(response.layout.rosConfig).toEqual({ defaultTopic: '/joy', defaultMessageType: 'sensor_msgs/msg/Joy' });
+    expect(response.layout.metadata.version).toBe('1.0.0');
   });
 
   it('rejects a Pad proposal with no components array', () => {
-    expect(() => parseAssistantResponse(JSON.stringify({ kind: 'padProposal', layout: { id: 'p1' } }), schemas)).toThrow(/invalid Pad/);
+    expect(() => parseAssistantResponse(JSON.stringify({ kind: 'padProposal', layout: { id: 'p1' } }), schemas)).toThrow(
+      /must contain a components array/
+    );
   });
 
   it('parses a ROS action proposal', () => {

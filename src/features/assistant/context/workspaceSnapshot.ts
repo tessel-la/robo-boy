@@ -2,9 +2,13 @@ import type { WorkspaceSnapshot } from '../types';
 
 export interface BuildWorkspaceSnapshotInput {
   connectionStatus: WorkspaceSnapshot['connectionStatus'];
-  panels: Array<{ id: string; type: string; title: string }>;
+  panels: WorkspaceSnapshot['openPanels'];
+  viewMode?: string;
+  workspaceMode?: WorkspaceSnapshot['workspaceMode'];
   selectedPadLayoutId: string | null;
   openBehaviorTreeId: string | null;
+  currentLayout?: WorkspaceSnapshot['currentLayout'];
+  savedLayouts?: WorkspaceSnapshot['savedLayouts'];
 }
 
 /** Pure, serializable snapshot builder. MainControlView owns the underlying state (open panels,
@@ -13,8 +17,12 @@ export interface BuildWorkspaceSnapshotInput {
  * polling — freshness is just React re-render freshness. */
 export const buildWorkspaceSnapshot = (input: BuildWorkspaceSnapshotInput): WorkspaceSnapshot => ({
   connectionStatus: input.connectionStatus,
-  openPanels: input.panels.map(panel => ({ id: panel.id, type: panel.type, title: panel.title })),
+  openPanels: input.panels.map(panel => ({ ...panel })),
+  ...(input.viewMode ? { viewMode: input.viewMode } : {}),
+  ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
   selectedPadLayoutId: input.selectedPadLayoutId,
   openBehaviorTreeId: input.openBehaviorTreeId,
+  ...(input.currentLayout ? { currentLayout: input.currentLayout } : {}),
+  savedLayouts: input.savedLayouts ?? [],
   fetchedAt: Date.now(),
 });

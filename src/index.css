@@ -210,6 +210,28 @@ textarea {
        itself is drawn behind them on purpose; a dialog put there would be unreadable. */
     --safe-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
     --safe-height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom));
+    /* The round buttons floated over the bottom corners of the app -- the assistant launcher on the
+       left, the theme selector on the right. They read as a matched pair, so both take their size,
+       icon size and edge inset from here rather than repeating the breakpoints separately. */
+    --floating-action-size: 50px;
+    --floating-action-icon: 32px;
+    --floating-action-inset: 20px;
+}
+
+@media (max-width: 768px) {
+    :root {
+        --floating-action-size: 45px;
+        --floating-action-icon: 28px;
+        --floating-action-inset: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --floating-action-size: 40px;
+        --floating-action-icon: 24px;
+        --floating-action-inset: 10px;
+    }
 }
 
 :root[data-runtime='tauri'] {

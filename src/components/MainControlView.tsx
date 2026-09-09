@@ -1598,6 +1598,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
 
+  const handleReviewAssistantPad = useCallback((layout: CustomGamepadLayout) => {
+    const existing = loadGamepadLibrary().some(item => item.id === layout.id || item.layout.id === layout.id);
+    const matchingWorkspacePanel = workspacePanelsRef.current.find(panel => panel.type === 'pad' && panel.layoutId === layout.id);
+    setWorkspacePadEditorTargetId(matchingWorkspacePanel?.id ?? null);
+    setEditorSession({ mode: existing ? 'edit' : 'create', initialLayout: layout });
+  }, []);
+
   const handleCustomGamepadDeleted = (layoutId: string) => {
     setActivePanels(prev => {
       const remainingPanels = prev.filter(panel => panel.layoutId !== layoutId);
@@ -3979,14 +3986,42 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         ros={ros}
         isConnected={isConnected}
         connectionGeneration={connectionGeneration}
+        onReviewPadProposal={handleReviewAssistantPad}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [
-            ...workspacePanels.map(panel => ({ id: panel.id, type: panel.type, title: panel.title })),
-            ...activePanels.map(panel => ({ id: panel.id, type: panel.type, title: panel.name })),
+            ...workspacePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              selected: !isWorkspaceStacked,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            ...mobileWorkspacePanels.map((panel, index) => ({
+              id: `mobile:${panel.id}`,
+              type: panel.type,
+              title: panel.title,
+              selected: isWorkspaceStacked && index === activeMobileWindowIndex,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            ...activePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.name,
+              selected: panel.id === selectedPanelId,
+              configuration: panel.layoutId ? { layoutId: panel.layoutId } : {},
+            })),
           ],
           selectedPadLayoutId:
-            workspacePanels.find(panel => panel.type === 'pad')?.layoutId ??
+            (isWorkspaceStacked ? activeMobilePanel?.layoutId : workspacePanels.find(panel => panel.type === 'pad')?.layoutId) ??
             activePanels.find(panel => panel.id === selectedPanelId)?.layoutId ??
             null,
           // The active BT bridge (registered by whichever BehaviorTreePanel is mounted) already
@@ -3994,6 +4029,40 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           // duplicating that plumbing at the workspace-snapshot level is a deliberate v1 scope
           // limit, documented in docs/ai-assistant.md.
           openBehaviorTreeId: null,
+          viewMode,
+          workspaceMode: isWorkspaceStacked
+            ? (isMobileSplitView ? 'mobile-split' : 'mobile-single')
+            : 'desktop',
+          currentLayout: {
+            id: activeWorkspaceLayoutId,
+            title: activeWorkspaceLayout?.title ?? 'Current workspace',
+            panels: workspacePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            layout: capturedWorkspaceLayout,
+          },
+          savedLayouts: savedWorkspaceLayouts.map(layout => ({
+            id: layout.id,
+            title: layout.title,
+            panels: layout.panels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            layout: layout.layout,
+          })),
         })}
       />
     </div>

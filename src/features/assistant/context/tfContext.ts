@@ -14,7 +14,59 @@ export interface TfLookupResult {
   transform: TfCalculatedTransform | null;
   diagnostics: TfGraphDiagnostics;
   timedOut: boolean;
+  frames: string[];
+  requestedSource: string;
+  requestedTarget: string;
+  resolvedSource: string | null;
+  resolvedTarget: string | null;
 }
+
+const abortError = () => new DOMException('TF lookup cancelled.', 'AbortError');
+
+const canonicalFrame = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, '');
+
+const resolveFrameHint = (hint: string, frames: Iterable<string>): string | null => {
+  const normalizedHint = canonicalFrame(hint);
+  if (!normalizedHint) return null;
+  const candidates = [...frames];
+  return (
+    candidates.find(frame => canonicalFrame(frame) === normalizedHint) ??
+    candidates.find(frame => canonicalFrame(frame).endsWith(normalizedHint) || normalizedHint.endsWith(canonicalFrame(frame))) ??
+    null
+  );
+};
+
+export interface ParsedTransformRequest {
+  sourceFrame: string;
+  targetFrame: string;
+}
+
+export interface ParsedDistanceRequest extends ParsedTransformRequest {}
+
+/** Accepts ordinary phrasing, including abbreviated "btw" and human-spaced frame names. */
+export const parseTransformRequest = (text: string): ParsedTransformRequest | null => {
+  const compact = text.replace(/[`"']/g, '').replace(/\s+/g, ' ').trim();
+  const match = compact.match(
+    /\btransform\b.*?\b(?:between|btw|from)\s+(.+?)\s+(?:and|to|->|→)\s+(.+?)(?:[?.!,;]|$)/i
+  );
+  if (!match) return null;
+  const sourceFrame = match[1].trim();
+  const targetFrame = match[2].trim();
+  return sourceFrame && targetFrame ? { sourceFrame, targetFrame } : null;
+};
+
+/** Frame-pair parser for Euclidean distance questions. The actual value is derived from the same
+ * composed TF transform as a transform lookup, so distance and transform answers cannot diverge. */
+export const parseDistanceRequest = (text: string): ParsedDistanceRequest | null => {
+  const compact = text.replace(/[`"']/g, '').replace(/\s+/g, ' ').trim();
+  const match = compact.match(
+    /\bdistance\b.*?\b(?:between|btw|from)\s+(.+?)\s+(?:and|to|->|→)\s+(.+?)(?:[?.!,;]|$)/i
+  );
+  if (!match) return null;
+  const sourceFrame = match[1].trim();
+  const targetFrame = match[2].trim();
+  return sourceFrame && targetFrame ? { sourceFrame, targetFrame } : null;
+};
 
 /**
  * On-demand transform lookup for the assistant's TF tool. Deliberately not a background
@@ -27,11 +79,17 @@ export const lookupTransformOnDemand = (
   ros: Ros,
   sourceFrame: string,
   targetFrame: string,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<TfLookupResult> =>
-  new Promise(resolve => {
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
     let state: TfTreeState = createEmptyTfTreeState();
     let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
     const dynamicTopic = new ROSLIB.Topic({
       ros,
@@ -47,25 +105,56 @@ export const lookupTransformOnDemand = (
       queue_length: 1,
     });
 
-    const finish = (result: TfLookupResult) => {
+    const resultFor = (transform: TfCalculatedTransform | null, timedOut: boolean): TfLookupResult => {
+      const resolvedSource = resolveFrameHint(sourceFrame, state.knownFrames);
+      const resolvedTarget = resolveFrameHint(targetFrame, state.knownFrames);
+      return {
+        transform,
+        diagnostics: getTfGraphDiagnostics(state),
+        timedOut,
+        frames: [...state.knownFrames].sort(),
+        requestedSource: sourceFrame,
+        requestedTarget: targetFrame,
+        resolvedSource,
+        resolvedTarget,
+      };
+    };
+
+    const finish = (result: TfLookupResult, error?: unknown) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       dynamicTopic.unsubscribe();
       staticTopic.unsubscribe();
-      resolve(result);
+      signal?.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve(result);
     };
+
+    const onAbort = () => finish(resultFor(null, false), abortError());
 
     const handle = (source: 'dynamic' | 'static') => (message: unknown) => {
       state = consumeTfMessage(state, message as { transforms?: unknown }, source, Date.now());
-      const transform = calculateTfBetweenFrames(state, sourceFrame, targetFrame);
-      if (transform) finish({ transform, diagnostics: getTfGraphDiagnostics(state), timedOut: false });
+      const resolvedSource = resolveFrameHint(sourceFrame, state.knownFrames);
+      const resolvedTarget = resolveFrameHint(targetFrame, state.knownFrames);
+      const transform = resolvedSource && resolvedTarget ? calculateTfBetweenFrames(state, resolvedSource, resolvedTarget) : null;
+      if (transform) finish(resultFor(transform, false));
     };
 
     dynamicTopic.subscribe(handle('dynamic'));
     staticTopic.subscribe(handle('static'));
+    signal?.addEventListener('abort', onAbort, { once: true });
 
-    const timer = setTimeout(() => {
-      finish({ transform: null, diagnostics: getTfGraphDiagnostics(state), timedOut: true });
+    timer = setTimeout(() => {
+      const resolvedSource = resolveFrameHint(sourceFrame, state.knownFrames);
+      const resolvedTarget = resolveFrameHint(targetFrame, state.knownFrames);
+      const transform = resolvedSource && resolvedTarget ? calculateTfBetweenFrames(state, resolvedSource, resolvedTarget) : null;
+      finish(resultFor(transform, true));
     }, timeoutMs);
   });
+
+export const captureTfSnapshotOnDemand = (
+  ros: Ros,
+  timeoutMs = 1800,
+  signal?: AbortSignal
+): Promise<TfLookupResult> => lookupTransformOnDemand(ros, '__snapshot__', '__snapshot__', timeoutMs, signal);
