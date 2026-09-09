@@ -210,6 +210,34 @@ describe('GlobalAssistant', () => {
     expect(screen.queryByLabelText('Remove Panel: Camera from context')).not.toBeInTheDocument();
   });
 
+  it('hands the Pad editor a repaired layout whose ROS binding survived the model\'s aliases', async () => {
+    const onReviewPadProposal = vi.fn();
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({
+      kind: 'padProposal',
+      layout: {
+        name: 'Drive pad',
+        components: [
+          // `topicName` and a bare action `type` are the shapes models actually emit; a Pad saved
+          // with them unrepaired would have no usable binding.
+          { type: 'joystick', action: { topicName: '/cmd_vel', type: 'geometry_msgs/msg/Twist' } },
+        ],
+      },
+    }));
+    renderOpenAssistant({ onReviewPadProposal });
+
+    const textarea = screen.getByRole('textbox', { name: 'Ask the assistant' });
+    fireEvent.change(textarea, { target: { value: 'build a drive pad' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review in Pad editor' }));
+    expect(onReviewPadProposal).toHaveBeenCalledOnce();
+    const layout = onReviewPadProposal.mock.calls[0][0];
+    expect(layout.components).toHaveLength(1);
+    expect(layout.components[0].action).toMatchObject({ topic: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' });
+    expect(layout.components[0].id).toBeTruthy();
+    expect(screen.getByText('Opened in the Pad editor for review.')).toBeInTheDocument();
+  });
+
   it('tags a second resource while the first is still being retrieved', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Both noted.' }));
     renderOpenAssistant();
