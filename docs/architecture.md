@@ -90,6 +90,10 @@ New visualization types should follow the same split: serializable configuration
 
 `MainControlView` owns the unified workspace and persists panel instances by stable panel-definition ID. The common
 catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
+`src/components/workspaceLayout.ts` owns the workspace's recursive split tree, including validation, legacy row-layout
+migration, tile insertion/removal, and split resizing. A split may contain tiles or further splits on either axis, so
+dragging onto any tile edge can build nested compositions without adding layout-specific cases. Saved named layouts
+persist the same tree alongside their panel snapshots.
 `src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
 `panels/installed.json` without importing panel code. The tracked default registry is empty; explicit panel builds
 generate a separate ignored public tree from a schema-v2 desired state that can combine remote inventories and
