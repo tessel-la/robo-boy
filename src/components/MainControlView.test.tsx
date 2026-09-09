@@ -332,6 +332,43 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
   });
 
+  it('keeps a stateful panel mounted when another tile changes the layout tree', async () => {
+    let stackedListener: ((event: MediaQueryListEvent) => void) | undefined;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(min-width: 1024px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn((type: string, listener: (event: MediaQueryListEvent) => void) => {
+          if (query === '(max-width: 767px)' && type === 'change') stackedListener = listener;
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
+    renderMainControlView();
+
+    const treeState = await screen.findByLabelText('Behavior tree local state');
+    fireEvent.change(treeState, { target: { value: 'Running tree state' } });
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: '3D panel' }));
+
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Running tree state');
+    expect(screen.getByTestId('visualization-panel')).toBeInTheDocument();
+
+    act(() => stackedListener?.({ matches: true } as MediaQueryListEvent));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Running tree state');
+  });
+
   it('keeps the replace menu open while its own list is scrolled, and closes it when the page moves', async () => {
     renderMainControlView();
     expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();

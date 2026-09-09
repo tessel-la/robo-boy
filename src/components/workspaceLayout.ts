@@ -25,6 +25,23 @@ export type WorkspaceDropEdge = 'left' | 'right' | 'top' | 'bottom';
 
 export type WorkspaceDropPlacement = { mode: 'tile'; targetTileId: string; edge: WorkspaceDropEdge } | { mode: 'end' };
 
+export type WorkspaceLayoutBounds = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export type WorkspaceLayoutGeometry = {
+  tiles: Array<{ id: string; bounds: WorkspaceLayoutBounds }>;
+  splits: Array<{
+    path: string;
+    axis: WorkspaceSplitAxis;
+    ratio: number;
+    bounds: WorkspaceLayoutBounds;
+  }>;
+};
+
 const MIN_SPLIT_RATIO = 0.15;
 
 const clampRatio = (ratio: unknown) => {
@@ -132,6 +149,52 @@ export const getWorkspaceLayoutTileIds = (node: WorkspaceLayoutNode | null): str
   if (!node) return [];
   if (node.type === 'tile') return [node.id];
   return [...getWorkspaceLayoutTileIds(node.first), ...getWorkspaceLayoutTileIds(node.second)];
+};
+
+/**
+ * Projects the recursive split tree onto one flat layout surface. Panels can
+ * then stay keyed siblings while their geometry changes, avoiding component
+ * remounts (and lost panel state) when a tile is inserted or moved in the tree.
+ */
+export const getWorkspaceLayoutGeometry = (root: WorkspaceLayoutNode | null): WorkspaceLayoutGeometry => {
+  const geometry: WorkspaceLayoutGeometry = { tiles: [], splits: [] };
+
+  const visit = (node: WorkspaceLayoutNode, bounds: WorkspaceLayoutBounds, path: string) => {
+    if (node.type === 'tile') {
+      geometry.tiles.push({ id: node.id, bounds });
+      return;
+    }
+
+    const ratio = clampRatio(node.ratio);
+    geometry.splits.push({ path, axis: node.axis, ratio, bounds });
+    if (node.axis === 'x') {
+      visit(node.first, { ...bounds, width: bounds.width * ratio }, `${path}0`);
+      visit(
+        node.second,
+        {
+          ...bounds,
+          left: bounds.left + bounds.width * ratio,
+          width: bounds.width * (1 - ratio),
+        },
+        `${path}1`
+      );
+      return;
+    }
+
+    visit(node.first, { ...bounds, height: bounds.height * ratio }, `${path}0`);
+    visit(
+      node.second,
+      {
+        ...bounds,
+        top: bounds.top + bounds.height * ratio,
+        height: bounds.height * (1 - ratio),
+      },
+      `${path}1`
+    );
+  };
+
+  if (root) visit(root, { left: 0, top: 0, width: 100, height: 100 }, '');
+  return geometry;
 };
 
 const appendTile = (root: WorkspaceLayoutNode | null, id: string): WorkspaceLayoutNode => {

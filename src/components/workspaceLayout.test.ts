@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createWorkspaceLayoutFromRows,
+  getWorkspaceLayoutGeometry,
   getWorkspaceLayoutTileIds,
   normalizeWorkspaceLayout,
   placeWorkspaceLayoutTile,
@@ -39,6 +40,12 @@ describe('workspaceLayout', () => {
         second: { type: 'tile', id: 'c' },
       },
     });
+
+    expect(getWorkspaceLayoutGeometry(layout.root).tiles).toEqual([
+      { id: 'a', bounds: { left: 0, top: 0, width: 50, height: 100 } },
+      { id: 'b', bounds: { left: 50, top: 0, width: 50, height: 50 } },
+      { id: 'c', bounds: { left: 50, top: 50, width: 50, height: 50 } },
+    ]);
   });
 
   it('moves a tile without duplicating it and collapses empty splits', () => {

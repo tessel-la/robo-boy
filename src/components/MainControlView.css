@@ -1125,6 +1125,34 @@ body.no-scroll {
   overflow: hidden;
 }
 
+.workspace-layout-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.workspace-split-overlay {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle-x {
+  top: 0;
+  bottom: 0;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle-y {
+  right: 0;
+  left: 0;
+}
+
 .workspace-split-x {
   flex-direction: row;
 }

@@ -51,6 +51,7 @@ import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 import {
   createWorkspaceLayoutFromRows,
+  getWorkspaceLayoutGeometry,
   getWorkspaceLayoutTileIds,
   normalizeWorkspaceLayout,
   placeWorkspaceLayoutTile,
@@ -58,7 +59,6 @@ import {
   updateWorkspaceSplitRatio,
   type WorkspaceDropEdge,
   type WorkspaceDropPlacement,
-  type WorkspaceLayoutNode,
   type WorkspaceLayoutState,
   type WorkspaceSplitAxis,
 } from './workspaceLayout';
@@ -1087,10 +1087,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       ),
     [workspaceDomOrderById]
   );
-  const workspaceTileById = useMemo(() => new Map(workspaceTiles.map(tile => [tile.id, tile])), [workspaceTiles]);
   const workspaceLayoutTree = useMemo(
     () => normalizeWorkspaceLayout(workspaceLayout, normalizedWorkspaceTileOrder),
     [normalizedWorkspaceTileOrder, workspaceLayout]
+  );
+  const workspaceLayoutGeometry = useMemo(
+    () => getWorkspaceLayoutGeometry(workspaceLayoutTree.root),
+    [workspaceLayoutTree.root]
+  );
+  const workspaceTileBoundsById = useMemo(
+    () => new Map(workspaceLayoutGeometry.tiles.map(tile => [tile.id, tile.bounds])),
+    [workspaceLayoutGeometry.tiles]
   );
   const renderedWorkspaceRows = useMemo(
     () => (workspaceTiles.length > 0 ? [workspaceTiles.slice(0, 2)] : []),
@@ -3503,73 +3510,103 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     );
   };
 
-  const renderWorkspaceTreeNode = (node: WorkspaceLayoutNode, path = ''): React.ReactNode => {
-    if (node.type === 'tile') {
-      const tile = workspaceTileById.get(node.id);
-      return tile ? renderWorkspaceCard(tile, normalizedWorkspaceTileOrder.indexOf(tile.id)) : null;
-    }
+  const getWorkspaceBoundsStyle = (
+    bounds: { left: number; top: number; width: number; height: number },
+    insetForGutters: boolean
+  ): React.CSSProperties => {
+    const leftInset = insetForGutters && bounds.left > 0 ? 8 : 0;
+    const rightInset = insetForGutters && bounds.left + bounds.width < 100 ? 8 : 0;
+    const topInset = insetForGutters && bounds.top > 0 ? 8 : 0;
+    const bottomInset = insetForGutters && bounds.top + bounds.height < 100 ? 8 : 0;
+    const offset = (percentage: number, pixels: number) =>
+      pixels === 0 ? `${percentage}%` : `calc(${percentage}% + ${pixels}px)`;
+    const size = (percentage: number, pixels: number) =>
+      pixels === 0 ? `${percentage}%` : `calc(${percentage}% - ${pixels}px)`;
 
-    return (
-      <div className={`workspace-split workspace-split-${node.axis}`} key={`split-${path || 'root'}`}>
-        <div className="workspace-split-child" style={{ flex: `${node.ratio} 1 0` }}>
-          {renderWorkspaceTreeNode(node.first, `${path}0`)}
-        </div>
-        <div
-          className={`workspace-tree-resize-handle workspace-tree-resize-handle-${node.axis}`}
-          onPointerDown={event => handleWorkspaceTreeResizeStart(event, path, node.axis, node.ratio)}
-          role="separator"
-          aria-orientation={node.axis === 'x' ? 'vertical' : 'horizontal'}
-          aria-label={node.axis === 'x' ? 'Resize workspace split columns' : 'Resize workspace split rows'}
-        >
-          <div className="workspace-resize-handle-bar" />
-        </div>
-        <div className="workspace-split-child" style={{ flex: `${1 - node.ratio} 1 0` }}>
-          {renderWorkspaceTreeNode(node.second, `${path}1`)}
-        </div>
-      </div>
-    );
+    return {
+      left: offset(bounds.left, leftInset),
+      top: offset(bounds.top, topInset),
+      width: size(bounds.width, leftInset + rightInset),
+      height: size(bounds.height, topInset + bottomInset),
+    };
   };
 
-  const renderStackedWorkspace = () => {
+  const renderWorkspaceLayout = () => {
     const row = renderedWorkspaceRows[0] || [];
+    const visibleTiles = isWorkspaceStacked ? row : workspaceTiles;
+
     return (
-      <div className="workspace-tile-row">
-        {getWorkspaceDomOrderedRow(row).map(tile => {
-          const tileIndex = row.findIndex(candidate => candidate.id === tile.id);
-          return (
-            <React.Fragment key={tile.id}>
-              {renderWorkspaceCard(tile, tileIndex, {
-                flex: renderedWorkspaceColumnRatiosByRow[0]?.[tileIndex] || 1,
-                order: tileIndex * 2,
-              })}
-              {tileIndex < row.length - 1 && (
+      <div className={`workspace-tile-row ${isWorkspaceStacked ? '' : 'workspace-layout-surface'}`}>
+        {getWorkspaceDomOrderedRow(visibleTiles).map(tile => {
+          const tileIndex = visibleTiles.findIndex(candidate => candidate.id === tile.id);
+          if (isWorkspaceStacked) {
+            return renderWorkspaceCard(tile, tileIndex, {
+              flex: renderedWorkspaceColumnRatiosByRow[0]?.[tileIndex] || 1,
+              order: tileIndex * 2,
+            });
+          }
+
+          const bounds = workspaceTileBoundsById.get(tile.id);
+          return bounds
+            ? renderWorkspaceCard(tile, normalizedWorkspaceTileOrder.indexOf(tile.id), {
+                ...getWorkspaceBoundsStyle(bounds, true),
+                position: 'absolute',
+              })
+            : null;
+        })}
+        {isWorkspaceStacked
+          ? row.slice(0, -1).map((tile, tileIndex) => (
+              <div
+                key={`stacked-handle-${tile.id}`}
+                className="workspace-column-resize-handle"
+                style={{ order: tileIndex * 2 + 1 }}
+                onPointerDown={event => handleWorkspaceStackedResizeStart(event, tileIndex)}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize stacked workspace tiles"
+              >
+                <div className="workspace-resize-handle-bar" />
+                {workspaceTiles.length >= 2 && tileIndex === 0 && (
+                  <button
+                    type="button"
+                    className="workspace-mobile-swap-button"
+                    onPointerDown={event => event.stopPropagation()}
+                    onClick={handleSwapUnifiedMobilePanels}
+                    disabled={isMobileSwapAnimating}
+                    title="Swap mobile panels"
+                    aria-label="Swap mobile panels"
+                  >
+                    {icons.swap}
+                  </button>
+                )}
+              </div>
+            ))
+          : workspaceLayoutGeometry.splits.map(split => (
+              <div
+                className={`workspace-split workspace-split-overlay workspace-split-${split.axis}`}
+                key={`split-${split.path || 'root'}`}
+                style={getWorkspaceBoundsStyle(split.bounds, false)}
+              >
                 <div
-                  className="workspace-column-resize-handle"
-                  style={{ order: tileIndex * 2 + 1 }}
-                  onPointerDown={event => handleWorkspaceStackedResizeStart(event, tileIndex)}
+                  className={`workspace-tree-resize-handle workspace-tree-resize-handle-${split.axis}`}
+                  style={
+                    split.axis === 'x'
+                      ? { left: `calc(${split.ratio * 100}% - 8px)` }
+                      : { top: `calc(${split.ratio * 100}% - 8px)` }
+                  }
+                  onPointerDown={event =>
+                    handleWorkspaceTreeResizeStart(event, split.path, split.axis, split.ratio)
+                  }
                   role="separator"
-                  aria-orientation="horizontal"
-                  aria-label="Resize stacked workspace tiles"
+                  aria-orientation={split.axis === 'x' ? 'vertical' : 'horizontal'}
+                  aria-label={
+                    split.axis === 'x' ? 'Resize workspace split columns' : 'Resize workspace split rows'
+                  }
                 >
                   <div className="workspace-resize-handle-bar" />
-                  {workspaceTiles.length >= 2 && tileIndex === 0 && (
-                    <button
-                      type="button"
-                      className="workspace-mobile-swap-button"
-                      onPointerDown={event => event.stopPropagation()}
-                      onClick={handleSwapUnifiedMobilePanels}
-                      disabled={isMobileSwapAnimating}
-                      title="Swap mobile panels"
-                      aria-label="Swap mobile panels"
-                    >
-                      {icons.swap}
-                    </button>
-                  )}
                 </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+              </div>
+            ))}
       </div>
     );
   };
@@ -3856,11 +3893,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           >
             {renderWorkspaceSnapAssistant()}
             <div className="workspace-grid">
-              {isWorkspaceStacked
-                ? renderStackedWorkspace()
-                : workspaceLayoutTree.root
-                  ? renderWorkspaceTreeNode(workspaceLayoutTree.root)
-                  : null}
+              {workspaceLayoutTree.root ? renderWorkspaceLayout() : null}
               {workspaceTiles.length === 0 && (
                 <div className="workspace-empty-drop-zone">
                   <button
