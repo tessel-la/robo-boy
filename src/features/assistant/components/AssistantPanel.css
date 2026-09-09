@@ -483,9 +483,6 @@
   background: color-mix(in srgb, var(--primary-color, #2563eb) 7%, var(--card-bg, #fff));
 }
 
-.assistant-context-tag.stale {
-  border-color: var(--warning-color, #d97706);
-}
 
 /* The user's own bubble is already filled with the primary colour, so a pale source tint on top of
    it reads as muddy and its tinted text loses contrast. Deepen the tint and take the bubble's own
