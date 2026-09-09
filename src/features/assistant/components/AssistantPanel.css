@@ -487,6 +487,14 @@
   border-color: var(--warning-color, #d97706);
 }
 
+/* The user's own bubble is already filled with the primary colour, so a pale source tint on top of
+   it reads as muddy and its tinted text loses contrast. Deepen the tint and take the bubble's own
+   text colour instead: the source is still distinguishable, and the tag stays readable. */
+.assistant-message.user .assistant-inline-tag {
+  background: color-mix(in srgb, var(--assistant-tag-tint, var(--primary-color, #2563eb)) 60%, transparent);
+  color: inherit;
+}
+
 .assistant-inline-tag.source-workspace { --assistant-tag-tint: var(--primary-color, #2563eb); }
 .assistant-inline-tag.source-pad { --assistant-tag-tint: #8b5cf6; }
 .assistant-inline-tag.source-behaviorTree { --assistant-tag-tint: #0f9f76; }
