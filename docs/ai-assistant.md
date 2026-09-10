@@ -4,7 +4,7 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 
 ## User Workflow
 
-1. Press the assistant launcher, fixed in the bottom-left corner. It is the mirror image of the theme button in the bottom-right and takes its size and inset from the same `--floating-action-*` tokens in `src/index.css`, so the pair always match.
+1. Press the assistant launcher, fixed in the bottom-left corner. It is the mirror image of the theme button in the bottom-right: both take their size, icon size and edge inset from the same `--floating-action-*` tokens in `src/index.css`, including the bottom offset, which clears a phone's gesture bar by the same amount for each so the pair do not sit at different heights.
 2. On desktop the assistant is a fixed left-side panel (`clamp(420px, 32vw, 480px)`) running the full height under the app bar. It is non-modal — the workspace to its right stays live — and it does not drag, resize, or minimize. Below 768px it fills the screen under the app bar as a modal dialog with a focus trap, the system back gesture closes it, and the theme button hides for as long as it is open rather than floating over the composer.
 3. Ask a question, or attach files, a sketch, or your voice (Web Speech API, or record-and-transcribe when the browser has no recognizer).
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
@@ -20,7 +20,9 @@ Context reaches a turn two ways, and neither is silent.
 
 **Tagged.** Type `@` for the inline picker, or open the `Context` browser for the grouped, searchable catalog — current workspace, Pads, Behavior Trees, ROS topics/services/actions/nodes/parameters, and TF/`/rosout`. Both write the resource into the prompt as a readable `@Camera` or `@/cmd_vel`.
 
-**The mention is the tag.** There is no separate chip strip above the composer to keep in sync or to spend transcript space on. A turn carries exactly the resources its text still mentions, so deleting the text removes the context. The mention is coloured by source as it is written — a backdrop behind the textarea paints the marks, since a textarea cannot style its own content — and stays coloured in the transcript once sent. Repeating or editing an earlier message re-sends it with the same tags, because retrieved resources outlive the prompt that tagged them; each one carries its age and reconnect generation into `Context used`.
+**The mention is the tag.** There is no separate chip strip above the composer to keep in sync or to spend transcript space on. A turn carries exactly the resources its text still mentions, so deleting the text removes the context. The mention is coloured by source as it is written — a backdrop behind the textarea paints the marks, since a textarea cannot style its own content — and stays coloured in the transcript once sent.
+
+A message's colouring is read from its own text against the context catalog rather than from what that turn happened to carry, so it survives a reload, a repeat, and an edit. Editing an already-sent message uses the same `@` picker and the same colouring as the composer; its list opens downwards, because an editor sitting in the transcript would otherwise put the list under the header. Retrieved resources outlive the prompt that tagged them, so repeating or editing re-sends the same context, each item carrying its age and reconnect generation into `Context used`.
 
 Tagging several resources works while earlier ones are still loading — retrievals run alongside each other, and a send waits for any that are still in flight so a prompt never goes out missing the context it names.
 

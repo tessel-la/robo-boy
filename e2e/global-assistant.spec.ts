@@ -196,6 +196,15 @@ test('the launcher matches the theme button and yields the corner to the full-sc
     }).toPass();
   }
 
+  // A phone's gesture bar lifts anything anchored to the bottom; both buttons must lift together.
+  await page.evaluate(() => document.documentElement.style.setProperty('--safe-area-bottom', '48px'));
+  await expect(async () => {
+    const [launcherBox, themeBox] = [await launcher.boundingBox(), await theme.boundingBox()];
+    expect(launcherBox!.y).toBe(themeBox!.y);
+    expect(launcherBox!.y + launcherBox!.height).toBeLessThan(844 - 40);
+  }).toPass();
+  await page.evaluate(() => document.documentElement.style.removeProperty('--safe-area-bottom'));
+
   await launcher.click();
   await expect(theme).toBeHidden();
   await page.getByLabel('Close assistant').click();
@@ -235,11 +244,20 @@ test('a tagged resource stays in the prompt and reads as a coloured tag in the t
   await expect(sentTag).toHaveText('@/cmd_vel');
   await expect(sentTag).toHaveClass(/source-ros/);
 
-  // Repeating and editing re-send the same tagged context rather than dropping it.
+  // Repeating re-sends the same tagged context rather than dropping it.
   await page.getByLabel('Repeat').click();
   await expect(page.locator('.assistant-message .assistant-inline-tag')).toHaveText('@/cmd_vel');
+
+  // An already-sent message can be tagged while being edited, with the same picker and colouring.
   await page.getByLabel('Edit message').first().click();
-  await page.getByLabel('Edit message', { exact: true }).fill('describe @/cmd_vel again');
+  const editor = page.getByLabel('Edit message', { exact: true });
+  await editor.click();
+  await editor.press('End');
+  await editor.type(' and @diagn');
+  await page.getByRole('option', { name: /\/diagnostics/ }).click();
+  await expect(editor).toHaveValue('describe @/cmd_vel and @/diagnostics ');
+  await expect(page.locator('.assistant-message-edit .assistant-inline-tag')).toHaveText(['@/cmd_vel', '@/diagnostics']);
+
   await page.getByRole('button', { name: /Save/ }).click();
-  await expect(page.locator('.assistant-message .assistant-inline-tag')).toHaveText('@/cmd_vel');
+  await expect(page.locator('.assistant-message .assistant-inline-tag')).toHaveText(['@/cmd_vel', '@/diagnostics']);
 });

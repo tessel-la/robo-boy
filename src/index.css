@@ -216,6 +216,9 @@ textarea {
     --floating-action-size: 50px;
     --floating-action-icon: 32px;
     --floating-action-inset: 20px;
+    /* Both buttons must clear the system's bottom bar by the same amount, or the pair stops looking
+       like a pair on a phone. Derived once here rather than applied to one of them. */
+    --floating-action-bottom: max(var(--floating-action-inset), var(--safe-area-bottom));
 }
 
 @media (max-width: 768px) {

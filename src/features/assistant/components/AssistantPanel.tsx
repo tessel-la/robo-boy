@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
@@ -100,6 +100,73 @@ const MessageContent = ({ content, tags }: { content: string; tags?: AssistantMe
   );
 };
 
+interface MentionPicker {
+  isOpen: boolean;
+  close: () => void;
+  /** Feeds a new field value in; returns true when it ends in an open `@mention`. */
+  trackValue: (value: string) => boolean;
+  /** Returns true when the picker consumed the key. */
+  handleKeyDown: (event: React.KeyboardEvent) => boolean;
+  node: React.ReactNode;
+}
+
+/** `@` autocompletion over the context catalog. The composer and the in-place message editor each
+ * own one, so a resource can be tagged while editing an earlier message and not only while
+ * composing a new one. */
+const useMentionPicker = (
+  options: ContextPickerOption[],
+  apply: (option: ContextPickerOption) => void,
+  /** The composer sits at the bottom of the panel, so its list opens upwards; an editor in the
+   * transcript would put that list under the header, so its list opens downwards. */
+  placement: 'above' | 'below' = 'above'
+): MentionPicker => {
+  const [query, setQuery] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const matches = useMemo(() => {
+    if (query === null) return [];
+    const needle = query.toLocaleLowerCase();
+    return options
+      .filter(option => !option.disabled && `${option.label} ${option.description}`.toLocaleLowerCase().includes(needle))
+      .slice(0, 10);
+  }, [options, query]);
+  const index = Math.min(activeIndex, Math.max(matches.length - 1, 0));
+
+  const close = () => setQuery(null);
+  const choose = (option: ContextPickerOption) => { close(); apply(option); };
+
+  return {
+    isOpen: query !== null,
+    close,
+    trackValue: value => {
+      const match = value.match(/(?:^|\s)@([^\s@]*)$/);
+      setQuery(match?.[1] ?? null);
+      setActiveIndex(0);
+      return Boolean(match);
+    },
+    handleKeyDown: event => {
+      if (query === null) return false;
+      if (event.key === 'Escape') { event.preventDefault(); close(); return true; }
+      if (matches.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        setActiveIndex((index + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+        return true;
+      }
+      if (matches.length && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); choose(matches[index]); return true; }
+      return false;
+    },
+    node: query === null ? null : (
+      <div className={`assistant-mention-picker ${placement}`} role="listbox" aria-label="Mention context">
+        {matches.map((option, position) => (
+          <button type="button" role="option" aria-selected={position === index} className={position === index ? 'active' : ''} key={option.id} onClick={() => choose(option)}>
+            <strong>{option.label}</strong><span>{option.description}</span>
+          </button>
+        ))}
+        {matches.length === 0 && <span>No matching context</span>}
+      </div>
+    ),
+  };
+};
+
 const useCompactAssistant = () => {
   const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
   useEffect(() => {
@@ -128,32 +195,39 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [showSketchEditor, setShowSketchEditor] = useState(false);
   const [contextSearch, setContextSearch] = useState('');
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
   const [mobileViewportStyle, setMobileViewportStyle] = useState<React.CSSProperties>();
   const panelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const editingRef = useRef<HTMLTextAreaElement>(null);
+  const editingHighlightRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const nearBottomRef = useRef(true);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const allContextOptions = useMemo(() => contextPickerSections.flatMap(section => section.options), [contextPickerSections]);
-  const mentionOptions = useMemo(() => {
-    if (mentionQuery === null) return [];
-    const needle = mentionQuery.toLocaleLowerCase();
-    return allContextOptions
-      .filter(option => !option.disabled && `${option.label} ${option.description}`.toLocaleLowerCase().includes(needle))
-      .slice(0, 10);
-  }, [allContextOptions, mentionQuery]);
-  const activeMentionIndex = Math.min(mentionActiveIndex, Math.max(mentionOptions.length - 1, 0));
-  // Only the resources the draft actually names, so the backdrop never builds a pattern over the
-  // whole ROS graph.
-  const draftTags = useMemo(
-    () => allContextOptions.filter(option => prompt.includes(`@${option.label}`)).map(option => ({ id: option.id, label: option.label, source: option.source })),
-    [allContextOptions, prompt]
+  /**
+   * The tags a piece of text names, read from the text itself rather than from what a turn happened
+   * to carry. A restored conversation has no chips behind it and a repeated or edited message is a
+   * new turn, so deriving from the text is what keeps those messages highlighted. `sent` adds back
+   * anything a turn did carry whose resource has since left the catalog. Filtering by `includes`
+   * first keeps the pattern off the whole ROS graph.
+   */
+  const tagsForText = useCallback(
+    (text: string, sent?: AssistantMessage['contextTags']): AssistantMessage['contextTags'] => {
+      const byMention = new Map<string, NonNullable<AssistantMessage['contextTags']>[number]>();
+      for (const option of allContextOptions) {
+        if (text.includes(`@${option.label}`)) byMention.set(`@${option.label}`, { id: option.id, label: option.label, source: option.source });
+      }
+      for (const tag of sent ?? []) {
+        const mention = `@${tag.mention ?? tag.label}`;
+        if (text.includes(mention)) byMention.set(mention, tag);
+      }
+      return [...byMention.values()];
+    },
+    [allContextOptions]
   );
 
   const filteredSections = useMemo(() => {
@@ -164,6 +238,45 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       .filter(section => section.options.length > 0);
   }, [contextPickerSections, contextSearch]);
 
+  const retrieveContextOption = async (option: ContextPickerOption) => {
+    setLoadingContextIds(previous => [...previous, option.id]);
+    try {
+      await option.onSelect();
+    } finally {
+      setLoadingContextIds(previous => previous.filter(id => id !== option.id));
+    }
+  };
+
+  /** Writes the resource into a field as `@Label` -- the mention is the tag -- and retrieves it in
+   * the background, so a second resource can be tagged while the first is still loading. */
+  const tagInto = (
+    option: ContextPickerOption,
+    field: { value: string; setValue: (next: string) => void; ref: React.RefObject<HTMLTextAreaElement> },
+    replaceOpenMention: boolean
+  ) => {
+    if (option.disabled) return;
+    const mention = mentionTextFor({ label: option.label });
+    const { value } = field;
+    const next = replaceOpenMention
+      ? value.replace(/@([^\s@]*)$/, `${mention} `)
+      : `${value.trimEnd()}${value.trim() ? ' ' : ''}${mention} `;
+    field.setValue(next);
+    // Focusing a textarea whose value React just replaced leaves the caret at the start, so put it
+    // back after the mention the user just chose.
+    window.requestAnimationFrame(() => {
+      const node = field.ref.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(next.length, next.length);
+    });
+    void retrieveContextOption(option);
+  };
+
+  const composerField = { value: prompt, setValue: onPromptChange, ref: promptRef };
+  const editingField = { value: editingDraft, setValue: setEditingDraft, ref: editingRef };
+  const composerMentions = useMentionPicker(allContextOptions, option => tagInto(option, composerField, true));
+  const editingMentions = useMentionPicker(allContextOptions, option => tagInto(option, editingField, true), 'below');
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -171,7 +284,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         event.preventDefault();
         if (showContextPicker) setShowContextPicker(false);
         else if (showSettings) setShowSettings(false);
-        else if (mentionQuery !== null) setMentionQuery(null);
+        else if (composerMentions.isOpen) composerMentions.close();
+        else if (editingMentions.isOpen) editingMentions.close();
         else if (editingMessageId) { setEditingMessageId(null); setEditingDraft(''); }
         else onClose();
       }
@@ -186,7 +300,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [compact, editingMessageId, mentionQuery, onClose, open, showContextPicker, showSettings, showSketchEditor]);
+  }, [compact, composerMentions, editingMentions, editingMessageId, onClose, open, showContextPicker, showSettings, showSketchEditor]);
 
   useEffect(() => {
     if (!open) return;
@@ -247,52 +361,12 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
   const handlePromptChange = (value: string) => {
     onPromptChange(value);
-    const match = value.match(/(?:^|\s)@([^\s@]*)$/);
-    setMentionQuery(match?.[1] ?? null);
-    setMentionActiveIndex(0);
-    if (match) setShowContextPicker(false);
-  };
-
-  /** Writes the resource into the prompt as `@Label` -- the mention is the tag -- and retrieves it
-   * in the background so a second resource can be tagged while the first is still loading. */
-  const selectContextOption = async (option: ContextPickerOption, fromMention = false) => {
-    if (option.disabled) return;
-    const mention = mentionTextFor({ label: option.label });
-    const next = fromMention ? prompt.replace(/@([^\s@]*)$/, `${mention} `) : `${prompt.trimEnd()}${prompt.trim() ? ' ' : ''}${mention} `;
-    onPromptChange(next);
-    setMentionQuery(null);
-    // Focusing a textarea whose value React just replaced leaves the caret at the start, so put it
-    // back after the mention the user just chose.
-    window.requestAnimationFrame(() => {
-      const node = promptRef.current;
-      if (!node) return;
-      node.focus();
-      node.setSelectionRange(next.length, next.length);
-    });
-    setLoadingContextIds(previous => [...previous, option.id]);
-    try {
-      await option.onSelect();
-    } finally {
-      setLoadingContextIds(previous => previous.filter(id => id !== option.id));
-    }
+    if (composerMentions.trackValue(value)) setShowContextPicker(false);
   };
 
   const handlePromptKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = event => {
     if (event.nativeEvent.isComposing) return;
-    if (mentionQuery !== null) {
-      if (event.key === 'Escape') { event.preventDefault(); setMentionQuery(null); return; }
-      if (mentionOptions.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-        event.preventDefault();
-        const direction = event.key === 'ArrowDown' ? 1 : -1;
-        setMentionActiveIndex((activeMentionIndex + direction + mentionOptions.length) % mentionOptions.length);
-        return;
-      }
-      if (mentionOptions.length && event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        void selectContextOption(mentionOptions[activeMentionIndex], true);
-        return;
-      }
-    }
+    if (composerMentions.handleKeyDown(event)) return;
     if (event.key === 'Enter' && !event.shiftKey && canGenerateFrom(prompt, isGenerating)) {
       event.preventDefault();
       onSubmit();
@@ -330,8 +404,28 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
               {editingMessageId === message.id ? (
-                <div className="assistant-message-edit"><textarea value={editingDraft} onChange={event => setEditingDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setEditingMessageId(null); } if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submitEditedMessage(index); } }} aria-label="Edit message" autoFocus /><div className="assistant-inline-actions"><button type="button" className="secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" onClick={() => submitEditedMessage(index)} disabled={!editingDraft.trim()}>Save &amp; resend</button></div></div>
-              ) : <MessageContent content={message.content} tags={message.contextTags} />}
+                <div className="assistant-message-edit">
+                  <span className="assistant-textarea-shell has-highlight">
+                    <div className="assistant-textarea-highlight" ref={editingHighlightRef} aria-hidden="true"><MessageText text={editingDraft} tags={tagsForText(editingDraft)} /></div>
+                    <textarea
+                      ref={editingRef}
+                      value={editingDraft}
+                      onChange={event => { setEditingDraft(event.target.value); editingMentions.trackValue(event.target.value); }}
+                      onScroll={event => { if (editingHighlightRef.current) editingHighlightRef.current.scrollTop = event.currentTarget.scrollTop; }}
+                      onKeyDown={event => {
+                        if (event.nativeEvent.isComposing) return;
+                        if (editingMentions.handleKeyDown(event)) return;
+                        if (event.key === 'Escape') { event.preventDefault(); setEditingMessageId(null); }
+                        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submitEditedMessage(index); }
+                      }}
+                      aria-label="Edit message"
+                      autoFocus
+                    />
+                  </span>
+                  {editingMentions.node}
+                  <div className="assistant-inline-actions"><button type="button" className="secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" onClick={() => submitEditedMessage(index)} disabled={!editingDraft.trim()}>Save &amp; resend</button></div>
+                </div>
+              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} />}
               {message.attachments.length > 0 && <div className="assistant-message-attachments">{message.attachments.map(item => <span key={item.id}>{item.name}</span>)}</div>}
 
               {message.response?.kind === 'rosAction' && <div className="assistant-proposal-card"><strong>Review-only {message.response.operation.kind}: {message.response.operation.name}</strong><p>{message.response.rationale}</p><pre>{JSON.stringify(message.response.operation, null, 2)}</pre>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<small>Robo-Boy does not run robot operations from assistant chat. Add the reviewed operation through a Pad or Behavior Tree.</small></div>}
@@ -359,10 +453,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {showContextPicker && <div id="assistant-context-browser" className="assistant-context-picker" role="dialog" aria-label="Add context" aria-busy={isDiscoveringContext || loadingContextIds.length > 0}>
             <header><div><strong>Add context</strong><span>Choose exact workspace or robot data</span></div><button type="button" onClick={() => setShowContextPicker(false)} aria-label="Close context picker"><FaTimes aria-hidden="true" /></button></header>
             <label className="assistant-context-search"><FaSearch aria-hidden="true" /><input value={contextSearch} onChange={event => setContextSearch(event.target.value)} placeholder="Search Pads, trees, topics, services…" autoFocus /></label>
-            <div className="assistant-context-sections">{filteredSections.map(section => <section key={section.id}><div className="assistant-context-section-heading"><strong>{section.label}</strong>{section.description && <span>{section.description}</span>}</div>{section.options.map(option => <button type="button" key={option.id} disabled={option.disabled} onClick={() => void selectContextOption(option)}><span className="assistant-context-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{loadingContextIds.includes(option.id) ? <FaSyncAlt className="spinning" aria-label="Loading context" /> : option.selected ? <FaCheck aria-label="Selected" /> : null}</button>)}</section>)}{filteredSections.length === 0 && <p className="assistant-context-empty">No matching context</p>}</div>
+            <div className="assistant-context-sections">{filteredSections.map(section => <section key={section.id}><div className="assistant-context-section-heading"><strong>{section.label}</strong>{section.description && <span>{section.description}</span>}</div>{section.options.map(option => <button type="button" key={option.id} disabled={option.disabled} onClick={() => tagInto(option, composerField, false)}><span className="assistant-context-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{loadingContextIds.includes(option.id) ? <FaSyncAlt className="spinning" aria-label="Loading context" /> : option.selected ? <FaCheck aria-label="Selected" /> : null}</button>)}</section>)}{filteredSections.length === 0 && <p className="assistant-context-empty">No matching context</p>}</div>
           </div>}
 
-          {mentionQuery !== null && <div className="assistant-mention-picker" role="listbox" aria-label="Mention context">{mentionOptions.map((option, index) => <button type="button" role="option" aria-selected={index === activeMentionIndex} className={index === activeMentionIndex ? 'active' : ''} key={option.id} onClick={() => void selectContextOption(option, true)}><strong>{option.label}</strong><span>{option.description}</span></button>)}{mentionOptions.length === 0 && <span>No matching context</span>}</div>}
+          {composerMentions.node}
 
           <div className="assistant-composer">
             <AssistantSpeechTextarea
@@ -375,7 +469,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               onTranscribeAudio={audio => transcribeAssistantAudio(audio, { ...settings, baseUrl: resolvedBaseUrl })}
               rows={1}
               autoGrow
-              highlight={<MessageText text={prompt} tags={draftTags} />}
+              highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
               textareaRef={promptRef}
               placeholder={compact ? 'Ask about this workspace…' : 'Ask about this workspace, a Pad, ROS, TF, or a Behavior Tree…'}
               toolbar={{

@@ -17,8 +17,8 @@
 /* New Button Styles */
 .theme-selector-container { /* New container for positioning */
   position: fixed;
-  bottom: var(--floating-action-inset);
-  right: var(--floating-action-inset);
+  bottom: var(--floating-action-bottom);
+  right: max(var(--floating-action-inset), env(safe-area-inset-right, 0px));
   z-index: 1000; /* Ensure it's above other content */
 }
 

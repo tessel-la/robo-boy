@@ -395,20 +395,31 @@
 }
 
 .assistant-message-edit {
+  /* Anchors this field's own mention picker, and matches the composer's textarea metrics so the
+     highlight backdrop lines up with the text. */
+  position: relative;
   display: grid;
   min-width: min(320px, 78vw);
   gap: 8px;
+  --assistant-textarea-padding: 10px;
+}
+
+/* The frame lives on the shell, not the textarea, so the backdrop's box is the textarea's box. */
+.assistant-message-edit .assistant-textarea-shell {
+  overflow: hidden;
+  border: 1px solid var(--primary-color, #2563eb);
+  border-radius: 9px;
+  background: var(--card-bg, #fff);
 }
 
 .assistant-message-edit textarea {
   box-sizing: border-box;
   width: 100%;
   min-height: 88px;
-  padding: 10px;
-  border: 1px solid var(--primary-color, #2563eb);
-  border-radius: 9px;
+  padding: var(--assistant-textarea-padding);
+  border: 0;
   outline: none;
-  background: var(--card-bg, #fff);
+  background: transparent;
   color: var(--text-color, #1f2937);
   font: inherit;
   resize: vertical;
@@ -617,11 +628,11 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  padding: var(--assistant-textarea-padding);
+  padding: var(--assistant-textarea-padding, 10px);
   color: transparent;
   font: inherit;
-  font-size: var(--assistant-textarea-font-size);
-  line-height: var(--assistant-textarea-line-height);
+  font-size: var(--assistant-textarea-font-size, inherit);
+  line-height: var(--assistant-textarea-line-height, inherit);
   overflow-wrap: break-word;
   white-space: pre-wrap;
   pointer-events: none;
@@ -684,8 +695,8 @@
 .assistant-launcher {
   position: fixed;
   z-index: 1250;
-  bottom: max(var(--floating-action-inset), env(safe-area-inset-bottom));
-  left: max(var(--floating-action-inset), env(safe-area-inset-left));
+  bottom: var(--floating-action-bottom);
+  left: max(var(--floating-action-inset), env(safe-area-inset-left, 0px));
   display: grid;
   width: var(--floating-action-size);
   height: var(--floating-action-size);
@@ -738,14 +749,17 @@
   position: absolute;
   z-index: 20;
   right: 12px;
-  bottom: calc(100% + 8px);
   left: 12px;
-  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
   border: 1px solid var(--border-color, #d9dee7);
   border-radius: 12px;
   background: var(--card-bg, #fff);
   box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
 }
+
+.assistant-mention-picker.above { bottom: calc(100% + 8px); }
+.assistant-mention-picker.below { top: calc(100% + 8px); }
 
 .assistant-context-picker {
   display: grid;
