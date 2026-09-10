@@ -19,10 +19,12 @@ on:
       ANDROID_KEY_PASSWORD:
         required: true
   workflow_dispatch:
-  push:
-    branches: [dev, main]
+  # Only on the way into main, like the desktop and iOS builds. Compiling Rust for Android on every
+  # dev change costs minutes per push to produce an artifact nobody installs from dev; the release
+  # APK is built by Release Please, and by the pull request that puts the code on main.
   pull_request:
-    branches: [dev, main]
+    types: [opened, synchronize, reopened]
+    branches: [main]
 
 permissions:
   contents: read
