@@ -41,7 +41,8 @@ transition, and global theme state. With no session it renders `EntrySection`; o
 
 `App` may mount several independent connection sessions and exposes them through responsive
 connection navigation inside the existing workspace top bar. One active-connection trigger opens an
-on-demand status list on desktop and mobile. Each session retains its own
+on-demand status list on desktop and mobile, with workspace-layout management available from that
+same list. Each session retains its own
 `useRos`, runtime endpoint provider, and `MainControlView` state. Only the selected session mounts
 resource-heavy panel subtrees. See
 [Multi-connection architecture](multi-connections.md) for lifecycle, cleanup, and persistence

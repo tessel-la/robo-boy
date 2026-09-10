@@ -79,6 +79,38 @@ describe('ConnectionTabs', () => {
     expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
   });
 
+  it('opens workspace and panel management from the switcher', () => {
+    const onManageWorkspaceLayouts = vi.fn();
+    const onManagePanels = vi.fn();
+    render(
+      <ConnectionTabs
+        tabs={tabs}
+        activeTabId="alpha"
+        isAdding={false}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onAdd={vi.fn()}
+        onManageWorkspaceLayouts={onManageWorkspaceLayouts}
+        onManagePanels={onManagePanels}
+        workspaceLayoutLabel="Driving (edited)"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    const popover = screen.getByRole('dialog', { name: 'Switch robot connection' });
+    expect(within(popover).getByText('Driving (edited)')).toBeInTheDocument();
+    fireEvent.click(within(popover).getByRole('button', { name: 'Workspace layouts' }));
+
+    expect(onManageWorkspaceLayouts).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage panels' }));
+
+    expect(onManagePanels).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
+  });
+
   it('supports add, close, outside-click, and Escape actions in the compact switcher', () => {
     const onClose = vi.fn();
     const onAdd = vi.fn();

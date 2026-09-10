@@ -17,6 +17,7 @@
 .connection-switcher-trigger,
 .connection-switcher-select,
 .connection-switcher-close,
+.connection-switcher-tool,
 .connection-switcher-add {
   border: 0;
   background: transparent;
@@ -267,6 +268,48 @@
   color: var(--primary-color, #4285f4);
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.connection-switcher-tool {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-color);
+  text-align: left;
+}
+
+.connection-switcher-tool > :first-child {
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.connection-switcher-tool > :last-child {
+  min-width: 0;
+  max-width: 48%;
+  overflow: hidden;
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-switcher-tool:hover {
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+}
+
+.connection-switcher-tool + .connection-switcher-tool {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.connection-switcher-tool + .connection-switcher-add {
+  margin-top: 0;
 }
 
 .connection-switcher-add:hover {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FiSettings, FiX } from 'react-icons/fi';
+import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
 import {
   getConnectionStorageKey,
@@ -368,7 +369,7 @@ interface MainControlViewProps {
   isActive?: boolean;
   storageScope?: string;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
-  connectionNavigation?: React.ReactNode;
+  connectionNavigation?: ConnectionTabsProps;
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
@@ -3248,18 +3249,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             </span>
           )}
           {externalPanels.map(renderPanelButton)}
-          {!isReplacementMenu && (
-            <button
-              type="button"
-              onClick={() => {
-                setIsWorkspaceAddMenuOpen(false);
-                setIsPanelManagerOpen(true);
-              }}
-            >
-              <FiSettings aria-hidden="true" />
-              <span>Manage installations…</span>
-            </button>
-          )}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
           {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
             <span className="workspace-panel-catalog-note">No external panels selected</span>
@@ -3675,7 +3664,30 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       <div
         className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''} ${isDesktopWorkspace ? 'workspace-active' : ''}`}
       >
-        {connectionNavigation}
+        {connectionNavigation && (
+          <ConnectionTabs
+            {...connectionNavigation}
+            onManageWorkspaceLayouts={() => {
+              setIsWorkspaceTemplateMenuOpen(true);
+              setIsWorkspaceAddMenuOpen(false);
+            }}
+            onManagePanels={() => {
+              setIsPanelManagerOpen(true);
+              setIsWorkspaceTemplateMenuOpen(false);
+              setIsWorkspaceAddMenuOpen(false);
+              setWorkspaceReplacementPanelId(null);
+              setWorkspaceReplaceMenuStyle(null);
+            }}
+            workspaceLayoutLabel={
+              activeWorkspaceLayout
+                ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? ' (edited)' : ''}`
+                : 'Unsaved layout'
+            }
+          />
+        )}
+        <div className="workspace-template-overlay" ref={workspaceTemplateControlRef}>
+          {renderWorkspaceTemplateMenu()}
+        </div>
         {!isDesktopWorkspace && (
           <div className="view-toggle">
             <button
@@ -3824,37 +3836,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             >
               {icons.split}
             </button>
-          )}
-          {isDesktopWorkspace && (
-            <>
-              <span
-                className={`workspace-active-layout-name ${isActiveWorkspaceLayoutDirty ? 'dirty' : ''}`}
-                title={
-                  activeWorkspaceLayout
-                    ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? ' (edited)' : ''}`
-                    : 'Unsaved workspace layout'
-                }
-              >
-                {activeWorkspaceLayout
-                  ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? '*' : ''}`
-                  : 'Unsaved layout'}
-              </span>
-              <div className="workspace-template-control" ref={workspaceTemplateControlRef}>
-                <button
-                  type="button"
-                  className="workspace-template-button"
-                  onClick={() => {
-                    setIsWorkspaceTemplateMenuOpen(prev => !prev);
-                    setIsWorkspaceAddMenuOpen(false);
-                  }}
-                  title="Manage workspace layouts"
-                  aria-label="Manage workspace layouts"
-                >
-                  {icons.saveLayout}
-                </button>
-                {renderWorkspaceTemplateMenu()}
-              </div>
-            </>
           )}
           {isDesktopWorkspace && (
             <div className="workspace-add-control" ref={workspaceAddControlRef}>

@@ -10,13 +10,16 @@ export interface ConnectionTabItem {
   isClosing?: boolean;
 }
 
-interface ConnectionTabsProps {
+export interface ConnectionTabsProps {
   tabs: ConnectionTabItem[];
   activeTabId: string | null;
   isAdding: boolean;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onAdd: () => void;
+  onManageWorkspaceLayouts?: () => void;
+  onManagePanels?: () => void;
+  workspaceLayoutLabel?: string;
 }
 
 const statusLabel: Record<ConnectionStatus, string> = {
@@ -43,7 +46,17 @@ const ChevronIcon = ({ isOpen }: { isOpen: boolean }) => (
   </svg>
 );
 
-export default function ConnectionTabs({ tabs, activeTabId, isAdding, onSelect, onClose, onAdd }: ConnectionTabsProps) {
+export default function ConnectionTabs({
+  tabs,
+  activeTabId,
+  isAdding,
+  onSelect,
+  onClose,
+  onAdd,
+  onManageWorkspaceLayouts,
+  onManagePanels,
+  workspaceLayoutLabel,
+}: ConnectionTabsProps) {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -78,6 +91,16 @@ export default function ConnectionTabs({ tabs, activeTabId, isAdding, onSelect, 
   const openAnotherConnection = () => {
     setIsSwitcherOpen(false);
     onAdd();
+  };
+
+  const manageWorkspaceLayouts = () => {
+    setIsSwitcherOpen(false);
+    onManageWorkspaceLayouts?.();
+  };
+
+  const managePanels = () => {
+    setIsSwitcherOpen(false);
+    onManagePanels?.();
   };
 
   return (
@@ -152,6 +175,28 @@ export default function ConnectionTabs({ tabs, activeTabId, isAdding, onSelect, 
               );
             })}
           </div>
+          {onManageWorkspaceLayouts && (
+            <button
+              type="button"
+              className="connection-switcher-tool"
+              onClick={manageWorkspaceLayouts}
+              aria-label="Workspace layouts"
+            >
+              <span>Workspace layouts</span>
+              <span>{workspaceLayoutLabel || 'Unsaved layout'}</span>
+            </button>
+          )}
+          {onManagePanels && (
+            <button
+              type="button"
+              className="connection-switcher-tool"
+              onClick={managePanels}
+              aria-label="Manage panels"
+            >
+              <span>Manage panels</span>
+              <span>Installations &amp; permissions</span>
+            </button>
+          )}
           <button type="button" className="connection-switcher-add" onClick={openAnotherConnection}>
             <PlusIcon />
             <span>Open another connection</span>

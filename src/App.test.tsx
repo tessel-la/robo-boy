@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import ConnectionTabs from './components/ConnectionTabs';
 
 const lifecycle = vi.hoisted(() => ({
   mounted: vi.fn(),
@@ -41,7 +42,9 @@ vi.mock('./components/MainControlView', () => ({
     if (!isActive) return null;
     return (
       <div>
-        <div data-testid="mock-top-bar">{connectionNavigation}</div>
+        <div data-testid="mock-top-bar">
+          <ConnectionTabs {...connectionNavigation} />
+        </div>
         {`${target}:active`}
       </div>
     );

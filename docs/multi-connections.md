@@ -116,9 +116,12 @@ subscriptions as tabs accumulate.
 Connection navigation is part of the existing workspace top bar, not a second application bar. At
 every screen size it uses one active-connection button with a status indicator; activating that
 button opens a temporary popover with every session's connected, connecting, or disconnected state
-plus switch, close, and add actions. The add-connection screen uses the same compact header only
-while that screen is open, so an existing session remains one quick selection away without
-permanently reducing workspace height.
+plus switch, close, and add actions. Workspace-layout management is reached from the same popover,
+as is panel installation and permission management, so these remain available when a mobile
+workspace has reached its two-panel limit. This leaves only the add-panel action centered in the
+workspace top bar. The add-connection screen uses the same compact header only while that screen is
+open, so an existing session remains one quick selection away without permanently reducing
+workspace height.
 
 ## Edge cases
 

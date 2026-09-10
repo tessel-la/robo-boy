@@ -292,16 +292,14 @@ function App() {
                           storageScope={session.storageScope}
                           onConnectionStatusChange={status => handleConnectionStatusChange(session.id, status)}
                           onDisconnect={() => handleCloseConnection(session.id)}
-                          connectionNavigation={
-                            <ConnectionTabs
-                              tabs={connectionSessions}
-                              activeTabId={activeConnectionId}
-                              isAdding={isAddingConnection}
-                              onSelect={handleSelectConnection}
-                              onClose={handleCloseConnection}
-                              onAdd={() => setIsAddingConnection(true)}
-                            />
-                          }
+                          connectionNavigation={{
+                            tabs: connectionSessions,
+                            activeTabId: activeConnectionId,
+                            isAdding: isAddingConnection,
+                            onSelect: handleSelectConnection,
+                            onClose: handleCloseConnection,
+                            onAdd: () => setIsAddingConnection(true),
+                          }}
                         />
                       </Suspense>
                     </RuntimeConfigProvider>
