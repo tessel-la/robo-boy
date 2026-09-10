@@ -59,12 +59,15 @@
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
+  /* ✦ sits high in its em box, so centring the box does not centre the glyph. */
+  padding-top: 2px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 28%, var(--border-color, #d9dee7));
   border-radius: 10px;
   background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, var(--card-bg, #fff));
   color: var(--primary-color, #2563eb);
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .assistant-kicker {
@@ -152,7 +155,7 @@
 .assistant-empty > span {
   margin-bottom: 12px;
   color: var(--primary-color, #2563eb);
-  font-size: 24px;
+  font-size: 32px;
   line-height: 1;
 }
 
@@ -1325,6 +1328,10 @@
 
   .assistant-chat {
     padding: 14px 12px 20px;
+  }
+
+  .assistant-empty > span {
+    font-size: 24px;
   }
 
   .assistant-context-summary,
