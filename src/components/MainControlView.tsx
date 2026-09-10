@@ -1598,6 +1598,36 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
 
+  /**
+   * Where a tagged resource takes the user when they click it in the transcript. Only resources the
+   * app can actually show have a destination: a Pad opens in its editor, a panel is selected. A ROS
+   * topic or a TF frame has no view of its own, so its tag stays a plain highlight.
+   */
+  const handleOpenAssistantResource = useCallback((resourceId: string): boolean => {
+    const padMatch = resourceId.match(/^pad:(.+)$/);
+    if (padMatch) {
+      const entry = loadGamepadLibrary().find(item => item.id === padMatch[1] || item.layout.id === padMatch[1]);
+      if (!entry) return false;
+      setWorkspacePadEditorTargetId(workspacePanelsRef.current.find(panel => panel.type === 'pad' && panel.layoutId === entry.layout.id)?.id ?? null);
+      setEditorSession({ mode: 'edit', initialLayout: entry.layout });
+      return true;
+    }
+
+    const panelMatch = resourceId.match(/^workspace:panel:(?:mobile:)?(.+)$/);
+    if (panelMatch) {
+      const workspaceIndex = workspacePanelsRef.current.findIndex(panel => panel.id === panelMatch[1]);
+      if (workspaceIndex >= 0) {
+        setActiveMobileWindowIndex(Math.min(workspaceIndex, 1));
+        return true;
+      }
+      if (activePanels.some(panel => panel.id === panelMatch[1])) {
+        setSelectedPanelId(panelMatch[1]);
+        return true;
+      }
+    }
+    return false;
+  }, [activePanels]);
+
   const handleReviewAssistantPad = useCallback((layout: CustomGamepadLayout) => {
     const existing = loadGamepadLibrary().some(item => item.id === layout.id || item.layout.id === layout.id);
     const matchingWorkspacePanel = workspacePanelsRef.current.find(panel => panel.type === 'pad' && panel.layoutId === layout.id);
@@ -3987,6 +4017,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         isConnected={isConnected}
         connectionGeneration={connectionGeneration}
         onReviewPadProposal={handleReviewAssistantPad}
+        onOpenResource={handleOpenAssistantResource}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [

@@ -21,8 +21,9 @@ import {
 } from '../context/rosContext';
 import { captureTfSnapshotOnDemand, lookupTransformOnDemand, parseDistanceRequest, parseTransformRequest, type TfLookupResult } from '../context/tfContext';
 import { composeAssistantSystemPrompt } from '../prompt';
-import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
+import { sendAssistantChat, fetchOllamaModels, providerAcceptsAudio, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
+import { transcribeAssistantAudio } from '../providers/transcription';
 import { getProviderDefaults, loadAssistantConversation, loadAssistantSettings, saveAssistantConversation, saveAssistantSettings } from '../storage/assistantStorage';
 import { fetchBehaviorTreeSchemas } from '../tools/behaviorTreeTool';
 import { validatePadAgainstRos } from '../tools/padValidator';
@@ -52,6 +53,8 @@ export interface GlobalAssistantProps {
   connectionGeneration: number;
   workspace: WorkspaceSnapshot;
   onReviewPadProposal?: (layout: CustomGamepadLayout) => void;
+  /** Opens a tagged resource in the view that owns it. Returns false when it has no such view. */
+  onOpenResource?: (resourceId: string) => boolean;
 }
 
 const MAX_ATTACHMENTS = 6;
@@ -79,18 +82,20 @@ const readFile = (file: File, mode: 'text' | 'data-url'): Promise<string> => {
 const createAttachment = async (file: File): Promise<AssistantAttachment> => {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   const isImage = IMAGE_ATTACHMENT_TYPES.has(file.type);
+  const isAudio = file.type.startsWith('audio/');
   const isText = file.type.startsWith('text/') || TEXT_ATTACHMENT_EXTENSIONS.has(extension) ||
     ['application/json', 'application/xml', 'application/yaml', 'application/x-yaml'].includes(file.type);
-  if (!isImage && !isText) throw new Error(`${file.name} is not a supported text, code, configuration, or image file.`);
+  if (!isImage && !isAudio && !isText) throw new Error(`${file.name} is not a supported text, code, configuration, image, or audio file.`);
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error(`${file.name} is larger than 5 MB.`);
-  const rawContent = await readFile(file, isImage ? 'data-url' : 'text');
+  const binary = isImage || isAudio;
+  const rawContent = await readFile(file, binary ? 'data-url' : 'text');
   return {
     id: `attachment:${file.name}:${file.size}:${file.lastModified}`,
     name: file.name,
-    mimeType: file.type || (isImage ? 'image/png' : 'text/plain'),
+    mimeType: file.type || (isImage ? 'image/png' : isAudio ? 'audio/webm' : 'text/plain'),
     size: file.size,
-    kind: isImage ? 'image' : 'text',
-    content: isImage ? rawContent.slice(rawContent.indexOf(',') + 1) : rawContent,
+    kind: isImage ? 'image' : isAudio ? 'audio' : 'text',
+    content: binary ? rawContent.slice(rawContent.indexOf(',') + 1) : rawContent,
   };
 };
 
@@ -181,7 +186,7 @@ const formatTfDistanceAnswer = (lookup: TfLookupResult): string => {
 };
 
 const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
-  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal }, ref) => {
+  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
@@ -195,6 +200,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const [clarificationSuggestions, setClarificationSuggestions] = useState<string[] | undefined>();
     const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
     const [attachmentError, setAttachmentError] = useState('');
+    const [transcribingAttachmentId, setTranscribingAttachmentId] = useState<string | null>(null);
     const [pinnedChips, setPinnedChips] = useState<AssistantContextChip[]>([]);
     /** Mirrors `pinnedChips` so a send that just awaited a retrieval reads the chip it waited for,
      * without waiting for React to re-render first. */
@@ -490,6 +496,30 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const isPinned = (id: string) => pinnedChips.some(chip => chip.id === id && !chip.stale);
       const option = (value: ContextPickerOption): ContextPickerOption => ({ ...value, selected: isPinned(value.id) });
       const sections: ContextPickerSection[] = [];
+      // One tag for a whole library, for questions that span it. Bounded by what the libraries hold,
+      // and named so the size is not a surprise.
+      const allPads = readPadLibrary();
+      const allTrees = readTreeLibrary();
+      const bulkOptions: ContextPickerOption[] = [];
+      if (allPads.length) bulkOptions.push(option({
+        id: 'pad:all', label: 'All Pads', source: 'pad', description: `${allPads.length} Pads · complete JSON for every one`,
+        onSelect: () => addPinnedChip({ id: 'pad:all', label: `All Pads (${allPads.length})`, mention: 'All Pads', source: 'pad', automatic: false, fetchedAt: Date.now(), value: allPads.map(item => item.layout) }),
+      }));
+      if (allTrees.length) bulkOptions.push(option({
+        id: 'bt:all', label: 'All Behavior Trees', source: 'behaviorTree', description: `${allTrees.length} trees · complete JSON for every one`,
+        onSelect: () => addPinnedChip({ id: 'bt:all', label: `All Behavior Trees (${allTrees.length})`, mention: 'All Behavior Trees', source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: allTrees.map(item => item.tree) }),
+      }));
+      if (allPads.length || allTrees.length) bulkOptions.push(option({
+        id: 'workspace:everything', label: 'Everything saved', source: 'workspace',
+        description: `${allPads.length} Pads, ${allTrees.length} trees, and the current workspace`,
+        onSelect: () => addPinnedChip({
+          id: 'workspace:everything', label: 'Everything saved', mention: 'Everything saved', source: 'workspace',
+          automatic: false, fetchedAt: Date.now(),
+          value: { pads: allPads.map(item => item.layout), behaviorTrees: allTrees.map(item => item.tree), workspace },
+        }),
+      }));
+      if (bulkOptions.length) sections.push({ ...catalogSection('bulk'), description: 'Whole libraries in one tag', options: bulkOptions });
+
       const workspaceOptions = workspace.openPanels.map(panel => option({
         id: `workspace:panel:${panel.id}`, label: panel.title, source: 'workspace', description: `${panel.type}${panel.selected ? ' · selected' : ''}`,
         onSelect: () => addPinnedChip({ id: `workspace:panel:${panel.id}`, label: `Panel: ${panel.title}`, mention: panel.title, source: 'workspace', automatic: false, fetchedAt: Date.now(), value: panel }),
@@ -515,12 +545,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       }));
       if (openOptions.length) sections.push({ ...catalogSection('open'), options: openOptions });
 
-      const pads = readPadLibrary().map(item => option({
+      const pads = allPads.map(item => option({
         id: `pad:${item.layout.id}`, label: item.name, source: 'pad', description: `${item.layout.components.length} components · complete JSON`,
         onSelect: () => addPinnedChip({ id: `pad:${item.layout.id}`, label: `Pad: ${item.name}`, mention: item.name, source: 'pad', automatic: false, fetchedAt: Date.now(), value: item.layout }),
       }));
       sections.push({ ...catalogSection('pads'), description: `${pads.length} saved`, options: pads });
-      const trees = readTreeLibrary().map(item => option({
+      const trees = allTrees.map(item => option({
         id: `bt:${item.tree.id}`, label: item.tree.name, source: 'behaviorTree', description: `${item.tree.nodes.length} nodes · complete JSON`,
         onSelect: () => addPinnedChip({ id: `bt:${item.tree.id}`, label: `BT: ${item.tree.name}`, mention: item.tree.name, source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: item.tree }),
       }));
@@ -691,7 +721,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         const lastIndex = chatMessages.length - 1;
         const imageAttachments = turnAttachments.filter(item => item.kind === 'image');
         const textAttachments = turnAttachments.filter(item => item.kind === 'text');
+        const audioAttachments = turnAttachments.filter(item => item.kind === 'audio');
+        if (audioAttachments.length && !providerAcceptsAudio(settings.provider)) {
+          throw new Error(`${settings.provider} cannot read audio. Use "To text" on the recording to send what it says instead.`);
+        }
         if (imageAttachments.length) chatMessages[lastIndex] = { ...chatMessages[lastIndex], images: imageAttachments.map(item => ({ mimeType: item.mimeType, data: item.content })) };
+        if (audioAttachments.length) chatMessages[lastIndex] = { ...chatMessages[lastIndex], audio: audioAttachments.map(item => ({ mimeType: item.mimeType, data: item.content })) };
         if (textAttachments.length) chatMessages[lastIndex] = { ...chatMessages[lastIndex], content: `${chatMessages[lastIndex].content}\n\nAttached files:\n${textAttachments.map(item => `### ${item.name}\n${item.content}`).join('\n\n')}` };
 
         setProgress(['Waiting for the model…']);
@@ -780,6 +815,44 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         setAttachmentError(cause instanceof Error ? cause.message : 'Could not attach that file.');
       }
     };
+    /** Keeps a recording as a playable attachment. Sending it as audio, or converting it to text
+     * first, is then the user's choice rather than something done to them on stop. */
+    const handleRecordAudio = async (audio: Blob, durationSeconds: number) => {
+      setAttachmentError('');
+      if (attachments.length >= MAX_ATTACHMENTS) { setAttachmentError(`Attach up to ${MAX_ATTACHMENTS} files per message.`); return; }
+      if (audio.size > MAX_ATTACHMENT_SIZE) { setAttachmentError('That recording is larger than 5 MB. Record a shorter clip.'); return; }
+      const dataUrl = await readFile(new File([audio], 'recording', { type: audio.type || 'audio/webm' }), 'data-url');
+      const timestamp = Date.now();
+      setAttachments(previous => [...previous, {
+        id: `recording:${timestamp}`,
+        name: `recording-${new Date(timestamp).toISOString().slice(11, 19).replace(/:/g, '')}.${(audio.type || 'audio/webm').includes('ogg') ? 'ogg' : (audio.type || '').includes('mp4') ? 'm4a' : 'webm'}`,
+        mimeType: audio.type || 'audio/webm',
+        size: audio.size,
+        kind: 'audio',
+        content: dataUrl.slice(dataUrl.indexOf(',') + 1),
+        durationSeconds,
+      }]);
+    };
+
+    /** Replaces a recording with what it says, for a provider that cannot take audio. */
+    const handleTranscribeAttachment = async (attachmentId: string) => {
+      const attachment = attachments.find(item => item.id === attachmentId);
+      if (!attachment || attachment.kind !== 'audio') return;
+      setAttachmentError('');
+      setTranscribingAttachmentId(attachmentId);
+      try {
+        const audio = await (await fetch(`data:${attachment.mimeType};base64,${attachment.content}`)).blob();
+        const transcript = (await transcribeAssistantAudio(audio, resolvedSettings)).trim();
+        if (!transcript) throw new Error('The speech model returned an empty transcript.');
+        setPrompt(previous => (previous.trim() ? `${previous.trimEnd()} ${transcript}` : transcript));
+        setAttachments(previous => previous.filter(item => item.id !== attachmentId));
+      } catch (cause) {
+        setAttachmentError(cause instanceof Error ? cause.message : 'Could not transcribe that recording.');
+      } finally {
+        setTranscribingAttachmentId(null);
+      }
+    };
+
     const handleSketchAttach = (dataUrl: string) => {
       const content = dataUrl.slice(dataUrl.indexOf(',') + 1);
       const size = Math.ceil((content.length * 3) / 4);
@@ -826,12 +899,16 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onRepeat={handleRepeat}
         onEditMessage={handleEditMessage}
         automaticContextLabels={automaticContextLabels}
+        onOpenResource={onOpenResource}
         contextPickerSections={contextPickerSections}
         onRequestContextCatalog={requestContextCatalog}
         isDiscoveringContext={isDiscoveringContext}
         attachments={attachments}
         attachmentError={attachmentError}
         onAttachFiles={handleAttachFiles}
+        onRecordAudio={handleRecordAudio}
+        onTranscribeAttachment={handleTranscribeAttachment}
+        transcribingAttachmentId={transcribingAttachmentId}
         onRemoveAttachment={id => setAttachments(previous => previous.filter(item => item.id !== id))}
         onSketchAttach={handleSketchAttach}
         settings={settings}

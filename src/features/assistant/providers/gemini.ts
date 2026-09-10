@@ -8,6 +8,7 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
     parts: [
       { text: turn.content },
       ...(turn.images ?? []).map(image => ({ inlineData: { mimeType: image.mimeType, data: image.data } })),
+      ...(turn.audio ?? []).map(clip => ({ inlineData: { mimeType: clip.mimeType, data: clip.data } })),
     ],
   }));
 

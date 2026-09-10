@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
-import { transcribeAssistantAudio } from '../providers/transcription';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
@@ -44,6 +43,8 @@ export interface AssistantPanelProps {
   onRepeat: (messageIndex: number) => void;
   onEditMessage: (messageIndex: number, nextText: string) => void;
   automaticContextLabels: string[];
+  /** Opens a tagged resource in the view that owns it; returns false when it has none. */
+  onOpenResource?: (resourceId: string) => boolean;
   contextPickerSections: ContextPickerSection[];
   onRequestContextCatalog: () => void;
   isDiscoveringContext: boolean;
@@ -51,6 +52,9 @@ export interface AssistantPanelProps {
   attachmentError: string;
   onAttachFiles: (files: FileList | null) => void;
   onRemoveAttachment: (id: string) => void;
+  onRecordAudio: (audio: Blob, durationSeconds: number) => void;
+  onTranscribeAttachment: (id: string) => void;
+  transcribingAttachmentId: string | null;
   onSketchAttach: (dataUrl: string) => void;
   settings: AssistantSettings;
   resolvedBaseUrl: string;
@@ -65,6 +69,10 @@ export interface AssistantPanelProps {
   hasActiveBehaviorTreeBridge: boolean;
 }
 
+/** Binary attachments are held as bare base64 so they survive a JSON round trip; the DOM wants the
+ * data URL back. */
+const dataUrlFor = (attachment: AssistantAttachment) => `data:${attachment.mimeType};base64,${attachment.content}`;
+
 const canGenerateFrom = (prompt: string, isGenerating: boolean) => Boolean(prompt.trim()) && !isGenerating;
 
 const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -74,27 +82,34 @@ const mentionTextFor = (tag: { label: string; mention?: string }) => `@${tag.men
 
 /** Colours the `@Label` mentions a message was sent with. The tagged resource is shown where the
  * author put it rather than in a separate strip, so tagging costs no vertical space. */
-const MessageText = ({ text, tags }: { text: string; tags?: AssistantMessage['contextTags'] }) => {
+const MessageText = ({ text, tags, onOpen }: { text: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void }) => {
   if (!tags?.length) return <>{text}</>;
-  const sourceByMention = new Map(tags.map(tag => [mentionTextFor(tag), tag.source]));
-  const mentions = [...sourceByMention.keys()].sort((a, b) => b.length - a.length).map(escapeForRegExp);
+  const byMention = new Map(tags.map(tag => [mentionTextFor(tag), tag]));
+  const mentions = [...byMention.keys()].sort((a, b) => b.length - a.length).map(escapeForRegExp);
   const parts = text.split(new RegExp(`(${mentions.join('|')})`, 'g'));
   return (
     <>
       {parts.map((part, index) => {
-        const source = sourceByMention.get(part);
-        return source ? <mark key={index} className={`assistant-inline-tag source-${source}`}>{part}</mark> : part;
+        const tag = byMention.get(part);
+        if (!tag) return part;
+        const className = `assistant-inline-tag source-${tag.source}`;
+        // Only a resource with a view of its own is worth making clickable; a topic has none.
+        return onOpen ? (
+          <button type="button" key={index} className={`${className} openable`} onClick={() => onOpen(tag.id)} title={`Open ${tag.label}`}>{part}</button>
+        ) : (
+          <mark key={index} className={className}>{part}</mark>
+        );
       })}
     </>
   );
 };
 
-const MessageContent = ({ content, tags }: { content: string; tags?: AssistantMessage['contextTags'] }) => {
+const MessageContent = ({ content, tags, onOpen }: { content: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void }) => {
   const segments = content.split(/```([\s\S]*?)```/g);
   return (
     <div className="assistant-message-content">
       {segments.map((segment, index) =>
-        index % 2 === 1 ? <pre key={index}>{segment.trim()}</pre> : segment ? <p key={index}><MessageText text={segment} tags={tags} /></p> : null
+        index % 2 === 1 ? <pre key={index}>{segment.trim()}</pre> : segment ? <p key={index}><MessageText text={segment} tags={tags} onOpen={onOpen} /></p> : null
       )}
     </div>
   );
@@ -183,8 +198,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
     open, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
-    automaticContextLabels, contextPickerSections, onRequestContextCatalog, isDiscoveringContext,
-    attachments, attachmentError, onAttachFiles, onRemoveAttachment, onSketchAttach, settings, resolvedBaseUrl,
+    automaticContextLabels, onOpenResource, contextPickerSections, onRequestContextCatalog, isDiscoveringContext,
+    attachments, attachmentError, onAttachFiles, onRemoveAttachment, onRecordAudio, onTranscribeAttachment,
+    transcribingAttachmentId, onSketchAttach, settings, resolvedBaseUrl,
     onProviderChange, onUpdateSettings, ollamaModels, ollamaModelsError, isLoadingOllamaModels,
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
   } = props;
@@ -197,6 +213,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
+  const [expandedImage, setExpandedImage] = useState<AssistantAttachment | null>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const [mobileViewportStyle, setMobileViewportStyle] = useState<React.CSSProperties>();
   const panelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -272,6 +290,11 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     void retrieveContextOption(option);
   };
 
+  /** Undefined when nothing can be opened, so tags stay plain marks rather than dead buttons. */
+  const openResource = onOpenResource
+    ? (id: string) => { if (onOpenResource(id) && compact) onClose(); }
+    : undefined;
+
   const composerField = { value: prompt, setValue: onPromptChange, ref: promptRef };
   const editingField = { value: editingDraft, setValue: setEditingDraft, ref: editingRef };
   const composerMentions = useMentionPicker(allContextOptions, option => tagInto(option, composerField, true));
@@ -282,7 +305,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !showSketchEditor) {
         event.preventDefault();
-        if (showContextPicker) setShowContextPicker(false);
+        if (expandedImage) setExpandedImage(null);
+        else if (showContextPicker) setShowContextPicker(false);
         else if (showSettings) setShowSettings(false);
         else if (composerMentions.isOpen) composerMentions.close();
         else if (editingMentions.isOpen) editingMentions.close();
@@ -300,7 +324,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [compact, composerMentions, editingMentions, editingMessageId, onClose, open, showContextPicker, showSettings, showSketchEditor]);
+  }, [compact, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showContextPicker, showSettings, showSketchEditor]);
 
   useEffect(() => {
     if (!open) return;
@@ -386,9 +410,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
   return (
     <div className="assistant-overlay" style={mobileViewportStyle}>
-      <section ref={panelRef} className="assistant-panel" data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
+      <section
+        ref={panelRef}
+        className={`assistant-panel${isDropTarget ? ' is-drop-target' : ''}`}
+        // Dropping a file anywhere on the panel attaches it, which is where people aim.
+        onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(true); } }}
+        onDragLeave={event => { if (!panelRef.current?.contains(event.relatedTarget as Node | null)) setIsDropTarget(false); }}
+        onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
+        data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
         <header className="assistant-header">
-          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><div><span className="assistant-kicker">Robo-Boy AI</span><h2 id="assistant-title">Assistant</h2></div></div>
+          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><div><span className="assistant-kicker">Robo-Boy AI</span><h2 id="assistant-title">{compact ? 'Robo-Boy AI' : 'Assistant'}</h2></div></div>
           <div className="assistant-header-actions">
             {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
             <button type="button" className="assistant-icon-button" onClick={() => setShowSettings(true)} aria-label="Assistant settings" title="Assistant settings"><FaCog aria-hidden="true" /></button>
@@ -399,7 +430,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} onClose={() => setShowSettings(false)} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
         <div ref={chatRef} className="assistant-chat" onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
-          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Work with the whole robot workspace</h3><p>Inspect the current Pad, Behavior Tree, ROS graph, TF, panels, and selected live data. Changes stay in the existing editors for review.</p></div>}
+          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Build and edit Behavior Trees and Pads, look up transforms, and ask anything about your robot, your panels, or Robo-Boy itself.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
@@ -425,8 +456,22 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                   {editingMentions.node}
                   <div className="assistant-inline-actions"><button type="button" className="secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" onClick={() => submitEditedMessage(index)} disabled={!editingDraft.trim()}>Save &amp; resend</button></div>
                 </div>
-              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} />}
-              {message.attachments.length > 0 && <div className="assistant-message-attachments">{message.attachments.map(item => <span key={item.id}>{item.name}</span>)}</div>}
+              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} />}
+              {message.attachments.length > 0 && (
+                <div className="assistant-message-attachments">
+                  {message.attachments.map(item =>
+                    item.kind === 'image' ? (
+                      <button type="button" className="assistant-message-image" key={item.id} onClick={() => setExpandedImage(item)} aria-label={`Expand ${item.name}`}>
+                        <img src={dataUrlFor(item)} alt={item.name} />
+                      </button>
+                    ) : item.kind === 'audio' ? (
+                      <audio className="assistant-message-audio" key={item.id} src={dataUrlFor(item)} controls preload="metadata" aria-label={`Play ${item.name}`} />
+                    ) : (
+                      <span key={item.id}>{item.name}</span>
+                    )
+                  )}
+                </div>
+              )}
 
               {message.response?.kind === 'rosAction' && <div className="assistant-proposal-card"><strong>Review-only {message.response.operation.kind}: {message.response.operation.name}</strong><p>{message.response.rationale}</p><pre>{JSON.stringify(message.response.operation, null, 2)}</pre>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<small>Robo-Boy does not run robot operations from assistant chat. Add the reviewed operation through a Pad or Behavior Tree.</small></div>}
               {message.response?.kind === 'padProposal' && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-pad-proposal-card"><strong>Proposed Pad: {message.response.layout.name}</strong><p>{message.response.layout.components.length} components · review every binding before saving.</p>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<div className="assistant-inline-actions"><button type="button" onClick={() => onReviewPadProposal(message.id)}>Review in Pad editor</button></div></div>}
@@ -446,8 +491,23 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         <div className="assistant-context-summary"><button type="button" onClick={() => { setShowContextPicker(value => !value); setShowSettings(false); if (!showContextPicker) onRequestContextCatalog(); }} aria-expanded={showContextPicker} aria-controls="assistant-context-browser"><FaPlus aria-hidden="true" /><span>Context</span><small>{automaticContextLabels.slice(0, 3).join(' · ')}{automaticContextLabels.length > 3 ? ` +${automaticContextLabels.length - 3}` : ''}</small></button></div>
 
         <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
-          <div className="assistant-context-tags" aria-label="Assistant attachments">
-            {attachments.map(item => <span className="assistant-context-tag attachment" key={item.id}><span>{item.name}</span><button type="button" onClick={() => onRemoveAttachment(item.id)} aria-label={`Remove attachment ${item.name}`}><FaTimes aria-hidden="true" /></button></span>)}
+          <div className="assistant-composer-attachments" aria-label="Assistant attachments">
+            {attachments.map(item => (
+              <span className={`assistant-context-tag attachment ${item.kind}`} key={item.id}>
+                {item.kind === 'image' && <img src={dataUrlFor(item)} alt="" aria-hidden="true" />}
+                {item.kind === 'audio' ? (
+                  <>
+                    <audio src={dataUrlFor(item)} controls preload="metadata" aria-label={`Play ${item.name}`} />
+                    <button type="button" className="assistant-attachment-action" onClick={() => onTranscribeAttachment(item.id)} disabled={transcribingAttachmentId === item.id}>
+                      {transcribingAttachmentId === item.id ? 'Transcribing…' : 'To text'}
+                    </button>
+                  </>
+                ) : (
+                  <span>{item.name}</span>
+                )}
+                <button type="button" onClick={() => onRemoveAttachment(item.id)} aria-label={`Remove attachment ${item.name}`}><FaTimes aria-hidden="true" /></button>
+              </span>
+            ))}
           </div>
 
           {showContextPicker && <div id="assistant-context-browser" className="assistant-context-picker" role="dialog" aria-label="Add context" aria-busy={isDiscoveringContext || loadingContextIds.length > 0}>
@@ -466,7 +526,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handlePromptKeyDown}
-              onTranscribeAudio={audio => transcribeAssistantAudio(audio, { ...settings, baseUrl: resolvedBaseUrl })}
+              onRecordAudio={onRecordAudio}
               rows={1}
               autoGrow
               highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
@@ -489,6 +549,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {attachmentError && <span className="assistant-attachment-error" role="alert">{attachmentError}</span>}
           <small className="assistant-enter-hint">Enter to send · Shift+Enter for a new line</small>
         </form>
+
+        {isDropTarget && <div className="assistant-drop-overlay" aria-hidden="true"><FaPaperclip aria-hidden="true" /><span>Drop to attach</span></div>}
+
+        {expandedImage && createPortal(
+          <div className="assistant-lightbox" role="dialog" aria-label={expandedImage.name} onClick={() => setExpandedImage(null)}>
+            <img src={dataUrlFor(expandedImage)} alt={expandedImage.name} />
+            <button type="button" onClick={() => setExpandedImage(null)} aria-label="Close image"><FaTimes aria-hidden="true" /></button>
+          </div>,
+          document.body
+        )}
 
         {showSketchEditor && createPortal(<AssistantSketchEditor onAttach={dataUrl => { onSketchAttach(dataUrl); setShowSketchEditor(false); }} onClose={() => setShowSketchEditor(false)} />, document.body)}
       </section>

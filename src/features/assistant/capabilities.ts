@@ -34,7 +34,7 @@ export interface AssistantCapability {
  * another to the model.
  */
 export interface ContextCatalogEntry {
-  id: 'workspace' | 'open' | 'pads' | 'trees' | 'topics' | 'services' | 'actions' | 'nodes' | 'parameters' | 'tf-diagnostics';
+  id: 'bulk' | 'workspace' | 'open' | 'pads' | 'trees' | 'topics' | 'services' | 'actions' | 'nodes' | 'parameters' | 'tf-diagnostics';
   /** Heading shown in the Context browser. */
   label: string;
   /** What tagging one of these actually puts in the prompt. */
@@ -42,6 +42,7 @@ export interface ContextCatalogEntry {
 }
 
 export const CONTEXT_CATALOG: readonly ContextCatalogEntry[] = [
+  { id: 'bulk', label: 'Everything', provides: 'every saved Pad and Behavior Tree at once, when a question spans the whole library' },
   { id: 'workspace', label: 'Current workspace', provides: 'an open panel, the current layout, or a saved layout' },
   { id: 'open', label: 'Open and selected', provides: 'the Pad or Behavior Tree open right now, as complete JSON' },
   { id: 'pads', label: 'Pads', provides: 'any saved Pad, as complete JSON' },

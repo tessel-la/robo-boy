@@ -70,7 +70,22 @@ test('context browser groups exact resources and captures a bounded selected top
 
   await expect(page.getByRole('dialog', { name: 'Add context' })).toBeVisible();
   const dialog = page.getByRole('dialog', { name: 'Add context' });
-  for (const heading of ['Current workspace', 'Pads', 'Behavior Trees', 'ROS topics', 'ROS services', 'ROS actions', 'ROS nodes', 'ROS parameters', 'TF and diagnostics']) {
+
+  // It opens above the composer and has to stay inside the panel at any height: with no vertical
+  // anchor it fell below the form, and with too generous a ceiling it ran off the top.
+  for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(size);
+    await expect(async () => {
+      const dialogBox = (await dialog.boundingBox())!;
+      const panelBox = (await page.getByTestId('assistant-panel').boundingBox())!;
+      expect(dialogBox.y).toBeGreaterThanOrEqual(panelBox.y);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height + 1);
+    }).toPass();
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(dialog.getByRole('button', { name: /All Pads/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /Everything saved/ })).toBeVisible();
+  for (const heading of ['Everything', 'Current workspace', 'Pads', 'Behavior Trees', 'ROS topics', 'ROS services', 'ROS actions', 'ROS nodes', 'ROS parameters', 'TF and diagnostics']) {
     await expect(dialog.locator('.assistant-context-section-heading').getByText(heading, { exact: true })).toBeVisible();
   }
   await page.getByPlaceholder('Search Pads, trees, topics, services…').fill('cmd_vel');
@@ -148,10 +163,21 @@ test('320px portrait keeps header, transcript, context, and composer reachable a
     expect(resized!.y + resized!.height).toBeLessThanOrEqual(360);
   }).toPass();
 
-  const controls = await panel.locator('button:visible').evaluateAll(buttons =>
-    buttons.slice(0, 8).map(button => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height }))
+  // The composer is what gets tapped over and over, so it keeps full-size touch targets. The
+  // header's two chrome controls are deliberately smaller: a second full-height title bar under the
+  // app bar costs transcript room it cannot earn, and back also closes the panel.
+  const composerControls = await panel.locator('.assistant-speech-toolbar button:visible').evaluateAll(buttons =>
+    buttons.map(button => button.getBoundingClientRect())
   );
-  expect(controls.every(control => control.width >= 40 && control.height >= 40)).toBe(true);
+  expect(composerControls.length).toBeGreaterThan(0);
+  expect(composerControls.every(box => box.width >= 44 && box.height >= 44)).toBe(true);
+
+  const headerControls = await panel.locator('.assistant-header button:visible').evaluateAll(buttons =>
+    buttons.map(button => button.getBoundingClientRect())
+  );
+  expect(headerControls.every(box => box.width >= 36 && box.height >= 36)).toBe(true);
+  const headerHeight = (await panel.locator('.assistant-header').boundingBox())!.height;
+  expect(headerHeight).toBeLessThanOrEqual(40);
 });
 
 test('mobile back closes the full-height assistant and landscape uses a side panel', async ({ page }) => {

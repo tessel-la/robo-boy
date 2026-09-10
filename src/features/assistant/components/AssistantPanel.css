@@ -167,6 +167,15 @@
   line-height: 1.55;
 }
 
+.assistant-empty-hint {
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.assistant-empty-hint strong {
+  color: var(--primary-color, #2563eb);
+}
+
 .assistant-message {
   position: relative;
   width: fit-content;
@@ -251,10 +260,121 @@
 }
 
 .assistant-message-attachments,
-.assistant-context-tags {
+.assistant-context-tags,
+.assistant-composer-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.assistant-composer-attachments:empty {
+  display: none;
+}
+
+/* A picture and a recording are the message, not a filename: show the one and play the other. */
+.assistant-message-image {
+  display: block;
+  max-width: min(260px, 100%);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 10px;
+  background: none;
+  cursor: zoom-in;
+}
+
+.assistant-message-image img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.assistant-message-audio,
+.assistant-context-tag.audio audio {
+  height: 34px;
+  max-width: min(260px, 100%);
+}
+
+.assistant-context-tag.audio {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.assistant-context-tag.image img {
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.assistant-attachment-action {
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 38%, var(--border-color, #d9dee7));
+  border-radius: 999px;
+  background: var(--card-bg, #fff);
+  color: var(--primary-color, #2563eb);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.assistant-drop-overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 8px;
+  display: grid;
+  gap: 8px;
+  place-content: center;
+  justify-items: center;
+  border: 2px dashed var(--primary-color, #2563eb);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 12%, var(--card-bg, #fff));
+  color: var(--primary-color, #2563eb);
+  font-size: 13px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+.assistant-drop-overlay svg {
+  width: 22px;
+  height: 22px;
+}
+
+.assistant-lightbox {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  place-items: center;
+  background: rgba(9, 12, 20, 0.86);
+  cursor: zoom-out;
+}
+
+.assistant-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.assistant-lightbox button {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
 }
 
 /* Zero padding and no border on purpose: behind the composer's textarea this mark must occupy
@@ -503,6 +623,20 @@
   color: inherit;
 }
 
+/* A tag that leads somewhere reads as a link without changing the text metrics the composer
+   backdrop depends on. */
+.assistant-inline-tag.openable {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.assistant-inline-tag.openable:hover,
+.assistant-inline-tag.openable:focus-visible {
+  outline: none;
+  text-decoration: underline;
+}
+
 .assistant-inline-tag.source-workspace { --assistant-tag-tint: var(--primary-color, #2563eb); }
 .assistant-inline-tag.source-pad { --assistant-tag-tint: #8b5cf6; }
 .assistant-inline-tag.source-behaviorTree { --assistant-tag-tint: #0f9f76; }
@@ -553,8 +687,28 @@
 
 .assistant-speech-toolbar-start {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 1px;
+}
+
+/* Sits in the toolbar row while recording, so it costs no height of its own. */
+.assistant-speech-toolbar .assistant-speech-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding-left: 2px;
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-speech-toolbar .assistant-speech-status.is-listening {
+  color: var(--error-color, #dc2626);
 }
 
 .assistant-speech-toolbar-start button,
@@ -739,6 +893,12 @@
   line-height: 1.3;
 }
 
+.assistant-speech-field > .assistant-speech-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .assistant-enter-hint {
   color: var(--text-secondary, #64748b);
   text-align: right;
@@ -750,21 +910,34 @@
   z-index: 20;
   right: 12px;
   left: 12px;
-  max-height: 260px;
-  overflow-y: auto;
   border: 1px solid var(--border-color, #d9dee7);
   border-radius: 12px;
   background: var(--card-bg, #fff);
   box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
 }
 
-.assistant-mention-picker.above { bottom: calc(100% + 8px); }
+/* Both open above the composer they belong to. Without an explicit anchor an absolutely positioned
+   box falls to its static position -- below the form, off the bottom of the panel, clipped. */
+.assistant-context-picker,
+.assistant-mention-picker.above {
+  bottom: calc(100% + 8px);
+}
+
+.assistant-mention-picker {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 .assistant-mention-picker.below { top: calc(100% + 8px); }
 
 .assistant-context-picker {
   display: grid;
-  max-height: min(560px, calc(100dvh - 180px));
+  /* Its sections scroll; the dialog itself must not, or the search field scrolls away. It opens
+     upwards from the composer, so the ceiling has to leave room for the app bar above and the
+     composer below -- 180px only accounted for the composer and ran off the top of the panel. */
+  max-height: min(560px, calc(100dvh - 300px));
   grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .assistant-context-picker > header {
@@ -1042,9 +1215,12 @@
   line-height: 1.5;
 }
 
+/* Fixed box, and the bars scale rather than growing: animating `height` reflowed the line box on
+   every frame, which walked the whole transcript up and down while the user was talking. */
 .assistant-listening-wave {
   display: inline-flex;
   height: 12px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
 }
@@ -1052,10 +1228,16 @@
 .assistant-listening-wave i {
   display: block;
   width: 2px;
-  height: 4px;
+  height: 12px;
   background: currentColor;
+  border-radius: 1px;
   animation: assistant-wave 0.75s ease-in-out infinite alternate;
+  transform: scaleY(0.3);
 }
+
+.assistant-listening-wave i:nth-child(2) { animation-delay: 0.12s; }
+.assistant-listening-wave i:nth-child(3) { animation-delay: 0.24s; }
+.assistant-listening-wave i:nth-child(4) { animation-delay: 0.36s; }
 
 .assistant-panel .spinning {
   animation: assistant-spin 0.8s linear infinite;
@@ -1066,7 +1248,7 @@
 }
 
 @keyframes assistant-wave {
-  to { height: 11px; }
+  to { transform: scaleY(1); }
 }
 
 @media (max-width: 767px) {
@@ -1089,19 +1271,22 @@
     box-shadow: none;
   }
 
-  /* A second full-height title bar under the app bar costs transcript space it cannot earn. */
+  /* Keep the mark and the name -- that is the panel's identity -- but on one line. The height came
+     from stacking a kicker above the title, not from the title itself. */
   .assistant-header {
-    min-height: 46px;
-    gap: 6px;
-    padding: 1px 6px 1px 10px;
+    min-height: 36px;
+    gap: 7px;
+    padding: 0 2px 0 9px;
   }
 
   .assistant-avatar {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
-    border-radius: 8px;
-    font-size: 15px;
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font-size: 21px;
   }
 
   .assistant-kicker {
@@ -1110,7 +1295,20 @@
 
   .assistant-header h2 {
     margin: 0;
-    font-size: 15px;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+  }
+
+  .assistant-icon-button {
+    width: 36px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  .assistant-header-actions .assistant-new {
+    min-height: 36px;
+    padding: 0 7px;
+    font-size: 11px;
   }
 
   .assistant-chat {

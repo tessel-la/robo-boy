@@ -6,7 +6,7 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 
 1. Press the assistant launcher, fixed in the bottom-left corner. It is the mirror image of the theme button in the bottom-right: both take their size, icon size and edge inset from the same `--floating-action-*` tokens in `src/index.css`, including the bottom offset, which clears a phone's gesture bar by the same amount for each so the pair do not sit at different heights.
 2. On desktop the assistant is a fixed left-side panel (`clamp(420px, 32vw, 480px)`) running the full height under the app bar. It is non-modal — the workspace to its right stays live — and it does not drag, resize, or minimize. Below 768px it fills the screen under the app bar as a modal dialog with a focus trap, the system back gesture closes it, and the theme button hides for as long as it is open rather than floating over the composer.
-3. Ask a question, or attach files, a sketch, or your voice (Web Speech API, or record-and-transcribe when the browser has no recognizer).
+3. Ask a question, or bring something with it. Files can be dropped anywhere on the panel or picked with the paperclip; an image shows as a thumbnail and opens full size when clicked. The microphone records a clip you can play back before sending, and `To text` converts it instead — a recording is sent as audio to providers that read audio (Gemini, and the OpenAI chat-completions shape), and refused with that suggestion for the ones that cannot (Anthropic, Ollama).
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
 5. Review any proposed change in the editor that owns it — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
 
@@ -18,7 +18,7 @@ Context reaches a turn two ways, and neither is silent.
 
 **Automatic.** A bounded workspace snapshot (connection status, open panels and their configuration, the selected Pad, the open Behavior Tree, the current and saved layouts) plus the cached ROS graph. The `Context` line above the composer names what is in play, and every reply carries a `Context used` disclosure listing each item with its source, age, and whether a reconnect has made it stale. Automatic context is always on: there is nothing to switch off and then be unable to restore.
 
-**Tagged.** Type `@` for the inline picker, or open the `Context` browser for the grouped, searchable catalog — current workspace, Pads, Behavior Trees, ROS topics/services/actions/nodes/parameters, and TF/`/rosout`. Both write the resource into the prompt as a readable `@Camera` or `@/cmd_vel`.
+**Tagged.** Type `@` for the inline picker, or open the `Context` browser for the grouped, searchable catalog. Its groups come from `CONTEXT_CATALOG`, which the system prompt also lists, so the browser and the model cannot describe different context. `Everything` is the first group: whole libraries in one tag, for a question that spans them. Both routes write the resource into the prompt as a readable `@Camera` or `@/cmd_vel`, and a tag with a view of its own — a Pad, a panel — is clickable in the transcript and takes you there.
 
 **The mention is the tag.** There is no separate chip strip above the composer to keep in sync or to spend transcript space on. A turn carries exactly the resources its text still mentions, so deleting the text removes the context. The mention is coloured by source as it is written — a backdrop behind the textarea paints the marks, since a textarea cannot style its own content — and stays coloured in the transcript once sent.
 
@@ -27,6 +27,14 @@ A message's colouring is read from its own text against the context catalog rath
 Tagging several resources works while earlier ones are still loading — retrievals run alongside each other, and a send waits for any that are still in flight so a prompt never goes out missing the context it names.
 
 What a tag actually retrieves is exact, not summarized: a Pad or Behavior Tree tag carries its complete JSON; a topic tag carries the live message schema plus a bounded sample; a service or action tag carries its request or goal schema.
+
+## What The Model Is Told About The App
+
+Left to general ROS knowledge the model answers app questions from outside the app: asked whether Robo-Boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
+
+So the assistant's self-description is data, not prose. Each capability is an `AssistantCapability` declared beside the code that implements it — `TF_CAPABILITY` next to the phrase parsers, `PAD_CAPABILITY` next to the Pad generator, and so on — collected in `ASSISTANT_CAPABILITIES` and rendered into the prompt by `describeCapabilities`. Delete a feature and its description goes with it.
+
+`capabilities.test.ts` is what holds the registry to the code: every TF phrasing offered to users is fed through the parsers that must match it, and every declared `responseKind` through the response parser. Change how a capability is triggered without updating its declaration and the test fails, rather than the assistant continuing to promise something that no longer works.
 
 ## Capability Matrix
 

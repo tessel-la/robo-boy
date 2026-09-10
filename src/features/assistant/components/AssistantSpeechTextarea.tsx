@@ -54,6 +54,12 @@ interface AssistantSpeechTextareaProps {
   /** Grow the textarea with its content instead of scrolling inside a fixed box. */
   autoGrow?: boolean;
   /**
+   * Keeps the recording as an attachment instead of transcribing it. When given, the microphone
+   * records rather than dictating, and the clip is handed over on stop -- the user can play it back
+   * and send the audio itself, or convert it to text from the attachment.
+   */
+  onRecordAudio?: (audio: Blob, durationSeconds: number) => void;
+  /**
    * Renders a control row under the textarea. The voice button joins `start` there instead of
    * sitting inside the textarea, so a composer can group it with its own tools.
    */
@@ -90,6 +96,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   autoGrow,
   toolbar,
   highlight,
+  onRecordAudio,
 }) => {
   const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
@@ -200,7 +207,8 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   };
 
   const startRecording = (stream: MediaStream) => {
-    if (typeof MediaRecorder === 'undefined' || !onTranscribeAudio) return false;
+    if (typeof MediaRecorder === 'undefined' || (!onTranscribeAudio && !onRecordAudio)) return false;
+    const startedAt = Date.now();
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
     streamRef.current = stream;
@@ -214,8 +222,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       recorderRef.current = null;
       streamRef.current = null;
       setIsListening(false);
-      if (audio.size > 0) void transcribeRecording(audio);
-      else setSpeechError('No audio was recorded.');
+      if (audio.size === 0) {
+        setSpeechError('No audio was recorded.');
+        return;
+      }
+      if (onRecordAudio) onRecordAudio(audio, Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
+      else void transcribeRecording(audio);
     };
     recorder.start();
     setIsListening(true);
@@ -231,7 +243,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     setIsRequestingPermission(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (SpeechRecognition) {
+      if (SpeechRecognition && !onRecordAudio) {
         stream.getTracks().forEach(track => track.stop());
         startRecognition();
       } else if (!startRecording(stream)) {
@@ -259,6 +271,14 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       void startListening();
     }
   };
+
+  const busyStatus = isRequestingPermission
+    ? 'Waiting for microphone…'
+    : isListening
+      ? onRecordAudio ? 'Recording' : 'Listening'
+      : isTranscribing
+        ? 'Transcribing…'
+        : '';
 
   const voiceButton = (
     <button
@@ -299,32 +319,43 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       </span>
       {toolbar && (
         <div className="assistant-speech-toolbar">
-          <div className="assistant-speech-toolbar-start">
-            {toolbar.start}
-            {voiceButton}
-          </div>
+          {/* The status takes the tools' place inside this fixed-height row rather than adding a
+              row of its own, so starting to talk never resizes the composer under the transcript. */}
+          {busyStatus ? (
+            <div className="assistant-speech-toolbar-start">
+              {voiceButton}
+              <span className={`assistant-speech-status${isListening ? ' is-listening' : ''}`} role="status">
+                {isListening && (
+                  <span className="assistant-listening-wave" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+                {busyStatus}
+              </span>
+            </div>
+          ) : (
+            <div className="assistant-speech-toolbar-start">
+              {toolbar.start}
+              {voiceButton}
+            </div>
+          )}
           {toolbar.end}
         </div>
       )}
-      {isRequestingPermission && (
-        <span className="assistant-speech-status" role="status">
-          Requesting microphone permission…
-        </span>
-      )}
-      {isListening && (
-        <span className="assistant-speech-status is-listening" role="status">
-          <span className="assistant-listening-wave" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          Listening…
-        </span>
-      )}
-      {isTranscribing && (
-        <span className="assistant-speech-status" role="status">
-          Transcribing audio…
+      {!toolbar && busyStatus && (
+        <span className={`assistant-speech-status${isListening ? ' is-listening' : ''}`} role="status">
+          {isListening && (
+            <span className="assistant-listening-wave" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+          )}
+          {busyStatus}
         </span>
       )}
       {speechError && (
