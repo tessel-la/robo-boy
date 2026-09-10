@@ -620,6 +620,13 @@
   z-index: 1400;
 }
 
+@media (min-width: 769px) {
+  .workspace-add-control > .workspace-add-menu {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
 @keyframes workspace-menu-enter {
   from {
     opacity: 0;
