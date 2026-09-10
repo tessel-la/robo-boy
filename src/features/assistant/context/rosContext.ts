@@ -3,6 +3,10 @@ import { runSerializedRosapi } from '../../../utils/rosapiQueue';
 
 const DEFAULT_SAMPLE_COUNT = 3;
 const DEFAULT_SAMPLE_TIMEOUT_MS = 1800;
+/** A caller may ask for more than the default, up to here. `/rosout` is the reason it is not 10:
+ * log lines are small and a handful of them says nothing, while a burst of camera frames at the
+ * same count would not be bounded in any useful sense -- which is what the byte cap is for. */
+const MAX_SAMPLE_COUNT = 40;
 const MAX_SAMPLE_BYTES = 24 * 1024;
 
 const abortError = () => new DOMException('ROS context request cancelled.', 'AbortError');
@@ -59,7 +63,7 @@ export const sampleRosTopic = (
   messageType: string,
   options: { maxMessages?: number; timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<TopicSampleResult> => {
-  const maxMessages = Math.max(1, Math.min(10, options.maxMessages ?? DEFAULT_SAMPLE_COUNT));
+  const maxMessages = Math.max(1, Math.min(MAX_SAMPLE_COUNT, options.maxMessages ?? DEFAULT_SAMPLE_COUNT));
   const timeoutMs = Math.max(100, Math.min(10_000, options.timeoutMs ?? DEFAULT_SAMPLE_TIMEOUT_MS));
 
   return new Promise((resolve, reject) => {

@@ -38,6 +38,7 @@ What a tag actually retrieves is exact, not summarized: a Pad or Behavior Tree t
 | ROS nodes and parameters | | ✅ (rosapi, serialized) | | |
 | TF snapshot, two-frame transform / distance | | ✅ (on demand, no background subscription) | | |
 | `/rosout` recent messages | | ✅ (bounded: up to 40 messages over 4s, on demand) | | |
+| Live topic sample | | ✅ (3 messages by default, 40 at most, 24 KiB each) | | |
 | Pad JSON | | ✅ (complete layout) | | |
 | Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
 | Behavior Tree JSON | | ✅ (complete tree) | | |
