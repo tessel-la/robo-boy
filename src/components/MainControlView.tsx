@@ -228,22 +228,6 @@ const IconMCVGrip = () => (
     <circle cx="15" cy="15" r="1.4" />
   </svg>
 );
-const IconMCVTile = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-  </svg>
-);
 const IconMCVSplit = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -350,7 +334,6 @@ const icons = {
   edit: <IconMCVEdit />,
   trash: <IconMCVTrash />,
   grip: <IconMCVGrip />,
-  tile: <IconMCVTile />,
   split: <IconMCVSplit />,
   swap: <IconMCVSwap />,
   replacePanel: <IconMCVReplacePanel />,
@@ -1668,11 +1651,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   };
   // --- End Panel Handlers ---
 
-  const resetWorkspaceLayout = () => {
-    const rows = buildWorkspaceRows(normalizedWorkspaceTileOrder);
-    setWorkspaceLayout(createWorkspaceLayoutFromRows(rows));
-  };
-
   const handleAddWorkspacePanel = (
     type: WorkspacePanelType,
     insertIndex?: number,
@@ -2490,26 +2468,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       }
     };
     reader.readAsText(file);
-  };
-
-  const handleAutoTileWorkspacePanels = () => {
-    setIsWorkspaceOpen(true);
-    setIsWorkspaceDragActive(false);
-    setWorkspaceDropPlacement(null);
-    if (isDesktopWorkspace) {
-      resetWorkspaceLayout();
-    }
-    setIsWorkspaceAddMenuOpen(false);
-    setIsWorkspaceTemplateMenuOpen(false);
-  };
-
-  const handleLayoutControlClick = () => {
-    if (isDesktopWorkspace) {
-      handleAutoTileWorkspacePanels();
-      return;
-    }
-
-    handleToggleMobileSplitView();
   };
 
   const handleOpenWorkspaceReplacementMenu = (event: React.MouseEvent<HTMLButtonElement>, panelId: string) => {
@@ -3856,27 +3814,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               </button>
             </div>
           )}
-          <button
-            type="button"
-            className={`workspace-tile-button ${isDesktopWorkspace || isMobileSplitView ? 'active' : ''}`}
-            onClick={handleLayoutControlClick}
-            title={
-              isDesktopWorkspace
-                ? 'Auto-arrange workspace panels'
-                : isMobileSplitView
-                  ? 'Use one mobile panel'
-                  : 'Split mobile view'
-            }
-            aria-label={
-              isDesktopWorkspace
-                ? 'Auto-arrange workspace panels'
-                : isMobileSplitView
-                  ? 'Use one mobile panel'
-                  : 'Split mobile view'
-            }
-          >
-            {isDesktopWorkspace ? icons.tile : icons.split}
-          </button>
+          {!isDesktopWorkspace && (
+            <button
+              type="button"
+              className={'workspace-split-button ' + (isMobileSplitView ? 'active' : '')}
+              onClick={handleToggleMobileSplitView}
+              title={isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
+              aria-label={isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
+            >
+              {icons.split}
+            </button>
+          )}
           {isDesktopWorkspace && (
             <>
               <span

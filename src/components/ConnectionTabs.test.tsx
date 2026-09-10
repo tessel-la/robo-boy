@@ -23,31 +23,31 @@ describe('ConnectionTabs', () => {
       />
     );
 
-    expect(screen.getByRole('tab', { name: 'Alpha robot, Connected' })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(screen.getByRole('tab', { name: 'Beta robot, Disconnected' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close Alpha robot' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
+    const trigger = screen.getByRole('button', {
+      name: 'Switch connections, current: Alpha robot, Connected',
+    });
+    fireEvent.click(trigger);
+    let popover = screen.getByRole('dialog', { name: 'Switch robot connection' });
+    fireEvent.click(within(popover).getByRole('button', { name: 'Beta robot, Disconnected' }));
+
+    fireEvent.click(trigger);
+    popover = screen.getByRole('dialog', { name: 'Switch robot connection' });
+    fireEvent.click(within(popover).getByRole('button', { name: 'Close Alpha robot' }));
+    fireEvent.click(within(popover).getByRole('button', { name: 'Open another connection' }));
 
     expect(onSelect).toHaveBeenCalledWith('beta');
     expect(onClose).toHaveBeenCalledWith('alpha');
     expect(onAdd).toHaveBeenCalledOnce();
   });
 
-  it('supports arrow-key tab selection', () => {
-    const onSelect = vi.fn();
+  it('shows when the connection screen is active', () => {
     render(
-      <ConnectionTabs
-        tabs={tabs}
-        activeTabId="alpha"
-        isAdding={false}
-        onSelect={onSelect}
-        onClose={vi.fn()}
-        onAdd={vi.fn()}
-      />
+      <ConnectionTabs tabs={tabs} activeTabId="alpha" isAdding onSelect={vi.fn()} onClose={vi.fn()} onAdd={vi.fn()} />
     );
 
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Alpha robot, Connected' }), { key: 'ArrowRight' });
-    expect(onSelect).toHaveBeenCalledWith('beta');
+    expect(screen.getByRole('button', { name: 'Switch connections, opening a new connection' })).toHaveTextContent(
+      'New connection'
+    );
   });
 
   it('offers a compact switcher with current state and all connection statuses', () => {
@@ -65,7 +65,6 @@ describe('ConnectionTabs', () => {
 
     const trigger = screen.getByRole('button', {
       name: 'Switch connections, current: Alpha robot, Connected',
-      hidden: true,
     });
     expect(trigger).toHaveTextContent('alpha.local');
     fireEvent.click(trigger);
@@ -97,7 +96,7 @@ describe('ConnectionTabs', () => {
       </div>
     );
 
-    const trigger = screen.getByRole('button', { name: /Switch connections, current/, hidden: true });
+    const trigger = screen.getByRole('button', { name: /Switch connections, current/ });
     fireEvent.click(trigger);
     let popover = screen.getByRole('dialog', { name: 'Switch robot connection' });
     fireEvent.click(within(popover).getByRole('button', { name: 'Close Beta robot' }));

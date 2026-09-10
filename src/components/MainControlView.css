@@ -360,6 +360,12 @@
   flex: 0 0 auto;
 }
 
+.top-bar.workspace-active > .layout-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .workspace-add-control {
   position: relative;
   display: flex;
@@ -390,7 +396,6 @@
 
 .workspace-add-button,
 .workspace-template-button,
-.workspace-tile-button,
 .workspace-split-button {
   background: transparent;
   border: 0;
@@ -409,7 +414,6 @@
 
 .workspace-add-button svg,
 .workspace-template-button svg,
-.workspace-tile-button svg,
 .workspace-split-button svg {
   width: 18px;
   height: 18px;
@@ -417,24 +421,22 @@
 
 .workspace-add-button:hover:not(:disabled),
 .workspace-template-button:hover,
-.workspace-tile-button:hover,
 .workspace-split-button:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
 
-.workspace-tile-button.active {
-  background: var(--primary-color, #4285f4);
-  color: #fff;
-}
-
 .workspace-add-button,
 .workspace-template-button,
-.workspace-tile-button,
 .workspace-split-button {
   height: 32px;
   min-width: 32px;
   background: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-split-button.active {
+  background: var(--primary-color, #4285f4);
+  color: #fff;
 }
 
 .workspace-add-button:disabled {
@@ -2345,12 +2347,14 @@ body.no-scroll {
   }
 
   .top-bar.workspace-active .layout-controls {
+    position: static;
+    left: auto;
+    transform: none;
     gap: 2px;
   }
 
   .top-bar.workspace-active .workspace-add-button,
-  .top-bar.workspace-active .workspace-template-button,
-  .top-bar.workspace-active .workspace-tile-button {
+  .top-bar.workspace-active .workspace-template-button {
     width: 28px;
     min-width: 28px;
     padding: 4px;
@@ -2453,13 +2457,6 @@ body.no-scroll {
     left: auto;
     transform: none;
     gap: 3px;
-  }
-
-  .layout-controls .workspace-tile-button {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    padding: 4px;
   }
 
   .top-bar:not(.workspace-active) .status-controls {

@@ -57,29 +57,33 @@ describe('App connection sessions', () => {
   it('keeps independent sessions mounted while switching and focuses duplicate targets', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect alpha' }));
-    await screen.findByRole('tab', { name: /alpha\.local.*Connected/ });
+    await screen.findByRole('button', { name: /Switch connections.*alpha\.local.*Connected/ });
 
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
     fireEvent.click(screen.getByRole('button', { name: 'Connect beta' }));
-    await screen.findByRole('tab', { name: /beta\.local.*Connected/ });
+    await screen.findByRole('button', { name: /Switch connections.*beta\.local.*Connected/ });
 
-    fireEvent.click(screen.getByRole('tab', { name: /alpha\.local.*Connected/ }));
-    expect(screen.getByRole('tab', { name: /alpha\.local.*Connected/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    fireEvent.click(screen.getByRole('button', { name: /alpha\.local.*Connected/ }));
+    expect(screen.getByRole('button', { name: /Switch connections.*alpha\.local.*Connected/ })).toBeInTheDocument();
     expect(lifecycle.mounted).toHaveBeenCalledTimes(2);
     expect(lifecycle.unmounted).not.toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
     fireEvent.click(screen.getByRole('button', { name: 'Connect alpha' }));
-    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /Switch connections.*alpha\.local.*Connected/ })).toBeInTheDocument();
     expect(lifecycle.mounted).toHaveBeenCalledTimes(2);
   });
 
   it('deactivates a tab before removing its connection owner', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect alpha' }));
-    await screen.findByRole('tab', { name: /alpha\.local.*Connected/ });
+    await screen.findByRole('button', { name: /Switch connections.*alpha\.local.*Connected/ });
     lifecycle.activation.mockClear();
 
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
     fireEvent.click(screen.getByRole('button', { name: /Close alpha\.local/ }));
 
     expect(lifecycle.activation).toHaveBeenCalledWith('alpha.local', false);

@@ -113,13 +113,12 @@ connection listeners, one topic-discovery result, and (when supported) one persi
 status monitor. This keeps switching fast without multiplying render loops or high-bandwidth ROS
 subscriptions as tabs accumulate.
 
-Connection navigation is part of the existing workspace top bar, not a second application bar. On
-wide screens it exposes the open sessions as compact inline tabs. At 900px and below it collapses to
-one active-connection button with a status indicator; activating that button opens a temporary
-popover with every session's connected, connecting, or disconnected state plus switch, close, and
-add actions. The add-connection screen uses the same compact header only while that screen is open,
-so an existing session remains one quick selection away without permanently reducing workspace
-height.
+Connection navigation is part of the existing workspace top bar, not a second application bar. At
+every screen size it uses one active-connection button with a status indicator; activating that
+button opens a temporary popover with every session's connected, connecting, or disconnected state
+plus switch, close, and add actions. The add-connection screen uses the same compact header only
+while that screen is open, so an existing session remains one quick selection away without
+permanently reducing workspace height.
 
 ## Edge cases
 

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
 
@@ -80,74 +80,8 @@ export default function ConnectionTabs({ tabs, activeTabId, isAdding, onSelect, 
     onAdd();
   };
 
-  const selectByOffset = (event: KeyboardEvent<HTMLButtonElement>, index: number, offset: number) => {
-    event.preventDefault();
-    if (tabs.length === 0) return;
-    const nextIndex = (index + offset + tabs.length) % tabs.length;
-    onSelect(tabs[nextIndex].id);
-    const tabList = event.currentTarget.closest('[role="tablist"]');
-    window.requestAnimationFrame(() => {
-      tabList?.querySelector<HTMLButtonElement>(`[data-connection-tab-id="${tabs[nextIndex].id}"]`)?.focus();
-    });
-  };
-
   return (
     <nav className="connection-tabs" aria-label="Robot connections" ref={navRef}>
-      <div className="connection-tabs-list" role="tablist" aria-label="Open robot connections">
-        {tabs.map((tab, index) => {
-          const selected = !isAdding && activeTabId === tab.id;
-          return (
-            <div
-              className={`connection-tab ${selected ? 'is-active' : ''} ${tab.isClosing ? 'is-closing' : ''}`}
-              key={tab.id}
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls={`connection-session-${tab.id}`}
-                aria-label={`${tab.description}, ${statusLabel[tab.status]}`}
-                title={`${tab.description} — ${statusLabel[tab.status]}`}
-                tabIndex={activeTabId === tab.id || (activeTabId === null && index === 0) ? 0 : -1}
-                className="connection-tab-select"
-                data-connection-tab-id={tab.id}
-                disabled={tab.isClosing}
-                onClick={() => onSelect(tab.id)}
-                onKeyDown={event => {
-                  if (event.key === 'ArrowRight') selectByOffset(event, index, 1);
-                  else if (event.key === 'ArrowLeft') selectByOffset(event, index, -1);
-                  else if (event.key === 'Home') selectByOffset(event, 0, 0);
-                  else if (event.key === 'End') selectByOffset(event, tabs.length - 1, 0);
-                }}
-              >
-                <span className={`connection-tab-status is-${tab.status}`} aria-hidden="true" />
-                <span className="connection-tab-label">{tab.label}</span>
-              </button>
-              <button
-                type="button"
-                className="connection-tab-close"
-                onClick={() => onClose(tab.id)}
-                disabled={tab.isClosing}
-                aria-label={`Close ${tab.description}`}
-                title={`Close ${tab.description}`}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <button
-        type="button"
-        className={`connection-tab-add ${isAdding ? 'is-active' : ''}`}
-        onClick={onAdd}
-        aria-label="Open another connection"
-        aria-pressed={isAdding}
-        title="Open another connection"
-      >
-        <PlusIcon />
-      </button>
-
       <button
         type="button"
         className={`connection-switcher-trigger ${isAdding ? 'is-adding' : ''}`}

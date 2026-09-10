@@ -1,68 +1,19 @@
 .connection-tabs {
   position: relative;
   min-width: 0;
-  max-width: min(680px, 58vw);
+  width: 220px;
+  max-width: min(220px, calc(100vw - 152px));
   height: 32px;
-  flex: 1 1 auto;
+  flex: 0 1 220px;
   display: flex;
   align-items: center;
-  gap: 4px;
   color: var(--navbar-text, #fff);
 }
 
-.connection-tabs-list {
-  min-width: 0;
-  height: 32px;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.connection-tabs-list::-webkit-scrollbar {
-  display: none;
-}
-
-.connection-tab {
-  min-width: 96px;
-  max-width: 190px;
-  height: 30px;
-  flex: 0 1 190px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.66);
-  background: transparent;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.connection-tab:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.connection-tab.is-active {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.connection-tab.is-closing,
 .connection-switcher-row.is-closing {
   opacity: 0.5;
 }
 
-.connection-tab-select,
-.connection-tab-close,
-.connection-tab-add,
 .connection-switcher-trigger,
 .connection-switcher-select,
 .connection-switcher-close,
@@ -74,29 +25,12 @@
   font: inherit;
 }
 
-.connection-tab-select {
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 4px 0 9px;
-  text-align: left;
-}
-
-.connection-tab-label,
 .connection-switcher-label,
 .connection-switcher-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.connection-tab-label {
-  font-size: 0.75rem;
-  font-weight: 700;
 }
 
 .connection-tab-status {
@@ -121,30 +55,18 @@
   background: var(--error-color, #dc3545);
 }
 
-.connection-tab-close,
 .connection-switcher-close {
   display: grid;
   place-items: center;
   opacity: 0.62;
 }
 
-.connection-tab-close {
-  width: 27px;
-  height: 100%;
-  flex: 0 0 27px;
-  padding: 0 6px 0 2px;
-}
-
-.connection-tab-close:hover,
-.connection-tab-close:focus-visible,
 .connection-switcher-close:hover,
 .connection-switcher-close:focus-visible {
   color: var(--error-color, #dc3545);
   opacity: 1;
 }
 
-.connection-tab-close svg,
-.connection-tab-add svg,
 .connection-switcher-plus svg,
 .connection-switcher-close svg,
 .connection-switcher-add svg {
@@ -156,27 +78,11 @@
   stroke-linecap: round;
 }
 
-.connection-tab-add {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.connection-tab-add:hover,
-.connection-tab-add.is-active {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-}
-
 .connection-switcher-trigger {
   width: 100%;
   height: 30px;
   min-width: 0;
-  display: none;
+  display: flex;
   align-items: center;
   gap: 7px;
   padding: 0 7px 0 9px;
@@ -381,15 +287,6 @@
   .connection-tabs {
     max-width: 160px;
     flex: 0 1 160px;
-  }
-
-  .connection-tabs-list,
-  .connection-tab-add {
-    display: none;
-  }
-
-  .connection-switcher-trigger {
-    display: flex;
   }
 }
 

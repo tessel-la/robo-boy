@@ -40,8 +40,8 @@ transition, and global theme state. With no session it renders `EntrySection`; o
 - Owns the resizable split between the primary view and control area.
 
 `App` may mount several independent connection sessions and exposes them through responsive
-connection navigation inside the existing workspace top bar. Desktop can show compact tabs; mobile
-shows one active-connection trigger with an on-demand status list. Each session retains its own
+connection navigation inside the existing workspace top bar. One active-connection trigger opens an
+on-demand status list on desktop and mobile. Each session retains its own
 `useRos`, runtime endpoint provider, and `MainControlView` state. Only the selected session mounts
 resource-heavy panel subtrees. See
 [Multi-connection architecture](multi-connections.md) for lifecycle, cleanup, and persistence
