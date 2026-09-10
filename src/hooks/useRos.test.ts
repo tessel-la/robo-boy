@@ -233,9 +233,11 @@ describe('useRos', () => {
 
   it('should cleanup on unmount', () => {
     const closeMock = vi.fn();
+    const offMock = vi.fn();
     (ROSLIB.Ros as any).mockImplementation(function () {
       return {
         on: vi.fn(),
+        off: offMock,
         close: closeMock,
       };
     });
@@ -249,6 +251,7 @@ describe('useRos', () => {
     unmount();
 
     expect(closeMock).toHaveBeenCalled();
+    expect(offMock.mock.calls.map(call => call[0])).toEqual(['connection', 'error', 'close']);
   });
 
   it('reconnects with the same parameters after returning from standby', () => {

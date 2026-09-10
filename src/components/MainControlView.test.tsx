@@ -62,6 +62,16 @@ vi.mock('../panels/ExternalPanelHost', () => ({
   },
 }));
 
+vi.mock('../panels/PanelManagerDialog', () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-label="External panels">
+      <button type="button" onClick={onClose}>
+        Close panel manager
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock('animejs', () => ({
   default: {
     timeline: vi.fn(() => ({
@@ -220,6 +230,15 @@ const connectionParams = {
   ros2Value: '0',
 };
 
+const connectionNavigation = {
+  tabs: [{ id: 'test', label: 'Test robot', description: 'Test robot', status: 'connected' as const }],
+  activeTabId: 'test',
+  isAdding: false,
+  onSelect: vi.fn(),
+  onClose: vi.fn(),
+  onAdd: vi.fn(),
+};
+
 const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | string, title: string) => ({
   id,
   type,
@@ -229,7 +248,18 @@ const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | 
 });
 
 const renderMainControlView = () =>
-  render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} />);
+  render(
+    <MainControlView
+      connectionParams={connectionParams}
+      onDisconnect={vi.fn()}
+      connectionNavigation={connectionNavigation}
+    />
+  );
+
+const openWorkspaceLayouts = () => {
+  fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace layouts' }));
+};
 
 describe('MainControlView desktop workspace', () => {
   beforeEach(() => {
@@ -320,6 +350,24 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Status: Connecting')).toBeDisabled();
   });
 
+  it('suspends panel resources without reconnecting when its connection tab enters the background', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    const view = render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive={false} />);
+    expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(disconnect).not.toHaveBeenCalled();
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
   it('starts with one unified empty workspace and adds panels', async () => {
     renderMainControlView();
 
@@ -329,8 +377,19 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByLabelText('Mobile panels')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    expect(screen.queryByRole('button', { name: 'Manage installations…' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it('opens panel management from the session menu without using the add-panel menu', () => {
+    renderMainControlView();
+
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage panels' }));
+
+    expect(screen.getByRole('dialog', { name: 'External panels' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
   });
 
   it('keeps a stateful panel mounted when another tile changes the layout tree', async () => {
@@ -350,10 +409,7 @@ describe('MainControlView desktop workspace', () => {
         dispatchEvent: vi.fn(),
       })),
     });
-    localStorage.setItem(
-      workspacePanelsKey,
-      JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')])
-    );
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
     renderMainControlView();
 
@@ -849,16 +905,16 @@ describe('MainControlView desktop workspace', () => {
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad']));
     renderMainControlView();
 
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
     fireEvent.change(screen.getByLabelText('Layout name'), { target: { value: 'Driving' } });
     fireEvent.click(screen.getByLabelText('Save current layout'));
     expect(screen.getByLabelText('Load Driving')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    fireEvent.mouseDown(document.body);
     fireEvent.click(screen.getByLabelText('Remove Camera'));
     expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
     fireEvent.click(screen.getByLabelText('Load Driving'));
     expect(await screen.findByLabelText('Camera')).toBeInTheDocument();
     expect(screen.getByLabelText('Pad controls')).toBeInTheDocument();
@@ -884,7 +940,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
     fireEvent.click(screen.getByLabelText('Export layouts'));
 
     expect(createObjectURL).toHaveBeenCalledOnce();
@@ -912,7 +968,9 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Open grid workspace'));
 
     expect(screen.getByLabelText('Desktop workspace')).toBeInTheDocument();
-    expect(screen.getByTitle('Unsaved workspace layout')).toHaveTextContent('Unsaved layout');
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    expect(screen.getByText('Unsaved layout')).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
     expect(screen.getByLabelText('View component')).toBeInTheDocument();
     expect(screen.getByLabelText('Pad controls component')).toBeInTheDocument();
 
@@ -963,7 +1021,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Desktop workspace');
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
 
     expect(screen.getByLabelText('Load Inspection layout')).toBeInTheDocument();
     expect(screen.getByText('Edited')).toBeInTheDocument();

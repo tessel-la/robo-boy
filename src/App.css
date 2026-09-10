@@ -26,6 +26,68 @@
   /* padding: 20px; /* Remove padding, let children handle it */
 }
 
+.connection-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-color);
+}
+
+.connection-shell-content,
+.connection-session,
+.connection-picker {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.connection-shell-content {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+}
+
+.connection-session,
+.connection-picker {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.connection-picker {
+  display: flex;
+  flex-direction: column;
+}
+
+.connection-picker-top-bar {
+  width: 100%;
+  height: calc(40px + var(--safe-area-top));
+  flex: 0 0 calc(40px + var(--safe-area-top));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(5px + var(--safe-area-top)) 10px 5px;
+  border-radius: 0 0 10px 10px;
+  background: var(--navbar-bg, #333);
+  color: var(--navbar-text, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1000;
+}
+
+.connection-picker > .entry-section-container.is-embedded {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.connection-session[hidden] {
+  display: none;
+}
+
 .app-loading-workspace {
   display: grid;
   min-height: 100%;

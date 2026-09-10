@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FiSettings, FiX } from 'react-icons/fi';
-import { ConnectionParams } from '../App'; // Import types
+import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
+import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
+import {
+  getConnectionStorageKey,
+  readConnectionStorage,
+  removeConnectionStorage,
+  writeConnectionStorage,
+} from '../runtime/connectionStorage';
 import { useRos } from '../hooks/useRos'; // Import the hook
 import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
 import './MainControlView.css';
@@ -225,22 +232,6 @@ const IconMCVGrip = () => (
     <circle cx="15" cy="15" r="1.4" />
   </svg>
 );
-const IconMCVTile = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-  </svg>
-);
 const IconMCVSplit = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -347,7 +338,6 @@ const icons = {
   edit: <IconMCVEdit />,
   trash: <IconMCVTrash />,
   grip: <IconMCVGrip />,
-  tile: <IconMCVTile />,
   split: <IconMCVSplit />,
   swap: <IconMCVSwap />,
   replacePanel: <IconMCVReplacePanel />,
@@ -379,6 +369,10 @@ export interface ActivePanel {
 interface MainControlViewProps {
   connectionParams: ConnectionParams;
   onDisconnect: () => void;
+  isActive?: boolean;
+  storageScope?: string;
+  onConnectionStatusChange?: (status: ConnectionStatus) => void;
+  connectionNavigation?: ConnectionTabsProps;
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
@@ -542,11 +536,11 @@ const createDefaultMobileWorkspacePanels = (): WorkspacePanel[] => [
   },
 ];
 
-const loadMobileWorkspacePanels = (): WorkspacePanel[] => {
+const loadMobileWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
   const defaults = createDefaultMobileWorkspacePanels();
 
   try {
-    const stored = localStorage.getItem(MOBILE_WORKSPACE_PANELS_KEY);
+    const stored = readConnectionStorage(MOBILE_WORKSPACE_PANELS_KEY, storageScope);
     if (!stored) return defaults;
 
     const parsed = JSON.parse(stored);
@@ -562,9 +556,9 @@ const loadMobileWorkspacePanels = (): WorkspacePanel[] => {
   }
 };
 
-const loadMobileSplitViewPreference = (): boolean => {
+const loadMobileSplitViewPreference = (storageScope?: string): boolean => {
   try {
-    return localStorage.getItem(MOBILE_SPLIT_VIEW_KEY) === 'true';
+    return readConnectionStorage(MOBILE_SPLIT_VIEW_KEY, storageScope) === 'true';
   } catch (error) {
     console.error('Failed to load mobile split view preference:', error);
     return false;
@@ -575,9 +569,9 @@ const isWorkspacePanel = (panel: unknown): panel is WorkspacePanel => {
   return normalizeWorkspacePanel(panel) !== null;
 };
 
-const loadWorkspacePanels = (): WorkspacePanel[] => {
+const loadWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_PANELS_KEY);
+    const stored = readConnectionStorage(WORKSPACE_PANELS_KEY, storageScope);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel) : [];
@@ -587,12 +581,12 @@ const loadWorkspacePanels = (): WorkspacePanel[] => {
   }
 };
 
-const loadUnifiedWorkspacePanels = (): WorkspacePanel[] => {
-  const desktopPanels = loadWorkspacePanels();
+const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
+  const desktopPanels = loadWorkspacePanels(storageScope);
   if (desktopPanels.length > 0) return desktopPanels;
 
   try {
-    const stored = localStorage.getItem(MOBILE_WORKSPACE_PANELS_KEY);
+    const stored = readConnectionStorage(MOBILE_WORKSPACE_PANELS_KEY, storageScope);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) return [];
@@ -648,13 +642,13 @@ const normalizeRatios = (ratios: unknown, length: number): number[] => {
   return total > 0 ? clampedRatios.map(value => value / total) : Array.from({ length }, () => 1);
 };
 
-const loadWorkspaceLayout = (): WorkspaceLayoutState => {
+const loadWorkspaceLayout = (storageScope?: string): WorkspaceLayoutState => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_LAYOUT_KEY);
-    return normalizeWorkspaceLayout(stored ? JSON.parse(stored) : null, loadWorkspaceTileOrder());
+    const stored = readConnectionStorage(WORKSPACE_LAYOUT_KEY, storageScope);
+    return normalizeWorkspaceLayout(stored ? JSON.parse(stored) : null, loadWorkspaceTileOrder(storageScope));
   } catch (error) {
     console.error('Failed to load desktop workspace layout:', error);
-    return normalizeWorkspaceLayout(null, loadWorkspaceTileOrder());
+    return normalizeWorkspaceLayout(null, loadWorkspaceTileOrder(storageScope));
   }
 };
 
@@ -687,9 +681,9 @@ const normalizeSavedWorkspaceLayout = (layout: unknown, allowApprovedRosTopics =
   };
 };
 
-const loadSavedWorkspaceLayouts = (): SavedWorkspaceLayout[] => {
+const loadSavedWorkspaceLayouts = (storageScope?: string): SavedWorkspaceLayout[] => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_SAVED_LAYOUTS_KEY);
+    const stored = readConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, storageScope);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
@@ -703,9 +697,9 @@ const loadSavedWorkspaceLayouts = (): SavedWorkspaceLayout[] => {
   }
 };
 
-const loadActiveWorkspaceLayoutId = (): string | null => {
+const loadActiveWorkspaceLayoutId = (storageScope?: string): string | null => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_ACTIVE_LAYOUT_KEY);
+    const stored = readConnectionStorage(WORKSPACE_ACTIVE_LAYOUT_KEY, storageScope);
     return stored || null;
   } catch (error) {
     console.error('Failed to load active desktop workspace layout:', error);
@@ -713,9 +707,9 @@ const loadActiveWorkspaceLayoutId = (): string | null => {
   }
 };
 
-const loadWorkspaceOpenPreference = (): boolean => {
+const loadWorkspaceOpenPreference = (storageScope?: string): boolean => {
   try {
-    return localStorage.getItem(WORKSPACE_OPEN_KEY) === 'true';
+    return readConnectionStorage(WORKSPACE_OPEN_KEY, storageScope) === 'true';
   } catch (error) {
     console.error('Failed to load desktop workspace open preference:', error);
     return false;
@@ -759,9 +753,9 @@ const normalizeWorkspaceSnapTemplate = (template: unknown): WorkspaceSnapTemplat
   };
 };
 
-const loadWorkspaceCustomTemplates = (): WorkspaceSnapTemplate[] => {
+const loadWorkspaceCustomTemplates = (storageScope?: string): WorkspaceSnapTemplate[] => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_CUSTOM_TEMPLATES_KEY);
+    const stored = readConnectionStorage(WORKSPACE_CUSTOM_TEMPLATES_KEY, storageScope);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
@@ -777,9 +771,9 @@ const loadWorkspaceCustomTemplates = (): WorkspaceSnapTemplate[] => {
 
 const BASE_WORKSPACE_TILE_IDS: string[] = [];
 
-const loadWorkspaceTileOrder = (): string[] => {
+const loadWorkspaceTileOrder = (storageScope?: string): string[] => {
   try {
-    const stored = localStorage.getItem(WORKSPACE_TILE_ORDER_KEY);
+    const stored = readConnectionStorage(WORKSPACE_TILE_ORDER_KEY, storageScope);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
@@ -920,7 +914,14 @@ const WORKSPACE_MENU_MIN_HEIGHT = 180;
 // Padding and border of .workspace-add-menu, which sit outside the height it is capped to.
 const WORKSPACE_MENU_CHROME = 22;
 
-const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onDisconnect }) => {
+const MainControlView: React.FC<MainControlViewProps> = ({
+  connectionParams,
+  onDisconnect,
+  isActive = true,
+  storageScope,
+  onConnectionStatusChange,
+  connectionNavigation,
+}) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
     () => ({
@@ -941,14 +942,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   );
   const panelCatalogById = useMemo(() => new Map(panelCatalog.map(panel => [panel.id, panel])), [panelCatalog]);
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(loadWorkspaceOpenPreference);
-  const [isMobileSplitView, setIsMobileSplitView] = useState(loadMobileSplitViewPreference);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(() => loadWorkspaceOpenPreference(storageScope));
+  const [isMobileSplitView, setIsMobileSplitView] = useState(() => loadMobileSplitViewPreference(storageScope));
   const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
   const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
-  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(loadUnifiedWorkspacePanels);
+  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(() =>
+    loadUnifiedWorkspacePanels(storageScope)
+  );
   const workspacePanelsRef = useRef(workspacePanels);
   workspacePanelsRef.current = workspacePanels;
-  const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(loadMobileWorkspacePanels);
+  const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(() =>
+    loadMobileWorkspacePanels(storageScope)
+  );
   const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() =>
     mobileWorkspacePanels.reduce<Record<string, WorkspacePanelType[]>>((mountedTypes, panel) => {
       mountedTypes[panel.id] = [panel.type];
@@ -956,12 +961,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }, {})
   );
   const [mobileSecondaryEverMounted, setMobileSecondaryEverMounted] = useState(isMobileSplitView);
-  const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(loadWorkspaceLayout);
-  const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(loadWorkspaceTileOrder);
-  const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] =
-    useState<WorkspaceSnapTemplate[]>(loadWorkspaceCustomTemplates);
-  const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(loadSavedWorkspaceLayouts);
-  const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(loadActiveWorkspaceLayoutId);
+  const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(() => loadWorkspaceLayout(storageScope));
+  const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(() => loadWorkspaceTileOrder(storageScope));
+  const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(() =>
+    loadWorkspaceCustomTemplates(storageScope)
+  );
+  const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(() =>
+    loadSavedWorkspaceLayouts(storageScope)
+  );
+  const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(() =>
+    loadActiveWorkspaceLayoutId(storageScope)
+  );
   const [isWorkspaceAddMenuOpen, setIsWorkspaceAddMenuOpen] = useState(false);
   const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
   const [workspaceReplaceMenuStyle, setWorkspaceReplaceMenuStyle] = useState<React.CSSProperties | null>(null);
@@ -1056,6 +1066,33 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
   const workspaceReplaceMenuRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const onConnectionStatusChangeRef = useRef(onConnectionStatusChange);
+
+  useEffect(() => {
+    onConnectionStatusChangeRef.current = onConnectionStatusChange;
+  }, [onConnectionStatusChange]);
+
+  useEffect(() => {
+    onConnectionStatusChangeRef.current?.(connectionStatus);
+  }, [connectionStatus]);
+
+  useEffect(() => {
+    if (isActive) return;
+    setIsWorkspaceAddMenuOpen(false);
+    setIsWorkspaceTemplateMenuOpen(false);
+    setWorkspaceReplacementPanelId(null);
+    setWorkspaceReplaceMenuStyle(null);
+    setWorkspacePadMenu(null);
+    workspaceInteractionRef.current = null;
+    workspaceMovePointerRef.current = null;
+    pendingWorkspaceResizeRef.current = null;
+    if (workspaceResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+      workspaceResizeFrameRef.current = null;
+    }
+    setIsWorkspaceResizing(false);
+    setIsWorkspaceDragActive(false);
+  }, [isActive]);
 
   useEffect(
     () => () => {
@@ -1155,27 +1192,31 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     initialTopHeight: 60,
     minTopHeight: 20,
     minBottomHeight: 20,
-    storageKey: 'robo-boy-panel-split',
+    storageKey: getConnectionStorageKey('robo-boy-panel-split', storageScope),
   });
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels));
+      writeConnectionStorage(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanels), storageScope);
     }, WORKSPACE_PERSIST_DELAY_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [workspacePanels]);
+  }, [storageScope, workspacePanels]);
 
   useEffect(() => {
-    return () => localStorage.setItem(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanelsRef.current));
-  }, []);
+    return () => writeConnectionStorage(WORKSPACE_PANELS_KEY, JSON.stringify(workspacePanelsRef.current), storageScope);
+  }, [storageScope]);
 
   useEffect(() => {
-    localStorage.setItem(MOBILE_WORKSPACE_PANELS_KEY, JSON.stringify(mobileWorkspacePanels.slice(0, 2)));
-  }, [mobileWorkspacePanels]);
+    writeConnectionStorage(
+      MOBILE_WORKSPACE_PANELS_KEY,
+      JSON.stringify(mobileWorkspacePanels.slice(0, 2)),
+      storageScope
+    );
+  }, [mobileWorkspacePanels, storageScope]);
 
   useEffect(() => {
-    localStorage.setItem(MOBILE_SPLIT_VIEW_KEY, String(isMobileSplitView));
-  }, [isMobileSplitView]);
+    writeConnectionStorage(MOBILE_SPLIT_VIEW_KEY, String(isMobileSplitView), storageScope);
+  }, [isMobileSplitView, storageScope]);
 
   useEffect(() => {
     if (isLargeScreen) {
@@ -1186,28 +1227,28 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   }, [isLargeScreen, isStandardBtExecuting]);
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout));
-  }, [workspaceLayout]);
+    writeConnectionStorage(WORKSPACE_LAYOUT_KEY, JSON.stringify(workspaceLayout), storageScope);
+  }, [storageScope, workspaceLayout]);
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_OPEN_KEY, String(isWorkspaceOpen));
-  }, [isWorkspaceOpen]);
+    writeConnectionStorage(WORKSPACE_OPEN_KEY, String(isWorkspaceOpen), storageScope);
+  }, [isWorkspaceOpen, storageScope]);
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_CUSTOM_TEMPLATES_KEY, JSON.stringify(customWorkspaceSnapTemplates));
-  }, [customWorkspaceSnapTemplates]);
+    writeConnectionStorage(WORKSPACE_CUSTOM_TEMPLATES_KEY, JSON.stringify(customWorkspaceSnapTemplates), storageScope);
+  }, [customWorkspaceSnapTemplates, storageScope]);
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts));
-  }, [savedWorkspaceLayouts]);
+    writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts), storageScope);
+  }, [savedWorkspaceLayouts, storageScope]);
 
   useEffect(() => {
     if (activeWorkspaceLayoutId) {
-      localStorage.setItem(WORKSPACE_ACTIVE_LAYOUT_KEY, activeWorkspaceLayoutId);
+      writeConnectionStorage(WORKSPACE_ACTIVE_LAYOUT_KEY, activeWorkspaceLayoutId, storageScope);
     } else {
-      localStorage.removeItem(WORKSPACE_ACTIVE_LAYOUT_KEY);
+      removeConnectionStorage(WORKSPACE_ACTIVE_LAYOUT_KEY, storageScope);
     }
-  }, [activeWorkspaceLayoutId]);
+  }, [activeWorkspaceLayoutId, storageScope]);
 
   useEffect(() => {
     if (activeWorkspaceLayoutId && !savedWorkspaceLayouts.some(layout => layout.id === activeWorkspaceLayoutId)) {
@@ -1224,10 +1265,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       setWorkspaceTileOrder(normalizedOrder);
       return;
     }
-    localStorage.setItem(WORKSPACE_TILE_ORDER_KEY, JSON.stringify(normalizedOrder));
-  }, [workspacePanels, workspaceTileOrder]);
+    writeConnectionStorage(WORKSPACE_TILE_ORDER_KEY, JSON.stringify(normalizedOrder), storageScope);
+  }, [storageScope, workspacePanels, workspaceTileOrder]);
 
   useEffect(() => {
+    if (!isActive) return;
     if (!window.matchMedia) return;
 
     const mediaQuery = window.matchMedia(DESKTOP_WORKSPACE_QUERY);
@@ -1241,19 +1283,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       mediaQuery.removeEventListener('change', handleMediaChange);
     };
-  }, []);
+  }, [isActive]);
 
   useEffect(() => {
+    if (!isActive) return;
     if (!window.matchMedia) return;
     const mediaQuery = window.matchMedia(STACKED_WORKSPACE_QUERY);
     const handleMediaChange = (event: MediaQueryListEvent) => setIsWorkspaceStacked(event.matches);
     setIsWorkspaceStacked(mediaQuery.matches);
     mediaQuery.addEventListener('change', handleMediaChange);
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
-  }, []);
+  }, [isActive]);
 
   useEffect(() => {
-    if (!isWorkspaceStacked) return;
+    if (!isActive || !isWorkspaceStacked) return;
 
     // The mobile layout combines panels that may have belonged to different
     // desktop rows. Start it at the top and notify canvas-based children only
@@ -1264,10 +1307,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
     const id = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
     return () => window.clearTimeout(id);
-  }, [isWorkspaceStacked]);
+  }, [isActive, isWorkspaceStacked]);
 
   useEffect(() => {
-    if (!isWorkspaceTemplateMenuOpen) return;
+    if (!isActive || !isWorkspaceTemplateMenuOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target;
@@ -1284,10 +1327,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [isWorkspaceTemplateMenuOpen]);
+  }, [isActive, isWorkspaceTemplateMenuOpen]);
 
   useEffect(() => {
-    if (!isWorkspaceAddMenuOpen) return;
+    if (!isActive || !isWorkspaceAddMenuOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target;
@@ -1304,14 +1347,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+  }, [isActive, isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
 
   // The toolbar catalog hangs below its button inside a pane that hides its overflow, so a menu
   // taller than the room beneath that button is cropped instead of scrolled, and its stylesheet
   // height cannot account for how far down the screen the menu starts. Measuring the room keeps
   // the whole list reachable.
   useEffect(() => {
-    if (!isWorkspaceAddMenuOpen || workspaceReplacementPanelId) {
+    if (!isActive || !isWorkspaceAddMenuOpen || workspaceReplacementPanelId) {
       setWorkspaceAddMenuMaxHeight(null);
       return;
     }
@@ -1331,10 +1374,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     measureAvailableHeight();
     window.addEventListener('resize', measureAvailableHeight);
     return () => window.removeEventListener('resize', measureAvailableHeight);
-  }, [isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+  }, [isActive, isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
 
   useEffect(() => {
-    if (!workspaceReplacementPanelId) return;
+    if (!isActive || !workspaceReplacementPanelId) return;
 
     // The menu is placed against a button and stays where it was put, so anything moving behind
     // it leaves it pointing at nothing. Its own list scrolling is not that: the scroll listener
@@ -1355,14 +1398,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       window.removeEventListener('resize', closeReplacementMenu);
       window.removeEventListener('scroll', closeReplacementMenu, true);
     };
-  }, [workspaceReplacementPanelId]);
+  }, [isActive, workspaceReplacementPanelId]);
 
   // Fetch topics when connected
   useEffect(() => {
+    let disposed = false;
     if (isConnected && ros) {
       console.log('Fetching ROS topics...');
       ros.getTopics(
         response => {
+          if (disposed) return;
           console.log('Available topics:', response.topics);
           console.log('Corresponding types:', response.types);
           // Filter topics likely to be camera feeds based on type or name pattern
@@ -1396,6 +1441,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
           }
         },
         error => {
+          if (disposed) return;
           console.error('Failed to fetch ROS topics:', error);
           setAvailableCameraTopics([]);
           setSelectedCameraTopic('');
@@ -1406,6 +1452,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       setAvailableCameraTopics([]);
       setSelectedCameraTopic('');
     }
+    return () => {
+      disposed = true;
+    };
   }, [isConnected, ros]); // Re-run when connection status or ros instance changes
 
   // Connect on mount and disconnect on unmount or when connectionParams change
@@ -1459,6 +1508,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
 
   // Lazy-mount BT panel on first visit; trigger 3D resize on switch
   useEffect(() => {
+    if (!isActive) return;
     if (viewMode === 'behaviorTree') setBtEverMounted(true);
     if (viewMode === 'tfTree') setTfEverMounted(true);
     if (viewMode === '3d') {
@@ -1466,22 +1516,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
       return () => clearTimeout(id);
     }
-  }, [viewMode]);
+  }, [isActive, viewMode]);
 
   useEffect(() => {
-    if (isLargeScreen) return;
+    if (!isActive || isLargeScreen) return;
     const hasVisible3dPanel =
       mobileWorkspacePanels[0]?.type === '3d' || (isMobileSplitView && mobileWorkspacePanels[1]?.type === '3d');
     if (!hasVisible3dPanel) return;
 
     const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
     return () => clearTimeout(id);
-  }, [isLargeScreen, isMobileSplitView, mobileWorkspacePanels]);
+  }, [isActive, isLargeScreen, isMobileSplitView, mobileWorkspacePanels]);
 
   const handleInternalDisconnect = () => {
     if (!btExecution.isPersistent) btExecutionControls.current?.stop();
-    disconnect(); // Disconnect ROS
-    onDisconnect(); // Call App's disconnect handler to go back to EntrySection
+    // App deactivates this workspace before removing its connection owner. Keeping the socket alive
+    // for that first render lets every panel cleanup publish neutral values and unadvertise safely.
+    onDisconnect();
   };
 
   // A bridge that went away is the usual reason to want the whole app restarted, when the same
@@ -1650,11 +1701,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
   // --- End Panel Handlers ---
-
-  const resetWorkspaceLayout = () => {
-    const rows = buildWorkspaceRows(normalizedWorkspaceTileOrder);
-    setWorkspaceLayout(createWorkspaceLayoutFromRows(rows));
-  };
 
   const handleAddWorkspacePanel = (
     type: WorkspacePanelType,
@@ -2014,6 +2060,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   useEffect(() => {
+    if (!isActive) return;
     const finishMove = (cancelled: boolean) => {
       const move = workspaceMovePointerRef.current;
       workspaceMovePointerRef.current = null;
@@ -2099,6 +2146,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   });
 
   useEffect(() => {
+    if (!isActive) return;
     const handlePointerMove = (event: PointerEvent) => {
       updateWorkspaceInteraction(event.clientX, event.clientY);
     };
@@ -2124,7 +2172,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handlePointerEnd);
     };
-  }, [flushPendingWorkspaceResize, updateWorkspaceInteraction]);
+  }, [flushPendingWorkspaceResize, isActive, updateWorkspaceInteraction]);
 
   useEffect(
     () => () => {
@@ -2471,26 +2519,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
       }
     };
     reader.readAsText(file);
-  };
-
-  const handleAutoTileWorkspacePanels = () => {
-    setIsWorkspaceOpen(true);
-    setIsWorkspaceDragActive(false);
-    setWorkspaceDropPlacement(null);
-    if (isDesktopWorkspace) {
-      resetWorkspaceLayout();
-    }
-    setIsWorkspaceAddMenuOpen(false);
-    setIsWorkspaceTemplateMenuOpen(false);
-  };
-
-  const handleLayoutControlClick = () => {
-    if (isDesktopWorkspace) {
-      handleAutoTileWorkspacePanels();
-      return;
-    }
-
-    handleToggleMobileSplitView();
   };
 
   const handleOpenWorkspaceReplacementMenu = (event: React.MouseEvent<HTMLButtonElement>, panelId: string) => {
@@ -3057,7 +3085,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     }
 
     if (panel.type === '3d') {
-      return <VisualizationPanel ros={ros} storageKey={`roboboy_3d_visualization_state_${panel.id}`} />;
+      return (
+        <VisualizationPanel
+          ros={ros}
+          storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
+        />
+      );
     }
 
     if (panel.type === 'behaviorTree') {
@@ -3272,18 +3305,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
             </span>
           )}
           {externalPanels.map(renderPanelButton)}
-          {!isReplacementMenu && (
-            <button
-              type="button"
-              onClick={() => {
-                setIsWorkspaceAddMenuOpen(false);
-                setIsPanelManagerOpen(true);
-              }}
-            >
-              <FiSettings aria-hidden="true" />
-              <span>Manage installations…</span>
-            </button>
-          )}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
           {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
             <span className="workspace-panel-catalog-note">No external panels selected</span>
@@ -3650,14 +3671,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
                       ? { left: `calc(${split.ratio * 100}% - 8px)` }
                       : { top: `calc(${split.ratio * 100}% - 8px)` }
                   }
-                  onPointerDown={event =>
-                    handleWorkspaceTreeResizeStart(event, split.path, split.axis, split.ratio)
-                  }
+                  onPointerDown={event => handleWorkspaceTreeResizeStart(event, split.path, split.axis, split.ratio)}
                   role="separator"
                   aria-orientation={split.axis === 'x' ? 'vertical' : 'horizontal'}
-                  aria-label={
-                    split.axis === 'x' ? 'Resize workspace split columns' : 'Resize workspace split rows'
-                  }
+                  aria-label={split.axis === 'x' ? 'Resize workspace split columns' : 'Resize workspace split rows'}
                 >
                   <div className="workspace-resize-handle-bar" />
                 </div>
@@ -3692,12 +3709,41 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
     </div>
   );
 
+  // Keep this connection owner and its workspace state mounted in the background, but remove every
+  // resource-heavy child. Their normal unmount cleanup releases ROS topics, publishers, streams,
+  // iframe brokers, timers, animation frames, and browser-local execution.
+  if (!isActive) return null;
+
   return (
     <div className="main-control-view">
       {/* Unified Top Bar */}
       <div
         className={`top-bar ${btExecution.isExecuting ? 'bt-running' : ''} ${isDesktopWorkspace ? 'workspace-active' : ''}`}
       >
+        {connectionNavigation && (
+          <ConnectionTabs
+            {...connectionNavigation}
+            onManageWorkspaceLayouts={() => {
+              setIsWorkspaceTemplateMenuOpen(true);
+              setIsWorkspaceAddMenuOpen(false);
+            }}
+            onManagePanels={() => {
+              setIsPanelManagerOpen(true);
+              setIsWorkspaceTemplateMenuOpen(false);
+              setIsWorkspaceAddMenuOpen(false);
+              setWorkspaceReplacementPanelId(null);
+              setWorkspaceReplaceMenuStyle(null);
+            }}
+            workspaceLayoutLabel={
+              activeWorkspaceLayout
+                ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? ' (edited)' : ''}`
+                : 'Unsaved layout'
+            }
+          />
+        )}
+        <div className="workspace-template-overlay" ref={workspaceTemplateControlRef}>
+          {renderWorkspaceTemplateMenu()}
+        </div>
         {!isDesktopWorkspace && (
           <div className="view-toggle">
             <button
@@ -3836,57 +3882,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
               </button>
             </div>
           )}
-          <button
-            type="button"
-            className={`workspace-tile-button ${isDesktopWorkspace || isMobileSplitView ? 'active' : ''}`}
-            onClick={handleLayoutControlClick}
-            title={
-              isDesktopWorkspace
-                ? 'Auto-arrange workspace panels'
-                : isMobileSplitView
-                  ? 'Use one mobile panel'
-                  : 'Split mobile view'
-            }
-            aria-label={
-              isDesktopWorkspace
-                ? 'Auto-arrange workspace panels'
-                : isMobileSplitView
-                  ? 'Use one mobile panel'
-                  : 'Split mobile view'
-            }
-          >
-            {isDesktopWorkspace ? icons.tile : icons.split}
-          </button>
-          {isDesktopWorkspace && (
-            <>
-              <span
-                className={`workspace-active-layout-name ${isActiveWorkspaceLayoutDirty ? 'dirty' : ''}`}
-                title={
-                  activeWorkspaceLayout
-                    ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? ' (edited)' : ''}`
-                    : 'Unsaved workspace layout'
-                }
-              >
-                {activeWorkspaceLayout
-                  ? `${activeWorkspaceLayout.title}${isActiveWorkspaceLayoutDirty ? '*' : ''}`
-                  : 'Unsaved layout'}
-              </span>
-              <div className="workspace-template-control" ref={workspaceTemplateControlRef}>
-                <button
-                  type="button"
-                  className="workspace-template-button"
-                  onClick={() => {
-                    setIsWorkspaceTemplateMenuOpen(prev => !prev);
-                    setIsWorkspaceAddMenuOpen(false);
-                  }}
-                  title="Manage workspace layouts"
-                  aria-label="Manage workspace layouts"
-                >
-                  {icons.saveLayout}
-                </button>
-                {renderWorkspaceTemplateMenu()}
-              </div>
-            </>
+          {!isDesktopWorkspace && (
+            <button
+              type="button"
+              className={'workspace-split-button ' + (isMobileSplitView ? 'active' : '')}
+              onClick={handleToggleMobileSplitView}
+              title={isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
+              aria-label={isMobileSplitView ? 'Use one mobile panel' : 'Split mobile view'}
+            >
+              {icons.split}
+            </button>
           )}
           {isDesktopWorkspace && (
             <div className="workspace-add-control" ref={workspaceAddControlRef}>

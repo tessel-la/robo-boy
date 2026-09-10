@@ -26,7 +26,9 @@ Robo-Boy has no application server or database. The web deployment uses Caddy to
 
 ## Frontend Composition
 
-`src/main.tsx` mounts `App`. `App` owns the connection-screen transition and global theme state. Before connection it renders `EntrySection`; after submission it renders `MainControlView`.
+`src/main.tsx` mounts `App`. `App` owns the connection-session collection, connection-screen
+transition, and global theme state. With no session it renders `EntrySection`; otherwise it keeps a
+`MainControlView` owner mounted for each open target.
 
 `MainControlView` is the runtime coordinator. It:
 
@@ -36,6 +38,15 @@ Robo-Boy has no application server or database. The web deployment uses Caddy to
 - Manages open custom-gamepad panels and editor sessions.
 - Keeps behavior-tree execution controls reachable for stop and disconnect operations.
 - Owns the resizable split between the primary view and control area.
+
+`App` may mount several independent connection sessions and exposes them through responsive
+connection navigation inside the existing workspace top bar. One active-connection trigger opens an
+on-demand status list on desktop and mobile, with workspace-layout management available from that
+same list. Each session retains its own
+`useRos`, runtime endpoint provider, and `MainControlView` state. Only the selected session mounts
+resource-heavy panel subtrees. See
+[Multi-connection architecture](multi-connections.md) for lifecycle, cleanup, and persistence
+boundaries.
 
 Keep orchestration here, but place feature-specific behavior inside feature modules and hooks. New large features should not add substantial protocol or rendering logic directly to `MainControlView`.
 

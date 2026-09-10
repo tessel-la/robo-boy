@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { getRosSubscriptionCount, installRosMock, waitForRosSubscription } from './helpers/rosMock';
 import { installWebRtcMock } from './helpers/webrtcMock';
 
+const desktopWorkspacePanelsKey = 'robo-boy-desktop-workspace-panels-v1';
+
 test('discovers and lazily loads the standalone Hello Panel artifact', async ({ page }) => {
   let panelBundleRequests = 0;
   page.on('request', request => {
@@ -39,10 +41,11 @@ test('discovers and lazily loads the standalone Hello Panel artifact', async ({ 
   await expect(panel.getByRole('button', { name: 'Send greeting (1)' })).toBeVisible();
   await expect
     .poll(() =>
-      page.evaluate(() => {
-        const panels = JSON.parse(localStorage.getItem('robo-boy-desktop-workspace-panels-v1') || '[]');
+      page.evaluate(storageKey => {
+        const scopedStorageKey = Object.keys(localStorage).find(key => key.startsWith(`${storageKey}:connection:`));
+        const panels = JSON.parse((scopedStorageKey && localStorage.getItem(scopedStorageKey)) || '[]');
         return panels[0]?.panelState?.values?.greetings;
-      })
+      }, desktopWorkspacePanelsKey)
     )
     .toBe(1);
 });
