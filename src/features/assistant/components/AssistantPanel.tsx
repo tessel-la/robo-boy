@@ -12,6 +12,9 @@ export interface ContextPickerOption {
   label: string;
   /** Drops this resource from the context again. Choosing an already-selected row calls this. */
   onRemove?: () => void;
+  /** Already in context on every turn, so the browser shows it as such and choosing it does
+   * nothing. It can still be written as an `@mention` to point at it in a sentence. */
+  alwaysIncluded?: boolean;
   /** Which kind of resource this is, so a mention of it can be coloured the moment it is written --
    * before the retrieval that pins it has finished. */
   source: AssistantContextSourceKind;
@@ -44,13 +47,10 @@ export interface AssistantPanelProps {
   onNewConversation: () => void;
   onRepeat: (messageIndex: number) => void;
   onEditMessage: (messageIndex: number, nextText: string) => void;
-  automaticContextLabels: string[];
   /** Opens a tagged resource in the view that owns it; returns false when it has none. */
   onOpenResource?: (resourceId: string) => boolean;
   canOpenResource?: (resourceId: string) => boolean;
   contextPickerSections: ContextPickerSection[];
-  onRequestContextCatalog: () => void;
-  isDiscoveringContext: boolean;
   attachments: AssistantAttachment[];
   attachmentError: string;
   onAttachFiles: (files: FileList | null) => void;
@@ -87,13 +87,15 @@ const mentionTextFor = (tag: { label: string; mention?: string }) => `@${tag.men
  * author put it rather than in a separate strip, so tagging costs no vertical space. */
 const MessageText = ({ text, tags, onOpen, canOpen }: { text: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void; canOpen?: (id: string) => boolean }) => {
   if (!tags?.length) return <>{text}</>;
-  const byMention = new Map(tags.map(tag => [mentionTextFor(tag), tag]));
+  // Case-insensitively: a resource is named "TF tree" but nobody types it that way, and a mention
+  // that does not light up reads as a tag that failed rather than a capital letter that differed.
+  const byMention = new Map(tags.map(tag => [mentionTextFor(tag).toLowerCase(), tag]));
   const mentions = [...byMention.keys()].sort((a, b) => b.length - a.length).map(escapeForRegExp);
-  const parts = text.split(new RegExp(`(${mentions.join('|')})`, 'g'));
+  const parts = text.split(new RegExp(`(${mentions.join('|')})`, 'gi'));
   return (
     <>
       {parts.map((part, index) => {
-        const tag = byMention.get(part);
+        const tag = byMention.get(part.toLowerCase());
         if (!tag) return part;
         const className = `assistant-inline-tag source-${tag.source}`;
         // Clickable only when something is actually open to show; otherwise it is a dead link.
@@ -201,7 +203,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
     open, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
-    automaticContextLabels, onOpenResource, canOpenResource, contextPickerSections, onRequestContextCatalog, isDiscoveringContext,
+    onOpenResource, canOpenResource, contextPickerSections,
     attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
     onProviderChange, onUpdateSettings, ollamaModels, ollamaModelsError, isLoadingOllamaModels,
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
@@ -209,9 +211,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
   const compact = useCompactAssistant();
   const [showSettings, setShowSettings] = useState(false);
-  const [showContextPicker, setShowContextPicker] = useState(false);
   const [showSketchEditor, setShowSketchEditor] = useState(false);
-  const [contextSearch, setContextSearch] = useState('');
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
@@ -228,10 +228,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const allContextOptions = useMemo(() => contextPickerSections.flatMap(section => section.options), [contextPickerSections]);
-  const pinnedContextCount = useMemo(
-    () => new Set(allContextOptions.filter(option => option.selected).map(option => option.id)).size,
-    [allContextOptions]
-  );
   /**
    * The tags a piece of text names, read from the text itself rather than from what a turn happened
    * to carry. A restored conversation has no chips behind it and a repeated or edited message is a
@@ -241,26 +237,21 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
    */
   const tagsForText = useCallback(
     (text: string, sent?: AssistantMessage['contextTags']): AssistantMessage['contextTags'] => {
+      const haystack = text.toLowerCase();
       const byMention = new Map<string, NonNullable<AssistantMessage['contextTags']>[number]>();
       for (const option of allContextOptions) {
-        if (text.includes(`@${option.label}`)) byMention.set(`@${option.label}`, { id: option.id, label: option.label, source: option.source });
+        const mention = `@${option.label}`;
+        if (haystack.includes(mention.toLowerCase())) byMention.set(mention.toLowerCase(), { id: option.id, label: option.label, source: option.source });
       }
       for (const tag of sent ?? []) {
         const mention = `@${tag.mention ?? tag.label}`;
-        if (text.includes(mention)) byMention.set(mention, tag);
+        if (haystack.includes(mention.toLowerCase())) byMention.set(mention.toLowerCase(), tag);
       }
       return [...byMention.values()];
     },
     [allContextOptions]
   );
 
-  const filteredSections = useMemo(() => {
-    const needle = contextSearch.trim().toLocaleLowerCase();
-    if (!needle) return contextPickerSections;
-    return contextPickerSections
-      .map(section => ({ ...section, options: section.options.filter(option => `${section.label} ${option.label} ${option.description}`.toLocaleLowerCase().includes(needle)) }))
-      .filter(section => section.options.length > 0);
-  }, [contextPickerSections, contextSearch]);
 
   const retrieveContextOption = async (option: ContextPickerOption) => {
     setLoadingContextIds(previous => [...previous, option.id]);
@@ -269,15 +260,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     } finally {
       setLoadingContextIds(previous => previous.filter(id => id !== option.id));
     }
-  };
-
-  /** The Context browser is a checklist of what this conversation is looking at: choosing a row puts
-   * it in context, choosing it again takes it out. It never writes to the prompt -- typing `@` is
-   * the other, separate act. */
-  const toggleContextOption = (option: ContextPickerOption) => {
-    if (option.disabled) return;
-    if (option.selected) option.onRemove?.();
-    else void retrieveContextOption(option);
   };
 
   /** Writes the resource into a field as `@Label` -- the mention is the tag -- and retrieves it in
@@ -321,7 +303,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       if (event.key === 'Escape' && !showSketchEditor) {
         event.preventDefault();
         if (expandedImage) setExpandedImage(null);
-        else if (showContextPicker) setShowContextPicker(false);
         else if (showSettings) setShowSettings(false);
         else if (composerMentions.isOpen) composerMentions.close();
         else if (editingMentions.isOpen) editingMentions.close();
@@ -339,7 +320,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [compact, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showContextPicker, showSettings, showSketchEditor]);
+  }, [compact, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSettings, showSketchEditor]);
 
   useEffect(() => {
     if (!open) return;
@@ -407,7 +388,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
   const handlePromptChange = (value: string) => {
     onPromptChange(value);
-    if (composerMentions.trackValue(value)) setShowContextPicker(false);
+    composerMentions.trackValue(value);
   };
 
   const handlePromptKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = event => {
@@ -508,8 +489,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
         </div>
 
-        <div className="assistant-context-summary"><button type="button" onClick={() => { setShowContextPicker(value => !value); setShowSettings(false); if (!showContextPicker) onRequestContextCatalog(); }} aria-expanded={showContextPicker} aria-controls="assistant-context-browser"><FaPlus aria-hidden="true" /><span>Context</span><small>{automaticContextLabels.slice(0, 3).join(' · ')}{automaticContextLabels.length > 3 ? ` +${automaticContextLabels.length - 3}` : ''}</small>{pinnedContextCount > 0 && <em className="assistant-context-count">{pinnedContextCount} tagged</em>}</button></div>
-
         <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
           <div className="assistant-composer-attachments" aria-label="Assistant attachments">
             {attachments.map(item => (
@@ -520,12 +499,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               </span>
             ))}
           </div>
-
-          {showContextPicker && <div id="assistant-context-browser" className="assistant-context-picker" role="dialog" aria-label="Add context" aria-busy={isDiscoveringContext || loadingContextIds.length > 0}>
-            <header><div><strong>Add context</strong><span>Choose exact workspace or robot data</span></div><button type="button" onClick={() => setShowContextPicker(false)} aria-label="Close context picker"><FaTimes aria-hidden="true" /></button></header>
-            <label className="assistant-context-search"><FaSearch aria-hidden="true" /><input value={contextSearch} onChange={event => setContextSearch(event.target.value)} placeholder="Search Pads, trees, topics, services…" autoFocus /></label>
-            <div className="assistant-context-sections">{filteredSections.map(section => <section key={section.id}><div className="assistant-context-section-heading"><strong>{section.label}</strong>{section.description && <span>{section.description}</span>}</div>{section.options.map(option => <button type="button" key={option.id} disabled={option.disabled} className={option.selected ? 'is-in-context' : undefined} aria-pressed={option.selected} onClick={() => toggleContextOption(option)}><span className="assistant-context-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{loadingContextIds.includes(option.id) ? <FaSyncAlt className="spinning" aria-label="Loading context" /> : option.selected ? <FaCheck aria-label={`${option.label} is in context — choose again to remove it`} /> : null}</button>)}</section>)}{filteredSections.length === 0 && <p className="assistant-context-empty">No matching context</p>}</div>
-          </div>}
 
           {composerMentions.node}
 
@@ -539,7 +512,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               onKeyDown={handlePromptKeyDown}
               onTranscribeAudio={onTranscribeAudio}
               holdToRecord={compact}
-              voiceButtonSlot={compact && !canGenerateFrom(prompt, isGenerating, attachments) ? 'end' : 'start'}
+              voiceButtonSlot={compact ? 'end' : 'start'}
               rows={1}
               autoGrow
               highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
@@ -553,9 +526,11 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                     <input ref={attachmentInputRef} className="assistant-attachment-input" type="file" multiple accept="text/*,.md,.json,.yaml,.yml,.xml,.csv,.log,.launch,.urdf,.xacro,.py,.js,.jsx,.ts,.tsx,.css,.html,.sh,.toml,.ini,.cfg,image/png,image/jpeg,image/webp,image/gif" onChange={event => { onAttachFiles(event.target.files); event.currentTarget.value = ''; }} aria-label="Assistant attachments" />
                   </>
                 ),
-                end: (
+                // Left out on a phone with nothing to send, so the microphone takes this slot
+                // rather than appearing a second time further down the row.
+                end: !compact || isGenerating || canGenerateFrom(prompt, false, attachments) ? (
                   <button type={isGenerating ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating ? 'Stop generating' : 'Send'}>{isGenerating ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
-                ),
+                ) : undefined,
               }}
             />
           </div>

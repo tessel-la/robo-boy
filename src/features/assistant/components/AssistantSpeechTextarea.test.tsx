@@ -178,8 +178,46 @@ describe('AssistantSpeechTextarea', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Listening/));
     expect(screen.getByRole('button', { name: /Hold to record/ })).toBe(mic);
 
+    // Long enough to count as a hold rather than a tap.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)); });
     fireEvent.pointerUp(mic);
     await waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Ask the assistant' })).toHaveValue('drive forward'));
+  });
+
+  /**
+   * A tap used to start the microphone after the finger was already gone: the release-before-start
+   * guard covered the recorder but not speech recognition, which is the branch a phone takes. The
+   * recording then had nobody holding it and no way to stop it.
+   */
+  it('starts nothing from a tap, and says why', async () => {
+    const transcribe = vi.fn();
+    const Harness = () => {
+      const [value, setValue] = useState('');
+      return (
+        <AssistantSpeechTextarea
+          id="tapped"
+          label="Ask the assistant"
+          value={value}
+          onChange={setValue}
+          rows={1}
+          holdToRecord
+          onTranscribeAudio={transcribe}
+          toolbar={{ start: null, end: <button type="button">Send</button> }}
+        />
+      );
+    };
+    render(<Harness />);
+    MockSpeechRecognition.instance = null;
+
+    const mic = screen.getByRole('button', { name: /Hold to record/ });
+    fireEvent.pointerDown(mic);
+    fireEvent.pointerUp(mic);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hold the microphone while you speak.');
+    await act(async () => { await Promise.resolve(); });
+    // Whatever the permission prompt resolved into was abandoned, not left running.
+    expect(MockSpeechRecognition.instance).toBeNull();
+    expect(transcribe).not.toHaveBeenCalled();
   });
 });

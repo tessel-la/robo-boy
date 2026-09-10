@@ -170,14 +170,6 @@ describe('GlobalAssistant', () => {
     expect(sendAssistantChatMock).not.toHaveBeenCalled();
   });
 
-  it('shows the context browser as named sections instead of one flat list', () => {
-    renderOpenAssistant();
-    fireEvent.click(screen.getByRole('button', { name: /Context/ }));
-    expect(screen.getByRole('dialog', { name: 'Add context' })).toBeInTheDocument();
-    expect(screen.getByText('Current workspace')).toBeInTheDocument();
-    expect(screen.getByText('Pads')).toBeInTheDocument();
-    expect(screen.getByText('Behavior Trees')).toBeInTheDocument();
-  });
 
   it('keeps a mentioned resource readable in the prompt instead of repeating it as a chip', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Camera context received.' }));
@@ -196,30 +188,28 @@ describe('GlobalAssistant', () => {
     await waitFor(() => expect(screen.getByText('Camera context received.')).toBeInTheDocument());
     const sentTag = document.querySelector('.assistant-inline-tag');
     expect(sentTag).toHaveTextContent('@Camera');
-    expect(sentTag).toHaveClass('source-workspace');
+    expect(sentTag).toHaveClass('assistant-inline-tag');
   });
 
-  /** The browser is a checklist of what the conversation is looking at, not a way to type: choosing
-   * a row puts it in context, choosing it again takes it out, and neither touches the prompt. */
-  it('toggles a resource in and out of context from the browser without writing to the prompt', async () => {
+
+
+
+  /** Everything the app holds goes in every turn, so a question about any Pad or tree is answerable
+   * without the user fetching one first. */
+  it('carries every saved Pad and Behavior Tree, in full, without being asked', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Seen.' }));
     renderOpenAssistant();
     const textarea = screen.getByRole('textbox', { name: 'Ask the assistant' });
-    fireEvent.change(textarea, { target: { value: 'look here' } });
-    fireEvent.click(screen.getByRole('button', { name: /Context/ }));
-
-    const row = await screen.findByRole('button', { name: /Camera/ });
-    fireEvent.click(row);
-    await waitFor(() => expect(screen.getByRole('button', { name: /Camera/ })).toHaveAttribute('aria-pressed', 'true'));
-    expect(textarea).toHaveValue('look here');
-
-    // It reaches the model even though the prompt never named it.
+    fireEvent.change(textarea, { target: { value: 'what pads do I have' } });
     fireEvent.keyDown(textarea, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByText('Seen.')).toBeInTheDocument());
-    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('Panel: Camera');
 
-    fireEvent.click(screen.getByRole('button', { name: /Camera/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Camera/ })).toHaveAttribute('aria-pressed', 'false'));
+    await waitFor(() => expect(screen.getByText('Seen.')).toBeInTheDocument());
+    const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt;
+    expect(prompt).toContain('### Every saved Pad, complete');
+    // "Complete" means the layout itself, not a count of its parts.
+    expect(prompt).toMatch(/### Every saved Pad, complete\n.*"components":\[/);
+    // No bar to open and nothing to choose: it is all already there.
+    expect(screen.queryByRole('button', { name: /^Context/ })).not.toBeInTheDocument();
   });
 
   it('hands the Pad editor a repaired layout whose ROS binding survived the model\'s aliases', async () => {

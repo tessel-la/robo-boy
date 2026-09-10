@@ -34,7 +34,7 @@ export interface AssistantCapability {
  * another to the model.
  */
 export interface ContextCatalogEntry {
-  id: 'automatic' | 'bulk' | 'workspace' | 'open' | 'pads' | 'trees' | 'topics' | 'services' | 'actions' | 'nodes' | 'parameters' | 'tf-diagnostics';
+  id: 'workspace' | 'open' | 'pads' | 'trees' | 'topics' | 'services' | 'actions' | 'nodes' | 'parameters' | 'tf-diagnostics';
   /** Heading shown in the Context browser. */
   label: string;
   /** What tagging one of these actually puts in the prompt. */
@@ -42,8 +42,6 @@ export interface ContextCatalogEntry {
 }
 
 export const CONTEXT_CATALOG: readonly ContextCatalogEntry[] = [
-  { id: 'automatic', label: 'Always included', provides: 'the workspace snapshot and ROS graph the assistant reads on its own, every turn' },
-  { id: 'bulk', label: 'Everything', provides: 'whole libraries at once — every Pad and panel, every Behavior Tree, or all of it with the saved layouts — for a question that spans them' },
   { id: 'workspace', label: 'Current workspace', provides: 'an open panel, the current layout, or a saved layout' },
   { id: 'open', label: 'Open and selected', provides: 'the Pad or Behavior Tree open right now, as complete JSON' },
   { id: 'pads', label: 'Pads', provides: 'any saved Pad, as complete JSON' },
@@ -75,8 +73,8 @@ export const describeCapabilities = (capabilities: readonly AssistantCapability[
     '',
     lines.join('\n'),
     '',
-    '- The user can tag exact data into the conversation by typing `@` or opening the Context browser:',
+    '- Everything the app holds is already below: every open panel and layout, every saved Pad and Behavior Tree in full, and the whole ROS graph. Never say you cannot see one of them, and never ask the user to paste one.',
+    '- Typing `@` names a resource in a sentence, and for a ROS topic, service or action it also pulls live data too costly to carry for every one of them:',
     catalog,
-    '  If a question needs data you were not given, name the exact resource and ask them to tag it, rather than guessing or saying you have no access.',
   ].join('\n');
 };

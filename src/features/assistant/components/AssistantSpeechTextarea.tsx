@@ -79,6 +79,9 @@ interface AssistantSpeechTextareaProps {
   highlight?: React.ReactNode;
 }
 
+/** Below this a press is a tap, not something anyone spoke into. */
+const MIN_HOLD_MS = 350;
+
 const speechErrorMessage = (code?: string) => {
   if (code === 'not-allowed' || code === 'service-not-allowed') return 'Microphone permission was denied.';
   if (code === 'audio-capture') return 'No microphone is available.';
@@ -110,6 +113,8 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const wantsRecordingRef = useRef(false);
+  const pressedAtRef = useRef(0);
+  const discardRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -161,6 +166,13 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     } finally {
       setIsTranscribing(false);
     }
+  };
+
+  /** Ends the attempt and throws away whatever it captured. */
+  const cancelListening = () => {
+    discardRef.current = true;
+    recognitionRef.current?.abort();
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
   };
 
   const stopListening = () => {
@@ -232,6 +244,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       recorderRef.current = null;
       streamRef.current = null;
       setIsListening(false);
+      if (discardRef.current) return;
       if (audio.size === 0) {
         setSpeechError('No audio was recorded.');
         return;
@@ -259,9 +272,16 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     setIsRequestingPermission(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // The permission prompt can outlast the press. Anything started now would have no one holding
+      // it, and on a phone that means a microphone nothing can switch off again.
+      if (holdToRecord && !wantsRecordingRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       if (SpeechRecognition) {
         stream.getTracks().forEach(track => track.stop());
         startRecognition();
+        if (holdToRecord && !wantsRecordingRef.current) cancelListening();
       } else if (!startRecording(stream)) {
         stream.getTracks().forEach(track => track.stop());
         setSpeechError('This browser cannot record or recognize speech.');
@@ -300,11 +320,27 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   const release = () => {
     if (!wantsRecordingRef.current) return;
     wantsRecordingRef.current = false;
-    if (isListening) stopListening();
+    // A tap is not a recording. Ending one as if it were leaves an empty clip, or a transcript of
+    // the room, and it is how a stray touch used to start a microphone with nothing holding it.
+    if (Date.now() - pressedAtRef.current < MIN_HOLD_MS) {
+      cancelListening();
+      setSpeechError('Hold the microphone while you speak.');
+      return;
+    }
+    stopListening();
   };
   const press = () => {
-    if (isListening || wantsRecordingRef.current) return;
+    // Never a no-op: if a previous attempt is somehow still live, this ends it rather than leaving
+    // a button that cannot switch off what it started.
+    if (isListening || wantsRecordingRef.current) {
+      wantsRecordingRef.current = false;
+      cancelListening();
+      return;
+    }
     wantsRecordingRef.current = true;
+    pressedAtRef.current = Date.now();
+    discardRef.current = false;
+    setSpeechError('');
     void startListening();
   };
   const voiceHandlers = holdToTalk
@@ -391,7 +427,9 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
             )}
             {voiceButtonSlot === 'start' && voiceButton}
           </div>
-          {voiceButtonSlot === 'end' ? voiceButton : toolbar.end}
+          {/* On a phone this one slot is the mic or the send button, never both and never a second
+              mic somewhere else in the row. */}
+          {voiceButtonSlot === 'end' ? toolbar.end ?? voiceButton : toolbar.end}
         </div>
       )}
       {!toolbar && busyStatus && (

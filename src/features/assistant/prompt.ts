@@ -101,13 +101,14 @@ const describeAutoContext = (auto: AssistantAutoContext): string => {
   if (auto.selectedPad) {
     sections.push(`### Pad currently selected or open\n${JSON.stringify(auto.selectedPad.layout)}`);
   }
+  if (auto.rosCatalog) {
+    sections.push(`### ROS nodes and parameters\n${JSON.stringify(auto.rosCatalog)}`);
+  }
   if (auto.padLibrary.length > 0) {
-    sections.push(
-      `### Saved Pads (summary — ask for or reference one by name and the user can pin its full JSON)\n${JSON.stringify(auto.padLibrary)}`
-    );
+    sections.push(`### Every saved Pad, complete\n${JSON.stringify(auto.padLibrary)}`);
   }
   if (auto.behaviorTreeLibrary.length > 0) {
-    sections.push(`### Saved Behavior Trees (summary)\n${JSON.stringify(auto.behaviorTreeLibrary)}`);
+    sections.push(`### Every saved Behavior Tree, complete\n${JSON.stringify(auto.behaviorTreeLibrary)}`);
   }
   if (auto.interfaceSchemas) {
     sections.push(`### Retrieved ROS interface schemas\n${JSON.stringify(auto.interfaceSchemas)}`);

@@ -152,7 +152,8 @@
 .assistant-empty > span {
   margin-bottom: 12px;
   color: var(--primary-color, #2563eb);
-  font-size: 30px;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .assistant-empty h3 {
@@ -354,15 +355,19 @@
   cursor: pointer;
 }
 
-/* Zero padding and no border on purpose: behind the composer's textarea this mark must occupy
-   exactly the width of the text it colours, or everything after it drifts out of alignment -- and
-   a padded chip also reads as if it had swallowed the space after the resource name. */
+/* One treatment for every kind of resource, tinted from the text colour of whatever it sits on.
+   Colouring by source gave a workspace tag the theme's primary -- the same colour as the user's own
+   message bubble -- so it vanished into it while a Pad tag beside it stayed visible. `currentColor`
+   keeps a tag legible on any surface in any theme.
+
+   Zero padding and no border on purpose: behind the composer's textarea this mark must occupy
+   exactly the width of the text it colours, or everything after it drifts out of alignment. */
 .assistant-inline-tag {
   padding: 0;
   border: 0;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--assistant-tag-tint, var(--primary-color, #2563eb)) 22%, transparent);
-  color: color-mix(in srgb, var(--assistant-tag-tint, var(--primary-color, #2563eb)) 82%, var(--text-color, #1f2937));
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  color: inherit;
   font-weight: 700;
 }
 
@@ -604,13 +609,6 @@
 }
 
 
-/* The user's own bubble is already filled with the primary colour, so a pale source tint on top of
-   it reads as muddy and its tinted text loses contrast. Deepen the tint and take the bubble's own
-   text colour instead: the source is still distinguishable, and the tag stays readable. */
-.assistant-message.user .assistant-inline-tag {
-  background: color-mix(in srgb, var(--assistant-tag-tint, var(--primary-color, #2563eb)) 60%, transparent);
-  color: inherit;
-}
 
 /* A tag that leads somewhere reads as a link without changing the text metrics the composer
    backdrop depends on. */
@@ -626,12 +624,6 @@
   text-decoration: underline;
 }
 
-.assistant-inline-tag.source-workspace { --assistant-tag-tint: var(--primary-color, #2563eb); }
-.assistant-inline-tag.source-pad { --assistant-tag-tint: #8b5cf6; }
-.assistant-inline-tag.source-behaviorTree { --assistant-tag-tint: #0f9f76; }
-.assistant-inline-tag.source-ros,
-.assistant-inline-tag.source-tf,
-.assistant-inline-tag.source-rosout { --assistant-tag-tint: #0284c7; }
 
 .assistant-context-tag > span {
   overflow: hidden;
@@ -781,7 +773,10 @@
   pointer-events: none;
 }
 
+/* The backdrop paints no text, so `currentColor` is transparent here and the tint has to name the
+   surface's own text colour instead. */
 .assistant-textarea-highlight .assistant-inline-tag {
+  background: color-mix(in srgb, var(--text-color, #1f2937) 20%, transparent);
   color: transparent;
 }
 
@@ -1293,13 +1288,17 @@
   }
 
   .assistant-avatar {
-    width: 26px;
-    height: 26px;
-    flex-basis: 26px;
+    /* `place-items: center` centres the glyph's box, not the glyph: ✦ sits high in its em box, so
+       the box has to give the difference back at the top. */
+    width: 22px;
+    height: 22px;
+    flex-basis: 22px;
+    padding-top: 2px;
     border: 0;
     border-radius: 6px;
     background: none;
-    font-size: 21px;
+    font-size: 17px;
+    line-height: 1;
   }
 
   .assistant-kicker {

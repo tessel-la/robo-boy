@@ -35,11 +35,12 @@ describe('composeAssistantSystemPrompt', () => {
     }
   });
 
-  it('lists exactly the context groups the picker offers', () => {
+  it('lists exactly the resources `@` can pull live, and says the rest is already there', () => {
     const prompt = compose();
 
     for (const entry of CONTEXT_CATALOG) expect(prompt).toContain(`- ${entry.label}: ${entry.provides}`);
-    expect(prompt).toMatch(/name the exact resource and ask them to tag it/);
+    expect(prompt).toMatch(/Everything the app holds is already below/);
+    expect(prompt).toMatch(/never ask the user to paste one/);
   });
 
   it('never tells the user to leave the app for something it does itself', () => {

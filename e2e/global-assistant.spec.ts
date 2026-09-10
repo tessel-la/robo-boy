@@ -42,6 +42,8 @@ test('uses a bottom-left launcher and opens a stable panel from the same side', 
   expect(box!.x).toBe(0);
   await expect(page.locator('.assistant-resize-handle, .assistant-minimize, .assistant-sheet-handle')).toHaveCount(0);
   await expect(page.locator('.theme-selector-container')).toBeVisible();
+  // Nothing to choose: everything the app holds is carried every turn.
+  await expect(page.getByRole('button', { name: /^Context/ })).toHaveCount(0);
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
   await page.keyboard.press('Escape');
@@ -61,45 +63,6 @@ test('Enter sends, Shift+Enter keeps editing, and parsing status clears after a 
   await page.keyboard.press('Enter');
   await expect(page.getByText('Keyboard response.')).toBeVisible();
   await expect(page.getByText('Parsing response…')).toHaveCount(0);
-});
-
-test('context browser groups exact resources and captures a bounded selected topic', async ({ page }) => {
-  await connectWithMockRos(page);
-  await page.getByLabel('Open Robo-Boy assistant').click();
-  await page.getByRole('button', { name: /Context/ }).click();
-
-  await expect(page.getByRole('dialog', { name: 'Add context' })).toBeVisible();
-  const dialog = page.getByRole('dialog', { name: 'Add context' });
-
-  // It opens above the composer and has to stay inside the panel at any height: with no vertical
-  // anchor it fell below the form, and with too generous a ceiling it ran off the top.
-  for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 1440, height: 900 }]) {
-    await page.setViewportSize(size);
-    await expect(async () => {
-      const dialogBox = (await dialog.boundingBox())!;
-      const panelBox = (await page.getByTestId('assistant-panel').boundingBox())!;
-      expect(dialogBox.y).toBeGreaterThanOrEqual(panelBox.y);
-      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height + 1);
-    }).toPass();
-  }
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await expect(dialog.getByRole('button', { name: /All Pads and panels/ })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: /All Behavior Trees/ })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: /Everything saved/ })).toBeVisible();
-  for (const heading of ['Everything', 'Current workspace', 'Pads', 'Behavior Trees', 'ROS topics', 'ROS services', 'ROS actions', 'ROS nodes', 'ROS parameters', 'TF and diagnostics']) {
-    await expect(dialog.locator('.assistant-context-section-heading').getByText(heading, { exact: true })).toBeVisible();
-  }
-  await page.getByPlaceholder('Search Pads, trees, topics, services…').fill('cmd_vel');
-  const topicButton = page.getByRole('button', { name: /\/cmd_vel/ });
-  await topicButton.click();
-  await waitForRosSubscription(page, '/cmd_vel');
-  await page.evaluate(() => {
-    (window as unknown as { __publishRosTopic: (topic: string, message: unknown) => void })
-      .__publishRosTopic('/cmd_vel', { linear: { x: 0.25 }, angular: { z: 0 } });
-  });
-  // Choosing from the browser puts the topic in context and marks the row, without typing for you.
-  await expect(page.getByRole('textbox', { name: 'Ask the assistant' })).toHaveValue('');
-  await expect(topicButton).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('computes a human-spaced btw TF distance from live /tf data without the provider', async ({ page }) => {
@@ -264,13 +227,13 @@ test('a tagged resource stays in the prompt and reads as a coloured tag in the t
   // The draft is highlighted through a backdrop behind the textarea, before the retrieval lands.
   const draftTag = page.locator('.assistant-textarea-highlight .assistant-inline-tag');
   await expect(draftTag).toHaveText('@/cmd_vel');
-  await expect(draftTag).toHaveClass(/source-ros/);
+  await expect(draftTag).toBeVisible();
 
   await page.keyboard.press('Enter');
   await expect(page.getByText('Tag noted.')).toBeVisible();
   const sentTag = page.locator('.assistant-message .assistant-inline-tag');
   await expect(sentTag).toHaveText('@/cmd_vel');
-  await expect(sentTag).toHaveClass(/source-ros/);
+  await expect(sentTag).toBeVisible();
 
   // Repeating re-sends the same tagged context rather than dropping it.
   await page.getByLabel('Repeat').click();

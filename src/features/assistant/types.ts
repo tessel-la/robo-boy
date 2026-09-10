@@ -139,8 +139,14 @@ export interface AssistantAutoContext {
   openBehaviorTree?: { name: string; tree: unknown };
   selectedBehaviorTreeNodes?: unknown;
   selectedPad?: { name: string; layout: CustomGamepadLayout };
-  padLibrary: Array<{ id: string; name: string; componentCount: number; isDefault: boolean }>;
-  behaviorTreeLibrary: Array<{ id: string; name: string; nodeCount: number }>;
+  /** Every saved Pad and Behavior Tree, complete. Summaries meant a question about any of them
+   * needed a second round trip to pin one; they are local JSON, so carrying them all is cheaper
+   * than making the user fetch the right one. */
+  /** Every node and parameter name rosapi reported, so a question about the graph does not need a
+   * round trip to fetch the list first. */
+  rosCatalog?: { nodes: string[]; parameters: string[] };
+  padLibrary: Array<{ id: string; name: string; isDefault: boolean; layout: CustomGamepadLayout }>;
+  behaviorTreeLibrary: Array<{ id: string; name: string; tree: BehaviorTree }>;
   interfaceSchemas?: {
     topics: Record<string, unknown>;
     services: Record<string, unknown>;

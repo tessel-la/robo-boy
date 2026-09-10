@@ -14,19 +14,15 @@ Settings (provider, model, API key, instructions) live in the gear icon inside t
 
 ## Context
 
-Context reaches a turn two ways, and neither is silent.
+**Everything the app holds goes in every turn.** The workspace snapshot (panels with their configuration, the current and saved layouts), every saved Pad and every saved Behavior Tree as complete JSON, the whole ROS graph, and the node and parameter lists. They are local reads, so making a user fetch the right one first cost more than carrying them all. Every reply lists what it used, with source and age, and a reconnect marks stale data rather than presenting it as current.
 
-**Automatic.** A bounded workspace snapshot (connection status, open panels and their configuration, the selected Pad, the open Behavior Tree, the current and saved layouts) plus the cached ROS graph. The `Context` line above the composer names what is in play, and every reply carries a `Context used` disclosure listing each item with its source, age, and whether a reconnect has made it stale. Automatic context is always on: there is nothing to switch off and then be unable to restore.
+There is no context picker to manage. What is left for the user to choose is the data that is genuinely expensive: a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture.
 
-**Tagged.** Type `@` for the inline picker, or open the `Context` browser for the grouped, searchable catalog. Its groups come from `CONTEXT_CATALOG`, which the system prompt also lists, so the browser and the model cannot describe different context. `Everything` is the first group: whole libraries in one tag, for a question that spans them. Both routes write the resource into the prompt as a readable `@Camera` or `@/cmd_vel`, and a tag with a view of its own — a Pad, a panel — is clickable in the transcript and takes you there.
+**Tagging.** Typing `@` names a resource in a sentence — it reads back as `@Camera` or `@/cmd_vel` — and for a ROS topic, service or action it also fetches that live data, which is too costly to carry for every one of them. `CONTEXT_CATALOG` is what the picker offers and what the prompt lists, so the two cannot disagree.
 
-**The mention is the tag.** There is no separate chip strip above the composer to keep in sync or to spend transcript space on. A turn carries exactly the resources its text still mentions, so deleting the text removes the context. The mention is coloured by source as it is written — a backdrop behind the textarea paints the marks, since a textarea cannot style its own content — and stays coloured in the transcript once sent.
+A mention is coloured as it is written: a backdrop behind the textarea paints the marks, since a textarea cannot style its own content, and it stays coloured in the transcript. One treatment for every kind of resource, tinted from the text colour of whatever surface it sits on — colouring by source gave a workspace tag the theme's primary, the same colour as the user's own message bubble, so it disappeared into it while a Pad tag beside it stayed visible. Matching is case-insensitive, because nobody types "TF tree" the way the panel spells it.
 
-A message's colouring is read from its own text against the context catalog rather than from what that turn happened to carry, so it survives a reload, a repeat, and an edit. Editing an already-sent message uses the same `@` picker and the same colouring as the composer; its list opens downwards, because an editor sitting in the transcript would otherwise put the list under the header. Retrieved resources outlive the prompt that tagged them, so repeating or editing re-sends the same context, each item carrying its age and reconnect generation into `Context used`.
-
-Tagging several resources works while earlier ones are still loading — retrievals run alongside each other, and a send waits for any that are still in flight so a prompt never goes out missing the context it names.
-
-What a tag actually retrieves is exact, not summarized: a Pad or Behavior Tree tag carries its complete JSON; a topic tag carries the live message schema plus a bounded sample; a service or action tag carries its request or goal schema.
+A message's tags are read from its own text, so the colouring survives a reload, a repeat and an edit. Editing an already-sent message uses the same picker and colouring; its list opens downwards, because an editor in the transcript would otherwise put the list under the header. A tag whose resource is currently on screen is clickable and opens it; one with no view waiting stays a plain mark rather than a dead link.
 
 ## What The Model Is Told About The App
 
@@ -41,15 +37,15 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 | Capability | Read automatically | Retrieve on demand | Propose (reviewed in its own editor) | Not accessible |
 | --- | --- | --- | --- | --- |
 | Connection status | ✅ | | | |
-| Open panels / layouts / selected Pad | ✅ (bounded snapshot) | | | |
+| Open panels / layouts / selected Pad | ✅ (snapshot with each panel's configuration) | | | |
 | ROS topics/services/actions + schemas | | ✅ (cached, reconnect-aware) | | |
 | ROS nodes and parameters | | ✅ (rosapi, serialized) | | |
 | TF snapshot, two-frame transform / distance | | ✅ (on demand, no background subscription) | | |
 | `/rosout` recent messages | | ✅ (bounded: up to 40 messages over 4s, on demand) | | |
+| Every saved Pad and Behavior Tree | ✅ (complete JSON, every turn) | | | |
+| ROS node and parameter names | ✅ (every turn) | | | |
 | Live topic sample | | ✅ (3 messages by default, 40 at most, 24 KiB each) | | |
-| Pad JSON | | ✅ (complete layout) | | |
 | Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
-| Behavior Tree JSON | | ✅ (complete tree) | | |
 | Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | |
 | Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |
 | External panel JSON / internals | | | | ❌ (no dependency edge to `src/panels/`; the assistant generates Pads, not external panels) |
@@ -116,7 +112,7 @@ The assistant has no dependency edge to or from `src/panels/` — it cannot be r
 
 ## Known Limitations
 
-- **The whole conversation is sent on every turn**, bounded only by the 100-message persistence cap. There is no summarization or sliding window, so a long conversation with several tagged Pads or Behavior Trees can grow the request past a small model's context window.
+- **The whole conversation is sent on every turn, and so is every Pad and Behavior Tree.** There is no summarization or sliding window, and the libraries are carried in full. A large library or a long conversation will grow the request past a small model's context window; the trade was made deliberately, against making the user fetch the right resource before asking about it.
 - **`/diagnostics` and ROS 2 lifecycle state are not read.** No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk the shared queue and `discoverAllROSResources` already guard against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
 - **ROS operation proposals are checked for existence and top-level message-type match, not full field-level payload schema.** A Behavior Tree or Pad proposal does get the full schema; a standalone publish/call/send card only gets the name/type check. Since nothing runs from chat, this bounds a review aid rather than an execution gate.
 - **Only Pads are generated, not external panels.** An external panel is a versioned, sandboxed artifact under `src/panels/`, outside the assistant's dependency boundary.

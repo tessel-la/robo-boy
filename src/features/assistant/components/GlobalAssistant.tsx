@@ -347,6 +347,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       if (!isOpen || !ros || !isConnected) return;
       setIsDiscoveringContext(true);
       void refreshRosContext().finally(() => setIsDiscoveringContext(false));
+      // Nodes and parameters used to be fetched when the Context browser opened. Nothing opens now,
+      // so they are fetched with everything else.
+      requestContextCatalog();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, ros, isConnected, connectionGeneration]);
 
@@ -364,12 +367,6 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const liveRosGraph = rosGraphAt(connectionGeneration);
     const activeBridge = getActiveBridge();
     const activeBridgeTree = activeBridge?.getCurrentTree() ?? null;
-    const automaticContextLabels = [
-      `Workspace · ${workspace.openPanels.length} open`,
-      selectedPad ? `Selected Pad · ${selectedPad.name}` : '',
-      activeBridgeTree ? `Open BT · ${activeBridgeTree.name}` : '',
-      liveRosGraph ? `ROS · ${liveRosGraph.resources.topics.length} topics` : isConnected ? 'ROS · loading' : 'ROS · disconnected',
-    ].filter(Boolean);
 
     const buildAutoContext = (
       discovery: ROSDiscoveryResult | null,
@@ -387,8 +384,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         ...(currentTree ? { openBehaviorTree: { name: currentTree.name, tree: currentTree } } : {}),
         ...(selection ? { selectedBehaviorTreeNodes: selection.nodes } : {}),
         ...(selectedPad ? { selectedPad } : {}),
-        padLibrary: readPadLibrary().map(item => ({ id: item.id, name: item.name, componentCount: item.layout.components.length, isDefault: Boolean(item.isDefault) })),
-        behaviorTreeLibrary: readTreeLibrary().map(item => ({ id: item.tree.id, name: item.tree.name, nodeCount: item.tree.nodes.length })),
+        ...(catalog.generation === connectionGeneration ? { rosCatalog: { nodes: catalog.nodes, parameters: catalog.parameters } } : {}),
+        padLibrary: readPadLibrary().map(item => ({ id: item.id, name: item.name, isDefault: Boolean(item.isDefault), layout: item.layout })),
+        behaviorTreeLibrary: readTreeLibrary().map(item => ({ id: item.tree.id, name: item.tree.name, tree: item.tree })),
         ...(interfaceSchemas ? { interfaceSchemas } : {}),
       };
     };
@@ -494,67 +492,20 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     const contextPickerSections: ContextPickerSection[] = useMemo(() => {
       const isPinned = (id: string) => pinnedChips.some(chip => chip.id === id && !chip.stale);
-      const option = (value: ContextPickerOption): ContextPickerOption => ({
-        ...value,
-        selected: isPinned(value.id),
-        onRemove: () => updatePinnedChips(previous => previous.filter(chip => chip.id !== value.id)),
-      });
+      const option = (value: ContextPickerOption): ContextPickerOption => ({ ...value, selected: isPinned(value.id) });
       const sections: ContextPickerSection[] = [];
       // One tag for a whole library, for questions that span it. Bounded by what the libraries hold,
       // and named so the size is not a surprise.
       const allPads = readPadLibrary();
       const allTrees = readTreeLibrary();
-      // Always listed, even when a library is empty, so the browser says what exists rather than
-      // hiding the answer.
-      const bulkOptions: ContextPickerOption[] = [
-        option({
-          id: 'pad:all', label: 'All Pads and panels', source: 'pad', disabled: allPads.length === 0 && workspace.openPanels.length === 0,
-          description: `${allPads.length} Pads and ${workspace.openPanels.length} panels · complete JSON for every one`,
-          onSelect: () => addPinnedChip({
-            id: 'pad:all', label: `All Pads and panels (${allPads.length + workspace.openPanels.length})`, mention: 'All Pads and panels',
-            source: 'pad', automatic: false, fetchedAt: Date.now(),
-            value: { pads: allPads.map(item => item.layout), panels: workspace.openPanels },
-          }),
-        }),
-        option({
-          id: 'bt:all', label: 'All Behavior Trees', source: 'behaviorTree', disabled: allTrees.length === 0,
-          description: allTrees.length ? `${allTrees.length} trees · complete JSON for every one` : 'No saved Behavior Trees yet',
-          onSelect: () => addPinnedChip({ id: 'bt:all', label: `All Behavior Trees (${allTrees.length})`, mention: 'All Behavior Trees', source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: allTrees.map(item => item.tree) }),
-        }),
-        option({
-          id: 'workspace:everything', label: 'Everything saved', source: 'workspace',
-          description: `${allPads.length} Pads, ${allTrees.length} trees, ${workspace.openPanels.length} panels, and every saved layout`,
-          onSelect: () => addPinnedChip({
-            id: 'workspace:everything', label: 'Everything saved', mention: 'Everything saved', source: 'workspace',
-            automatic: false, fetchedAt: Date.now(),
-            value: {
-              pads: allPads.map(item => item.layout),
-              behaviorTrees: allTrees.map(item => item.tree),
-              panels: workspace.openPanels,
-              layouts: [...(workspace.currentLayout ? [workspace.currentLayout] : []), ...workspace.savedLayouts],
-            },
-          }),
-        }),
-      ];
-      sections.push({ ...catalogSection('bulk'), description: 'Whole libraries in one tag', options: bulkOptions });
-
-      // What the assistant reads on its own, shown ticked and fixed: it is context the user cannot
-      // switch off, so the browser should still account for it rather than look empty.
-      sections.push({
-        ...catalogSection('automatic'),
-        description: 'Read every turn',
-        options: automaticContextLabels.map((label, index) => ({
-          id: `automatic:${index}`, label, source: 'workspace' as const, description: 'Always included',
-          selected: true, disabled: true, onSelect: () => {},
-        })),
-      });
-
       const workspaceOptions = workspace.openPanels.map(panel => option({
-        id: `workspace:panel:${panel.id}`, label: panel.title, source: 'workspace', description: `${panel.type}${panel.selected ? ' · selected' : ''}`,
+        id: `workspace:panel:${panel.id}`, label: panel.title, source: 'workspace',
+        description: `${panel.type}${panel.selected ? ' · selected' : ''}`,
         onSelect: () => addPinnedChip({ id: `workspace:panel:${panel.id}`, label: `Panel: ${panel.title}`, mention: panel.title, source: 'workspace', automatic: false, fetchedAt: Date.now(), value: panel }),
       }));
       if (workspace.currentLayout) workspaceOptions.push(option({
-        id: 'workspace:layout:current', label: workspace.currentLayout.title, source: 'workspace', description: 'Current workspace layout',
+        id: 'workspace:layout:current', label: workspace.currentLayout.title, source: 'workspace',
+        description: 'Current workspace layout',
         onSelect: () => addPinnedChip({ id: 'workspace:layout:current', label: `Layout: ${workspace.currentLayout!.title}`, mention: workspace.currentLayout!.title, source: 'workspace', automatic: false, fetchedAt: Date.now(), value: workspace.currentLayout }),
       }));
       workspace.savedLayouts.forEach(layout => workspaceOptions.push(option({
@@ -800,6 +751,10 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     const handleNewConversation = () => {
       abortRef.current?.abort();
+      abortContextWork();
+      // A new conversation looks at nothing until it is told to: context belongs to the chat that
+      // gathered it, not to the panel.
+      updatePinnedChips(() => []);
       setMessages([]);
       setClarificationSuggestions(undefined);
       setProgress([]);
@@ -889,12 +844,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onNewConversation={handleNewConversation}
         onRepeat={handleRepeat}
         onEditMessage={handleEditMessage}
-        automaticContextLabels={automaticContextLabels}
         onOpenResource={onOpenResource}
         canOpenResource={canOpenResource}
         contextPickerSections={contextPickerSections}
-        onRequestContextCatalog={requestContextCatalog}
-        isDiscoveringContext={isDiscoveringContext}
         attachments={attachments}
         attachmentError={attachmentError}
         onAttachFiles={handleAttachFiles}
