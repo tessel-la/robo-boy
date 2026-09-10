@@ -199,15 +199,27 @@ describe('GlobalAssistant', () => {
     expect(sentTag).toHaveClass('source-workspace');
   });
 
-  it('tags the prompt from the context browser too, instead of a separate chip strip', async () => {
+  /** The browser is a checklist of what the conversation is looking at, not a way to type: choosing
+   * a row puts it in context, choosing it again takes it out, and neither touches the prompt. */
+  it('toggles a resource in and out of context from the browser without writing to the prompt', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Seen.' }));
     renderOpenAssistant();
     const textarea = screen.getByRole('textbox', { name: 'Ask the assistant' });
     fireEvent.change(textarea, { target: { value: 'look here' } });
     fireEvent.click(screen.getByRole('button', { name: /Context/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /Camera/ }));
 
-    await waitFor(() => expect(textarea).toHaveValue('look here @Camera '));
-    expect(screen.queryByLabelText('Remove Panel: Camera from context')).not.toBeInTheDocument();
+    const row = await screen.findByRole('button', { name: /Camera/ });
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Camera/ })).toHaveAttribute('aria-pressed', 'true'));
+    expect(textarea).toHaveValue('look here');
+
+    // It reaches the model even though the prompt never named it.
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText('Seen.')).toBeInTheDocument());
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('Panel: Camera');
+
+    fireEvent.click(screen.getByRole('button', { name: /Camera/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Camera/ })).toHaveAttribute('aria-pressed', 'false'));
   });
 
   it('hands the Pad editor a repaired layout whose ROS binding survived the model\'s aliases', async () => {

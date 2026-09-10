@@ -1599,34 +1599,37 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
   };
 
   /**
-   * Where a tagged resource takes the user when they click it in the transcript. Only resources the
-   * app can actually show have a destination: a Pad opens in its editor, a panel is selected. A ROS
-   * topic or a TF frame has no view of its own, so its tag stays a plain highlight.
+   * Where a tagged resource takes the user when they click it in the transcript, or null when it has
+   * nowhere to go. Only something already on screen counts: a saved Pad or a ROS topic has no view
+   * waiting for it, and a tag that leads nowhere should not look clickable.
    */
-  const handleOpenAssistantResource = useCallback((resourceId: string): boolean => {
-    const padMatch = resourceId.match(/^pad:(.+)$/);
-    if (padMatch) {
-      const entry = loadGamepadLibrary().find(item => item.id === padMatch[1] || item.layout.id === padMatch[1]);
-      if (!entry) return false;
-      setWorkspacePadEditorTargetId(workspacePanelsRef.current.find(panel => panel.type === 'pad' && panel.layoutId === entry.layout.id)?.id ?? null);
-      setEditorSession({ mode: 'edit', initialLayout: entry.layout });
-      return true;
-    }
+  const assistantResourceTarget = useCallback((resourceId: string): { workspaceIndex: number } | { panelId: string } | null => {
+    const layoutId = resourceId.match(/^pad:(.+)$/)?.[1];
+    const panelId = resourceId.match(/^workspace:panel:(?:mobile:)?(.+)$/)?.[1];
 
-    const panelMatch = resourceId.match(/^workspace:panel:(?:mobile:)?(.+)$/);
-    if (panelMatch) {
-      const workspaceIndex = workspacePanelsRef.current.findIndex(panel => panel.id === panelMatch[1]);
-      if (workspaceIndex >= 0) {
-        setActiveMobileWindowIndex(Math.min(workspaceIndex, 1));
-        return true;
-      }
-      if (activePanels.some(panel => panel.id === panelMatch[1])) {
-        setSelectedPanelId(panelMatch[1]);
-        return true;
-      }
-    }
-    return false;
+    const workspaceIndex = workspacePanelsRef.current.findIndex(panel =>
+      (panelId !== undefined && panel.id === panelId) || (layoutId !== undefined && panel.type === 'pad' && panel.layoutId === layoutId)
+    );
+    if (workspaceIndex >= 0) return { workspaceIndex };
+
+    const active = activePanels.find(panel =>
+      (panelId !== undefined && panel.id === panelId) || (layoutId !== undefined && panel.layoutId === layoutId)
+    );
+    return active ? { panelId: active.id } : null;
   }, [activePanels]);
+
+  const canOpenAssistantResource = useCallback(
+    (resourceId: string) => assistantResourceTarget(resourceId) !== null,
+    [assistantResourceTarget]
+  );
+
+  const handleOpenAssistantResource = useCallback((resourceId: string): boolean => {
+    const target = assistantResourceTarget(resourceId);
+    if (!target) return false;
+    if ('workspaceIndex' in target) setActiveMobileWindowIndex(Math.min(target.workspaceIndex, 1));
+    else setSelectedPanelId(target.panelId);
+    return true;
+  }, [assistantResourceTarget]);
 
   const handleReviewAssistantPad = useCallback((layout: CustomGamepadLayout) => {
     const existing = loadGamepadLibrary().some(item => item.id === layout.id || item.layout.id === layout.id);
@@ -4018,6 +4021,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({ connectionParams, onD
         connectionGeneration={connectionGeneration}
         onReviewPadProposal={handleReviewAssistantPad}
         onOpenResource={handleOpenAssistantResource}
+        canOpenResource={canOpenAssistantResource}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [

@@ -96,8 +96,9 @@ test('context browser groups exact resources and captures a bounded selected top
     (window as unknown as { __publishRosTopic: (topic: string, message: unknown) => void })
       .__publishRosTopic('/cmd_vel', { linear: { x: 0.25 }, angular: { z: 0 } });
   });
-  // Choosing from the browser tags the prompt, exactly as typing the mention does.
-  await expect(page.getByRole('textbox', { name: 'Ask the assistant' })).toHaveValue('@/cmd_vel ');
+  // Choosing from the browser puts the topic in context and marks the row, without typing for you.
+  await expect(page.getByRole('textbox', { name: 'Ask the assistant' })).toHaveValue('');
+  await expect(topicButton).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('computes a human-spaced btw TF distance from live /tf data without the provider', async ({ page }) => {

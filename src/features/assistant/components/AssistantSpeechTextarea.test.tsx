@@ -134,4 +134,52 @@ describe('AssistantSpeechTextarea', () => {
     expect(transcribe).toHaveBeenCalledWith(expect.any(Blob));
     expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument();
   });
+
+  /**
+   * Hold to record, release to stop. The release used to land on nothing: the microphone was
+   * re-rendered into a different slot the moment recording started, so the node under the finger
+   * was replaced and its pointerup never fired.
+   */
+  it('records while held and stops on release, from the same button throughout', async () => {
+    Reflect.deleteProperty(window, 'SpeechRecognition');
+    class HeldRecorder {
+      state: RecordingState = 'inactive';
+      mimeType = 'audio/webm';
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      start() { this.state = 'recording'; }
+      stop() {
+        this.state = 'inactive';
+        this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
+        this.onstop?.();
+      }
+    }
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: HeldRecorder });
+    const transcribe = vi.fn().mockResolvedValue('drive forward');
+    const Harness = () => {
+      const [value, setValue] = React.useState('');
+      return (
+        <AssistantSpeechTextarea
+          id="held"
+          label="Ask the assistant"
+          value={value}
+          onChange={setValue}
+          rows={1}
+          holdToRecord
+          onTranscribeAudio={transcribe}
+          toolbar={{ start: <button type="button">Attach</button>, end: <button type="button">Send</button> }}
+        />
+      );
+    };
+    render(<Harness />);
+
+    const mic = screen.getByRole('button', { name: /Hold to record/ });
+    fireEvent.pointerDown(mic);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Listening/));
+    expect(screen.getByRole('button', { name: /Hold to record/ })).toBe(mic);
+
+    fireEvent.pointerUp(mic);
+    await waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Ask the assistant' })).toHaveValue('drive forward'));
+  });
 });

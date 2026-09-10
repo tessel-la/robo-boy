@@ -10,6 +10,8 @@ import './AssistantPanel.css';
 export interface ContextPickerOption {
   id: string;
   label: string;
+  /** Drops this resource from the context again. Choosing an already-selected row calls this. */
+  onRemove?: () => void;
   /** Which kind of resource this is, so a mention of it can be coloured the moment it is written --
    * before the retrieval that pins it has finished. */
   source: AssistantContextSourceKind;
@@ -45,6 +47,7 @@ export interface AssistantPanelProps {
   automaticContextLabels: string[];
   /** Opens a tagged resource in the view that owns it; returns false when it has none. */
   onOpenResource?: (resourceId: string) => boolean;
+  canOpenResource?: (resourceId: string) => boolean;
   contextPickerSections: ContextPickerSection[];
   onRequestContextCatalog: () => void;
   isDiscoveringContext: boolean;
@@ -52,9 +55,8 @@ export interface AssistantPanelProps {
   attachmentError: string;
   onAttachFiles: (files: FileList | null) => void;
   onRemoveAttachment: (id: string) => void;
-  onRecordAudio: (audio: Blob, durationSeconds: number) => void;
-  onTranscribeAttachment: (id: string) => void;
-  transcribingAttachmentId: string | null;
+  /** Turns a finished recording into text for the prompt. */
+  onTranscribeAudio: (audio: Blob) => Promise<string>;
   onSketchAttach: (dataUrl: string) => void;
   settings: AssistantSettings;
   resolvedBaseUrl: string;
@@ -73,7 +75,8 @@ export interface AssistantPanelProps {
  * data URL back. */
 const dataUrlFor = (attachment: AssistantAttachment) => `data:${attachment.mimeType};base64,${attachment.content}`;
 
-const canGenerateFrom = (prompt: string, isGenerating: boolean) => Boolean(prompt.trim()) && !isGenerating;
+const canGenerateFrom = (prompt: string, isGenerating: boolean, attachments: AssistantAttachment[] = []) =>
+  (Boolean(prompt.trim()) || attachments.length > 0) && !isGenerating;
 
 const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -82,7 +85,7 @@ const mentionTextFor = (tag: { label: string; mention?: string }) => `@${tag.men
 
 /** Colours the `@Label` mentions a message was sent with. The tagged resource is shown where the
  * author put it rather than in a separate strip, so tagging costs no vertical space. */
-const MessageText = ({ text, tags, onOpen }: { text: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void }) => {
+const MessageText = ({ text, tags, onOpen, canOpen }: { text: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void; canOpen?: (id: string) => boolean }) => {
   if (!tags?.length) return <>{text}</>;
   const byMention = new Map(tags.map(tag => [mentionTextFor(tag), tag]));
   const mentions = [...byMention.keys()].sort((a, b) => b.length - a.length).map(escapeForRegExp);
@@ -93,8 +96,8 @@ const MessageText = ({ text, tags, onOpen }: { text: string; tags?: AssistantMes
         const tag = byMention.get(part);
         if (!tag) return part;
         const className = `assistant-inline-tag source-${tag.source}`;
-        // Only a resource with a view of its own is worth making clickable; a topic has none.
-        return onOpen ? (
+        // Clickable only when something is actually open to show; otherwise it is a dead link.
+        return onOpen && canOpen?.(tag.id) ? (
           <button type="button" key={index} className={`${className} openable`} onClick={() => onOpen(tag.id)} title={`Open ${tag.label}`}>{part}</button>
         ) : (
           <mark key={index} className={className}>{part}</mark>
@@ -104,12 +107,12 @@ const MessageText = ({ text, tags, onOpen }: { text: string; tags?: AssistantMes
   );
 };
 
-const MessageContent = ({ content, tags, onOpen }: { content: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void }) => {
+const MessageContent = ({ content, tags, onOpen, canOpen }: { content: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void; canOpen?: (id: string) => boolean }) => {
   const segments = content.split(/```([\s\S]*?)```/g);
   return (
     <div className="assistant-message-content">
       {segments.map((segment, index) =>
-        index % 2 === 1 ? <pre key={index}>{segment.trim()}</pre> : segment ? <p key={index}><MessageText text={segment} tags={tags} onOpen={onOpen} /></p> : null
+        index % 2 === 1 ? <pre key={index}>{segment.trim()}</pre> : segment ? <p key={index}><MessageText text={segment} tags={tags} onOpen={onOpen} canOpen={canOpen} /></p> : null
       )}
     </div>
   );
@@ -198,9 +201,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
     open, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
-    automaticContextLabels, onOpenResource, contextPickerSections, onRequestContextCatalog, isDiscoveringContext,
-    attachments, attachmentError, onAttachFiles, onRemoveAttachment, onRecordAudio, onTranscribeAttachment,
-    transcribingAttachmentId, onSketchAttach, settings, resolvedBaseUrl,
+    automaticContextLabels, onOpenResource, canOpenResource, contextPickerSections, onRequestContextCatalog, isDiscoveringContext,
+    attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
     onProviderChange, onUpdateSettings, ollamaModels, ollamaModelsError, isLoadingOllamaModels,
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
   } = props;
@@ -226,6 +228,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const allContextOptions = useMemo(() => contextPickerSections.flatMap(section => section.options), [contextPickerSections]);
+  const pinnedContextCount = useMemo(
+    () => new Set(allContextOptions.filter(option => option.selected).map(option => option.id)).size,
+    [allContextOptions]
+  );
   /**
    * The tags a piece of text names, read from the text itself rather than from what a turn happened
    * to carry. A restored conversation has no chips behind it and a repeated or edited message is a
@@ -263,6 +269,15 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     } finally {
       setLoadingContextIds(previous => previous.filter(id => id !== option.id));
     }
+  };
+
+  /** The Context browser is a checklist of what this conversation is looking at: choosing a row puts
+   * it in context, choosing it again takes it out. It never writes to the prompt -- typing `@` is
+   * the other, separate act. */
+  const toggleContextOption = (option: ContextPickerOption) => {
+    if (option.disabled) return;
+    if (option.selected) option.onRemove?.();
+    else void retrieveContextOption(option);
   };
 
   /** Writes the resource into a field as `@Label` -- the mention is the tag -- and retrieves it in
@@ -340,8 +355,15 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
   }, [open]);
 
+  /**
+   * Fits the panel to the room actually left under the app bar. The CSS starting point can only
+   * guess at that bar's height, and a guess that is wrong by a few pixels on a platform whose
+   * chrome differs -- the packaged desktop shell, a phone with a keyboard up -- either leaves a
+   * strip of page showing above or pushes the composer off the bottom. Measuring is the same on
+   * every platform, so it is done on every platform.
+   */
   useEffect(() => {
-    if (!open || !compact) { setMobileViewportStyle(undefined); return; }
+    if (!open) { setMobileViewportStyle(undefined); return; }
     const place = () => {
       const viewport = window.visualViewport;
       const viewportTop = viewport?.offsetTop ?? 0;
@@ -360,7 +382,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       viewport?.removeEventListener('scroll', place);
       window.removeEventListener('resize', place);
     };
-  }, [compact, open]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !compact) return;
@@ -391,7 +413,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const handlePromptKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = event => {
     if (event.nativeEvent.isComposing) return;
     if (composerMentions.handleKeyDown(event)) return;
-    if (event.key === 'Enter' && !event.shiftKey && canGenerateFrom(prompt, isGenerating)) {
+    if (event.key === 'Enter' && !event.shiftKey && canGenerateFrom(prompt, isGenerating, attachments)) {
       event.preventDefault();
       onSubmit();
     }
@@ -456,7 +478,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                   {editingMentions.node}
                   <div className="assistant-inline-actions"><button type="button" className="secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" onClick={() => submitEditedMessage(index)} disabled={!editingDraft.trim()}>Save &amp; resend</button></div>
                 </div>
-              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} />}
+              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} canOpen={canOpenResource} />}
               {message.attachments.length > 0 && (
                 <div className="assistant-message-attachments">
                   {message.attachments.map(item =>
@@ -464,8 +486,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                       <button type="button" className="assistant-message-image" key={item.id} onClick={() => setExpandedImage(item)} aria-label={`Expand ${item.name}`}>
                         <img src={dataUrlFor(item)} alt={item.name} />
                       </button>
-                    ) : item.kind === 'audio' ? (
-                      <audio className="assistant-message-audio" key={item.id} src={dataUrlFor(item)} controls preload="metadata" aria-label={`Play ${item.name}`} />
                     ) : (
                       <span key={item.id}>{item.name}</span>
                     )
@@ -488,23 +508,14 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
         </div>
 
-        <div className="assistant-context-summary"><button type="button" onClick={() => { setShowContextPicker(value => !value); setShowSettings(false); if (!showContextPicker) onRequestContextCatalog(); }} aria-expanded={showContextPicker} aria-controls="assistant-context-browser"><FaPlus aria-hidden="true" /><span>Context</span><small>{automaticContextLabels.slice(0, 3).join(' · ')}{automaticContextLabels.length > 3 ? ` +${automaticContextLabels.length - 3}` : ''}</small></button></div>
+        <div className="assistant-context-summary"><button type="button" onClick={() => { setShowContextPicker(value => !value); setShowSettings(false); if (!showContextPicker) onRequestContextCatalog(); }} aria-expanded={showContextPicker} aria-controls="assistant-context-browser"><FaPlus aria-hidden="true" /><span>Context</span><small>{automaticContextLabels.slice(0, 3).join(' · ')}{automaticContextLabels.length > 3 ? ` +${automaticContextLabels.length - 3}` : ''}</small>{pinnedContextCount > 0 && <em className="assistant-context-count">{pinnedContextCount} tagged</em>}</button></div>
 
         <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
           <div className="assistant-composer-attachments" aria-label="Assistant attachments">
             {attachments.map(item => (
               <span className={`assistant-context-tag attachment ${item.kind}`} key={item.id}>
                 {item.kind === 'image' && <img src={dataUrlFor(item)} alt="" aria-hidden="true" />}
-                {item.kind === 'audio' ? (
-                  <>
-                    <audio src={dataUrlFor(item)} controls preload="metadata" aria-label={`Play ${item.name}`} />
-                    <button type="button" className="assistant-attachment-action" onClick={() => onTranscribeAttachment(item.id)} disabled={transcribingAttachmentId === item.id}>
-                      {transcribingAttachmentId === item.id ? 'Transcribing…' : 'To text'}
-                    </button>
-                  </>
-                ) : (
-                  <span>{item.name}</span>
-                )}
+                <span>{item.name}</span>
                 <button type="button" onClick={() => onRemoveAttachment(item.id)} aria-label={`Remove attachment ${item.name}`}><FaTimes aria-hidden="true" /></button>
               </span>
             ))}
@@ -513,7 +524,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {showContextPicker && <div id="assistant-context-browser" className="assistant-context-picker" role="dialog" aria-label="Add context" aria-busy={isDiscoveringContext || loadingContextIds.length > 0}>
             <header><div><strong>Add context</strong><span>Choose exact workspace or robot data</span></div><button type="button" onClick={() => setShowContextPicker(false)} aria-label="Close context picker"><FaTimes aria-hidden="true" /></button></header>
             <label className="assistant-context-search"><FaSearch aria-hidden="true" /><input value={contextSearch} onChange={event => setContextSearch(event.target.value)} placeholder="Search Pads, trees, topics, services…" autoFocus /></label>
-            <div className="assistant-context-sections">{filteredSections.map(section => <section key={section.id}><div className="assistant-context-section-heading"><strong>{section.label}</strong>{section.description && <span>{section.description}</span>}</div>{section.options.map(option => <button type="button" key={option.id} disabled={option.disabled} onClick={() => tagInto(option, composerField, false)}><span className="assistant-context-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{loadingContextIds.includes(option.id) ? <FaSyncAlt className="spinning" aria-label="Loading context" /> : option.selected ? <FaCheck aria-label="Selected" /> : null}</button>)}</section>)}{filteredSections.length === 0 && <p className="assistant-context-empty">No matching context</p>}</div>
+            <div className="assistant-context-sections">{filteredSections.map(section => <section key={section.id}><div className="assistant-context-section-heading"><strong>{section.label}</strong>{section.description && <span>{section.description}</span>}</div>{section.options.map(option => <button type="button" key={option.id} disabled={option.disabled} className={option.selected ? 'is-in-context' : undefined} aria-pressed={option.selected} onClick={() => toggleContextOption(option)}><span className="assistant-context-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>{loadingContextIds.includes(option.id) ? <FaSyncAlt className="spinning" aria-label="Loading context" /> : option.selected ? <FaCheck aria-label={`${option.label} is in context — choose again to remove it`} /> : null}</button>)}</section>)}{filteredSections.length === 0 && <p className="assistant-context-empty">No matching context</p>}</div>
           </div>}
 
           {composerMentions.node}
@@ -526,7 +537,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handlePromptKeyDown}
-              onRecordAudio={onRecordAudio}
+              onTranscribeAudio={onTranscribeAudio}
+              holdToRecord={compact}
+              voiceButtonSlot={compact && !canGenerateFrom(prompt, isGenerating, attachments) ? 'end' : 'start'}
               rows={1}
               autoGrow
               highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
@@ -541,7 +554,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                   </>
                 ),
                 end: (
-                  <button type={isGenerating ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false)} aria-label={isGenerating ? 'Stop generating' : 'Send'}>{isGenerating ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
+                  <button type={isGenerating ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating ? 'Stop generating' : 'Send'}>{isGenerating ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
                 ),
               }}
             />

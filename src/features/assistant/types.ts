@@ -22,11 +22,9 @@ export interface AssistantAttachment {
   name: string;
   mimeType: string;
   size: number;
-  kind: 'text' | 'image' | 'audio';
-  /** Text for `text`; base64 without the data-URL prefix for `image` and `audio`. */
+  kind: 'text' | 'image';
+  /** Text for `text`; base64 without the data-URL prefix for `image`. */
   content: string;
-  /** Recording length in seconds, when known. Shown on the player instead of a byte count. */
-  durationSeconds?: number;
 }
 
 /** In-memory conversation turn. `checkpoint` lets "edit from here"/"repeat" restore whichever

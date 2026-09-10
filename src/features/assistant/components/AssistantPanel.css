@@ -290,35 +290,12 @@
   object-fit: cover;
 }
 
-.assistant-message-audio,
-.assistant-context-tag.audio audio {
-  height: 34px;
-  max-width: min(260px, 100%);
-}
-
-.assistant-context-tag.audio {
-  gap: 6px;
-  padding-left: 4px;
-}
-
 .assistant-context-tag.image img {
   width: 26px;
   height: 26px;
   margin-right: 2px;
   border-radius: 5px;
   object-fit: cover;
-}
-
-.assistant-attachment-action {
-  padding: 3px 8px;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 38%, var(--border-color, #d9dee7));
-  border-radius: 999px;
-  background: var(--card-bg, #fff);
-  color: var(--primary-color, #2563eb);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .assistant-drop-overlay {
@@ -565,7 +542,7 @@
   display: grid;
   width: 100%;
   min-height: 42px;
-  grid-template-columns: 26px auto minmax(0, 1fr);
+  grid-template-columns: 26px auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   padding: 0 8px;
@@ -584,6 +561,18 @@
 .assistant-context-summary > button > span {
   font-size: 12px;
   font-weight: 750;
+}
+
+.assistant-context-count {
+  justify-self: end;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 16%, transparent);
+  color: var(--primary-color, #2563eb);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .assistant-context-summary > button > small {
@@ -762,7 +751,7 @@
   position: relative;
   box-sizing: border-box;
   width: 100%;
-  max-height: 150px;
+  max-height: 220px;
   min-height: 34px;
   padding: var(--assistant-textarea-padding);
   overflow-y: auto;
@@ -814,6 +803,21 @@
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+}
+
+/* In the send position it is the primary control, so it looks like one. */
+.assistant-mic.is-primary {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: var(--primary-color, #2563eb);
+  color: var(--button-text-color, #fff);
+  font-size: 16px;
+}
+
+.assistant-mic.is-primary.listening {
+  background: var(--error-color, #dc2626);
+  color: #fff;
 }
 
 .assistant-speech-toolbar-start .assistant-mic {
@@ -1045,6 +1049,15 @@
   color: var(--text-color, #1f2937);
   text-align: left;
   cursor: pointer;
+}
+
+/* A row that is already in context reads as on, and says so when chosen again. */
+.assistant-context-sections section > button.is-in-context {
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, transparent);
+}
+
+.assistant-context-sections section > button.is-in-context strong {
+  color: var(--primary-color, #2563eb);
 }
 
 .assistant-context-sections section > button:hover,

@@ -14,24 +14,19 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
     temperature: 0.2,
     messages: [
       { role: 'system', content: systemPrompt },
-      ...messages.map(turn => {
-        const parts = [
-          ...(turn.images ?? []).map(image => ({
-            type: 'image_url',
-            image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-          })),
-          // `input_audio` is the chat-completions shape for a recording. Its `format` is the bare
-          // container name, not the MIME type.
-          ...(turn.audio ?? []).map(clip => ({
-            type: 'input_audio',
-            input_audio: { data: clip.data, format: clip.mimeType.includes('mp3') ? 'mp3' : clip.mimeType.includes('wav') ? 'wav' : 'webm' },
-          })),
-        ];
-        return {
-          role: turn.role,
-          content: parts.length > 0 ? [{ type: 'text', text: turn.content }, ...parts] : turn.content,
-        };
-      }),
+      ...messages.map(turn => ({
+        role: turn.role,
+        content:
+          turn.images && turn.images.length > 0
+            ? [
+                { type: 'text', text: turn.content },
+                ...turn.images.map(image => ({
+                  type: 'image_url',
+                  image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+                })),
+              ]
+            : turn.content,
+      })),
     ],
   };
   if (jsonMode) body.response_format = { type: 'json_object' };

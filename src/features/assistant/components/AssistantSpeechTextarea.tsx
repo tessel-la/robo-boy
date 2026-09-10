@@ -65,6 +65,13 @@ interface AssistantSpeechTextareaProps {
    */
   toolbar?: { start?: React.ReactNode; end?: React.ReactNode };
   /**
+   * Where the voice button sits in that row. `'end'` puts it in the send position instead of
+   * `toolbar.end` -- what a phone wants when there is nothing yet to send.
+   */
+  voiceButtonSlot?: 'start' | 'end';
+  /** Record while the button is held and stop on release, instead of toggling on click. */
+  holdToRecord?: boolean;
+  /**
    * A copy of `value` rendered behind the textarea so parts of the draft can be highlighted. A
    * textarea cannot style its own content; the backdrop supplies the marks and the real text sits
    * on top of them, so it must lay out identically (same font, padding, wrapping, scroll).
@@ -97,9 +104,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   toolbar,
   highlight,
   onRecordAudio,
+  holdToRecord,
+  voiceButtonSlot = 'start',
 }) => {
   const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
+  const wantsRecordingRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -229,6 +239,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       if (onRecordAudio) onRecordAudio(audio, Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
       else void transcribeRecording(audio);
     };
+    if (holdToRecord && !wantsRecordingRef.current) {
+      stream.getTracks().forEach(track => track.stop());
+      recorderRef.current = null;
+      streamRef.current = null;
+      return true;
+    }
     recorder.start();
     setIsListening(true);
     return true;
@@ -243,7 +259,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     setIsRequestingPermission(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (SpeechRecognition && !onRecordAudio) {
+      if (SpeechRecognition) {
         stream.getTracks().forEach(track => track.stop());
         startRecognition();
       } else if (!startRecording(stream)) {
@@ -272,10 +288,45 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     }
   };
 
+  /**
+   * Hold to record, release to send -- the way a voice note is recorded everywhere else. Only where
+   * the recording is the message; a dictation field keeps a click toggle, since holding a button
+   * through a long sentence is not the same task.
+   *
+   * A release can land before the permission prompt resolves, so intent is tracked separately from
+   * `isListening` and `startRecording` checks it before it starts a recorder nobody is waiting for.
+   */
+  const holdToTalk = holdToRecord;
+  const release = () => {
+    if (!wantsRecordingRef.current) return;
+    wantsRecordingRef.current = false;
+    if (isListening) stopListening();
+  };
+  const press = () => {
+    if (isListening || wantsRecordingRef.current) return;
+    wantsRecordingRef.current = true;
+    void startListening();
+  };
+  const voiceHandlers = holdToTalk
+    ? {
+        onPointerDown: (event: React.PointerEvent) => {
+          event.preventDefault();
+          // Without capture a finger that drifts off the button releases onto whatever is under it,
+          // and the recording never stops.
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+          press();
+        },
+        onPointerUp: release,
+        onPointerCancel: release,
+        onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); press(); } },
+        onKeyUp: (event: React.KeyboardEvent) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } },
+      }
+    : { onClick: handleVoiceClick };
+
   const busyStatus = isRequestingPermission
     ? 'Waiting for microphone…'
     : isListening
-      ? onRecordAudio ? 'Recording' : 'Listening'
+      ? holdToRecord ? 'Listening — release when done' : 'Listening'
       : isTranscribing
         ? 'Transcribing…'
         : '';
@@ -283,12 +334,13 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   const voiceButton = (
     <button
       type="button"
-      className={`assistant-mic${isListening ? ' listening' : ''}`}
-      onClick={handleVoiceClick}
-      disabled={isRequestingPermission || isTranscribing}
-      aria-label={`${isListening ? 'Stop' : 'Start'} voice input for ${label}`}
+      className={`assistant-mic${isListening ? ' listening' : ''}${voiceButtonSlot === 'end' ? ' is-primary' : ''}`}
+      {...voiceHandlers}
+      disabled={isTranscribing}
+      style={holdToTalk ? { touchAction: 'none' } : undefined}
+      aria-label={holdToTalk ? `Hold to record a voice message for ${label}` : `${isListening ? 'Stop' : 'Start'} voice input for ${label}`}
       aria-pressed={isListening}
-      title={isListening ? 'Stop voice input' : 'Start voice input'}
+      title={holdToTalk ? 'Hold to record, release to send' : isListening ? 'Stop voice input' : 'Start voice input'}
     >
       {isListening ? <FaStop aria-hidden="true" /> : <FaMicrophone aria-hidden="true" />}
     </button>
@@ -321,9 +373,8 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
         <div className="assistant-speech-toolbar">
           {/* The status takes the tools' place inside this fixed-height row rather than adding a
               row of its own, so starting to talk never resizes the composer under the transcript. */}
-          {busyStatus ? (
-            <div className="assistant-speech-toolbar-start">
-              {voiceButton}
+          <div className="assistant-speech-toolbar-start">
+            {busyStatus ? (
               <span className={`assistant-speech-status${isListening ? ' is-listening' : ''}`} role="status">
                 {isListening && (
                   <span className="assistant-listening-wave" aria-hidden="true">
@@ -335,14 +386,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
                 )}
                 {busyStatus}
               </span>
-            </div>
-          ) : (
-            <div className="assistant-speech-toolbar-start">
-              {toolbar.start}
-              {voiceButton}
-            </div>
-          )}
-          {toolbar.end}
+            ) : (
+              toolbar.start
+            )}
+            {voiceButtonSlot === 'start' && voiceButton}
+          </div>
+          {voiceButtonSlot === 'end' ? voiceButton : toolbar.end}
         </div>
       )}
       {!toolbar && busyStatus && (
