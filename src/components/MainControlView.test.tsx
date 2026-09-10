@@ -319,6 +319,24 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Status: Connecting')).toBeDisabled();
   });
 
+  it('suspends panel resources without reconnecting when its connection tab enters the background', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    const view = render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive={false} />);
+    expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(disconnect).not.toHaveBeenCalled();
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
   it('starts with one unified empty workspace and adds panels', async () => {
     renderMainControlView();
 
@@ -349,10 +367,7 @@ describe('MainControlView desktop workspace', () => {
         dispatchEvent: vi.fn(),
       })),
     });
-    localStorage.setItem(
-      workspacePanelsKey,
-      JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')])
-    );
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
     renderMainControlView();
 

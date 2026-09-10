@@ -1,0 +1,417 @@
+.connection-tabs {
+  position: relative;
+  min-width: 0;
+  max-width: min(680px, 58vw);
+  height: 32px;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--navbar-text, #fff);
+}
+
+.connection-tabs-list {
+  min-width: 0;
+  height: 32px;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.connection-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.connection-tab {
+  min-width: 96px;
+  max-width: 190px;
+  height: 30px;
+  flex: 0 1 190px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.66);
+  background: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.connection-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.connection-tab.is-active {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.connection-tab.is-closing,
+.connection-switcher-row.is-closing {
+  opacity: 0.5;
+}
+
+.connection-tab-select,
+.connection-tab-close,
+.connection-tab-add,
+.connection-switcher-trigger,
+.connection-switcher-select,
+.connection-switcher-close,
+.connection-switcher-add {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  font: inherit;
+}
+
+.connection-tab-select {
+  min-width: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 9px;
+  text-align: left;
+}
+
+.connection-tab-label,
+.connection-switcher-label,
+.connection-switcher-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-tab-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.connection-tab-status {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--text-color-secondary);
+}
+
+.connection-tab-status.is-connected {
+  background: var(--success-color, #4caf50);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--success-color, #4caf50) 70%, transparent);
+}
+
+.connection-tab-status.is-connecting {
+  background: var(--primary-color, #4285f4);
+  animation: connection-tab-pulse 1.2s ease-in-out infinite;
+}
+
+.connection-tab-status.is-disconnected {
+  background: var(--error-color, #dc3545);
+}
+
+.connection-tab-close,
+.connection-switcher-close {
+  display: grid;
+  place-items: center;
+  opacity: 0.62;
+}
+
+.connection-tab-close {
+  width: 27px;
+  height: 100%;
+  flex: 0 0 27px;
+  padding: 0 6px 0 2px;
+}
+
+.connection-tab-close:hover,
+.connection-tab-close:focus-visible,
+.connection-switcher-close:hover,
+.connection-switcher-close:focus-visible {
+  color: var(--error-color, #dc3545);
+  opacity: 1;
+}
+
+.connection-tab-close svg,
+.connection-tab-add svg,
+.connection-switcher-plus svg,
+.connection-switcher-close svg,
+.connection-switcher-add svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.connection-tab-add {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.connection-tab-add:hover,
+.connection-tab-add.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.connection-switcher-trigger {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  display: none;
+  align-items: center;
+  gap: 7px;
+  padding: 0 7px 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  text-align: left;
+}
+
+.connection-switcher-trigger:hover,
+.connection-switcher-trigger[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.21);
+}
+
+.connection-switcher-plus {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-color, #4285f4);
+}
+
+.connection-switcher-label {
+  flex: 1 1 auto;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.connection-switcher-chevron {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.62;
+  transition: transform 0.15s ease;
+}
+
+.connection-switcher-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.connection-switcher-popover {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  width: min(330px, calc(100vw - 16px));
+  max-height: calc(var(--safe-height, 100vh) - 58px - var(--safe-area-top, 0px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--background-secondary) 94%, transparent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+  box-sizing: border-box;
+  z-index: 1010;
+}
+
+.connection-switcher-heading {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px;
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.connection-switcher-heading > :last-child {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-color) 9%, transparent);
+  text-align: center;
+}
+
+.connection-switcher-list {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.connection-switcher-row {
+  min-height: 46px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.connection-switcher-row:hover {
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+}
+
+.connection-switcher-row.is-active {
+  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}
+
+.connection-switcher-select {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 5px 7px 9px;
+  color: var(--text-color);
+  text-align: left;
+}
+
+.connection-switcher-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connection-switcher-name {
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.connection-switcher-status {
+  font-size: 0.68rem;
+  color: var(--text-color-secondary);
+}
+
+.connection-switcher-status.is-connected {
+  color: var(--success-color, #4caf50);
+}
+
+.connection-switcher-status.is-disconnected {
+  color: var(--error-color, #dc3545);
+}
+
+.connection-switcher-status.is-connecting {
+  color: var(--primary-color, #4285f4);
+}
+
+.connection-switcher-current {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: var(--primary-color, #4285f4);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.connection-switcher-close {
+  width: 38px;
+  flex: 0 0 38px;
+  color: var(--text-color-secondary);
+}
+
+.connection-switcher-add {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0 0 7px 7px;
+  color: var(--primary-color, #4285f4);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.connection-switcher-add:hover {
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+@keyframes connection-tab-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .connection-tabs {
+    max-width: 160px;
+    flex: 0 1 160px;
+  }
+
+  .connection-tabs-list,
+  .connection-tab-add {
+    display: none;
+  }
+
+  .connection-switcher-trigger {
+    display: flex;
+  }
+}
+
+@media (max-width: 480px) {
+  .connection-tabs {
+    max-width: min(124px, 34vw);
+    flex-basis: min(124px, 34vw);
+  }
+
+  .connection-switcher-trigger {
+    gap: 6px;
+    padding-left: 7px;
+    padding-right: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connection-tab-status.is-connecting {
+    animation: none;
+  }
+
+  .connection-switcher-chevron {
+    transition: none;
+  }
+}

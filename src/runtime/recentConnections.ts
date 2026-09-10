@@ -1,4 +1,4 @@
-import type { ConnectionParams } from '../App';
+import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
 import { getDefaultServicePorts, normalizeRuntimeServicePorts } from './runtimeConfig';
 

@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
+import ConnectionTabs from './components/ConnectionTabs';
 import TitleBar from './components/TitleBar';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import {
@@ -12,16 +13,23 @@ import {
   generateThemeCss,
 } from './features/theme/themeUtils';
 import { RuntimeConfigProvider } from './runtime/runtimeConfig';
+import {
+  createConnectionSessionId,
+  describeConnectionTarget,
+  type ConnectionParams,
+  type ConnectionStatus,
+  type ConnectionTarget,
+} from './runtime/connections';
+
+export type { ConnectionParams } from './runtime/connections';
 
 const MainControlView = lazy(() => import('./components/MainControlView'));
 const ThemeCreator = lazy(() => import('./features/theme/components/ThemeCreator'));
 
-export interface ConnectionParams {
-  ros2Option: 'domain' | 'ip'; // Now required
-  ros2Value: string | number; // Now required
-  rosbridgePort?: string;
-  videoStreamPort?: string;
-  meshResourcesPort?: string;
+interface ConnectionSession extends ConnectionTarget {
+  id: string;
+  status: ConnectionStatus;
+  isClosing: boolean;
 }
 
 const safeGetStorageItem = (key: string): string | null => {
@@ -42,7 +50,10 @@ const safeSetStorageItem = (key: string, value: string): void => {
 };
 
 function App() {
-  const [connectionParams, setConnectionParams] = useState<ConnectionParams | null>(null);
+  const [connectionSessions, setConnectionSessions] = useState<ConnectionSession[]>([]);
+  const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
+  const [isAddingConnection, setIsAddingConnection] = useState(false);
+  const closeTimersRef = useRef(new Map<string, number>());
 
   // --- Theme State ---
   const [selectedThemeId, setSelectedThemeId] = useState<string>(() => {
@@ -64,6 +75,14 @@ function App() {
 
   // Ref for the dynamic style tag
   const themeStyleTagRef = useRef<HTMLStyleElement | null>(null);
+
+  useEffect(
+    () => () => {
+      closeTimersRef.current.forEach(timer => window.clearTimeout(timer));
+      closeTimersRef.current.clear();
+    },
+    []
+  );
 
   // --- Theme Application Effect ---
   useEffect(() => {
@@ -180,13 +199,64 @@ function App() {
 
   // --- Connection Handlers ---
   const handleConnect = (params: ConnectionParams) => {
-    setConnectionParams(params);
-    console.log('Connecting with:', params); // Logs only ROS 2 params
+    const target = describeConnectionTarget(params);
+    const existing = connectionSessions.find(session => session.key === target.key && !session.isClosing);
+    if (existing) {
+      setActiveConnectionId(existing.id);
+      setIsAddingConnection(false);
+      return;
+    }
+
+    const session: ConnectionSession = {
+      ...target,
+      id: createConnectionSessionId(),
+      status: 'connecting',
+      isClosing: false,
+    };
+    setConnectionSessions(previous => [...previous, session]);
+    setActiveConnectionId(session.id);
+    setIsAddingConnection(false);
+    console.log('Opening connection:', target.description);
   };
 
-  const handleDisconnect = () => {
-    setConnectionParams(null);
-    console.log('Disconnected');
+  const handleSelectConnection = (id: string) => {
+    if (!connectionSessions.some(session => session.id === id && !session.isClosing)) return;
+    setActiveConnectionId(id);
+    setIsAddingConnection(false);
+  };
+
+  const handleCloseConnection = (id: string) => {
+    const closingIndex = connectionSessions.findIndex(session => session.id === id);
+    if (closingIndex < 0 || connectionSessions[closingIndex].isClosing || closeTimersRef.current.has(id)) return;
+
+    const remaining = connectionSessions.filter(session => session.id !== id && !session.isClosing);
+    setConnectionSessions(previous =>
+      previous.map(session => (session.id === id ? { ...session, isClosing: true } : session))
+    );
+
+    if (activeConnectionId === id && !isAddingConnection) {
+      const next = remaining[Math.min(closingIndex, remaining.length - 1)] || null;
+      setActiveConnectionId(next?.id || null);
+      setIsAddingConnection(!next);
+    }
+
+    // First render the session as inactive. Panel cleanup can then publish neutral control values
+    // while its ROS socket still exists; removing the owner on the next task closes that socket.
+    const timer = window.setTimeout(() => {
+      closeTimersRef.current.delete(id);
+      setConnectionSessions(previous => previous.filter(session => session.id !== id));
+    }, 0);
+    closeTimersRef.current.set(id, timer);
+  };
+
+  const handleConnectionStatusChange = (id: string, status: ConnectionStatus) => {
+    setConnectionSessions(previous => {
+      const index = previous.findIndex(session => session.id === id);
+      if (index < 0 || previous[index].status === status) return previous;
+      const next = [...previous];
+      next[index] = { ...next[index], status };
+      return next;
+    });
   };
 
   // Combine default and custom themes for the selector
@@ -200,19 +270,63 @@ function App() {
       <TitleBar />
       <div className="App">
         <main>
-          {!connectionParams ? (
-            <EntrySection onConnect={handleConnect} />
-          ) : (
-            <RuntimeConfigProvider connectionParams={connectionParams}>
-              <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
-                <MainControlView
-                  connectionParams={connectionParams}
-                  onDisconnect={handleDisconnect}
-                  // Potentially pass theme management functions down if needed
-                />
-              </Suspense>
-            </RuntimeConfigProvider>
-          )}
+          <div className="connection-shell">
+            <div className="connection-shell-content">
+              {connectionSessions.map(session => {
+                const isActive = !isAddingConnection && activeConnectionId === session.id && !session.isClosing;
+                return (
+                  <section
+                    id={`connection-session-${session.id}`}
+                    className="connection-session"
+                    role="tabpanel"
+                    aria-label={session.label}
+                    aria-hidden={!isActive}
+                    hidden={!isActive}
+                    key={session.id}
+                  >
+                    <RuntimeConfigProvider connectionParams={session.params}>
+                      <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
+                        <MainControlView
+                          connectionParams={session.params}
+                          isActive={isActive}
+                          storageScope={session.storageScope}
+                          onConnectionStatusChange={status => handleConnectionStatusChange(session.id, status)}
+                          onDisconnect={() => handleCloseConnection(session.id)}
+                          connectionNavigation={
+                            <ConnectionTabs
+                              tabs={connectionSessions}
+                              activeTabId={activeConnectionId}
+                              isAdding={isAddingConnection}
+                              onSelect={handleSelectConnection}
+                              onClose={handleCloseConnection}
+                              onAdd={() => setIsAddingConnection(true)}
+                            />
+                          }
+                        />
+                      </Suspense>
+                    </RuntimeConfigProvider>
+                  </section>
+                );
+              })}
+              {(connectionSessions.length === 0 || isAddingConnection) && (
+                <section className="connection-picker" aria-label="Open a robot connection">
+                  {connectionSessions.length > 0 && (
+                    <div className="connection-picker-top-bar">
+                      <ConnectionTabs
+                        tabs={connectionSessions}
+                        activeTabId={activeConnectionId}
+                        isAdding
+                        onSelect={handleSelectConnection}
+                        onClose={handleCloseConnection}
+                        onAdd={() => setIsAddingConnection(true)}
+                      />
+                    </div>
+                  )}
+                  <EntrySection onConnect={handleConnect} embedded={connectionSessions.length > 0} />
+                </section>
+              )}
+            </div>
+          </div>
         </main>
         <ThemeSelector
           currentThemeId={selectedThemeId}
@@ -223,12 +337,7 @@ function App() {
         />
         {isThemeCreatorOpen && (
           <Suspense fallback={null}>
-            <ThemeCreator
-              isOpen
-              onClose={closeThemeCreator}
-              onSave={handleSaveTheme}
-              existingTheme={themeToEdit}
-            />
+            <ThemeCreator isOpen onClose={closeThemeCreator} onSave={handleSaveTheme} existingTheme={themeToEdit} />
           </Suspense>
         )}
       </div>
