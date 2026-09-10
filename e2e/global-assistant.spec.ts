@@ -83,7 +83,8 @@ test('context browser groups exact resources and captures a bounded selected top
     }).toPass();
   }
   await page.setViewportSize({ width: 1280, height: 720 });
-  await expect(dialog.getByRole('button', { name: /All Pads/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /All Pads and panels/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /All Behavior Trees/ })).toBeVisible();
   await expect(dialog.getByRole('button', { name: /Everything saved/ })).toBeVisible();
   for (const heading of ['Everything', 'Current workspace', 'Pads', 'Behavior Trees', 'ROS topics', 'ROS services', 'ROS actions', 'ROS nodes', 'ROS parameters', 'TF and diagnostics']) {
     await expect(dialog.locator('.assistant-context-section-heading').getByText(heading, { exact: true })).toBeVisible();

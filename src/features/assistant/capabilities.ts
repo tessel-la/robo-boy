@@ -43,7 +43,7 @@ export interface ContextCatalogEntry {
 
 export const CONTEXT_CATALOG: readonly ContextCatalogEntry[] = [
   { id: 'automatic', label: 'Always included', provides: 'the workspace snapshot and ROS graph the assistant reads on its own, every turn' },
-  { id: 'bulk', label: 'Everything', provides: 'every saved Pad and Behavior Tree at once, when a question spans the whole library' },
+  { id: 'bulk', label: 'Everything', provides: 'whole libraries at once — every Pad and panel, every Behavior Tree, or all of it with the saved layouts — for a question that spans them' },
   { id: 'workspace', label: 'Current workspace', provides: 'an open panel, the current layout, or a saved layout' },
   { id: 'open', label: 'Open and selected', provides: 'the Pad or Behavior Tree open right now, as complete JSON' },
   { id: 'pads', label: 'Pads', provides: 'any saved Pad, as complete JSON' },

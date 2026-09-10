@@ -508,9 +508,13 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       // hiding the answer.
       const bulkOptions: ContextPickerOption[] = [
         option({
-          id: 'pad:all', label: 'All Pads', source: 'pad', disabled: allPads.length === 0,
-          description: allPads.length ? `${allPads.length} Pads · complete JSON for every one` : 'No saved Pads yet',
-          onSelect: () => addPinnedChip({ id: 'pad:all', label: `All Pads (${allPads.length})`, mention: 'All Pads', source: 'pad', automatic: false, fetchedAt: Date.now(), value: allPads.map(item => item.layout) }),
+          id: 'pad:all', label: 'All Pads and panels', source: 'pad', disabled: allPads.length === 0 && workspace.openPanels.length === 0,
+          description: `${allPads.length} Pads and ${workspace.openPanels.length} panels · complete JSON for every one`,
+          onSelect: () => addPinnedChip({
+            id: 'pad:all', label: `All Pads and panels (${allPads.length + workspace.openPanels.length})`, mention: 'All Pads and panels',
+            source: 'pad', automatic: false, fetchedAt: Date.now(),
+            value: { pads: allPads.map(item => item.layout), panels: workspace.openPanels },
+          }),
         }),
         option({
           id: 'bt:all', label: 'All Behavior Trees', source: 'behaviorTree', disabled: allTrees.length === 0,
@@ -518,17 +522,17 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           onSelect: () => addPinnedChip({ id: 'bt:all', label: `All Behavior Trees (${allTrees.length})`, mention: 'All Behavior Trees', source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: allTrees.map(item => item.tree) }),
         }),
         option({
-          id: 'workspace:panels:all', label: 'All open panels', source: 'workspace', disabled: workspace.openPanels.length === 0,
-          description: workspace.openPanels.length ? `${workspace.openPanels.length} panels · type, title and configuration` : 'No panels open',
-          onSelect: () => addPinnedChip({ id: 'workspace:panels:all', label: `All open panels (${workspace.openPanels.length})`, mention: 'All open panels', source: 'workspace', automatic: false, fetchedAt: Date.now(), value: workspace.openPanels }),
-        }),
-        option({
           id: 'workspace:everything', label: 'Everything saved', source: 'workspace',
-          description: `${allPads.length} Pads, ${allTrees.length} trees, and the current workspace`,
+          description: `${allPads.length} Pads, ${allTrees.length} trees, ${workspace.openPanels.length} panels, and every saved layout`,
           onSelect: () => addPinnedChip({
             id: 'workspace:everything', label: 'Everything saved', mention: 'Everything saved', source: 'workspace',
             automatic: false, fetchedAt: Date.now(),
-            value: { pads: allPads.map(item => item.layout), behaviorTrees: allTrees.map(item => item.tree), workspace },
+            value: {
+              pads: allPads.map(item => item.layout),
+              behaviorTrees: allTrees.map(item => item.tree),
+              panels: workspace.openPanels,
+              layouts: [...(workspace.currentLayout ? [workspace.currentLayout] : []), ...workspace.savedLayouts],
+            },
           }),
         }),
       ];
