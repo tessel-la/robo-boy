@@ -5,6 +5,7 @@ import type {
   GamepadComponentConfig,
 } from '../../customGamepad/types';
 import type { RosOperation } from '../../../utils/rosOperations';
+import type { AssistantCapability } from '../capabilities';
 
 /**
  * Parse/repair for model-generated Pad layouts — the Pad equivalent of behaviorTree's
@@ -13,6 +14,13 @@ import type { RosOperation } from '../../../utils/rosOperations';
  * to produce a Pad that saved but had no usable ROS binding. Everything here is repair-first:
  * fix what can be fixed, drop what cannot, and throw only when the result would be unusable.
  */
+
+export const PAD_CAPABILITY: AssistantCapability = {
+  id: 'pad-generation',
+  summary: 'You can build a Pad — a touch control layout — or repair an existing one.',
+  detail: ['It opens in the user\'s own Pad editor for review; nothing is saved to their library until they save it there.'],
+  responseKind: 'padProposal',
+};
 
 const COMPONENT_TYPES = new Set<GamepadComponentConfig['type']>([
   'joystick',

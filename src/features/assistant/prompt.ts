@@ -1,4 +1,8 @@
-import { BEHAVIOR_TREE_PROMPT_FRAGMENT } from './tools/behaviorTreeTool';
+import { BEHAVIOR_TREE_CAPABILITY, BEHAVIOR_TREE_PROMPT_FRAGMENT } from './tools/behaviorTreeTool';
+import { PAD_CAPABILITY } from './tools/padGeneration';
+import { ROS_OPERATION_CAPABILITY } from './tools/rosActionValidator';
+import { TF_CAPABILITY } from './context/tfContext';
+import { describeCapabilities, type AssistantCapability } from './capabilities';
 import type { AssistantAutoContext, AssistantContextChip, AssistantSettings } from './types';
 
 const BASE_PERSONA = `You are the Robo-Boy assistant, a single global copilot embedded in the Robo-Boy robot teleoperation app. Use only the workspace, Pad, Behavior Tree, ROS, TF, diagnostics, and attachment context supplied below. Every item includes its source and freshness. Never claim that you lack access to data that is present in the supplied context. Never invent a ROS name, type, field, frame, Pad, panel, or Behavior Tree. Robo-Boy does not let this chat execute robot-affecting operations; propose them for review through the Pad or Behavior Tree workflows. Answer directly when the user asks a question. Only produce one of the structured JSON outputs described below when the user's request matches that tool.`;
@@ -47,6 +51,16 @@ Rules:
 
 Complete valid example (two sticks driving one Joy topic):
 {"kind":"padProposal","layout":{"id":"drive-pad","name":"Drive Pad","gridSize":{"width":8,"height":4},"cellSize":80,"components":[{"id":"left-stick","type":"joystick","position":{"x":0,"y":1,"width":3,"height":3},"label":"Left Stick","action":{"topic":"/joy","messageType":"sensor_msgs/msg/Joy","field":"axes"},"config":{"min":-1,"max":1,"axes":["0","1"]}},{"id":"right-stick","type":"joystick","position":{"x":5,"y":1,"width":3,"height":3},"label":"Right Stick","action":{"topic":"/joy","messageType":"sensor_msgs/msg/Joy","field":"axes"},"config":{"min":-1,"max":1,"axes":["2","3"]}}],"rosConfig":{"defaultTopic":"/joy","defaultMessageType":"sensor_msgs/msg/Joy"},"metadata":{"created":"2026-01-01T00:00:00.000Z","modified":"2026-01-01T00:00:00.000Z","version":"1.0.0"}}}`;
+
+/** Every capability the assistant has, each declared beside the code that implements it. Adding a
+ * tool means adding it here; the registry is what the model is told, and `capabilities.test.ts`
+ * holds each entry to what its implementation actually does. */
+export const ASSISTANT_CAPABILITIES: readonly AssistantCapability[] = [
+  TF_CAPABILITY,
+  PAD_CAPABILITY,
+  BEHAVIOR_TREE_CAPABILITY,
+  ROS_OPERATION_CAPABILITY,
+];
 
 const domainFragments = (needs: { behaviorTree: boolean; pad: boolean; rosAction: boolean }): string[] => {
   const fragments: string[] = [];
@@ -115,6 +129,7 @@ export const composeAssistantSystemPrompt = ({
 }: ComposeSystemPromptInput): string => {
   const parts = [
     BASE_PERSONA,
+    describeCapabilities(ASSISTANT_CAPABILITIES),
     RESPONSE_CONTRACT,
     ...domainFragments(needs),
     settings.systemContext.trim() && `Additional assistant instructions:\n${settings.systemContext.trim()}`,

@@ -4,6 +4,7 @@ import { fetchActionGoalDetails, fetchServiceRequestSchema } from '../../behavio
 import type { BehaviorTreeResourceSchemas } from '../../behaviorTree/agent/types';
 import type { ROSDiscoveryResult } from '../../behaviorTree/types';
 import type { AssistantResponse } from '../types';
+import type { AssistantCapability } from '../capabilities';
 
 /**
  * Per-type action/service parameter schemas for whichever types the current discovery result
@@ -33,6 +34,13 @@ export const fetchBehaviorTreeSchemas = async (
 // LLM-output validation. Only this adapter is new: it maps its `{kind:'tree', tree}` output onto
 // this module's generalized `AssistantResponse` union.
 export { parseGeneratedBehaviorTree } from '../../behaviorTree/agent/treeGeneration';
+
+export const BEHAVIOR_TREE_CAPABILITY: AssistantCapability = {
+  id: 'behavior-tree-generation',
+  summary: 'You can build or change a Behavior Tree.',
+  detail: ['It previews on the open Behavior Tree canvas for the user to accept or reject, or is saved to their library when no canvas is open.'],
+  responseKind: 'behaviorTree',
+};
 
 export const BEHAVIOR_TREE_PROMPT_FRAGMENT = `## Behavior Tree tool
 When the user asks to create, change, fix, or extend a behavior tree, act autonomously and return ONLY one finished tree JSON object with this shape:

@@ -10,6 +10,7 @@ import type { ROSDiscoveryResult } from '../../behaviorTree/types';
 import { loadGamepadLibrary } from '../../customGamepad/gamepadStorage';
 import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGamepad/types';
 import { createRosGraphCache } from '../context/rosGraphCache';
+import { CONTEXT_CATALOG, type ContextCatalogEntry } from '../capabilities';
 import {
   captureRosout,
   fetchRosNodeDetails,
@@ -478,6 +479,13 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       })();
     };
 
+    /** Heading text comes from the shared catalog, which is also what the system prompt lists, so
+     * the browser and the model cannot describe different context. */
+    const catalogSection = (id: ContextCatalogEntry['id']) => {
+      const entry = CONTEXT_CATALOG.find(candidate => candidate.id === id)!;
+      return { id: entry.id, label: entry.label };
+    };
+
     const contextPickerSections: ContextPickerSection[] = useMemo(() => {
       const isPinned = (id: string) => pinnedChips.some(chip => chip.id === id && !chip.stale);
       const option = (value: ContextPickerOption): ContextPickerOption => ({ ...value, selected: isPinned(value.id) });
@@ -494,7 +502,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         id: `workspace:layout:${layout.id}`, label: layout.title, source: 'workspace', description: `${layout.panels.length} saved panels`,
         onSelect: () => addPinnedChip({ id: `workspace:layout:${layout.id}`, label: `Saved layout: ${layout.title}`, mention: layout.title, source: 'workspace', automatic: false, fetchedAt: Date.now(), value: layout }),
       })));
-      sections.push({ id: 'workspace', label: 'Current workspace', description: workspace.workspaceMode, options: workspaceOptions });
+      sections.push({ ...catalogSection('workspace'), description: workspace.workspaceMode, options: workspaceOptions });
 
       const openOptions: ContextPickerOption[] = [];
       if (selectedPad) openOptions.push(option({
@@ -505,34 +513,34 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         id: `bt:${activeBridgeTree.id}`, label: activeBridgeTree.name, source: 'behaviorTree', description: 'Open Behavior Tree · complete JSON',
         onSelect: () => addPinnedChip({ id: `bt:${activeBridgeTree.id}`, label: `BT: ${activeBridgeTree.name}`, mention: activeBridgeTree.name, source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: activeBridgeTree }),
       }));
-      if (openOptions.length) sections.push({ id: 'open', label: 'Open and selected', options: openOptions });
+      if (openOptions.length) sections.push({ ...catalogSection('open'), options: openOptions });
 
       const pads = readPadLibrary().map(item => option({
         id: `pad:${item.layout.id}`, label: item.name, source: 'pad', description: `${item.layout.components.length} components · complete JSON`,
         onSelect: () => addPinnedChip({ id: `pad:${item.layout.id}`, label: `Pad: ${item.name}`, mention: item.name, source: 'pad', automatic: false, fetchedAt: Date.now(), value: item.layout }),
       }));
-      sections.push({ id: 'pads', label: 'Pads', description: `${pads.length} saved`, options: pads });
+      sections.push({ ...catalogSection('pads'), description: `${pads.length} saved`, options: pads });
       const trees = readTreeLibrary().map(item => option({
         id: `bt:${item.tree.id}`, label: item.tree.name, source: 'behaviorTree', description: `${item.tree.nodes.length} nodes · complete JSON`,
         onSelect: () => addPinnedChip({ id: `bt:${item.tree.id}`, label: `BT: ${item.tree.name}`, mention: item.tree.name, source: 'behaviorTree', automatic: false, fetchedAt: Date.now(), value: item.tree }),
       }));
-      sections.push({ id: 'trees', label: 'Behavior Trees', description: `${trees.length} saved`, options: trees });
+      sections.push({ ...catalogSection('trees'), description: `${trees.length} saved`, options: trees });
 
       const resources = liveRosGraph?.resources ?? null;
       if (resources) {
-        sections.push({ id: 'topics', label: 'ROS topics', description: 'Schema + bounded live sample', options: resources.topics.map(item => option({ id: `ros:topic:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveTopic(item.name, item.type) })) });
-        sections.push({ id: 'services', label: 'ROS services', description: 'Request schema', options: resources.services.map(item => option({ id: `ros:service:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveService(item.name, item.type) })) });
-        sections.push({ id: 'actions', label: 'ROS actions', description: 'Goal schema', options: resources.actions.map(item => option({ id: `ros:action:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveAction(item.name, item.type) })) });
+        sections.push({ ...catalogSection('topics'), description: 'Schema + bounded live sample', options: resources.topics.map(item => option({ id: `ros:topic:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveTopic(item.name, item.type) })) });
+        sections.push({ ...catalogSection('services'), description: 'Request schema', options: resources.services.map(item => option({ id: `ros:service:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveService(item.name, item.type) })) });
+        sections.push({ ...catalogSection('actions'), description: 'Goal schema', options: resources.actions.map(item => option({ id: `ros:action:${item.name}`, label: item.name, source: 'ros', description: item.type, onSelect: () => retrieveAction(item.name, item.type) })) });
       }
-      sections.push({ id: 'nodes', label: 'ROS nodes', description: catalog.generation === connectionGeneration ? `${catalog.nodes.length} discovered` : 'Loading from rosapi', options: catalog.nodes.map(name => option({
+      sections.push({ ...catalogSection('nodes'), description: catalog.generation === connectionGeneration ? `${catalog.nodes.length} discovered` : 'Loading from rosapi', options: catalog.nodes.map(name => option({
         id: `ros:node:${name}`, label: name, source: 'ros', description: 'Publishers, subscribers, and services',
         onSelect: () => runContextRetrieval(async (signal, generation) => ({ id: `ros:node:${name}`, label: `Node: ${name}`, mention: name, source: 'ros', automatic: false, fetchedAt: Date.now(), generation, value: await fetchRosNodeDetails(ros!, name, signal) })),
       })) });
-      sections.push({ id: 'parameters', label: 'ROS parameters', description: catalog.generation === connectionGeneration ? `${catalog.parameters.length} discovered` : 'Availability depends on rosapi', options: catalog.parameters.map(name => option({
+      sections.push({ ...catalogSection('parameters'), description: catalog.generation === connectionGeneration ? `${catalog.parameters.length} discovered` : 'Availability depends on rosapi', options: catalog.parameters.map(name => option({
         id: `ros:parameter:${name}`, label: name, source: 'ros', description: 'Current bounded value',
         onSelect: () => runContextRetrieval(async (signal, generation) => ({ id: `ros:parameter:${name}`, label: `Parameter: ${name}`, mention: name, source: 'ros', automatic: false, fetchedAt: Date.now(), generation, value: { name, value: await fetchRosParameterValue(ros!, name, signal) } })),
       })) });
-      if (ros && isConnected) sections.push({ id: 'tf-diagnostics', label: 'TF and diagnostics', options: [
+      if (ros && isConnected) sections.push({ ...catalogSection('tf-diagnostics'), options: [
         option({ id: 'tf:snapshot', label: 'TF tree snapshot', source: 'tf', description: 'Frames, components, cycles, and parent conflicts', onSelect: () => runContextRetrieval(async (signal, generation) => ({ id: 'tf:snapshot', label: 'TF tree snapshot', source: 'tf', automatic: false, fetchedAt: Date.now(), generation, value: await captureTfSnapshotOnDemand(ros, 1800, signal) })) }),
         option({ id: 'ros:rosout', label: '/rosout capture', source: 'rosout', description: 'Up to 40 messages for 4 seconds', onSelect: () => runContextRetrieval(async (signal, generation) => ({ id: 'ros:rosout', label: '/rosout capture', source: 'rosout', automatic: false, fetchedAt: Date.now(), generation, value: await captureRosout(ros, signal) })) }),
       ] });

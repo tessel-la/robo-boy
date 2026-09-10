@@ -1,4 +1,5 @@
 import ROSLIB, { Ros } from 'roslib';
+import type { AssistantCapability } from '../capabilities';
 import {
   consumeTfMessage,
   createEmptyTfTreeState,
@@ -44,6 +45,23 @@ export interface ParsedTransformRequest {
 export interface ParsedDistanceRequest extends ParsedTransformRequest {}
 
 /** Accepts ordinary phrasing, including abbreviated "btw" and human-spaced frame names. */
+/** Declared here so it cannot drift from the two parsers below; `capabilities.test.ts` feeds every
+ * phrasing through them. */
+export const TF_CAPABILITY: AssistantCapability = {
+  id: 'tf-transform-distance',
+  summary:
+    'Transforms and distances between two TF frames are computed for the user, live and exactly, from `/tf` and `/tf_static` — before this conversation is even consulted.',
+  detail: [
+    'When they ask whether that is possible without naming both frames, answer yes and tell them to ask for it by frame. Never describe writing a TF listener, a tf2_ros node, or a script.',
+  ],
+  invocations: [
+    'transform between base_link and camera_link',
+    'distance between base_link and camera_link',
+    'distance btw panda_link0 and panda_hand',
+    'transform from odom to base_link',
+  ],
+};
+
 export const parseTransformRequest = (text: string): ParsedTransformRequest | null => {
   const compact = text.replace(/[`"']/g, '').replace(/\s+/g, ' ').trim();
   const match = compact.match(

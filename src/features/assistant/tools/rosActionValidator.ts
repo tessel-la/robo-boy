@@ -1,6 +1,8 @@
 import type { ROSDiscoveryResult } from '../../behaviorTree/types';
 import type { RosOperation } from '../../../utils/rosOperations';
 
+import type { AssistantCapability } from '../capabilities';
+
 export interface RosActionValidationIssue {
   severity: 'error' | 'warning';
   message: string;
@@ -15,6 +17,15 @@ export interface RosActionValidationIssue {
  * proposal only gets this name/type check because chat renders it for review and never executes it.
  * Documented as a known limitation, not silently assumed complete.
  */
+export const ROS_OPERATION_CAPABILITY: AssistantCapability = {
+  id: 'ros-operation-review',
+  summary: 'You cannot run anything on the robot from this chat, and neither can the user.',
+  detail: [
+    'A publish, service call, or action goal you propose is rendered as a review-only card. Say so plainly, and point at the Pad or Behavior Tree editors as where an operation actually gets run.',
+  ],
+  responseKind: 'rosAction',
+};
+
 export const validateRosActionProposal = (
   operation: RosOperation,
   discovery: ROSDiscoveryResult
