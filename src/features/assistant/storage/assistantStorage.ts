@@ -33,6 +33,7 @@ export const getDefaultAssistantSettings = (): AssistantSettings => ({
   systemContext: '',
   robotContext: '',
   ollamaUseBackendHost: true,
+  voiceLanguage: '',
 });
 
 export const loadAssistantSettings = (): AssistantSettings => {

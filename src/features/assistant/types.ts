@@ -15,6 +15,8 @@ export interface AssistantSettings {
   systemContext: string;
   robotContext: string;
   ollamaUseBackendHost: boolean;
+  /** BCP-47 tag the browser recogniser is told to expect, or '' to follow the device's language. */
+  voiceLanguage: string;
 }
 
 export interface AssistantAttachment {

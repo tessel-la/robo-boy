@@ -53,7 +53,7 @@ describe('fetchOllamaModels', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(fetchOllamaModels('http://robot.local:11434')).rejects.toThrow(
-      /Ollama model discovery failed at http:\/\/robot\.local:11434\/api: Failed to fetch\. For remote connections/
+      /Could not reach http:\/\/robot\.local:11434\/api\/tags: Failed to fetch\..*For remote connections, make sure Ollama listens/s
     );
   });
 

@@ -52,10 +52,9 @@ export const fetchOllamaModels = async (baseUrl: string, apiKey = '', signal?: A
     return Array.from(new Set<string>(names)).sort((left, right) => left.localeCompare(right));
   } catch (cause) {
     if (signal?.aborted) throw cause;
-    const detail = cause instanceof Error ? cause.message : 'Unknown connection error';
-    throw new Error(
-      `Ollama model discovery failed at ${apiBaseUrl}: ${detail}. ` +
-        'For remote connections, make sure Ollama listens on the VPN or LAN interface.'
-    );
+    // `checkedFetch` already names the URL it tried and why it failed; this adds only what is
+    // specific to Ollama, rather than repeating the address a second time.
+    const detail = cause instanceof Error ? cause.message : `Ollama model discovery failed at ${apiBaseUrl}.`;
+    throw new Error(`${detail} For remote connections, make sure Ollama listens on the VPN or LAN interface.`);
   }
 };

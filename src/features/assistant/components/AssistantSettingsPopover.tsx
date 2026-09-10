@@ -71,6 +71,21 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
           Use connected backend host
         </label>
       )}
+      <label>
+        Voice language
+        <select value={settings.voiceLanguage} onChange={event => onUpdate({ voiceLanguage: event.target.value })}>
+          {/* The browser recogniser hears everything as the language it is told to expect, so this
+              is what makes dictating in a language other than the device's own work. */}
+          <option value="">Follow this device ({navigator.language || 'en-US'})</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="it-IT">Italiano</option>
+          <option value="es-ES">Español</option>
+          <option value="fr-FR">Français</option>
+          <option value="de-DE">Deutsch</option>
+          <option value="pt-BR">Português (BR)</option>
+        </select>
+      </label>
       {settings.provider === 'ollama' ? (
         <div className="assistant-setting-field">
           <label htmlFor="assistant-ollama-model">Model</label>

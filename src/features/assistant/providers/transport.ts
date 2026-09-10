@@ -71,8 +71,31 @@ export const readNdjson = async (
   return result;
 };
 
+/**
+ * `fetch` rejects with a bare "Failed to fetch" for every reason it never got an answer — a host
+ * that is not there, a webview that blocked the origin, a relative URL with nothing behind it in
+ * the packaged app. That message alone is unactionable, so the request that failed is named along
+ * with what is worth checking.
+ */
+const describeNetworkFailure = (url: string, cause: unknown): Error => {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  const isRelative = !/^https?:\/\//i.test(url);
+  const hint = isRelative
+    ? 'That is a relative URL, which only resolves when Robo-Boy is served behind its own proxy. In the packaged app, set the provider base URL to the full address of the machine running it, such as http://192.168.1.10:11434.'
+    : /localhost|127\.0\.0\.1/i.test(url)
+      ? 'On a phone, localhost is the phone itself. Use the address of the machine running the provider on your network.'
+      : 'Check the base URL and that this device can reach it; a browser also needs the provider to allow cross-origin requests.';
+  return new Error(`Could not reach ${url}: ${detail}. ${hint}`);
+};
+
 export const checkedFetch = async (url: string, init: RequestInit): Promise<Response> => {
-  const response = await fetch(url, init);
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
+    throw describeNetworkFailure(url, cause);
+  }
   if (response.ok) return response;
   const body = await response.text();
   let message = body;

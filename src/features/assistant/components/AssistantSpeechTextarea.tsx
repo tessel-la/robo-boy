@@ -71,6 +71,8 @@ interface AssistantSpeechTextareaProps {
   voiceButtonSlot?: 'start' | 'end';
   /** Record while the button is held and stop on release, instead of toggling on click. */
   holdToRecord?: boolean;
+  /** BCP-47 tag for the browser recogniser. Empty follows the device's own language. */
+  language?: string;
   /**
    * A copy of `value` rendered behind the textarea so parts of the draft can be highlighted. A
    * textarea cannot style its own content; the backdrop supplies the marks and the real text sits
@@ -108,6 +110,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   highlight,
   onRecordAudio,
   holdToRecord,
+  language,
   voiceButtonSlot = 'start',
 }) => {
   const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
@@ -190,7 +193,9 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = navigator.language || 'en-US';
+    // The browser recogniser is told which language to expect and hears everything as that language,
+    // so speaking English into a recogniser set to the phone's Italian locale transcribes badly.
+    recognition.lang = language || navigator.language || 'en-US';
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => {
       setIsListening(false);

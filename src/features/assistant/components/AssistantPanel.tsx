@@ -512,6 +512,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               onKeyDown={handlePromptKeyDown}
               onTranscribeAudio={onTranscribeAudio}
               holdToRecord={compact}
+              language={settings.voiceLanguage}
               voiceButtonSlot={compact ? 'end' : 'start'}
               rows={1}
               autoGrow
