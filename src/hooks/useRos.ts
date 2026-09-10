@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ROSLIB from 'roslib';
 import type { Ros } from 'roslib';
-import { ConnectionParams } from '../App'; // Assuming App.tsx is in src/
+import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
 import { resolveRuntimeEndpoints } from '../runtime/runtimeConfig';
 
 // Define the hook's return type
 interface UseRosReturn {
   ros: Ros | null;
   isConnected: boolean;
-  connectionStatus: 'disconnected' | 'connecting' | 'connected';
+  connectionStatus: ConnectionStatus;
   connectionGeneration: number;
   connect: (params: ConnectionParams) => void;
   disconnect: () => void;
@@ -26,6 +26,7 @@ export const useRos = (): UseRosReturn => {
   const isConnectedRef = useRef(false);
   // Use a single ref to hold the current ROS instance. Simpler state management.
   const rosInstanceRef = useRef<Ros | null>(null);
+  const rosListenerCleanupRef = useRef<(() => void) | null>(null);
   // Ref to track if a connection attempt is in progress to avoid overlaps
   const isConnectingRef = useRef<boolean>(false);
   // Keep the last user-selected endpoint so a browser returning from standby can restore the
@@ -33,13 +34,19 @@ export const useRos = (): UseRosReturn => {
   const lastConnectionParamsRef = useRef<ConnectionParams | null>(null);
   const wasHiddenRef = useRef(false);
 
+  const closeCurrentRos = useCallback(() => {
+    const currentRos = rosInstanceRef.current;
+    rosInstanceRef.current = null;
+    rosListenerCleanupRef.current?.();
+    rosListenerCleanupRef.current = null;
+    currentRos?.close();
+  }, []);
+
   // Stable disconnect function
   const disconnect = useCallback(() => {
     if (rosInstanceRef.current) {
       console.log('[disconnect] Disconnecting ROS instance...');
-      const currentRos = rosInstanceRef.current;
-      rosInstanceRef.current = null;
-      currentRos.close();
+      closeCurrentRos();
     }
     // Reset state regardless of whether an instance existed
     console.log('[disconnect] Resetting state.');
@@ -48,7 +55,7 @@ export const useRos = (): UseRosReturn => {
     setRos(null);
     setConnectionStatus('disconnected');
     isConnectingRef.current = false;
-  }, []);
+  }, [closeCurrentRos]);
 
   const connect = useCallback(
     (params: ConnectionParams) => {
@@ -73,9 +80,7 @@ export const useRos = (): UseRosReturn => {
       // 3. Close Previous Instance
       if (rosInstanceRef.current) {
         console.log('[connect] Closing previous ROS instance ref before new attempt.');
-        const previousRos = rosInstanceRef.current;
-        rosInstanceRef.current = null;
-        previousRos.close();
+        closeCurrentRos();
       }
 
       // 4. Set Connecting Flag
@@ -94,7 +99,7 @@ export const useRos = (): UseRosReturn => {
       setConnectionGeneration(generation => generation + 1);
 
       // 6. Add Listeners
-      newRos.on('connection', () => {
+      const handleConnection = () => {
         console.log('[on.connection] Event received.');
         // Critical check: Only update state if this is still the current attempt
         if (newRos === rosInstanceRef.current) {
@@ -106,11 +111,12 @@ export const useRos = (): UseRosReturn => {
           isConnectingRef.current = false;
         } else {
           console.warn('[on.connection] Ignoring event from stale ROS instance.');
+          detachListeners();
           newRos.close();
         }
-      });
+      };
 
-      newRos.on('error', (error: Error) => {
+      const handleError = (error: Error) => {
         console.error('[on.error] Event received: ', error);
         // Only handle error if it belongs to the current attempt
         if (newRos === rosInstanceRef.current) {
@@ -119,9 +125,9 @@ export const useRos = (): UseRosReturn => {
         } else {
           console.warn('[on.error] Ignoring event from stale ROS instance.');
         }
-      });
+      };
 
-      newRos.on('close', () => {
+      const handleClose = () => {
         console.log('[on.close] Event received.');
         // Only handle close if it belongs to the current attempt
         // and wasn't an explicit disconnect already handled by error or direct call
@@ -131,9 +137,21 @@ export const useRos = (): UseRosReturn => {
         } else {
           console.warn('[on.close] Ignoring event from stale ROS instance.');
         }
-      });
+      };
+      const emitter = newRos as Ros & {
+        off?: (eventName: string, callback: (event?: unknown) => void) => void;
+      };
+      const detachListeners = () => {
+        emitter.off?.('connection', handleConnection);
+        emitter.off?.('error', handleError as (event?: unknown) => void);
+        emitter.off?.('close', handleClose);
+      };
+      newRos.on('connection', handleConnection);
+      newRos.on('error', handleError);
+      newRos.on('close', handleClose);
+      rosListenerCleanupRef.current = detachListeners;
     },
-    [disconnect]
+    [closeCurrentRos, disconnect]
   ); // connect should be stable
 
   // Mobile browsers commonly suspend a WebSocket while the screen is off. Recreate the
