@@ -422,7 +422,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
         data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
         <header className="assistant-header">
-          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><div><span className="assistant-kicker">Robo-Boy AI</span><h2 id="assistant-title">{compact ? 'Robo-Boy AI' : 'Assistant'}</h2></div></div>
+          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><h2 id="assistant-title">Robo-Boy AI</h2></div>
           <div className="assistant-header-actions">
             {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
             <button type="button" className="assistant-icon-button" onClick={() => setShowSettings(true)} aria-label="Assistant settings" title="Assistant settings"><FaCog aria-hidden="true" /></button>
@@ -517,7 +517,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               autoGrow
               highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
               textareaRef={promptRef}
-              placeholder={compact ? 'Ask about this workspace…' : 'Ask about this workspace, a Pad, ROS, TF, or a Behavior Tree…'}
+              placeholder={compact ? 'Ask Robo-Boy about your robot, or to build a Pad…' : 'Ask Robo-Boy about your workspace, or to build a Pad or a Behavior Tree…'}
               toolbar={{
                 start: (
                   <>
