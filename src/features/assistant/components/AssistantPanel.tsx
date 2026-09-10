@@ -433,7 +433,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} onClose={() => setShowSettings(false)} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
         <div ref={chatRef} className="assistant-chat" onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
-          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Build and edit Behavior Trees and Pads, look up transforms, and ask anything about your robot, your panels, or Robo-Boy itself.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}
+          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Ask Robo-Boy AI to build a Pad or a Behavior Tree, look up a transform, or explain anything in your current workspace.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
