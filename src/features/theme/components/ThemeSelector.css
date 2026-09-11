@@ -1,186 +1,192 @@
-/* Remove old button styles */
-/* .theme-toggle-button { ... } */
-/* .theme-toggle-button:hover { ... } */
-
-/* Remove switch styles */
-/* .theme-switch { ... } */
-/* .theme-switch input { ... } */
-/* .slider { ... } */
-/* .slider::before { ... } */
-/* .icon-container { ... } */
-/* .sun-icon { ... } */
-/* .moon-icon { ... } */
-/* .theme-switch input:checked + .slider::before { ... } */
-/* .theme-switch input:checked + .slider .sun-icon { ... } */
-/* .theme-switch input:checked + .slider .moon-icon { ... } */
-
-/* New Button Styles */
-.theme-selector-container { /* New container for positioning */
-  position: fixed;
-  bottom: var(--floating-action-bottom);
-  right: max(var(--floating-action-inset), env(safe-area-inset-right, 0px));
-  z-index: 1000; /* Ensure it's above other content */
+.theme-selector-container {
+  min-width: 0;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
 }
 
-.theme-selector-button { 
-  /* Styles for the main toggle button */
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  width: var(--floating-action-size);
-  height: var(--floating-action-size);
+.theme-selector-button {
+  width: 100%;
+  min-height: 44px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  transition: all 0.3s ease;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-color);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
 }
 
-.theme-selector-button:hover {
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  transform: translateY(-2px);
+.theme-selector-button:hover,
+.theme-selector-button[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
 }
 
 .icon-wrapper {
-  width: var(--floating-action-icon);
-  height: var(--floating-action-icon);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden; 
-}
-
-.icon-wrapper svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
   color: var(--primary-color);
-  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out; 
 }
 
-/* Popup Menu Styles */
-.theme-popup-menu {
-  position: absolute;
-  bottom: calc(var(--floating-action-size) + 15px); /* Position above the button */
-  right: 0;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(10px) scale(0.95); /* Initial state for animation */
-  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
-}
-
-.theme-popup-menu.open {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0) scale(1); /* Final state for animation */
-}
-
-.theme-popup-menu button {
-  /* Keep base styles */
-}
-
-/* Rename existing button style for clarity */
-.theme-select-button {
-    background-color: transparent;
-    border: none;
-    color: var(--text-color);
-    padding: 8px 12px;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    width: 100%;
-    /* Remove flex-grow if previously added */
-}
-
-.theme-select-button:hover {
-  background-color: var(--background-secondary);
-}
-
+.icon-wrapper svg,
 .theme-select-button svg {
   width: 18px;
   height: 18px;
+}
+
+.theme-selector-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.theme-selector-copy > :first-child {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.theme-selector-copy > :last-child {
+  min-width: 0;
+  max-width: 48%;
+  overflow: hidden;
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-selector-chevron {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  opacity: 0.62;
+  transition: transform 0.15s ease;
+}
+
+.theme-selector-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.theme-popup-menu {
+  max-height: min(240px, calc(var(--safe-height, 100vh) - 220px));
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  padding: 3px 0 0 7px;
+}
+
+.theme-item-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.theme-select-button {
+  min-width: 0;
+  min-height: 36px;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-color);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.theme-select-button:hover {
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+}
+
+.theme-select-button svg {
+  flex: 0 0 18px;
   color: var(--primary-color);
 }
 
 .theme-select-button.active {
-  font-weight: bold;
-  background-color: var(--primary-color);
   color: var(--button-text-color);
+  background: var(--primary-color);
+  font-weight: 750;
 }
 
 .theme-select-button.active svg {
-  color: var(--button-text-color);
-}
-
-/* Style for the row containing theme button and actions */
-.theme-item-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between; /* Push actions to the right */
-    gap: 5px;
-    width: 100%;
+  color: currentColor;
 }
 
 .theme-item-actions {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0; /* Prevent action buttons from shrinking */
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
 }
 
 .action-button {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px; /* Small size for action icons */
-    height: 24px;
-    transition: background-color 0.2s ease, color 0.2s ease;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-color-secondary);
+  background: transparent;
+  box-shadow: none;
 }
 
 .action-button:hover {
-    background-color: var(--background-secondary);
-    color: var(--text-color);
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
 }
 
 .action-button.delete-button:hover {
-    color: var(--error-color); /* Red hover for delete */
+  color: var(--error-color);
 }
 
 .action-button svg {
-    width: 14px;
-    height: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .create-new-theme-button {
-    margin-top: 8px; /* Space above */
-    padding: 8px 12px;
-    background-color: var(--background-secondary);
-    color: var(--text-color);
-    border: 1px dashed var(--border-color); /* Dashed border */
-    text-align: center;
-    font-weight: 500;
-    cursor: pointer;
-    border-radius: 4px;
-    width: 100%;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+  min-height: 34px;
+  margin-top: 3px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 4%, transparent);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
 }
 
 .create-new-theme-button:hover {
-    background-color: var(--border-color);
-    border-color: var(--text-secondary);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 9%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-selector-chevron {
+    transition: none;
+  }
 }

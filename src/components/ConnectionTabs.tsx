@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
 
@@ -20,6 +20,7 @@ export interface ConnectionTabsProps {
   onManageWorkspaceLayouts?: () => void;
   onManagePanels?: () => void;
   workspaceLayoutLabel?: string;
+  themeControl?: ReactNode;
 }
 
 const statusLabel: Record<ConnectionStatus, string> = {
@@ -56,6 +57,7 @@ export default function ConnectionTabs({
   onManageWorkspaceLayouts,
   onManagePanels,
   workspaceLayoutLabel,
+  themeControl,
 }: ConnectionTabsProps) {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
@@ -197,6 +199,7 @@ export default function ConnectionTabs({
               <span>Installations &amp; permissions</span>
             </button>
           )}
+          {themeControl}
           <button type="button" className="connection-switcher-add" onClick={openAnotherConnection}>
             <PlusIcon />
             <span>Open another connection</span>
