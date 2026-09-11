@@ -1,6 +1,7 @@
 import type { Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import type { GamepadComponentConfig } from './types';
+import { runSerializedRosapi } from '../../utils/rosapiQueue';
 export { buildCameraStreamUrl } from '../../utils/cameraStreamUrl';
 
 export interface TopicInfo {
@@ -418,7 +419,7 @@ export function flattenNumericFields(typedefs: FieldTypedef[], messageType: stri
 export async function fetchNumericFields(ros: Ros, messageType: string): Promise<NumericFieldOption[]> {
   if (!messageType) return [];
 
-  return new Promise(resolve => {
+  return runSerializedRosapi(ros, () => new Promise(resolve => {
     try {
       const service = new ROSLIB.Service({
         ros,
@@ -436,7 +437,7 @@ export async function fetchNumericFields(ros: Ros, messageType: string): Promise
     } catch {
       resolve(COMMON_NUMERIC_FIELDS[messageType] ?? []);
     }
-  });
+  }));
 }
 
 function readPathSegment(value: unknown, segment: string): unknown {

@@ -41,7 +41,7 @@ import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
 import ServiceParameterEditor from './ServiceParameterEditor';
 import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
-import BehaviorTreeAgentPanel from './BehaviorTreeAgentPanel';
+import type { BehaviorTreeAssistantBridge } from '../../assistant/types';
 import { buildTreeDiff, summarizeTreeChanges } from './BehaviorTreeAgentPreview';
 import { BehaviorTreeExecutor } from '../engine/executor';
 import {
@@ -109,6 +109,14 @@ interface BehaviorTreePanelProps {
   isActive: boolean;
   onExecutionChange?: (snapshot: BehaviorTreeExecutionSnapshot) => void;
   onExecutionControlsChange?: (controls: BehaviorTreeExecutionControls | null) => void;
+  /** Workspace panel id for this instance — multiple BT tiles can coexist in the desktop
+   * workspace, so the assistant bridge registry is keyed by this. Defaults to 'primary' for the
+   * single-instance mobile/legacy render site. */
+  panelId?: string;
+  /** Opens the global assistant (a singleton conversation) with this panel's BT context pinned —
+   * replaces the old embedded BehaviorTreeAgentPanel entirely; see docs/ai-assistant.md. */
+  onOpenAssistant?: (context: { panelId: string }) => void;
+  onRegisterAssistantBridge?: (panelId: string, bridge: BehaviorTreeAssistantBridge | null) => void;
 }
 
 export interface BehaviorTreeExecutionSnapshot {
@@ -514,6 +522,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   isActive,
   onExecutionChange,
   onExecutionControlsChange,
+  panelId = 'primary',
+  onOpenAssistant,
+  onRegisterAssistantBridge,
 }) => {
   const [nodes, setNodes] = useState<BehaviorTreeNode[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -527,12 +538,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
-  const [isAgentOpen, setIsAgentOpen] = useState(false);
-  const [inlineAgentPosition, setInlineAgentPosition] = useState<{
-    left: number;
-    top: number;
-    width: number;
-  } | null>(null);
   const [agentPreviewTree, setAgentPreviewTree] = useState<BehaviorTree | null>(null);
   const [agentPreviewDimensions, setAgentPreviewDimensions] = useState<
     Record<string, { width: number; height: number }>
@@ -566,7 +571,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     treeName: '',
   });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const persistentExecutorRef = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentSessionIdRef = useRef<string | undefined>(undefined);
@@ -2133,27 +2137,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     onExecutionChange?.(executionSnapshot);
   }, [executionSnapshot, onExecutionChange]);
 
+  // Ctrl/Cmd+I used to open a tiny canvas-anchored micro-form; the global assistant is now a
+  // lightweight, non-modal, always-reachable panel, so this shortcut simply opens/focuses it with
+  // this tree pinned instead of maintaining a second, canvas-position-dependent input surface.
   const openInlineAgentPrompt = useCallback(() => {
-    const panel = reactFlowWrapper.current?.closest('.behavior-tree-panel');
-    if (!(panel instanceof HTMLElement)) return;
-    const bounds = panel.getBoundingClientRect();
-    const pointer = lastCanvasPointerRef.current ?? {
-      x: bounds.left + bounds.width / 2,
-      y: bounds.top + bounds.height / 2,
-    };
-    const localX = Number.isFinite(pointer.x) ? pointer.x - bounds.left : bounds.width / 2;
-    const localY = Number.isFinite(pointer.y) ? pointer.y - bounds.top : bounds.height / 2;
-    const width = Math.min(360, Math.max(180, bounds.width - 24));
-    const left = localX + width + 24 <= bounds.width
-      ? localX + 12
-      : Math.max(12, localX - width - 12);
-    const top = localY + 66 <= bounds.height
-      ? Math.max(62, localY + 12)
-      : Math.max(62, localY - 58);
-
-    setIsAgentOpen(false);
-    setInlineAgentPosition({ left, top, width });
-  }, []);
+    onOpenAssistant?.({ panelId });
+  }, [onOpenAssistant, panelId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2426,6 +2415,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       edges: edges.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)),
     };
   }, [behaviorNodes, currentTree, edges, selectedNodes]);
+
+  // Registers this panel with the global assistant as the active BT document (plan §3.4):
+  // formalizes the exact seven-callback contract this panel used to pass to its own embedded
+  // BehaviorTreeAgentPanel. The assistant calls `applyPreview`/`restoreCheckpoint` instead of this
+  // panel rendering its own chat UI; all diff/canvas-overlay/accept-mode logic below is unchanged.
+  useEffect(() => {
+    if (!onRegisterAssistantBridge) return;
+    const bridge: BehaviorTreeAssistantBridge = {
+      panelId,
+      label: currentTree?.name ?? 'Behavior Tree',
+      getCurrentTree: () => currentTree,
+      getSelectedTreeContext: () => selectedTreeContext,
+      getPreviewTree: () => agentPreviewTree,
+      captureCheckpoint: () => createHistorySnapshot(),
+      applyPreview: tree => {
+        setAgentPreviewTree(tree);
+        setAgentPreviewDimensions({});
+        if (tree) fitAgentPreviewInView();
+      },
+      restoreCheckpoint: checkpoint => restoreAgentCheckpoint(checkpoint),
+      notify: notice => showSaveNotice(notice),
+    };
+    onRegisterAssistantBridge(panelId, bridge);
+    return () => onRegisterAssistantBridge(panelId, null);
+  }, [
+    agentPreviewTree,
+    createHistorySnapshot,
+    currentTree,
+    fitAgentPreviewInView,
+    onRegisterAssistantBridge,
+    panelId,
+    restoreAgentCheckpoint,
+    selectedTreeContext,
+    showSaveNotice,
+  ]);
+
   const displayedEdges = useMemo(() => {
     const nodeStatusById = new Map(
       behaviorNodes.map((node) => [node.id, node.data.status ?? ExecutionStatus.Idle])
@@ -2533,7 +2558,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (!isFinitePoint(position)) return;
       addNodeAtPosition(BehaviorNodeType.Subtree, position, agentPreviewTree, { avoidOverlap: true });
     }
-    setIsAgentOpen(false);
     clearAgentPreview();
     window.requestAnimationFrame(() => centerTreeInView());
   }, [addNodeAtPosition, agentPreviewTree, centerTreeInView, clearAgentPreview, persistEditorTree, screenToFlowPosition]);
@@ -2685,7 +2709,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleCanvasPointerMoveCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      lastCanvasPointerRef.current = { x: event.clientX, y: event.clientY };
       const gesture = customBoxSelectionGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
@@ -2739,7 +2762,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     manualEdgeSelectionRef.current = null;
     setOrderingParentId(null);
     setIsPaletteCollapsed(true);
-    setInlineAgentPosition(null);
     setSelectedNodes([]);
     setSelectedEdges([]);
     applySelectionState(new Set(), new Set());
@@ -3076,7 +3098,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   return (
-    <div className={`behavior-tree-panel${isAgentOpen ? ' bt-agent-open' : ''}`} data-testid="behavior-tree-panel">
+    <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
         currentTree={currentTree}
         isExecuting={isExecuting}
@@ -3113,10 +3135,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           setPersistentExecution(enabled);
           savePersistentExecutionPreference(enabled);
         }}
-        onOpenAgent={() => {
-          setInlineAgentPosition(null);
-          setIsAgentOpen(true);
-        }}
+        onOpenAgent={() => onOpenAssistant?.({ panelId })}
         onRename={handleRename}
         blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
         blackboardTypes={currentTree?.blackboardTypes || {}}
@@ -3425,27 +3444,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         </div>
       </div>
 
-      <BehaviorTreeAgentPanel
-        open={isAgentOpen}
-        ros={ros}
-        isConnected={isConnected}
-        currentTree={currentTree}
-        selectedTreeContext={selectedTreeContext}
-        previewTree={agentPreviewTree}
-        inlinePosition={inlineAgentPosition}
-        onInlineClose={() => setInlineAgentPosition(null)}
-        onClose={() => setIsAgentOpen(false)}
-        captureCheckpoint={createHistorySnapshot}
-        onRestoreCheckpoint={restoreAgentCheckpoint}
-        onNotify={showSaveNotice}
-        onPreviewChange={tree => {
-          setAgentPreviewTree(tree);
-          setAgentPreviewDimensions({});
-          if (tree) {
-            fitAgentPreviewInView();
-          }
-        }}
-      />
 
       {editingAction && (
         <ActionParameterEditor

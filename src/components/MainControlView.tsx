@@ -69,6 +69,9 @@ import {
   type WorkspaceLayoutState,
   type WorkspaceSplitAxis,
 } from './workspaceLayout';
+import GlobalAssistant, { type GlobalAssistantHandle } from '../features/assistant/components/GlobalAssistant';
+import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceSnapshot';
+import type { BehaviorTreeAssistantBridge } from '../features/assistant/types';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -1004,6 +1007,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentBtSessionId = useRef<string | undefined>(undefined);
   const { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect } = useRos(); // Use the hook
+  const assistantRef = useRef<GlobalAssistantHandle>(null);
+  const handleOpenAssistant = useCallback((context: { panelId: string }) => {
+    assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
+  }, []);
+  const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
+    assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
+  }, []);
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
@@ -1638,6 +1648,46 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     // Trigger refresh of custom gamepad list in AddPanelMenu
     setCustomGamepadRefreshKey(prev => prev + 1);
   };
+
+  /**
+   * Where a tagged resource takes the user when they click it in the transcript, or null when it has
+   * nowhere to go. Only something already on screen counts: a saved Pad or a ROS topic has no view
+   * waiting for it, and a tag that leads nowhere should not look clickable.
+   */
+  const assistantResourceTarget = useCallback((resourceId: string): { workspaceIndex: number } | { panelId: string } | null => {
+    const layoutId = resourceId.match(/^pad:(.+)$/)?.[1];
+    const panelId = resourceId.match(/^workspace:panel:(?:mobile:)?(.+)$/)?.[1];
+
+    const workspaceIndex = workspacePanelsRef.current.findIndex(panel =>
+      (panelId !== undefined && panel.id === panelId) || (layoutId !== undefined && panel.type === 'pad' && panel.layoutId === layoutId)
+    );
+    if (workspaceIndex >= 0) return { workspaceIndex };
+
+    const active = activePanels.find(panel =>
+      (panelId !== undefined && panel.id === panelId) || (layoutId !== undefined && panel.layoutId === layoutId)
+    );
+    return active ? { panelId: active.id } : null;
+  }, [activePanels]);
+
+  const canOpenAssistantResource = useCallback(
+    (resourceId: string) => assistantResourceTarget(resourceId) !== null,
+    [assistantResourceTarget]
+  );
+
+  const handleOpenAssistantResource = useCallback((resourceId: string): boolean => {
+    const target = assistantResourceTarget(resourceId);
+    if (!target) return false;
+    if ('workspaceIndex' in target) setActiveMobileWindowIndex(Math.min(target.workspaceIndex, 1));
+    else setSelectedPanelId(target.panelId);
+    return true;
+  }, [assistantResourceTarget]);
+
+  const handleReviewAssistantPad = useCallback((layout: CustomGamepadLayout) => {
+    const existing = loadGamepadLibrary().some(item => item.id === layout.id || item.layout.id === layout.id);
+    const matchingWorkspacePanel = workspacePanelsRef.current.find(panel => panel.type === 'pad' && panel.layoutId === layout.id);
+    setWorkspacePadEditorTargetId(matchingWorkspacePanel?.id ?? null);
+    setEditorSession({ mode: existing ? 'edit' : 'create', initialLayout: layout });
+  }, []);
 
   const handleCustomGamepadDeleted = (layoutId: string) => {
     setActivePanels(prev => {
@@ -2765,6 +2815,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               onExecutionControlsChange={controls => {
                 btExecutionControls.current = controls;
               }}
+              panelId="primary"
+              onOpenAssistant={handleOpenAssistant}
+              onRegisterAssistantBridge={handleRegisterAssistantBridge}
             />
           ) : (
             <div className="placeholder">Connect to ROS to use Behavior Trees</div>
@@ -3050,6 +3103,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onExecutionControlsChange={controls => {
             btExecutionControls.current = controls;
           }}
+          panelId={panel.id}
+          onOpenAssistant={handleOpenAssistant}
+          onRegisterAssistantBridge={handleRegisterAssistantBridge}
         />
       );
     }
@@ -3958,6 +4014,97 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           ros={ros}
         />
       )}
+
+      {/* Global AI assistant — a single top-level mount per docs/architecture.md's "Adding a
+          Feature" guidance; all conversation/provider/tool logic lives in the feature module, not
+          here. The workspace snapshot below is a bounded, serializable read of state this
+          component already owns (see docs/ai-assistant.md's capability matrix). */}
+      <GlobalAssistant
+        ref={assistantRef}
+        ros={ros}
+        isConnected={isConnected}
+        connectionGeneration={connectionGeneration}
+        onReviewPadProposal={handleReviewAssistantPad}
+        onOpenResource={handleOpenAssistantResource}
+        canOpenResource={canOpenAssistantResource}
+        workspace={buildWorkspaceSnapshot({
+          connectionStatus,
+          panels: [
+            ...workspacePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              selected: !isWorkspaceStacked,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            ...mobileWorkspacePanels.map((panel, index) => ({
+              id: `mobile:${panel.id}`,
+              type: panel.type,
+              title: panel.title,
+              selected: isWorkspaceStacked && index === activeMobileWindowIndex,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            ...activePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.name,
+              selected: panel.id === selectedPanelId,
+              configuration: panel.layoutId ? { layoutId: panel.layoutId } : {},
+            })),
+          ],
+          selectedPadLayoutId:
+            (isWorkspaceStacked ? activeMobilePanel?.layoutId : workspacePanels.find(panel => panel.type === 'pad')?.layoutId) ??
+            activePanels.find(panel => panel.id === selectedPanelId)?.layoutId ??
+            null,
+          // The active BT bridge (registered by whichever BehaviorTreePanel is mounted) already
+          // supplies the live current-tree chip with richer data than an id here would; not
+          // duplicating that plumbing at the workspace-snapshot level is a deliberate v1 scope
+          // limit, documented in docs/ai-assistant.md.
+          openBehaviorTreeId: null,
+          viewMode,
+          workspaceMode: isWorkspaceStacked
+            ? (isMobileSplitView ? 'mobile-split' : 'mobile-single')
+            : 'desktop',
+          currentLayout: {
+            id: activeWorkspaceLayoutId,
+            title: activeWorkspaceLayout?.title ?? 'Current workspace',
+            panels: workspacePanels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            layout: capturedWorkspaceLayout,
+          },
+          savedLayouts: savedWorkspaceLayouts.map(layout => ({
+            id: layout.id,
+            title: layout.title,
+            panels: layout.panels.map(panel => ({
+              id: panel.id,
+              type: panel.type,
+              title: panel.title,
+              configuration: {
+                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
+                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
+                ...(panel.panelState ? { panelState: panel.panelState } : {}),
+              },
+            })),
+            layout: layout.layout,
+          })),
+        })}
+      />
     </div>
   );
 };

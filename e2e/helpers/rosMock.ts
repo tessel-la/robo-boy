@@ -4,12 +4,16 @@ type MockRosResources = {
   topics?: Array<{ name: string; type: string }>;
   services?: Array<{ name: string; type: string }>;
   actionServers?: Array<{ name: string; type: string }>;
+  nodes?: Array<{ name: string; subscribing?: string[]; publishing?: string[]; services?: string[] }>;
+  parameters?: Record<string, unknown>;
 };
 
 const defaultResources: Required<MockRosResources> = {
   topics: [{ name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' }],
   services: [{ name: '/set_bool', type: 'std_srvs/srv/SetBool' }],
   actionServers: [{ name: '/navigate_to_pose', type: 'nav2_msgs/action/NavigateToPose' }],
+  nodes: [{ name: '/controller', subscribing: [], publishing: ['/cmd_vel'], services: ['/set_bool'] }],
+  parameters: { '/controller/max_velocity': 1.5 },
 };
 
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
@@ -17,6 +21,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     topics: resources.topics ?? defaultResources.topics,
     services: resources.services ?? defaultResources.services,
     actionServers: resources.actionServers ?? defaultResources.actionServers,
+    nodes: resources.nodes ?? defaultResources.nodes,
+    parameters: resources.parameters ?? defaultResources.parameters,
   };
 
   await page.addInitScript(initResources => {
@@ -132,6 +138,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
         const action = initResources.actionServers.find(item => item.name === args.action);
         const serviceInfo = initResources.services.find(item => item.name === args.service);
         const topicInfo = initResources.topics.find(item => item.name === args.topic);
+        const nodeInfo = initResources.nodes.find(item => item.name === args.node);
 
         switch (service) {
           case '/rosapi/topics':
@@ -149,6 +156,18 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           case '/rosapi/message_details':
           case '/rosapi/service_request_details':
             return { typedefs: [] };
+          case '/rosapi/nodes':
+            return { nodes: initResources.nodes.map(item => item.name) };
+          case '/rosapi/node_details':
+            return {
+              subscribing: nodeInfo?.subscribing ?? [],
+              publishing: nodeInfo?.publishing ?? [],
+              services: nodeInfo?.services ?? [],
+            };
+          case '/rosapi/get_param_names':
+            return { names: Object.keys(initResources.parameters) };
+          case '/rosapi/get_param':
+            return { value: JSON.stringify(initResources.parameters[args.name]) };
           default:
             return {};
         }

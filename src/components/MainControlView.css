@@ -352,6 +352,31 @@
   padding: 3px;
 }
 
+.top-bar .assistant-toolbar-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.top-bar .assistant-toolbar-button:hover,
+.top-bar .assistant-toolbar-button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  outline: none;
+}
+
+.top-bar .assistant-toolbar-button svg {
+  width: 19px;
+  height: 19px;
+}
+
 .layout-controls {
   display: flex;
   align-items: center;

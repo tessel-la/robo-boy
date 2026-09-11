@@ -1,0 +1,1368 @@
+.assistant-overlay {
+  position: fixed;
+  z-index: 1400;
+  top: calc(48px + var(--safe-area-top, 0px));
+  left: 0;
+  bottom: 0;
+  width: clamp(420px, 32vw, 480px);
+  pointer-events: none;
+}
+
+.assistant-panel {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-width: 0 1px 0 0;
+  background: var(--card-bg, #fff);
+  color: var(--text-color, #1f2937);
+  box-shadow: 12px 0 30px rgba(15, 23, 42, 0.16);
+  pointer-events: auto;
+}
+
+.assistant-header {
+  display: flex;
+  min-width: 0;
+  /* One line of title now, so the bar no longer needs the height two lines asked for. */
+  min-height: 50px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, #d9dee7);
+  background: var(--card-bg, #fff);
+}
+
+.assistant-title,
+.assistant-header-actions,
+.assistant-inline-actions,
+.assistant-message-actions {
+  display: flex;
+  align-items: center;
+}
+
+.assistant-title {
+  min-width: 0;
+  gap: 9px;
+}
+
+.assistant-avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  /* ✦ sits high in its em box, so centring the box does not centre the glyph. */
+  padding-top: 2px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 28%, var(--border-color, #d9dee7));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, var(--card-bg, #fff));
+  color: var(--primary-color, #2563eb);
+  font-size: 27px;
+  line-height: 1;
+}
+
+.assistant-header h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-header-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.assistant-icon-button,
+.assistant-header-actions .assistant-new {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.assistant-icon-button {
+  display: grid;
+  width: 44px;
+  padding: 0;
+  place-items: center;
+  font-size: 15px;
+}
+
+.assistant-header-actions .assistant-new {
+  padding: 0 9px;
+  color: var(--primary-color, #2563eb);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-icon-button:hover,
+.assistant-header-actions .assistant-new:hover,
+.assistant-icon-button:focus-visible,
+.assistant-header-actions .assistant-new:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 9%, transparent);
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-chat {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 18px 16px 24px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.assistant-empty {
+  display: grid;
+  max-width: 340px;
+  align-self: center;
+  margin: auto 0;
+  padding: 28px 18px;
+  justify-items: center;
+  color: var(--text-secondary, #64748b);
+  text-align: center;
+}
+
+.assistant-empty > span {
+  margin-bottom: 12px;
+  color: var(--primary-color, #2563eb);
+  font-size: 32px;
+  line-height: 1;
+}
+
+.assistant-empty h3 {
+  margin: 0;
+  color: var(--text-color, #1f2937);
+  font-size: 17px;
+}
+
+.assistant-empty p {
+  margin: 9px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.assistant-empty-hint {
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.assistant-empty-hint strong {
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-message {
+  position: relative;
+  width: fit-content;
+  max-width: min(92%, 700px);
+}
+
+.assistant-message.user {
+  align-self: flex-end;
+}
+
+.assistant-message-role {
+  display: block;
+  margin: 0 4px 5px;
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.assistant-message.user .assistant-message-role {
+  text-align: right;
+}
+
+.assistant-message-content {
+  overflow-wrap: anywhere;
+}
+
+.assistant-message-content p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.assistant-message-content p,
+.assistant-message-content pre {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 12px;
+  background: var(--background-secondary, #f6f8fb);
+  color: var(--text-color, #1f2937);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.assistant-message.user .assistant-message-content p {
+  border-color: var(--primary-color, #2563eb);
+  background: var(--primary-color, #2563eb);
+  color: var(--button-text-color, #fff);
+}
+
+.assistant-message-content pre,
+.assistant-proposal-card pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-message-actions {
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.assistant-message-actions button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.assistant-message-actions button:hover,
+.assistant-message-actions button:focus-visible {
+  outline: none;
+  background: var(--background-secondary, #f6f8fb);
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-message-attachments,
+.assistant-context-tags,
+.assistant-composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assistant-composer-attachments:empty {
+  display: none;
+}
+
+/* A picture and a recording are the message, not a filename: show the one and play the other. */
+.assistant-message-image {
+  display: block;
+  max-width: min(260px, 100%);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 10px;
+  background: none;
+  cursor: zoom-in;
+}
+
+.assistant-message-image img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.assistant-context-tag.image img {
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.assistant-drop-overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 8px;
+  display: grid;
+  gap: 8px;
+  place-content: center;
+  justify-items: center;
+  border: 2px dashed var(--primary-color, #2563eb);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 12%, var(--card-bg, #fff));
+  color: var(--primary-color, #2563eb);
+  font-size: 13px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+.assistant-drop-overlay svg {
+  width: 22px;
+  height: 22px;
+}
+
+.assistant-lightbox {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  place-items: center;
+  background: rgba(9, 12, 20, 0.86);
+  cursor: zoom-out;
+}
+
+.assistant-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.assistant-lightbox button {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* One treatment for every kind of resource, tinted from the text colour of whatever it sits on.
+   Colouring by source gave a workspace tag the theme's primary -- the same colour as the user's own
+   message bubble -- so it vanished into it while a Pad tag beside it stayed visible. `currentColor`
+   keeps a tag legible on any surface in any theme.
+
+   Zero padding and no border on purpose: behind the composer's textarea this mark must occupy
+   exactly the width of the text it colours, or everything after it drifts out of alignment. */
+.assistant-inline-tag {
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  color: inherit;
+  font-weight: 700;
+}
+
+.assistant-message-attachments {
+  margin-top: 6px;
+}
+
+.assistant-message-attachments span,
+.assistant-context-tag {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 999px;
+  background: var(--card-bg, #fff);
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+}
+
+.assistant-message-attachments span {
+  overflow: hidden;
+  padding: 5px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-status {
+  align-self: flex-start;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--background-secondary, #f6f8fb);
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.assistant-status.error,
+.assistant-attachment-error,
+.assistant-speech-error,
+.assistant-model-error,
+.assistant-proposal-warning {
+  color: var(--error-color, #dc2626);
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.assistant-suggestions button,
+.assistant-inline-actions button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 38%, var(--border-color, #d9dee7));
+  border-radius: 8px;
+  background: var(--card-bg, #fff);
+  color: var(--primary-color, #2563eb);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.assistant-context-used {
+  margin-top: 7px;
+}
+
+.assistant-context-used summary {
+  min-height: 30px;
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 30px;
+  cursor: pointer;
+}
+
+.assistant-context-used ul {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 9px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 8px;
+  background: var(--background-secondary, #f6f8fb);
+  list-style: none;
+}
+
+.assistant-context-used li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.assistant-context-used li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-context-used li em {
+  color: var(--text-secondary, #64748b);
+  font-style: normal;
+}
+
+.assistant-proposal-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 26%, var(--border-color, #d9dee7));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 5%, var(--card-bg, #fff));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.assistant-proposal-card p,
+.assistant-proposal-card pre {
+  margin: 0;
+}
+
+.assistant-proposal-card small,
+.assistant-message-note {
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+}
+
+.assistant-message-edit {
+  /* Anchors this field's own mention picker, and matches the composer's textarea metrics so the
+     highlight backdrop lines up with the text. */
+  position: relative;
+  display: grid;
+  min-width: min(320px, 78vw);
+  gap: 8px;
+  --assistant-textarea-padding: 10px;
+}
+
+/* The frame lives on the shell, not the textarea, so the backdrop's box is the textarea's box. */
+.assistant-message-edit .assistant-textarea-shell {
+  overflow: hidden;
+  border: 1px solid var(--primary-color, #2563eb);
+  border-radius: 9px;
+  background: var(--card-bg, #fff);
+}
+
+.assistant-message-edit textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 88px;
+  padding: var(--assistant-textarea-padding);
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-color, #1f2937);
+  font: inherit;
+  resize: vertical;
+}
+
+.assistant-inline-actions {
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.assistant-inline-actions button.secondary {
+  border-color: var(--border-color, #d9dee7);
+  color: var(--text-secondary, #64748b);
+}
+
+.assistant-context-summary {
+  padding: 7px 12px 0;
+  border-top: 1px solid var(--border-color, #d9dee7);
+  background: var(--card-bg, #fff);
+}
+
+.assistant-context-summary > button {
+  display: grid;
+  width: 100%;
+  min-height: 42px;
+  grid-template-columns: 26px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--background-secondary, #f6f8fb);
+  color: var(--text-color, #1f2937);
+  text-align: left;
+  cursor: pointer;
+}
+
+.assistant-context-summary > button > svg {
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-context-summary > button > span {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.assistant-context-count {
+  justify-self: end;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 16%, transparent);
+  color: var(--primary-color, #2563eb);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.assistant-context-summary > button > small {
+  overflow: hidden;
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-form {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  padding: 7px 12px max(10px, env(safe-area-inset-bottom));
+  background: var(--card-bg, #fff);
+}
+
+.assistant-context-tags:empty {
+  display: none;
+}
+
+.assistant-context-tag {
+  min-width: 0;
+  min-height: 30px;
+  padding-left: 9px;
+  border-color: color-mix(in srgb, var(--primary-color, #2563eb) 28%, var(--border-color, #d9dee7));
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 7%, var(--card-bg, #fff));
+}
+
+
+
+/* A tag that leads somewhere reads as a link without changing the text metrics the composer
+   backdrop depends on. */
+.assistant-inline-tag.openable {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.assistant-inline-tag.openable:hover,
+.assistant-inline-tag.openable:focus-visible {
+  outline: none;
+  text-decoration: underline;
+}
+
+
+.assistant-context-tag > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-context-tag button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.assistant-composer {
+  min-width: 0;
+  padding: 4px 6px 6px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 12px;
+  background: var(--background-color, #fff);
+}
+
+.assistant-composer:focus-within {
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 13%, transparent);
+}
+
+/* Attach, draw and the microphone read as one group on the left; send stays alone on the right. */
+.assistant-speech-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.assistant-speech-toolbar-start {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Sits in the toolbar row while recording, so it costs no height of its own. */
+.assistant-speech-toolbar .assistant-speech-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding-left: 2px;
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-speech-toolbar .assistant-speech-status.is-listening {
+  color: var(--error-color, #dc2626);
+}
+
+.assistant-speech-toolbar-start button,
+.assistant-send {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.assistant-speech-toolbar-start button {
+  display: grid;
+  width: 44px;
+  padding: 0;
+  place-items: center;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  font-size: 15px;
+}
+
+.assistant-composer-speech { min-width: 0; }
+
+.assistant-composer-speech > .assistant-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.assistant-textarea-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/* A textarea is inline by default, so its line box leaves a descender strip under the field. */
+.assistant-textarea-shell textarea {
+  display: block;
+}
+
+.assistant-composer {
+  --assistant-textarea-padding: 9px 6px 5px;
+  --assistant-textarea-font-size: 13px;
+  --assistant-textarea-line-height: 1.45;
+}
+
+.assistant-composer textarea {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 220px;
+  min-height: 34px;
+  padding: var(--assistant-textarea-padding);
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-color, #1f2937);
+  font: inherit;
+  font-size: var(--assistant-textarea-font-size);
+  line-height: var(--assistant-textarea-line-height);
+  resize: none;
+}
+
+/* Sits under the textarea and must wrap identically: only its tag marks are visible, and the real
+   text is painted over them by the transparent-background textarea above. */
+.assistant-textarea-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: var(--assistant-textarea-padding, 10px);
+  color: transparent;
+  font: inherit;
+  font-size: var(--assistant-textarea-font-size, inherit);
+  line-height: var(--assistant-textarea-line-height, inherit);
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+/* The backdrop paints no text, so `currentColor` is transparent here and the tint has to name the
+   surface's own text colour instead. */
+.assistant-textarea-highlight .assistant-inline-tag {
+  background: color-mix(in srgb, var(--text-color, #1f2937) 20%, transparent);
+  color: transparent;
+}
+
+.assistant-mic {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.assistant-textarea-shell:not(.has-toolbar) .assistant-mic {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* In the send position it is the primary control, so it looks like one. */
+.assistant-mic.is-primary {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: var(--primary-color, #2563eb);
+  color: var(--button-text-color, #fff);
+  font-size: 16px;
+}
+
+.assistant-mic.is-primary.listening {
+  background: var(--error-color, #dc2626);
+  color: #fff;
+}
+
+.assistant-speech-toolbar-start .assistant-mic {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.assistant-mic.listening {
+  background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
+  color: var(--error-color, #dc2626);
+}
+
+.assistant-send {
+  display: grid;
+  width: 44px;
+  padding: 0;
+  place-items: center;
+  background: var(--primary-color, #2563eb);
+  color: var(--button-text-color, #fff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.assistant-send svg {
+  width: 15px;
+  height: 15px;
+}
+
+.assistant-launcher {
+  position: fixed;
+  z-index: 1250;
+  bottom: var(--floating-action-bottom);
+  left: max(var(--floating-action-inset), env(safe-area-inset-left, 0px));
+  display: grid;
+  width: var(--floating-action-size);
+  height: var(--floating-action-size);
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 55%, transparent);
+  border-radius: 50%;
+  background: var(--primary-color, #2563eb);
+  color: var(--button-text-color, #fff);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+}
+
+.assistant-launcher:hover,
+.assistant-launcher:focus-visible {
+  outline: none;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.32), 0 0 0 4px color-mix(in srgb, var(--primary-color, #2563eb) 18%, transparent);
+}
+
+.assistant-launcher svg {
+  width: calc(var(--floating-action-icon) - 8px);
+  height: calc(var(--floating-action-icon) - 8px);
+}
+
+.assistant-send:disabled,
+.assistant-panel button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.assistant-attachment-input {
+  display: none;
+}
+
+.assistant-enter-hint,
+.assistant-attachment-error,
+.assistant-speech-status,
+.assistant-speech-error {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.assistant-speech-field > .assistant-speech-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.assistant-enter-hint {
+  color: var(--text-secondary, #64748b);
+  text-align: right;
+}
+
+.assistant-context-picker,
+.assistant-mention-picker {
+  position: absolute;
+  z-index: 20;
+  right: 12px;
+  left: 12px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 12px;
+  background: var(--card-bg, #fff);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
+}
+
+/* Both open above the composer they belong to. Without an explicit anchor an absolutely positioned
+   box falls to its static position -- below the form, off the bottom of the panel, clipped. */
+.assistant-context-picker,
+.assistant-mention-picker.above {
+  bottom: calc(100% + 8px);
+}
+
+.assistant-mention-picker {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.assistant-mention-picker.below { top: calc(100% + 8px); }
+
+.assistant-context-picker {
+  display: grid;
+  /* Its sections scroll; the dialog itself must not, or the search field scrolls away. It opens
+     upwards from the composer, so the ceiling has to leave room for the app bar above and the
+     composer below -- 180px only accounted for the composer and ran off the top of the panel. */
+  max-height: min(560px, calc(100dvh - 300px));
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.assistant-context-picker > header {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--border-color, #d9dee7);
+}
+
+.assistant-context-picker > header > div {
+  display: grid;
+}
+
+.assistant-context-picker > header strong {
+  font-size: 14px;
+}
+
+.assistant-context-picker > header span,
+.assistant-context-section-heading span {
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+}
+
+.assistant-context-picker > header button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.assistant-context-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 10px;
+  padding: 0 11px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 9px;
+  color: var(--text-secondary, #64748b);
+}
+
+.assistant-context-search input {
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-color, #1f2937);
+  font: inherit;
+  font-size: 12px;
+}
+
+.assistant-context-sections {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 10px;
+  overscroll-behavior: contain;
+}
+
+.assistant-context-sections > section {
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border-color, #d9dee7);
+}
+
+.assistant-context-sections > section:first-child {
+  border-top: 0;
+}
+
+.assistant-context-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 6px;
+}
+
+.assistant-context-section-heading strong {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.assistant-context-sections section > button,
+.assistant-mention-picker > button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color, #1f2937);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* A row that is already in context reads as on, and says so when chosen again. */
+.assistant-context-sections section > button.is-in-context {
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, transparent);
+}
+
+.assistant-context-sections section > button.is-in-context strong {
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-context-sections section > button:hover,
+.assistant-context-sections section > button:focus-visible,
+.assistant-mention-picker > button.active {
+  outline: none;
+  background: var(--background-secondary, #f6f8fb);
+}
+
+.assistant-context-option-copy,
+.assistant-mention-picker > button {
+  min-width: 0;
+}
+
+.assistant-context-option-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.assistant-context-option-copy strong,
+.assistant-mention-picker strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-context-option-copy small,
+.assistant-mention-picker span {
+  overflow: hidden;
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-context-empty {
+  padding: 22px;
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+  text-align: center;
+}
+
+.assistant-mention-picker {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.assistant-mention-picker > button {
+  display: grid;
+}
+
+.assistant-settings-popover {
+  position: absolute;
+  z-index: 30;
+  inset: 58px 0 0;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--card-bg, #fff);
+  color: var(--text-color, #1f2937);
+  overscroll-behavior: contain;
+}
+
+.assistant-settings-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assistant-settings-popover-header button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+}
+
+.assistant-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+  padding-top: 12px;
+}
+
+.assistant-settings label,
+.assistant-setting-field,
+.assistant-speech-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.assistant-wide,
+.assistant-key-note {
+  grid-column: 1 / -1;
+}
+
+.assistant-settings input,
+.assistant-settings select,
+.assistant-settings textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--background-color, #fff);
+  color: var(--text-color, #1f2937);
+  font: inherit;
+  font-size: 13px;
+}
+
+.assistant-settings textarea {
+  padding-right: 46px;
+  resize: vertical;
+}
+
+.assistant-settings input:focus,
+.assistant-settings select:focus,
+.assistant-settings textarea:focus {
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 12%, transparent);
+}
+
+.assistant-model-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 6px;
+}
+
+.assistant-model-refresh {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border-color, #d9dee7);
+  border-radius: 8px;
+  background: var(--card-bg, #fff);
+  color: var(--primary-color, #2563eb);
+}
+
+.assistant-ollama-backend-toggle {
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+}
+
+.assistant-ollama-backend-toggle input {
+  width: 20px;
+  min-height: 20px;
+}
+
+.assistant-key-note {
+  margin: 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* Fixed box, and the bars scale rather than growing: animating `height` reflowed the line box on
+   every frame, which walked the whole transcript up and down while the user was talking. */
+.assistant-listening-wave {
+  display: inline-flex;
+  height: 12px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.assistant-listening-wave i {
+  display: block;
+  width: 2px;
+  height: 12px;
+  background: currentColor;
+  border-radius: 1px;
+  animation: assistant-wave 0.75s ease-in-out infinite alternate;
+  transform: scaleY(0.3);
+}
+
+.assistant-listening-wave i:nth-child(2) { animation-delay: 0.12s; }
+.assistant-listening-wave i:nth-child(3) { animation-delay: 0.24s; }
+.assistant-listening-wave i:nth-child(4) { animation-delay: 0.36s; }
+
+.assistant-panel .spinning {
+  animation: assistant-spin 0.8s linear infinite;
+}
+
+@keyframes assistant-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes assistant-wave {
+  to { transform: scaleY(1); }
+}
+
+@media (max-width: 767px) {
+  .assistant-overlay {
+    top: calc(46px + var(--safe-area-top, 0px));
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: 100%;
+    height: calc(100dvh - 46px - var(--safe-area-top, 0px));
+  }
+
+  /* The panel covers the whole screen here, so the theme button would sit on top of the composer. */
+  .assistant-is-open .theme-selector-container {
+    display: none;
+  }
+
+  .assistant-panel {
+    border: 0;
+    box-shadow: none;
+  }
+
+  /* Keep the mark and the name -- that is the panel's identity -- but on one line. The height came
+     from stacking a kicker above the title, not from the title itself. */
+  .assistant-header {
+    min-height: 36px;
+    gap: 7px;
+    padding: 0 2px 0 9px;
+  }
+
+  .assistant-avatar {
+    /* `place-items: center` centres the glyph's box, not the glyph: ✦ sits high in its em box, so
+       the box has to give the difference back at the top. */
+    width: 22px;
+    height: 22px;
+    flex-basis: 22px;
+    padding-top: 2px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .assistant-header h2 {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+  }
+
+  .assistant-icon-button {
+    width: 36px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  .assistant-header-actions .assistant-new {
+    min-height: 36px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .assistant-chat {
+    padding: 14px 12px 20px;
+  }
+
+  .assistant-empty > span {
+    font-size: 24px;
+  }
+
+  .assistant-context-summary,
+  .assistant-form {
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-left: max(10px, env(safe-area-inset-left));
+  }
+
+  .assistant-context-picker,
+  .assistant-mention-picker {
+    right: max(10px, env(safe-area-inset-right));
+    left: max(10px, env(safe-area-inset-left));
+  }
+
+  .assistant-enter-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .assistant-header {
+    padding-right: 4px;
+    padding-left: 8px;
+  }
+
+  .assistant-header-actions .assistant-new {
+    padding: 0 6px;
+    font-size: 11px;
+  }
+
+  .assistant-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-wide,
+  .assistant-key-note {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-panel *,
+  .assistant-panel *::before,
+  .assistant-panel *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

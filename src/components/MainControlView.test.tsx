@@ -30,6 +30,7 @@ vi.mock('../hooks/useRos', () => ({
     ros: mockRos,
     isConnected: rosConnection.isConnected,
     connectionStatus: rosConnection.connectionStatus,
+    connectionGeneration: rosConnection.isConnected ? 1 : 0,
     connect,
     disconnect,
   }),

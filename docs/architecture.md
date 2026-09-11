@@ -120,6 +120,26 @@ separate authenticated manager for previewing and applying desired-state changes
 feature internals out of the public context. See
 [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
 
+### Global AI Assistant
+
+`src/features/assistant/` owns the single, global assistant: conversation state, the five-provider chat client
+(`providers/`), bounded ROS/TF/rosout context sources (`context/`), the Pad generator and validators
+(`tools/`), and its own React UI (`components/`). `MainControlView` mounts one `<GlobalAssistant>`, computes a
+small, serializable workspace snapshot for it to read, and receives Pad proposals to open in the existing Pad
+editor — no protocol or provider logic lives in `MainControlView` itself, matching this doc's "Adding a Feature"
+guidance.
+
+The assistant proposes; it never acts on the robot. A topic publish, service call, or action goal is rendered as
+a review-only card, and reaching the robot means putting it through the Pad or Behavior Tree editors, which own
+that path already. Its ROS reads share `src/utils/rosapiQueue.ts` with the rest of the app, because rosbridge
+serves rosapi one request at a time.
+
+A mounted `BehaviorTreePanel` registers a `BehaviorTreeAssistantBridge` (get current/selected tree, capture/restore
+a checkpoint, apply or clear a preview) so the assistant can drive that panel's existing diff/canvas-overlay/accept
+flow instead of owning a second BT-editing implementation; opening the assistant from the panel's toolbar or
+Ctrl/Cmd+I pins that bridge rather than starting another conversation. See
+[AI assistant](ai-assistant.md) for capabilities, trust boundaries, and privacy/credential handling.
+
 ## State And Persistence
 
 State is intentionally local to the browser:
@@ -136,6 +156,8 @@ State is intentionally local to the browser:
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
 | External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
+| Assistant settings           | `assistant/storage`       | `localStorage` (plaintext, see [AI assistant](ai-assistant.md))  |
+| Assistant conversation       | `assistant/storage`       | Versioned `localStorage`, capped to 100 messages, role/content only |
 
 Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 
