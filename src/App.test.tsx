@@ -11,7 +11,9 @@ const lifecycle = vi.hoisted(() => ({
 }));
 
 vi.mock('./components/TitleBar', () => ({ default: () => null }));
-vi.mock('./features/theme/components/ThemeSelector', () => ({ default: () => null }));
+vi.mock('./features/theme/components/ThemeSelector', () => ({
+  default: () => <button type="button">Theme setting</button>,
+}));
 vi.mock('./features/theme/components/ThemeCreator', () => ({ default: () => null }));
 vi.mock('./components/EntrySection', () => ({
   default: ({ onConnect }: any) => (
@@ -55,6 +57,16 @@ describe('App connection sessions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  it('keeps the theme setting in the session dropdown before the first connection', () => {
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: 'Theme setting' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch connections, opening a new connection' }));
+
+    const popover = screen.getByRole('dialog', { name: 'Switch robot connection' });
+    expect(popover).toContainElement(screen.getByRole('button', { name: 'Theme setting' }));
   });
 
   it('keeps independent sessions mounted while switching and focuses duplicate targets', async () => {

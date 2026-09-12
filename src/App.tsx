@@ -265,6 +265,16 @@ function App() {
     ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false })),
   ];
 
+  const themeControl = (
+    <ThemeSelector
+      currentThemeId={selectedThemeId}
+      selectTheme={selectTheme}
+      themes={allThemesForSelector}
+      openThemeCreator={openThemeCreator}
+      deleteTheme={deleteCustomTheme}
+    />
+  );
+
   return (
     <>
       <TitleBar />
@@ -299,6 +309,7 @@ function App() {
                             onSelect: handleSelectConnection,
                             onClose: handleCloseConnection,
                             onAdd: () => setIsAddingConnection(true),
+                            themeControl,
                           }}
                         />
                       </Suspense>
@@ -308,31 +319,23 @@ function App() {
               })}
               {(connectionSessions.length === 0 || isAddingConnection) && (
                 <section className="connection-picker" aria-label="Open a robot connection">
-                  {connectionSessions.length > 0 && (
-                    <div className="connection-picker-top-bar">
-                      <ConnectionTabs
-                        tabs={connectionSessions}
-                        activeTabId={activeConnectionId}
-                        isAdding
-                        onSelect={handleSelectConnection}
-                        onClose={handleCloseConnection}
-                        onAdd={() => setIsAddingConnection(true)}
-                      />
-                    </div>
-                  )}
-                  <EntrySection onConnect={handleConnect} embedded={connectionSessions.length > 0} />
+                  <div className="connection-picker-top-bar">
+                    <ConnectionTabs
+                      tabs={connectionSessions}
+                      activeTabId={activeConnectionId}
+                      isAdding
+                      onSelect={handleSelectConnection}
+                      onClose={handleCloseConnection}
+                      onAdd={() => setIsAddingConnection(true)}
+                      themeControl={themeControl}
+                    />
+                  </div>
+                  <EntrySection onConnect={handleConnect} embedded />
                 </section>
               )}
             </div>
           </div>
         </main>
-        <ThemeSelector
-          currentThemeId={selectedThemeId}
-          selectTheme={selectTheme}
-          themes={allThemesForSelector}
-          openThemeCreator={openThemeCreator}
-          deleteTheme={deleteCustomTheme}
-        />
         {isThemeCreatorOpen && (
           <Suspense fallback={null}>
             <ThemeCreator isOpen onClose={closeThemeCreator} onSave={handleSaveTheme} existingTheme={themeToEdit} />

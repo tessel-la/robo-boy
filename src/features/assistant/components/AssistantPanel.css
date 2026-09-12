@@ -1260,11 +1260,6 @@
     height: calc(100dvh - 46px - var(--safe-area-top, 0px));
   }
 
-  /* The panel covers the whole screen here, so the theme button would sit on top of the composer. */
-  .assistant-is-open .theme-selector-container {
-    display: none;
-  }
-
   .assistant-panel {
     border: 0;
     box-shadow: none;

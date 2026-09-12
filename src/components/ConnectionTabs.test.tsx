@@ -111,6 +111,28 @@ describe('ConnectionTabs', () => {
     expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
   });
 
+  it('hosts the theme setting in the session dropdown', () => {
+    render(
+      <ConnectionTabs
+        tabs={tabs}
+        activeTabId="alpha"
+        isAdding={false}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onAdd={vi.fn()}
+        themeControl={<button type="button">Theme setting</button>}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Theme setting' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    expect(
+      within(screen.getByRole('dialog', { name: 'Switch robot connection' })).getByRole('button', {
+        name: 'Theme setting',
+      })
+    ).toBeInTheDocument();
+  });
+
   it('supports add, close, outside-click, and Escape actions in the compact switcher', () => {
     const onClose = vi.fn();
     const onAdd = vi.fn();
