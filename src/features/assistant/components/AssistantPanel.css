@@ -840,7 +840,7 @@
   position: fixed;
   z-index: 1250;
   bottom: var(--floating-action-bottom);
-  left: max(var(--floating-action-inset), env(safe-area-inset-left, 0px));
+  right: max(var(--floating-action-inset), env(safe-area-inset-right, 0px));
   display: grid;
   width: var(--floating-action-size);
   height: var(--floating-action-size);
