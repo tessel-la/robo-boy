@@ -210,14 +210,12 @@ textarea {
        itself is drawn behind them on purpose; a dialog put there would be unreadable. */
     --safe-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
     --safe-height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom));
-    /* The round buttons floated over the bottom corners of the app -- the assistant launcher on the
-       left, the theme selector on the right. They read as a matched pair, so both take their size,
-       icon size and edge inset from here rather than repeating the breakpoints separately. */
+    /* The assistant launcher floats over the bottom-right corner of the app. Keep its size, icon
+       size, and edge inset together so the responsive breakpoints stay aligned. */
     --floating-action-size: 50px;
     --floating-action-icon: 32px;
     --floating-action-inset: 20px;
-    /* Both buttons must clear the system's bottom bar by the same amount, or the pair stops looking
-       like a pair on a phone. Derived once here rather than applied to one of them. */
+    /* Keep the launcher clear of the system's bottom bar on a phone. */
     --floating-action-bottom: max(var(--floating-action-inset), var(--safe-area-bottom));
 }
 
