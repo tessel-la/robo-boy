@@ -840,7 +840,7 @@
   position: fixed;
   z-index: 1250;
   bottom: var(--floating-action-bottom);
-  left: max(var(--floating-action-inset), env(safe-area-inset-left, 0px));
+  right: max(var(--floating-action-inset), env(safe-area-inset-right, 0px));
   display: grid;
   width: var(--floating-action-size);
   height: var(--floating-action-size);
@@ -1258,11 +1258,6 @@
     left: 0;
     width: 100%;
     height: calc(100dvh - 46px - var(--safe-area-top, 0px));
-  }
-
-  /* The panel covers the whole screen here, so the theme button would sit on top of the composer. */
-  .assistant-is-open .theme-selector-container {
-    display: none;
   }
 
   .assistant-panel {

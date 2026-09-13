@@ -24,12 +24,14 @@ const mockOpenAiCompatibleChat = (page: Page, message: Record<string, unknown>) 
     })
   );
 
-test('uses a bottom-left launcher and opens a stable panel from the same side', async ({ page }) => {
+test('uses a bottom-right launcher and opens a stable panel from the left', async ({ page }) => {
   await connectWithMockRos(page);
   const launcher = page.getByLabel('Open Robo-Boy assistant');
   await expect(launcher).toBeVisible();
   const launcherBox = await launcher.boundingBox();
-  expect(launcherBox!.x).toBeLessThan(30);
+  expect(launcherBox!.x + launcherBox!.width).toBeGreaterThan(
+    (await page.evaluate(() => window.innerWidth)) - 30
+  );
   expect(launcherBox!.y + launcherBox!.height).toBeGreaterThan((await page.evaluate(() => window.innerHeight)) - 30);
   await launcher.click();
 
@@ -41,14 +43,12 @@ test('uses a bottom-left launcher and opens a stable panel from the same side', 
   expect(box!.width).toBeLessThanOrEqual(481);
   expect(box!.x).toBe(0);
   await expect(page.locator('.assistant-resize-handle, .assistant-minimize, .assistant-sheet-handle')).toHaveCount(0);
-  await expect(page.locator('.theme-selector-container')).toBeVisible();
   // Nothing to choose: everything the app holds is carried every turn.
   await expect(page.getByRole('button', { name: /^Context/ })).toHaveCount(0);
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
 
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
-  await expect(page.locator('.theme-selector-container')).toBeVisible();
 });
 
 test('Enter sends, Shift+Enter keeps editing, and parsing status clears after a reply', async ({ page }) => {
@@ -171,39 +171,35 @@ test('honors reduced motion in the assistant surface', async ({ page }) => {
   expect(['0s', '0.001ms']).toContain(duration);
 });
 
-test('the launcher matches the theme button and yields the corner to the full-screen assistant', async ({ page }) => {
+test('the launcher uses the former theme corner and theme selection stays in the session menu', async ({ page }) => {
   await connectWithMockRos(page);
   const launcher = page.getByLabel('Open Robo-Boy assistant');
-  const theme = page.getByLabel('Select theme');
 
   for (const size of [{ width: 1440, height: 900 }, { width: 700, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(size);
-    // Both buttons animate their size, so compare once the transition has settled.
     await expect(async () => {
-      const [launcherBox, themeBox] = [await launcher.boundingBox(), await theme.boundingBox()];
-      expect(launcherBox!.width).toBe(themeBox!.width);
-      expect(launcherBox!.height).toBe(themeBox!.height);
-      expect(launcherBox!.y).toBe(themeBox!.y);
+      const launcherBox = await launcher.boundingBox();
+      expect(launcherBox!.x + launcherBox!.width).toBeGreaterThan(size.width - 30);
+      expect(launcherBox!.y + launcherBox!.height).toBeGreaterThan(size.height - 30);
     }).toPass();
   }
 
-  // A phone's gesture bar lifts anything anchored to the bottom; both buttons must lift together.
+  // A phone's gesture bar lifts the launcher clear of the system's bottom inset.
   await page.evaluate(() => document.documentElement.style.setProperty('--safe-area-bottom', '48px'));
   await expect(async () => {
-    const [launcherBox, themeBox] = [await launcher.boundingBox(), await theme.boundingBox()];
-    expect(launcherBox!.y).toBe(themeBox!.y);
-    expect(launcherBox!.y + launcherBox!.height).toBeLessThan(844 - 40);
+    const launcherBox = await launcher.boundingBox();
+    expect(launcherBox!.y + launcherBox!.height).toBeLessThanOrEqual(844 - 48);
   }).toPass();
   await page.evaluate(() => document.documentElement.style.removeProperty('--safe-area-bottom'));
 
-  await launcher.click();
-  await expect(theme).toBeHidden();
-  await page.getByLabel('Close assistant').click();
-  await expect(theme).toBeVisible();
+  await expect(page.getByLabel('Select theme')).toHaveCount(0);
+  await page.getByRole('button', { name: /Switch connections, current/ }).click();
+  await expect(page.getByLabel('Select theme')).toBeVisible();
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByLabel('Open Robo-Boy assistant').click();
-  await expect(theme).toBeVisible();
+  await launcher.click();
+  await expect(page.getByLabel('Select theme')).toHaveCount(0);
+  await expect(page.getByTestId('assistant-panel')).toBeVisible();
+  await page.getByLabel('Close assistant').click();
 });
 
 test('a tagged resource stays in the prompt and reads as a coloured tag in the transcript', async ({ page }) => {
