@@ -8,6 +8,7 @@ interface UseTfProviderProps {
   ros: Ros | null;
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>; // Pass the viewer ref itself
+  viewerGeneration: number;
   fixedFrame: string;
   // Pass initial transforms for provider constructor
   initialTransforms: TransformStore;
@@ -19,6 +20,7 @@ export function useTfProvider({
   ros,
   isRosConnected,
   ros3dViewer,
+  viewerGeneration,
   fixedFrame,
   initialTransforms, // Use this prop now
   handleTFMessage,
@@ -60,15 +62,7 @@ export function useTfProvider({
           // Then update the provider - this will trigger callbacks to visualizations
           customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame);
 
-          // Force a render update on the viewer if needed
-          if (ros3dViewer.current?.renderer) {
-            try {
-              ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-              console.log(`[TF Provider Effect] Forced viewer render after frame change`);
-            } catch (e) {
-              console.warn(`[TF Provider Effect] Error forcing viewer render:`, e);
-            }
-          }
+          ros3dViewer.current?.requestRender?.();
         }
 
         // Ensure readiness state is true if prerequisites re-established
@@ -97,7 +91,7 @@ export function useTfProvider({
     };
 
     // Depend on prerequisites and fixedFrame for updates
-  }, [ros, isRosConnected, ros3dViewer, fixedFrame, isProviderReady]);
+  }, [ros, isRosConnected, ros3dViewer, viewerGeneration, fixedFrame, isProviderReady]);
 
   // Effect 2: Manage TF Subscriptions based on provider readiness
   useEffect(() => {

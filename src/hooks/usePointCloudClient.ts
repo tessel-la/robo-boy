@@ -146,15 +146,7 @@ export function usePointCloudClient({
         pointsObj.material.needsUpdate = true;
         pointsObj.visible = wasVisible;
 
-        // Force render update
-        if (ros3dViewer.current?.renderer) {
-          ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-          requestAnimationFrame(() => {
-            if (ros3dViewer.current?.renderer) {
-              ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-            }
-          });
-        }
+        ros3dViewer.current?.requestRender?.();
 
         // Return cleanup function
         return () => {
@@ -216,6 +208,7 @@ export function usePointCloudClient({
       compression: 'cbor' as const,
       queue_length: 1,
       fixedFrame: fixedFrame,
+      requestRender: ros3dViewer.current.requestRender,
       messageHandler: function (message: any) {
         try {
           this.fixedFrame = fixedFrame;
@@ -274,9 +267,9 @@ export function usePointCloudClient({
 
       // Initialization delay
       setTimeout(() => {
-        if (pointsClient.current && ros3dViewer.current?.renderer) {
+        if (pointsClient.current && ros3dViewer.current) {
           console.log("[usePointCloudClient] Initialization complete, client ready");
-          ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
+          ros3dViewer.current.requestRender();
         }
       }, 300);
 
@@ -319,6 +312,7 @@ export function usePointCloudClient({
       return () => {
         clearPointCloudIntervals(intervalsRef.current);
         cleanupPointCloudClient(createdClientInstance, ros3dViewer.current?.scene);
+        ros3dViewer.current?.requestRender?.();
       };
 
     } catch (error) {
@@ -330,6 +324,7 @@ export function usePointCloudClient({
     // Fallback cleanup
     return () => {
       cleanupPointCloudClient(createdClientInstance, ros3dViewer.current?.scene);
+      ros3dViewer.current?.requestRender?.();
     };
 
   }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame]);
@@ -409,14 +404,7 @@ function setupAxisRangeUpdates(
               mat.opacity = 1.0;
               mat.needsUpdate = true;
 
-              if (ros3dViewer.current?.renderer) {
-                ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-                requestAnimationFrame(() => {
-                  if (ros3dViewer.current?.renderer) {
-                    ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-                  }
-                });
-              }
+              ros3dViewer.current?.requestRender?.();
               rangeCalculated = true;
             }
 
@@ -444,9 +432,7 @@ function setupAxisRangeUpdates(
             }
             pointsObj.visible = true;
 
-            if (ros3dViewer.current?.renderer) {
-              ros3dViewer.current.renderer.render(ros3dViewer.current.scene, ros3dViewer.current.camera);
-            }
+            ros3dViewer.current?.requestRender?.();
 
             clearInterval(intervalsRef.current.updateRangesInterval!);
             intervalsRef.current.updateRangesInterval = null;

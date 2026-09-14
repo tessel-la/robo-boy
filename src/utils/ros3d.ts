@@ -121,13 +121,14 @@ class Viewer {
     // Append renderer to container
     container.appendChild(this.renderer.domElement);
     
-    // Start animation loop
-    this.animate();
+    // Draw once after construction. Scene, data, resize, and camera changes invalidate further frames.
+    this.requestRender();
   }
 
   // Add objects to the scene
   addObject(object: THREE.Object3D): void {
     this.scene.add(object);
+    this.requestRender();
   }
 
   // Resize viewer
@@ -139,11 +140,18 @@ class Viewer {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.requestRender();
   }
 
-  // Animation loop
-  private animate = (): void => {
-    this.animationId = requestAnimationFrame(this.animate);
+  // Coalesce all invalidations in the same display frame. Keeping this loop alive continuously
+  // made even an unchanged grid consume a substantial share of a renderer process and the GPU.
+  public requestRender = (): void => {
+    if (this.animationId !== null) return;
+    this.animationId = requestAnimationFrame(this.render);
+  };
+
+  public render = (): void => {
+    this.animationId = null;
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -329,6 +337,7 @@ class PointCloud2 extends THREE.Object3D {
   public points: any;
   private messageFrameId: string | null = null;
   private fixedFrame: string;
+  private requestRender: () => void;
   private rosTopicInstance: ROSLIB.Topic | null = null; // Added for managing subscription
   
   // Scaling factors for points
@@ -362,6 +371,7 @@ class PointCloud2 extends THREE.Object3D {
     originY?: number;
     originZ?: number;
     fixedFrame?: string; // Add option to pass fixed frame
+    requestRender?: () => void;
   }) {
     super();
     
@@ -374,6 +384,7 @@ class PointCloud2 extends THREE.Object3D {
     this.compression = options.compression || 'none';
     this.throttleRate = options.throttle_rate || 100;
     this.fixedFrame = options.fixedFrame || 'odom'; // Store the fixed frame
+    this.requestRender = options.requestRender || (() => {});
     
     // Set scaling factors if provided
     if (options.scaleX !== undefined) this.scaleX = options.scaleX;
@@ -438,18 +449,20 @@ class PointCloud2 extends THREE.Object3D {
           }
           
           if (tf && tf.translation && tf.rotation) {
+            const poseChanged =
+              this.position.x !== tf.translation.x ||
+              this.position.y !== tf.translation.y ||
+              this.position.z !== tf.translation.z ||
+              this.quaternion.x !== tf.rotation.x ||
+              this.quaternion.y !== tf.rotation.y ||
+              this.quaternion.z !== tf.rotation.z ||
+              this.quaternion.w !== tf.rotation.w;
+            const visibilityChanged = !this.visible;
             // Apply transformation to the whole point cloud object
-            this.position.set(
-              tf.translation.x,
-              tf.translation.y,
-              tf.translation.z
-            );
-            this.quaternion.set(
-              tf.rotation.x,
-              tf.rotation.y,
-              tf.rotation.z,
-              tf.rotation.w
-            );
+            if (poseChanged) {
+              this.position.copy(tf.translation);
+              this.quaternion.copy(tf.rotation);
+            }
             
             if (!lastVisibleState) {
               console.log(`[PointCloud2] Transform found for ${this.messageFrameId} in ${fixedFrame}, showing point cloud`);
@@ -469,6 +482,7 @@ class PointCloud2 extends THREE.Object3D {
             if (this.points.object) {
               this.points.object.matrixWorldNeedsUpdate = true;
             }
+            if (poseChanged || visibilityChanged) this.requestRender();
           } else {
             // If transformation not immediately available, increment retry count
             retryCount++;
@@ -478,8 +492,11 @@ class PointCloud2 extends THREE.Object3D {
               if (lastVisibleState) {
                 console.warn(`[PointCloud2] Transform not available from ${this.messageFrameId} to ${fixedFrame} after ${retryCount} retries`);
               }
-              (this as any).visible = false;
-              lastVisibleState = false;
+              if (lastVisibleState) {
+                (this as any).visible = false;
+                lastVisibleState = false;
+                this.requestRender();
+              }
               
               // Limit retry count to avoid overflow
               if (retryCount > 300) { // About 10 seconds
@@ -808,6 +825,7 @@ class PointCloud2 extends THREE.Object3D {
       
       // Set the draw range to only render valid points
       this.points.geometry?.setDrawRange(0, pointCount);
+      this.requestRender();
       
       console.log('[PointCloud2] Point cloud visualization updated');
     } catch (e) {
@@ -902,6 +920,7 @@ class PointCloud2 extends THREE.Object3D {
       pointSize: this.pointSize,
       color: options.color ? 'color updated' : undefined
     });
+    this.requestRender();
   }
 
   // Add a method to force a transform update immediately
@@ -943,6 +962,7 @@ class PointCloud2 extends THREE.Object3D {
         if (this.points.object) {
           this.points.object.matrixWorldNeedsUpdate = true;
         }
+        this.requestRender();
         
         console.log(`[PointCloud2] Transform update successful`);
       } else {
@@ -967,6 +987,7 @@ class OrbitControls {
   private element: HTMLElement;
   private target = new THREE.Vector3(0, 0, 0);
   private enabled = true;
+  private onChange: () => void;
   public zoomSpeed = 0.1;
   public panSpeed = 0.1;
   public rotateSpeed = 1.0;
@@ -1000,9 +1021,11 @@ class OrbitControls {
     userPanSpeed?: number;
     userRotateSpeed?: number;
     element?: HTMLElement;
+    onChange?: () => void;
   }) {
     this.camera = options.camera;
     this.element = options.element || document.body;
+    this.onChange = options.onChange || (() => {});
     
     if (options.userZoomSpeed) {
       this.zoomSpeed = options.userZoomSpeed;
@@ -1129,6 +1152,7 @@ class OrbitControls {
         this.panStart.copy(this.panEnd);
         break;
     }
+    this.onChange();
   }
   
   private onMouseUp(event: MouseEvent): void {
@@ -1314,6 +1338,7 @@ class OrbitControls {
     
     // Always maintain Z-up orientation
     this.camera.up.set(0, 0, 1);
+    this.onChange();
   }
   
   public dispose(): void {

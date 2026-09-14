@@ -67,11 +67,40 @@ describe('useRos3dViewer', () => {
         expect(ROS3D.Viewer).not.toHaveBeenCalled();
     });
 
-    it('should not initialize if ref dimensions are zero', () => {
+    it('should wait to initialize if ref dimensions are zero', () => {
         viewerRef.current.clientWidth = 0;
         renderHook(() => useRos3dViewer(viewerRef, true));
 
         expect(ROS3D.Viewer).not.toHaveBeenCalled();
+        expect(resizeObserverObserveMock).toHaveBeenCalledWith(viewerRef.current);
+    });
+
+    it('should initialize when a zero-sized container receives its first non-zero observation', () => {
+        (ROS3D.Viewer as any).mockImplementation(function () {
+            return {
+                addObject: vi.fn(),
+                scene: {},
+                camera: {},
+                resize: vi.fn()
+            }
+        });
+        viewerRef.current.clientWidth = 0;
+        viewerRef.current.clientHeight = 0;
+        const { result } = renderHook(() => useRos3dViewer(viewerRef, true));
+
+        const calls = ResizeObserverMock.mock.calls as any[];
+        const observerCallback = calls[0]?.[0];
+        expect(result.current.viewerGeneration).toBe(0);
+        act(() => {
+            observerCallback([{
+                contentRect: { width: 800, height: 600 }
+            }]);
+        });
+
+        expect(ROS3D.Viewer).toHaveBeenCalledOnce();
+        expect(ROS3D.Viewer).toHaveBeenCalledWith(expect.objectContaining({ width: 800, height: 600 }));
+        expect(ROS3D.OrbitControls).toHaveBeenCalledOnce();
+        expect(result.current.viewerGeneration).toBe(1);
     });
 
     it.skip('should cleanup viewer on unmount', () => {

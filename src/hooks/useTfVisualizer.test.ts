@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useTfVisualizer } from './useTfVisualizer';
 import * as THREE from 'three';
 import { TransformStore } from '../utils/tfUtils';
@@ -184,6 +184,7 @@ describe('useTfVisualizer', () => {
         isRosConnected: true,
         ros3dViewer: { current: mockViewer },
         customTFProvider: { current: mockTFProvider },
+        fixedFrame: 'map',
         displayedTfFrames: [] as string[],
         transforms: {} as TransformStore,
         showFrameLabels: true,
@@ -233,7 +234,8 @@ describe('useTfVisualizer', () => {
         };
         mockViewer = {
             scene: mockScene,
-            fixedFrame: 'map'
+            fixedFrame: 'map',
+            requestRender: vi.fn(),
         };
         mockTFProvider = {
             lookupTransform: vi.fn((_: string, frameName: string) => ({
@@ -297,18 +299,12 @@ describe('useTfVisualizer', () => {
         expect(lineInstances).toHaveLength(1);
     });
 
-    it('should update connection line geometry in the animation loop', () => {
-        vi.useFakeTimers();
-
+    it('should update connection line geometry when transforms change', () => {
         renderHook(() => useTfVisualizer({
             ...defaultProps(),
             displayedTfFrames: ['map', 'odom'],
             transforms,
         }));
-
-        act(() => {
-            vi.advanceTimersByTime(100);
-        });
 
         const positionAttribute = lineInstances[0].geometry.getAttribute('position');
         expect(Array.from(positionAttribute.array)).toEqual([0, 0, 0, 1, 2, 3]);
@@ -316,19 +312,16 @@ describe('useTfVisualizer', () => {
         expect(lineInstances[0].visible).toBe(true);
     });
 
-    it('should update poses in animation loop', () => {
-        vi.useFakeTimers();
-
+    it('should update poses when transforms change', () => {
+        const animationFrameSpy = vi.spyOn(window, 'requestAnimationFrame');
         renderHook(() => useTfVisualizer({
             ...defaultProps(),
             displayedTfFrames: ['base_link']
         }));
 
-        act(() => {
-            vi.advanceTimersByTime(100);
-        });
-
         expect(mockTFProvider.lookupTransform).toHaveBeenCalled();
+        expect(animationFrameSpy).not.toHaveBeenCalled();
+        animationFrameSpy.mockRestore();
     });
 
     it('should dispose labels and connection lines on cleanup', () => {

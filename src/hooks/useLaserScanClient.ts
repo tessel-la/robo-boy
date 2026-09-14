@@ -65,6 +65,7 @@ export const useLaserScanClient = ({
         },
         maxRange: options?.maxRange,
         minRange: options?.minRange,
+        requestRender: ros3dViewer.current.requestRender,
       });
 
       if (clientRef) {
@@ -87,4 +88,4 @@ export const useLaserScanClient = ({
   }, [ros, isRosConnected, ros3dViewer, customTFProvider, fixedFrame, selectedLaserScanTopic, material, options, clientRef]);
 
   return { laserScanClient: internalClientRef.current };
-}; 
+};
