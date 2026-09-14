@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useCameraInfoVisualizer } from './useCameraInfoVisualizer';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
@@ -20,8 +20,14 @@ vi.mock('three', async () => {
             visible = true;
             add = vi.fn();
             remove = vi.fn();
-            position = { set: vi.fn(), copy: vi.fn() };
-            quaternion = { set: vi.fn(), copy: vi.fn(), multiply: vi.fn() };
+            position = { set: vi.fn(), copy: vi.fn(), distanceToSquared: vi.fn().mockReturnValue(1) };
+            quaternion = {
+                set: vi.fn(),
+                copy: vi.fn(),
+                multiply: vi.fn(),
+                dot: vi.fn().mockReturnValue(0),
+                equals: vi.fn().mockReturnValue(false),
+            };
             clear = vi.fn();
             children = [];
         },
@@ -91,6 +97,7 @@ describe('useCameraInfoVisualizer', () => {
         mockViewer = {
             scene: mockScene,
             fixedFrame: 'map',
+            requestRender: vi.fn(),
         };
         mockTFProvider = {
             lookupTransform: vi.fn(),
@@ -169,9 +176,64 @@ describe('useCameraInfoVisualizer', () => {
             height: 100,
         };
 
-        if (messageCallback) {
-            messageCallback(msg);
-        }
+        act(() => messageCallback?.(msg));
+    });
+
+    it('requests renders when the camera pose changes or becomes unavailable', () => {
+        const scheduledFrames = new Map<number, FrameRequestCallback>();
+        let nextFrameId = 1;
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+            const frameId = nextFrameId++;
+            scheduledFrames.set(frameId, callback);
+            return frameId;
+        });
+        vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(frameId => {
+            scheduledFrames.delete(frameId);
+        });
+
+        let messageCallback: ((message: unknown) => void) | undefined;
+        (Topic as any).mockImplementation(function () {
+            return {
+                subscribe: (callback: (message: unknown) => void) => { messageCallback = callback; },
+                unsubscribe: vi.fn(),
+            };
+        });
+        mockTFProvider.lookupTransform.mockReturnValue({
+            translation: { x: 1, y: 2, z: 3 },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+        });
+
+        const { unmount } = renderHook(() => useCameraInfoVisualizer(defaultProps));
+        act(() => {
+            messageCallback?.({
+                header: { frame_id: '/camera_frame' },
+                k: [100, 0, 50, 0, 100, 50, 0, 0, 1],
+                width: 100,
+                height: 100,
+            });
+        });
+        mockViewer.requestRender.mockClear();
+
+        const runNextFrame = () => {
+            const nextFrame = scheduledFrames.entries().next().value as [number, FrameRequestCallback] | undefined;
+            expect(nextFrame).toBeDefined();
+            scheduledFrames.delete(nextFrame![0]);
+            act(() => nextFrame![1](performance.now()));
+        };
+
+        runNextFrame();
+        expect(mockTFProvider.lookupTransform).toHaveBeenCalledWith('map', 'camera_frame');
+        expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
+
+        const container = mockScene.add.mock.calls[0][0];
+        mockViewer.requestRender.mockClear();
+        mockTFProvider.lookupTransform.mockReturnValue(null);
+        runNextFrame();
+        expect(container.visible).toBe(false);
+        expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
+
+        unmount();
+        expect(scheduledFrames).toHaveLength(0);
     });
 
     it.skip('should update pose in animation loop', async () => {

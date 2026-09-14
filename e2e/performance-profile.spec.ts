@@ -2,7 +2,7 @@ import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
 import { installRosMock, waitForRosSubscription } from './helpers/rosMock';
 
-const profile = process.env.ROBOBOY_PROFILE === '1' ? test : test.skip;
+const profileDescribe = process.env.ROBOBOY_PROFILE === '1' ? test.describe : test.describe.skip;
 const SAMPLE_MS = Number(process.env.ROBOBOY_PROFILE_SAMPLE_MS || 5_000);
 
 type RuntimeCounters = {
@@ -301,23 +301,23 @@ const publishLaserScanForSample = (page: Page) =>
     });
   }, SAMPLE_MS);
 
-profile.describe('frontend resource profile', () => {
-  profile.beforeEach(async ({ page }) => {
+profileDescribe('frontend resource profile', () => {
+  test.beforeEach(async ({ page }) => {
     await installRuntimeCounters(page);
   });
 
-  profile('entry screen idle', async ({ page }) => {
+  test('entry screen idle', async ({ page }) => {
     await page.goto('/');
     await measure(page, 'entry-idle');
   });
 
-  profile('connected empty workspace idle', async ({ page }) => {
+  test('connected empty workspace idle', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     await measure(page, 'connected-empty-idle');
   });
 
-  profile('single empty 3D panel idle', async ({ page }) => {
+  test('single empty 3D panel idle', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     await addPanel(page, '3D panel');
@@ -332,7 +332,7 @@ profile.describe('frontend resource profile', () => {
     expect(settled.webglDrawCallsPerSecond).toBe(0);
   });
 
-  profile('two empty 3D panels idle', async ({ page }) => {
+  test('two empty 3D panels idle', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     await addPanel(page, '3D panel');
@@ -341,7 +341,7 @@ profile.describe('frontend resource profile', () => {
     await measure(page, '3d-empty-two-panels-idle');
   });
 
-  profile('displayed TF frame when updates stop', async ({ page }) => {
+  test('displayed TF frame when updates stop', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     await addPanel(page, '3D panel');
@@ -362,7 +362,7 @@ profile.describe('frontend resource profile', () => {
     expect(settled.webglDrawCallsPerSecond).toBe(0);
   });
 
-  profile('3D panel mount and unmount lifecycle', async ({ page }) => {
+  test('3D panel mount and unmount lifecycle', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     // Warm the lazy-loaded 3D bundle before comparing heap snapshots.
@@ -386,7 +386,7 @@ profile.describe('frontend resource profile', () => {
     expect(after.jsHeapMiB - before.jsHeapMiB).toBeLessThan(5);
   });
 
-  profile('TF tree idle and 40 Hz updates', async ({ page }) => {
+  test('TF tree idle and 40 Hz updates', async ({ page }) => {
     await installRosMock(page);
     await connect(page);
     await addPanel(page, 'TF tree');
@@ -395,7 +395,7 @@ profile.describe('frontend resource profile', () => {
     await measure(page, 'tf-tree-40hz', () => publishTfForSample(page));
   });
 
-  profile('camera panel without stream decode', async ({ page }) => {
+  test('camera panel without stream decode', async ({ page }) => {
     await page.route('**/video_stream*', route =>
       route.fulfill({
         status: 200,
@@ -410,7 +410,7 @@ profile.describe('frontend resource profile', () => {
     await measure(page, 'camera-static-idle');
   });
 
-  profile('PoseStamped visualization active and settled', async ({ page }) => {
+  test('PoseStamped visualization active and settled', async ({ page }) => {
     await installRosMock(page, { topics: [{ name: '/pose', type: 'geometry_msgs/msg/PoseStamped' }] });
     await connect(page);
     await addPanel(page, '3D panel');
@@ -427,7 +427,7 @@ profile.describe('frontend resource profile', () => {
     expect(settled.webglDrawCallsPerSecond).toBe(0);
   });
 
-  profile('LaserScan visualization idle, active, and settled', async ({ page }) => {
+  test('LaserScan visualization idle, active, and settled', async ({ page }) => {
     await installRosMock(page, { topics: [{ name: '/scan', type: 'sensor_msgs/msg/LaserScan' }] });
     await connect(page);
     await addPanel(page, '3D panel');
@@ -446,7 +446,7 @@ profile.describe('frontend resource profile', () => {
     expect(settled.webglDrawCallsPerSecond).toBe(0);
   });
 
-  profile('restored 3D visualization after connection-session switch', async ({ page }) => {
+  test('restored 3D visualization after connection-session switch', async ({ page }) => {
     await installRosMock(page, { topics: [{ name: '/scan', type: 'sensor_msgs/msg/LaserScan' }] });
     await connect(page);
     await addPanel(page, '3D panel');

@@ -112,7 +112,8 @@ describe('usePointCloudClient', () => {
             camera: {},
             renderer: {
                 render: vi.fn(),
-            }
+            },
+            requestRender: vi.fn(),
         };
 
         mockTFProvider = {
@@ -121,13 +122,15 @@ describe('usePointCloudClient', () => {
         };
 
         // Setup PointCloud2 mock implementation
-        (ROS3D.PointCloud2 as any).mockImplementation(() => ({
-            points: {
-                object: new THREE.Points(new THREE.BufferGeometry(), new THREE.ShaderMaterial()),
-                setup: vi.fn(),
-            },
-            unsubscribe: vi.fn(),
-        }));
+        (ROS3D.PointCloud2 as any).mockImplementation(function () {
+            return {
+                points: {
+                    object: new THREE.Points(new THREE.BufferGeometry(), new THREE.ShaderMaterial()),
+                    setup: vi.fn(),
+                },
+                unsubscribe: vi.fn(),
+            };
+        });
 
         // Explicitly type defaultProps or cast to any where needed
         defaultProps = {
@@ -140,6 +143,10 @@ describe('usePointCloudClient', () => {
             material: { size: 0.1 },
             options: { maxPoints: 100000 },
         };
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('should not create client if prerequisites are missing', () => {
@@ -159,6 +166,19 @@ describe('usePointCloudClient', () => {
             fixedFrame: '/map',
             max_pts: 100000,
         }));
+    });
+
+    it('requests a render when the client becomes ready and when it is removed', () => {
+        vi.useFakeTimers();
+        const { unmount } = renderHook(() => usePointCloudClient(defaultProps));
+
+        vi.advanceTimersByTime(300);
+        expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
+
+        mockViewer.requestRender.mockClear();
+        unmount();
+        expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
     });
 
     it('should cleanup previous client when topic changes', () => {
