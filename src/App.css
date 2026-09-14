@@ -1,6 +1,7 @@
 .App {
   /* text-align: center; */ /* Remove if using flex for centering */
-  height: var(--app-height);
+  /* The fixed edges own the shell height. An explicit viewport-unit height over-constrains this
+     box, and iOS standalone PWAs can then ignore the bottom edge when their `dvh` is shorter. */
   display: flex;
   flex-direction: column; /* Stack children vertically */
   overflow: hidden; /* Prevent scrolling at App level */
