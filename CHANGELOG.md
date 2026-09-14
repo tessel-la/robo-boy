@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.0-alpha...robo-boy-v0.9.1-alpha) (2026-09-14)
+
+
+### Bug Fixes
+
+* **ci:** stop asking the Android SDK for the withdrawn tools package ([#146](https://github.com/tessel-la/robo-boy/issues/146)) ([ff3ec50](https://github.com/tessel-la/robo-boy/commit/ff3ec50d064f0dd27472e46eaf733a76d1f1fd1a))
+* **ci:** stop asking the Android SDK for the withdrawn tools package ([#146](https://github.com/tessel-la/robo-boy/issues/146)) ([e000704](https://github.com/tessel-la/robo-boy/commit/e00070421253405801a5baa9466d91109c635448))
+
 ## [0.9.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.8.0-alpha...robo-boy-v0.9.0-alpha) (2026-09-14)
 
 
