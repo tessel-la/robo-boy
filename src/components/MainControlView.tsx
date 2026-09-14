@@ -415,7 +415,12 @@ const STACKED_WORKSPACE_QUERY = '(max-width: 767px)';
 const WORKSPACE_DRAG_FORMAT = 'application/x-robo-boy-workspace-panel';
 const MIN_WORKSPACE_TILE_RATIO = 0.24;
 const WORKSPACE_PERSIST_DELAY_MS = 100;
-const RETIRED_BUILT_IN_PAD_IDS = new Set(['panda-cartesian-jog', 'default-panda-cartesian-jog']);
+const RETIRED_BUILT_IN_PAD_IDS = new Set([
+  'panda-cartesian-jog',
+  'default-panda-cartesian-jog',
+  'physical-gamepad',
+  'default-physical-gamepad',
+]);
 
 type WorkspaceDraft = {
   type: WorkspacePanelType;

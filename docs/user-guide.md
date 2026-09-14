@@ -46,12 +46,11 @@ Trees are stored in the current browser and can be imported or exported as JSON.
 The lower control area starts empty. Use the `+` button to:
 
 - Clone the built-in dual-joystick and heartbeat template.
-- Clone the built-in physical-gamepad template for an Xbox, PlayStation, or Logitech controller.
 - Create a control pad from an empty grid.
 - Open a control pad saved in this browser.
 - Import a versioned control-pad JSON file.
 
-The editor supports virtual joystick, physical gamepad, button, D-pad, toggle, slider, camera, plot, and heartbeat components. A physical gamepad publishes its complete axes and button state as `sensor_msgs/Joy`; each of its 17 standard buttons can also run an independent topic publish, service call, or action on press and release. The live controller drawing follows both sticks and highlights active buttons. Browsers expose a newly connected controller only after you press one of its buttons.
+The editor supports virtual joystick, physical gamepad, button, D-pad, toggle, slider, camera, plot, and heartbeat components. Add a physical-gamepad component to an empty or existing custom pad when you want to use an Xbox, PlayStation, or Logitech controller. It publishes its complete axes and button state as `sensor_msgs/Joy`; each of its 17 standard buttons can also run an independent topic publish, service call, or action on press and release. The live controller drawing follows both sticks and highlights active buttons. Browsers expose a newly connected controller only after you press one of its buttons.
 
 Choose automatic controller detection for normal use, or force Xbox, PlayStation, or Logitech labels and stick placement. If the controller reports a non-standard browser mapping, Robo-Boy warns you to verify its indices before driving.
 

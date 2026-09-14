@@ -41,6 +41,7 @@ describe('useTfProvider', () => {
         mockRos = {};
         mockViewer = {
             fixedFrame: 'odom',
+            requestRender: vi.fn(),
             renderer: { render: vi.fn() },
             scene: {},
             camera: {}
@@ -53,6 +54,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: true,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage
@@ -67,6 +69,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: false,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage
@@ -74,6 +77,31 @@ describe('useTfProvider', () => {
 
         expect(CustomTFProvider).not.toHaveBeenCalled();
         expect(result.current.customTFProvider.current).toBeNull();
+    });
+
+    it('should initialize after delayed viewer creation changes the viewer generation', () => {
+        const viewerRef = { current: null as typeof mockViewer | null };
+        const { result, rerender } = renderHook(
+            ({ viewerGeneration }) => useTfProvider({
+                ros: mockRos,
+                isRosConnected: true,
+                ros3dViewer: viewerRef,
+                viewerGeneration,
+                fixedFrame: 'map',
+                initialTransforms: {},
+                handleTFMessage
+            }),
+            { initialProps: { viewerGeneration: 0 } }
+        );
+
+        expect(CustomTFProvider).not.toHaveBeenCalled();
+        expect(result.current.customTFProvider.current).toBeNull();
+
+        viewerRef.current = mockViewer;
+        rerender({ viewerGeneration: 1 });
+
+        expect(CustomTFProvider).toHaveBeenCalledWith('map', {});
+        expect(result.current.customTFProvider.current).toBeTruthy();
     });
 
     it('should update fixed frame when prop changes', () => {
@@ -94,6 +122,7 @@ describe('useTfProvider', () => {
                 ros: mockRos,
                 isRosConnected: true,
                 ros3dViewer: { current: mockViewer },
+                viewerGeneration: 1,
                 fixedFrame: 'odom',
                 initialTransforms: {},
                 handleTFMessage
@@ -105,6 +134,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: true,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage
@@ -116,7 +146,8 @@ describe('useTfProvider', () => {
 
         expect(updateFixedFrameMock).toHaveBeenCalledWith('map');
         expect(mockViewer.fixedFrame).toBe('map');
-        expect(mockViewer.renderer.render).toHaveBeenCalled();
+        expect(mockViewer.requestRender).toHaveBeenCalled();
+        expect(mockViewer.renderer.render).not.toHaveBeenCalled();
     });
 
     it('should subscribe to TF topics when provider is ready', () => {
@@ -132,6 +163,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: true,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage
@@ -165,6 +197,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: true,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage
@@ -180,6 +213,7 @@ describe('useTfProvider', () => {
             ros: mockRos,
             isRosConnected: true,
             ros3dViewer: { current: mockViewer },
+            viewerGeneration: 1,
             fixedFrame: 'map',
             initialTransforms: {},
             handleTFMessage

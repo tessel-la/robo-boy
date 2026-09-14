@@ -16,6 +16,8 @@
   --card-bg: #ffffff;
   --card-border: #dee2e6;
   --button-text-color: #ffffff; /* Text on primary button */
+  --navbar-bg: #333333;
+  --navbar-text: #ffffff;
   --error-color: #dc3545; /* Red */
   --error-hover-color: #c82333; /* Darker Red */
   --error-rgb: 220, 53, 69; /* For RGBA shadows */

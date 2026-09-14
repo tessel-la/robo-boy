@@ -4,7 +4,7 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#282c34",
-  "theme_color": "#282c34",
+  "theme_color": "#333333",
   "description": "A vibe web application for controlling ROS 2 robots with a retro handheld console feel",
   "icons": [
     {
@@ -204,4 +204,4 @@
       "purpose": "maskable any"
     }
   ]
-} 
+}

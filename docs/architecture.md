@@ -91,6 +91,13 @@ The 3D stack has three layers:
 - `src/components/visualizers/` adapts React props to visualization hooks and settings components.
 - `src/hooks/` and `src/utils/ros3d/` own ROS subscriptions, TF coordination, Three.js objects, shaders, primitives, and disposal.
 
+The application-facing `../utils/ros3d` import currently resolves to `src/utils/ros3d.ts`; that
+entry point owns the live viewer, point-cloud, orbit-control, and URDF implementations and
+re-exports the modular LaserScan implementation. The viewer is invalidation-driven: scene/data,
+resize, settings, and camera changes coalesce into one requested frame, while an unchanged scene
+does not retain a render loop. Keep new visualizers on that boundary so idle panels do no WebGL
+work. See [Frontend performance analysis](performance.md) for measurements and the profiling suite.
+
 New visualization types should follow the same split: serializable configuration in the panel, a thin React adapter, and lifecycle-heavy ROS/Three.js code in a hook or `ros3d` class. Dispose subscriptions, geometries, materials, animation callbacks, and viewer objects when dependencies change or components unmount.
 
 ### Themes

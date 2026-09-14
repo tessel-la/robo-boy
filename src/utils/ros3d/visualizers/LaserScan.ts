@@ -18,6 +18,7 @@ export class LaserScan extends THREE.Object3D {
     private pointColor: THREE.Color;
     private maxRange: number;
     private minRange: number;
+    private requestRender: () => void;
 
     private rosTopicInstance: ROSLIB.Topic | null = null;
     private pointsNode: THREE.Points | null = null;
@@ -42,6 +43,7 @@ export class LaserScan extends THREE.Object3D {
         };
         maxRange?: number;
         minRange?: number;
+        requestRender?: () => void;
     }) {
         super();
 
@@ -56,6 +58,7 @@ export class LaserScan extends THREE.Object3D {
             : new THREE.Color(options.material?.color || 0xff0000); // Default red
         this.maxRange = options.maxRange || Infinity;
         this.minRange = options.minRange || 0;
+        this.requestRender = options.requestRender || (() => {});
 
         // Pre-allocate position buffer
         this.positionBuffer = new Float32Array(this.maxLaserPoints * 3);
@@ -124,6 +127,7 @@ export class LaserScan extends THREE.Object3D {
         if (this.parent) {
             this.parent.remove(this);
         }
+        this.requestRender();
     }
 
     private processMessage(message: any): void {
@@ -170,6 +174,7 @@ export class LaserScan extends THREE.Object3D {
         const positionAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
         positionAttr.needsUpdate = true;
         this.geometry.setDrawRange(0, validPoints);
+        this.requestRender();
     }
 
     private setupTfHandling(): void {
@@ -201,6 +206,15 @@ export class LaserScan extends THREE.Object3D {
                     const tf = this.tfClient.lookupTransform(targetFixedFrame, this.messageFrameId);
 
                     if (tf && tf.translation && tf.rotation) {
+                        const poseChanged =
+                            this.position.x !== tf.translation.x ||
+                            this.position.y !== tf.translation.y ||
+                            this.position.z !== tf.translation.z ||
+                            this.quaternion.x !== tf.rotation.x ||
+                            this.quaternion.y !== tf.rotation.y ||
+                            this.quaternion.z !== tf.rotation.z ||
+                            this.quaternion.w !== tf.rotation.w;
+                        const visibilityChanged = !this.visible;
                         // Log successful transform
                         // console.log(`[LaserScan] TF Success: ${this.messageFrameId} to ${targetFixedFrame}`, JSON.parse(JSON.stringify(tf)));
                         this.position.set(tf.translation.x, tf.translation.y, tf.translation.z);
@@ -215,14 +229,18 @@ export class LaserScan extends THREE.Object3D {
 
                         this.updateMatrix();
                         this.matrixWorldNeedsUpdate = true;
+                        if (poseChanged || visibilityChanged) this.requestRender();
                     } else {
                         retryCount++;
                         if (retryCount > 30) { // Hide after ~1s of failing to get transform
                             if (lastVisibleState) {
                                 console.warn(`[LaserScan] Transform not available from ${this.messageFrameId} to ${targetFixedFrame} after ${retryCount} retries. Hiding scan.`);
                             }
-                            this.visible = false;
-                            lastVisibleState = false;
+                            if (lastVisibleState) {
+                                this.visible = false;
+                                lastVisibleState = false;
+                                this.requestRender();
+                            }
                             // Limit further retries to avoid console spam, but still check occasionally
                             if (retryCount > 300) retryCount = 300;
                         }
@@ -271,6 +289,7 @@ export class LaserScan extends THREE.Object3D {
         if (options.minRange !== undefined) {
             this.minRange = options.minRange;
         }
+        this.requestRender();
     }
 
     public setFixedFrame(fixedFrame: string): void {

@@ -109,7 +109,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // Use the custom hook for viewer management
   const isRosConnected = ros?.isConnected ?? false;
-  const { ros3dViewer } = useRos3dViewer(viewerRef, isRosConnected);
+  const { ros3dViewer, viewerGeneration } = useRos3dViewer(viewerRef, isRosConnected);
 
   // --- State and Refs for other parts ---
   const [transforms, setTransforms] = useState<TransformStore>({});
@@ -220,10 +220,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     ros,
     isRosConnected,
     ros3dViewer, // Pass viewer ref from the other hook
+    viewerGeneration,
     fixedFrame,
     initialTransforms: transforms, // Pass current transforms state for initial setup
     handleTFMessage, // Pass the callback
   });
+
+  // Visualizer adapters render no UI of their own. Mount them only after both mutable refs are
+  // ready so a restored panel cannot permanently miss setup during a delayed 0x0 viewer mount.
+  const visualizersReady = isRosConnected
+    && viewerGeneration > 0
+    && ros3dViewer.current !== null
+    && isProviderReady;
 
   // Add an effect to ensure TF provider is properly initialized
   useEffect(() => {
@@ -249,9 +257,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // TF Visualizer Hook Call (Still direct)
   useTfVisualizer({
-    isRosConnected,
+    isRosConnected: visualizersReady,
     ros3dViewer,
     customTFProvider,
+    fixedFrame,
     displayedTfFrames,
     transforms,
     showFrameLabels: showTfFrameLabels,
@@ -369,15 +378,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         console.log(`[VisualizationPanel] Updated TF provider fixed frame to: ${newFixedFrame}`);
       }
 
-      // Force a viewer render if possible
-      if (ros3dViewer.current && typeof (ros3dViewer.current as any).render === 'function') {
-        try {
-          (ros3dViewer.current as any).render();
-          console.log(`[VisualizationPanel] Forced viewer render after frame change`);
-        } catch (e) {
-          console.warn(`[VisualizationPanel] Error forcing viewer render:`, e);
-        }
-      }
+      ros3dViewer.current?.requestRender?.();
 
       console.log(`[VisualizationPanel] Successfully changed fixed frame to: ${newFixedFrame} (${updatedComponentCount} components updated)`);
     } catch (error) {
@@ -472,7 +473,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   return (
     <div className="visualization-panel" ref={panelRef}>
       {/* Render Visualization Wrapper Components */}
-      {visualizations.map((viz: VisualizationConfig) => {
+      {visualizersReady && visualizations.map((viz: VisualizationConfig) => {
         if (viz.type === 'pointcloud') {
           return (
             <React.Fragment key={viz.id}>

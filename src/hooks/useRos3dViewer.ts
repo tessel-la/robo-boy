@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Needed for type hints during disposal
 
@@ -10,12 +10,15 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
   const resizeObserver = useRef<ResizeObserver | null>(null);
   const resizeFrameId = useRef<number | null>(null);
   const pendingResize = useRef<{ width: number; height: number } | null>(null);
+  const [viewerGeneration, setViewerGeneration] = useState(0);
 
   useEffect(() => {
     const currentViewerRef = viewerRef.current;
+    let disposed = false;
 
     // --- Viewer Teardown Logic --- (Copied and adapted from VisualizationPanel)
     const cleanupViewer = () => {
+      disposed = true;
       console.log('[useRos3dViewer Cleanup] Cleaning up ROS3D viewer, Grid, OrbitControls...');
 
       // Stop ResizeObserver first
@@ -103,79 +106,89 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
       console.log('[useRos3dViewer Cleanup] Viewer refs nulled.');
     };
 
-    // --- Viewer Setup Logic --- (Copied and adapted from VisualizationPanel)
-    if (currentViewerRef && isRosConnected) {
-      // Only initialize if viewer doesn't exist yet
-      if (!ros3dViewer.current) {
-        // Ensure the viewer container has an ID
-        if (!currentViewerRef.id) {
-          // Generate a unique ID if one doesn't exist
-          currentViewerRef.id = `viewer-container-${Date.now()}`;
-        }
+    const initializeViewer = (width: number, height: number) => {
+      if (disposed || !currentViewerRef || !isRosConnected || ros3dViewer.current || width <= 0 || height <= 0) {
+        return;
+      }
 
-        console.log(`[useRos3dViewer Setup] Initializing ROS3D Viewer for div#${currentViewerRef.id}...`);
-        if (currentViewerRef.clientWidth > 0 && currentViewerRef.clientHeight > 0) {
-          try {
-            const viewer = new ROS3D.Viewer({
-              divID: currentViewerRef.id,
-              width: currentViewerRef.clientWidth,
-              height: currentViewerRef.clientHeight,
-              antialias: true,
-              background: undefined as any,
-              cameraPose: { x: 3, y: 3, z: 3 }
-            });
-            ros3dViewer.current = viewer;
-            console.log('[useRos3dViewer Setup] ROS3D.Viewer created.');
+      if (!currentViewerRef.id) {
+        currentViewerRef.id = `viewer-container-${Date.now()}`;
+      }
 
-            const grid = new ROS3D.Grid();
-            viewer.addObject(grid);
-            gridClient.current = grid; // Store ref to grid if needed later
-            console.log('[useRos3dViewer Setup] ROS3D.Grid added.');
+      console.log(`[useRos3dViewer Setup] Initializing ROS3D Viewer for div#${currentViewerRef.id}...`);
+      try {
+        const viewer = new ROS3D.Viewer({
+          divID: currentViewerRef.id,
+          width,
+          height,
+          antialias: true,
+          background: undefined as any,
+          cameraPose: { x: 3, y: 3, z: 3 }
+        });
+        ros3dViewer.current = viewer;
+        console.log('[useRos3dViewer Setup] ROS3D.Viewer created.');
 
-            if (ROS3D.OrbitControls) {
-              orbitControlsRef.current = new ROS3D.OrbitControls({
-                scene: viewer.scene,
-                camera: viewer.camera,
-                userZoomSpeed: 0.2,
-                userPanSpeed: 0.2,
-                element: currentViewerRef
-              });
-              console.log('[useRos3dViewer Setup] OrbitControls initialized.');
-            } else {
-              console.warn('[useRos3dViewer Setup] ROS3D.OrbitControls not found.');
-            }
+        const grid = new ROS3D.Grid();
+        viewer.addObject(grid);
+        gridClient.current = grid;
+        console.log('[useRos3dViewer Setup] ROS3D.Grid added.');
 
-            // --- Setup Resize Observer ---
-            const observer = new ResizeObserver(entries => {
-              const entry = entries[0];
-              if (entry && ros3dViewer.current) {
-                const { width, height } = entry.contentRect;
-                if (width > 0 && height > 0) {
-                  pendingResize.current = { width, height };
-                  if (resizeFrameId.current === null) {
-                    resizeFrameId.current = requestAnimationFrame(() => {
-                      resizeFrameId.current = null;
-                      const nextSize = pendingResize.current;
-                      pendingResize.current = null;
-                      if (nextSize && ros3dViewer.current) {
-                        ros3dViewer.current.resize(nextSize.width, nextSize.height);
-                      }
-                    });
-                  }
-                }
-              }
-            });
-            observer.observe(currentViewerRef);
-            resizeObserver.current = observer; // Store observer ref
-            console.log('[useRos3dViewer Setup] ResizeObserver is now observing the viewer container.');
-            // ---------------------------
-          } catch (error) {
-            console.error("[useRos3dViewer Setup] Error initializing ROS3D Viewer/Components:", error);
-            cleanupViewer(); // Cleanup on error
-          }
+        if (ROS3D.OrbitControls) {
+          orbitControlsRef.current = new ROS3D.OrbitControls({
+            scene: viewer.scene,
+            camera: viewer.camera,
+            userZoomSpeed: 0.2,
+            userPanSpeed: 0.2,
+            element: currentViewerRef,
+            onChange: viewer.requestRender,
+          });
+          console.log('[useRos3dViewer Setup] OrbitControls initialized.');
         } else {
-          console.warn('[useRos3dViewer Setup] Viewer div has zero width or height. Skipping initialization.');
+          console.warn('[useRos3dViewer Setup] ROS3D.OrbitControls not found.');
         }
+        // Ref mutation alone does not wake effects that skipped setup while the container was 0x0.
+        // A generation change lets the panel retry all viewer-dependent lifecycles.
+        setViewerGeneration(current => current + 1);
+      } catch (error) {
+        console.error("[useRos3dViewer Setup] Error initializing ROS3D Viewer/Components:", error);
+        cleanupViewer();
+      }
+    };
+
+    // Observe before the first initialization attempt. Freshly mounted split panels can briefly
+    // report 0x0 while layout settles; the first non-zero observation must initialize the viewer.
+    if (currentViewerRef && isRosConnected) {
+      const observer = new ResizeObserver(entries => {
+        const entry = entries[0];
+        if (!entry || disposed) return;
+
+        const { width, height } = entry.contentRect;
+        if (width <= 0 || height <= 0) return;
+
+        if (!ros3dViewer.current) {
+          initializeViewer(width, height);
+          return;
+        }
+
+        pendingResize.current = { width, height };
+        if (resizeFrameId.current === null) {
+          resizeFrameId.current = requestAnimationFrame(() => {
+            resizeFrameId.current = null;
+            const nextSize = pendingResize.current;
+            pendingResize.current = null;
+            if (nextSize && ros3dViewer.current) {
+              ros3dViewer.current.resize(nextSize.width, nextSize.height);
+            }
+          });
+        }
+      });
+      resizeObserver.current = observer;
+      observer.observe(currentViewerRef);
+      console.log('[useRos3dViewer Setup] ResizeObserver is now observing the viewer container.');
+
+      initializeViewer(currentViewerRef.clientWidth, currentViewerRef.clientHeight);
+      if (!disposed && !ros3dViewer.current) {
+        console.warn('[useRos3dViewer Setup] Viewer div has zero width or height. Waiting for layout.');
       }
     } else {
       console.log('[useRos3dViewer] Prerequisites not met or ROS disconnected. Cleaning up viewer if it exists...');
@@ -189,5 +202,5 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
   }, [viewerRef, isRosConnected]);
 
   // Return the refs needed by the component
-  return { ros3dViewer /* , gridClient, orbitControlsRef */ }; // Only return viewer for now, adjust as needed
-} 
+  return { ros3dViewer, viewerGeneration };
+}
