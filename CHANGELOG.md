@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.8.0-alpha...robo-boy-v0.9.0-alpha) (2026-09-14)
+
+
+### Features
+
+* add global AI assistant and multi-connection workspaces ([4df31b5](https://github.com/tessel-la/robo-boy/commit/4df31b546068fc997fc07cf786f817548d5d35be))
+* add possibility to enstablish multiple connections and minor ui adjustments ([#140](https://github.com/tessel-la/robo-boy/issues/140)) ([8b1e716](https://github.com/tessel-la/robo-boy/commit/8b1e7167ff16c52ccd1732bf68c1446913df3b85))
+* derive the assistant's self-description from the code that implements it ([3e11522](https://github.com/tessel-la/robo-boy/commit/3e1152260e6dd30e2c45f077e6c30b919085cc0d))
+* improve workspace panel tiling ([#139](https://github.com/tessel-la/robo-boy/issues/139)) ([45dd38f](https://github.com/tessel-la/robo-boy/commit/45dd38f233043c7f69551a76bf89e2ed41fd1b57))
+* load everything as context and drop the context bar ([4b8978e](https://github.com/tessel-la/robo-boy/commit/4b8978e78abba19d5bfd06ed728b98bff5bf5c2f))
+* make assistant context tagging and mobile layout hold up in use ([050bd90](https://github.com/tessel-la/robo-boy/commit/050bd900c9e667b7ec47f24d29b2c19c48a41048))
+* make the assistant panel handle media, tagging and its own chrome properly ([e74dc37](https://github.com/tessel-la/robo-boy/commit/e74dc3725ae4e4715502877239c546ed97c4db24))
+* move theme controls into session menu ([#141](https://github.com/tessel-la/robo-boy/issues/141)) ([e037f42](https://github.com/tessel-la/robo-boy/commit/e037f4256918f66a29bae339426f5c3e413a775a))
+* name the panel Robo-Boy AI and say what to ask it ([99444ea](https://github.com/tessel-la/robo-boy/commit/99444ea7e476381ddbf574874904a7047edc152e))
+* replace BT-owned AI assistant with a global assistant ([9354522](https://github.com/tessel-la/robo-boy/commit/93545226efa93a9920877c21a556b4c1b065dbb6))
+* replace BT-owned AI assistant with a global assistant ([2793d22](https://github.com/tessel-la/robo-boy/commit/2793d2251bcc96ca58ce3521165893404d57f896))
+* say what to ask Robo-Boy AI for in the empty state ([b00f2ef](https://github.com/tessel-la/robo-boy/commit/b00f2eff00a57b49f84fe0779b8851fef9833a5b))
+* separate choosing context from tagging it, and fix voice on mobile ([a5a844d](https://github.com/tessel-la/robo-boy/commit/a5a844dc638e400dbc5477581f05f68c01c5929f))
+
+
+### Bug Fixes
+
+* dress the status bar strip in the navbar colour ([#143](https://github.com/tessel-la/robo-boy/issues/143)) ([60fb193](https://github.com/tessel-la/robo-boy/commit/60fb19325fc93603c580fd0a3afd88e19645bdf6))
+* fold panels into the bulk Pad tag instead of a group of their own ([08d6a66](https://github.com/tessel-la/robo-boy/commit/08d6a6629ec1d2057172ce597e8dc49b44910bfd))
+* improved performance for 3d panel ([#142](https://github.com/tessel-la/robo-boy/issues/142)) ([2d34e6e](https://github.com/tessel-la/robo-boy/commit/2d34e6e6e5c2eac90e3aeebeea974369ec5d56cb))
+* keep a tagged resource readable inside the user's own message bubble ([7fc6657](https://github.com/tessel-la/robo-boy/commit/7fc665782b12e2b552ef9d769323bd7910bfe7b7))
+* say which request failed, and let voice input pick its language ([73432c5](https://github.com/tessel-la/robo-boy/commit/73432c57e7541e072d7c4d276d56fb696ab64649))
+* tag from the message editor, and keep both floating buttons level ([a876435](https://github.com/tessel-la/robo-boy/commit/a8764359dba2439473bbdae7f3772207de77d275))
+
 ## [0.8.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.7.0-alpha...robo-boy-v0.8.0-alpha) (2026-09-07)
 
 
