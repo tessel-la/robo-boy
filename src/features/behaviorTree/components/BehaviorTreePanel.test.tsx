@@ -30,10 +30,6 @@ const rosDiscoveryMock = vi.hoisted(() => ({
   fetchServiceRequestSchema: vi.fn(),
 }));
 
-const agentClientMock = vi.hoisted(() => ({
-  generateBehaviorTree: vi.fn(),
-}));
-
 const createRect = (x: number, y: number, width: number, height: number): DOMRect => ({
   x,
   y,
@@ -158,7 +154,6 @@ vi.mock('../engine/executor', () => ({
 }));
 
 vi.mock('../services/rosDiscovery', () => rosDiscoveryMock);
-vi.mock('../agent/agentClient', () => agentClientMock);
 
 vi.mock('reactflow', () => ({
   default: (props: {
@@ -317,15 +312,9 @@ describe('BehaviorTreePanel', () => {
     rosDiscoveryMock.discoverAllROSResources.mockReset();
     rosDiscoveryMock.fetchActionGoalDetails.mockReset();
     rosDiscoveryMock.fetchServiceRequestSchema.mockReset();
-    agentClientMock.generateBehaviorTree.mockReset();
     rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({ actions: [], services: [], topics: [] });
     rosDiscoveryMock.fetchActionGoalDetails.mockResolvedValue(null);
     rosDiscoveryMock.fetchServiceRequestSchema.mockResolvedValue(null);
-    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
-      name: 'Generated',
-      nodes: [{ id: 'generated-root', type: 'sequence', label: 'Generated root' }],
-      edges: [],
-    }));
     window.matchMedia = createMatchMedia(false);
     window.confirm = vi.fn(() => true);
     localStorage.clear();
@@ -368,41 +357,28 @@ describe('BehaviorTreePanel', () => {
     });
   });
 
-  it('opens and closes the AI behavior tree agent', () => {
-    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+  it('opens the global assistant (pinned to this panel) instead of an embedded chat', () => {
+    const onOpenAssistant = vi.fn();
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive panelId="tile-1" onOpenAssistant={onOpenAssistant} />);
 
     fireEvent.click(screen.getByTestId('bt-open-agent'));
-    expect(screen.getByTestId('bt-agent-panel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Describe the behavior')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Generate tree' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close AI agent' }));
-    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('bt-open-agent'));
-    fireEvent.pointerDown(document.querySelector('.bt-agent-overlay')!);
+    expect(onOpenAssistant).toHaveBeenCalledWith({ panelId: 'tile-1' });
+    // No embedded chat panel exists anymore — the assistant lives outside this component entirely.
     expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
   });
 
-  it('opens a compact inline agent instruction at the canvas pointer with Ctrl+I', async () => {
-    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+  it('opens the global assistant with Ctrl+I instead of a canvas-anchored micro-form', () => {
+    const onOpenAssistant = vi.fn();
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive panelId="tile-1" onOpenAssistant={onOpenAssistant} />);
 
-    fireEvent.pointerMove(screen.getByTestId('bt-canvas'), { clientX: 240, clientY: 180 });
     fireEvent.keyDown(window, { key: 'i', ctrlKey: true });
 
-    const prompt = await screen.findByLabelText('Inline AI instruction');
-    await waitFor(() => expect(prompt).toHaveFocus());
-    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Send inline AI instruction').querySelector('.bt-agent-inline-ai-icon')).toBeInTheDocument();
-
-    fireEvent.change(prompt, { target: { value: 'Add a stop action to this sequence' } });
-    fireEvent.submit(prompt.closest('form')!);
-
-    expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
-    await waitFor(() => expect(agentClientMock.generateBehaviorTree).toHaveBeenCalled());
+    expect(onOpenAssistant).toHaveBeenCalledWith({ panelId: 'tile-1' });
+    expect(screen.queryByLabelText('Inline AI instruction')).not.toBeInTheDocument();
   });
 
-  it('previews agent changes on the canvas and accepts them from the popup', async () => {
+  it('registers an assistant bridge that previews/accepts a proposed tree on the canvas', async () => {
     const now = Date.now();
     localStorage.setItem(
       'robo-boy-behavior-trees',
@@ -433,34 +409,58 @@ describe('BehaviorTreePanel', () => {
         },
       ])
     );
-    rosDiscoveryMock.discoverAllROSResources.mockResolvedValue({
-      actions: [{ name: '/move', type: 'robot/action/Move', namespace: '/move' }],
-      services: [],
-      topics: [],
-    });
-    agentClientMock.generateBehaviorTree.mockResolvedValue(JSON.stringify({
-      name: 'Accepted Agent Tree',
-      description: 'Move farther',
-      nodes: [
-        { id: 'root', type: 'sequence', label: 'Root' },
-        { id: 'move', type: 'action', label: 'Move', config: { actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1, y: 0 } } },
-        { id: 'wait', type: 'timeout', label: 'Wait', config: { timeout: 500 } },
-      ],
-      edges: [
-        { source: 'root', target: 'move' },
-        { source: 'root', target: 'wait' },
-      ],
-    }));
 
-    render(<BehaviorTreePanel ros={{} as any} isConnected isActive />);
+    let bridge: import('../../assistant/types').BehaviorTreeAssistantBridge | null = null;
+    const onRegisterAssistantBridge = vi.fn((panelId: string, registered: import('../../assistant/types').BehaviorTreeAssistantBridge | null) => {
+      bridge = registered;
+    });
+
+    render(
+      <BehaviorTreePanel
+        ros={{} as any}
+        isConnected
+        isActive
+        panelId="tile-1"
+        onRegisterAssistantBridge={onRegisterAssistantBridge}
+      />
+    );
     setCanvasRect();
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('Agent Current Tree'));
     await screen.findByTestId('rf-node-move');
 
-    fireEvent.click(screen.getByTestId('bt-open-agent'));
-    fireEvent.change(screen.getByLabelText('Describe the behavior'), { target: { value: 'Move one meter and wait' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Generate tree' }));
+    expect(onRegisterAssistantBridge).toHaveBeenCalledWith('tile-1', expect.any(Object));
+    expect(bridge).not.toBeNull();
+    expect(bridge!.getCurrentTree()?.name).toBe('Agent Current Tree');
+    const checkpoint = bridge!.captureCheckpoint();
+    expect(checkpoint).not.toBeNull();
+
+    // Simulate what the global assistant does after generating a proposal: hand the tree back
+    // through the bridge. BehaviorTreePanel's own diff/canvas-overlay/accept code (unchanged)
+    // takes it from there.
+    act(() => {
+      bridge!.applyPreview({
+        id: 'agent-current-tree',
+        name: 'Accepted Agent Tree',
+        description: 'Move farther',
+        nodes: [
+          { id: 'root', type: 'sequence', position: { x: 0, y: 0 }, data: { label: 'Root' } },
+          {
+            id: 'move',
+            type: 'action',
+            position: { x: 0, y: 120 },
+            data: { label: 'Move', actionName: '/move', actionType: 'robot/action/Move', parameters: { x: 1, y: 0 } },
+          },
+          { id: 'wait', type: 'timeout', position: { x: 0, y: 240 }, data: { label: 'Wait', timeout: 500 } },
+        ] as any,
+        edges: [
+          { id: 'e1', source: 'root', target: 'move' } as any,
+          { id: 'e2', source: 'root', target: 'wait' } as any,
+        ],
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
 
     const banner = await screen.findByTestId('bt-agent-canvas-preview-banner');
     expect(banner).toHaveTextContent('Agent preview');
@@ -477,7 +477,6 @@ describe('BehaviorTreePanel', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('bt-agent-canvas-preview-banner')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('bt-agent-panel')).not.toBeInTheDocument();
       expect(screen.getByTestId('rf-node-wait')).toBeInTheDocument();
     });
   });

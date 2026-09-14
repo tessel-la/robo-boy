@@ -83,6 +83,7 @@ export function useCameraInfoVisualizer({
         (frustumLinesRef.current?.material as THREE.Material)?.dispose();
         frustumContainerRef.current = null;
         frustumLinesRef.current = null;
+        viewer?.requestRender?.();
       }
     }
 
@@ -96,6 +97,7 @@ export function useCameraInfoVisualizer({
           viewer.scene.remove(frustumContainerRef.current);
           frustumLinesRef.current?.geometry?.dispose();
           (frustumLinesRef.current?.material as THREE.Material)?.dispose();
+          viewer.requestRender?.();
         } catch (e) {
           console.error("[CameraInfoViz E1 Cleanup] Error removing/disposing objects:", e);
         }
@@ -205,9 +207,10 @@ export function useCameraInfoVisualizer({
 
     // Make the lines visible *only if* geometry is valid
     lines.visible = true;
+    ros3dViewer.current?.requestRender?.();
     // console.log('[CameraInfoViz E3] Updated frustum geometry and made visible');
 
-  }, [lastCameraInfo, lineScale]); // Only depends on info and scale, color handled in E1
+  }, [lastCameraInfo, lineScale, ros3dViewer]); // Only depends on info and scale, color handled in E1
 
   // Effect 4: Animation loop to update frustum pose using TF lookup
   useEffect(() => {
@@ -230,13 +233,6 @@ export function useCameraInfoVisualizer({
         const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
 
         if (transform && transform.translation && transform.rotation) {
-          // Apply position directly (x, y, z)
-          container.position.set(
-            transform.translation.x,
-            transform.translation.y,
-            transform.translation.z
-          );
-
           // Apply raw TF rotation combined with static camera adjustment
           try {
             // Create a fresh quaternion to avoid modifying the original transform
@@ -249,21 +245,36 @@ export function useCameraInfoVisualizer({
 
             // Apply TF rotation first, then the static camera adjustment
             // Use a safer approach for quaternion multiplication
-            container.quaternion.copy(tfQuaternion);
             if (CAMERA_FRAME_ROTATION) {
-              container.quaternion.multiply(CAMERA_FRAME_ROTATION);
+              tfQuaternion.multiply(CAMERA_FRAME_ROTATION);
             }
 
+            const changed =
+              container.position.distanceToSquared(transform.translation) > 1e-10 ||
+              Math.abs(container.quaternion.dot(tfQuaternion)) < 1 - 1e-10 ||
+              !container.visible;
+            container.position.copy(transform.translation);
+            container.quaternion.copy(tfQuaternion);
             container.visible = true; // Make container visible if transform is valid
+            if (changed) viewer.requestRender?.();
           } catch (rotationError) {
             console.warn(`[CameraInfoViz] Quaternion operation failed:`, rotationError);
             // Even if rotation fails, we can still show at the right position with default orientation
+            const changed =
+              container.position.distanceToSquared(transform.translation) > 1e-10 ||
+              !container.quaternion.equals(new THREE.Quaternion(0, 0, 0, 1)) ||
+              !container.visible;
+            container.position.copy(transform.translation);
             container.quaternion.set(0, 0, 0, 1); // Identity quaternion as fallback
             container.visible = true;
+            if (changed) viewer.requestRender?.();
           }
         } else {
           // console.warn(`[CameraInfoViz] TF lookup returned incomplete transform for ${cameraFrameId} relative to ${fixedFrame}`);
-          container.visible = false; // Hide if transform data is incomplete
+          if (container.visible) {
+            container.visible = false; // Hide if transform data is incomplete
+            viewer.requestRender?.();
+          }
         }
       } catch (tfError) {
         console.warn(`[CameraInfoViz] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}:`,
@@ -287,7 +298,10 @@ export function useCameraInfoVisualizer({
           }
         }
 
-        container.visible = false; // Hide if transform fails
+        if (container.visible) {
+          container.visible = false; // Hide if transform fails
+          viewer.requestRender?.();
+        }
       }
 
       // Continue the loop
@@ -316,4 +330,4 @@ export function useCameraInfoVisualizer({
     };
   }, [isRosConnected, ros3dViewer, customTFProvider, cameraFrameId]); // Dependencies that trigger restart of the loop
 
-} 
+}

@@ -183,6 +183,7 @@ export function usePoseStampedClient({
       if (showTrail) {
         updateTrail(positionVec);
       }
+      ros3dViewer.current.requestRender?.();
 
     } catch (error) {
       console.error('[PoseStamped] Error processing message:', error);
@@ -228,6 +229,7 @@ export function usePoseStampedClient({
         ros3dViewer.current.scene.remove(visualizationGroupRef.current);
         visualizationGroupRef.current.clear();
         visualizationGroupRef.current = null;
+        ros3dViewer.current.requestRender?.();
       }
 
       if (trailLineRef.current) {
@@ -252,6 +254,7 @@ export function usePoseStampedClient({
         (trailLineRef.current.material as THREE.Material).dispose();
         trailLineRef.current = null;
       }
+      ros3dViewer.current?.requestRender?.();
     }
   }, [visualizationType, scale, color, arrowLength, arrowWidth, axesSize, showTrail, maxTrailLength]);
 

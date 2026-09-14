@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The webview asks for RECORD_AUDIO and MODIFY_AUDIO_SETTINGS in one request (wry's
+         RustWebChromeClient.onPermissionRequest). An undeclared permission comes back denied, which
+         denies the whole request, so voice input needs both declared. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Voice control is optional; phones and future Wear OS variants without a microphone can
          still install and use every non-voice part of Robo-Boy. -->

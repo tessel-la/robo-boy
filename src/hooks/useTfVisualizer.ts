@@ -14,6 +14,7 @@ interface UseTfVisualizerProps {
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
+  fixedFrame: string;
   displayedTfFrames: string[]; // Array of frame names to visualize
   transforms: TransformStore;
   showFrameLabels: boolean;
@@ -167,6 +168,7 @@ export function useTfVisualizer({
   isRosConnected,
   ros3dViewer,
   customTFProvider,
+  fixedFrame,
   displayedTfFrames,
   transforms,
   showFrameLabels,
@@ -175,7 +177,6 @@ export function useTfVisualizer({
   const tfAxesContainerRef = useRef<THREE.Group | null>(null);
   const tfAxesMapRef = useRef<TfAxesMap>(new Map());
   const tfEdgeMapRef = useRef<TfEdgeMap>(new Map());
-  const animationFrameId = useRef<number | null>(null);
 
   // Effect 1: Manage the main container for all TF axes
   useEffect(() => {
@@ -266,6 +267,7 @@ export function useTfVisualizer({
         ...(label ? { label } : {}),
       });
     });
+    ros3dViewer.current?.requestRender?.();
 
     // Cleanup function for Effect 2
     return () => {
@@ -283,7 +285,7 @@ export function useTfVisualizer({
       mapToClear.clear(); // Clear the map itself
     };
 
-  }, [displayedTfFrames, axesScale, showFrameLabels]); // Re-run when the list, scale, or label mode changes
+  }, [displayedTfFrames, axesScale, showFrameLabels, ros3dViewer]); // Re-run when the list, scale, or label mode changes
 
   // Effect 3: Manage TF connection lines for selected parent-child edges
   useEffect(() => {
@@ -296,12 +298,14 @@ export function useTfVisualizer({
 
     const selectedEdges = getSelectedTfFrameEdges(transforms, displayedTfFrames);
     const selectedEdgeKeys = new Set(selectedEdges.map(getTfEdgeKey));
+    let sceneChanged = false;
 
     currentEdges.forEach((entry, key) => {
       if (!selectedEdgeKeys.has(key)) {
         container.remove(entry.line);
         disposeEdgeEntry(entry);
         currentEdges.delete(key);
+        sceneChanged = true;
       }
     });
 
@@ -314,134 +318,97 @@ export function useTfVisualizer({
       const edgeEntry = createEdgeEntry(edge);
       container.add(edgeEntry.line);
       currentEdges.set(key, edgeEntry);
+      sceneChanged = true;
     });
-  }, [displayedTfFrames, transforms]);
+    if (sceneChanged) {
+      ros3dViewer.current?.requestRender?.();
+    }
+  }, [displayedTfFrames, transforms, ros3dViewer]);
 
-  // Effect 4: Animation loop to update axes poses and selected TF edges
+  // Effect 4: Apply TF changes to axes and selected edges. TF messages already update
+  // `transforms`, so polling on every animation frame only redraws unchanged scenes.
   useEffect(() => {
-    // Set refresh rate to 30 fps (33ms between frames)
-    const VISUALIZATION_REFRESH_RATE_MS = 33; // 30 fps
-    let lastUpdateTime = 0;
+    const viewer = ros3dViewer.current;
+    const provider = customTFProvider.current;
+    const container = tfAxesContainerRef.current;
+    const currentMap = tfAxesMapRef.current;
+    const currentEdges = tfEdgeMapRef.current;
 
-    // Reuse these objects to avoid garbage collection
-    const newPos = new THREE.Vector3();
-    const newQuat = new THREE.Quaternion();
-
-    const updateAxesPoses = (timestamp: number) => {
-      const viewer = ros3dViewer.current;
-      const provider = customTFProvider.current;
-      const container = tfAxesContainerRef.current;
-      const currentMap = tfAxesMapRef.current;
-      const currentEdges = tfEdgeMapRef.current;
-
-      // Ensure everything needed is available
-      if (!isRosConnected || !viewer || !provider || !container || (currentMap.size === 0 && currentEdges.size === 0)) {
-        animationFrameId.current = requestAnimationFrame(updateAxesPoses);
-        return;
-      }
-
-      // Throttle updates to target 30 fps
-      if (timestamp - lastUpdateTime < VISUALIZATION_REFRESH_RATE_MS) {
-        animationFrameId.current = requestAnimationFrame(updateAxesPoses);
-        return;
-      }
-
-      lastUpdateTime = timestamp;
-      const fixedFrame = viewer.fixedFrame || 'odom';
-
-      // Use smaller thresholds for faster response but still avoid tiny changes
-      const POSITION_THRESHOLD = 0.00005;
-      const ROTATION_THRESHOLD = 0.00005;
-      const frameTransformCache = new Map<string, StoredTransform | null>();
-
-      const getFrameTransform = (frameName: string): StoredTransform | null => {
-        if (!frameTransformCache.has(frameName)) {
-          frameTransformCache.set(frameName, provider.lookupTransform(fixedFrame, frameName));
-        }
-
-        return frameTransformCache.get(frameName) ?? null;
-      };
-
-      currentMap.forEach((entry: TfAxesEntry, frameName: string) => {
-        const transform = getFrameTransform(frameName);
-        if (transform && transform.translation && transform.rotation) {
-          // Reuse objects to avoid garbage collection
-          newPos.set(
-            transform.translation.x,
-            transform.translation.y,
-            transform.translation.z
-          );
-          newQuat.set(
-            transform.rotation.x,
-            transform.rotation.y,
-            transform.rotation.z,
-            transform.rotation.w
-          );
-
-          // Only update if the change is significant
-          const positionChanged = !entry.group.position.equals(newPos) &&
-            entry.group.position.distanceToSquared(newPos) > POSITION_THRESHOLD;
-
-          const rotationChanged = !entry.group.quaternion.equals(newQuat) &&
-            Math.abs(entry.group.quaternion.dot(newQuat) - 1.0) > ROTATION_THRESHOLD;
-
-          if (positionChanged || rotationChanged) {
-            entry.group.position.copy(newPos);
-            entry.group.quaternion.copy(newQuat);
-          }
-
-          if (!entry.group.visible) {
-            entry.group.visible = true;
-          }
-        } else if (entry.group.visible) {
-          entry.group.visible = false;
-        }
-      });
-
-      currentEdges.forEach((entry: TfEdgeEntry) => {
-        const parentTransform = getFrameTransform(entry.edge.parentFrame);
-        const childTransform = getFrameTransform(entry.edge.childFrame);
-
-        if (!parentTransform?.translation || !childTransform?.translation) {
-          entry.line.visible = false;
-          return;
-        }
-
-        entry.positions[0] = parentTransform.translation.x;
-        entry.positions[1] = parentTransform.translation.y;
-        entry.positions[2] = parentTransform.translation.z;
-        entry.positions[3] = childTransform.translation.x;
-        entry.positions[4] = childTransform.translation.y;
-        entry.positions[5] = childTransform.translation.z;
-
-        const positionAttribute = entry.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-        if (positionAttribute) {
-          positionAttribute.needsUpdate = true;
-        }
-        entry.line.visible = true;
-      });
-
-      // Continue the loop
-      animationFrameId.current = requestAnimationFrame(updateAxesPoses);
-    };
-
-    // Start the loop if connected and container exists
-    if (isRosConnected && tfAxesContainerRef.current) {
-      // console.log('[useTfVisualizer] Starting animation loop');
-      animationFrameId.current = requestAnimationFrame(updateAxesPoses);
-    } else {
-      // console.log('[useTfVisualizer] Not starting animation loop (prerequisites not met)');
+    if (!isRosConnected || !viewer || !provider || !container || (currentMap.size === 0 && currentEdges.size === 0)) {
+      return;
     }
 
-    // Cleanup function for Effect 3
-    return () => {
-      // console.log('[useTfVisualizer] Cleanup Effect 4: Cancelling animation frame');
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-        animationFrameId.current = null;
+    const newPos = new THREE.Vector3();
+    const newQuat = new THREE.Quaternion();
+    const POSITION_THRESHOLD = 0.00005;
+    const ROTATION_THRESHOLD = 0.00005;
+    const frameTransformCache = new Map<string, StoredTransform | null>();
+    let sceneChanged = false;
+
+    const getFrameTransform = (frameName: string): StoredTransform | null => {
+      if (!frameTransformCache.has(frameName)) {
+        frameTransformCache.set(frameName, provider.lookupTransform(fixedFrame, frameName));
       }
+      return frameTransformCache.get(frameName) ?? null;
     };
-  }, [isRosConnected, ros3dViewer, customTFProvider]); // Re-run if connection, viewer, or provider changes
+
+    currentMap.forEach((entry: TfAxesEntry, frameName: string) => {
+      const transform = getFrameTransform(frameName);
+      if (transform?.translation && transform.rotation) {
+        newPos.copy(transform.translation);
+        newQuat.copy(transform.rotation);
+        const positionChanged = !entry.group.position.equals(newPos) &&
+          entry.group.position.distanceToSquared(newPos) > POSITION_THRESHOLD;
+        const rotationChanged = !entry.group.quaternion.equals(newQuat) &&
+          Math.abs(entry.group.quaternion.dot(newQuat) - 1.0) > ROTATION_THRESHOLD;
+
+        if (positionChanged || rotationChanged) {
+          entry.group.position.copy(newPos);
+          entry.group.quaternion.copy(newQuat);
+          sceneChanged = true;
+        }
+        if (!entry.group.visible) {
+          entry.group.visible = true;
+          sceneChanged = true;
+        }
+      } else if (entry.group.visible) {
+        entry.group.visible = false;
+        sceneChanged = true;
+      }
+    });
+
+    currentEdges.forEach((entry: TfEdgeEntry) => {
+      const parentTransform = getFrameTransform(entry.edge.parentFrame);
+      const childTransform = getFrameTransform(entry.edge.childFrame);
+
+      if (!parentTransform?.translation || !childTransform?.translation) {
+        if (entry.line.visible) {
+          entry.line.visible = false;
+          sceneChanged = true;
+        }
+        return;
+      }
+
+      const nextPositions = [
+        parentTransform.translation.x,
+        parentTransform.translation.y,
+        parentTransform.translation.z,
+        childTransform.translation.x,
+        childTransform.translation.y,
+        childTransform.translation.z,
+      ];
+      const positionsChanged = nextPositions.some((value, index) => entry.positions[index] !== value);
+      if (positionsChanged || !entry.line.visible) {
+        entry.positions.set(nextPositions);
+        const positionAttribute = entry.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (positionAttribute) positionAttribute.needsUpdate = true;
+        entry.line.visible = true;
+        sceneChanged = true;
+      }
+    });
+
+    if (sceneChanged) viewer.requestRender?.();
+  }, [isRosConnected, ros3dViewer, customTFProvider, fixedFrame, displayedTfFrames, transforms]);
 
   // No return value needed, hook manages side effects
 }

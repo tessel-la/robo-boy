@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { getStepPrecision } from '../rangeUtils';
 import './ValueControl.css';
 
@@ -19,6 +19,7 @@ const ValueControl: React.FC<ValueControlProps> = ({
   min = -Infinity,
   max = Infinity,
 }) => {
+  const inputId = useId();
   const precision = getStepPrecision(step);
   const [inputValue, setInputValue] = useState(value.toFixed(precision));
 
@@ -29,7 +30,7 @@ const ValueControl: React.FC<ValueControlProps> = ({
   const commitChange = (val: number) => {
     const clampedValue = Math.max(min, Math.min(max, val));
     const roundedValue = parseFloat(clampedValue.toFixed(precision));
-    
+
     if (roundedValue !== value) {
       onChange(roundedValue);
     } else {
@@ -57,17 +58,20 @@ const ValueControl: React.FC<ValueControlProps> = ({
 
   return (
     <div className="value-control">
-      <label>{label}</label>
+      <label htmlFor={inputId}>{label}</label>
       <div className="control-input-group">
         <button
+          type="button"
           className="control-btn minus"
           onClick={handleDecrement}
           disabled={value <= min}
           title={`Decrease ${label}`}
+          aria-label={`Decrease ${label}`}
         >
           −
         </button>
         <input
+          id={inputId}
           type="number"
           value={inputValue}
           onChange={handleInputChange}
@@ -76,10 +80,12 @@ const ValueControl: React.FC<ValueControlProps> = ({
           className="control-value-input"
         />
         <button
+          type="button"
           className="control-btn plus"
           onClick={handleIncrement}
           disabled={value >= max}
           title={`Increase ${label}`}
+          aria-label={`Increase ${label}`}
         >
           +
         </button>

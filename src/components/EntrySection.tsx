@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ConnectionParams } from '../App'; // Adjust if ConnectionParams definition changes
+import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
@@ -9,14 +9,11 @@ import {
   normalizeRuntimeServicePorts,
   type RuntimeServicePorts,
 } from '../runtime/runtimeConfig';
-import {
-  loadRecentConnections,
-  RecentConnection,
-  removeRecentConnection,
-} from '../runtime/recentConnections';
+import { loadRecentConnections, RecentConnection, removeRecentConnection } from '../runtime/recentConnections';
 
 interface EntrySectionProps {
   onConnect: (params: ConnectionParams) => void;
+  embedded?: boolean;
 }
 
 type PortKey = keyof RuntimeServicePorts;
@@ -77,7 +74,7 @@ const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
   </svg>
 );
 
-const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
+const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
@@ -344,7 +341,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect }) => {
   };
 
   return (
-    <div className="entry-section-container" ref={containerRef}>
+    <div className={`entry-section-container ${embedded ? 'is-embedded' : ''}`} ref={containerRef}>
       <div className="entry-section card" data-testid="entry-section">
         <div className="logo-container" ref={logoRef}>
           <h1 className="app-title">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Ros } from 'roslib';
+import { FiCheck, FiSettings, FiX } from 'react-icons/fi';
 import {
   GamepadComponentConfig,
   PhysicalGamepadBinding,
@@ -220,6 +221,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [valueRange, setValueRange] = useState({ min: -1, max: 1 });
   const [sliderMin, setSliderMin] = useState(-1);
   const [sliderMax, setSliderMax] = useState(1);
+  const [sliderStep, setSliderStep] = useState(0.1);
+  const [sliderOrientation, setSliderOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
   const [axisSelection, setAxisSelection] = useState<'xy' | 'zw'>('xy'); // First 2 or second 2 axes
   const [customAxes, setCustomAxes] = useState<string[]>(['0', '1']);
   const [useCustomAxes, setUseCustomAxes] = useState(false);
@@ -417,6 +420,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setValueRange({ min: -1, max: 1 });
       setSliderMin(-1);
       setSliderMax(1);
+      setSliderStep(0.1);
+      setSliderOrientation('horizontal');
       setAxisSelection('xy');
       setCustomAxes(['0', '1']);
       setUseCustomAxes(false);
@@ -538,6 +543,11 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         } else if (component.type === 'button') {
           setButtonIndex(component.config.buttonIndex ?? 0);
           setMomentary(component.config.momentary ?? true);
+        } else if (component.type === 'slider') {
+          setSliderMin(component.config.min ?? -1);
+          setSliderMax(component.config.max ?? 1);
+          setSliderStep(component.config.step ?? 0.1);
+          setSliderOrientation(component.config.orientation ?? 'horizontal');
         } else if (component.type === 'dpad') {
           // Initialize D-pad button mapping
           setDpadButtonMapping(component.config.buttonMapping || {
@@ -791,6 +801,14 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         buttonIndex,
         momentary
       };
+    } else if (component.type === 'slider') {
+      updatedConfig = {
+        ...updatedConfig,
+        min: sliderMin,
+        max: sliderMax,
+        step: sliderStep,
+        orientation: sliderOrientation,
+      };
     } else if (component.type === 'dpad') {
       updatedConfig = isPoseStampedMessageType(messageType)
         ? {
@@ -900,19 +918,33 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
   return (
     <div className="component-settings-modal-overlay" onClick={onClose}>
-      <div className="enhanced-component-settings-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="enhanced-component-settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="component-settings-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
-          <h3>Configure {component.type.charAt(0).toUpperCase() + component.type.slice(1)}</h3>
-          <button className="close-button" onClick={onClose}>×</button>
+          <div className="modal-heading">
+            <span className="modal-kicker"><FiSettings /> Component setup</span>
+            <h3 id="component-settings-title">
+              Configure {component.type.charAt(0).toUpperCase() + component.type.slice(1)}
+            </h3>
+            <p>Set how this component looks, connects, and responds.</p>
+          </div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="Close component settings">
+            <FiX />
+          </button>
         </div>
 
         <div className="modal-content">
           {/* Basic Settings */}
           <div className="settings-section">
-            <h4>Basic Settings</h4>
+            <h4>Appearance</h4>
 
             <div className="setting-group">
-              <label htmlFor="component-label">Display Label:</label>
+              <label htmlFor="component-label">Display label</label>
               <input
                 id="component-label"
                 type="text"
@@ -958,10 +990,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
           {/* Topic Configuration */}
           <div className="settings-section">
-            <h4>ROS Topic Configuration</h4>
+            <h4>ROS connection</h4>
 
             <div className="setting-group">
-              <label htmlFor="message-type">Message Type:</label>
+              <label htmlFor="message-type">Message type</label>
               {component.type === 'heartbeat' ? (
                 <>
                   <input
@@ -1041,56 +1073,62 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             </div>
 
             <div className="setting-group">
-              <label htmlFor="topic-name">Topic:</label>
+              <label htmlFor="topic-select">Topic</label>
               <div className="topic-input-group">
-                <select
-                  id="topic-select"
-                  value={topic}
-                  onChange={(e) => {
-                    const nextTopic = e.target.value;
-                    setTopic(nextTopic);
-                    if (component.type === 'camera' || component.type === 'plot' || component.type === 'heartbeat') {
-                      const selectedTopic = availableTopics.find(item => item.name === nextTopic);
-                      if (selectedTopic?.type) {
-                        const canonicalType = getCanonicalMessageType(selectedTopic.type);
-                        setMessageType(canonicalType);
-                        if (component.type === 'camera') {
-                          setStreamType(getDefaultCameraStreamType(canonicalType));
-                        } else if (component.type === 'heartbeat') {
-                          const isBooleanType = canonicalType.endsWith('/Bool') || canonicalType.endsWith('/msg/Bool');
-                          setHeartbeatMode(isBooleanType ? 'boolean' : 'pulse');
-                          if (isBooleanType) setHeartbeatFieldPath('data');
+                <div className="topic-input-option">
+                  <span className="topic-input-label">Available topics</span>
+                  <select
+                    id="topic-select"
+                    value={topic}
+                    onChange={(e) => {
+                      const nextTopic = e.target.value;
+                      setTopic(nextTopic);
+                      if (component.type === 'camera' || component.type === 'plot' || component.type === 'heartbeat') {
+                        const selectedTopic = availableTopics.find(item => item.name === nextTopic);
+                        if (selectedTopic?.type) {
+                          const canonicalType = getCanonicalMessageType(selectedTopic.type);
+                          setMessageType(canonicalType);
+                          if (component.type === 'camera') {
+                            setStreamType(getDefaultCameraStreamType(canonicalType));
+                          } else if (component.type === 'heartbeat') {
+                            const isBooleanType = canonicalType.endsWith('/Bool') || canonicalType.endsWith('/msg/Bool');
+                            setHeartbeatMode(isBooleanType ? 'boolean' : 'pulse');
+                            if (isBooleanType) setHeartbeatFieldPath('data');
+                          }
                         }
                       }
-                    }
-                  }}
-                  className="setting-select topic-select"
-                  disabled={isLoadingTopics}
-                >
-                  <option value="">
-                    {isLoadingTopics ? 'Loading topics...' : 'Select existing topic...'}
-                  </option>
-                  {filteredTopics.length > 0 ? (
-                    filteredTopics.map((topicInfo) => (
-                      <option key={topicInfo.name} value={topicInfo.name}>
-                        {topicInfo.name} ({topicInfo.type})
-                      </option>
-                    ))
-                  ) : messageType ? (
-                    <option disabled>No {messageType} topics found</option>
-                  ) : (
-                    <option disabled>Select message type first</option>
-                  )}
-                </select>
+                    }}
+                    className="setting-select topic-select"
+                    disabled={isLoadingTopics}
+                  >
+                    <option value="">
+                      {isLoadingTopics ? 'Loading topics...' : 'Select existing topic...'}
+                    </option>
+                    {filteredTopics.length > 0 ? (
+                      filteredTopics.map((topicInfo) => (
+                        <option key={topicInfo.name} value={topicInfo.name}>
+                          {topicInfo.name} ({topicInfo.type})
+                        </option>
+                      ))
+                    ) : messageType ? (
+                      <option disabled>No {messageType} topics found</option>
+                    ) : (
+                      <option disabled>Select message type first</option>
+                    )}
+                  </select>
+                </div>
                 <span className="topic-input-separator">or</span>
-                <input
-                  id="topic-custom"
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Enter custom topic name"
-                  className="setting-input topic-input"
-                />
+                <div className="topic-input-option">
+                  <label className="topic-input-label" htmlFor="topic-custom">Custom topic</label>
+                  <input
+                    id="topic-custom"
+                    type="text"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="/robot/control"
+                    className="setting-input topic-input"
+                  />
+                </div>
               </div>
               {errorMessage ? (
                 <div className="error-message-inline">
@@ -1387,7 +1425,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               {/* Only show axis configuration for Joy, Twist, and PoseStamped message types */}
               {isAxisConfigurationEnabled(messageType) && (
                 <div className="setting-group">
-                  <label>Axis Configuration:</label>
+                  <label>Axis configuration</label>
                   <div className="axis-config">
                     {isPoseStampedAxisConfigurationEnabled(messageType) ? (
                       <>
@@ -1695,42 +1733,49 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                     {poseStampedReferenceMode === 'odometry' && (
                       <>
                         <div className="setting-group">
-                          <label htmlFor="pose-stamped-odom-topic">Odometry Topic:</label>
+                          <label htmlFor="pose-stamped-odom-topic">Odometry topic</label>
                           <div className="topic-input-group">
-                            <select
-                              id="pose-stamped-odom-topic"
-                              value={poseStampedOdometryTopic}
-                              onChange={(e) => {
-                                const nextTopic = e.target.value;
-                                setPoseStampedOdometryTopic(nextTopic);
-                                const selectedTopic = odometryTopics.find(item => item.name === nextTopic);
-                                if (selectedTopic?.type) {
-                                  setPoseStampedOdometryMessageType(selectedTopic.type);
-                                }
-                              }}
-                              className="setting-select topic-select"
-                              disabled={isLoadingTopics}
-                            >
-                              <option value="">
-                                {isLoadingTopics ? 'Loading topics...' : 'Select odometry topic...'}
-                              </option>
-                              {odometryTopics.map(topicInfo => (
-                                <option key={topicInfo.name} value={topicInfo.name}>
-                                  {topicInfo.name} ({topicInfo.type})
+                            <div className="topic-input-option">
+                              <span className="topic-input-label">Available topics</span>
+                              <select
+                                id="pose-stamped-odom-topic"
+                                value={poseStampedOdometryTopic}
+                                onChange={(e) => {
+                                  const nextTopic = e.target.value;
+                                  setPoseStampedOdometryTopic(nextTopic);
+                                  const selectedTopic = odometryTopics.find(item => item.name === nextTopic);
+                                  if (selectedTopic?.type) {
+                                    setPoseStampedOdometryMessageType(selectedTopic.type);
+                                  }
+                                }}
+                                className="setting-select topic-select"
+                                disabled={isLoadingTopics}
+                              >
+                                <option value="">
+                                  {isLoadingTopics ? 'Loading topics...' : 'Select odometry topic...'}
                                 </option>
-                              ))}
-                              {odometryTopics.length === 0 && (
-                                <option disabled>No odometry topics found</option>
-                              )}
-                            </select>
+                                {odometryTopics.map(topicInfo => (
+                                  <option key={topicInfo.name} value={topicInfo.name}>
+                                    {topicInfo.name} ({topicInfo.type})
+                                  </option>
+                                ))}
+                                {odometryTopics.length === 0 && (
+                                  <option disabled>No odometry topics found</option>
+                                )}
+                              </select>
+                            </div>
                             <span className="topic-input-separator">or</span>
-                            <input
-                              type="text"
-                              value={poseStampedOdometryTopic}
-                              onChange={(e) => setPoseStampedOdometryTopic(e.target.value)}
-                              placeholder="/odom"
-                              className="setting-input topic-input"
-                            />
+                            <div className="topic-input-option">
+                              <span className="topic-input-label">Custom topic</span>
+                              <input
+                                type="text"
+                                value={poseStampedOdometryTopic}
+                                onChange={(e) => setPoseStampedOdometryTopic(e.target.value)}
+                                placeholder="/odom"
+                                aria-label="Custom odometry topic"
+                                className="setting-input topic-input"
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -1771,6 +1816,52 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {component.type === 'slider' && (
+            <div className="settings-section">
+              <h4>Slider settings</h4>
+
+              <div className="setting-group range-controls">
+                <ValueControl
+                  label="Minimum value"
+                  value={sliderMin}
+                  onChange={setSliderMin}
+                  step={getDynamicRangeStep(sliderMin, sliderMax, messageType.includes('Int'))}
+                  max={sliderMax}
+                />
+                <ValueControl
+                  label="Maximum value"
+                  value={sliderMax}
+                  onChange={setSliderMax}
+                  step={getDynamicRangeStep(sliderMin, sliderMax, messageType.includes('Int'))}
+                  min={sliderMin}
+                />
+              </div>
+
+              <div className="setting-group range-controls">
+                <ValueControl
+                  label="Step size"
+                  value={sliderStep}
+                  onChange={setSliderStep}
+                  step={getDynamicRangeStep(sliderMin, sliderMax, false)}
+                  min={getDynamicRangeStep(sliderMin, sliderMax, false)}
+                />
+              </div>
+
+              <div className="setting-group">
+                <label htmlFor="slider-orientation">Orientation</label>
+                <select
+                  id="slider-orientation"
+                  value={sliderOrientation}
+                  onChange={(event) => setSliderOrientation(event.target.value as 'horizontal' | 'vertical')}
+                  className="setting-select"
+                >
+                  <option value="horizontal">Horizontal</option>
+                  <option value="vertical">Vertical</option>
+                </select>
+              </div>
             </div>
           )}
 
@@ -1888,17 +1979,13 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
               <div className="setting-group">
                 <div className="axis-config-disabled">
-                  <p><strong>Toggle Component Configuration:</strong></p>
-                  <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                    <li>Message Type: <strong>std_msgs/Bool</strong> only</li>
-                    <li>Field: <strong>data</strong> (boolean value)</li>
-                    <li>Behavior: ON/OFF state toggle</li>
-                    <li>Published Values: <strong>true</strong> when ON, <strong>false</strong> when OFF</li>
+                  <p><strong>Boolean state control</strong></p>
+                  <ul className="configuration-summary">
+                    <li><span>Message type</span><strong>std_msgs/Bool</strong></li>
+                    <li><span>Field</span><strong>data</strong></li>
+                    <li><span>Behavior</span><strong>ON / OFF</strong></li>
+                    <li><span>Published values</span><strong>true / false</strong></li>
                   </ul>
-                  <p style={{ fontStyle: 'italic', fontSize: '0.9em', color: 'var(--text-color-secondary)' }}>
-                    Toggle components are designed for simple boolean control. They publish true/false values
-                    to the specified topic when toggled on or off.
-                  </p>
                 </div>
               </div>
             </div>
@@ -1906,15 +1993,16 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         </div>
 
         <div className="modal-footer">
-          <button className="cancel-btn" onClick={handleCancel}>
+          <button type="button" className="cancel-btn" onClick={handleCancel}>
             Cancel
           </button>
           <button
+            type="button"
             className="save-btn"
             onClick={handleSave}
             disabled={!topic || !messageType || !!errorMessage}
           >
-            Save Configuration
+            <FiCheck /> Save configuration
           </button>
         </div>
       </div>

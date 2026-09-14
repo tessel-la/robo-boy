@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import type { ConnectionParams } from '../App';
+import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
 
 export interface RuntimeEndpoints {

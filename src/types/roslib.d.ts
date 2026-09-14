@@ -5,6 +5,7 @@ declare module 'roslib' {
         constructor(options: { url: string });
         options: { url: string }; // Expose options
         on(eventName: string, callback: (event: any) => void): void;
+        off(eventName: string, callback: (event: any) => void): void;
         close(): void;
         isConnected: boolean;
         // Add other methods/properties as needed (e.g., Topic, Service)
@@ -59,6 +60,13 @@ declare module 'roslib' {
         [key: string]: any;
     }
 
+    export class Param {
+        constructor(options: { ros: Ros; name: string });
+        get(callback: (value: any) => void, failedCallback?: (error: any) => void): void;
+        set(value: any, callback?: () => void, failedCallback?: (error: any) => void): void;
+        delete(callback?: () => void, failedCallback?: (error: any) => void): void;
+    }
+
     // Add TFClient declaration
     export class TFClient {
         constructor(options: {
@@ -90,6 +98,7 @@ declare module 'roslib' {
         Service: typeof Service;
         ServiceRequest: typeof ServiceRequest;
         ServiceResponse: typeof ServiceResponse;
+        Param: typeof Param;
     };
 
     export default ROSLIB;

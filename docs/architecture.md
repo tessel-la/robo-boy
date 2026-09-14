@@ -26,7 +26,9 @@ Robo-Boy has no application server or database. The web deployment uses Caddy to
 
 ## Frontend Composition
 
-`src/main.tsx` mounts `App`. `App` owns the connection-screen transition and global theme state. Before connection it renders `EntrySection`; after submission it renders `MainControlView`.
+`src/main.tsx` mounts `App`. `App` owns the connection-session collection, connection-screen
+transition, and global theme state. With no session it renders `EntrySection`; otherwise it keeps a
+`MainControlView` owner mounted for each open target.
 
 `MainControlView` is the runtime coordinator. It:
 
@@ -36,6 +38,15 @@ Robo-Boy has no application server or database. The web deployment uses Caddy to
 - Manages open custom-gamepad panels and editor sessions.
 - Keeps behavior-tree execution controls reachable for stop and disconnect operations.
 - Owns the resizable split between the primary view and control area.
+
+`App` may mount several independent connection sessions and exposes them through responsive
+connection navigation inside the existing workspace top bar. One active-connection trigger opens an
+on-demand status list on desktop and mobile, with workspace-layout management available from that
+same list. Each session retains its own
+`useRos`, runtime endpoint provider, and `MainControlView` state. Only the selected session mounts
+resource-heavy panel subtrees. See
+[Multi-connection architecture](multi-connections.md) for lifecycle, cleanup, and persistence
+boundaries.
 
 Keep orchestration here, but place feature-specific behavior inside feature modules and hooks. New large features should not add substantial protocol or rendering logic directly to `MainControlView`.
 
@@ -80,6 +91,13 @@ The 3D stack has three layers:
 - `src/components/visualizers/` adapts React props to visualization hooks and settings components.
 - `src/hooks/` and `src/utils/ros3d/` own ROS subscriptions, TF coordination, Three.js objects, shaders, primitives, and disposal.
 
+The application-facing `../utils/ros3d` import currently resolves to `src/utils/ros3d.ts`; that
+entry point owns the live viewer, point-cloud, orbit-control, and URDF implementations and
+re-exports the modular LaserScan implementation. The viewer is invalidation-driven: scene/data,
+resize, settings, and camera changes coalesce into one requested frame, while an unchanged scene
+does not retain a render loop. Keep new visualizers on that boundary so idle panels do no WebGL
+work. See [Frontend performance analysis](performance.md) for measurements and the profiling suite.
+
 New visualization types should follow the same split: serializable configuration in the panel, a thin React adapter, and lifecycle-heavy ROS/Three.js code in a hook or `ros3d` class. Dispose subscriptions, geometries, materials, animation callbacks, and viewer objects when dependencies change or components unmount.
 
 ### Themes
@@ -90,6 +108,10 @@ New visualization types should follow the same split: serializable configuration
 
 `MainControlView` owns the unified workspace and persists panel instances by stable panel-definition ID. The common
 catalog in `src/panels/builtInPanels.ts` registers the existing camera, 3D, behavior-tree, TF-tree, and pad panels.
+`src/components/workspaceLayout.ts` owns the workspace's recursive split tree, including validation, legacy row-layout
+migration, tile insertion/removal, and split resizing. A split may contain tiles or further splits on either axis, so
+dragging onto any tile edge can build nested compositions without adding layout-specific cases. Saved named layouts
+persist the same tree alongside their panel snapshots.
 `src/panels/useInstalledPanels.ts` adds compatible external manifests from the deployment-local
 `panels/installed.json` without importing panel code. The tracked default registry is empty; explicit panel builds
 generate a separate ignored public tree from a schema-v2 desired state that can combine remote inventories and
@@ -104,6 +126,26 @@ cannot access the parent DOM, cookies, Robo-Boy browser storage, or undeclared r
 separate authenticated manager for previewing and applying desired-state changes. Keep application stores and
 feature internals out of the public context. See
 [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
+
+### Global AI Assistant
+
+`src/features/assistant/` owns the single, global assistant: conversation state, the five-provider chat client
+(`providers/`), bounded ROS/TF/rosout context sources (`context/`), the Pad generator and validators
+(`tools/`), and its own React UI (`components/`). `MainControlView` mounts one `<GlobalAssistant>`, computes a
+small, serializable workspace snapshot for it to read, and receives Pad proposals to open in the existing Pad
+editor — no protocol or provider logic lives in `MainControlView` itself, matching this doc's "Adding a Feature"
+guidance.
+
+The assistant proposes; it never acts on the robot. A topic publish, service call, or action goal is rendered as
+a review-only card, and reaching the robot means putting it through the Pad or Behavior Tree editors, which own
+that path already. Its ROS reads share `src/utils/rosapiQueue.ts` with the rest of the app, because rosbridge
+serves rosapi one request at a time.
+
+A mounted `BehaviorTreePanel` registers a `BehaviorTreeAssistantBridge` (get current/selected tree, capture/restore
+a checkpoint, apply or clear a preview) so the assistant can drive that panel's existing diff/canvas-overlay/accept
+flow instead of owning a second BT-editing implementation; opening the assistant from the panel's toolbar or
+Ctrl/Cmd+I pins that bridge rather than starting another conversation. See
+[AI assistant](ai-assistant.md) for capabilities, trust boundaries, and privacy/credential handling.
 
 ## State And Persistence
 
@@ -121,6 +163,8 @@ State is intentionally local to the browser:
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
 | External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
+| Assistant settings           | `assistant/storage`       | `localStorage` (plaintext, see [AI assistant](ai-assistant.md))  |
+| Assistant conversation       | `assistant/storage`       | Versioned `localStorage`, capped to 100 messages, role/content only |
 
 Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.
 

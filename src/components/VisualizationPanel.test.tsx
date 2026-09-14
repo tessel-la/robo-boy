@@ -3,20 +3,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VisualizationPanel from './VisualizationPanel';
 import { clearVisualizationState } from '../utils/visualizationState';
 
+const viewerLifecycleMock = vi.hoisted(() => ({
+  ros3dViewer: { current: null as any },
+  viewerGeneration: 0,
+}));
+const tfProviderLifecycleMock = vi.hoisted(() => ({
+  customTFProvider: { current: null as any },
+  ensureProviderFunctionality: vi.fn(),
+  isProviderReady: false,
+}));
+const pointCloudVizMock = vi.hoisted(() => vi.fn(() => null));
+
 vi.mock('../hooks/useRos3dViewer', () => ({
-  useRos3dViewer: () => ({ ros3dViewer: { current: null } }),
+  useRos3dViewer: () => viewerLifecycleMock,
 }));
 
 vi.mock('../hooks/useTfProvider', () => ({
-  useTfProvider: () => ({
-    customTFProvider: { current: null },
-    ensureProviderFunctionality: vi.fn(),
-    isProviderReady: false,
-  }),
+  useTfProvider: () => tfProviderLifecycleMock,
 }));
 
 vi.mock('../hooks/useTfVisualizer', () => ({
   useTfVisualizer: vi.fn(),
+}));
+
+vi.mock('./visualizers/PointCloudViz', () => ({
+  default: pointCloudVizMock,
 }));
 
 describe('VisualizationPanel state restoration', () => {
@@ -24,6 +35,11 @@ describe('VisualizationPanel state restoration', () => {
     vi.restoreAllMocks();
     clearVisualizationState();
     localStorage.clear();
+    viewerLifecycleMock.ros3dViewer.current = null;
+    viewerLifecycleMock.viewerGeneration = 0;
+    tfProviderLifecycleMock.customTFProvider.current = null;
+    tfProviderLifecycleMock.isProviderReady = false;
+    pointCloudVizMock.mockClear();
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -77,6 +93,34 @@ describe('VisualizationPanel state restoration', () => {
     expect(viewerIds).toHaveLength(2);
     expect(new Set(viewerIds).size).toBe(2);
     expect(viewerIds.every(id => id.startsWith('ros3d-viewer-'))).toBe(true);
+  });
+
+  it('mounts restored visualizers after delayed viewer and TF provider readiness', () => {
+    const savedState = {
+      visualizations: [{ id: 'points', type: 'pointcloud', topic: '/points' }],
+      fixedFrame: 'odom',
+      displayedTfFrames: [],
+      showFrameLabels: true,
+      tfAxesScale: 0.1,
+    };
+    localStorage.setItem('delayed-viewer', JSON.stringify(savedState));
+    const createRos = () => ({
+      isConnected: true,
+      getTopics: (onSuccess: (response: { topics: string[]; types: string[] }) => void) => {
+        onSuccess({ topics: ['/points'], types: ['sensor_msgs/msg/PointCloud2'] });
+      },
+    });
+
+    const { rerender } = render(<VisualizationPanel ros={createRos() as any} storageKey="delayed-viewer" />);
+    expect(pointCloudVizMock).not.toHaveBeenCalled();
+
+    viewerLifecycleMock.ros3dViewer.current = { scene: {} };
+    viewerLifecycleMock.viewerGeneration = 1;
+    tfProviderLifecycleMock.customTFProvider.current = {};
+    tfProviderLifecycleMock.isProviderReady = true;
+    rerender(<VisualizationPanel ros={createRos() as any} storageKey="delayed-viewer" />);
+
+    expect(pointCloudVizMock).toHaveBeenCalled();
   });
 
   it('keeps add visualization inside the shared settings menu', () => {

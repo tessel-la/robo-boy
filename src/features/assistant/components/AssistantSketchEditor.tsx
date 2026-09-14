@@ -10,7 +10,10 @@ import {
   FaTrash,
   FaUndo,
 } from 'react-icons/fa';
-import './BehaviorTreeSketchEditor.css';
+import './AssistantSketchEditor.css';
+
+// Relocated near-verbatim from the former behaviorTree/components/BehaviorTreeSketchEditor.tsx —
+// this canvas sketch tool is generic (draw, export PNG, attach), not BT-specific.
 
 const SKETCH_WIDTH = 1200;
 const SKETCH_HEIGHT = 800;
@@ -43,7 +46,7 @@ interface PendingText {
   value: string;
 }
 
-interface BehaviorTreeSketchEditorProps {
+interface AssistantSketchEditorProps {
   onAttach: (dataUrl: string) => void;
   onClose: () => void;
 }
@@ -118,7 +121,7 @@ const drawSketch = (context: CanvasRenderingContext2D, elements: SketchElement[]
   context.restore();
 };
 
-const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onAttach, onClose }) => {
+const AssistantSketchEditor: React.FC<AssistantSketchEditorProps> = ({ onAttach, onClose }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const activePointerRef = useRef<number | null>(null);
   const activeElementRef = useRef<number | null>(null);
@@ -314,17 +317,20 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
   };
 
   return (
-    <div className="bt-sketch-overlay" onPointerDown={event => event.target === event.currentTarget && onClose()}>
-      <section className="bt-sketch-editor" role="dialog" aria-modal="true" aria-labelledby="bt-sketch-title">
-        <header className="bt-sketch-header">
-          <h3 id="bt-sketch-title">Sketch attachment</h3>
+    <div
+      className="assistant-sketch-overlay"
+      onPointerDown={event => event.target === event.currentTarget && onClose()}
+    >
+      <section className="assistant-sketch-editor" role="dialog" aria-modal="true" aria-labelledby="assistant-sketch-title">
+        <header className="assistant-sketch-header">
+          <h3 id="assistant-sketch-title">Sketch attachment</h3>
           <button type="button" onClick={onClose} aria-label="Close sketch editor" title="Close">
             <FaTimes aria-hidden="true" />
           </button>
         </header>
 
-        <div className="bt-sketch-toolbar" aria-label="Sketch tools">
-          <div className="bt-sketch-tool-group" role="group" aria-label="Drawing tool">
+        <div className="assistant-sketch-toolbar" aria-label="Sketch tools">
+          <div className="assistant-sketch-tool-group" role="group" aria-label="Drawing tool">
             <button
               type="button"
               className={tool === 'pen' ? 'active' : ''}
@@ -372,7 +378,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
             </button>
           </div>
 
-          <div className="bt-sketch-colors" role="group" aria-label="Drawing color">
+          <div className="assistant-sketch-colors" role="group" aria-label="Drawing color">
             {COLORS.map(value => (
               <button
                 type="button"
@@ -384,7 +390,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
                 title={value}
               />
             ))}
-            <label className="bt-sketch-custom-color" title="Custom color">
+            <label className="assistant-sketch-custom-color" title="Custom color">
               <input
                 type="color"
                 value={color}
@@ -394,7 +400,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
             </label>
           </div>
 
-          <label className="bt-sketch-width">
+          <label className="assistant-sketch-width">
             <span>Size</span>
             <input
               type="range"
@@ -407,7 +413,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
             />
           </label>
 
-          <div className="bt-sketch-history-actions">
+          <div className="assistant-sketch-history-actions">
             <button
               type="button"
               onClick={undo}
@@ -429,7 +435,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
           </div>
         </div>
 
-        <div className="bt-sketch-canvas-stage">
+        <div className="assistant-sketch-canvas-stage">
           <canvas
             ref={canvasRef}
             width={SKETCH_WIDTH}
@@ -438,11 +444,11 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
             onPointerMove={handlePointerMove}
             onPointerUp={finishElement}
             onPointerCancel={finishElement}
-            aria-label="Behavior tree sketch canvas"
+            aria-label="Assistant sketch canvas"
           />
           {pendingText && (
             <input
-              className={`bt-sketch-inline-text ${pendingText.target === 'rectangle' ? 'inside-rectangle' : ''}`}
+              className={`assistant-sketch-inline-text ${pendingText.target === 'rectangle' ? 'inside-rectangle' : ''}`}
               style={{ left: pendingText.left, top: pendingText.top, maxWidth: pendingText.maxWidth }}
               value={pendingText.value}
               onChange={event => updatePendingText({ ...pendingText, value: event.target.value })}
@@ -465,7 +471,7 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
           )}
         </div>
 
-        <footer className="bt-sketch-footer">
+        <footer className="assistant-sketch-footer">
           <button type="button" className="secondary" onClick={onClose}>
             Cancel
           </button>
@@ -479,4 +485,4 @@ const BehaviorTreeSketchEditor: React.FC<BehaviorTreeSketchEditorProps> = ({ onA
   );
 };
 
-export default BehaviorTreeSketchEditor;
+export default AssistantSketchEditor;

@@ -49,6 +49,7 @@ export function useUrdfClient({
         onComplete: (model: Object3D) => {
           console.log('[useUrdfClient] URDF model loaded successfully.', model);
           setIsUrdfLoaded(true);
+          ros3dViewer.current?.requestRender?.();
           // You might want to adjust camera or do other actions here
         },
       });
@@ -61,6 +62,7 @@ export function useUrdfClient({
       urdfClientRef.current.dispose();
       urdfClientRef.current = null;
       setIsUrdfLoaded(false);
+      ros3dViewer.current?.requestRender?.();
     }
 
     // Cleanup function
@@ -70,6 +72,7 @@ export function useUrdfClient({
         urdfClientRef.current.dispose();
         urdfClientRef.current = null;
         setIsUrdfLoaded(false);
+        ros3dViewer.current?.requestRender?.();
       }
     };
   }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl]);

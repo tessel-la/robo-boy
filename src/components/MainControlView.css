@@ -1,15 +1,12 @@
 .main-control-view {
   display: flex;
   flex-direction: column;
-  height: var(--app-height);
+  height: 100%;
+  min-height: 0;
   /* Remove padding-top, handled by content area now */
   padding: 0;
   gap: 0; /* Remove gap, handled by content area padding */
-  position: fixed; /* Fixed positioning to prevent scrolling */
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   box-sizing: border-box;
   overflow: hidden; /* Prevent scrolling on the main view */
 }
@@ -25,9 +22,8 @@
   padding: calc(5px + var(--safe-area-top)) 10px 5px; /* Reduced padding */
   background-color: var(--navbar-bg, #333);
   color: var(--navbar-text, white);
-  position: fixed;
-  top: 0;
-  left: 0;
+  position: relative;
+  flex: 0 0 calc(40px + var(--safe-area-top));
   width: 100%;
   z-index: 1000;
   box-sizing: border-box;
@@ -35,6 +31,10 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); /* Adjusted shadow */
   border-bottom-left-radius: 10px; /* Round bottom-left corner */
   border-bottom-right-radius: 10px; /* Round bottom-right corner */
+}
+
+.top-bar > .connection-tabs {
+  align-self: center;
 }
 
 .bt-execution-island {
@@ -163,13 +163,15 @@
 /* Main Content Area Styles */
 .main-content-area {
   padding: 10px; /* Reduced from 15px */
-  padding-top: calc(40px + 10px + var(--safe-area-top)); /* Top bar height + padding */
+  padding-top: 10px;
   padding-bottom: 10px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   overflow: hidden;
-  height: var(--app-height);
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
   width: 100%;
   box-sizing: border-box;
   position: relative;
@@ -350,6 +352,31 @@
   padding: 3px;
 }
 
+.top-bar .assistant-toolbar-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.top-bar .assistant-toolbar-button:hover,
+.top-bar .assistant-toolbar-button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  outline: none;
+}
+
+.top-bar .assistant-toolbar-button svg {
+  width: 19px;
+  height: 19px;
+}
+
 .layout-controls {
   display: flex;
   align-items: center;
@@ -358,37 +385,27 @@
   flex: 0 0 auto;
 }
 
+.top-bar.workspace-active > .layout-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .workspace-add-control {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.workspace-template-control {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.workspace-active-layout-name {
-  max-width: 180px;
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 32px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-active-layout-name.dirty {
-  color: #fff;
+.workspace-template-overlay {
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  width: 0;
+  height: 0;
 }
 
 .workspace-add-button,
-.workspace-template-button,
-.workspace-tile-button,
 .workspace-split-button {
   background: transparent;
   border: 0;
@@ -406,33 +423,27 @@
 }
 
 .workspace-add-button svg,
-.workspace-template-button svg,
-.workspace-tile-button svg,
 .workspace-split-button svg {
   width: 18px;
   height: 18px;
 }
 
 .workspace-add-button:hover:not(:disabled),
-.workspace-template-button:hover,
-.workspace-tile-button:hover,
 .workspace-split-button:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
 
-.workspace-tile-button.active {
-  background: var(--primary-color, #4285f4);
-  color: #fff;
-}
-
 .workspace-add-button,
-.workspace-template-button,
-.workspace-tile-button,
 .workspace-split-button {
   height: 32px;
   min-width: 32px;
   background: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-split-button.active {
+  background: var(--primary-color, #4285f4);
+  color: #fff;
 }
 
 .workspace-add-button:disabled {
@@ -632,6 +643,13 @@
 
 .workspace-add-menu-floating {
   z-index: 1400;
+}
+
+@media (min-width: 769px) {
+  .workspace-add-control > .workspace-add-menu {
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes workspace-menu-enter {
@@ -881,6 +899,15 @@
 }
 
 @media (max-width: 460px) {
+  .top-bar.bt-running.workspace-active .connection-tabs {
+    max-width: min(96px, 28vw);
+    flex-basis: min(96px, 28vw);
+  }
+
+  .top-bar.bt-running.workspace-active .workspace-add-control {
+    display: none;
+  }
+
   .top-bar.bt-running .view-toggle {
     gap: 1px;
   }
@@ -1039,10 +1066,10 @@ body.no-scroll {
   max-width: calc(100% - 36px);
   display: flex;
   align-items: stretch;
-  gap: 8px;
-  padding: 8px;
+  gap: 5px;
+  padding: 5px;
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 8px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--card-bg) 88%, transparent);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(14px);
@@ -1050,17 +1077,17 @@ body.no-scroll {
 }
 
 .workspace-snap-template {
-  width: 88px;
-  min-width: 88px;
+  width: 56px;
+  min-width: 56px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .workspace-snap-template-title {
   min-width: 0;
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 700;
   line-height: 1;
   overflow: hidden;
@@ -1070,7 +1097,7 @@ body.no-scroll {
 }
 
 .workspace-snap-template-grid {
-  height: 48px;
+  height: 34px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1088,7 +1115,7 @@ body.no-scroll {
   min-height: 0;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--primary-color) 32%, var(--border-color));
-  border-radius: 5px;
+  border-radius: 3px;
   background: color-mix(in srgb, var(--primary-color) 8%, var(--background-secondary));
   cursor: copy;
   transition:
@@ -1114,6 +1141,85 @@ body.no-scroll {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.workspace-split,
+.workspace-split-child {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.workspace-layout-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.workspace-split-overlay {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle-x {
+  top: 0;
+  bottom: 0;
+}
+
+.workspace-split-overlay > .workspace-tree-resize-handle-y {
+  right: 0;
+  left: 0;
+}
+
+.workspace-split-x {
+  flex-direction: row;
+}
+
+.workspace-split-y {
+  flex-direction: column;
+}
+
+.workspace-tree-resize-handle {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.workspace-tree-resize-handle-x {
+  width: 16px;
+  cursor: col-resize;
+}
+
+.workspace-tree-resize-handle-y {
+  height: 16px;
+  cursor: row-resize;
+}
+
+.workspace-tree-resize-handle-x .workspace-resize-handle-bar {
+  width: 3px;
+  height: 58px;
+}
+
+.workspace-tree-resize-handle-y .workspace-resize-handle-bar {
+  width: 70px;
+  height: 3px;
+}
+
+.workspace-tree-resize-handle:hover .workspace-resize-handle-bar {
+  background: var(--primary-color, #4285f4);
 }
 
 .workspace-tile-row {
@@ -1340,16 +1446,69 @@ body.no-scroll {
   user-select: none;
 }
 
-.workspace-card-header[draggable='true'] {
+.workspace-card-header[data-workspace-drag-handle='true'] {
   cursor: grab;
+  touch-action: none;
 }
 
-.workspace-card-header[draggable='true']:active {
+.workspace-card-header[data-workspace-drag-handle='true']:active {
   cursor: grabbing;
 }
 
-.desktop-workspace.is-drop-active .workspace-card-header[draggable='true'] {
+.desktop-workspace.is-drop-active .workspace-card-header[data-workspace-drag-handle='true'] {
   cursor: grabbing;
+}
+
+.workspace-card-header button {
+  touch-action: manipulation;
+}
+
+.desktop-workspace.is-drop-active .workspace-card-content {
+  pointer-events: none;
+  user-select: none;
+}
+
+.workspace-card-drop-preview {
+  position: absolute;
+  z-index: 90;
+  pointer-events: none;
+  border: 2px solid var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  box-shadow: inset 0 0 20px color-mix(in srgb, var(--primary-color) 13%, transparent);
+}
+
+.workspace-card-drop-preview-left,
+.workspace-card-drop-preview-right {
+  top: 0;
+  bottom: 0;
+  width: 42%;
+}
+
+.workspace-card-drop-preview-left {
+  left: 0;
+  border-radius: 7px 0 0 7px;
+}
+
+.workspace-card-drop-preview-right {
+  right: 0;
+  border-radius: 0 7px 7px 0;
+}
+
+.workspace-card-drop-preview-top,
+.workspace-card-drop-preview-bottom {
+  right: 0;
+  left: 0;
+  height: 42%;
+}
+
+.workspace-card-drop-preview-top {
+  top: 0;
+  border-radius: 7px 7px 0 0;
+}
+
+.workspace-card-drop-preview-bottom {
+  bottom: 0;
+  border-radius: 0 0 7px 7px;
 }
 
 .workspace-card-title {
@@ -2190,9 +2349,38 @@ body.no-scroll {
 
 /* Responsive Adjustments for new layout */
 @media (max-width: 768px) {
+  .top-bar.workspace-active {
+    gap: 5px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .top-bar.workspace-active .layout-controls {
+    position: static;
+    left: auto;
+    transform: none;
+    gap: 2px;
+  }
+
+  .top-bar.workspace-active .workspace-add-control {
+    position: absolute;
+    top: calc(4px + var(--safe-area-top));
+    left: calc(50% - 14px);
+  }
+
+  .top-bar.workspace-active .workspace-add-button {
+    width: 28px;
+    min-width: 28px;
+    padding: 4px;
+  }
+
+  .top-bar.workspace-active .status-controls {
+    flex: 0 0 auto;
+  }
+
   .main-content-area {
     padding: 5px; /* Reduced from 10px */
-    padding-top: calc(40px + 5px + var(--safe-area-top)); /* Reduced from 10px */
+    padding-top: 5px;
     padding-bottom: 5px; /* Ensure bottom padding is also reduced */
   }
 
@@ -2246,7 +2434,6 @@ body.no-scroll {
     font-size: 0.72rem;
     line-height: 1.1;
   }
-
 }
 
 @media (max-width: 1023px) {
@@ -2284,13 +2471,6 @@ body.no-scroll {
     left: auto;
     transform: none;
     gap: 3px;
-  }
-
-  .layout-controls .workspace-tile-button {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    padding: 4px;
   }
 
   .top-bar:not(.workspace-active) .status-controls {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import BehaviorTreeSketchEditor from './BehaviorTreeSketchEditor';
+import AssistantSketchEditor from './AssistantSketchEditor';
 
 const canvasContext = {
   save: vi.fn(),
@@ -24,7 +24,7 @@ const canvasContext = {
   textBaseline: 'top',
 };
 
-describe('BehaviorTreeSketchEditor', () => {
+describe('AssistantSketchEditor', () => {
   beforeEach(() => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
       canvasContext as unknown as CanvasRenderingContext2D
@@ -41,8 +41,8 @@ describe('BehaviorTreeSketchEditor', () => {
 
   it('draws with pointer input and attaches a PNG', async () => {
     const onAttach = vi.fn();
-    render(<BehaviorTreeSketchEditor onAttach={onAttach} onClose={vi.fn()} />);
-    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    render(<AssistantSketchEditor onAttach={onAttach} onClose={vi.fn()} />);
+    const canvas = screen.getByLabelText('Assistant sketch canvas');
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -65,9 +65,9 @@ describe('BehaviorTreeSketchEditor', () => {
   });
 
   it('places text, supports undo, and clears the canvas', async () => {
-    render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
+    render(<AssistantSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Text' }));
-    fireEvent.pointerDown(screen.getByLabelText('Behavior tree sketch canvas'), {
+    fireEvent.pointerDown(screen.getByLabelText('Assistant sketch canvas'), {
       pointerId: 2,
       clientX: 100,
       clientY: 80,
@@ -82,7 +82,7 @@ describe('BehaviorTreeSketchEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo sketch change' }));
     expect(screen.getByRole('button', { name: 'Attach sketch' })).toBeDisabled();
 
-    fireEvent.pointerDown(screen.getByLabelText('Behavior tree sketch canvas'), {
+    fireEvent.pointerDown(screen.getByLabelText('Assistant sketch canvas'), {
       pointerId: 3,
       clientX: 120,
       clientY: 100,
@@ -93,8 +93,8 @@ describe('BehaviorTreeSketchEditor', () => {
   });
 
   it('draws a rectangle and places inline text inside it', async () => {
-    render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
-    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    render(<AssistantSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
+    const canvas = screen.getByLabelText('Assistant sketch canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }));
     fireEvent.pointerDown(canvas, { pointerId: 4, clientX: 40, clientY: 40 });
     fireEvent.pointerMove(canvas, { pointerId: 4, clientX: 260, clientY: 180 });
@@ -114,8 +114,8 @@ describe('BehaviorTreeSketchEditor', () => {
   });
 
   it('draws an arrow with a directional head', async () => {
-    render(<BehaviorTreeSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
-    const canvas = screen.getByLabelText('Behavior tree sketch canvas');
+    render(<AssistantSketchEditor onAttach={vi.fn()} onClose={vi.fn()} />);
+    const canvas = screen.getByLabelText('Assistant sketch canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Arrow' }));
     fireEvent.pointerDown(canvas, { pointerId: 5, clientX: 40, clientY: 60 });
     fireEvent.pointerMove(canvas, { pointerId: 5, clientX: 280, clientY: 180 });

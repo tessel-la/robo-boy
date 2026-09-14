@@ -30,6 +30,7 @@ vi.mock('../hooks/useRos', () => ({
     ros: mockRos,
     isConnected: rosConnection.isConnected,
     connectionStatus: rosConnection.connectionStatus,
+    connectionGeneration: rosConnection.isConnected ? 1 : 0,
     connect,
     disconnect,
   }),
@@ -59,6 +60,16 @@ vi.mock('../panels/ExternalPanelHost', () => ({
       </div>
     );
   },
+}));
+
+vi.mock('../panels/PanelManagerDialog', () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-label="External panels">
+      <button type="button" onClick={onClose}>
+        Close panel manager
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('animejs', () => ({
@@ -219,6 +230,15 @@ const connectionParams = {
   ros2Value: '0',
 };
 
+const connectionNavigation = {
+  tabs: [{ id: 'test', label: 'Test robot', description: 'Test robot', status: 'connected' as const }],
+  activeTabId: 'test',
+  isAdding: false,
+  onSelect: vi.fn(),
+  onClose: vi.fn(),
+  onAdd: vi.fn(),
+};
+
 const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | string, title: string) => ({
   id,
   type,
@@ -228,7 +248,18 @@ const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | 
 });
 
 const renderMainControlView = () =>
-  render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} />);
+  render(
+    <MainControlView
+      connectionParams={connectionParams}
+      onDisconnect={vi.fn()}
+      connectionNavigation={connectionNavigation}
+    />
+  );
+
+const openWorkspaceLayouts = () => {
+  fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace layouts' }));
+};
 
 describe('MainControlView desktop workspace', () => {
   beforeEach(() => {
@@ -319,6 +350,24 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Status: Connecting')).toBeDisabled();
   });
 
+  it('suspends panel resources without reconnecting when its connection tab enters the background', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    const view = render(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive={false} />);
+    expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(disconnect).not.toHaveBeenCalled();
+
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} isActive />);
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
   it('starts with one unified empty workspace and adds panels', async () => {
     renderMainControlView();
 
@@ -328,8 +377,53 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByLabelText('Mobile panels')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    expect(screen.queryByRole('button', { name: 'Manage installations…' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it('opens panel management from the session menu without using the add-panel menu', () => {
+    renderMainControlView();
+
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage panels' }));
+
+    expect(screen.getByRole('dialog', { name: 'External panels' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a stateful panel mounted when another tile changes the layout tree', async () => {
+    let stackedListener: ((event: MediaQueryListEvent) => void) | undefined;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(min-width: 1024px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn((type: string, listener: (event: MediaQueryListEvent) => void) => {
+          if (query === '(max-width: 767px)' && type === 'change') stackedListener = listener;
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
+    renderMainControlView();
+
+    const treeState = await screen.findByLabelText('Behavior tree local state');
+    fireEvent.change(treeState, { target: { value: 'Running tree state' } });
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: '3D panel' }));
+
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Running tree state');
+    expect(screen.getByTestId('visualization-panel')).toBeInTheDocument();
+
+    act(() => stackedListener?.({ matches: true } as MediaQueryListEvent));
+    expect(screen.getByLabelText('Behavior tree local state')).toHaveValue('Running tree state');
   });
 
   it('keeps the replace menu open while its own list is scrolled, and closes it when the page moves', async () => {
@@ -546,9 +640,9 @@ describe('MainControlView desktop workspace', () => {
       expect(parseFloat(cards[0].style.flex)).toBeGreaterThan(parseFloat(cards[1].style.flex));
     });
 
-    // A touch-only split must not overwrite the saved desktop column layout.
+    // A touch-only split must not overwrite the saved desktop tree layout.
     const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
-    expect(stored.columnRatiosByRow[0]).toEqual([1, 1]);
+    expect(stored).toMatchObject({ version: 2, root: { type: 'split', axis: 'x', ratio: 0.5 } });
   });
 
   it('reflows a multi-row desktop workspace cleanly when the viewport becomes mobile', async () => {
@@ -755,6 +849,77 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
+  it('moves a panel from its title bar into a nested side stack', async () => {
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([
+        makePanel('panel-left', 'camera', 'Left'),
+        makePanel('panel-top', '3d', 'Right top'),
+        makePanel('panel-bottom', 'behaviorTree', 'Right bottom'),
+      ])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-left', 'panel-top', 'panel-bottom']));
+    localStorage.setItem(
+      workspaceLayoutKey,
+      JSON.stringify({ rowSizes: [3], rowRatios: [1], columnRatiosByRow: { 0: [1, 1, 1] } })
+    );
+    renderMainControlView();
+
+    const cards = ['Left', 'Right top', 'Right bottom'].map(name => screen.getByLabelText(name));
+    cards.forEach((card, index) => {
+      card.getBoundingClientRect = () =>
+        ({ left: index * 300, right: (index + 1) * 300, top: 0, bottom: 300, width: 300, height: 300 }) as DOMRect;
+    });
+    const dragTitle = cards[2].querySelector('.workspace-card-title span:last-child') as HTMLElement;
+    const pointerDown = new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 750, clientY: 100 });
+    Object.defineProperty(pointerDown, 'pointerId', { value: 7 });
+    fireEvent(dragTitle, pointerDown);
+    const pointerMove = new MouseEvent('pointermove', { bubbles: true, clientX: 450, clientY: 285 });
+    Object.defineProperty(pointerMove, 'pointerId', { value: 7 });
+    fireEvent(document, pointerMove);
+    const pointerUp = new MouseEvent('pointerup', { bubbles: true, clientX: 450, clientY: 285 });
+    Object.defineProperty(pointerUp, 'pointerId', { value: 7 });
+    fireEvent(document, pointerUp);
+
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(workspaceLayoutKey) || '{}');
+      expect(stored.root).toMatchObject({
+        type: 'split',
+        axis: 'x',
+        first: { type: 'tile', id: 'panel-left' },
+        second: {
+          type: 'split',
+          axis: 'y',
+          first: { type: 'tile', id: 'panel-top' },
+          second: { type: 'tile', id: 'panel-bottom' },
+        },
+      });
+    });
+  });
+
+  it('saves the current arrangement as a named layout and restores it later', async () => {
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([makePanel('panel-camera', 'camera', 'Camera'), makePanel('panel-pad', 'pad', 'Pad controls')])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad']));
+    renderMainControlView();
+
+    openWorkspaceLayouts();
+    fireEvent.change(screen.getByLabelText('Layout name'), { target: { value: 'Driving' } });
+    fireEvent.click(screen.getByLabelText('Save current layout'));
+    expect(screen.getByLabelText('Load Driving')).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    fireEvent.click(screen.getByLabelText('Remove Camera'));
+    expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+
+    openWorkspaceLayouts();
+    fireEvent.click(screen.getByLabelText('Load Driving'));
+    expect(await screen.findByLabelText('Camera')).toBeInTheDocument();
+    expect(screen.getByLabelText('Pad controls')).toBeInTheDocument();
+  });
+
   it('migrates legacy mobile panels only when the unified workspace is empty', async () => {
     localStorage.setItem(
       mobileWorkspacePanelsKey,
@@ -775,7 +940,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Pad controls');
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
     fireEvent.click(screen.getByLabelText('Export layouts'));
 
     expect(createObjectURL).toHaveBeenCalledOnce();
@@ -803,7 +968,9 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Open grid workspace'));
 
     expect(screen.getByLabelText('Desktop workspace')).toBeInTheDocument();
-    expect(screen.getByTitle('Unsaved workspace layout')).toHaveTextContent('Unsaved layout');
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    expect(screen.getByText('Unsaved layout')).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
     expect(screen.getByLabelText('View component')).toBeInTheDocument();
     expect(screen.getByLabelText('Pad controls component')).toBeInTheDocument();
 
@@ -854,7 +1021,7 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     await screen.findByLabelText('Desktop workspace');
-    fireEvent.click(screen.getByLabelText('Manage workspace layouts'));
+    openWorkspaceLayouts();
 
     expect(screen.getByLabelText('Load Inspection layout')).toBeInTheDocument();
     expect(screen.getByText('Edited')).toBeInTheDocument();
@@ -1025,14 +1192,14 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByRole('dialog', { name: 'Pad settings' })).not.toBeInTheDocument();
   });
 
-  it('falls back to an available generic pad when a saved preset no longer exists', async () => {
+  it('falls back to an available generic pad when a retired built-in preset no longer exists', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'generic-joy', name: 'Generic Joy Pad', layout: { id: 'generic-joy-layout' }, isDefault: true },
     ]);
     localStorage.setItem(workspaceOpenKey, 'true');
     localStorage.setItem(
       workspacePanelsKey,
-      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'panda-cartesian-jog' }])
+      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'physical-gamepad' }])
     );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
 

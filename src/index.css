@@ -16,6 +16,8 @@
   --card-bg: #ffffff;
   --card-border: #dee2e6;
   --button-text-color: #ffffff; /* Text on primary button */
+  --navbar-bg: #333333;
+  --navbar-text: #ffffff;
   --error-color: #dc3545; /* Red */
   --error-hover-color: #c82333; /* Darker Red */
   --error-rgb: 220, 53, 69; /* For RGBA shadows */
@@ -87,6 +89,15 @@ html, body {
   /* Keep the shell at native-app scale. Interactive surfaces such as the 3D
      viewer opt into their own touch gestures locally. */
   touch-action: pan-x pan-y;
+}
+
+/* Anything outside the viewport the page was given -- the strip a phone keeps for its status bar
+   and notch when it lets the app draw under them -- is painted from the canvas. Left alone the
+   canvas takes `body`'s colour, so a light theme put a white band around the notch above a dark
+   bar. Colour it like the bar instead; `body` is fixed to the whole viewport, so this only ever
+   shows where the app itself cannot reach. */
+html {
+  background-color: var(--navbar-bg, #333);
 }
 
 body {
@@ -199,7 +210,9 @@ textarea {
     /* No window chrome in a browser: the tab already has one. */
     --title-bar-height: 0px;
     /* The room the system keeps at the edges of the screen for its own bars. Zero anywhere the app
-       is not drawn behind them. */
+       is not drawn behind them. A browser -- installed as a PWA or not -- is one of those places:
+       it hands the page a viewport that already stops short of the system bars, so the app fills
+       that viewport edge to edge and has no inset of its own to give back. */
     --safe-area-top: 0px;
     --safe-area-bottom: 0px;
     /* The room the app has to lay out in, which is the screen less any chrome drawn above it.
@@ -210,6 +223,29 @@ textarea {
        itself is drawn behind them on purpose; a dialog put there would be unreadable. */
     --safe-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
     --safe-height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom));
+    /* The assistant launcher floats over the bottom-right corner of the app. Keep its size, icon
+       size, and edge inset together so the responsive breakpoints stay aligned. */
+    --floating-action-size: 50px;
+    --floating-action-icon: 32px;
+    --floating-action-inset: 20px;
+    /* Keep the launcher clear of the system's bottom bar on a phone. */
+    --floating-action-bottom: max(var(--floating-action-inset), var(--safe-area-bottom));
+}
+
+@media (max-width: 768px) {
+    :root {
+        --floating-action-size: 45px;
+        --floating-action-icon: 28px;
+        --floating-action-inset: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --floating-action-size: 40px;
+        --floating-action-icon: 24px;
+        --floating-action-inset: 10px;
+    }
 }
 
 :root[data-runtime='tauri'] {
