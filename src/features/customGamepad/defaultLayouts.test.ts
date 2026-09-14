@@ -3,7 +3,6 @@ import {
   componentLibrary,
   defaultDualJoystickHeartbeatLayout,
   defaultGamepadLibrary,
-  defaultPhysicalGamepadLayout,
 } from './defaultLayouts';
 import type { CustomGamepadLayout, GamepadLibraryItem } from './types';
 
@@ -18,26 +17,15 @@ describe('defaultLayouts', () => {
     expect(layout.metadata.version).toBeTruthy();
   };
 
-  it('provides the generic and physical-controller templates', () => {
+  it('offers only the generic controller as a starter template', () => {
     validateLayout(defaultDualJoystickHeartbeatLayout);
-    validateLayout(defaultPhysicalGamepadLayout);
-    expect(defaultGamepadLibrary).toHaveLength(2);
+    expect(defaultGamepadLibrary).toHaveLength(1);
     expect(defaultGamepadLibrary[0]).toMatchObject({
       id: 'dual-joystick-heartbeat',
       name: 'Dual Joystick + Heartbeat',
       isDefault: true,
     });
-    expect(defaultGamepadLibrary[1]).toMatchObject({
-      id: 'physical-gamepad',
-      name: 'Physical Gamepad',
-      isDefault: true,
-    });
-    expect(defaultPhysicalGamepadLayout.components[0]).toMatchObject({
-      type: 'physical-gamepad',
-      position: { x: 0, y: 0, width: 8, height: 4 },
-      action: { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' },
-      config: { physicalGamepadProfile: 'auto', physicalGamepadDeadzone: 0.08, physicalGamepadPublishHz: 20 },
-    });
+    expect(defaultGamepadLibrary.some(item => item.id === 'physical-gamepad')).toBe(false);
   });
 
   it('maps both joysticks to one four-axis Joy topic', () => {

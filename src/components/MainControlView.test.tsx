@@ -1192,14 +1192,14 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByRole('dialog', { name: 'Pad settings' })).not.toBeInTheDocument();
   });
 
-  it('falls back to an available generic pad when a saved preset no longer exists', async () => {
+  it('falls back to an available generic pad when a retired built-in preset no longer exists', async () => {
     loadGamepadLibrary.mockReturnValue([
       { id: 'generic-joy', name: 'Generic Joy Pad', layout: { id: 'generic-joy-layout' }, isDefault: true },
     ]);
     localStorage.setItem(workspaceOpenKey, 'true');
     localStorage.setItem(
       workspacePanelsKey,
-      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'panda-cartesian-jog' }])
+      JSON.stringify([{ ...makePanel('panel-pad', 'pad', 'Pad controls'), layoutId: 'physical-gamepad' }])
     );
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
 
