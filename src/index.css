@@ -91,6 +91,15 @@ html, body {
   touch-action: pan-x pan-y;
 }
 
+/* Anything outside the viewport the page was given -- the strip a phone keeps for its status bar
+   and notch when it lets the app draw under them -- is painted from the canvas. Left alone the
+   canvas takes `body`'s colour, so a light theme put a white band around the notch above a dark
+   bar. Colour it like the bar instead; `body` is fixed to the whole viewport, so this only ever
+   shows where the app itself cannot reach. */
+html {
+  background-color: var(--navbar-bg, #333);
+}
+
 body {
   font-family: var(--font-family-ui);
   -webkit-font-smoothing: antialiased;
@@ -201,7 +210,9 @@ textarea {
     /* No window chrome in a browser: the tab already has one. */
     --title-bar-height: 0px;
     /* The room the system keeps at the edges of the screen for its own bars. Zero anywhere the app
-       is not drawn behind them. */
+       is not drawn behind them. A browser -- installed as a PWA or not -- is one of those places:
+       it hands the page a viewport that already stops short of the system bars, so the app fills
+       that viewport edge to edge and has no inset of its own to give back. */
     --safe-area-top: 0px;
     --safe-area-bottom: 0px;
     /* The room the app has to lay out in, which is the screen less any chrome drawn above it.
