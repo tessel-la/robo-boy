@@ -91,6 +91,16 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action defaults to installing 'tools platform-tools'. `tools` is the
+          # long-deprecated SDK Tools package, and Google withdrew it from the remote
+          # repository on 2026-09-14: sdkmanager stopped finding it between a run that
+          # passed at 17:50 and one that failed at 21:53 the same day, with the action,
+          # the runner image and the cmdline-tools version all unchanged. Asking for it
+          # now fails this step before any build package is installed. Every version
+          # this build actually pins is installed by the step below, so only
+          # platform-tools is left for the action to fetch.
+          packages: platform-tools
 
       - name: Install Android build packages
         run: |
