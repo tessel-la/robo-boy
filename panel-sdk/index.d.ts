@@ -13,7 +13,8 @@ export type RoboBoyPanelCapability =
   | 'web-usb'
   | 'web-serial'
   | 'camera'
-  | 'microphone';
+  | 'microphone'
+  | 'webxr';
 
 /**
  * Named host services a panel may ask for.
