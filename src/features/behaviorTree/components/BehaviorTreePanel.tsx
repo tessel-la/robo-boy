@@ -1677,11 +1677,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [loadRootTree, pushUndoSnapshot]);
 
   const handleNew = useCallback(() => {
-    if (nodes.length > 0 || edges.length > 0) {
-      if (!window.confirm('Create new tree? Unsaved changes will be lost.')) {
-        return;
-      }
-    }
     pushUndoSnapshot();
 
     const newTree: BehaviorTree = {
@@ -1693,7 +1688,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       updatedAt: Date.now(),
     };
     loadRootTree(newTree);
-  }, [edges.length, loadRootTree, nodes.length, pushUndoSnapshot]);
+    showSaveNotice({
+      type: 'success',
+      title: 'New tree created',
+      message: 'A blank behavior tree is ready.',
+    });
+  }, [loadRootTree, pushUndoSnapshot, showSaveNotice]);
 
   const handleExport = useCallback(() => {
     if (!currentTree) return;

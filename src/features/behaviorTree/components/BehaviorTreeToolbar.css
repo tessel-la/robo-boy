@@ -844,9 +844,9 @@
   color: var(--error-color, #f44336);
 }
 
-/* ── Delete confirmation ─────────────────────────────────────────────────── */
+/* ── Confirmations ───────────────────────────────────────────────────────── */
 
-.bt-delete-confirm-overlay {
+.bt-confirm-overlay {
   position: absolute;
   inset: 0;
   z-index: 430;
@@ -857,7 +857,7 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-.bt-delete-confirm-card {
+.bt-confirm-card {
   width: min(320px, 82%);
   display: grid;
   grid-template-columns: 34px 1fr;
@@ -870,32 +870,40 @@
     0 10px 34px rgba(0, 0, 0, 0.16),
     0 2px 8px rgba(0, 0, 0, 0.08);
   color: var(--text-color, #333333);
-  animation: bt-delete-confirm-in 0.18s ease-out;
+  animation: bt-confirm-in 0.18s ease-out;
 }
 
-.bt-delete-confirm-icon {
+.bt-confirm-icon {
   width: 34px;
   height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--error-color, #f44336);
-  background: rgba(244, 67, 54, 0.1);
   border-radius: 50%;
 }
 
-.bt-delete-confirm-copy {
+.bt-confirm-icon.danger {
+  color: var(--error-color, #f44336);
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.bt-confirm-icon.primary {
+  color: var(--primary-color, #4285f4);
+  background: color-mix(in srgb, var(--primary-color, #4285f4) 12%, transparent);
+}
+
+.bt-confirm-copy {
   min-width: 0;
 }
 
-.bt-delete-confirm-copy h3 {
+.bt-confirm-copy h3 {
   margin: 0;
   color: var(--text-color, #333333);
   font-size: 14px;
   line-height: 1.25;
 }
 
-.bt-delete-confirm-copy p {
+.bt-confirm-copy p {
   margin: 4px 0 0;
   color: var(--text-color-secondary, #666666);
   font-size: 12px;
@@ -903,7 +911,7 @@
   overflow-wrap: anywhere;
 }
 
-.bt-delete-confirm-actions {
+.bt-confirm-actions {
   grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
@@ -911,8 +919,9 @@
   padding-top: 2px;
 }
 
-.bt-delete-confirm-cancel,
-.bt-delete-confirm-delete {
+.bt-confirm-cancel,
+.bt-confirm-danger,
+.bt-confirm-primary {
   height: 32px;
   padding: 0 12px;
   border-radius: 8px;
@@ -926,33 +935,41 @@
     transform 0.12s;
 }
 
-.bt-delete-confirm-cancel {
+.bt-confirm-cancel {
   background: var(--background-color, #f5f5f5);
   border: 1px solid var(--border-color, #e0e0e0);
   color: var(--text-color, #333333);
 }
 
-.bt-delete-confirm-cancel:hover {
+.bt-confirm-cancel:hover {
   background: var(--primary-color-light, #e3f2fd);
   border-color: var(--primary-color, #4285f4);
 }
 
-.bt-delete-confirm-delete {
+.bt-confirm-danger {
   background: var(--error-color, #f44336);
   border: 1px solid var(--error-color, #f44336);
   color: #fff;
 }
 
-.bt-delete-confirm-delete:hover {
+.bt-confirm-danger:hover,
+.bt-confirm-primary:hover {
   filter: brightness(1.08);
 }
 
-.bt-delete-confirm-cancel:active,
-.bt-delete-confirm-delete:active {
+.bt-confirm-primary {
+  background: var(--primary-color, #4285f4);
+  border: 1px solid var(--primary-color, #4285f4);
+  color: #fff;
+}
+
+.bt-confirm-cancel:active,
+.bt-confirm-danger:active,
+.bt-confirm-primary:active {
   transform: scale(0.96);
 }
 
-@keyframes bt-delete-confirm-in {
+@keyframes bt-confirm-in {
   from {
     opacity: 0;
     transform: translateY(-6px) scale(0.96);
