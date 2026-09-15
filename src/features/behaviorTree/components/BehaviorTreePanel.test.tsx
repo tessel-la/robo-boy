@@ -316,7 +316,6 @@ describe('BehaviorTreePanel', () => {
     rosDiscoveryMock.fetchActionGoalDetails.mockResolvedValue(null);
     rosDiscoveryMock.fetchServiceRequestSchema.mockResolvedValue(null);
     window.matchMedia = createMatchMedia(false);
-    window.confirm = vi.fn(() => true);
     localStorage.clear();
   });
 
@@ -1177,6 +1176,7 @@ describe('BehaviorTreePanel', () => {
 
     fireEvent.click(screen.getByTestId('bt-menu-button'));
     fireEvent.click(screen.getByText('New'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create new tree' }));
 
     await waitFor(() => {
       const latestProps = reactFlowMock.render.mock.lastCall?.[0] as {
@@ -1193,6 +1193,71 @@ describe('BehaviorTreePanel', () => {
       };
       expect(latestProps.nodes.map((node) => node.id)).toContain('node-existing');
     });
+  });
+
+  it('confirms a visually identical blank tree was created', async () => {
+    let bridge: import('../../assistant/types').BehaviorTreeAssistantBridge | null = null;
+    render(
+      <BehaviorTreePanel
+        ros={null}
+        isConnected={false}
+        isActive
+        onRegisterAssistantBridge={(_panelId, registered) => {
+          bridge = registered;
+        }}
+      />
+    );
+    await waitFor(() => expect(bridge).not.toBeNull());
+    const initialTreeId = bridge!.getCurrentTree()?.id;
+
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('New'));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('New tree created');
+    expect(screen.queryByTestId('bt-menu-panel')).not.toBeInTheDocument();
+    await waitFor(() => expect(bridge!.getCurrentTree()?.id).not.toBe(initialTreeId));
+  });
+
+  it('keeps the tree menu open when new-tree confirmation is canceled', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: 'new-cancel-source',
+            name: 'New Cancel Source',
+            nodes: [
+              {
+                id: 'node-existing',
+                type: 'action',
+                position: { x: 0, y: 0 },
+                data: { label: 'Existing Action', actionName: '/existing', actionType: 'example/Existing' },
+              },
+            ],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('New Cancel Source'));
+    await screen.findByTestId('rf-node-node-existing');
+
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText('New'));
+
+    expect(screen.getByRole('dialog', { name: 'Create new tree?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByTestId('bt-menu-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('rf-node-node-existing')).toBeInTheDocument();
+    expect(screen.queryByText('New tree created')).not.toBeInTheDocument();
   });
 
   it('undoes a newly created subtree from inside that subtree without leaving a broken path', async () => {
