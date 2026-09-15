@@ -434,6 +434,8 @@ test.describe('Behavior Tree panel', () => {
     await page.keyboard.press('Enter');
     await page.getByRole('button', { name: 'Save' }).click();
     await page.getByRole('button', { name: 'New' }).click();
+    await expect(page.getByRole('dialog', { name: 'Create new tree?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Create new tree' }).click();
 
     await expect(page.locator('.react-flow__node')).toHaveCount(0);
 
@@ -607,6 +609,8 @@ test.describe('Behavior Tree panel', () => {
 
     await page.getByTestId('bt-menu-button').click();
     await page.getByRole('button', { name: 'New' }).click();
+    await expect(page.getByRole('dialog', { name: 'Create new tree?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Create new tree' }).click();
     await expect(page.locator('.react-flow__node')).toHaveCount(0);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);

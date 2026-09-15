@@ -85,6 +85,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
   const [nameValue, setNameValue] = useState(currentTree?.name ?? '');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingNew, setPendingNew] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync local name whenever the active tree changes
@@ -95,6 +96,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   useEffect(() => {
     if (!isEditingLocked) return;
     setPendingDelete(null);
+    setPendingNew(false);
     setMenuOpen(false);
   }, [isEditingLocked]);
 
@@ -111,6 +113,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   const closeMenu = () => {
     setPendingDelete(null);
+    setPendingNew(false);
     setMenuOpen(false);
   };
 
@@ -140,6 +143,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   const handleDelete = (tree: BehaviorTree, e: React.MouseEvent) => {
     e.stopPropagation();
+    setPendingNew(false);
     setPendingDelete({ id: tree.id, name: tree.name });
   };
 
@@ -153,6 +157,19 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   };
 
   const handleNew = () => {
+    if (nodeCount > 0) {
+      setPendingDelete(null);
+      setPendingNew(true);
+      return;
+    }
+
+    onNew();
+    closeMenu();
+  };
+
+  const cancelNew = () => setPendingNew(false);
+
+  const confirmNew = () => {
     onNew();
     closeMenu();
   };
@@ -177,15 +194,18 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   };
 
   useEffect(() => {
-    if (!pendingDelete) return;
+    if (!pendingDelete && !pendingNew) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPendingDelete(null);
+      if (event.key === 'Escape') {
+        setPendingDelete(null);
+        setPendingNew(false);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pendingDelete]);
+  }, [pendingDelete, pendingNew]);
 
   const displayName = currentTree?.name ?? 'Untitled';
   const menuContent = (
@@ -570,15 +590,15 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       </div>
 
       {pendingDelete && (
-        <div className="bt-delete-confirm-overlay" onClick={cancelDelete}>
+        <div className="bt-confirm-overlay" onClick={cancelDelete}>
           <div
-            className="bt-delete-confirm-card"
+            className="bt-confirm-card"
             role="dialog"
             aria-modal="true"
             aria-labelledby="bt-delete-confirm-title"
             onClick={e => e.stopPropagation()}
           >
-            <div className="bt-delete-confirm-icon" aria-hidden="true">
+            <div className="bt-confirm-icon danger" aria-hidden="true">
               <svg
                 width="16"
                 height="18"
@@ -594,16 +614,47 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
                 <path d="M3.2 4l0.8 11.2A1.2 1.2 0 0 0 5.2 16.3h5.6a1.2 1.2 0 0 0 1.2-1.1L12.8 4" />
               </svg>
             </div>
-            <div className="bt-delete-confirm-copy">
+            <div className="bt-confirm-copy">
               <h3 id="bt-delete-confirm-title">Delete behavior tree?</h3>
               <p>"{pendingDelete.name}" will be removed from saved trees.</p>
             </div>
-            <div className="bt-delete-confirm-actions">
-              <button className="bt-delete-confirm-cancel" onClick={cancelDelete}>
+            <div className="bt-confirm-actions">
+              <button className="bt-confirm-cancel" onClick={cancelDelete}>
                 Cancel
               </button>
-              <button className="bt-delete-confirm-delete" onClick={confirmDelete}>
+              <button className="bt-confirm-danger" onClick={confirmDelete}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingNew && (
+        <div className="bt-confirm-overlay" onClick={cancelNew}>
+          <div
+            className="bt-confirm-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bt-new-confirm-title"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="bt-confirm-icon primary" aria-hidden="true">
+              <svg width="17" height="19" viewBox="0 0 14 16" fill="none">
+                <path d="M2 0h7l5 5v11H2V0z" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M8 0v5h5" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </div>
+            <div className="bt-confirm-copy">
+              <h3 id="bt-new-confirm-title">Create new tree?</h3>
+              <p>The current canvas will be replaced. You can undo this action afterward.</p>
+            </div>
+            <div className="bt-confirm-actions">
+              <button className="bt-confirm-cancel" onClick={cancelNew}>
+                Cancel
+              </button>
+              <button className="bt-confirm-primary" onClick={confirmNew} autoFocus>
+                Create new tree
               </button>
             </div>
           </div>
