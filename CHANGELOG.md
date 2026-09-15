@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.1-alpha...robo-boy-v0.9.2-alpha) (2026-09-15)
+
+
+### Bug Fixes
+
+* solved a stale 3d panel ([#149](https://github.com/tessel-la/robo-boy/issues/149)) ([f975180](https://github.com/tessel-la/robo-boy/commit/f975180f25a04653faae7f1d376d4bc9c248424c))
+
 ## [0.9.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.0-alpha...robo-boy-v0.9.1-alpha) (2026-09-14)
 
 
