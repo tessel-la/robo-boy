@@ -1,225 +1,174 @@
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as THREE from 'three';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
 import { useTfProvider } from './useTfProvider';
-import * as ROSLIB from 'roslib';
 import { CustomTFProvider } from '../utils/tfUtils';
+import { subscribeToTfStream } from '../utils/tfStream';
 
-// Mock dependencies
-vi.mock('roslib', () => {
-    return {
-        Ros: vi.fn(),
-        Topic: vi.fn(function () {
-            return {
-                subscribe: vi.fn(),
-                unsubscribe: vi.fn()
-            }
-        })
-    };
-});
-
-vi.mock('../utils/tfUtils', () => ({
-    CustomTFProvider: vi.fn(function () {
-        return {
-            fixedFrame: 'map',
-            updateFixedFrame: vi.fn(),
-            dispose: vi.fn(),
-            lookupTransform: vi.fn(),
-            subscribe: vi.fn(),
-            unsubscribe: vi.fn()
-        }
-    })
+const streamMock = vi.hoisted(() => ({
+  listener: null as null | ((update: unknown) => void),
+  unsubscribe: vi.fn(),
 }));
 
+vi.mock('../utils/tfStream', () => ({
+  subscribeToTfStream: vi.fn((_ros, listener) => {
+    streamMock.listener = listener;
+    listener({ transforms: {}, changedFrames: new Set() });
+    return streamMock.unsubscribe;
+  }),
+}));
+
+vi.mock('../utils/tfUtils', async () => {
+  const actual = await vi.importActual<typeof import('../utils/tfUtils')>('../utils/tfUtils');
+  return {
+    ...actual,
+    CustomTFProvider: vi.fn(function CustomTFProvider(fixedFrame: string) {
+      return {
+        fixedFrame,
+        updateTransforms: vi.fn(),
+        updateFixedFrame: vi.fn(function updateFixedFrame(this: { fixedFrame: string }, next: string) {
+          this.fixedFrame = next;
+        }),
+        dispose: vi.fn(),
+        lookupTransform: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+      };
+    }),
+  };
+});
+
 describe('useTfProvider', () => {
-    let mockRos: any;
-    let mockViewer: any;
-    let handleTFMessage: any;
+  let ros: any;
+  let viewer: any;
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mockRos = {};
-        mockViewer = {
-            fixedFrame: 'odom',
-            requestRender: vi.fn(),
-            renderer: { render: vi.fn() },
-            scene: {},
-            camera: {}
-        };
-        handleTFMessage = vi.fn();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.listener = null;
+    ros = {};
+    viewer = { fixedFrame: '', requestRender: vi.fn() };
+  });
+
+  const renderProvider = (overrides: Record<string, unknown> = {}) => renderHook(
+    props => useTfProvider(props as any),
+    {
+      initialProps: {
+        ros,
+        isRosConnected: true,
+        ros3dViewer: { current: viewer },
+        viewerGeneration: 1,
+        fixedFrame: 'map',
+        ...overrides,
+      },
+    }
+  );
+
+  it('initializes the provider and shared TF stream while connected', () => {
+    const { result } = renderProvider();
+
+    expect(CustomTFProvider).toHaveBeenCalledWith('map', {});
+    expect(subscribeToTfStream).toHaveBeenCalledWith(ros, expect.any(Function));
+    expect(result.current.customTFProvider.current).toBeTruthy();
+    expect(result.current.isProviderReady).toBe(true);
+  });
+
+  it('starts before delayed viewer creation and synchronizes each viewer generation', () => {
+    const viewerRef = { current: null as typeof viewer | null };
+    const { result, rerender } = renderProvider({ ros3dViewer: viewerRef, viewerGeneration: 0 });
+
+    expect(result.current.customTFProvider.current).toBeTruthy();
+    expect(result.current.isProviderReady).toBe(true);
+
+    viewerRef.current = viewer;
+    rerender({
+      ros,
+      isRosConnected: true,
+      ros3dViewer: viewerRef,
+      viewerGeneration: 1,
+      fixedFrame: 'map',
     });
 
-    it('should initialize provider when connected', () => {
-        const { result } = renderHook(() => useTfProvider({
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        }));
+    expect(viewer.fixedFrame).toBe('map');
+    expect(viewer.requestRender).toHaveBeenCalled();
+  });
 
-        expect(CustomTFProvider).toHaveBeenCalledWith('map', {});
-        expect(result.current.customTFProvider.current).toBeTruthy();
+  it('applies stream snapshots to the provider and exposed panel state', () => {
+    const { result } = renderProvider();
+    const provider = result.current.customTFProvider.current as any;
+    const transforms = {
+      base_link: {
+        parentFrame: 'map',
+        transform: {
+          translation: new THREE.Vector3(1, 2, 3),
+          rotation: new THREE.Quaternion(),
+        },
+        isStatic: false,
+      },
+    };
+
+    act(() => {
+      streamMock.listener?.({ transforms, changedFrames: new Set(['base_link']) });
     });
 
-    it('should not initialize provider if disconnected', () => {
-        const { result } = renderHook(() => useTfProvider({
-            ros: mockRos,
-            isRosConnected: false,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        }));
+    expect(provider.updateTransforms).toHaveBeenLastCalledWith(transforms, new Set(['base_link']));
+    expect(result.current.transforms).toBe(transforms);
+    expect(result.current.availableFrames).toEqual(['base_link', 'map']);
+  });
 
-        expect(CustomTFProvider).not.toHaveBeenCalled();
-        expect(result.current.customTFProvider.current).toBeNull();
+  it('updates the provider and viewer fixed frame without rebuilding subscriptions', () => {
+    const { result, rerender } = renderProvider({ fixedFrame: 'odom' });
+    const provider = result.current.customTFProvider.current as any;
+
+    rerender({
+      ros,
+      isRosConnected: true,
+      ros3dViewer: { current: viewer },
+      viewerGeneration: 1,
+      fixedFrame: '/map',
     });
 
-    it('should initialize after delayed viewer creation changes the viewer generation', () => {
-        const viewerRef = { current: null as typeof mockViewer | null };
-        const { result, rerender } = renderHook(
-            ({ viewerGeneration }) => useTfProvider({
-                ros: mockRos,
-                isRosConnected: true,
-                ros3dViewer: viewerRef,
-                viewerGeneration,
-                fixedFrame: 'map',
-                initialTransforms: {},
-                handleTFMessage
-            }),
-            { initialProps: { viewerGeneration: 0 } }
-        );
+    expect(provider.updateFixedFrame).toHaveBeenCalledWith('map');
+    expect(viewer.fixedFrame).toBe('map');
+    expect(subscribeToTfStream).toHaveBeenCalledTimes(1);
+  });
 
-        expect(CustomTFProvider).not.toHaveBeenCalled();
-        expect(result.current.customTFProvider.current).toBeNull();
+  it('releases the shared stream and provider on unmount', () => {
+    const { result, unmount } = renderProvider();
+    const provider = result.current.customTFProvider.current as any;
 
-        viewerRef.current = mockViewer;
-        rerender({ viewerGeneration: 1 });
+    unmount();
 
-        expect(CustomTFProvider).toHaveBeenCalledWith('map', {});
-        expect(result.current.customTFProvider.current).toBeTruthy();
+    expect(streamMock.unsubscribe).toHaveBeenCalledOnce();
+    expect(provider.dispose).toHaveBeenCalledOnce();
+    expect(result.current.customTFProvider.current).toBeNull();
+  });
+
+  it('isolates a replacement ROS connection from the previous provider', () => {
+    const { result, rerender } = renderProvider();
+    const firstProvider = result.current.customTFProvider.current as any;
+    const replacementRos = {};
+
+    rerender({
+      ros: replacementRos,
+      isRosConnected: true,
+      ros3dViewer: { current: viewer },
+      viewerGeneration: 2,
+      fixedFrame: 'map',
     });
 
-    it('should update fixed frame when prop changes', () => {
-        const updateFixedFrameMock = vi.fn();
-        (CustomTFProvider as any).mockImplementation(function () {
-            return {
-                fixedFrame: 'odom',
-                updateFixedFrame: updateFixedFrameMock,
-                dispose: vi.fn(),
-                lookupTransform: vi.fn(),
-                subscribe: vi.fn(),
-                unsubscribe: vi.fn()
-            }
-        });
+    expect(streamMock.unsubscribe).toHaveBeenCalledOnce();
+    expect(firstProvider.dispose).toHaveBeenCalledOnce();
+    expect(subscribeToTfStream).toHaveBeenLastCalledWith(replacementRos, expect.any(Function));
+    expect(result.current.customTFProvider.current).not.toBe(firstProvider);
+  });
 
-        const { rerender } = renderHook((props) => useTfProvider(props), {
-            initialProps: {
-                ros: mockRos,
-                isRosConnected: true,
-                ros3dViewer: { current: mockViewer },
-                viewerGeneration: 1,
-                fixedFrame: 'odom',
-                initialTransforms: {},
-                handleTFMessage
-            }
-        });
+  it('does not initialize while disconnected', () => {
+    const { result } = renderProvider({ isRosConnected: false });
 
-        // Change frame
-        rerender({
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        });
-
-        // NOTE: Our mock state 'fixedFrame' is hardcoded in the re-render if using default mock,
-        // so effectively the internal check `if (currentProviderFixedFrame !== normalizedNewFixedFrame)` 
-        // works because our initial 'fixedFrame' in mock is 'odom' (or whatever we set).
-
-        expect(updateFixedFrameMock).toHaveBeenCalledWith('map');
-        expect(mockViewer.fixedFrame).toBe('map');
-        expect(mockViewer.requestRender).toHaveBeenCalled();
-        expect(mockViewer.renderer.render).not.toHaveBeenCalled();
-    });
-
-    it('should subscribe to TF topics when provider is ready', () => {
-        const subscribeMock = vi.fn();
-        (ROSLIB.Topic as any).mockImplementation(function () {
-            return {
-                subscribe: subscribeMock,
-                unsubscribe: vi.fn()
-            }
-        });
-
-        renderHook(() => useTfProvider({
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        }));
-
-        expect(ROSLIB.Topic).toHaveBeenCalledTimes(2); // /tf and /tf_static
-        expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
-            name: '/tf',
-            compression: 'cbor',
-            throttle_rate: 25,
-            queue_length: 1
-        }));
-        expect(ROSLIB.Topic).toHaveBeenCalledWith(expect.objectContaining({
-            name: '/tf_static',
-            compression: 'cbor',
-            queue_length: 1
-        }));
-        expect(subscribeMock).toHaveBeenCalledTimes(2);
-    });
-
-    it('should cleanup subscriptions on unmount', () => {
-        const unsubscribeMock = vi.fn();
-        (ROSLIB.Topic as any).mockImplementation(function () {
-            return {
-                subscribe: vi.fn(),
-                unsubscribe: unsubscribeMock
-            }
-        });
-
-        const { unmount } = renderHook(() => useTfProvider({
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        }));
-
-        unmount();
-
-        expect(unsubscribeMock).toHaveBeenCalled();
-    });
-
-    it('should ensure provider functionality methods', () => {
-        const { result } = renderHook(() => useTfProvider({
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            viewerGeneration: 1,
-            fixedFrame: 'map',
-            initialTransforms: {},
-            handleTFMessage
-        }));
-
-        const isValid = result.current.ensureProviderFunctionality();
-        expect(isValid).toBe(true);
-    });
+    expect(CustomTFProvider).not.toHaveBeenCalled();
+    expect(subscribeToTfStream).not.toHaveBeenCalled();
+    expect(result.current.customTFProvider.current).toBeNull();
+    expect(result.current.isProviderReady).toBe(false);
+  });
 });

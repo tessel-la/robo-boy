@@ -96,7 +96,7 @@ entry point owns the live viewer, point-cloud, orbit-control, and URDF implement
 re-exports the modular LaserScan implementation. The viewer is invalidation-driven: scene/data,
 resize, settings, and camera changes coalesce into one requested frame, while an unchanged scene
 does not retain a render loop. Keep new visualizers on that boundary so idle panels do no WebGL
-work. See [Frontend performance analysis](performance.md) for measurements and the profiling suite.
+work. See [Performance evaluation](performance.md) for measurements and the profiling suite.
 
 New visualization types should follow the same split: serializable configuration in the panel, a thin React adapter, and lifecycle-heavy ROS/Three.js code in a hook or `ros3d` class. Dispose subscriptions, geometries, materials, animation callbacks, and viewer objects when dependencies change or components unmount.
 

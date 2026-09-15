@@ -85,11 +85,13 @@ vi.mock('../utils/pointCloudShaders', () => ({
     createInlineShaderMaterial: vi.fn().mockReturnValue({ type: 'InlineShaderMaterial' }),
 }));
 
-vi.mock('../utils/pointCloudCleanup', () => ({
-    cleanupPointCloudClient: vi.fn(),
-    clearPointCloudIntervals: vi.fn(),
-    createIntervalsRef: vi.fn().mockReturnValue({}),
-}));
+vi.mock('../utils/pointCloudCleanup', async () => {
+    const actual = await vi.importActual<typeof import('../utils/pointCloudCleanup')>('../utils/pointCloudCleanup');
+    return {
+        ...actual,
+        cleanupPointCloudClient: vi.fn(),
+    };
+});
 
 describe('usePointCloudClient', () => {
     let mockRos: any;

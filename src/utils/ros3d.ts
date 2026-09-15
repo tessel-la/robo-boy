@@ -9,15 +9,10 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
 
-interface UrdfModelCacheEntry {
-  urdfString: string;
-  model?: THREE.Object3D;
-  linkNameMap?: Map<string, THREE.Object3D>;
-  rootLinks?: string[];
-  cachedAt: number;
-}
-
-const urdfModelCache = new Map<string, UrdfModelCacheEntry>();
+// Robot descriptions are immutable for the normal lifetime of a ROS connection. Cache only the
+// source string, scoped to the Ros object identity; scene graphs remain independently owned by
+// each panel and a reconnect cannot inherit data from the previous socket.
+const urdfDescriptionsByRos = new WeakMap<Ros, Map<string, string>>();
 
 const isDesktopRuntime = (): boolean =>
   typeof document !== 'undefined' && document.documentElement.dataset.runtime === 'tauri';
@@ -29,9 +24,39 @@ const getRendererPixelRatio = (): number => {
   return isDesktopRuntime() ? Math.min(devicePixelRatio, 1) : devicePixelRatio;
 };
 
-function getUrdfCacheKey(ros: Ros, topic: string): string {
-  const rosUrl = (ros as any)?.url || 'default-ros';
-  return `${rosUrl}:${topic}`;
+function getCachedUrdfDescription(ros: Ros, topic: string): string | undefined {
+  return urdfDescriptionsByRos.get(ros)?.get(topic);
+}
+
+function cacheUrdfDescription(ros: Ros, topic: string, description: string): void {
+  let descriptions = urdfDescriptionsByRos.get(ros);
+  if (!descriptions) {
+    descriptions = new Map();
+    urdfDescriptionsByRos.set(ros, descriptions);
+  }
+  descriptions.set(topic, description);
+}
+
+function disposeObjectResources(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+
+  root.traverse(object => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.geometry) geometries.add(mesh.geometry);
+    const objectMaterials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    objectMaterials.forEach(material => {
+      materials.add(material);
+      Object.values(material).forEach(value => {
+        if (value instanceof THREE.Texture) textures.add(value);
+      });
+    });
+  });
+
+  textures.forEach(texture => texture.dispose());
+  materials.forEach(material => material.dispose());
+  geometries.forEach(geometry => geometry.dispose());
 }
 
 // Basic viewer class implementation
@@ -1370,7 +1395,7 @@ class UrdfClient extends THREE.Object3D {
   private colladaLoader: ColladaLoader;
   private objLoader: OBJLoader;
   private stlLoader: STLLoader;
-  private cacheKey: string;
+  private requestRender: () => void;
   private disposed = false;
   private tfSubscriptions: Array<{
     frameId: string;
@@ -1384,6 +1409,7 @@ class UrdfClient extends THREE.Object3D {
     robotDescriptionTopic?: string;
     path?: string;
     onComplete?: (model: THREE.Object3D) => void;
+    requestRender?: () => void;
     // Removed loader option, will use internal Collada and STL loaders
   }) {
     super();
@@ -1392,38 +1418,22 @@ class UrdfClient extends THREE.Object3D {
     this.path = options.path || '/mesh_resources';
     this.rootObject = options.rootObject;
     this.onComplete = options.onComplete;
+    this.requestRender = options.requestRender || (() => {});
 
     this.colladaLoader = new ColladaLoader();
     this.objLoader = new OBJLoader();
     this.stlLoader = new STLLoader();
-    this.userData.preserveAcrossViewerCleanup = true;
-
     this.rootObject.add(this);
 
     const descriptionTopicName = options.robotDescriptionTopic || '/robot_description';
     this.robotDescriptionTopicName = descriptionTopicName;
-    this.cacheKey = getUrdfCacheKey(this.ros, descriptionTopicName);
 
-    const cachedModel = urdfModelCache.get(this.cacheKey);
-    if (cachedModel?.model && cachedModel.linkNameMap && cachedModel.rootLinks) {
-      console.log(`[UrdfClient] Reusing cached URDF model for ${descriptionTopicName}.`);
-      this.urdfModel = cachedModel.model;
-      this.linkNameMap = new Map(cachedModel.linkNameMap);
-      this.add(this.urdfModel);
-
-      queueMicrotask(() => {
-        if (this.disposed || !this.urdfModel) return;
-        this.onComplete?.(this.urdfModel);
-        this.setupTfUpdates(cachedModel.rootLinks || []);
-      });
-      return;
-    }
-
-    if (cachedModel?.urdfString) {
+    const cachedDescription = getCachedUrdfDescription(this.ros, descriptionTopicName);
+    if (cachedDescription) {
       console.log(`[UrdfClient] Loading URDF for ${descriptionTopicName} from cached description.`);
       queueMicrotask(() => {
         if (!this.disposed) {
-          this.loadUrdf(cachedModel.urdfString);
+          this.loadUrdf(cachedDescription);
         }
       });
       return;
@@ -1444,6 +1454,7 @@ class UrdfClient extends THREE.Object3D {
   }
 
   private handleUrdfString(message: any): void {
+    if (this.disposed || typeof message?.data !== 'string') return;
     if (this.urdfModel) {
       console.log('[UrdfClient] URDF already loaded, ignoring new message.');
       return;
@@ -1451,17 +1462,19 @@ class UrdfClient extends THREE.Object3D {
     console.log('[UrdfClient] Received URDF string.');
     this.robotDescriptionTopic?.unsubscribe();
     this.robotDescriptionTopic = null;
-    urdfModelCache.set(this.cacheKey, {
-      urdfString: message.data,
-      cachedAt: Date.now(),
-    });
+    cacheUrdfDescription(this.ros, this.robotDescriptionTopicName, message.data);
     this.loadUrdf(message.data);
   }
 
   private parseUrdf(urdfString: string): XMLDocument | null {
     try {
       const parser = new DOMParser();
-      return parser.parseFromString(urdfString, 'application/xml');
+      const document = parser.parseFromString(urdfString, 'application/xml');
+      if (document.getElementsByTagName('parsererror').length > 0) {
+        console.error('[UrdfClient] Robot description contains invalid XML.');
+        return null;
+      }
+      return document;
     } catch (e) {
       console.error('[UrdfClient] Error parsing URDF XML:', e);
       return null;
@@ -1469,6 +1482,7 @@ class UrdfClient extends THREE.Object3D {
   }
 
   private loadUrdf(urdfString: string): void {
+    if (this.disposed || this.urdfModel) return;
     const xmlDoc = this.parseUrdf(urdfString);
     if (!xmlDoc) return;
 
@@ -1566,13 +1580,6 @@ class UrdfClient extends THREE.Object3D {
     });
 
     console.log('[UrdfClient] URDF structure processed.', this.urdfModel);
-    urdfModelCache.set(this.cacheKey, {
-      urdfString: urdfString,
-      model: this.urdfModel,
-      linkNameMap: new Map(this.linkNameMap),
-      rootLinks: [...rootLinks],
-      cachedAt: Date.now(),
-    });
     if (this.onComplete && this.urdfModel) {
       this.onComplete(this.urdfModel);
     }
@@ -1603,6 +1610,10 @@ class UrdfClient extends THREE.Object3D {
         if (filename.toLowerCase().endsWith('.dae') || filename.toLowerCase().endsWith('.collada')) {
           this.colladaLoader.load(fullPath, (collada) => {
             const daeMesh = collada.scene;
+            if (this.disposed) {
+              disposeObjectResources(daeMesh);
+              return;
+            }
             daeMesh.scale.copy(scaleVec);
             
             // Counter-rotate to undo ColladaLoader's automatic Y-up conversion
@@ -1648,10 +1659,15 @@ class UrdfClient extends THREE.Object3D {
             }
             
             linkObject.add(daeMesh);
+            this.requestRender();
             console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
           }, undefined, (error) => console.error(`[UrdfClient] Error loading DAE ${fullPath}:`, error));
         } else if (filename.toLowerCase().endsWith('.obj')) {
           const addObjMesh = (objMesh: THREE.Group) => {
+            if (this.disposed) {
+              disposeObjectResources(objMesh);
+              return;
+            }
             objMesh.scale.copy(scaleVec);
             this.applyOrigin(visualElement, objMesh);
             if (urdfMaterial) {
@@ -1660,6 +1676,7 @@ class UrdfClient extends THREE.Object3D {
               });
             }
             linkObject.add(objMesh);
+            this.requestRender();
             console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
           };
           const loadObj = (loader: OBJLoader) => {
@@ -1687,6 +1704,7 @@ class UrdfClient extends THREE.Object3D {
             materialLoader.load(
               materialPath,
               (materials) => {
+                if (this.disposed) return;
                 materials.preload();
                 const materialAwareLoader = new OBJLoader();
                 materialAwareLoader.setMaterials(materials);
@@ -1703,11 +1721,16 @@ class UrdfClient extends THREE.Object3D {
           }
         } else if (filename.toLowerCase().endsWith('.stl')) {
           this.stlLoader.load(fullPath, (geometry) => {
+            if (this.disposed) {
+              geometry.dispose();
+              return;
+            }
             const material = urdfMaterial || new THREE.MeshLambertMaterial({ color: 0xcccccc });
             const stlMesh = new THREE.Mesh(geometry, material);
             stlMesh.scale.copy(scaleVec);
             this.applyOrigin(visualElement, stlMesh);
             linkObject.add(stlMesh);
+            this.requestRender();
             console.log(`[UrdfClient] Loaded STL: ${fullPath}`);
           }, undefined, (error) => console.error(`[UrdfClient] Error loading STL ${fullPath}:`, error));
         } else {
@@ -1809,7 +1832,14 @@ class UrdfClient extends THREE.Object3D {
             // Proper path resolution for textures is also needed here
             const texturePath = this.resolvePackagePath(filename);
             try {
-                texture = new THREE.TextureLoader().load(texturePath);
+                texture = new THREE.TextureLoader().load(
+                  texturePath,
+                  () => {
+                    if (!this.disposed) this.requestRender();
+                  },
+                  undefined,
+                  error => console.error(`[UrdfClient] Error loading texture ${texturePath}:`, error),
+                );
                 console.log(`[UrdfClient] Loading texture: ${texturePath}`);
             } catch (e) {
                 console.error(`[UrdfClient] Error loading texture ${texturePath}:`, e);
@@ -1857,64 +1887,71 @@ class UrdfClient extends THREE.Object3D {
             
             const uniqueFramesToTry = [...new Set(framesToTry)];
             let activeSubscriptionFrame: string | null = null;
+            const candidateSubscriptions: Array<{
+              frameId: string;
+              callback: (transform: StoredTransform | null) => void;
+            }> = [];
 
             console.log(`[UrdfClient] For URDF link "${urdfLinkName}", trying TF frames: ${uniqueFramesToTry.join(', ')}`);
 
             const subscriptionCallback = (tfFrameName: string, transform: StoredTransform | null) => {
-                if (transform) {
+                if (this.disposed || !transform) return;
+
                     if (!activeSubscriptionFrame) {
                         activeSubscriptionFrame = tfFrameName;
                         console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
-                        // If other subscriptions were made for this link, they should be cancelled here if possible
-                        // For now, this logic means the first to provide data 'wins'.
+                        candidateSubscriptions.forEach(subscription => {
+                            if (subscription.frameId === tfFrameName) return;
+                            this.tfClient.unsubscribe(subscription.frameId, subscription.callback);
+                            const ownedIndex = this.tfSubscriptions.indexOf(subscription);
+                            if (ownedIndex >= 0) this.tfSubscriptions.splice(ownedIndex, 1);
+                        });
                     } else if (activeSubscriptionFrame !== tfFrameName) {
-                        // Already have an active subscription for this link from a different TF frame name.
-                        // This callback is from an alternative name that also got data; we ignore it.
-                        return; 
+                        return;
                     }
 
+                    let sceneChanged = false;
                     const currentParent = linkObject.parent;
                     if (currentParent && currentParent !== this.urdfModel && this.urdfModel) {
                         currentParent.remove(linkObject);
-                        if (linkObject.parent !== this.urdfModel) { 
+                        if (linkObject.parent !== this.urdfModel) {
                            this.urdfModel.add(linkObject);
                         }
+                        sceneChanged = true;
                     } else if (!currentParent && this.urdfModel) {
                         this.urdfModel.add(linkObject);
+                        sceneChanged = true;
                     }
 
-                    linkObject.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                    linkObject.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    linkObject.updateMatrix();
-                    linkObject.matrixWorldNeedsUpdate = true;
-                }
+                    const poseChanged =
+                      linkObject.position.x !== transform.translation.x ||
+                      linkObject.position.y !== transform.translation.y ||
+                      linkObject.position.z !== transform.translation.z ||
+                      linkObject.quaternion.x !== transform.rotation.x ||
+                      linkObject.quaternion.y !== transform.rotation.y ||
+                      linkObject.quaternion.z !== transform.rotation.z ||
+                      linkObject.quaternion.w !== transform.rotation.w;
+
+                    if (poseChanged) {
+                      linkObject.position.copy(transform.translation);
+                      linkObject.quaternion.copy(transform.rotation);
+                      linkObject.updateMatrix();
+                      linkObject.matrixWorldNeedsUpdate = true;
+                      sceneChanged = true;
+                    }
+
+                    if (sceneChanged) this.requestRender();
             };
 
-            uniqueFramesToTry.forEach(frameName => {
+            for (const frameName of uniqueFramesToTry) {
+                if (activeSubscriptionFrame) break;
                 const callback = (transform: StoredTransform | null) => {
                     subscriptionCallback(frameName, transform);
                 };
+                const subscription = { frameId: frameName, callback };
+                candidateSubscriptions.push(subscription);
+                this.tfSubscriptions.push(subscription);
                 this.tfClient.subscribe(frameName, callback);
-                this.tfSubscriptions.push({ frameId: frameName, callback });
-            });
-
-            // Optional: Initial check for immediate availability (for faster first render)
-            let initialFrameFound = false;
-            for (const frameName of uniqueFramesToTry) {
-                try {
-                    // Use a common fixed frame like 'odom' for the lookup check
-                    const initialTransform = this.tfClient.lookupTransform('odom', frameName); // Default to 'odom'
-                    if (initialTransform) {
-                        console.log(`[UrdfClient] URDF link "${urdfLinkName}" initially found active TF frame "${frameName}"`);
-                        // Trigger the callback manually with this initial transform to potentially render faster
-                        // subscriptionCallback(frameName, initialTransform);
-                        initialFrameFound = true;
-                        break; 
-                    }
-                } catch (e) { /* lookup failed, try next */ }
-            }
-            if (!initialFrameFound) {
-                 console.warn(`[UrdfClient] URDF link "${urdfLinkName}": No TF frame immediately found among [${uniqueFramesToTry.join(', ')}]. Waiting for subscription data.`);
             }
         });
         
@@ -1923,10 +1960,21 @@ class UrdfClient extends THREE.Object3D {
             console.warn(`[UrdfClient] Fallback: No links in URDF. Subscribing to ${baseFrameToTry} for the whole model.`);
             const callback = (transform: StoredTransform | null) => {
                 if (transform && this.urdfModel) {
-                    this.urdfModel.position.set(transform.translation.x, transform.translation.y, transform.translation.z);
-                    this.urdfModel.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-                    this.urdfModel.updateMatrix();
-                    this.urdfModel.matrixWorldNeedsUpdate = true;
+                    const poseChanged =
+                      this.urdfModel.position.x !== transform.translation.x ||
+                      this.urdfModel.position.y !== transform.translation.y ||
+                      this.urdfModel.position.z !== transform.translation.z ||
+                      this.urdfModel.quaternion.x !== transform.rotation.x ||
+                      this.urdfModel.quaternion.y !== transform.rotation.y ||
+                      this.urdfModel.quaternion.z !== transform.rotation.z ||
+                      this.urdfModel.quaternion.w !== transform.rotation.w;
+                    if (poseChanged) {
+                      this.urdfModel.position.copy(transform.translation);
+                      this.urdfModel.quaternion.copy(transform.rotation);
+                      this.urdfModel.updateMatrix();
+                      this.urdfModel.matrixWorldNeedsUpdate = true;
+                      this.requestRender();
+                    }
                 }
             };
             this.tfClient.subscribe(baseFrameToTry, callback);
@@ -1937,6 +1985,7 @@ class UrdfClient extends THREE.Object3D {
   }
 
   public dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
     if (this.robotDescriptionTopic) {
       this.robotDescriptionTopic.unsubscribe();
@@ -1947,12 +1996,14 @@ class UrdfClient extends THREE.Object3D {
     });
     this.tfSubscriptions = [];
     if (this.urdfModel) {
+      disposeObjectResources(this.urdfModel);
       this.remove(this.urdfModel);
       this.urdfModel = null;
     }
     this.rootObject.remove(this);
     this.linkNameMap.clear();
-    // TODO: Unsubscribe from all TF frames if tfClient.unsubscribe supports targeted removal based on callback or ID
+    this.onComplete = undefined;
+    this.requestRender();
     console.log('[UrdfClient] Disposed.');
   }
 }

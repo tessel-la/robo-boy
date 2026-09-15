@@ -484,6 +484,65 @@ describe('tfUtils', () => {
         expect(callback).toHaveBeenCalled()
       })
 
+      it('does not miss subscribed motion in TF trees larger than 100 frames', () => {
+        const largeTree: TransformStore = {}
+        for (let index = 0; index < 110; index += 1) {
+          largeTree[`unrelated_${index}`] = {
+            parentFrame: 'map',
+            transform: {
+              translation: new THREE.Vector3(index, 0, 0),
+              rotation: new THREE.Quaternion(),
+            },
+            isStatic: true,
+          }
+        }
+        largeTree.moving_link = {
+          parentFrame: 'map',
+          transform: {
+            translation: new THREE.Vector3(1, 0, 0),
+            rotation: new THREE.Quaternion(),
+          },
+          isStatic: false,
+        }
+        const largeProvider = new CustomTFProvider('map', largeTree)
+        const callback = vi.fn()
+        largeProvider.subscribe('moving_link', callback)
+        callback.mockClear()
+
+        largeProvider.updateTransforms({
+          ...largeTree,
+          moving_link: {
+            ...largeTree.moving_link,
+            transform: {
+              translation: new THREE.Vector3(2, 0, 0),
+              rotation: new THREE.Quaternion(),
+            },
+          },
+        })
+
+        expect(callback).toHaveBeenCalledOnce()
+      })
+
+      it('updates a descendant when a changed ancestor is provided by the TF stream', () => {
+        const callback = vi.fn()
+        provider.subscribe('sensor', callback)
+        callback.mockClear()
+        const nextTransforms = {
+          ...transforms,
+          odom: {
+            ...transforms.odom,
+            transform: {
+              translation: new THREE.Vector3(3, 0, 0),
+              rotation: new THREE.Quaternion(),
+            },
+          },
+        }
+
+        provider.updateTransforms(nextTransforms, new Set(['odom']))
+
+        expect(callback).toHaveBeenCalledOnce()
+      })
+
       it('should not trigger callbacks when transforms unchanged', () => {
         const callback = vi.fn()
         provider.subscribe('odom', callback)

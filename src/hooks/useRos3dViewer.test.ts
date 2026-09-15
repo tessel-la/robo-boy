@@ -103,12 +103,12 @@ describe('useRos3dViewer', () => {
         expect(result.current.viewerGeneration).toBe(1);
     });
 
-    it.skip('should cleanup viewer on unmount', () => {
+    it('should cleanup viewer on unmount', () => {
         const stopMock = vi.fn();
         const disposeRendererMock = vi.fn();
 
         // Setup mock to return a robust viewer object
-        (ROS3D.Viewer as any).mockImplementation(() => ({
+        (ROS3D.Viewer as any).mockImplementation(function () { return {
             addObject: vi.fn(),
             stop: stopMock,
             renderer: {
@@ -124,7 +124,7 @@ describe('useRos3dViewer', () => {
             },
             camera: {},
             resize: vi.fn()
-        }));
+        }; });
 
         const { unmount } = renderHook(() => useRos3dViewer(viewerRef, true));
 
@@ -134,11 +134,11 @@ describe('useRos3dViewer', () => {
         unmount();
 
         expect(stopMock).toHaveBeenCalled();
-        expect(resizeObserverUnobserveMock).toHaveBeenCalled();
+        expect(resizeObserverDisconnectMock).toHaveBeenCalled();
         expect(disposeRendererMock).toHaveBeenCalled();
     });
 
-    it('should detach preserved scene objects without disposing their resources', () => {
+    it('should dispose every remaining scene object on unmount', () => {
         const stopMock = vi.fn();
         const disposeRendererMock = vi.fn();
         const preservedGeometryDispose = vi.fn();
@@ -186,7 +186,7 @@ describe('useRos3dViewer', () => {
         expect(stopMock).toHaveBeenCalled();
         expect(sceneRemoveMock).toHaveBeenCalledWith(preservedObject);
         expect(sceneRemoveMock).toHaveBeenCalledWith(normalObject);
-        expect(preservedGeometryDispose).not.toHaveBeenCalled();
+        expect(preservedGeometryDispose).toHaveBeenCalled();
         expect(normalGeometryDispose).toHaveBeenCalled();
         expect(disposeRendererMock).toHaveBeenCalled();
     });

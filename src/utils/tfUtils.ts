@@ -24,6 +24,48 @@ export interface TfFrameEdge {
   childFrame: string;
 }
 
+function transformsEqual(
+  left: TransformStore[string] | undefined,
+  right: TransformStore[string] | undefined,
+): boolean {
+  return left === right || Boolean(
+    left &&
+    right &&
+    left.parentFrame === right.parentFrame &&
+    left.isStatic === right.isStatic &&
+    left.transform.translation.equals(right.transform.translation) &&
+    left.transform.rotation.equals(right.transform.rotation)
+  );
+}
+
+function getChangedFrames(previous: TransformStore, next: TransformStore): Set<string> {
+  const changedFrames = new Set<string>();
+  const frameIds = new Set([...Object.keys(previous), ...Object.keys(next)]);
+
+  frameIds.forEach(frameId => {
+    if (!transformsEqual(previous[frameId], next[frameId])) changedFrames.add(frameId);
+  });
+
+  return changedFrames;
+}
+
+function chainContainsChangedFrame(
+  startFrame: string,
+  transforms: TransformStore,
+  changedFrames: ReadonlySet<string>,
+): boolean {
+  let currentFrame = normalizeFrameId(startFrame);
+  const visited = new Set<string>();
+
+  while (currentFrame && !visited.has(currentFrame)) {
+    if (changedFrames.has(currentFrame)) return true;
+    visited.add(currentFrame);
+    currentFrame = transforms[currentFrame]?.parentFrame || '';
+  }
+
+  return false;
+}
+
 // Reusable identity transform to avoid creating new objects
 export const IDENTITY_TRANSFORM: StoredTransform = {
   translation: new THREE.Vector3(0, 0, 0),
@@ -226,6 +268,7 @@ export class CustomTFProvider {
   public fixedFrame: string;
   private transforms: TransformStore; // Stores THREE.Vector3 and THREE.Quaternion
   private callbacks: Map<string, Set<(transform: any | null) => void>>; // Callbacks expect ROSLIB structure
+  private disposed = false;
 
   constructor(/*ros: Ros,*/ fixedFrame: string, initialTransforms: TransformStore) {
     // this.ros = ros; // Removed ROS dependency if not strictly needed by provider itself
@@ -235,98 +278,25 @@ export class CustomTFProvider {
     console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
   }
 
-  updateTransforms(newTransforms: TransformStore) {
-    const changedFrames = new Set<string>();
+  updateTransforms(newTransforms: TransformStore, knownChangedFrames?: ReadonlySet<string>) {
+    if (this.disposed) return;
+
     const oldTransforms = this.transforms;
-
-    // Skip detailed change comparison if too many frames (performance optimization)
-    const hasLotsOfFrames = Object.keys(newTransforms).length > 100;
-
-    // Fast path: If we have many frames, just check if key lengths changed
-    if (hasLotsOfFrames) {
-      if (Object.keys(oldTransforms).length !== Object.keys(newTransforms).length) {
-        // Basic change detection - assume all subscribed frames are affected
-        this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
-      } else {
-        // Just check a few random frames as a heuristic
-        const sampleKeys = Object.keys(newTransforms).slice(0, 5);
-        let hasChanges = false;
-
-        for (const frameId of sampleKeys) {
-          const oldTf = oldTransforms[frameId]?.transform;
-          const newTf = newTransforms[frameId]?.transform;
-          if (!oldTf || !newTf ||
-            !oldTf.translation.equals(newTf.translation) ||
-            !oldTf.rotation.equals(newTf.rotation)) {
-            hasChanges = true;
-            break;
-          }
-        }
-
-        if (hasChanges) {
-          this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
-        }
-      }
-    }
-    // Detailed comparison for fewer frames
-    else {
-      // Check if set of keys changed
-      const oldKeys = Object.keys(oldTransforms);
-      const newKeys = Object.keys(newTransforms);
-
-      if (oldKeys.length !== newKeys.length || !oldKeys.every(k => newKeys.includes(k))) {
-        // Frame set changed - assume all subscribed frames are affected
-        this.callbacks.forEach((_, frameId) => changedFrames.add(frameId));
-      } else {
-        // Check each frame for changes, but only if it affects subscribed frames
-        // Get all parent frames for subscribed frames
-        const relevantFrames = new Set<string>();
-        this.callbacks.forEach((_, frameId) => {
-          // Add the frame itself
-          relevantFrames.add(frameId);
-          // Find all parent frames in the chain
-          let currentFrame = frameId;
-          while (newTransforms[currentFrame]?.parentFrame) {
-            const parentFrame = newTransforms[currentFrame].parentFrame;
-            relevantFrames.add(parentFrame);
-            currentFrame = parentFrame;
-          }
-        });
-
-        // Only check frames that could affect our subscriptions
-        for (const frameId of relevantFrames) {
-          const oldTf = oldTransforms[frameId]?.transform;
-          const newTf = newTransforms[frameId]?.transform;
-          if (!oldTf || !newTf ||
-            !oldTf.translation.equals(newTf.translation) ||
-            !oldTf.rotation.equals(newTf.rotation)) {
-            // Mark this frame as changed
-            changedFrames.add(frameId);
-            // Mark all dependent subscribed frames as needing updates
-            this.callbacks.forEach((_, cbFrameId) => {
-              // Check if this frame is in the parent chain of the callback frame
-              let currentFrame = cbFrameId;
-              while (currentFrame) {
-                if (currentFrame === frameId) {
-                  changedFrames.add(cbFrameId);
-                  break;
-                }
-                currentFrame = newTransforms[currentFrame]?.parentFrame;
-                if (!currentFrame) break;
-              }
-            });
-          }
-        }
-      }
-    }
+    const changedFrames = knownChangedFrames ?? getChangedFrames(oldTransforms, newTransforms);
 
     this.transforms = newTransforms;
 
-    // Batch update callbacks to avoid redundant work
-    if (changedFrames.size > 0) {
-      changedFrames.forEach(frameId => {
-        const frameCallbacks = this.callbacks.get(frameId);
-        if (frameCallbacks) {
+    if (changedFrames.size > 0 && this.callbacks.size > 0) {
+      const fixedFrameChanged =
+        chainContainsChangedFrame(this.fixedFrame, oldTransforms, changedFrames) ||
+        chainContainsChangedFrame(this.fixedFrame, newTransforms, changedFrames);
+
+      this.callbacks.forEach((frameCallbacks, frameId) => {
+        const subscribedPathChanged = fixedFrameChanged ||
+          chainContainsChangedFrame(frameId, oldTransforms, changedFrames) ||
+          chainContainsChangedFrame(frameId, newTransforms, changedFrames);
+
+        if (subscribedPathChanged) {
           const latestTransformTHREE = this.lookupTransform(this.fixedFrame, frameId);
           const latestTransformObject = latestTransformTHREE
             ? {
@@ -348,6 +318,7 @@ export class CustomTFProvider {
   }
 
   updateFixedFrame(newFixedFrame: string) {
+    if (this.disposed) return;
     // Normalize frame ID (remove leading slash)
     const normalizedNewFrame = normalizeFrameId(newFixedFrame);
 
@@ -395,6 +366,7 @@ export class CustomTFProvider {
 
   // Modify subscribe to provide plain object initially
   subscribe(frameId: string, callback: (transform: any | null) => void) { // Use 'any' for now if Transform type is problematic
+    if (this.disposed) return;
     const normalizedFrameId = normalizeFrameId(frameId);
     // console.log(`[CustomTFProvider] subscribe called for frameId: ${normalizedFrameId}`);
 
@@ -423,6 +395,7 @@ export class CustomTFProvider {
 
   // Modify unsubscribe type signature
   unsubscribe(frameId: string, callback?: (transform: any | null) => void) { // Use 'any' for now
+    if (this.disposed) return;
     const normalizedFrameId = normalizeFrameId(frameId);
     // console.log(`[CustomTFProvider] unsubscribe called for frameId: ${normalizedFrameId}`);
     const frameCallbacks = this.callbacks.get(normalizedFrameId);
@@ -445,6 +418,7 @@ export class CustomTFProvider {
 
   // Ensure this public method uses the external helper
   public lookupTransform(targetFrame: string, sourceFrame: string): StoredTransform | null {
+    if (this.disposed) return null;
     // Normalize frames for consistency
     const normalizedTargetFrame = normalizeFrameId(targetFrame);
     const normalizedSourceFrame = normalizeFrameId(sourceFrame);
@@ -468,6 +442,8 @@ export class CustomTFProvider {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     console.log("[CustomTFProvider] Disposing provider.");
     this.transforms = {}; // Clear transforms
     this.callbacks.clear(); // Clear callbacks

@@ -22,8 +22,8 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
       console.log('[useRos3dViewer Cleanup] Cleaning up ROS3D viewer, Grid, OrbitControls...');
 
       // Stop ResizeObserver first
-      if (resizeObserver.current && currentViewerRef) {
-        resizeObserver.current.unobserve(currentViewerRef);
+      if (resizeObserver.current) {
+        resizeObserver.current.disconnect();
         console.log('[useRos3dViewer Cleanup] ResizeObserver detached.');
         resizeObserver.current = null;
       }
@@ -49,10 +49,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
         if (!obj) return;
         if (obj.children && obj.children.length > 0) {
           [...obj.children].forEach(child => {
-            if (child.userData?.preserveAcrossViewerCleanup) {
-              try { obj.remove(child); } catch (e) { console.warn('[Viewer Cleanup] Error detaching preserved child object:', e); }
-              return;
-            }
             disposeSceneResources(child);
             try { obj.remove(child); } catch (e) { console.warn('[Viewer Cleanup] Error removing child object:', e); }
           });
@@ -95,6 +91,7 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
               ros3dViewer.current.renderer.domElement.parentElement.removeChild(ros3dViewer.current.renderer.domElement);
             }
             ros3dViewer.current.renderer?.dispose();
+            ros3dViewer.current.renderer?.forceContextLoss?.();
           }
           console.log('[useRos3dViewer Cleanup] Viewer resources likely released.');
         } catch (e) {
