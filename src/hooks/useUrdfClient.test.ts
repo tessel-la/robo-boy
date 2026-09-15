@@ -27,7 +27,7 @@ describe('useUrdfClient', () => {
         props = {
             ros: { isRos: true },
             isRosConnected: true,
-            ros3dViewer: { current: { scene: {} } },
+            ros3dViewer: { current: { scene: {}, requestRender: vi.fn() } },
             tfClient: { current: {} },
             dependenciesReady: true,
             robotDescriptionTopic: '/robot_description'
@@ -41,7 +41,8 @@ describe('useUrdfClient', () => {
             ros: props.ros,
             tfClient: props.tfClient.current,
             rootObject: props.ros3dViewer.current.scene,
-            robotDescriptionTopic: props.robotDescriptionTopic
+            robotDescriptionTopic: props.robotDescriptionTopic,
+            requestRender: props.ros3dViewer.current.requestRender,
         }));
     });
 

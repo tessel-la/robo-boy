@@ -104,6 +104,7 @@ export function disposeMaterial(material: THREE.Material | THREE.Material[]): vo
  * Cleanup intervals used by point cloud client.
  */
 export interface PointCloudIntervals {
+    initializationTimeout: ReturnType<typeof setTimeout> | null;
     checkSceneInterval: ReturnType<typeof setInterval> | null;
     checkPointsObjectInterval: ReturnType<typeof setInterval> | null;
     updateRangesInterval: ReturnType<typeof setInterval> | null;
@@ -113,6 +114,10 @@ export interface PointCloudIntervals {
  * Clears all point cloud related intervals.
  */
 export function clearPointCloudIntervals(intervals: PointCloudIntervals): void {
+    if (intervals.initializationTimeout) {
+        clearTimeout(intervals.initializationTimeout);
+        intervals.initializationTimeout = null;
+    }
     if (intervals.checkSceneInterval) {
         clearInterval(intervals.checkSceneInterval);
         intervals.checkSceneInterval = null;
@@ -132,6 +137,7 @@ export function clearPointCloudIntervals(intervals: PointCloudIntervals): void {
  */
 export function createIntervalsRef(): PointCloudIntervals {
     return {
+        initializationTimeout: null,
         checkSceneInterval: null,
         checkPointsObjectInterval: null,
         updateRangesInterval: null

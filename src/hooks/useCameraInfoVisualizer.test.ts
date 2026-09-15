@@ -1,8 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import { useCameraInfoVisualizer } from './useCameraInfoVisualizer';
-import * as THREE from 'three';
-import { CustomTFProvider } from '../utils/tfUtils';
 import { Topic } from 'roslib';
 
 // Mock dependencies
@@ -100,7 +98,8 @@ describe('useCameraInfoVisualizer', () => {
             requestRender: vi.fn(),
         };
         mockTFProvider = {
-            lookupTransform: vi.fn(),
+            subscribe: vi.fn(),
+            unsubscribe: vi.fn(),
         };
 
         defaultProps = {
@@ -179,28 +178,17 @@ describe('useCameraInfoVisualizer', () => {
         act(() => messageCallback?.(msg));
     });
 
-    it('requests renders when the camera pose changes or becomes unavailable', () => {
-        const scheduledFrames = new Map<number, FrameRequestCallback>();
-        let nextFrameId = 1;
-        vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
-            const frameId = nextFrameId++;
-            scheduledFrames.set(frameId, callback);
-            return frameId;
-        });
-        vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(frameId => {
-            scheduledFrames.delete(frameId);
-        });
-
+    it('requests renders for provider-driven camera poses and unsubscribes cleanly', () => {
         let messageCallback: ((message: unknown) => void) | undefined;
+        let transformCallback: ((transform: unknown) => void) | undefined;
         (Topic as any).mockImplementation(function () {
             return {
                 subscribe: (callback: (message: unknown) => void) => { messageCallback = callback; },
                 unsubscribe: vi.fn(),
             };
         });
-        mockTFProvider.lookupTransform.mockReturnValue({
-            translation: { x: 1, y: 2, z: 3 },
-            rotation: { x: 0, y: 0, z: 0, w: 1 },
+        mockTFProvider.subscribe.mockImplementation((_frameId: string, callback: (transform: unknown) => void) => {
+            transformCallback = callback;
         });
 
         const { unmount } = renderHook(() => useCameraInfoVisualizer(defaultProps));
@@ -214,54 +202,20 @@ describe('useCameraInfoVisualizer', () => {
         });
         mockViewer.requestRender.mockClear();
 
-        const runNextFrame = () => {
-            const nextFrame = scheduledFrames.entries().next().value as [number, FrameRequestCallback] | undefined;
-            expect(nextFrame).toBeDefined();
-            scheduledFrames.delete(nextFrame![0]);
-            act(() => nextFrame![1](performance.now()));
-        };
-
-        runNextFrame();
-        expect(mockTFProvider.lookupTransform).toHaveBeenCalledWith('map', 'camera_frame');
+        act(() => transformCallback?.({
+            translation: { x: 1, y: 2, z: 3 },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+        }));
+        expect(mockTFProvider.subscribe).toHaveBeenCalledWith('camera_frame', expect.any(Function));
         expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
 
         const container = mockScene.add.mock.calls[0][0];
         mockViewer.requestRender.mockClear();
-        mockTFProvider.lookupTransform.mockReturnValue(null);
-        runNextFrame();
+        act(() => transformCallback?.(null));
         expect(container.visible).toBe(false);
         expect(mockViewer.requestRender).toHaveBeenCalledTimes(1);
 
         unmount();
-        expect(scheduledFrames).toHaveLength(0);
-    });
-
-    it.skip('should update pose in animation loop', async () => {
-        vi.useFakeTimers();
-        mockTFProvider.lookupTransform.mockReturnValue({
-            translation: { x: 1, y: 2, z: 3 },
-            rotation: { x: 0, y: 0, z: 0, w: 1 },
-        });
-
-        // Simulate message to set cameraFrameId
-        let messageCallback: any;
-        (Topic as any).mockImplementation(function () {
-            return {
-                subscribe: (cb: any) => { messageCallback = cb; },
-                unsubscribe: vi.fn(),
-            }
-        });
-
-        renderHook(() => useCameraInfoVisualizer(defaultProps));
-
-        if (messageCallback) {
-            messageCallback({ header: { frame_id: 'camera_frame' } });
-        }
-
-        // Fast forward to trigger animation frame
-        vi.advanceTimersByTime(100);
-
-        expect(mockTFProvider.lookupTransform).toHaveBeenCalled();
-        vi.useRealTimers();
+        expect(mockTFProvider.unsubscribe).toHaveBeenCalledWith('camera_frame', expect.any(Function));
     });
 });

@@ -17,6 +17,12 @@ resizes, and camera interaction request a frame; requests in the same display in
 coalesced. An idle scene does no animation-frame or WebGL work. TF axes use the same model instead
 of polling and redrawing a stationary transform at 30 frames per second.
 
+A follow-up 3D lifecycle investigation found that URDF link TF callbacks were missing that
+invalidation boundary. The Three.js scene changed but the canvas did not, which made robot motion
+appear intermittent. URDF TF and asynchronous resource changes now request coalesced frames, and
+all 3D panels on one live ROS connection share a single TF topic pair and replay its current
+snapshot when they join.
+
 No connection, UX, data-rate, or visualization feature was removed. Active orbit, TF, and
 PoseStamped scenarios confirm that frames are produced while the scene is changing and stop after
 it settles.
@@ -72,9 +78,9 @@ required there.
 | Connections | `App` retains one `MainControlView` owner per connection; `useRos` owns its `ROSLIB.Ros` object. An inactive session returns no panel subtree while preserving connection ownership. | An empty connected workspace was effectively quiescent. Connection lifetime and retry behavior were not changed. |
 | Workspace panels | `MainControlView` owns the split tree and panel instances. Desktop tiles mount only when present. On mobile, heavy camera and 3D panels are unmounted when hidden; TF and behavior-tree panels receive activity state and pause work where required. | Removing a panel tears down subscriptions, observers, controls, renderer resources, and canvases. Five warm mount/remove cycles returned to zero canvases, zero pending frames, and the original DOM count. |
 | 3D viewer | `VisualizationPanel` owns configuration and React adapters. Live imports of `../utils/ros3d` resolve to the monolithic `src/utils/ros3d.ts`; it owns `Viewer`, `PointCloud2`, `OrbitControls`, and URDF. The modular `LaserScan` is re-exported from that entry point. | Rendering is invalidation-driven. The viewer waits for its first non-zero layout size, coalesces requests, and visualizers request frames only after data, pose, visibility, settings, resize, or camera changes. |
-| TF | `useTfProvider` owns one bounded `/tf` and `/tf_static` subscription per 3D panel. Dynamic TF is capped at 40 Hz with queue length 1 and CBOR. `useTfVisualizer` owns axes and edge objects. | No displayed frames means no TF rendering. Displayed axes update when transform state changes, not through a permanent polling loop. |
+| TF | A reference-counted stream owns one bounded `/tf` and `/tf_static` subscription pair per live `ROSLIB.Ros` identity. Each 3D panel owns an independent provider populated from the stream snapshot. Dynamic TF is capped at 40 Hz with queue length 1 and CBOR. | A late-mounting viewer does not miss earlier TF. Ordinary dynamic TF updates bypass React when no axes are displayed; provider subscribers still update directly. The final panel removal unsubscribes the source topics and drops dynamic state. |
 | Point clouds and LaserScan | Visualization hooks/classes own topic clients, bounded queues, typed buffers, TF pose checks, and Three.js resources. | Incoming data invalidates a frame. TF polling can remain active while the visualization exists, but it requests rendering only after a pose or visibility change. Point-cloud data is capped near 30 Hz and stale messages are dropped. |
-| Camera | `CameraView` gives the browser/webview an MJPEG URL through an `<img>`. CameraInfo is a 3D frustum and is separate from video decode. | A static camera panel has negligible JS cost. Video decode and composition are browser/webview workloads and are expected while a visible stream is active. Hidden mobile camera panels are unmounted. |
+| Camera | `CameraView` gives the browser/webview an MJPEG URL through an `<img>`. CameraInfo is a 3D frustum and is separate from video decode. | A static camera panel has negligible JS cost. CameraInfo pose changes are provider-driven instead of permanently polling TF with RAF. Video decode and composition remain browser/webview workloads while a visible stream is active. |
 | UI animation | `EntrySection` owns the visible animated dash. Other transitions are CSS or bounded interaction callbacks. | The entry dash intentionally keeps one animation frame pending at about 60 callbacks/s. It costs about 2% renderer-main-thread time and was retained because it is visible, deliberate, and much smaller than the former 3D cost. |
 | TF tree | `TfTreePanel` subscribes only while active and uses a one-second clock for relative timestamps. React Flow renders graph changes. | Idle cost is about 0.2%. Synthetic 40 Hz TF updates cost about 5%, including React/graph animation work; no WebGL is involved. |
 | Other timers/listeners | Point-cloud setup/range intervals are bounded and cleared; joystick hold and physical-gamepad polling exist only while those controls are active. Resize, pointer, key, and connection listeners have matching cleanup. | The connected baseline had no recurring instrumented callback activity apart from one library/runtime interval. No duplicate TF subscriptions or growing callback count was observed in the exercised lifecycles. |
@@ -123,10 +129,10 @@ meaningful pose updates.
 | Continuous orbit input | 18.79% | 1.35% | 80.05 | 39.86 | 0 draws/s, 0.01% main thread |
 | PoseStamped at 40 Hz | 19.22% | 2.33% | 39.98 | 119.93 | 0 draws/s, 0.01% main thread |
 
-PoseStamped recreates an arrow containing several drawable meshes, so its draw-call count is higher
-than its render frequency. That work is expected while new poses arrive. Rebuilding this geometry
-could be investigated separately with real high-rate workloads, but it was not changed here because
-the measured problem was idle work and the active scenario remained responsive.
+PoseStamped arrows contain several drawable meshes, so their draw-call count is higher than render
+frequency. Their geometry and materials are now reused between messages and disposed on option
+changes or teardown; only pose data changes at the topic rate. This removes avoidable allocation
+and GPU-resource retention without changing the visible update rate or draw quality.
 
 LaserScan keeps a lightweight TF pose check alive while its visualization exists: before data and
 after data stops it produced about 60 RAF callbacks/s but no WebGL draws, using 0.33–0.34% renderer
@@ -142,6 +148,25 @@ canvases, zero animation callbacks, and zero WebGL draws. Collected JS heap move
 14.36 MiB (+0.63 MiB). This small bounded increase can include initialized module/engine caches; it
 is not evidence of a retained renderer. A longer real-data soak is still appropriate for large
 point-cloud and URDF deployments.
+
+### 3D lifecycle follow-up
+
+The September 15 follow-up ran the complete 12-scenario profile with one-second verification
+samples after the TF/URDF lifecycle changes:
+
+- Two simultaneous idle 3D panels created exactly one active `/tf` and one `/tf_static`
+  subscription. Removing the first panel kept that pair active; removing the final panel returned
+  both active counts to zero. Idle work remained at zero RAF callbacks and zero WebGL draws.
+- A primitive URDF mounted after its TF had already arrived, rendered immediately from the replayed
+  snapshot, and followed a synthetic 40 Hz transform stream at 38.93 rendered frames/s. After the
+  stream stopped it returned to zero RAF callbacks, zero WebGL draws, and 0.04% renderer-main-thread
+  time.
+- Five warm add/remove cycles again returned to 108 DOM elements, zero canvases, zero pending RAF
+  callbacks, and zero WebGL draws. Collected heap increased by 0.72 MiB, consistent with the prior
+  bounded module/cache warm-up result.
+
+These short synthetic measurements validate ownership and settling behavior. They do not replace a
+long real-robot soak with large mesh, point-cloud, reconnect, and lossy-network workloads.
 
 ## Web Versus Tauri
 
@@ -181,6 +206,12 @@ bundle with OS process and GPU tooling on the target hardware.
   messages, TF pose/visibility changes, settings, and asynchronous URDF completion to that boundary.
 - Replaced displayed-TF RAF polling with updates driven by React's already-bounded transform state.
 - Avoided starting any TF visualization work when no TF frames are displayed.
+- Shared one reference-counted TF topic pair per live ROS connection, replayed its latest snapshot
+  to new panels, and made exact changed-path propagation independent of tree size.
+- Gave every URDF panel an independent scene graph, invalidated frames for link and asynchronous
+  mesh/texture updates, and disposed its subscriptions and GPU resources on teardown.
+- Replaced CameraInfo TF polling with provider callbacks, reused PoseStamped geometry, and cancelled
+  delayed point-cloud initialization during cleanup.
 - Removed fresh-mount and environment-switch races by observing panel size before viewer creation,
   signaling each successful viewer generation, and mounting restored visualizers only after both
   the viewer and TF provider are ready.
@@ -190,8 +221,7 @@ bundle with OS process and GPU tooling on the target hardware.
   multi-viewer, settling, and repeated panel lifecycle scenarios.
 
 No optimization was made to connection management, the entry animation, TF-tree React rendering,
-camera decode, or active visualization geometry because the measurements did not justify added
-complexity or those costs are inherent to visible/current data. The remaining approximately 1.2%
-main-thread cost for an empty 3D panel receiving 40 Hz TF is transform parsing, provider update, and
-React state propagation; it performs no rendering and is retained to preserve frame discovery and
-connection reliability.
+camera decode, or inherent active draw work. In the one-second follow-up, an empty 3D panel receiving
+40 Hz TF with no displayed axes used 0.42% renderer-main-thread time, zero RAF callbacks, and zero
+WebGL draws. That remaining work is transform parsing and direct provider propagation; React state
+updates are reserved for topology changes or displayed TF axes.

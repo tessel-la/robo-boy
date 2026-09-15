@@ -122,6 +122,13 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
         return [...MockWebSocket.instances].some(socket => [...socket.subscriptions.values()].includes(topic));
       }
 
+      static activeSubscriptionCount(topic: string) {
+        return [...MockWebSocket.instances].reduce(
+          (count, socket) => count + [...socket.subscriptions.values()].filter(value => value === topic).length,
+          0
+        );
+      }
+
       private emit(type: string, event: unknown) {
         if (type === 'open') this.onopen?.(event);
         if (type === 'close') this.onclose?.(event);
@@ -177,10 +184,12 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     const mockWindow = window as unknown as {
       __getRosSubscriptionCount: (topic: string) => number;
+      __getActiveRosSubscriptionCount: (topic: string) => number;
       __hasRosSubscription: (topic: string) => boolean;
       __publishRosTopic: (topic: string, message: unknown) => void;
     };
     mockWindow.__getRosSubscriptionCount = topic => MockWebSocket.subscriptionCounts.get(topic) ?? 0;
+    mockWindow.__getActiveRosSubscriptionCount = topic => MockWebSocket.activeSubscriptionCount(topic);
     mockWindow.__hasRosSubscription = topic => MockWebSocket.hasSubscription(topic);
     mockWindow.__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
   }, mockResources);
@@ -194,6 +203,18 @@ export async function getRosSubscriptionCount(page: Page, topic: string): Promis
           __getRosSubscriptionCount: (topic: string) => number;
         }
       ).__getRosSubscriptionCount(topicName),
+    topic
+  );
+}
+
+export async function getActiveRosSubscriptionCount(page: Page, topic: string): Promise<number> {
+  return page.evaluate(
+    topicName =>
+      (
+        window as unknown as {
+          __getActiveRosSubscriptionCount: (topic: string) => number;
+        }
+      ).__getActiveRosSubscriptionCount(topicName),
     topic
   );
 }

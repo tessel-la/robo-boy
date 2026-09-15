@@ -16,6 +16,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [AI assistant](ai-assistant.md): the global assistant's capabilities, trust model, provider support, and privacy/credential handling.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.
 - [Frontend performance analysis](performance.md): profiling method, architecture/lifecycle costs, web and Tauri baselines, and justified optimizations.
+- [3D panel lifecycle investigation](3d-panel-lifecycle.md): panel creation, TF/URDF synchronization,
+  teardown findings, root cause, invariants, and verification plan.
 - [Adding a custom panel](custom-panels.md): get a panel you wrote into the web app and into a desktop build,
   the four kinds of panel, enable/disable, and what an update changes.
 - [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.

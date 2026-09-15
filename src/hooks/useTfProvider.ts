@@ -1,187 +1,118 @@
-import { useEffect, useRef, useState } from 'react';
-import { Ros } from 'roslib';
-import * as ROSLIB from 'roslib';
-import { CustomTFProvider, TransformStore } from '../utils/tfUtils';
-import * as ROS3D from '../utils/ros3d'; // Use internal implementation
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Ros } from 'roslib';
+
+import * as ROS3D from '../utils/ros3d';
+import { CustomTFProvider, normalizeFrameId, type TransformStore } from '../utils/tfUtils';
+import { subscribeToTfStream } from '../utils/tfStream';
 
 interface UseTfProviderProps {
   ros: Ros | null;
   isRosConnected: boolean;
-  ros3dViewer: React.RefObject<ROS3D.Viewer | null>; // Pass the viewer ref itself
+  ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   viewerGeneration: number;
   fixedFrame: string;
-  // Pass initial transforms for provider constructor
-  initialTransforms: TransformStore;
-  handleTFMessage: (message: any, isStatic: boolean) => void; // Callback to update transforms state
+  trackTransformUpdates?: boolean;
 }
 
-// Custom Hook for managing the CustomTFProvider and TF subscriptions
+/**
+ * Owns the panel-local TF provider while sharing the ROS topic pair with every other 3D panel on
+ * the same connection. The provider intentionally starts before the viewer so TF received during
+ * a delayed layout/mount is available synchronously when visualizers subscribe.
+ */
 export function useTfProvider({
   ros,
   isRosConnected,
   ros3dViewer,
   viewerGeneration,
   fixedFrame,
-  initialTransforms, // Use this prop now
-  handleTFMessage,
+  trackTransformUpdates = false,
 }: UseTfProviderProps) {
   const customTFProvider = useRef<CustomTFProvider | null>(null);
-  const initialTransformsRef = useRef<TransformStore>(initialTransforms);
-  const tfSub = useRef<ROSLIB.Topic | null>(null);
-  const tfStaticSub = useRef<ROSLIB.Topic | null>(null);
-  // Internal state to signal when the provider instance is ready
-  const [isProviderReady, setIsProviderReady] = useState<boolean>(false);
+  const fixedFrameRef = useRef(fixedFrame);
+  fixedFrameRef.current = fixedFrame;
+  const [isProviderReady, setIsProviderReady] = useState(false);
+  const [transforms, setTransforms] = useState<TransformStore>({});
+  const latestTransformsRef = useRef<TransformStore>({});
+  const trackTransformUpdatesRef = useRef(trackTransformUpdates);
+  trackTransformUpdatesRef.current = trackTransformUpdates;
 
   useEffect(() => {
-    initialTransformsRef.current = initialTransforms;
-  }, [initialTransforms]);
-
-  // Effect 1: Manage TF Provider instance and Fixed Frame updates
-  useEffect(() => {
-    // Check prerequisites
-    if (ros && isRosConnected && ros3dViewer.current) {
-      if (!customTFProvider.current) {
-        // console.log(`[TF Provider Effect] Creating provider with fixedFrame: ${fixedFrame}`);
-        customTFProvider.current = new CustomTFProvider(fixedFrame, initialTransformsRef.current);
-        ros3dViewer.current.fixedFrame = fixedFrame; // Set viewer frame on creation
-        setIsProviderReady(true);
-      } else {
-        // Provider exists, update fixed frame if it changed
-        const currentProviderFixedFrame = customTFProvider.current.fixedFrame;
-        const normalizedNewFixedFrame = fixedFrame.startsWith('/') ? fixedFrame.substring(1) : fixedFrame;
-
-        if (currentProviderFixedFrame !== normalizedNewFixedFrame) {
-          console.log(`[TF Provider Effect] Fixed frame changed from ${currentProviderFixedFrame} to: ${normalizedNewFixedFrame}`);
-
-          // First update the viewer to ensure consistent state
-          if (ros3dViewer.current) {
-            ros3dViewer.current.fixedFrame = normalizedNewFixedFrame;
-            console.log(`[TF Provider Effect] Updated viewer fixed frame to: ${normalizedNewFixedFrame}`);
-          }
-
-          // Then update the provider - this will trigger callbacks to visualizations
-          customTFProvider.current.updateFixedFrame(normalizedNewFixedFrame);
-
-          ros3dViewer.current?.requestRender?.();
-        }
-
-        // Ensure readiness state is true if prerequisites re-established
-        if (!isProviderReady) {
-          setIsProviderReady(true);
-        }
-      }
-    } else {
-      // Prerequisites lost
-      // console.log('[TF Provider Effect] Prerequisites lost.');
-      if (customTFProvider.current) {
-        customTFProvider.current.dispose();
-        customTFProvider.current = null;
-      }
-      if (isProviderReady) {
-        // Only update state if it was previously ready
-        setIsProviderReady(false);
-      }
+    if (!ros || !isRosConnected) {
+      customTFProvider.current = null;
+      setIsProviderReady(false);
+      setTransforms({});
+      return;
     }
 
-    // Cleanup function for *this* effect (Provider instance lifecycle)
+    const provider = new CustomTFProvider(fixedFrameRef.current, {});
+    let active = true;
+    latestTransformsRef.current = {};
+    setTransforms({});
+    customTFProvider.current = provider;
+
+    const unsubscribe = subscribeToTfStream(ros, update => {
+      if (!active) return;
+      const previousTransforms = latestTransformsRef.current;
+      latestTransformsRef.current = update.transforms;
+      provider.updateTransforms(update.transforms, update.changedFrames);
+      const topologyChanged = [...update.changedFrames].some(frameId => {
+        const previous = previousTransforms[frameId];
+        const next = update.transforms[frameId];
+        return !previous || !next || previous.parentFrame !== next.parentFrame || previous.isStatic !== next.isStatic;
+      });
+      if (trackTransformUpdatesRef.current || topologyChanged) {
+        setTransforms(current => current === update.transforms ? current : update.transforms);
+      }
+    });
+
+    setIsProviderReady(true);
+
     return () => {
-      // Let's remove explicit disposal here and rely on the prerequisite logic
-      // and Effect B's cleanup.
-      // console.log('[TF Provider Effect] Component unmounting? No explicit disposal here.')
+      active = false;
+      unsubscribe();
+      provider.dispose();
+      if (customTFProvider.current === provider) customTFProvider.current = null;
+      latestTransformsRef.current = {};
     };
+  }, [isRosConnected, ros]);
 
-    // Depend on prerequisites and fixedFrame for updates
-  }, [ros, isRosConnected, ros3dViewer, viewerGeneration, fixedFrame, isProviderReady]);
-
-  // Effect 2: Manage TF Subscriptions based on provider readiness
   useEffect(() => {
-    const cleanupSubscriptions = () => {
-      // console.log('[TF Subscription Effect] Cleaning up subscriptions...');
-      tfSub.current?.unsubscribe();
-      tfSub.current = null;
-      tfStaticSub.current?.unsubscribe();
-      tfStaticSub.current = null;
-      // console.log('[TF Subscription Effect] Subscription refs nulled.');
-    };
-
-    // Only subscribe if provider is ready and ROS is connected
-    if (isProviderReady && ros && customTFProvider.current) {
-      // Check refs *before* subscribing to prevent duplicates if effect runs unexpectedly
-      if (!tfSub.current) {
-        tfSub.current = new ROSLIB.Topic({
-          ros: ros,
-          name: '/tf',
-          messageType: 'tf2_msgs/TFMessage',
-          throttle_rate: 25, // Cap UI work at 40 Hz while keeping motion smooth.
-          queue_length: 1, // Drop stale transforms instead of building main-thread backlog.
-          compression: 'cbor'
-        });
-        tfSub.current.subscribe((msg: any) => handleTFMessage(msg, false));
-      }
-      if (!tfStaticSub.current) {
-        tfStaticSub.current = new ROSLIB.Topic({
-          ros: ros,
-          name: '/tf_static',
-          messageType: 'tf2_msgs/TFMessage',
-          throttle_rate: 0, // No throttling for static TF
-          queue_length: 1,
-          compression: 'cbor'
-        });
-        tfStaticSub.current.subscribe((msg: any) => handleTFMessage(msg, true));
-      }
-    } else {
-      // Provider not ready or ROS disconnected, ensure subscriptions are cleaned up
-      // console.log('[TF Subscription Effect] Prereqs not met, ensuring cleanup.');
-      cleanupSubscriptions();
+    if (trackTransformUpdates) {
+      setTransforms(current => current === latestTransformsRef.current ? current : latestTransformsRef.current);
     }
+  }, [trackTransformUpdates]);
 
-    // Cleanup function for subscriptions
-    return () => {
-      cleanupSubscriptions();
-    };
-
-    // Depend on provider readiness, ROS connection, and the stable message handler
-    // customTFProvider ref shouldn't be a dependency itself, readiness flag handles it.
-  }, [isProviderReady, ros, handleTFMessage]);
-
-  // Function to check if the provider is properly initialized with all required methods
-  const ensureProviderFunctionality = () => {
-    if (!customTFProvider.current) {
-      console.error("[TF Provider] Provider not initialized yet");
-      return false;
-    }
-
-    // Check for required methods
-    const requiredMethods = ['lookupTransform', 'updateFixedFrame', 'subscribe', 'unsubscribe'];
-    for (const method of requiredMethods) {
-      if (typeof (customTFProvider.current as any)[method] !== 'function') {
-        console.error(`[TF Provider] Provider missing required method: ${method}`);
-        return false;
-      }
-    }
-
-    // Add a getFixedFrame method if it doesn't exist (needed by some components)
-    if (typeof (customTFProvider.current as any).getFixedFrame !== 'function') {
-      console.log("[TF Provider] Adding getFixedFrame method to provider");
-      (customTFProvider.current as any).getFixedFrame = function () {
-        return this.fixedFrame;
-      };
-    }
-
-    return true;
-  };
-
-  // Call this function each time the provider is created or updated
+  // Fixed-frame state belongs to the provider even before a canvas exists. Each viewer generation
+  // is synchronized when it eventually appears or is recreated after a reconnect.
   useEffect(() => {
-    if (customTFProvider.current) {
-      ensureProviderFunctionality();
-    }
-  }, [isProviderReady]);
+    const provider = customTFProvider.current;
+    if (!isProviderReady || !provider) return;
 
-  // Return the TF provider instance ref, needed by the PointCloud client
+    const normalizedFixedFrame = normalizeFrameId(fixedFrame);
+    if (provider.fixedFrame !== normalizedFixedFrame) {
+      provider.updateFixedFrame(normalizedFixedFrame);
+    }
+
+    const viewer = ros3dViewer.current;
+    if (viewer) {
+      viewer.fixedFrame = normalizedFixedFrame;
+      viewer.requestRender?.();
+    }
+  }, [fixedFrame, isProviderReady, ros3dViewer, viewerGeneration]);
+
+  const availableFrames = useMemo(() => {
+    const frames = new Set<string>([normalizeFrameId(fixedFrame)]);
+    Object.entries(transforms).forEach(([childFrame, entry]) => {
+      frames.add(normalizeFrameId(childFrame));
+      frames.add(normalizeFrameId(entry.parentFrame));
+    });
+    return [...frames].filter(Boolean).sort();
+  }, [fixedFrame, transforms]);
+
   return {
     customTFProvider,
-    ensureProviderFunctionality, // Export the function for external use
     isProviderReady,
+    transforms,
+    availableFrames,
   };
 }

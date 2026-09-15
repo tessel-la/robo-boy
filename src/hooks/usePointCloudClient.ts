@@ -265,17 +265,19 @@ export function usePointCloudClient({
         clientRef.current = newClient;
       }
 
+      // Clear timers left by the previous client before registering work owned by this one.
+      clearPointCloudIntervals(intervalsRef.current);
+
       // Initialization delay
-      setTimeout(() => {
-        if (pointsClient.current && ros3dViewer.current) {
+      intervalsRef.current.initializationTimeout = setTimeout(() => {
+        intervalsRef.current.initializationTimeout = null;
+        if (pointsClient.current === createdClientInstance && ros3dViewer.current) {
           console.log("[usePointCloudClient] Initialization complete, client ready");
           ros3dViewer.current.requestRender();
         }
       }, 300);
 
       // --- Post-Creation Intervals ---
-      clearPointCloudIntervals(intervalsRef.current);
-
       // Check for scene addition
       intervalsRef.current.checkSceneInterval = setInterval(() => {
         if (ros3dViewer.current?.scene && createdClientInstance) {
@@ -312,6 +314,8 @@ export function usePointCloudClient({
       return () => {
         clearPointCloudIntervals(intervalsRef.current);
         cleanupPointCloudClient(createdClientInstance, ros3dViewer.current?.scene);
+        if (pointsClient.current === createdClientInstance) pointsClient.current = null;
+        if (clientRef?.current === createdClientInstance) clientRef.current = null;
         ros3dViewer.current?.requestRender?.();
       };
 
@@ -324,6 +328,8 @@ export function usePointCloudClient({
     // Fallback cleanup
     return () => {
       cleanupPointCloudClient(createdClientInstance, ros3dViewer.current?.scene);
+      if (pointsClient.current === createdClientInstance) pointsClient.current = null;
+      if (clientRef?.current === createdClientInstance) clientRef.current = null;
       ros3dViewer.current?.requestRender?.();
     };
 

@@ -9,8 +9,9 @@ const viewerLifecycleMock = vi.hoisted(() => ({
 }));
 const tfProviderLifecycleMock = vi.hoisted(() => ({
   customTFProvider: { current: null as any },
-  ensureProviderFunctionality: vi.fn(),
   isProviderReady: false,
+  transforms: {},
+  availableFrames: ['map', 'odom'],
 }));
 const pointCloudVizMock = vi.hoisted(() => vi.fn(() => null));
 
