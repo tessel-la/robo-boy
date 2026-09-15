@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.3-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.2-alpha...robo-boy-v0.9.3-alpha) (2026-09-15)
+
+
+### Bug Fixes
+
+* make new behavior tree action reliable ([d17867a](https://github.com/tessel-la/robo-boy/commit/d17867a664d95eb573288d06b11d812793da55cd))
+* make new behavior tree action reliable ([53fa149](https://github.com/tessel-la/robo-boy/commit/53fa1491b6179820a63ce518207a7e8918c7cecc))
+
 ## [0.9.2-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.1-alpha...robo-boy-v0.9.2-alpha) (2026-09-15)
 
 
