@@ -30,50 +30,34 @@ export function useUrdfClient({
   const [isUrdfLoaded, setIsUrdfLoaded] = useState(false);
 
   useEffect(() => {
-    if (
-      dependenciesReady &&
-      isRosConnected &&
-      ros &&
-      ros3dViewer.current &&
-      tfClient.current &&
-      !urdfClientRef.current
-    ) {
-      console.log('[useUrdfClient] Initializing UrdfClient...');
+    setIsUrdfLoaded(false);
+    const viewer = ros3dViewer.current;
+    const provider = tfClient.current;
+    if (!dependenciesReady || !isRosConnected || !ros || !viewer || !provider) return;
 
-      const urdfClient = new ROS3D.UrdfClient({
-        ros: ros,
-        tfClient: tfClient.current,
-        rootObject: ros3dViewer.current.scene, // Add to the main viewer scene
-        robotDescriptionTopic: robotDescriptionTopic,
-        path: meshResourcesBaseUrl,
-        onComplete: (model: Object3D) => {
-          console.log('[useUrdfClient] URDF model loaded successfully.', model);
-          setIsUrdfLoaded(true);
-          ros3dViewer.current?.requestRender?.();
-          // You might want to adjust camera or do other actions here
-        },
-      });
-      urdfClientRef.current = urdfClient;
-    } else if (
-      (!dependenciesReady || !isRosConnected || !ros3dViewer.current || !tfClient.current) &&
-      urdfClientRef.current
-    ) {
-      console.log('[useUrdfClient] Cleaning up UrdfClient...');
-      urdfClientRef.current.dispose();
-      urdfClientRef.current = null;
-      setIsUrdfLoaded(false);
-      ros3dViewer.current?.requestRender?.();
-    }
+    let active = true;
+    console.log('[useUrdfClient] Initializing UrdfClient...');
+    const urdfClient = new ROS3D.UrdfClient({
+      ros,
+      tfClient: provider,
+      rootObject: viewer.scene,
+      robotDescriptionTopic,
+      path: meshResourcesBaseUrl,
+      requestRender: viewer.requestRender,
+      onComplete: (model: Object3D) => {
+        if (!active) return;
+        console.log('[useUrdfClient] URDF model loaded successfully.', model);
+        setIsUrdfLoaded(true);
+        viewer.requestRender?.();
+      },
+    });
+    urdfClientRef.current = urdfClient;
 
-    // Cleanup function
     return () => {
-      if (urdfClientRef.current) {
-        console.log('[useUrdfClient] Disposing UrdfClient on unmount.');
-        urdfClientRef.current.dispose();
-        urdfClientRef.current = null;
-        setIsUrdfLoaded(false);
-        ros3dViewer.current?.requestRender?.();
-      }
+      active = false;
+      console.log('[useUrdfClient] Disposing UrdfClient.');
+      urdfClient.dispose();
+      if (urdfClientRef.current === urdfClient) urdfClientRef.current = null;
     };
   }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl]);
 

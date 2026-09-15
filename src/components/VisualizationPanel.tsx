@@ -1,15 +1,9 @@
-import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
 import './VisualizationPanel.css';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys
-
-// Import TF logic from the new utility file
-import {
-  TransformStore,
-  StoredTransform,
-} from '../utils/tfUtils';
 
 // Import the new SettingsPopup component
 import SettingsPopup from './SettingsPopup';
@@ -111,9 +105,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const isRosConnected = ros?.isConnected ?? false;
   const { ros3dViewer, viewerGeneration } = useRos3dViewer(viewerRef, isRosConnected);
 
-  // --- State and Refs for other parts ---
-  const [transforms, setTransforms] = useState<TransformStore>({});
-
   // Remove old topic states
   // const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
   // const [selectedPointCloudTopic, setSelectedPointCloudTopic] = useState<string>('');
@@ -123,7 +114,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // Frame States
   const [fixedFrame, setFixedFrame] = useState<string>(initialState.fixedFrame || DEFAULT_FIXED_FRAME);
-  const [availableFrames, setAvailableFrames] = useState<string[]>([initialState.fixedFrame || DEFAULT_FIXED_FRAME]);
   const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>(initialState.displayedTfFrames);
   const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(initialState.showTfFrameLabels);
   const [tfAxesScale, setTfAxesScale] = useState<number>(initialState.tfAxesScale);
@@ -138,9 +128,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
-
-  // Add a ref to track TF provider initialization to prevent repeated logging
-  const tfProviderInitialized = useRef<boolean>(false);
 
   // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
   useEffect(() => {
@@ -157,73 +144,19 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     }
   }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, tfAxesScale, isRosConnected, storageKey]);
 
-  // --- Callback for handling TF messages (populates store & extracts frames) ---
-  const handleTFMessage = useCallback((message: any, isStatic: boolean) => {
-    if (!Array.isArray(message?.transforms)) {
-      console.warn('[TF] Ignoring malformed TF message:', message);
-      return;
-    }
-
-    let _newFramesFound = false;
-    setTransforms((prevTransforms: TransformStore) => {
-      let currentFrames = new Set<string>();
-      const newTransforms = { ...prevTransforms };
-      let changed = false;
-      message.transforms.forEach((tStamped: any) => {
-        const parentFrame = (tStamped.header.frame_id || '').startsWith('/') ? tStamped.header.frame_id.substring(1) : (tStamped.header.frame_id || '');
-        const childFrame = (tStamped.child_frame_id || '').startsWith('/') ? tStamped.child_frame_id.substring(1) : (tStamped.child_frame_id || '');
-        if (!parentFrame || !childFrame) { console.warn("[TF] Empty frame ID.", tStamped); return; }
-        if (!currentFrames.has(parentFrame)) currentFrames.add(parentFrame);
-        if (!currentFrames.has(childFrame)) currentFrames.add(childFrame);
-        const transform: StoredTransform = { translation: new THREE.Vector3(tStamped.transform.translation.x, tStamped.transform.translation.y, tStamped.transform.translation.z), rotation: new THREE.Quaternion(tStamped.transform.rotation.x, tStamped.transform.rotation.y, tStamped.transform.rotation.z, tStamped.transform.rotation.w) };
-        const existingEntry = newTransforms[childFrame];
-        if (!existingEntry || !isStatic ||
-          existingEntry.parentFrame !== parentFrame ||
-          !existingEntry.transform.translation.equals(transform.translation) ||
-          !existingEntry.transform.rotation.equals(transform.rotation)) {
-          newTransforms[childFrame] = { parentFrame, transform, isStatic };
-          changed = true;
-        }
-      });
-      if (changed) {
-        customTFProvider.current?.updateTransforms(newTransforms);
-        return newTransforms;
-      } else {
-        return prevTransforms;
-      }
-    });
-    setAvailableFrames((prevAvailableFrames: string[]) => {
-      const currentFramesSet = new Set(prevAvailableFrames);
-      let newFramesAdded = false;
-      message.transforms.forEach((tStamped: any) => {
-        const parentFrame = (tStamped.header.frame_id || '').startsWith('/') ? tStamped.header.frame_id.substring(1) : (tStamped.header.frame_id || '');
-        const childFrame = (tStamped.child_frame_id || '').startsWith('/') ? tStamped.child_frame_id.substring(1) : (tStamped.child_frame_id || '');
-        if (parentFrame && !currentFramesSet.has(parentFrame)) {
-          currentFramesSet.add(parentFrame);
-          newFramesAdded = true;
-        }
-        if (childFrame && !currentFramesSet.has(childFrame)) {
-          currentFramesSet.add(childFrame);
-          newFramesAdded = true;
-        }
-      });
-      if (newFramesAdded) {
-        return Array.from(currentFramesSet).sort();
-      } else {
-        return prevAvailableFrames;
-      }
-    });
-  }, []);
-
   // Update the TF provider hook call
-  const { customTFProvider, ensureProviderFunctionality, isProviderReady } = useTfProvider({
+  const {
+    customTFProvider,
+    isProviderReady,
+    transforms,
+    availableFrames,
+  } = useTfProvider({
     ros,
     isRosConnected,
     ros3dViewer, // Pass viewer ref from the other hook
     viewerGeneration,
     fixedFrame,
-    initialTransforms: transforms, // Pass current transforms state for initial setup
-    handleTFMessage, // Pass the callback
+    trackTransformUpdates: displayedTfFrames.length > 0,
   });
 
   // Visualizer adapters render no UI of their own. Mount them only after both mutable refs are
@@ -232,25 +165,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     && viewerGeneration > 0
     && ros3dViewer.current !== null
     && isProviderReady;
-
-  // Add an effect to ensure TF provider is properly initialized
-  useEffect(() => {
-    if (isRosConnected && customTFProvider.current && !tfProviderInitialized.current) {
-      // Ensure the TF provider has all required methods
-      const isProviderValid = ensureProviderFunctionality();
-      if (isProviderValid) {
-        console.log("[VisualizationPanel] TF provider initialized successfully");
-        tfProviderInitialized.current = true; // Mark as initialized to prevent repeated logging
-      } else {
-        console.error("[VisualizationPanel] TF provider initialization failed");
-      }
-    }
-
-    // Reset the flag when ROS disconnects
-    if (!isRosConnected) {
-      tfProviderInitialized.current = false;
-    }
-  }, [isRosConnected, customTFProvider, ensureProviderFunctionality]);
 
   // REMOVED Direct PointCloud Client Hook Call
   // usePointCloudClient({ ... });

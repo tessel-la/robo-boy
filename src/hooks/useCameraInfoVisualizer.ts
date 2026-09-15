@@ -37,7 +37,6 @@ export function useCameraInfoVisualizer({
   const frustumContainerRef = useRef<THREE.Group | null>(null); // Container for lines + pose
   const [lastCameraInfo, setLastCameraInfo] = useState<any>(null); // Store the last received msg
   const [cameraFrameId, setCameraFrameId] = useState<string | null>(null);
-  const animationFrameId = useRef<number | null>(null); // ADDED: For animation loop
 
   // Effect 1: Manage Frustum Container and LineSegments Object
   useEffect(() => {
@@ -212,122 +211,46 @@ export function useCameraInfoVisualizer({
 
   }, [lastCameraInfo, lineScale, ros3dViewer]); // Only depends on info and scale, color handled in E1
 
-  // Effect 4: Animation loop to update frustum pose using TF lookup
+  // Effect 4: Apply provider-driven TF updates to the frustum pose. The provider immediately
+  // replays its current transform and notifies again when that path changes, so polling every
+  // display frame only wastes CPU and makes lifecycle cleanup harder.
   useEffect(() => {
-    const updatePose = () => {
-      const viewer = ros3dViewer.current;
-      const provider = customTFProvider.current;
-      const container = frustumContainerRef.current;
+    const viewer = ros3dViewer.current;
+    const provider = customTFProvider.current;
+    const container = frustumContainerRef.current;
+    if (!isRosConnected || !viewer || !provider || !container || !cameraFrameId) return;
 
-      // Ensure all prerequisites are met
-      if (!isRosConnected || !viewer || !provider || !container || !cameraFrameId) {
-        if (container) container.visible = false; // Hide if prerequisites fail
-        animationFrameId.current = requestAnimationFrame(updatePose); // Continue loop
+    const applyTransform = (transform: any | null) => {
+      if (!transform?.translation || !transform.rotation) {
+        if (container.visible) {
+          container.visible = false;
+          viewer.requestRender?.();
+        }
         return;
       }
 
-      const fixedFrame = viewer.fixedFrame || 'odom'; // Use viewer's fixed frame
+      const nextQuaternion = new THREE.Quaternion(
+        transform.rotation.x,
+        transform.rotation.y,
+        transform.rotation.z,
+        transform.rotation.w
+      ).multiply(CAMERA_FRAME_ROTATION);
+      const changed =
+        container.position.distanceToSquared(transform.translation) > 1e-10 ||
+        Math.abs(container.quaternion.dot(nextQuaternion)) < 1 - 1e-10 ||
+        !container.visible;
 
-      try {
-        // Look up the transform from fixedFrame -> cameraFrameId
-        const transform = provider.lookupTransform(fixedFrame, cameraFrameId);
-
-        if (transform && transform.translation && transform.rotation) {
-          // Apply raw TF rotation combined with static camera adjustment
-          try {
-            // Create a fresh quaternion to avoid modifying the original transform
-            const tfQuaternion = new THREE.Quaternion(
-              transform.rotation.x,
-              transform.rotation.y,
-              transform.rotation.z,
-              transform.rotation.w
-            );
-
-            // Apply TF rotation first, then the static camera adjustment
-            // Use a safer approach for quaternion multiplication
-            if (CAMERA_FRAME_ROTATION) {
-              tfQuaternion.multiply(CAMERA_FRAME_ROTATION);
-            }
-
-            const changed =
-              container.position.distanceToSquared(transform.translation) > 1e-10 ||
-              Math.abs(container.quaternion.dot(tfQuaternion)) < 1 - 1e-10 ||
-              !container.visible;
-            container.position.copy(transform.translation);
-            container.quaternion.copy(tfQuaternion);
-            container.visible = true; // Make container visible if transform is valid
-            if (changed) viewer.requestRender?.();
-          } catch (rotationError) {
-            console.warn(`[CameraInfoViz] Quaternion operation failed:`, rotationError);
-            // Even if rotation fails, we can still show at the right position with default orientation
-            const changed =
-              container.position.distanceToSquared(transform.translation) > 1e-10 ||
-              !container.quaternion.equals(new THREE.Quaternion(0, 0, 0, 1)) ||
-              !container.visible;
-            container.position.copy(transform.translation);
-            container.quaternion.set(0, 0, 0, 1); // Identity quaternion as fallback
-            container.visible = true;
-            if (changed) viewer.requestRender?.();
-          }
-        } else {
-          // console.warn(`[CameraInfoViz] TF lookup returned incomplete transform for ${cameraFrameId} relative to ${fixedFrame}`);
-          if (container.visible) {
-            container.visible = false; // Hide if transform data is incomplete
-            viewer.requestRender?.();
-          }
-        }
-      } catch (tfError) {
-        console.warn(`[CameraInfoViz] TF lookup failed for ${cameraFrameId} relative to ${fixedFrame}:`,
-          tfError instanceof Error ? tfError.message : tfError);
-
-        // Log more details on first error
-        if (container.visible) {
-          console.debug(`[CameraInfoViz] TF lookup error details:`, tfError);
-
-          // Try to show available frames for debugging
-          try {
-            if (provider && (provider as any).transforms) {
-              const frames = Object.keys((provider as any).transforms);
-              console.debug(`[CameraInfoViz] Available frames:`,
-                frames.includes(cameraFrameId) ? `${cameraFrameId} (found)` : `${cameraFrameId} (not found)`,
-                frames.includes(fixedFrame) ? `${fixedFrame} (found)` : `${fixedFrame} (not found)`
-              );
-            }
-          } catch (e) {
-            // Ignore errors in debug code
-          }
-        }
-
-        if (container.visible) {
-          container.visible = false; // Hide if transform fails
-          viewer.requestRender?.();
-        }
-      }
-
-      // Continue the loop
-      animationFrameId.current = requestAnimationFrame(updatePose);
+      if (!changed) return;
+      container.position.copy(transform.translation);
+      container.quaternion.copy(nextQuaternion);
+      container.visible = true;
+      viewer.requestRender?.();
     };
 
-    // Start the loop if connected and container exists
-    if (isRosConnected && frustumContainerRef.current) {
-      // console.log('[CameraInfoViz E4] Starting animation loop');
-      animationFrameId.current = requestAnimationFrame(updatePose);
-    } else {
-      // console.log('[CameraInfoViz E4] Not starting animation loop (prerequisites not met)');
-    }
-
-    // Cleanup function for Effect 4: Cancel animation frame
+    provider.subscribe(cameraFrameId, applyTransform);
     return () => {
-      // console.log('[CameraInfoViz E4] Cleanup: Cancelling animation frame');
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-        animationFrameId.current = null;
-      }
-      // Ensure container is hidden on cleanup if it still exists
-      if (frustumContainerRef.current) {
-        frustumContainerRef.current.visible = false;
-      }
+      provider.unsubscribe(cameraFrameId, applyTransform);
     };
-  }, [isRosConnected, ros3dViewer, customTFProvider, cameraFrameId]); // Dependencies that trigger restart of the loop
+  }, [isRosConnected, ros3dViewer, customTFProvider, cameraFrameId]);
 
 }

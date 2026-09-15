@@ -1,0 +1,137 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const topicMock = vi.hoisted(() => ({
+  instances: [] as Array<{
+    name: string;
+    callback?: (message: unknown) => void;
+    subscribe: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+  }>,
+}));
+
+vi.mock('roslib', () => ({
+  Topic: vi.fn(function Topic(options: { name: string }) {
+    const instance = {
+      name: options.name,
+      callback: undefined as ((message: unknown) => void) | undefined,
+      subscribe: vi.fn((callback: (message: unknown) => void) => {
+        instance.callback = callback;
+      }),
+      unsubscribe: vi.fn(),
+    };
+    topicMock.instances.push(instance);
+    return instance;
+  }),
+}));
+
+const transformMessage = (childFrame: string, x: number) => ({
+  transforms: [{
+    header: { frame_id: '/map' },
+    child_frame_id: `/${childFrame}`,
+    transform: {
+      translation: { x, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+    },
+  }],
+});
+
+describe('shared TF stream', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    topicMock.instances = [];
+  });
+
+  it('shares one topic pair and releases it after the final consumer', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const ros = {} as any;
+    const firstListener = vi.fn();
+    const secondListener = vi.fn();
+
+    const unsubscribeFirst = subscribeToTfStream(ros, firstListener);
+    const unsubscribeSecond = subscribeToTfStream(ros, secondListener);
+
+    expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf', '/tf_static']);
+    expect(firstListener).toHaveBeenCalledWith({ transforms: {}, changedFrames: new Set() });
+    expect(secondListener).toHaveBeenCalledWith({ transforms: {}, changedFrames: new Set() });
+
+    topicMock.instances.find(topic => topic.name === '/tf')?.callback?.(transformMessage('base_link', 1));
+    expect(firstListener).toHaveBeenLastCalledWith(expect.objectContaining({
+      changedFrames: new Set(['base_link']),
+    }));
+    expect(secondListener).toHaveBeenCalledTimes(2);
+
+    unsubscribeFirst();
+    expect(topicMock.instances.every(topic => topic.unsubscribe.mock.calls.length === 0)).toBe(true);
+
+    unsubscribeSecond();
+    expect(topicMock.instances.every(topic => topic.unsubscribe.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('replays current data to a panel joining an active connection', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const ros = {} as any;
+    const unsubscribeFirst = subscribeToTfStream(ros, vi.fn());
+    topicMock.instances.find(topic => topic.name === '/tf')?.callback?.(transformMessage('base_link', 4));
+    const joiningListener = vi.fn();
+
+    const unsubscribeSecond = subscribeToTfStream(ros, joiningListener);
+
+    expect(joiningListener.mock.calls[0][0].transforms.base_link.transform.translation.x).toBe(4);
+    expect(joiningListener.mock.calls[0][0].changedFrames).toEqual(new Set(['base_link']));
+
+    unsubscribeFirst();
+    unsubscribeSecond();
+  });
+
+  it('retains static data but drops stale dynamic data while no panel is mounted', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const ros = {} as any;
+    const firstListener = vi.fn();
+    const unsubscribe = subscribeToTfStream(ros, firstListener);
+    const oldDynamicTopic = topicMock.instances.find(topic => topic.name === '/tf')!;
+
+    oldDynamicTopic.callback?.(transformMessage('base_link', 1));
+    topicMock.instances.find(topic => topic.name === '/tf_static')?.callback?.(transformMessage('camera_mount', 2));
+    unsubscribe();
+
+    // A delivery already queued by the old ROSLIB topic must not repopulate the stopped source.
+    oldDynamicTopic.callback?.(transformMessage('base_link', 99));
+
+    const nextListener = vi.fn();
+    const unsubscribeNext = subscribeToTfStream(ros, nextListener);
+    const replay = nextListener.mock.calls[0][0];
+
+    expect(replay.transforms.base_link).toBeUndefined();
+    expect(replay.transforms.camera_mount.transform.translation.x).toBe(2);
+    expect(topicMock.instances).toHaveLength(4);
+
+    unsubscribeNext();
+  });
+
+  it('isolates subscriptions and snapshots by live ROS identity', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const firstRos = {} as any;
+    const secondRos = {} as any;
+    const unsubscribeFirst = subscribeToTfStream(firstRos, vi.fn());
+    topicMock.instances.find(topic => topic.name === '/tf')?.callback?.(transformMessage('base_link', 7));
+    const secondListener = vi.fn();
+
+    const unsubscribeSecond = subscribeToTfStream(secondRos, secondListener);
+
+    expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf', '/tf_static', '/tf', '/tf_static']);
+    expect(secondListener).toHaveBeenCalledWith({ transforms: {}, changedFrames: new Set() });
+
+    unsubscribeFirst();
+    unsubscribeSecond();
+  });
+
+  it('ignores malformed and unchanged messages', async () => {
+    const { mergeTfMessage } = await import('./tfStream');
+    const initial = mergeTfMessage({}, transformMessage('base_link', 1), false)!;
+
+    expect(mergeTfMessage(initial.transforms, transformMessage('base_link', 1), false)).toBeNull();
+    expect(mergeTfMessage(initial.transforms, { transforms: [{}] }, false)).toBeNull();
+    expect(mergeTfMessage(initial.transforms, { transforms: 'invalid' }, false)).toBeNull();
+  });
+});

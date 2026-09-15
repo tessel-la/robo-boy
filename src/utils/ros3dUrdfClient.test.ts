@@ -91,11 +91,13 @@ describe('UrdfClient cache', () => {
       unsubscribe: vi.fn(),
       lookupTransform: vi.fn(() => null),
     };
+    const requestRender = vi.fn();
     const client = new UrdfClient({
       ros: { url: 'ws://panda-materials' } as any,
       tfClient: tfClient as any,
       rootObject,
       robotDescriptionTopic: '/robot_description',
+      requestRender,
     });
     const pandaUrdf = `
       <robot name="panda">
@@ -117,11 +119,12 @@ describe('UrdfClient cache', () => {
     expect(meshLoaderMock.materialsPreload).toHaveBeenCalledOnce();
     expect(meshLoaderMock.objSetMaterials).toHaveBeenCalledOnce();
     expect(meshLoaderMock.objLoad).toHaveBeenCalledWith('/mesh_resources/meshes/visual/link6.obj');
+    expect(requestRender).toHaveBeenCalled();
 
     client.dispose();
   });
 
-  it('reuses a cached URDF model without resubscribing to robot_description', async () => {
+  it('reuses only the cached description and builds an independent panel model', async () => {
     const { UrdfClient } = await import('./ros3d');
     const rootObject = new THREE.Scene();
     const tfClient = {
@@ -143,7 +146,6 @@ describe('UrdfClient cache', () => {
     });
 
     expect(roslibMock.topicInstances).toHaveLength(1);
-    expect(firstClient.userData.preserveAcrossViewerCleanup).toBe(true);
     roslibMock.topicInstances[0].callback?.({ data: urdf });
     expect(roslibMock.topicInstances[0].unsubscribe).toHaveBeenCalledTimes(1);
     expect(firstModel).toBeDefined();
@@ -165,9 +167,106 @@ describe('UrdfClient cache', () => {
     await Promise.resolve();
 
     expect(roslibMock.topicInstances).toHaveLength(1);
-    expect(secondModel).toBe(firstModel);
+    expect(secondModel).toBeDefined();
+    expect(secondModel).not.toBe(firstModel);
     expect(rootObject.children).toContain(secondClient);
   }, 10000);
+
+  it('does not reuse a description across replacement ROS instances with the same URL', async () => {
+    const { UrdfClient } = await import('./ros3d');
+    const tfClient = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      lookupTransform: vi.fn(() => null),
+    };
+    const firstClient = new UrdfClient({
+      ros: { url: 'ws://same-url' } as any,
+      tfClient: tfClient as any,
+      rootObject: new THREE.Scene(),
+    });
+    roslibMock.topicInstances[0].callback?.({ data: urdf });
+    firstClient.dispose();
+
+    const replacementClient = new UrdfClient({
+      ros: { url: 'ws://same-url' } as any,
+      tfClient: tfClient as any,
+      rootObject: new THREE.Scene(),
+    });
+
+    expect(roslibMock.topicInstances).toHaveLength(2);
+    replacementClient.dispose();
+  });
+
+  it('disposes the GPU resources owned by its independent model', async () => {
+    const { UrdfClient } = await import('./ros3d');
+    const tfClient = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      lookupTransform: vi.fn(() => null),
+    };
+    let model: THREE.Object3D | undefined;
+    const client = new UrdfClient({
+      ros: { url: 'ws://resource-owner' } as any,
+      tfClient: tfClient as any,
+      rootObject: new THREE.Scene(),
+      onComplete: loadedModel => {
+        model = loadedModel;
+      },
+    });
+    roslibMock.topicInstances[0].callback?.({ data: urdf });
+    const mesh = model?.getObjectByProperty('isMesh', true) as THREE.Mesh;
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+    const materialDispose = vi.spyOn(mesh.material as THREE.Material, 'dispose');
+
+    client.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates rendering for TF motion and releases losing frame candidates', async () => {
+    const { UrdfClient } = await import('./ros3d');
+    const rootObject = new THREE.Scene();
+    const callbacks = new Map<string, (transform: any) => void>();
+    const tfClient = {
+      subscribe: vi.fn((frameId: string, callback: (transform: any) => void) => {
+        callbacks.set(frameId, callback);
+        callback(null);
+      }),
+      unsubscribe: vi.fn(),
+      lookupTransform: vi.fn(() => null),
+    };
+    const requestRender = vi.fn();
+    const client = new UrdfClient({
+      ros: { url: 'ws://moving-robot' } as any,
+      tfClient: tfClient as any,
+      rootObject,
+      robotDescriptionTopic: '/robot_description',
+      requestRender,
+    });
+
+    roslibMock.topicInstances[0].callback?.({ data: urdf });
+    requestRender.mockClear();
+    callbacks.get('base_link')?.({
+      translation: new THREE.Vector3(2, 0, 0),
+      rotation: new THREE.Quaternion(),
+    });
+
+    expect(requestRender).toHaveBeenCalledOnce();
+    expect(tfClient.unsubscribe).toHaveBeenCalledWith(
+      'cached_bot/base_link',
+      expect.any(Function),
+    );
+
+    // Identical TF does not wake the GPU again.
+    callbacks.get('base_link')?.({
+      translation: new THREE.Vector3(2, 0, 0),
+      rotation: new THREE.Quaternion(),
+    });
+    expect(requestRender).toHaveBeenCalledOnce();
+
+    client.dispose();
+  });
 
   it('composes URDF fixed-axis roll, pitch, yaw for joints and visuals', async () => {
     const { UrdfClient } = await import('./ros3d');

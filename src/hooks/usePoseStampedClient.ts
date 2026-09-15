@@ -65,6 +65,7 @@ export function usePoseStampedClient({
 }: UsePoseStampedClientProps) {
   const topicClientRef = useRef<ROSLIB.Topic | null>(null);
   const visualizationGroupRef = useRef<THREE.Group | null>(null);
+  const visualizationObjectRef = useRef<THREE.Object3D | null>(null);
   const trailPointsRef = useRef<THREE.Vector3[]>([]);
   const trailLineRef = useRef<THREE.Line | null>(null);
 
@@ -160,24 +161,19 @@ export function usePoseStampedClient({
       // Create quaternion for orientation
       const quaternion = new THREE.Quaternion(orientation.x, orientation.y, orientation.z, orientation.w);
 
-      // Clear previous visualization
-      visualizationGroupRef.current.clear();
-
-      // Create the appropriate visualization
-      let visualization: THREE.Object3D;
-      
-      if (visualizationType === 'arrow') {
-        visualization = createArrow(arrowLength * scale, arrowWidth * scale, color);
-      } else {
-        visualization = createAxes(axesSize * scale);
+      // Geometry is stable between messages. Rebuilding and discarding meshes at the topic rate
+      // created avoidable CPU work and leaked GPU buffers because Group.clear() does not dispose.
+      if (!visualizationObjectRef.current) {
+        visualizationObjectRef.current = visualizationType === 'arrow'
+          ? createArrow(arrowLength * scale, arrowWidth * scale, color)
+          : createAxes(axesSize * scale);
+        visualizationGroupRef.current.add(visualizationObjectRef.current);
       }
+      const visualization = visualizationObjectRef.current;
 
       // Apply position and orientation
       visualization.position.copy(positionVec);
       visualization.quaternion.copy(quaternion);
-
-      // Add to visualization group
-      visualizationGroupRef.current.add(visualization);
 
       // Update trail if enabled
       if (showTrail) {
@@ -227,6 +223,10 @@ export function usePoseStampedClient({
 
       if (visualizationGroupRef.current && ros3dViewer.current) {
         ros3dViewer.current.scene.remove(visualizationGroupRef.current);
+        if (visualizationObjectRef.current) {
+          disposePoseObject(visualizationObjectRef.current);
+          visualizationObjectRef.current = null;
+        }
         visualizationGroupRef.current.clear();
         visualizationGroupRef.current = null;
         ros3dViewer.current.requestRender?.();
@@ -247,7 +247,11 @@ export function usePoseStampedClient({
     // Force re-render when options change by clearing the current visualization
     // The next message will recreate it with new options
     if (visualizationGroupRef.current) {
-      visualizationGroupRef.current.clear();
+      if (visualizationObjectRef.current) {
+        visualizationGroupRef.current.remove(visualizationObjectRef.current);
+        disposePoseObject(visualizationObjectRef.current);
+        visualizationObjectRef.current = null;
+      }
       trailPointsRef.current = [];
       if (trailLineRef.current) {
         trailLineRef.current.geometry.dispose();
@@ -262,4 +266,17 @@ export function usePoseStampedClient({
     isSubscribed: !!topicClientRef.current,
     visualizationGroup: visualizationGroupRef.current,
   };
+}
+
+function disposePoseObject(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  root.traverse?.(object => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.geometry) geometries.add(mesh.geometry);
+    if (Array.isArray(mesh.material)) mesh.material.forEach(material => materials.add(material));
+    else if (mesh.material) materials.add(mesh.material);
+  });
+  geometries.forEach(geometry => geometry.dispose());
+  materials.forEach(material => material.dispose());
 }

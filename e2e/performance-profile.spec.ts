@@ -1,9 +1,24 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
-import { installRosMock, waitForRosSubscription } from './helpers/rosMock';
+import {
+  getActiveRosSubscriptionCount,
+  getRosSubscriptionCount,
+  installRosMock,
+  waitForRosSubscription,
+} from './helpers/rosMock';
 
 const profileDescribe = process.env.ROBOBOY_PROFILE === '1' ? test.describe : test.describe.skip;
 const SAMPLE_MS = Number(process.env.ROBOBOY_PROFILE_SAMPLE_MS || 5_000);
+const PRIMITIVE_URDF = `
+  <robot name="profile_robot">
+    <link name="base_link">
+      <visual>
+        <geometry><box size="0.4 0.3 0.2" /></geometry>
+        <material><color rgba="0.2 0.6 1 1" /></material>
+      </visual>
+    </link>
+  </robot>
+`;
 
 type RuntimeCounters = {
   animationFrameCallbacks: number;
@@ -237,6 +252,11 @@ const publishTfOnce = (page: Page, sequence = 1) =>
     });
   }, sequence);
 
+const publishUrdfOnce = (page: Page) =>
+  page.evaluate(urdf => {
+    window.__publishRosTopic?.('/robot_description', { data: urdf });
+  }, PRIMITIVE_URDF);
+
 const orbitForSample = async (page: Page) => {
   const canvas = page.locator('.visualization-panel canvas').first();
   const bounds = await canvas.boundingBox();
@@ -338,7 +358,24 @@ profileDescribe('frontend resource profile', () => {
     await addPanel(page, '3D panel');
     await addPanel(page, '3D panel');
     await expect(page.locator('.visualization-panel canvas')).toHaveCount(2);
+    await waitForRosSubscription(page, '/tf');
+    await waitForRosSubscription(page, '/tf_static');
+
+    expect(await getRosSubscriptionCount(page, '/tf')).toBe(1);
+    expect(await getRosSubscriptionCount(page, '/tf_static')).toBe(1);
+    expect(await getActiveRosSubscriptionCount(page, '/tf')).toBe(1);
+    expect(await getActiveRosSubscriptionCount(page, '/tf_static')).toBe(1);
     await measure(page, '3d-empty-two-panels-idle');
+
+    await page.getByRole('button', { name: 'Remove 3D view', exact: true }).first().click();
+    await expect(page.locator('.visualization-panel canvas')).toHaveCount(1);
+    expect(await getActiveRosSubscriptionCount(page, '/tf')).toBe(1);
+    expect(await getActiveRosSubscriptionCount(page, '/tf_static')).toBe(1);
+
+    await page.getByRole('button', { name: 'Remove 3D view', exact: true }).click();
+    await expect(page.locator('.visualization-panel canvas')).toHaveCount(0);
+    await expect.poll(() => getActiveRosSubscriptionCount(page, '/tf')).toBe(0);
+    await expect.poll(() => getActiveRosSubscriptionCount(page, '/tf_static')).toBe(0);
   });
 
   test('displayed TF frame when updates stop', async ({ page }) => {
@@ -359,6 +396,37 @@ profileDescribe('frontend resource profile', () => {
     expect(active.webglDrawCallsPerSecond).toBeGreaterThan(1);
     await page.waitForTimeout(100);
     const settled = await measure(page, '3d-tf-displayed-after-updates-idle');
+    expect(settled.webglDrawCallsPerSecond).toBe(0);
+  });
+
+  test('URDF follows TF updates and settles', async ({ page }) => {
+    await installRosMock(page, {
+      topics: [{ name: '/robot_description', type: 'std_msgs/msg/String' }],
+    });
+    await connect(page);
+    await addPanel(page, '3D panel');
+    await expect(page.locator('.visualization-panel canvas')).toHaveCount(1);
+    await waitForRosSubscription(page, '/tf');
+
+    // TF arrives before the URDF visualizer mounts. The provider snapshot must still initialize
+    // the link immediately when the visualizer subscribes.
+    await publishTfOnce(page);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Add visualization', exact: true }).click();
+    await page.getByRole('button', { name: /URDF/ }).click();
+    await waitForRosSubscription(page, '/robot_description');
+
+    const loaded = await measure(page, '3d-urdf-load-with-existing-tf', async () => {
+      await publishUrdfOnce(page);
+      await page.waitForTimeout(100);
+    });
+    expect(loaded.webglDrawCallsPerSecond).toBeGreaterThan(1);
+    await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+
+    const active = await measure(page, '3d-urdf-tf-40hz', () => publishTfForSample(page, 'odom'));
+    expect(active.webglDrawCallsPerSecond).toBeGreaterThan(1);
+    await page.waitForTimeout(100);
+    const settled = await measure(page, '3d-urdf-after-tf-idle');
     expect(settled.webglDrawCallsPerSecond).toBe(0);
   });
 

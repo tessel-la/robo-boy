@@ -47,6 +47,7 @@ describe('pointCloudCleanup', () => {
         it('should create an intervals object with null values', () => {
             const intervals = createIntervalsRef();
 
+            expect(intervals.initializationTimeout).toBeNull();
             expect(intervals.checkSceneInterval).toBeNull();
             expect(intervals.checkPointsObjectInterval).toBeNull();
             expect(intervals.updateRangesInterval).toBeNull();
@@ -56,6 +57,7 @@ describe('pointCloudCleanup', () => {
     describe('clearPointCloudIntervals', () => {
         it('should clear all intervals', () => {
             const intervals: PointCloudIntervals = {
+                initializationTimeout: setTimeout(() => { }, 1000),
                 checkSceneInterval: setInterval(() => { }, 1000),
                 checkPointsObjectInterval: setInterval(() => { }, 1000),
                 updateRangesInterval: setInterval(() => { }, 1000)
@@ -63,6 +65,7 @@ describe('pointCloudCleanup', () => {
 
             clearPointCloudIntervals(intervals);
 
+            expect(intervals.initializationTimeout).toBeNull();
             expect(intervals.checkSceneInterval).toBeNull();
             expect(intervals.checkPointsObjectInterval).toBeNull();
             expect(intervals.updateRangesInterval).toBeNull();
@@ -70,6 +73,7 @@ describe('pointCloudCleanup', () => {
 
         it('should handle already null intervals', () => {
             const intervals: PointCloudIntervals = {
+                initializationTimeout: null,
                 checkSceneInterval: null,
                 checkPointsObjectInterval: null,
                 updateRangesInterval: null
@@ -81,6 +85,7 @@ describe('pointCloudCleanup', () => {
 
         it('should handle partial null intervals', () => {
             const intervals: PointCloudIntervals = {
+                initializationTimeout: null,
                 checkSceneInterval: setInterval(() => { }, 1000),
                 checkPointsObjectInterval: null,
                 updateRangesInterval: setInterval(() => { }, 1000)
