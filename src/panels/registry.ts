@@ -25,6 +25,7 @@ const PANEL_CAPABILITIES = new Set<RoboBoyPanelCapability>([
   'web-serial',
   'camera',
   'microphone',
+  'webxr',
 ]);
 const HOST_ENDPOINTS = new Set(['videoStream', 'webrtcWhep', 'webrtcDiscovery', 'webrtcHls']);
 const ROS_RESOURCE_PATTERN = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
