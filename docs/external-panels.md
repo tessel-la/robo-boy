@@ -197,6 +197,7 @@ terminates the panel realm even if its cleanup fails.
 | `web-serial`    | Declares use of Web Serial                                                                               |
 | `camera`        | Declares use of camera/media capture                                                                     |
 | `microphone`    | Declares use of microphone/media capture                                                                 |
+| `webxr`         | Delegates XR spatial tracking and fullscreen for an immersive WebXR session                              |
 
 Undeclared services are `null`. ROS/network capabilities require a matching `permissions` block. Static ROS
 discovery returns only topics matching an approved `subscribe` pattern; every subscribe, publish, and service
@@ -261,8 +262,8 @@ order, labels, disabled states, overflow behavior, and responsive UI. Avoid copy
 colors into panel source because custom and future themes update the variables at runtime.
 
 Device capabilities are translated to iframe Permissions Policy entries. Camera and microphone still require the
-browser's normal user consent. Browser support for Bluetooth, USB, and Serial inside a sandbox varies and should be
-tested on the deployment target.
+browser's normal user consent. WebXR requires a secure origin and browser/headset support. Browser support for
+Bluetooth, USB, and Serial inside a sandbox varies and should be tested on the deployment target.
 
 Storage is owned by `(panel type, workspace instance)`, stored in a schema-versioned envelope, cleared when a
 tile changes panel type, and debounced before `localStorage` writes. It accepts only finite, acyclic, plain JSON

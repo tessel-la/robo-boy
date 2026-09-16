@@ -20,7 +20,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const installerPath = join(projectRoot, 'scripts/install-panels.mjs');
 const integrity = bytes => `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
 
-const panelFixture = (id, version, origin, prefix) => {
+const panelFixture = (id, version, origin, prefix, capabilities = ['storage']) => {
   const bundle = Buffer.from(`export default { apiVersion: '2.0.0', id: '${id}', activate() {} };\n`);
   const digest = integrity(bundle);
   const manifest = {
@@ -32,7 +32,7 @@ const panelFixture = (id, version, origin, prefix) => {
     entryPoint: './dist/index.js',
     integrity: digest,
     compatibility: { panelApi: '^2.0.0', roboboy: '>=0.3.0-0 <1.0.0' },
-    capabilities: ['storage'],
+    capabilities,
     author: { name: 'Test Author' },
     repository: `https://example.com/${id}`,
   };
@@ -275,7 +275,7 @@ test('installs remote and local panels together from one desired-state configura
     routes.set('/remote/release/index.js', remote.bundle);
 
     const localRepository = join(temporaryRoot, 'local-panel');
-    const local = panelFixture('com.example.local', '0.1.0-dev.1', server.origin, 'unused');
+    const local = panelFixture('com.example.local', '0.1.0-dev.1', server.origin, 'unused', ['webxr']);
     await mkdir(join(localRepository, 'dist'), { recursive: true });
     await writeFile(join(localRepository, 'roboboy.panel.json'), JSON.stringify(local.manifest));
     await writeFile(join(localRepository, 'dist/index.js'), local.bundle);

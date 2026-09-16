@@ -22,6 +22,7 @@ const CAPABILITIES = new Set([
   'web-serial',
   'camera',
   'microphone',
+  'webxr',
 ]);
 const HOST_ENDPOINTS = new Set(['videoStream', 'webrtcWhep', 'webrtcDiscovery', 'webrtcHls']);
 const ROS_RESOURCE = /^\/[A-Za-z0-9_~{}*][A-Za-z0-9_~{}/*-]*$/;
