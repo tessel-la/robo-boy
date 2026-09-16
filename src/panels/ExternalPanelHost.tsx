@@ -68,6 +68,10 @@ const getIframeAllow = (capabilities: readonly string[]): string | undefined => 
     capabilities.includes('web-bluetooth') ? 'bluetooth' : '',
     capabilities.includes('web-usb') ? 'usb' : '',
     capabilities.includes('web-serial') ? 'serial' : '',
+    // immersive-vr sessions require this Permissions Policy feature delegated explicitly;
+    // fullscreen because entering an XR session takes over the display the same way.
+    capabilities.includes('webxr') ? 'xr-spatial-tracking' : '',
+    capabilities.includes('webxr') ? 'fullscreen' : '',
   ].filter(Boolean);
   return permissions.length > 0 ? permissions.join('; ') : undefined;
 };
