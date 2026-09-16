@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.3-alpha...robo-boy-v0.10.0-alpha) (2026-09-16)
+
+
+### Features
+
+* add the webxr panel capability and panel SDK 2.2.0 ([d2df8f4](https://github.com/tessel-la/robo-boy/commit/d2df8f4323e80043a7c76a00cabed178d3b95d80))
+* vr panel webxr capability ([#155](https://github.com/tessel-la/robo-boy/issues/155)) ([ab25f5b](https://github.com/tessel-la/robo-boy/commit/ab25f5bcd460dfc8ed44091d8f9ecad2d38c1dd3))
+
 ## [0.9.3-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.2-alpha...robo-boy-v0.9.3-alpha) (2026-09-15)
 
 
