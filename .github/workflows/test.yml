@@ -163,8 +163,16 @@ jobs:
         path: coverage/
         retention-days: 30
 
+    # A pull request from a fork runs with a read-only GITHUB_TOKEN: the write entries in this
+    # job's permissions block are dropped, so posting a comment answers 403 and fails the job
+    # around passing tests. The coverage table is already in the step summary above, which a
+    # fork contributor can read, so the comment is simply skipped rather than made tolerant of
+    # failure -- a 403 on a branch in this repository is a real problem and should stay loud.
     - name: Coverage comment on PR
-      if: always() && github.event_name == 'pull_request' && steps.unit_tests.outputs.status != ''
+      if: >-
+        always() && github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        steps.unit_tests.outputs.status != ''
       uses: actions/github-script@v7
       with:
         script: |
@@ -233,10 +241,14 @@ jobs:
           fi
         } >> "$GITHUB_STEP_SUMMARY"
 
+    # Same fork restriction as the comment above: use_oidc needs the id-token: write scope, which
+    # a fork pull request does not get either, and fail_ci_if_error would turn that into a job
+    # failure. Coverage from a fork lands when the change is merged and dev is pushed.
     - name: Upload coverage to Codecov
       if: >-
         steps.unit_tests.outputs.status == '0' &&
-        (github.event_name == 'pull_request' ||
+        ((github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'push' && github.ref == 'refs/heads/dev'))
       uses: codecov/codecov-action@v5
