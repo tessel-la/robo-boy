@@ -8,7 +8,7 @@ export one default `RoboBoyPanelDefinition` from their ESM entry point:
 
 ```sh
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.1.0/tessel-la-roboboy-panel-sdk-2.1.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.2.0/tessel-la-roboboy-panel-sdk-2.2.0.tgz
 ```
 
 The SDK is distributed as an npm-compatible tarball attached to the matching versioned GitHub release. It is not
@@ -21,7 +21,9 @@ The complete authoring and deployment guide lives in the
 API `2.0.0` is the source contract in the Robo-Boy repository. Package `2.1.0` adds the `webrtcWhep` and
 `webrtcDiscovery` host endpoints, so a panel that wants the stream gateway can ask for it by name instead of
 inferring it from the video server. `videoStream` still reaches the gateway for panels written before those
-existed, so nothing published against `2.0.0` needs changing. Panel instances execute in an opaque-origin
+existed, so nothing published against `2.0.0` needs changing. Package `2.2.0` adds the `webxr` capability,
+which delegates `xr-spatial-tracking` and `fullscreen` to the panel frame so it can open an immersive
+`navigator.xr` session; a panel that does not declare it is unaffected. Panel instances execute in an opaque-origin
 sandbox and must implement both `mount` and `unmount`. ROS, network, storage, viewport, connection, and theme access
 are host-owned services; raw Robo-Boy objects are not exposed to panel code. Direct HTTP calls are blocked by the
 sandbox CSP, so network access must use the reviewed `context.network` allowlist.
