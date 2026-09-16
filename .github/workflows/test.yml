@@ -36,6 +36,11 @@ jobs:
         filters: |
           frontend:
             - 'src/**'
+            # src/panels/types.ts imports '../../panel-sdk' by relative path, so the type-only SDK
+            # is compiled into the app. Without this line a change confined to panel-sdk/ skips the
+            # linter, the build and every test, and reports a full row of green checks: exactly what
+            # happened to #157.
+            - 'panel-sdk/**'
             - 'config/**'
             - 'public/**'
             - 'scripts/**'
