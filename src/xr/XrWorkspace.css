@@ -1,0 +1,114 @@
+/*
+ * The WebGL canvas for an immersive session is never composited onto the page — the headset owns
+ * the presentation. It still has to exist and hold a live context, so it is parked at zero size
+ * rather than removed, which would drop the context and end the session.
+ */
+.xr-canvas-host {
+  position: fixed;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.xr-entry {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  font-family: var(--font-family-ui, system-ui, sans-serif);
+}
+
+.xr-entry-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #33404e);
+  background: var(--card-bg, #161c23);
+  color: var(--text-color, #e5ebf1);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.7);
+}
+
+.xr-entry-button:hover:not(:disabled) {
+  border-color: var(--primary-color, #4fa8e6);
+}
+
+.xr-entry-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.xr-entry-button.is-active {
+  border-color: var(--primary-color, #4fa8e6);
+  color: var(--primary-color, #4fa8e6);
+}
+
+.xr-entry-button:focus-visible,
+.xr-mode-option:focus-visible {
+  outline: 2px solid var(--primary-color, #4fa8e6);
+  outline-offset: 2px;
+}
+
+.xr-entry-mode {
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.xr-mode-toggle {
+  display: inline-flex;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #33404e);
+  background: var(--card-bg, #161c23);
+}
+
+.xr-mode-option {
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-color, #e5ebf1);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.xr-mode-option.is-selected {
+  background: var(--primary-color, #4fa8e6);
+  color: #fff;
+}
+
+.xr-entry-error,
+.xr-entry-note {
+  margin: 0;
+  max-width: 260px;
+  text-align: right;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.xr-entry-error {
+  color: var(--error-color, #e0705f);
+}
+
+.xr-entry-note {
+  color: var(--text-muted, #94a3b0);
+}
+
+@media (max-width: 767px) {
+  /* The entry point would sit on top of the mobile view controls; XR on a phone is AR-only anyway
+     and is reached from a stationary pose, so it moves up out of the way. */
+  .xr-entry {
+    bottom: 76px;
+  }
+}

@@ -85,6 +85,14 @@ import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceS
 import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
 import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
 
+const XrWorkspace = React.lazy(() => import('../xr/XrWorkspace'));
+
+// The presence of `navigator.xr` is the cheapest possible gate and costs no import. Checking it
+// before mounting means a browser with no WebXR never fetches the immersive workspace chunk at all,
+// rather than downloading it to be told there is nothing to enter. Which modes are actually
+// supported still has to be probed asynchronously, which is the XR module's own job.
+const HAS_XR_API = typeof navigator !== 'undefined' && 'xr' in navigator;
+
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
   <svg
@@ -4495,6 +4503,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
         })}
       />
+
+      {/* Immersive workspace — a single top-level mount, following the same guidance as the global
+          assistant above. It renders nothing at all on a device with no WebXR support, reads the
+          panels and connection this component already owns, and owns nothing the 2D interface
+          depends on. Lazily loaded so the XR and spatial-UI code stays out of the workspace bundle
+          for the devices that can never use it. See docs/xr.md. */}
+      {HAS_XR_API && (
+        <React.Suspense fallback={null}>
+          <XrWorkspace
+            ros={ros}
+            isConnected={isConnected}
+            panels={workspacePanels}
+            storageScope={storageScope}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

@@ -22,6 +22,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Native Time Series](native-time-series.md): live telemetry, zoom, filters, derived signals, and migration.
 - [Record & Replay](record-replay.md): replay local MCAP files into Time Series, TF and 3D, and record ROS topics on the host.
 - [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.
+- [Immersive XR workspace](xr.md): the spatial control room in VR and AR passthrough, what it reuses
+  from the 2D stack, the interaction model, and how to run it on a headset or a desktop emulator.
 
 ## Source Map
 
