@@ -22,8 +22,15 @@ describe('visualizationState', () => {
     visualizations: [{ id: '1', type: 'scan', topic: '/scan' }],
     fixedFrame: 'map',
     displayedTfFrames: ['base_link'],
+    showAllTfFrames: true,
+    showTfAxes: true,
     showTfFrameLabels: false,
+    showTfConnections: false,
     tfAxesScale: 1.2,
+    tfLabelScale: 0.3,
+    tfAxesOpacity: 0.5,
+    tfLabelOpacity: 0.8,
+    showTfLabelBackground: false,
   };
 
   it('should save state to memory and localStorage', () => {
@@ -43,10 +50,39 @@ describe('visualizationState', () => {
     const state = getVisualizationState();
     expect(state).toEqual({
       visualizations: [],
-      fixedFrame: 'odom',
+      fixedFrame: '',
       displayedTfFrames: [],
+      showAllTfFrames: false,
+      showTfAxes: true,
       showTfFrameLabels: true,
+      showTfConnections: true,
       tfAxesScale: 0.1,
+      tfLabelScale: 0.12,
+      tfAxesOpacity: 1,
+      tfLabelOpacity: 1,
+      showTfLabelBackground: true,
+    });
+  });
+
+  it('fills the frame-display settings older saved panels never had', () => {
+    localStorage.setItem(
+      'roboboy_3d_visualization_state',
+      JSON.stringify({ visualizations: [], fixedFrame: 'odom', displayedTfFrames: ['odom'], showTfFrameLabels: false, tfAxesScale: 0.2 })
+    );
+
+    expect(getVisualizationState()).toEqual({
+      visualizations: [],
+      fixedFrame: 'odom',
+      displayedTfFrames: ['odom'],
+      showAllTfFrames: false,
+      showTfAxes: true,
+      showTfFrameLabels: false,
+      showTfConnections: true,
+      tfAxesScale: 0.2,
+      tfLabelScale: 0.12,
+      tfAxesOpacity: 1,
+      tfLabelOpacity: 1,
+      showTfLabelBackground: true,
     });
   });
 
@@ -146,21 +182,5 @@ describe('visualizationState', () => {
     expect(consoleSpy).toHaveBeenCalled();
 
     consoleSpy.mockRestore();
-  });
-
-  it('should default old saved state to showing TF frame labels', () => {
-    const oldState = {
-      visualizations: [{ id: '1', type: 'scan', topic: '/scan' }],
-      fixedFrame: 'map',
-      displayedTfFrames: ['base_link']
-    };
-
-    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(oldState));
-
-    expect(getVisualizationState()).toEqual({
-      ...oldState,
-      showTfFrameLabels: true,
-      tfAxesScale: 0.1,
-    });
   });
 });

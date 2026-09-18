@@ -78,6 +78,43 @@ export function normalizeFrameId(frameId: string): string {
   return frameId.startsWith('/') ? frameId.substring(1) : frameId;
 }
 
+/** Every frame id the store knows about (parents included), normalized and sorted. */
+export function getTfFrameNames(transforms: TransformStore): string[] {
+  const frames = new Set<string>();
+  Object.entries(transforms).forEach(([childFrame, entry]) => {
+    frames.add(normalizeFrameId(childFrame));
+    frames.add(normalizeFrameId(entry.parentFrame));
+  });
+  return [...frames].filter(Boolean).sort();
+}
+
+/** Frames that are only ever parents: the roots of the TF forest. */
+export function getTfRootFrames(transforms: TransformStore): string[] {
+  const children = new Set(Object.keys(transforms).map(normalizeFrameId));
+  return getTfFrameNames(transforms).filter(frame => !children.has(frame));
+}
+
+const PREFERRED_FIXED_FRAMES = ['world', 'map', 'odom'];
+export const FALLBACK_FIXED_FRAME = 'map';
+
+/**
+ * Picks the frame the 3D view should be anchored to. A frame the user chose wins while it exists
+ * in the tree (or before any TF has arrived); otherwise the first of `world`, `map`, `odom` that
+ * is present, then a tree root, then the alphabetically first frame. `preferredFrame` of '' means
+ * "auto", so nothing is hardcoded for robots that publish none of the conventional names.
+ */
+export function resolveFixedFrame(preferredFrame: string, transforms: TransformStore): string {
+  const preferred = normalizeFrameId(preferredFrame);
+  const frames = getTfFrameNames(transforms);
+  if (frames.length === 0) return preferred || FALLBACK_FIXED_FRAME;
+  if (preferred && frames.includes(preferred)) return preferred;
+
+  const conventional = PREFERRED_FIXED_FRAMES.find(frame => frames.includes(frame));
+  if (conventional) return conventional;
+
+  return getTfRootFrames(transforms)[0] ?? frames[0];
+}
+
 export function getSelectedTfFrameEdges(
   transforms: TransformStore,
   selectedFrames: string[],

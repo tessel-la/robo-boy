@@ -1,8 +1,9 @@
+/* Docked on the same side as the launcher, so the panel opens where the button was pressed. */
 .assistant-overlay {
   position: fixed;
   z-index: 1400;
   top: calc(48px + var(--safe-area-top, 0px));
-  left: 0;
+  right: 0;
   bottom: 0;
   width: clamp(420px, 32vw, 480px);
   pointer-events: none;
@@ -18,10 +19,10 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   border: 1px solid var(--border-color, #d9dee7);
-  border-width: 0 1px 0 0;
+  border-width: 0 0 0 1px;
   background: var(--card-bg, #fff);
   color: var(--text-color, #1f2937);
-  box-shadow: 12px 0 30px rgba(15, 23, 42, 0.16);
+  box-shadow: -12px 0 30px rgba(15, 23, 42, 0.16);
   pointer-events: auto;
 }
 

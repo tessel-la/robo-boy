@@ -5,6 +5,9 @@ import {
   multiplyTransforms,
   findTransformPath,
   getSelectedTfFrameEdges,
+  getTfFrameNames,
+  getTfRootFrames,
+  resolveFixedFrame,
   lookupTransform,
   normalizeFrameId,
   IDENTITY_TRANSFORM,
@@ -36,6 +39,40 @@ describe('tfUtils', () => {
 
     it('should leave normalized names unchanged', () => {
       expect(normalizeFrameId('base_link')).toBe('base_link')
+    })
+  })
+
+  describe('resolveFixedFrame', () => {
+    const entry = (parentFrame: string): TransformStore[string] => ({
+      parentFrame,
+      transform: { translation: new THREE.Vector3(), rotation: new THREE.Quaternion() },
+      isStatic: false,
+    })
+
+    it('lists every known frame, parents included, and the roots of the forest', () => {
+      const transforms: TransformStore = { base_link: entry('odom'), odom: entry('map'), tool: entry('/arm_base') }
+      expect(getTfFrameNames(transforms)).toEqual(['arm_base', 'base_link', 'map', 'odom', 'tool'])
+      expect(getTfRootFrames(transforms)).toEqual(['arm_base', 'map'])
+    })
+
+    it('keeps a chosen frame while it exists and before any TF arrives', () => {
+      expect(resolveFixedFrame('odom', { base_link: entry('odom') })).toBe('odom')
+      expect(resolveFixedFrame('/odom', { base_link: entry('odom') })).toBe('odom')
+      expect(resolveFixedFrame('odom', {})).toBe('odom')
+    })
+
+    it('prefers world, then map, then odom when the chosen frame is missing or unset', () => {
+      const transforms: TransformStore = { odom: entry('map'), map: entry('world'), base_link: entry('odom') }
+      expect(resolveFixedFrame('', transforms)).toBe('world')
+      expect(resolveFixedFrame('robot_base', transforms)).toBe('world')
+      expect(resolveFixedFrame('', { odom: entry('map'), base_link: entry('odom') })).toBe('map')
+      expect(resolveFixedFrame('', { base_link: entry('odom') })).toBe('odom')
+    })
+
+    it('falls back to a tree root, then the first frame, and never hardcodes a name', () => {
+      expect(resolveFixedFrame('', { tool: entry('arm_base'), arm_base: entry('robot') })).toBe('robot')
+      expect(resolveFixedFrame('', { b: entry('a'), a: entry('b') })).toBe('a')
+      expect(resolveFixedFrame('', {})).toBe('map')
     })
   })
 

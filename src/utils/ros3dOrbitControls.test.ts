@@ -72,6 +72,48 @@ describe('active ROS3D OrbitControls interactions', () => {
     expect(target.length()).toBeGreaterThan(0);
   });
 
+  it('keeps the grabbed point under the pointer while panning', () => {
+    camera.aspect = 500 / 400;
+    camera.updateProjectionMatrix();
+    const screenPositionOf = (point: THREE.Vector3) => {
+      camera.updateMatrixWorld();
+      const ndc = point.clone().project(camera);
+      return { x: ((ndc.x + 1) / 2) * 500, y: ((1 - ndc.y) / 2) * 400 };
+    };
+    const grabbed = new THREE.Vector3(0, 0, 0); // the orbit target, at the pan reference depth
+    const before = screenPositionOf(grabbed);
+
+    element.dispatchEvent(new MouseEvent('mousedown', { button: 0, ctrlKey: true, clientX: 100, clientY: 100, bubbles: true }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 130, clientY: 115, bubbles: true }));
+    document.dispatchEvent(new MouseEvent('mouseup'));
+
+    const after = screenPositionOf(grabbed);
+    expect(after.x - before.x).toBeCloseTo(30, 3);
+    expect(after.y - before.y).toBeCloseTo(15, 3);
+  });
+
+  it('shows a hand cursor while a pan modifier is held over the view and a closed hand while dragging', () => {
+    element.dispatchEvent(new MouseEvent('mouseenter', { ctrlKey: false }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+    expect(element.style.cursor).toBe('grab');
+
+    element.dispatchEvent(new MouseEvent('mousedown', { button: 0, ctrlKey: true, clientX: 10, clientY: 10, bubbles: true }));
+    expect(element.style.cursor).toBe('grabbing');
+    expect(document.body.style.cursor).toBe('grabbing');
+
+    document.dispatchEvent(new MouseEvent('mouseup', { ctrlKey: true }));
+    expect(element.style.cursor).toBe('grab');
+    expect(document.body.style.cursor).toBe('');
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', ctrlKey: false }));
+    expect(element.style.cursor).toBe('');
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }));
+    expect(element.style.cursor).toBe('grab');
+    element.dispatchEvent(new MouseEvent('mouseleave'));
+    expect(element.style.cursor).toBe('');
+  });
+
   it('pans with a middle-button drag', () => {
     const target = (controls as unknown as TestControls).target;
 

@@ -2,7 +2,7 @@
 import { Viewer } from './Viewer';
 import { Grid, Axes } from './primitives';
 import { PointCloud2, LaserScan } from './visualizers';
-import { OrbitControls } from './controls';
+import { OrbitControls } from '../ros3d';
 import { UrdfClient } from './UrdfClient';
 
 // Export as default and named exports to match the original module
@@ -20,7 +20,7 @@ const ROS3D = {
 export { Viewer } from './Viewer';
 export { Grid, Axes } from './primitives';
 export { PointCloud2, LaserScan } from './visualizers';
-export { OrbitControls } from './controls';
+export { OrbitControls } from '../ros3d';
 export { UrdfClient } from './UrdfClient';
 
 // Default export for backward compatibility

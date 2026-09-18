@@ -33,6 +33,10 @@ The 3D view can display:
 
 Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. The configuration is saved in browser storage.
 
+The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `odom` when the robot publishes one of them, otherwise to the root of the TF tree. Picking a frame explicitly keeps it as long as it exists in the tree. The **Frames** list toggles individual TF frames, **Show all frames** follows the live tree (frames that appear later are added automatically), and the sliders button next to the list opens the frame display settings: axes, labels, parent links, axes size, and label size.
+
+Navigation: drag to orbit, scroll to zoom, and pan with a middle- or right-button drag or by holding `Ctrl`, `Shift`, or `⌘` while dragging (the cursor turns into a hand). On touch screens, one finger orbits and two fingers pan and pinch-zoom.
+
 ### Behavior Trees
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.

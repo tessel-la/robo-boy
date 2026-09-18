@@ -63,11 +63,12 @@
 
 .visualization-menu-panel {
   width: min(400px, calc(100% - 24px));
-  height: min(620px, calc(100% - 80px));
+  height: min(680px, calc(100% - 80px));
 }
 
 .settings-popup {
   min-width: 0;
+  height: 100%;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -93,6 +94,11 @@
   font-weight: 800;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.settings-popup-heading {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .settings-popup-header h3 {
@@ -129,15 +135,41 @@
 
 .settings-popup-content {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+}
+
+.frame-display-content {
+  gap: 10px;
+  padding: 14px 15px;
 }
 
 .settings-menu-section,
 .popup-section {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+/* The expanded section owns the remaining height; its list scrolls instead of the whole menu. */
+.popup-section.is-open {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-section.is-open > .section-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.popup-section.is-open > .active-visualizations-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .fixed-frame-section {
@@ -198,13 +230,19 @@
 }
 
 .section-header-with-action {
+  flex: 0 0 auto;
   display: flex;
   align-items: stretch;
-  padding-right: 12px;
+  /* Same inset as the boxes below, so the action button shares their right edge. */
+  padding-right: 15px;
 }
 
 .section-header-with-action .section-header {
   flex: 1 1 auto;
+}
+
+.section-action-button {
+  align-self: center;
 }
 
 .section-header {
@@ -306,6 +344,26 @@
   gap: 10px;
 }
 
+.tf-section-content .settings-toggle-row {
+  flex: 0 0 auto;
+}
+
+.tf-frame-filter {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  font-size: 12px;
+}
+
+.tf-frame-filter:focus {
+  border-color: var(--primary-color, #32cd32);
+  outline: none;
+}
+
 .tf-scale-control,
 .tf-frame-group {
   padding: 10px;
@@ -397,9 +455,12 @@
 }
 
 .tf-checkbox-list {
-  max-height: 166px;
-  margin: 0 -4px -4px;
-  padding: 0 4px 4px;
+  flex: 1 1 auto;
+  min-height: 120px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 8px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -417,7 +478,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 5px 4px;
+  padding: 5px 10px;
   color: var(--text-color, #212529);
   font-size: 12px;
   cursor: pointer;
@@ -483,6 +544,9 @@
   flex: 0 0 auto;
 }
 
+/* One "configure" button look for the whole menu: the frame display settings and each
+ * visualization's own settings share it. */
+.settings-icon-button,
 .visualization-item-actions button {
   width: 30px;
   height: 30px;
@@ -497,9 +561,15 @@
   cursor: pointer;
 }
 
+.settings-icon-button:hover,
 .visualization-item-actions .viz-settings-button:hover {
   border-color: var(--primary-color, #32cd32);
   color: var(--primary-color, #32cd32);
+}
+
+.settings-icon-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .visualization-item-actions .remove-viz-button:hover {
@@ -564,7 +634,7 @@
   }
 
   .section-header-with-action {
-    padding-right: 10px;
+    padding-right: 12px;
   }
 
   .section-content {
@@ -582,7 +652,18 @@
     height: 34px;
   }
 
-  .tf-checkbox-list {
-    max-height: none;
+  .settings-icon-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tf-checkbox-list label,
+  .settings-toggle-row {
+    min-height: 44px;
+  }
+
+  .tf-frame-filter {
+    height: 40px;
+    font-size: 14px;
   }
 }
