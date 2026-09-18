@@ -388,11 +388,6 @@
   width: 100%;
   height: 5px;
   margin: 6px 0;
-}
-
-/* A second slider in the same card starts a new row. */
-.range-input + .control-heading-row {
-  margin-top: 14px;
   appearance: none;
   border-radius: 3px;
   outline: none;
