@@ -1014,8 +1014,10 @@ class OrbitControls {
   private enabled = true;
   private onChange: () => void;
   public zoomSpeed = 0.1;
-  public panSpeed = 0.1;
+  /** 1 keeps the grabbed point under the pointer; the pan is scaled by the target distance. */
+  public panSpeed = 1.0;
   public rotateSpeed = 1.0;
+  private pointerInside = false;
   
   private mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
   private STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2 };
@@ -1077,10 +1079,20 @@ class OrbitControls {
     this.onTouchStart = this.onTouchStart.bind(this);
     this.onTouchMove = this.onTouchMove.bind(this);
     this.onTouchEnd = this.onTouchEnd.bind(this);
+    this.onPointerEnter = this.onPointerEnter.bind(this);
+    this.onPointerLeave = this.onPointerLeave.bind(this);
+    this.onModifierChange = this.onModifierChange.bind(this);
+    this.onWindowBlur = this.onWindowBlur.bind(this);
     
     // Add event listeners
     this.element.addEventListener('mousedown', this.onMouseDown, false);
     this.element.addEventListener('wheel', this.onMouseWheel, { passive: false });
+    this.element.addEventListener('mouseenter', this.onPointerEnter, false);
+    this.element.addEventListener('mouseleave', this.onPointerLeave, false);
+    // A hand cursor while a pan modifier is held tells desktop users the drag will grab the scene.
+    window.addEventListener('keydown', this.onModifierChange, false);
+    window.addEventListener('keyup', this.onModifierChange, false);
+    window.addEventListener('blur', this.onWindowBlur, false);
     
     // Add touch event listeners
     this.element.addEventListener('touchstart', this.onTouchStart, { passive: false });
@@ -1091,7 +1103,7 @@ class OrbitControls {
     // Initial update
     this.update();
     
-    console.log('[OrbitControls] Initialized with touch support');
+    console.log('[OrbitControls] Initialized: Left=Rotate, Ctrl/Shift/Middle/Right=Pan, Wheel=Zoom, Touch: 1-finger=Rotate, 2-finger=Pan/Zoom');
   }
   
   private updateSpherical(): void {
@@ -1122,6 +1134,35 @@ class OrbitControls {
     this.camera.lookAt(this.target);
   }
   
+  private static isPanModifier(event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): boolean {
+    return event.ctrlKey || event.metaKey || event.shiftKey;
+  }
+
+  private setCursor(cursor: '' | 'grab' | 'grabbing'): void {
+    this.element.style.cursor = cursor;
+    // The pointer may leave the canvas mid-drag; keep the hand until the button is released.
+    document.body.style.cursor = cursor === 'grabbing' ? cursor : '';
+  }
+
+  private onPointerEnter(event: MouseEvent): void {
+    this.pointerInside = true;
+    if (this.state === this.STATE.NONE && OrbitControls.isPanModifier(event)) this.setCursor('grab');
+  }
+
+  private onPointerLeave(): void {
+    this.pointerInside = false;
+    if (this.state === this.STATE.NONE) this.setCursor('');
+  }
+
+  private onModifierChange(event: KeyboardEvent): void {
+    if (!this.enabled || this.state !== this.STATE.NONE || !this.pointerInside) return;
+    this.setCursor(OrbitControls.isPanModifier(event) ? 'grab' : '');
+  }
+
+  private onWindowBlur(): void {
+    if (this.state === this.STATE.NONE) this.setCursor('');
+  }
+
   private onMouseDown(event: MouseEvent): void {
     if (!this.enabled) return;
     
@@ -1129,7 +1170,7 @@ class OrbitControls {
     
     switch (event.button) {
       case this.mouseButtons.LEFT:
-        if (event.ctrlKey) {
+        if (OrbitControls.isPanModifier(event)) {
           this.state = this.STATE.PAN;
           this.panStart.set(event.clientX, event.clientY);
         } else {
@@ -1150,6 +1191,7 @@ class OrbitControls {
     }
     
     if (this.state !== this.STATE.NONE) {
+      if (this.state === this.STATE.PAN) this.setCursor('grabbing');
       document.addEventListener('mousemove', this.onMouseMove, false);
       document.addEventListener('mouseup', this.onMouseUp, false);
     }
@@ -1185,6 +1227,7 @@ class OrbitControls {
     document.removeEventListener('mouseup', this.onMouseUp, false);
     
     this.state = this.STATE.NONE;
+    this.setCursor(this.pointerInside && OrbitControls.isPanModifier(event) ? 'grab' : '');
   }
   
   private onMouseWheel(event: WheelEvent): void {
@@ -1285,43 +1328,26 @@ class OrbitControls {
     this.prevTouchDistance = -1;
   }
   
+  /**
+   * Moves camera and target so the scene follows the pointer: a drag of (deltaX, deltaY) screen
+   * pixels shifts the point at the target's depth by the same amount on screen, in the camera's
+   * own right/up directions, so the grabbed geometry stays under the cursor at any elevation.
+   */
   private pan(deltaX: number, deltaY: number): void {
-    const element = this.element === document.body ? 
-      document.body : this.element;
-    
-    // Adjust pan speed based on camera position
+    const element = this.element === document.body ? document.body : this.element;
+    if (element.clientHeight <= 0) return;
+
     const position = this.camera.position;
     const targetDistance = position.distanceTo(this.target);
-    
-    // Scale panning based on distance
-    deltaX *= targetDistance * this.panSpeed / element.clientWidth;
-    deltaY *= targetDistance * this.panSpeed / element.clientHeight;
-    
-    // For Z-up system:
-    // Create precise panning vectors that align with the screen
-    const worldUp = new THREE.Vector3(0, 0, 1);
-    
-    // Get the vector from target to camera (camera direction reversed)
-    const offset = new THREE.Vector3().subVectors(position, this.target);
-    
-    // Get right vector (screen X direction)
-    // Cross product of camera direction and world up
-    const panX = new THREE.Vector3().crossVectors(offset, worldUp).normalize();
-    
-    // Get the screen's Y axis vector (perpendicular to both)
-    // This ensures correct panning in the screen plane
-    const forward = offset.clone().normalize();
-    const panY = new THREE.Vector3().crossVectors(panX, forward).normalize();
-    
-    // Move along right vector for X movement 
-    const moveX = panX.clone().multiplyScalar(-deltaX);
-    
-    // Move along screen Y vector for Y movement
-    const moveY = panY.clone().multiplyScalar(deltaY);
-    
-    // Apply the combined movement
-    position.add(moveX).add(moveY);
-    this.target.add(moveX).add(moveY);
+    const visibleHeight = 2 * targetDistance * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const worldPerPixel = (visibleHeight / element.clientHeight) * this.panSpeed;
+
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
+    const move = right.multiplyScalar(-deltaX * worldPerPixel).add(up.multiplyScalar(deltaY * worldPerPixel));
+
+    position.add(move);
+    this.target.add(move);
   }
   
   private dollyIn(): void {
@@ -1369,8 +1395,14 @@ class OrbitControls {
   public dispose(): void {
     this.element.removeEventListener('mousedown', this.onMouseDown, false);
     this.element.removeEventListener('wheel', this.onMouseWheel, false);
+    this.element.removeEventListener('mouseenter', this.onPointerEnter, false);
+    this.element.removeEventListener('mouseleave', this.onPointerLeave, false);
     document.removeEventListener('mousemove', this.onMouseMove, false);
     document.removeEventListener('mouseup', this.onMouseUp, false);
+    window.removeEventListener('keydown', this.onModifierChange, false);
+    window.removeEventListener('keyup', this.onModifierChange, false);
+    window.removeEventListener('blur', this.onWindowBlur, false);
+    this.setCursor('');
     
     // Remove touch event listeners
     this.element.removeEventListener('touchstart', this.onTouchStart, false);

@@ -11,19 +11,31 @@ interface VisualizationConfig {
 // Complete state for the visualization panel
 export interface VisualizationPanelState {
   visualizations: VisualizationConfig[];
+  /** '' means auto: the panel picks a frame from the live TF tree (see `resolveFixedFrame`). */
   fixedFrame: string;
   displayedTfFrames: string[];
+  /** Show every frame in the TF tree, including ones that appear later; `displayedTfFrames` is
+   * then only the snapshot to fall back to when the toggle is switched off again. */
+  showAllTfFrames: boolean;
+  showTfAxes: boolean;
   showTfFrameLabels: boolean;
+  showTfConnections: boolean;
   tfAxesScale: number;
+  /** Label height in scene metres, independent of the axes so small axes can keep readable names. */
+  tfLabelScale: number;
 }
 
 export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
   visualizations: [],
-  fixedFrame: 'odom',
+  fixedFrame: '',
   displayedTfFrames: [],
+  showAllTfFrames: false,
+  showTfAxes: true,
   showTfFrameLabels: true,
+  showTfConnections: true,
   // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
   tfAxesScale: 0.1,
+  tfLabelScale: 0.12,
 };
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
@@ -31,19 +43,24 @@ const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 // Keep an explicit flag because an empty visualization list is still valid saved state.
 const inMemoryState = new Map<string, VisualizationPanelState>();
 
+const finiteOr = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
 const normalizeVisualizationState = (
   state: Partial<VisualizationPanelState> | null | undefined,
   migrateLegacyAxesScale = false
 ): VisualizationPanelState => ({
   visualizations: Array.isArray(state?.visualizations) ? state.visualizations : [],
-  fixedFrame: state?.fixedFrame || DEFAULT_VISUALIZATION_STATE.fixedFrame,
+  fixedFrame: typeof state?.fixedFrame === 'string' ? state.fixedFrame : DEFAULT_VISUALIZATION_STATE.fixedFrame,
   displayedTfFrames: Array.isArray(state?.displayedTfFrames) ? state.displayedTfFrames : [],
+  showAllTfFrames: state?.showAllTfFrames ?? DEFAULT_VISUALIZATION_STATE.showAllTfFrames,
+  showTfAxes: state?.showTfAxes ?? DEFAULT_VISUALIZATION_STATE.showTfAxes,
   showTfFrameLabels: state?.showTfFrameLabels ?? DEFAULT_VISUALIZATION_STATE.showTfFrameLabels,
-  tfAxesScale: typeof state?.tfAxesScale === 'number' && Number.isFinite(state.tfAxesScale)
-    ? migrateLegacyAxesScale && state.tfAxesScale === 0.5
-      ? DEFAULT_VISUALIZATION_STATE.tfAxesScale
-      : state.tfAxesScale
-    : DEFAULT_VISUALIZATION_STATE.tfAxesScale,
+  showTfConnections: state?.showTfConnections ?? DEFAULT_VISUALIZATION_STATE.showTfConnections,
+  tfAxesScale: migrateLegacyAxesScale && state?.tfAxesScale === 0.5
+    ? DEFAULT_VISUALIZATION_STATE.tfAxesScale
+    : finiteOr(state?.tfAxesScale, DEFAULT_VISUALIZATION_STATE.tfAxesScale),
+  tfLabelScale: finiteOr(state?.tfLabelScale, DEFAULT_VISUALIZATION_STATE.tfLabelScale),
 });
 
 /**

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
 
 import * as ROS3D from '../utils/ros3d';
-import { CustomTFProvider, normalizeFrameId, type TransformStore } from '../utils/tfUtils';
+import { CustomTFProvider, getTfFrameNames, normalizeFrameId, resolveFixedFrame, type TransformStore } from '../utils/tfUtils';
 import { subscribeToTfStream } from '../utils/tfStream';
 
 interface UseTfProviderProps {
@@ -10,6 +10,7 @@ interface UseTfProviderProps {
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   viewerGeneration: number;
+  /** The frame the user asked for, or '' to let the provider pick one from the live tree. */
   fixedFrame: string;
   trackTransformUpdates?: boolean;
 }
@@ -24,14 +25,20 @@ export function useTfProvider({
   isRosConnected,
   ros3dViewer,
   viewerGeneration,
-  fixedFrame,
+  fixedFrame: preferredFixedFrame,
   trackTransformUpdates = false,
 }: UseTfProviderProps) {
   const customTFProvider = useRef<CustomTFProvider | null>(null);
-  const fixedFrameRef = useRef(fixedFrame);
-  fixedFrameRef.current = fixedFrame;
   const [isProviderReady, setIsProviderReady] = useState(false);
   const [transforms, setTransforms] = useState<TransformStore>({});
+  // Resolved on every snapshot but only changes value when the tree gains or loses the frames it
+  // depends on, so the viewer/provider sync below stays quiet during pose-only traffic.
+  const fixedFrame = useMemo(
+    () => resolveFixedFrame(preferredFixedFrame, transforms),
+    [preferredFixedFrame, transforms]
+  );
+  const fixedFrameRef = useRef(fixedFrame);
+  fixedFrameRef.current = fixedFrame;
   const latestTransformsRef = useRef<TransformStore>({});
   const trackTransformUpdatesRef = useRef(trackTransformUpdates);
   trackTransformUpdatesRef.current = trackTransformUpdates;
@@ -100,19 +107,25 @@ export function useTfProvider({
     }
   }, [fixedFrame, isProviderReady, ros3dViewer, viewerGeneration]);
 
+  // Only frames the tree actually contains, so no phantom entry shows up before TF arrives.
+  // Content-stable: `transforms` is replaced on every tracked TF message, but consumers key
+  // scene rebuilds on this list, so its identity only changes when the set of frames does.
+  const availableFramesRef = useRef<string[]>([]);
   const availableFrames = useMemo(() => {
-    const frames = new Set<string>([normalizeFrameId(fixedFrame)]);
-    Object.entries(transforms).forEach(([childFrame, entry]) => {
-      frames.add(normalizeFrameId(childFrame));
-      frames.add(normalizeFrameId(entry.parentFrame));
-    });
-    return [...frames].filter(Boolean).sort();
-  }, [fixedFrame, transforms]);
+    const next = getTfFrameNames(transforms);
+    const previous = availableFramesRef.current;
+    if (previous.length === next.length && previous.every((frame, index) => frame === next[index])) {
+      return previous;
+    }
+    availableFramesRef.current = next;
+    return next;
+  }, [transforms]);
 
   return {
     customTFProvider,
     isProviderReady,
     transforms,
     availableFrames,
+    fixedFrame,
   };
 }

@@ -94,7 +94,7 @@ describe('useTfProvider', () => {
   });
 
   it('applies stream snapshots to the provider and exposed panel state', () => {
-    const { result } = renderProvider();
+    const { result } = renderProvider({ trackTransformUpdates: true });
     const provider = result.current.customTFProvider.current as any;
     const transforms = {
       base_link: {
@@ -114,6 +114,18 @@ describe('useTfProvider', () => {
     expect(provider.updateTransforms).toHaveBeenLastCalledWith(transforms, new Set(['base_link']));
     expect(result.current.transforms).toBe(transforms);
     expect(result.current.availableFrames).toEqual(['base_link', 'map']);
+
+    // A pose-only update keeps the same frame list identity so "show all frames" consumers do
+    // not rebuild their scene objects on every TF message.
+    const framesBeforePoseUpdate = result.current.availableFrames;
+    const movedTransforms = {
+      base_link: { ...transforms.base_link, transform: { ...transforms.base_link.transform, translation: new THREE.Vector3(4, 5, 6) } },
+    };
+    act(() => {
+      streamMock.listener?.({ transforms: movedTransforms, changedFrames: new Set(['base_link']) });
+    });
+    expect(result.current.transforms).toBe(movedTransforms);
+    expect(result.current.availableFrames).toBe(framesBeforePoseUpdate);
   });
 
   it('updates the provider and viewer fixed frame without rebuilding subscriptions', () => {
@@ -131,6 +143,35 @@ describe('useTfProvider', () => {
     expect(provider.updateFixedFrame).toHaveBeenCalledWith('map');
     expect(viewer.fixedFrame).toBe('map');
     expect(subscribeToTfStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('anchors an automatic fixed frame to the live tree, preferring map once it appears', () => {
+    const { result } = renderProvider({ fixedFrame: '' });
+    const provider = result.current.customTFProvider.current as any;
+    const entry = (parentFrame: string) => ({
+      parentFrame,
+      transform: { translation: new THREE.Vector3(), rotation: new THREE.Quaternion() },
+      isStatic: false,
+    });
+
+    expect(result.current.fixedFrame).toBe('map');
+
+    act(() => {
+      streamMock.listener?.({ transforms: { base_link: entry('odom') }, changedFrames: new Set(['base_link']) });
+    });
+    expect(result.current.fixedFrame).toBe('odom');
+    expect(provider.updateFixedFrame).toHaveBeenLastCalledWith('odom');
+    expect(viewer.fixedFrame).toBe('odom');
+
+    act(() => {
+      streamMock.listener?.({
+        transforms: { base_link: entry('odom'), odom: entry('map') },
+        changedFrames: new Set(['odom']),
+      });
+    });
+    expect(result.current.fixedFrame).toBe('map');
+    expect(viewer.fixedFrame).toBe('map');
+    expect(result.current.availableFrames).toEqual(['base_link', 'map', 'odom']);
   });
 
   it('releases the shared stream and provider on unmount', () => {

@@ -324,6 +324,50 @@ describe('useTfVisualizer', () => {
         animationFrameSpy.mockRestore();
     });
 
+    it('rebuilds the axes inside the new container after the viewer is torn down and recreated', () => {
+        const props = { ...defaultProps(), displayedTfFrames: ['map', 'odom'], transforms };
+        const { rerender } = renderHook((hookProps: ReturnType<typeof defaultProps>) => useTfVisualizer(hookProps), {
+            initialProps: props,
+        });
+        const firstContainer = groupInstances[0];
+        expect(firstContainer.add).toHaveBeenCalledTimes(3); // 2 axes groups + 1 connection line
+
+        // Reconnect: the panel flips readiness off (viewer disposed) and on again (viewer rebuilt)
+        // while the displayed frame list stays the same.
+        rerender({ ...props, isRosConnected: false });
+        expect(canvasTextureInstances[0].dispose).toHaveBeenCalled();
+        expect(mockScene.remove).toHaveBeenCalledWith(firstContainer);
+
+        rerender({ ...props, isRosConnected: true });
+        const newContainer = groupInstances.find(group => mockScene.add.mock.calls.at(-1)?.[0] === group);
+        expect(newContainer).toBeDefined();
+        expect(newContainer).not.toBe(firstContainer);
+        const addedToNewContainer = newContainer.add.mock.calls.map((call: any[]) => call[0]);
+        expect(addedToNewContainer.filter((object: any) => groupInstances.includes(object))).toHaveLength(2);
+        expect(addedToNewContainer.filter((object: any) => lineInstances.includes(object))).toHaveLength(1);
+    });
+
+    it('can hide the axes, the connection lines, and size labels independently of the axes', () => {
+        renderHook(() => useTfVisualizer({
+            ...defaultProps(),
+            displayedTfFrames: ['map', 'odom'],
+            transforms,
+            showAxes: false,
+            showConnections: false,
+            axesScale: 0.1,
+            labelScale: 0.4,
+        }));
+
+        expect(lineInstances).toHaveLength(0);
+        expect(spriteInstances).toHaveLength(2);
+        const frameGroups = groupInstances.slice(1);
+        frameGroups.forEach(group => {
+            expect(group.add).toHaveBeenCalledTimes(1);
+            expect(spriteInstances).toContain(group.add.mock.calls[0][0]);
+        });
+        expect(spriteInstances[0].scale.set.mock.calls[0][1]).toBe(0.4);
+    });
+
     it('should dispose labels and connection lines on cleanup', () => {
         const { unmount } = renderHook(() => useTfVisualizer({
             ...defaultProps(),

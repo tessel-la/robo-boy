@@ -386,7 +386,6 @@ profileDescribe('frontend resource profile', () => {
     await waitForRosSubscription(page, '/tf');
     await publishTfOnce(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('button', { name: 'Displayed TF Frames', exact: true }).click();
     await page.getByRole('checkbox', { name: 'base_link', exact: true }).check();
     await page.getByRole('button', { name: 'Close settings', exact: true }).click();
     await page.waitForTimeout(100);

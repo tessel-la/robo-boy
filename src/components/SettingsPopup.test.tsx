@@ -7,10 +7,14 @@ describe('SettingsPopup', () => {
   const mockOnClose = vi.fn();
   const mockOnFixedFrameChange = vi.fn();
   const mockOnDisplayedTfFramesChange = vi.fn();
+  const mockOnShowAllTfFramesChange = vi.fn();
   const mockOnRemoveVisualization = vi.fn();
   const mockOnAddVisualizationClick = vi.fn();
   const mockOnTfAxesScaleChange = vi.fn();
+  const mockOnTfLabelScaleChange = vi.fn();
+  const mockOnShowTfAxesChange = vi.fn();
   const mockOnShowTfFrameLabelsChange = vi.fn();
+  const mockOnShowTfConnectionsChange = vi.fn();
   const mockOnUpdateVisualizationTopic = vi.fn();
 
   const defaultProps = {
@@ -20,8 +24,14 @@ describe('SettingsPopup', () => {
     onFixedFrameChange: mockOnFixedFrameChange,
     displayedTfFrames: ['base_link'],
     onDisplayedTfFramesChange: mockOnDisplayedTfFramesChange,
+    showAllTfFrames: false,
+    onShowAllTfFramesChange: mockOnShowAllTfFramesChange,
+    showTfAxes: true,
+    onShowTfAxesChange: mockOnShowTfAxesChange,
     showTfFrameLabels: true,
     onShowTfFrameLabelsChange: mockOnShowTfFrameLabelsChange,
+    showTfConnections: true,
+    onShowTfConnectionsChange: mockOnShowTfConnectionsChange,
     activeVisualizations: [
       { id: 'viz-1', type: 'pointcloud' as const, topic: '/points' },
       { id: 'viz-2', type: 'laserscan' as const, topic: '/scan' },
@@ -35,71 +45,137 @@ describe('SettingsPopup', () => {
     ],
     tfAxesScale: 0.5,
     onTfAxesScaleChange: mockOnTfAxesScaleChange,
+    tfLabelScale: 0.12,
+    onTfLabelScaleChange: mockOnTfLabelScaleChange,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('rendering', () => {
-    it('should render the settings popup', () => {
-      const { container } = render(<SettingsPopup {...defaultProps} />);
+  describe('fixed frame selection', () => {
+    it('shows the frame in use, selected automatically, and lets the user pick another', () => {
+      render(<SettingsPopup {...defaultProps} fixedFrame="map" />);
 
-      expect(container.querySelector('.settings-popup') || container.firstChild).toBeTruthy();
+      const select = screen.getByLabelText('Fixed Frame:');
+      expect(select).toHaveValue('map');
+      expect(select).not.toHaveTextContent(/auto/i);
+
+      fireEvent.change(select, { target: { value: 'odom' } });
+      expect(mockOnFixedFrameChange).toHaveBeenCalled();
     });
 
-    it('should render close button', () => {
-      render(<SettingsPopup {...defaultProps} />);
+    it('is disabled with an explanatory option before any TF frame exists', () => {
+      render(<SettingsPopup {...defaultProps} fixedFrame="map" availableFrames={[]} />);
 
-      // FiX icon should render close button
-      const closeButtons = screen.getAllByRole('button');
-      expect(closeButtons.length).toBeGreaterThan(0);
-    });
-
-    it('should render fixed frame selector', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      // Should have a select for fixed frame
-      const selects = screen.getAllByRole('combobox');
-      expect(selects.length).toBeGreaterThan(0);
-    });
-
-    it('should display available frames in selector', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      // Check that frames are available as options
-      expect(screen.getByText('base_link')).toBeInTheDocument();
+      const select = screen.getByLabelText('Fixed Frame:');
+      expect(select).toBeDisabled();
+      expect(select).toHaveTextContent('No frames available');
     });
   });
 
-  describe('fixed frame selection', () => {
-    it('should call onFixedFrameChange when frame is selected', () => {
+  describe('TF frames section', () => {
+    it('opens on the frame list by default and toggles a single frame', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      const selects = screen.getAllByRole('combobox');
-      const fixedFrameSelect = selects[0]; // First select is typically fixed frame
+      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('1/3')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('odom'));
 
-      fireEvent.change(fixedFrameSelect, { target: { value: 'odom' } });
+      expect(mockOnDisplayedTfFramesChange).toHaveBeenCalledWith(['base_link', 'odom']);
+    });
 
-      // Should trigger the change handler
-      expect(mockOnFixedFrameChange).toHaveBeenCalled();
+    it('has a show-all toggle', () => {
+      render(<SettingsPopup {...defaultProps} />);
+
+      fireEvent.click(screen.getByLabelText('Show all frames'));
+
+      expect(mockOnShowAllTfFramesChange).toHaveBeenCalledWith(true);
+    });
+
+    it('filters a long frame list without changing the selection', () => {
+      const availableFrames = ['base_link', 'camera_link', 'camera_optical', 'lidar', 'map', 'odom', 'wheel_left'];
+      render(<SettingsPopup {...defaultProps} availableFrames={availableFrames} />);
+
+      fireEvent.change(screen.getByLabelText('Filter frames'), { target: { value: 'CAM' } });
+
+      expect(screen.getAllByRole('checkbox', { name: /link|optical|map|odom|lidar|wheel/ })).toHaveLength(2);
+      expect(screen.getByLabelText('camera_link')).toBeInTheDocument();
+      expect(screen.queryByLabelText('map')).not.toBeInTheDocument();
+      expect(mockOnDisplayedTfFramesChange).not.toHaveBeenCalled();
+    });
+
+    it('hides the filter for short lists', () => {
+      render(<SettingsPopup {...defaultProps} />);
+
+      expect(screen.queryByLabelText('Filter frames')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('frame display settings', () => {
+    it('moves axes, label, link toggles and both size sliders to their own view', () => {
+      render(<SettingsPopup {...defaultProps} />);
+
+      expect(screen.queryByLabelText('Axes size')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
+
+      expect(screen.getByRole('heading', { name: 'Frame display' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Fixed Frame:')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Axes size')).toHaveValue('0.5');
+      expect(screen.getByLabelText('Label size')).toHaveValue('0.12');
+
+      fireEvent.change(screen.getByLabelText('Axes size'), { target: { value: '0.25' } });
+      fireEvent.change(screen.getByLabelText('Label size'), { target: { value: '0.3' } });
+      fireEvent.click(screen.getByLabelText('Show axes'));
+      fireEvent.click(screen.getByLabelText('Show labels'));
+      fireEvent.click(screen.getByLabelText('Show parent links'));
+
+      expect(mockOnTfAxesScaleChange).toHaveBeenCalledWith(0.25);
+      expect(mockOnTfLabelScaleChange).toHaveBeenCalledWith(0.3);
+      expect(mockOnShowTfAxesChange).toHaveBeenCalledWith(false);
+      expect(mockOnShowTfFrameLabelsChange).toHaveBeenCalledWith(false);
+      expect(mockOnShowTfConnectionsChange).toHaveBeenCalledWith(false);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Back to 3D view settings' }));
+      expect(screen.getByLabelText('Fixed Frame:')).toBeInTheDocument();
+    });
+
+    it('disables a size slider whose feature is switched off', () => {
+      render(<SettingsPopup {...defaultProps} showTfAxes={false} showTfFrameLabels={false} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
+
+      expect(screen.getByLabelText('Axes size')).toBeDisabled();
+      expect(screen.getByLabelText('Label size')).toBeDisabled();
     });
   });
 
   describe('visualizations section', () => {
-    it('should display active visualizations', () => {
+    it('is collapsed behind the frame list and expands in its place', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      // Check for visualization topics
-      expect(screen.getByText('/points') || screen.queryByText('pointcloud')).toBeTruthy();
+      expect(screen.queryByText('/points')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+
+      expect(screen.getByTitle('/points')).toBeInTheDocument();
+      expect(screen.queryByLabelText('odom')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('should have remove button for visualizations', () => {
+    it('keeps the add button reachable while collapsed', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      // Trash icon buttons for removal
-      const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBeGreaterThan(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
+
+      expect(mockOnAddVisualizationClick).toHaveBeenCalled();
+    });
+
+    it('removes a visualization', () => {
+      render(<SettingsPopup {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Point Cloud visualization for topic /points' }));
+
+      expect(mockOnRemoveVisualization).toHaveBeenCalledWith('viz-1');
     });
 
     it('updates a visualization from its contained topic selector', () => {
@@ -112,6 +188,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
+      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
 
       fireEvent.change(screen.getByLabelText('Topic', { selector: '#visualization-topic-viz-1' }), {
         target: { value: '/points_filtered' },
@@ -132,6 +209,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
+      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
 
       const selector = screen.getByTitle('/robot_description');
       expect(selector).toHaveTextContent('/robot_description');
@@ -140,80 +218,11 @@ describe('SettingsPopup', () => {
     });
   });
 
-  describe('add visualization', () => {
-    it('should have add visualization button', () => {
-      render(<SettingsPopup {...defaultProps} />);
+  it('closes from the header', () => {
+    render(<SettingsPopup {...defaultProps} />);
 
-      // FiPlus icon button
-      const addButtons = screen.getAllByRole('button');
-      expect(
-        addButtons.some(
-          btn =>
-            btn.getAttribute('aria-label')?.includes('Add') ||
-            btn.textContent?.includes('Add') ||
-            btn.querySelector('svg')
-        )
-      ).toBe(true);
-    });
-  });
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
 
-  describe('TF frames section', () => {
-    it('should allow toggling TF frame display', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /displayed tf frames/i }));
-      fireEvent.click(screen.getByLabelText('odom'));
-
-      expect(mockOnDisplayedTfFramesChange).toHaveBeenCalledWith(['base_link', 'odom']);
-    });
-
-    it('should toggle TF frame labels', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /displayed tf frames/i }));
-      fireEvent.click(screen.getByLabelText(/show frame labels/i));
-
-      expect(mockOnShowTfFrameLabelsChange).toHaveBeenCalledWith(false);
-    });
-  });
-
-  describe('TF axes scale', () => {
-    it('should display TF axes scale control', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      // Should have input for scale or slider
-      const inputs = screen.queryAllByRole('spinbutton');
-      const sliders = screen.queryAllByRole('slider');
-      // Either type of input may be present
-      expect(inputs.length + sliders.length).toBeGreaterThanOrEqual(0);
-    });
-  });
-
-  describe('close functionality', () => {
-    it('should call onClose when clicking close button', () => {
-      render(<SettingsPopup {...defaultProps} />);
-
-      // Find close button (usually first button or button with X icon)
-      const buttons = screen.getAllByRole('button');
-      const closeButton =
-        buttons.find(
-          btn => btn.getAttribute('aria-label')?.toLowerCase().includes('close') || btn.classList.contains('close')
-        ) || buttons[0];
-
-      if (closeButton) {
-        fireEvent.click(closeButton);
-        // May or may not directly call onClose depending on implementation
-      }
-    });
-  });
-
-  describe('collapsible sections', () => {
-    it('should have expandable/collapsible sections', () => {
-      const { container } = render(<SettingsPopup {...defaultProps} />);
-
-      // Should have chevron icons for sections
-      const chevrons = container.querySelectorAll('svg');
-      expect(chevrons.length).toBeGreaterThan(0);
-    });
+    expect(mockOnClose).toHaveBeenCalled();
   });
 });

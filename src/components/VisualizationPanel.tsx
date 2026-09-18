@@ -70,7 +70,6 @@ interface TopicInfo {
   type: string;
 }
 
-const DEFAULT_FIXED_FRAME = 'odom'; // Or your preferred default, e.g., 'map', 'base_link'
 const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
   'pointcloud',
   'camerainfo',
@@ -112,11 +111,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // const [selectedCameraInfoTopic, setSelectedCameraInfoTopic] = useState<string | null>(null);
   const [fetchTopicsError, setFetchTopicsError] = useState<string | null>(null);
 
-  // Frame States
-  const [fixedFrame, setFixedFrame] = useState<string>(initialState.fixedFrame || DEFAULT_FIXED_FRAME);
+  // Frame States. `fixedFramePreference` is what the user picked ('' = auto); the frame the scene
+  // is actually anchored to is resolved against the live TF tree below.
+  const [fixedFramePreference, setFixedFramePreference] = useState<string>(initialState.fixedFrame);
   const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>(initialState.displayedTfFrames);
+  const [showAllTfFrames, setShowAllTfFrames] = useState<boolean>(initialState.showAllTfFrames);
+  const [showTfAxes, setShowTfAxes] = useState<boolean>(initialState.showTfAxes);
   const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(initialState.showTfFrameLabels);
+  const [showTfConnections, setShowTfConnections] = useState<boolean>(initialState.showTfConnections);
   const [tfAxesScale, setTfAxesScale] = useState<number>(initialState.tfAxesScale);
+  const [tfLabelScale, setTfLabelScale] = useState<number>(initialState.tfLabelScale);
 
   // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false);
@@ -134,30 +138,51 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     if (isRosConnected) {
       const stateToSave = {
         visualizations,
-        fixedFrame,
+        fixedFrame: fixedFramePreference,
         displayedTfFrames,
+        showAllTfFrames,
+        showTfAxes,
         showTfFrameLabels,
+        showTfConnections,
         tfAxesScale,
+        tfLabelScale,
       };
       saveVisualizationStateForKey(storageKey, stateToSave);
       console.log('Saved visualization state:', stateToSave);
     }
-  }, [visualizations, fixedFrame, displayedTfFrames, showTfFrameLabels, tfAxesScale, isRosConnected, storageKey]);
+  }, [
+    visualizations,
+    fixedFramePreference,
+    displayedTfFrames,
+    showAllTfFrames,
+    showTfAxes,
+    showTfFrameLabels,
+    showTfConnections,
+    tfAxesScale,
+    tfLabelScale,
+    isRosConnected,
+    storageKey,
+  ]);
 
-  // Update the TF provider hook call
+  // The provider resolves the preference against the live TF tree; `fixedFrame` is the frame the
+  // scene is actually anchored to.
   const {
     customTFProvider,
     isProviderReady,
     transforms,
     availableFrames,
+    fixedFrame,
   } = useTfProvider({
     ros,
     isRosConnected,
     ros3dViewer, // Pass viewer ref from the other hook
     viewerGeneration,
-    fixedFrame,
-    trackTransformUpdates: displayedTfFrames.length > 0,
+    fixedFrame: fixedFramePreference,
+    trackTransformUpdates: showAllTfFrames || displayedTfFrames.length > 0,
   });
+
+  // "Show all" follows the live tree so frames that appear later are added automatically.
+  const visibleTfFrames = showAllTfFrames ? availableFrames : displayedTfFrames;
 
   // Visualizer adapters render no UI of their own. Mount them only after both mutable refs are
   // ready so a restored panel cannot permanently miss setup during a delayed 0x0 viewer mount.
@@ -175,10 +200,13 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     ros3dViewer,
     customTFProvider,
     fixedFrame,
-    displayedTfFrames,
+    displayedTfFrames: visibleTfFrames,
     transforms,
+    showAxes: showTfAxes,
     showFrameLabels: showTfFrameLabels,
-    axesScale: tfAxesScale, // Use the state value for axes scale
+    showConnections: showTfConnections,
+    axesScale: tfAxesScale,
+    labelScale: tfLabelScale,
   });
 
   // REMOVED Direct CameraInfo Visualizer Hook Call
@@ -266,43 +294,22 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // const handlePointCloudTopicSelect = ...
   // const handleCameraInfoTopicSelect = ...
 
+  // useTfProvider pushes the resolved frame into the provider and viewer, so the preference is
+  // the only thing to update here.
   const handleFixedFrameChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newFixedFrame = event.target.value;
-    console.log(`[VisualizationPanel] Changing fixed frame from ${fixedFrame} to: ${newFixedFrame}`);
-
-    // Update state first
-    setFixedFrame(newFixedFrame);
-
-    // Keep a count of updated components for diagnostic purposes
-    let updatedComponentCount = 0;
-
-    try {
-      // If we have a viewer, update its fixed frame 
-      if (ros3dViewer.current) {
-        ros3dViewer.current.fixedFrame = newFixedFrame;
-        updatedComponentCount++;
-        console.log(`[VisualizationPanel] Updated viewer fixed frame to: ${newFixedFrame}`);
-      }
-
-      // If we have a custom TF provider, update its fixed frame
-      if (customTFProvider.current) {
-        // This will trigger callbacks to all subscribers
-        customTFProvider.current.updateFixedFrame(newFixedFrame);
-        updatedComponentCount++;
-        console.log(`[VisualizationPanel] Updated TF provider fixed frame to: ${newFixedFrame}`);
-      }
-
-      ros3dViewer.current?.requestRender?.();
-
-      console.log(`[VisualizationPanel] Successfully changed fixed frame to: ${newFixedFrame} (${updatedComponentCount} components updated)`);
-    } catch (error) {
-      console.error(`[VisualizationPanel] Error updating fixed frame:`, error);
-    }
+    setFixedFramePreference(event.target.value);
   };
 
   const handleDisplayedTfFramesChange = (selectedFrames: string[]) => {
+    // Editing individual frames while "all" is on means the user wants a subset again.
+    setShowAllTfFrames(false);
     setDisplayedTfFrames(selectedFrames);
-    console.log("Displayed TF frames changed to:", selectedFrames);
+  };
+
+  // The toggle is a quick "everything / nothing" switch; individual picks start from a clean list.
+  const handleShowAllTfFramesChange = (showAll: boolean) => {
+    setShowAllTfFrames(showAll);
+    if (!showAll) setDisplayedTfFrames([]);
   };
 
   // Visualization-specific editors still use their legacy popovers. The shared
@@ -486,8 +493,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             onClose={closeSettingsPopup}
             fixedFrame={fixedFrame}
             availableFrames={availableFrames}
-            displayedTfFrames={displayedTfFrames}
+            displayedTfFrames={visibleTfFrames}
+            showAllTfFrames={showAllTfFrames}
+            onShowAllTfFramesChange={handleShowAllTfFramesChange}
+            showTfAxes={showTfAxes}
+            onShowTfAxesChange={setShowTfAxes}
             showTfFrameLabels={showTfFrameLabels}
+            showTfConnections={showTfConnections}
+            onShowTfConnectionsChange={setShowTfConnections}
+            tfLabelScale={tfLabelScale}
+            onTfLabelScaleChange={setTfLabelScale}
             onFixedFrameChange={handleFixedFrameChange}
             onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
             onShowTfFrameLabelsChange={setShowTfFrameLabels}
@@ -498,7 +513,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             onUpdateVisualizationTopic={updateVisualizationTopic}
             allTopics={allTopics}
             tfAxesScale={tfAxesScale}
-            onTfAxesScaleChange={(newScale: number) => setTfAxesScale(newScale)}
+            onTfAxesScaleChange={setTfAxesScale}
           />
         }
       />

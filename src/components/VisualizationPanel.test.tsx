@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VisualizationPanel from './VisualizationPanel';
 import { clearVisualizationState } from '../utils/visualizationState';
+import { useTfVisualizer } from '../hooks/useTfVisualizer';
 
 const viewerLifecycleMock = vi.hoisted(() => ({
   ros3dViewer: { current: null as any },
@@ -12,6 +13,7 @@ const tfProviderLifecycleMock = vi.hoisted(() => ({
   isProviderReady: false,
   transforms: {},
   availableFrames: ['map', 'odom'],
+  fixedFrame: 'map',
 }));
 const pointCloudVizMock = vi.hoisted(() => vi.fn(() => null));
 
@@ -40,7 +42,9 @@ describe('VisualizationPanel state restoration', () => {
     viewerLifecycleMock.viewerGeneration = 0;
     tfProviderLifecycleMock.customTFProvider.current = null;
     tfProviderLifecycleMock.isProviderReady = false;
+    tfProviderLifecycleMock.availableFrames = ['map', 'odom'];
     pointCloudVizMock.mockClear();
+    (useTfVisualizer as any).mockClear();
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -52,9 +56,13 @@ describe('VisualizationPanel state restoration', () => {
     const savedState = {
       visualizations: [],
       fixedFrame: 'map',
-      displayedTfFrames: ['base_link'],
+      displayedTfFrames: ['odom'],
+      showAllTfFrames: false,
+      showTfAxes: true,
       showTfFrameLabels: false,
+      showTfConnections: false,
       tfAxesScale: 1.2,
+      tfLabelScale: 0.3,
     };
     localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(savedState));
 
@@ -67,12 +75,52 @@ describe('VisualizationPanel state restoration', () => {
 
     render(<VisualizationPanel ros={ros as any} />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: /Displayed TF Frames/i }));
 
     expect(screen.getByLabelText('Fixed Frame:')).toHaveValue('map');
-    expect(screen.getByLabelText('TF Axes Size:')).toHaveValue('1.2');
-    expect(screen.getByLabelText('Show frame labels')).not.toBeChecked();
+    expect(screen.getByLabelText('odom')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
+    expect(screen.getByLabelText('Axes size')).toHaveValue('1.2');
+    expect(screen.getByLabelText('Label size')).toHaveValue('0.3');
+    expect(screen.getByLabelText('Show labels')).not.toBeChecked();
+    expect(screen.getByLabelText('Show parent links')).not.toBeChecked();
     expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!)).toEqual(savedState);
+  });
+
+  it('shows every live frame while "show all" is on and clears them when it is switched off', () => {
+    const ros = {
+      isConnected: true,
+      getTopics: (onSuccess: (response: { topics: string[]; types: string[] }) => void) => {
+        onSuccess({ topics: [], types: [] });
+      },
+    };
+    const visualizedFrames = () => (useTfVisualizer as any).mock.calls.at(-1)[0].displayedTfFrames;
+
+    const { rerender } = render(<VisualizationPanel ros={ros as any} storageKey="show-all" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByLabelText('Show all frames'));
+    expect(visualizedFrames()).toEqual(['map', 'odom']);
+    expect(screen.getByLabelText('map')).toBeChecked();
+
+    // A frame that appears later is added without touching the settings. (The panel is memoized,
+    // so a fresh ros identity stands in for the provider re-rendering it.)
+    tfProviderLifecycleMock.availableFrames = ['base_link', 'map', 'odom'];
+    rerender(<VisualizationPanel ros={{ ...ros } as any} storageKey="show-all" />);
+    expect(visualizedFrames()).toEqual(['base_link', 'map', 'odom']);
+    expect(screen.getByText('3/3')).toBeInTheDocument();
+
+    // Unchecking one frame leaves "all" mode with the remaining subset.
+    fireEvent.click(screen.getByLabelText('odom'));
+    expect(screen.getByLabelText('Show all frames')).not.toBeChecked();
+    expect(visualizedFrames()).toEqual(['base_link', 'map']);
+
+    fireEvent.click(screen.getByLabelText('Show all frames'));
+    fireEvent.click(screen.getByLabelText('Show all frames'));
+    expect(visualizedFrames()).toEqual([]);
+    expect(screen.getByText('0/3')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('show-all')!)).toMatchObject({
+      showAllTfFrames: false,
+      displayedTfFrames: [],
+    });
   });
 
   it('gives every mounted viewer its own DOM target', () => {

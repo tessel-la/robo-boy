@@ -17,8 +17,11 @@ interface UseTfVisualizerProps {
   fixedFrame: string;
   displayedTfFrames: string[]; // Array of frame names to visualize
   transforms: TransformStore;
+  showAxes?: boolean;
   showFrameLabels: boolean;
+  showConnections?: boolean;
   axesScale?: number; // Optional scale for the axes
+  labelScale?: number; // Label height in scene metres
 }
 
 // Type for the map storing visualized axes
@@ -30,7 +33,7 @@ type TfLabelEntry = {
 
 type TfAxesEntry = {
   group: THREE.Group;
-  axes: ROS3D.Axes;
+  axes?: ROS3D.Axes;
   label?: TfLabelEntry;
 };
 
@@ -45,6 +48,7 @@ type TfEdgeEntry = {
 type TfEdgeMap = Map<string, TfEdgeEntry>;
 
 const DEFAULT_AXES_SCALE = 0.1;
+const DEFAULT_LABEL_SCALE = 0.12;
 const TF_EDGE_COLOR = 0x9aa7b3;
 
 function disposeMaterial(material: Material | Material[] | null | undefined) {
@@ -56,7 +60,7 @@ function disposeMaterial(material: Material | Material[] | null | undefined) {
 }
 
 function disposeAxesEntry(entry: TfAxesEntry) {
-  if (entry.axes.lineSegments) {
+  if (entry.axes?.lineSegments) {
     entry.axes.lineSegments.geometry?.dispose();
     disposeMaterial(entry.axes.lineSegments.material);
   }
@@ -76,7 +80,7 @@ function getTfEdgeKey(edge: TfFrameEdge): string {
   return `${edge.parentFrame}->${edge.childFrame}`;
 }
 
-function createLabelSprite(frameName: string, axesScale: number): TfLabelEntry | null {
+function createLabelSprite(frameName: string, axesScale: number, labelScale: number): TfLabelEntry | null {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
@@ -134,7 +138,7 @@ function createLabelSprite(frameName: string, axesScale: number): TfLabelEntry |
     depthWrite: false,
   });
   const sprite = new THREE.Sprite(material);
-  const labelHeight = Math.max(axesScale * 0.22, 0.12);
+  const labelHeight = Math.max(labelScale, 0.01);
   const labelWidth = labelHeight * (width / height);
 
   sprite.scale.set(labelWidth, labelHeight, 1);
@@ -171,8 +175,11 @@ export function useTfVisualizer({
   fixedFrame,
   displayedTfFrames,
   transforms,
+  showAxes = true,
   showFrameLabels,
+  showConnections = true,
   axesScale = DEFAULT_AXES_SCALE,
+  labelScale = DEFAULT_LABEL_SCALE,
 }: UseTfVisualizerProps) {
   const tfAxesContainerRef = useRef<THREE.Group | null>(null);
   const tfAxesMapRef = useRef<TfAxesMap>(new Map());
@@ -192,19 +199,15 @@ export function useTfVisualizer({
       }
     }
 
-    // Cleanup function for Effect 1
+    // Cleanup function for Effect 1. Everything parented to the container goes with it: axes left
+    // in the map would otherwise keep pointing at a group inside a removed (and, after a viewer
+    // teardown, disposed) container, so the frames would silently vanish until the user toggled
+    // them off and on again while Effect 3 kept recreating the connection lines in the new one.
     return () => {
-      // console.log('[useTfVisualizer] Cleanup Effect 1: Container');
-      if (containerAdded && tfAxesContainerRef.current) {
-        // console.log('[useTfVisualizer] Removing TF Axes container from scene');
+      if ((containerAdded || !isRosConnected) && tfAxesContainerRef.current) {
         viewer?.scene.remove(tfAxesContainerRef.current);
-        tfEdgeMapRef.current.forEach(disposeEdgeEntry);
-        tfEdgeMapRef.current.clear();
-        tfAxesContainerRef.current = null;
-      } else if (!isRosConnected && tfAxesContainerRef.current) {
-        // If ROS disconnected, ensure container is removed if it exists
-        // console.log('[useTfVisualizer] ROS disconnected, removing TF Axes container');
-        viewer?.scene.remove(tfAxesContainerRef.current);
+        tfAxesMapRef.current.forEach(disposeAxesEntry);
+        tfAxesMapRef.current.clear();
         tfEdgeMapRef.current.forEach(disposeEdgeEntry);
         tfEdgeMapRef.current.clear();
         tfAxesContainerRef.current = null;
@@ -251,19 +254,19 @@ export function useTfVisualizer({
     framesToAdd.forEach((frameName: string) => {
       // console.log(`[useTfVisualizer] Adding Axes for ${frameName}`);
       const group = new THREE.Group();
-      const axes = new ROS3D.Axes({
-        lineSize: axesScale, // Rely on lineSize for scaling
-      });
-      const label = showFrameLabels ? createLabelSprite(frameName, axesScale) : null;
+      const axes = showAxes ? new ROS3D.Axes({ lineSize: axesScale }) : null;
+      const label = showFrameLabels ? createLabelSprite(frameName, axesScale, labelScale) : null;
 
-      group.add(axes);
+      if (axes) {
+        group.add(axes);
+      }
       if (label) {
         group.add(label.sprite);
       }
       container.add(group);
       currentMap.set(frameName, {
         group,
-        axes,
+        ...(axes ? { axes } : {}),
         ...(label ? { label } : {}),
       });
     });
@@ -285,7 +288,9 @@ export function useTfVisualizer({
       mapToClear.clear(); // Clear the map itself
     };
 
-  }, [displayedTfFrames, axesScale, showFrameLabels, ros3dViewer]); // Re-run when the list, scale, or label mode changes
+    // `isRosConnected` is here so the axes are rebuilt inside whichever container Effect 1 just
+    // created, not only when the list or styling changes.
+  }, [isRosConnected, displayedTfFrames, showAxes, axesScale, showFrameLabels, labelScale, ros3dViewer]);
 
   // Effect 3: Manage TF connection lines for selected parent-child edges
   useEffect(() => {
@@ -296,7 +301,7 @@ export function useTfVisualizer({
       return;
     }
 
-    const selectedEdges = getSelectedTfFrameEdges(transforms, displayedTfFrames);
+    const selectedEdges = showConnections ? getSelectedTfFrameEdges(transforms, displayedTfFrames) : [];
     const selectedEdgeKeys = new Set(selectedEdges.map(getTfEdgeKey));
     let sceneChanged = false;
 
@@ -323,7 +328,7 @@ export function useTfVisualizer({
     if (sceneChanged) {
       ros3dViewer.current?.requestRender?.();
     }
-  }, [displayedTfFrames, transforms, ros3dViewer]);
+  }, [isRosConnected, displayedTfFrames, showConnections, transforms, ros3dViewer]);
 
   // Effect 4: Apply TF changes to axes and selected edges. TF messages already update
   // `transforms`, so polling on every animation frame only redraws unchanged scenes.
