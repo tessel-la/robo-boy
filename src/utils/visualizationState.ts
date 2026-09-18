@@ -8,8 +8,34 @@ interface VisualizationConfig {
   options?: any;
 }
 
+/** How displayed TF frames are drawn — the "Frame display" settings of the 3D menu. */
+export interface TfDisplaySettings {
+  showTfAxes: boolean;
+  showTfFrameLabels: boolean;
+  showTfConnections: boolean;
+  tfAxesScale: number;
+  /** Label height in scene metres, independent of the axes so small axes can keep readable names. */
+  tfLabelScale: number;
+  tfAxesOpacity: number;
+  tfLabelOpacity: number;
+  /** Draw the dark pill behind frame names; off leaves outlined text over the scene. */
+  showTfLabelBackground: boolean;
+}
+
+export const DEFAULT_TF_DISPLAY_SETTINGS: TfDisplaySettings = {
+  showTfAxes: true,
+  showTfFrameLabels: true,
+  showTfConnections: true,
+  // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
+  tfAxesScale: 0.1,
+  tfLabelScale: 0.12,
+  tfAxesOpacity: 1,
+  tfLabelOpacity: 1,
+  showTfLabelBackground: true,
+};
+
 // Complete state for the visualization panel
-export interface VisualizationPanelState {
+export interface VisualizationPanelState extends TfDisplaySettings {
   visualizations: VisualizationConfig[];
   /** '' means auto: the panel picks a frame from the live TF tree (see `resolveFixedFrame`). */
   fixedFrame: string;
@@ -17,12 +43,6 @@ export interface VisualizationPanelState {
   /** Show every frame in the TF tree, including ones that appear later; `displayedTfFrames` is
    * then only the snapshot to fall back to when the toggle is switched off again. */
   showAllTfFrames: boolean;
-  showTfAxes: boolean;
-  showTfFrameLabels: boolean;
-  showTfConnections: boolean;
-  tfAxesScale: number;
-  /** Label height in scene metres, independent of the axes so small axes can keep readable names. */
-  tfLabelScale: number;
 }
 
 export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
@@ -30,13 +50,19 @@ export const DEFAULT_VISUALIZATION_STATE: VisualizationPanelState = {
   fixedFrame: '',
   displayedTfFrames: [],
   showAllTfFrames: false,
-  showTfAxes: true,
-  showTfFrameLabels: true,
-  showTfConnections: true,
-  // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
-  tfAxesScale: 0.1,
-  tfLabelScale: 0.12,
+  ...DEFAULT_TF_DISPLAY_SETTINGS,
 };
+
+export const pickTfDisplaySettings = (state: TfDisplaySettings): TfDisplaySettings => ({
+  showTfAxes: state.showTfAxes,
+  showTfFrameLabels: state.showTfFrameLabels,
+  showTfConnections: state.showTfConnections,
+  tfAxesScale: state.tfAxesScale,
+  tfLabelScale: state.tfLabelScale,
+  tfAxesOpacity: state.tfAxesOpacity,
+  tfLabelOpacity: state.tfLabelOpacity,
+  showTfLabelBackground: state.showTfLabelBackground,
+});
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 
@@ -61,6 +87,9 @@ const normalizeVisualizationState = (
     ? DEFAULT_VISUALIZATION_STATE.tfAxesScale
     : finiteOr(state?.tfAxesScale, DEFAULT_VISUALIZATION_STATE.tfAxesScale),
   tfLabelScale: finiteOr(state?.tfLabelScale, DEFAULT_VISUALIZATION_STATE.tfLabelScale),
+  tfAxesOpacity: finiteOr(state?.tfAxesOpacity, DEFAULT_VISUALIZATION_STATE.tfAxesOpacity),
+  tfLabelOpacity: finiteOr(state?.tfLabelOpacity, DEFAULT_VISUALIZATION_STATE.tfLabelOpacity),
+  showTfLabelBackground: state?.showTfLabelBackground ?? DEFAULT_VISUALIZATION_STATE.showTfLabelBackground,
 });
 
 /**

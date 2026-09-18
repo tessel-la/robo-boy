@@ -90,6 +90,7 @@ vi.mock('../features/customGamepad/gamepadStorage', () => ({
   deleteCustomGamepad: (layoutId: string) => deleteCustomGamepad(layoutId),
   downloadGamepadLayout: (layoutId: string) => downloadGamepadLayout(layoutId),
   importGamepadFile: (file: File) => importGamepadFile(file),
+  importGamepadLayouts: () => ({ idMap: {} }),
 }));
 
 vi.mock('./CameraView', () => ({
@@ -957,6 +958,57 @@ describe('MainControlView desktop workspace', () => {
       currentWorkspace: { tileOrder: ['panel-pad'] },
     });
     expect(exported.gamepads).toHaveLength(1);
+    click.mockRestore();
+    createObjectURL.mockRestore();
+  });
+
+  it('carries each 3D panel\'s scene settings through a bundle export and import', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-3d', '3d', '3D view')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-3d']));
+    const sceneSettings = {
+      visualizations: [],
+      fixedFrame: 'map',
+      displayedTfFrames: ['base_link'],
+      showAllTfFrames: false,
+      showTfAxes: true,
+      showTfFrameLabels: true,
+      showTfConnections: false,
+      tfAxesScale: 0.3,
+      tfLabelScale: 0.2,
+      tfAxesOpacity: 0.5,
+      tfLabelOpacity: 0.9,
+      showTfLabelBackground: false,
+    };
+    localStorage.setItem('roboboy_3d_visualization_state_panel-3d', JSON.stringify(sceneSettings));
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workspace');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderMainControlView();
+
+    await screen.findByLabelText('3D view');
+    openWorkspaceLayouts();
+    fireEvent.click(screen.getByLabelText('Export layouts'));
+
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const exportedText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    const exported = JSON.parse(exportedText);
+    expect(exported.currentWorkspace.panels[0]).toMatchObject({ id: 'panel-3d', visualization: sceneSettings });
+
+    // Import the same bundle on a browser that has never seen this panel: its settings land in
+    // the storage slot the panel reads from.
+    localStorage.removeItem('roboboy_3d_visualization_state_panel-3d');
+    const fileInput = document.querySelector('.workspace-template-transfer-row input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput!, {
+      target: { files: [new File([JSON.stringify(exported)], 'workspace.json', { type: 'application/json' })] },
+    });
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state_panel-3d') ?? 'null')).toEqual(sceneSettings)
+    );
     click.mockRestore();
     createObjectURL.mockRestore();
   });

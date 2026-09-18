@@ -22,6 +22,9 @@ interface UseTfVisualizerProps {
   showConnections?: boolean;
   axesScale?: number; // Optional scale for the axes
   labelScale?: number; // Label height in scene metres
+  axesOpacity?: number;
+  labelOpacity?: number;
+  showLabelBackground?: boolean;
 }
 
 // Type for the map storing visualized axes
@@ -80,7 +83,21 @@ function getTfEdgeKey(edge: TfFrameEdge): string {
   return `${edge.parentFrame}->${edge.childFrame}`;
 }
 
-function createLabelSprite(frameName: string, axesScale: number, labelScale: number): TfLabelEntry | null {
+function setAxesOpacity(axes: ROS3D.Axes, opacity: number) {
+  const materials = axes.lineSegments?.material;
+  (Array.isArray(materials) ? materials : materials ? [materials] : []).forEach(material => {
+    material.transparent = opacity < 1;
+    material.opacity = opacity;
+  });
+}
+
+function createLabelSprite(
+  frameName: string,
+  axesScale: number,
+  labelScale: number,
+  opacity: number,
+  withBackground: boolean
+): TfLabelEntry | null {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
@@ -107,23 +124,31 @@ function createLabelSprite(frameName: string, axesScale: number, labelScale: num
   context.font = `600 ${fontSize}px sans-serif`;
   context.textBaseline = 'middle';
 
-  const radius = 6;
-  context.fillStyle = 'rgba(16, 18, 20, 0.82)';
-  context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-  context.lineWidth = 1;
-  context.beginPath();
-  context.moveTo(radius, 0);
-  context.lineTo(width - radius, 0);
-  context.quadraticCurveTo(width, 0, width, radius);
-  context.lineTo(width, height - radius);
-  context.quadraticCurveTo(width, height, width - radius, height);
-  context.lineTo(radius, height);
-  context.quadraticCurveTo(0, height, 0, height - radius);
-  context.lineTo(0, radius);
-  context.quadraticCurveTo(0, 0, radius, 0);
-  context.closePath();
-  context.fill();
-  context.stroke();
+  if (withBackground) {
+    const radius = 6;
+    context.fillStyle = 'rgba(16, 18, 20, 0.82)';
+    context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(radius, 0);
+    context.lineTo(width - radius, 0);
+    context.quadraticCurveTo(width, 0, width, radius);
+    context.lineTo(width, height - radius);
+    context.quadraticCurveTo(width, height, width - radius, height);
+    context.lineTo(radius, height);
+    context.quadraticCurveTo(0, height, 0, height - radius);
+    context.lineTo(0, radius);
+    context.quadraticCurveTo(0, 0, radius, 0);
+    context.closePath();
+    context.fill();
+    context.stroke();
+  } else {
+    // Without the pill, a dark outline keeps the name readable over light geometry.
+    context.strokeStyle = 'rgba(16, 18, 20, 0.9)';
+    context.lineWidth = 4;
+    context.lineJoin = 'round';
+    context.strokeText(frameName, horizontalPadding, height / 2);
+  }
 
   context.fillStyle = '#f6f8fb';
   context.fillText(frameName, horizontalPadding, height / 2);
@@ -134,6 +159,7 @@ function createLabelSprite(frameName: string, axesScale: number, labelScale: num
   const material = new THREE.SpriteMaterial({
     map: texture,
     transparent: true,
+    opacity,
     depthTest: false,
     depthWrite: false,
   });
@@ -180,6 +206,9 @@ export function useTfVisualizer({
   showConnections = true,
   axesScale = DEFAULT_AXES_SCALE,
   labelScale = DEFAULT_LABEL_SCALE,
+  axesOpacity = 1,
+  labelOpacity = 1,
+  showLabelBackground = true,
 }: UseTfVisualizerProps) {
   const tfAxesContainerRef = useRef<THREE.Group | null>(null);
   const tfAxesMapRef = useRef<TfAxesMap>(new Map());
@@ -255,7 +284,10 @@ export function useTfVisualizer({
       // console.log(`[useTfVisualizer] Adding Axes for ${frameName}`);
       const group = new THREE.Group();
       const axes = showAxes ? new ROS3D.Axes({ lineSize: axesScale }) : null;
-      const label = showFrameLabels ? createLabelSprite(frameName, axesScale, labelScale) : null;
+      if (axes) setAxesOpacity(axes, axesOpacity);
+      const label = showFrameLabels
+        ? createLabelSprite(frameName, axesScale, labelScale, labelOpacity, showLabelBackground)
+        : null;
 
       if (axes) {
         group.add(axes);
@@ -290,7 +322,18 @@ export function useTfVisualizer({
 
     // `isRosConnected` is here so the axes are rebuilt inside whichever container Effect 1 just
     // created, not only when the list or styling changes.
-  }, [isRosConnected, displayedTfFrames, showAxes, axesScale, showFrameLabels, labelScale, ros3dViewer]);
+  }, [
+    isRosConnected,
+    displayedTfFrames,
+    showAxes,
+    axesScale,
+    axesOpacity,
+    showFrameLabels,
+    labelScale,
+    labelOpacity,
+    showLabelBackground,
+    ros3dViewer,
+  ]);
 
   // Effect 3: Manage TF connection lines for selected parent-child edges
   useEffect(() => {
@@ -413,7 +456,25 @@ export function useTfVisualizer({
     });
 
     if (sceneChanged) viewer.requestRender?.();
-  }, [isRosConnected, ros3dViewer, customTFProvider, fixedFrame, displayedTfFrames, transforms]);
+    // Effects 2 and 3 rebuild their objects at the origin whenever styling changes, so this effect
+    // must run after every such rebuild, not only when a transform arrives — a static tree would
+    // otherwise stay collapsed on the fixed frame until the next TF message.
+  }, [
+    isRosConnected,
+    ros3dViewer,
+    customTFProvider,
+    fixedFrame,
+    displayedTfFrames,
+    transforms,
+    showAxes,
+    axesScale,
+    axesOpacity,
+    showFrameLabels,
+    labelScale,
+    labelOpacity,
+    showLabelBackground,
+    showConnections,
+  ]);
 
   // No return value needed, hook manages side effects
 }

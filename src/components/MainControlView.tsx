@@ -9,6 +9,11 @@ import {
   writeConnectionStorage,
 } from '../runtime/connectionStorage';
 import { useRos } from '../hooks/useRos'; // Import the hook
+import {
+  getVisualizationStateForKey,
+  saveVisualizationStateForKey,
+  type VisualizationPanelState,
+} from '../utils/visualizationState';
 import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
 import './MainControlView.css';
 // Import placeholder components (we'll create these next)
@@ -615,13 +620,22 @@ type SavedWorkspaceLayout = {
   updatedAt: string;
 };
 
+/** A 3D panel keeps its scene settings in visualization storage keyed by panel id, not on the
+ * panel record; a portable bundle carries them next to the panel so a layout imported elsewhere
+ * brings its frames, fixed frame and frame display along. */
+type ExportedWorkspacePanel = WorkspacePanel & { visualization?: VisualizationPanelState };
+type ExportedWorkspaceLayout<T extends { panels: WorkspacePanel[] }> = Omit<T, 'panels'> & { panels: ExportedWorkspacePanel[] };
+
 type WorkspaceBundleV2 = {
   version: 2;
   exportedAt: string;
-  currentWorkspace: Omit<SavedWorkspaceLayout, 'id' | 'title' | 'createdAt' | 'updatedAt'>;
-  layouts: SavedWorkspaceLayout[];
+  currentWorkspace: ExportedWorkspaceLayout<Omit<SavedWorkspaceLayout, 'id' | 'title' | 'createdAt' | 'updatedAt'>>;
+  layouts: ExportedWorkspaceLayout<SavedWorkspaceLayout>[];
   gamepads: CustomGamepadLayout[];
 };
+
+const visualizationStorageKey = (panelId: string, storageScope?: string) =>
+  getConnectionStorageKey(`roboboy_3d_visualization_state_${panelId}`, storageScope);
 
 type WorkspaceSnapTemplate = {
   id: string;
@@ -2449,17 +2463,23 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const gamepads = gamepadLibrary
       .filter(item => !item.isDefault && (referencedLayoutIds.has(item.id) || referencedLayoutIds.has(item.layout.id)))
       .map(item => item.layout);
+    const exportPanel = (panel: WorkspacePanel): ExportedWorkspacePanel => {
+      const portable = withoutApprovedRosTopics(panel);
+      return panel.type === '3d'
+        ? { ...portable, visualization: getVisualizationStateForKey(visualizationStorageKey(panel.id, storageScope)) }
+        : portable;
+    };
     const bundle: WorkspaceBundleV2 = {
       version: 2,
       exportedAt: new Date().toISOString(),
       currentWorkspace: {
-        panels: workspacePanels.map(withoutApprovedRosTopics),
+        panels: workspacePanels.map(exportPanel),
         tileOrder: normalizedWorkspaceTileOrder,
         layout: capturedWorkspaceLayout,
       },
       layouts: savedWorkspaceLayouts.map(layout => ({
         ...layout,
-        panels: layout.panels.map(withoutApprovedRosTopics),
+        panels: layout.panels.map(exportPanel),
       })),
       gamepads,
     };
@@ -2492,6 +2512,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           }));
         const candidates = Array.isArray(parsed) ? parsed : parsed?.layouts;
         if (!Array.isArray(candidates)) return;
+
+        // Panel ids survive import, so a 3D panel's exported scene settings go straight into the
+        // storage slot the panel reads from on this connection.
+        const restoreVisualizationStates = (layout: unknown) => {
+          const panels = (layout as { panels?: unknown })?.panels;
+          if (!Array.isArray(panels)) return;
+          panels.forEach((panel: Partial<ExportedWorkspacePanel>) => {
+            if (panel?.type === '3d' && typeof panel.id === 'string' && panel.visualization && typeof panel.visualization === 'object') {
+              saveVisualizationStateForKey(visualizationStorageKey(panel.id, storageScope), panel.visualization);
+            }
+          });
+        };
+        candidates.forEach(restoreVisualizationStates);
+        if (parsed?.version === 2) restoreVisualizationStates(parsed.currentWorkspace);
 
         const importedLayouts = candidates
           .map(layout => normalizeSavedWorkspaceLayout(layout, false))

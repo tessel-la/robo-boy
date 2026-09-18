@@ -63,6 +63,9 @@ describe('VisualizationPanel state restoration', () => {
       showTfConnections: false,
       tfAxesScale: 1.2,
       tfLabelScale: 0.3,
+      tfAxesOpacity: 0.6,
+      tfLabelOpacity: 0.7,
+      showTfLabelBackground: false,
     };
     localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(savedState));
 
@@ -81,7 +84,10 @@ describe('VisualizationPanel state restoration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
     expect(screen.getByLabelText('Axes size')).toHaveValue('1.2');
     expect(screen.getByLabelText('Label size')).toHaveValue('0.3');
+    expect(screen.getByLabelText('Axes opacity')).toHaveValue('0.6');
+    expect(screen.getByLabelText('Label opacity')).toHaveValue('0.7');
     expect(screen.getByLabelText('Show labels')).not.toBeChecked();
+    expect(screen.getByLabelText('Label background')).not.toBeChecked();
     expect(screen.getByLabelText('Show parent links')).not.toBeChecked();
     expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!)).toEqual(savedState);
   });

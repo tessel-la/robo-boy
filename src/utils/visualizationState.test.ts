@@ -28,6 +28,9 @@ describe('visualizationState', () => {
     showTfConnections: false,
     tfAxesScale: 1.2,
     tfLabelScale: 0.3,
+    tfAxesOpacity: 0.5,
+    tfLabelOpacity: 0.8,
+    showTfLabelBackground: false,
   };
 
   it('should save state to memory and localStorage', () => {
@@ -55,6 +58,9 @@ describe('visualizationState', () => {
       showTfConnections: true,
       tfAxesScale: 0.1,
       tfLabelScale: 0.12,
+      tfAxesOpacity: 1,
+      tfLabelOpacity: 1,
+      showTfLabelBackground: true,
     });
   });
 
@@ -74,6 +80,9 @@ describe('visualizationState', () => {
       showTfConnections: true,
       tfAxesScale: 0.2,
       tfLabelScale: 0.12,
+      tfAxesOpacity: 1,
+      tfLabelOpacity: 1,
+      showTfLabelBackground: true,
     });
   });
 

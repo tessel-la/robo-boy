@@ -34,7 +34,9 @@ import { PoseStampedOptions } from '../hooks/usePoseStampedClient'; // Import Po
 
 import {
   getVisualizationStateForKey,
-  saveVisualizationStateForKey
+  pickTfDisplaySettings,
+  saveVisualizationStateForKey,
+  type TfDisplaySettings,
 } from '../utils/visualizationState';
 
 interface VisualizationPanelProps {
@@ -116,11 +118,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const [fixedFramePreference, setFixedFramePreference] = useState<string>(initialState.fixedFrame);
   const [displayedTfFrames, setDisplayedTfFrames] = useState<string[]>(initialState.displayedTfFrames);
   const [showAllTfFrames, setShowAllTfFrames] = useState<boolean>(initialState.showAllTfFrames);
-  const [showTfAxes, setShowTfAxes] = useState<boolean>(initialState.showTfAxes);
-  const [showTfFrameLabels, setShowTfFrameLabels] = useState<boolean>(initialState.showTfFrameLabels);
-  const [showTfConnections, setShowTfConnections] = useState<boolean>(initialState.showTfConnections);
-  const [tfAxesScale, setTfAxesScale] = useState<number>(initialState.tfAxesScale);
-  const [tfLabelScale, setTfLabelScale] = useState<number>(initialState.tfLabelScale);
+  const [tfDisplay, setTfDisplay] = useState<TfDisplaySettings>(() => pickTfDisplaySettings(initialState));
+  const updateTfDisplay = (patch: Partial<TfDisplaySettings>) =>
+    setTfDisplay(previous => ({ ...previous, ...patch }));
 
   // UI State
   const [isSettingsPopupOpen, setIsSettingsPopupOpen] = useState(false);
@@ -141,28 +141,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         fixedFrame: fixedFramePreference,
         displayedTfFrames,
         showAllTfFrames,
-        showTfAxes,
-        showTfFrameLabels,
-        showTfConnections,
-        tfAxesScale,
-        tfLabelScale,
+        ...tfDisplay,
       };
       saveVisualizationStateForKey(storageKey, stateToSave);
       console.log('Saved visualization state:', stateToSave);
     }
-  }, [
-    visualizations,
-    fixedFramePreference,
-    displayedTfFrames,
-    showAllTfFrames,
-    showTfAxes,
-    showTfFrameLabels,
-    showTfConnections,
-    tfAxesScale,
-    tfLabelScale,
-    isRosConnected,
-    storageKey,
-  ]);
+  }, [visualizations, fixedFramePreference, displayedTfFrames, showAllTfFrames, tfDisplay, isRosConnected, storageKey]);
 
   // The provider resolves the preference against the live TF tree; `fixedFrame` is the frame the
   // scene is actually anchored to.
@@ -202,11 +186,14 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     fixedFrame,
     displayedTfFrames: visibleTfFrames,
     transforms,
-    showAxes: showTfAxes,
-    showFrameLabels: showTfFrameLabels,
-    showConnections: showTfConnections,
-    axesScale: tfAxesScale,
-    labelScale: tfLabelScale,
+    showAxes: tfDisplay.showTfAxes,
+    showFrameLabels: tfDisplay.showTfFrameLabels,
+    showConnections: tfDisplay.showTfConnections,
+    axesScale: tfDisplay.tfAxesScale,
+    labelScale: tfDisplay.tfLabelScale,
+    axesOpacity: tfDisplay.tfAxesOpacity,
+    labelOpacity: tfDisplay.tfLabelOpacity,
+    showLabelBackground: tfDisplay.showTfLabelBackground,
   });
 
   // REMOVED Direct CameraInfo Visualizer Hook Call
@@ -496,24 +483,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             displayedTfFrames={visibleTfFrames}
             showAllTfFrames={showAllTfFrames}
             onShowAllTfFramesChange={handleShowAllTfFramesChange}
-            showTfAxes={showTfAxes}
-            onShowTfAxesChange={setShowTfAxes}
-            showTfFrameLabels={showTfFrameLabels}
-            showTfConnections={showTfConnections}
-            onShowTfConnectionsChange={setShowTfConnections}
-            tfLabelScale={tfLabelScale}
-            onTfLabelScaleChange={setTfLabelScale}
+            tfDisplay={tfDisplay}
+            onTfDisplayChange={updateTfDisplay}
             onFixedFrameChange={handleFixedFrameChange}
             onDisplayedTfFramesChange={handleDisplayedTfFramesChange}
-            onShowTfFrameLabelsChange={setShowTfFrameLabels}
             activeVisualizations={visualizations}
             onRemoveVisualization={removeVisualization}
             onAddVisualizationClick={openAddVizModalFromSettings}
             onEditVisualization={openVisualizationSettings}
             onUpdateVisualizationTopic={updateVisualizationTopic}
             allTopics={allTopics}
-            tfAxesScale={tfAxesScale}
-            onTfAxesScaleChange={setTfAxesScale}
           />
         }
       />

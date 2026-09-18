@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
 
 import { getUrdfTopics } from '../utils/urdfTopics';
+import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
 
@@ -21,22 +22,14 @@ interface SettingsPopupProps {
   onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
   showAllTfFrames: boolean;
   onShowAllTfFramesChange: (showAll: boolean) => void;
-  showTfAxes: boolean;
-  onShowTfAxesChange: (show: boolean) => void;
-  showTfFrameLabels: boolean;
-  onShowTfFrameLabelsChange: (show: boolean) => void;
-  showTfConnections: boolean;
-  onShowTfConnectionsChange: (show: boolean) => void;
+  tfDisplay: TfDisplaySettings;
+  onTfDisplayChange: (patch: Partial<TfDisplaySettings>) => void;
   activeVisualizations: VisualizationConfig[];
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
-  tfAxesScale: number;
-  onTfAxesScaleChange: (newScale: number) => void;
-  tfLabelScale: number;
-  onTfLabelScaleChange: (newScale: number) => void;
 }
 
 /** One section is expanded at a time and takes the remaining height, so the frame list gets the
@@ -66,22 +59,14 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onDisplayedTfFramesChange,
   showAllTfFrames,
   onShowAllTfFramesChange,
-  showTfAxes,
-  onShowTfAxesChange,
-  showTfFrameLabels,
-  onShowTfFrameLabelsChange,
-  showTfConnections,
-  onShowTfConnectionsChange,
+  tfDisplay,
+  onTfDisplayChange,
   activeVisualizations,
   onRemoveVisualization,
   onAddVisualizationClick,
   onEditVisualization,
   onUpdateVisualizationTopic,
   allTopics = [],
-  tfAxesScale,
-  onTfAxesScaleChange,
-  tfLabelScale,
-  onTfLabelScaleChange,
 }) => {
   const [openSection, setOpenSection] = useState<OpenSection>('tfFrames');
   const [view, setView] = useState<PopupView>('main');
@@ -150,30 +135,17 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
         <div className="settings-popup-content frame-display-content">
           <label className="settings-toggle-row">
             <span>Show axes</span>
-            <input type="checkbox" checked={showTfAxes} onChange={event => onShowTfAxesChange(event.target.checked)} />
-          </label>
-          <label className="settings-toggle-row">
-            <span>Show labels</span>
             <input
               type="checkbox"
-              checked={showTfFrameLabels}
-              onChange={event => onShowTfFrameLabelsChange(event.target.checked)}
+              checked={tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ showTfAxes: event.target.checked })}
             />
           </label>
-          <label className="settings-toggle-row">
-            <span>Show parent links</span>
-            <input
-              type="checkbox"
-              checked={showTfConnections}
-              onChange={event => onShowTfConnectionsChange(event.target.checked)}
-            />
-          </label>
-
           <div className="tf-scale-control">
             <div className="control-heading-row">
               <label htmlFor="tf-axes-scale">Axes size</label>
               <output htmlFor="tf-axes-scale" className="range-value">
-                {tfAxesScale.toFixed(2)} m
+                {tfDisplay.tfAxesScale.toFixed(2)} m
               </output>
             </div>
             <input
@@ -182,18 +154,52 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               min="0.05"
               max="2"
               step="0.05"
-              value={tfAxesScale}
-              disabled={!showTfAxes}
-              onChange={event => onTfAxesScaleChange(parseFloat(event.target.value))}
+              value={tfDisplay.tfAxesScale}
+              disabled={!tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ tfAxesScale: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+            <div className="control-heading-row">
+              <label htmlFor="tf-axes-opacity">Axes opacity</label>
+              <output htmlFor="tf-axes-opacity" className="range-value">
+                {Math.round(tfDisplay.tfAxesOpacity * 100)}%
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-axes-opacity"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={tfDisplay.tfAxesOpacity}
+              disabled={!tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ tfAxesOpacity: parseFloat(event.target.value) })}
               className="range-input"
             />
           </div>
 
+          <label className="settings-toggle-row">
+            <span>Show labels</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ showTfFrameLabels: event.target.checked })}
+            />
+          </label>
+          <label className="settings-toggle-row">
+            <span>Label background</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfLabelBackground}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ showTfLabelBackground: event.target.checked })}
+            />
+          </label>
           <div className="tf-scale-control">
             <div className="control-heading-row">
               <label htmlFor="tf-label-scale">Label size</label>
               <output htmlFor="tf-label-scale" className="range-value">
-                {tfLabelScale.toFixed(2)} m
+                {tfDisplay.tfLabelScale.toFixed(2)} m
               </output>
             </div>
             <input
@@ -202,12 +208,38 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               min="0.02"
               max="1"
               step="0.02"
-              value={tfLabelScale}
-              disabled={!showTfFrameLabels}
-              onChange={event => onTfLabelScaleChange(parseFloat(event.target.value))}
+              value={tfDisplay.tfLabelScale}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ tfLabelScale: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+            <div className="control-heading-row">
+              <label htmlFor="tf-label-opacity">Label opacity</label>
+              <output htmlFor="tf-label-opacity" className="range-value">
+                {Math.round(tfDisplay.tfLabelOpacity * 100)}%
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-label-opacity"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={tfDisplay.tfLabelOpacity}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ tfLabelOpacity: parseFloat(event.target.value) })}
               className="range-input"
             />
           </div>
+
+          <label className="settings-toggle-row">
+            <span>Show parent links</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfConnections}
+              onChange={event => onTfDisplayChange({ showTfConnections: event.target.checked })}
+            />
+          </label>
         </div>
       </div>
     );

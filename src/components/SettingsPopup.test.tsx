@@ -10,11 +10,7 @@ describe('SettingsPopup', () => {
   const mockOnShowAllTfFramesChange = vi.fn();
   const mockOnRemoveVisualization = vi.fn();
   const mockOnAddVisualizationClick = vi.fn();
-  const mockOnTfAxesScaleChange = vi.fn();
-  const mockOnTfLabelScaleChange = vi.fn();
-  const mockOnShowTfAxesChange = vi.fn();
-  const mockOnShowTfFrameLabelsChange = vi.fn();
-  const mockOnShowTfConnectionsChange = vi.fn();
+  const mockOnTfDisplayChange = vi.fn();
   const mockOnUpdateVisualizationTopic = vi.fn();
 
   const defaultProps = {
@@ -26,12 +22,17 @@ describe('SettingsPopup', () => {
     onDisplayedTfFramesChange: mockOnDisplayedTfFramesChange,
     showAllTfFrames: false,
     onShowAllTfFramesChange: mockOnShowAllTfFramesChange,
-    showTfAxes: true,
-    onShowTfAxesChange: mockOnShowTfAxesChange,
-    showTfFrameLabels: true,
-    onShowTfFrameLabelsChange: mockOnShowTfFrameLabelsChange,
-    showTfConnections: true,
-    onShowTfConnectionsChange: mockOnShowTfConnectionsChange,
+    tfDisplay: {
+      showTfAxes: true,
+      showTfFrameLabels: true,
+      showTfConnections: true,
+      tfAxesScale: 0.5,
+      tfLabelScale: 0.12,
+      tfAxesOpacity: 1,
+      tfLabelOpacity: 0.8,
+      showTfLabelBackground: true,
+    },
+    onTfDisplayChange: mockOnTfDisplayChange,
     activeVisualizations: [
       { id: 'viz-1', type: 'pointcloud' as const, topic: '/points' },
       { id: 'viz-2', type: 'laserscan' as const, topic: '/scan' },
@@ -43,10 +44,6 @@ describe('SettingsPopup', () => {
       { name: '/points', type: 'sensor_msgs/PointCloud2' },
       { name: '/scan', type: 'sensor_msgs/LaserScan' },
     ],
-    tfAxesScale: 0.5,
-    onTfAxesScaleChange: mockOnTfAxesScaleChange,
-    tfLabelScale: 0.12,
-    onTfLabelScaleChange: mockOnTfLabelScaleChange,
   };
 
   beforeEach(() => {
@@ -113,7 +110,7 @@ describe('SettingsPopup', () => {
   });
 
   describe('frame display settings', () => {
-    it('moves axes, label, link toggles and both size sliders to their own view', () => {
+    it('moves axes, label, link toggles and the size/opacity sliders to their own view', () => {
       render(<SettingsPopup {...defaultProps} />);
 
       expect(screen.queryByLabelText('Axes size')).not.toBeInTheDocument();
@@ -123,29 +120,47 @@ describe('SettingsPopup', () => {
       expect(screen.queryByLabelText('Fixed Frame:')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Axes size')).toHaveValue('0.5');
       expect(screen.getByLabelText('Label size')).toHaveValue('0.12');
+      expect(screen.getByLabelText('Label opacity')).toHaveValue('0.8');
+      expect(screen.getByText('80%')).toBeInTheDocument();
 
       fireEvent.change(screen.getByLabelText('Axes size'), { target: { value: '0.25' } });
       fireEvent.change(screen.getByLabelText('Label size'), { target: { value: '0.3' } });
+      fireEvent.change(screen.getByLabelText('Axes opacity'), { target: { value: '0.5' } });
+      fireEvent.change(screen.getByLabelText('Label opacity'), { target: { value: '0.35' } });
       fireEvent.click(screen.getByLabelText('Show axes'));
       fireEvent.click(screen.getByLabelText('Show labels'));
+      fireEvent.click(screen.getByLabelText('Label background'));
       fireEvent.click(screen.getByLabelText('Show parent links'));
 
-      expect(mockOnTfAxesScaleChange).toHaveBeenCalledWith(0.25);
-      expect(mockOnTfLabelScaleChange).toHaveBeenCalledWith(0.3);
-      expect(mockOnShowTfAxesChange).toHaveBeenCalledWith(false);
-      expect(mockOnShowTfFrameLabelsChange).toHaveBeenCalledWith(false);
-      expect(mockOnShowTfConnectionsChange).toHaveBeenCalledWith(false);
+      expect(mockOnTfDisplayChange.mock.calls.map(call => call[0])).toEqual([
+        { tfAxesScale: 0.25 },
+        { tfLabelScale: 0.3 },
+        { tfAxesOpacity: 0.5 },
+        { tfLabelOpacity: 0.35 },
+        { showTfAxes: false },
+        { showTfFrameLabels: false },
+        { showTfLabelBackground: false },
+        { showTfConnections: false },
+      ]);
 
       fireEvent.click(screen.getByRole('button', { name: 'Back to 3D view settings' }));
       expect(screen.getByLabelText('Fixed Frame:')).toBeInTheDocument();
     });
 
-    it('disables a size slider whose feature is switched off', () => {
-      render(<SettingsPopup {...defaultProps} showTfAxes={false} showTfFrameLabels={false} />);
+    it('disables the controls of a feature that is switched off', () => {
+      render(
+        <SettingsPopup
+          {...defaultProps}
+          tfDisplay={{ ...defaultProps.tfDisplay, showTfAxes: false, showTfFrameLabels: false }}
+        />
+      );
       fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
 
       expect(screen.getByLabelText('Axes size')).toBeDisabled();
+      expect(screen.getByLabelText('Axes opacity')).toBeDisabled();
       expect(screen.getByLabelText('Label size')).toBeDisabled();
+      expect(screen.getByLabelText('Label opacity')).toBeDisabled();
+      expect(screen.getByLabelText('Label background')).toBeDisabled();
     });
   });
 
