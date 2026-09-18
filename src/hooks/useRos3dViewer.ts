@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three'; // Needed for type hints during disposal
+import { subscribeToXrPresentation } from '../xr/xrPresentationBus';
 
 // Custom Hook for managing ROS3D Viewer lifecycle
 export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRosConnected: boolean) {
@@ -197,6 +198,42 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
 
     // Dependencies: Re-run when ROS connection state changes or the container ref changes (though ref should be stable)
   }, [viewerRef, isRosConnected]);
+
+  // Stand down while a headset is presenting.
+  //
+  // This viewer never loops, but every arriving transform invalidates it, so on a busy /tf it keeps
+  // drawing frames to a page nobody is looking at while an immersive session needs the same GPU.
+  // OrbitControls is disabled alongside it because its listeners are bound to the container element
+  // and would otherwise still move a camera that is no longer driving anything visible.
+  //
+  // With no XR session ever started, subscribeToXrPresentation reports false once and never fires
+  // again, so this is inert for every existing deployment.
+  useEffect(() => {
+    // The bus replays its current value to every new subscriber, so the first callback is a
+    // statement of where things already stand rather than a change. Acting on it would request a
+    // needless frame on every mount, which is exactly the waste the invalidation model exists to
+    // avoid.
+    let applied: boolean | null = null;
+
+    return subscribeToXrPresentation(isPresenting => {
+      if (applied === isPresenting) return;
+      const isInitial = applied === null;
+      applied = isPresenting;
+
+      const viewer = ros3dViewer.current;
+      const controls = orbitControlsRef.current;
+      if (controls) controls.enabled = !isPresenting;
+      if (!viewer) return;
+
+      if (isPresenting) {
+        viewer.stop();
+      } else if (!isInitial) {
+        // One frame on the way back, so the panel is not left showing whatever was on screen when
+        // the session began. Skipped on the initial callback, where nothing was ever suspended.
+        viewer.requestRender();
+      }
+    });
+  }, [viewerGeneration]);
 
   // Return the refs needed by the component
   return { ros3dViewer, viewerGeneration };

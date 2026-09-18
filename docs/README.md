@@ -20,6 +20,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Adding a custom panel](custom-panels.md): get a panel you wrote into the web app and into a desktop build,
   the four kinds of panel, enable/disable, and what an update changes.
 - [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.
+- [Immersive XR workspace](xr.md): the spatial control room in VR and AR passthrough, what it reuses
+  from the 2D stack, the interaction model, and how to run it on a headset or a desktop emulator.
 
 ## Source Map
 
