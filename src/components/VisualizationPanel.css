@@ -152,12 +152,140 @@
   border-bottom: 1px solid var(--border-color, #dee2e6);
 }
 
-/* The expanded section owns the remaining height; its list scrolls instead of the whole menu. */
+/* Header with an action beside the title: the action is placed over the header's own padding so
+   it reads as part of the title row while the whole row still toggles the section. */
+.section-header-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.section-header-row .section-header--title {
+  width: auto;
+  flex: 0 0 auto;
+  padding-right: 10px;
+}
+
+.section-header-row .section-header--meta {
+  width: auto;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  padding-left: 10px;
+}
+
+/* The whole row highlights as one bar, gear included. */
+.section-header-row:hover {
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, transparent);
+}
+
+.section-header-row .section-header:hover {
+  background: transparent;
+}
+
+.section-title-action {
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+/* Expanded sections share the remaining height; their lists scroll instead of the whole menu. */
 .popup-section.is-open {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* A row that leads somewhere (a sub-view, the add sheet): full width, like the toggle rows. */
+.settings-nav-row {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-color, #f8f9fa) 82%, var(--card-bg, #ffffff));
+  color: var(--text-color, #212529);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-nav-row > span {
+  flex: 1 1 auto;
+}
+
+.settings-nav-row > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+}
+
+.settings-nav-row:hover {
+  border-color: var(--primary-color, #32cd32);
+}
+
+.settings-nav-row.is-primary {
+  margin-bottom: 8px;
+  border-color: color-mix(in srgb, var(--primary-color, #32cd32) 26%, var(--border-color, #dee2e6));
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
+  color: var(--primary-color, #32cd32);
+  font-weight: 700;
+}
+
+.settings-nav-row.is-primary > svg {
+  color: inherit;
+}
+
+.scale-field-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Attribute selector to outrank index.css's generic input[type="number"] block (padding, margin
+   and a percentage width meant for forms). */
+input[type='number'].scale-field-number {
+  box-sizing: border-box;
+  width: 58px;
+  height: 22px;
+  margin: 0;
+  padding: 0 5px;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--card-bg, #ffffff);
+  color: var(--primary-color, #32cd32);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+input[type='number'].scale-field-number::-webkit-outer-spin-button,
+input[type='number'].scale-field-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type='number'].scale-field-number:focus {
+  border-color: var(--primary-color, #32cd32);
+  outline: none;
+}
+
+input[type='number'].scale-field-number:disabled {
+  opacity: 0.55;
+}
+
+.scale-field + .control-heading-row {
+  margin-top: 12px;
 }
 
 .popup-section.is-open > .section-content {
@@ -229,21 +357,10 @@
   opacity: 0.55;
 }
 
-.section-header-with-action {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: stretch;
-  /* Same inset as the boxes below, so the action button shares their right edge. */
-  padding-right: 15px;
-}
-
-.section-header-with-action .section-header {
+.section-header {
   flex: 1 1 auto;
 }
 
-.section-action-button {
-  align-self: center;
-}
 
 .section-header {
   width: 100%;
@@ -308,31 +425,7 @@
   font-weight: 800;
 }
 
-.add-viz-popup-button {
-  align-self: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 26%, var(--border-color, #dee2e6));
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
-  color: var(--primary-color, #32cd32);
-  cursor: pointer;
-}
 
-.add-viz-popup-button:hover {
-  border-color: var(--primary-color, #32cd32);
-  background: color-mix(in srgb, var(--primary-color, #32cd32) 16%, var(--card-bg, #ffffff));
-}
-
-.add-viz-popup-button svg {
-  width: 17px;
-  height: 17px;
-}
 
 .section-content {
   padding: 0 15px 14px;
@@ -456,7 +549,7 @@
 
 .tf-checkbox-list {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 160px;
   margin: 0;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
@@ -631,10 +724,6 @@
   .section-header {
     min-height: 56px;
     padding: 8px 12px;
-  }
-
-  .section-header-with-action {
-    padding-right: 12px;
   }
 
   .section-content {

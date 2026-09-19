@@ -76,7 +76,8 @@ import {
 } from './workspaceLayout';
 import GlobalAssistant, { type GlobalAssistantHandle } from '../features/assistant/components/GlobalAssistant';
 import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceSnapshot';
-import type { BehaviorTreeAssistantBridge } from '../features/assistant/types';
+import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
+import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -1033,6 +1034,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
   }, []);
+  const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
+    assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
+  }, []);
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
@@ -1724,10 +1728,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleAddWorkspacePanel = (
     type: WorkspacePanelType,
     insertIndex?: number,
-    snapTemplate?: WorkspaceSnapTemplate
+    snapTemplate?: WorkspaceSnapTemplate,
+    options?: { cameraTopic?: string; layoutId?: string; title?: string }
   ) => {
     setIsWorkspaceOpen(true);
-    if (workspaceReplacementPanelId) {
+    if (workspaceReplacementPanelId && !options) {
       setWorkspacePanels(prev =>
         prev.map(panel =>
           panel.id === workspaceReplacementPanelId
@@ -1759,9 +1764,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       const newPanel = createWorkspacePanel(
         { type },
         {
-          cameraTopic: selectedCameraTopic || availableCameraTopics[0],
-          layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
-          title: panelCatalogById.get(type)?.name,
+          cameraTopic: options?.cameraTopic || selectedCameraTopic || availableCameraTopics[0],
+          layoutId: options?.layoutId || selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+          title: options?.title || panelCatalogById.get(type)?.name,
         }
       );
       const nextPanels = [...prev];
@@ -2451,6 +2456,131 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceAddMenuOpen(false);
   };
 
+  /**
+   * The assistant's workspace tool. Every operation goes through the same handlers the menus use,
+   * so the assistant can do exactly what a user can from the UI and nothing more; each outcome is
+   * reported in the user's terms and shown in the chat.
+   */
+  const handleAssistantWorkspaceEdit = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
+    const panelName = (type: string) => panelCatalogById.get(type)?.name || getWorkspaceTitle(type);
+    const findPanel = (panelId: string) => {
+      const bareId = panelId.replace(/^mobile:/, '');
+      return (isWorkspaceStacked ? mobileWorkspacePanels : workspacePanels).find(panel => panel.id === bareId)
+        ?? workspacePanels.find(panel => panel.id === bareId)
+        ?? mobileWorkspacePanels.find(panel => panel.id === bareId);
+    };
+    const results: WorkspaceEditResult[] = [];
+    // Removals are batched so several in one turn do not race on stale panel lists.
+    const removedIds = new Set<string>();
+    // A save snapshots committed state, so it cannot follow a change made in the same turn.
+    let panelsChanged = false;
+
+    for (const operation of operations) {
+      switch (operation.op) {
+        case 'addPanel': {
+          const type = resolvePanelType(operation.panelType, panelCatalog);
+          if (!type) {
+            results.push({ operation, ok: false, message: `No panel type "${operation.panelType}"; available: ${panelCatalog.map(panel => panel.id).join(', ')}.` });
+            break;
+          }
+          const padId = operation.padId && gamepadLibrary.some(item => item.id === operation.padId) ? operation.padId : undefined;
+          if (isWorkspaceStacked) {
+            const target = activeMobilePanel;
+            if (!target) {
+              results.push({ operation, ok: false, message: 'No mobile window to put the panel in.' });
+              break;
+            }
+            handleChangeMobileWorkspacePanel(target.id, type);
+            if (operation.cameraTopic && type === 'camera') handleWorkspaceCameraTopicChange(target.id, operation.cameraTopic);
+            if (padId && type === 'pad') handleWorkspacePadLayoutChange(target.id, padId);
+            results.push({ operation, ok: true, message: `Showing ${panelName(type)} in the active window.` });
+            break;
+          }
+          handleAddWorkspacePanel(type, undefined, undefined, {
+            cameraTopic: type === 'camera' ? operation.cameraTopic : undefined,
+            layoutId: type === 'pad' ? padId : undefined,
+            title: operation.title,
+          });
+          panelsChanged = true;
+          results.push({ operation, ok: true, message: `Added a ${panelName(type)} panel.` });
+          break;
+        }
+        case 'removePanel': {
+          const panel = findPanel(operation.panelId);
+          if (!panel || removedIds.has(panel.id)) {
+            results.push({ operation, ok: false, message: `No open panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (isWorkspaceStacked) {
+            results.push({ operation, ok: false, message: `On a phone the two windows stay; switch what "${panel.title}" shows instead of removing it.` });
+            break;
+          }
+          removedIds.add(panel.id);
+          panelsChanged = true;
+          handleRemoveWorkspacePanel(panel.id);
+          results.push({ operation, ok: true, message: `Removed the ${panel.title} panel.` });
+          break;
+        }
+        case 'setCameraTopic': {
+          const panel = findPanel(operation.panelId);
+          if (!panel || panel.type !== 'camera') {
+            results.push({ operation, ok: false, message: `No camera panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (!availableCameraTopics.includes(operation.cameraTopic)) {
+            results.push({ operation, ok: false, message: `"${operation.cameraTopic}" is not an available image topic.` });
+            break;
+          }
+          handleWorkspaceCameraTopicChange(panel.id, operation.cameraTopic);
+          results.push({ operation, ok: true, message: `${panel.title} now shows ${operation.cameraTopic}.` });
+          break;
+        }
+        case 'setPanelPad': {
+          const panel = findPanel(operation.panelId);
+          const pad = gamepadLibrary.find(item => item.id === operation.padId);
+          if (!panel || panel.type !== 'pad') {
+            results.push({ operation, ok: false, message: `No Pad panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (!pad) {
+            results.push({ operation, ok: false, message: `No saved Pad with id "${operation.padId}".` });
+            break;
+          }
+          handleWorkspacePadLayoutChange(panel.id, pad.id);
+          results.push({ operation, ok: true, message: `${panel.title} now shows the "${pad.name}" Pad.` });
+          break;
+        }
+        case 'applyLayout': {
+          const layout = savedWorkspaceLayouts.find(item => item.id === operation.layoutId);
+          if (!layout) {
+            results.push({ operation, ok: false, message: `No saved layout with id "${operation.layoutId}".` });
+            break;
+          }
+          panelsChanged = true;
+          handleLoadSavedWorkspaceLayout(layout);
+          results.push({ operation, ok: true, message: `Loaded the "${layout.title}" layout.` });
+          break;
+        }
+        case 'saveLayout': {
+          if (workspaceTiles.length === 0) {
+            results.push({ operation, ok: false, message: 'There is nothing in the workspace to save.' });
+            break;
+          }
+          if (panelsChanged) {
+            results.push({ operation, ok: false, message: 'Ask again to save once the changes above are on screen.' });
+            break;
+          }
+          const savedLayout = createSavedWorkspaceSnapshot(operation.title);
+          setSavedWorkspaceLayouts(prev => [...prev, savedLayout]);
+          setActiveWorkspaceLayoutId(savedLayout.id);
+          results.push({ operation, ok: true, message: `Saved the current workspace as "${operation.title}".` });
+          break;
+        }
+      }
+    }
+    return results;
+  };
+
   const handleExportWorkspaceLayouts = () => {
     if (savedWorkspaceLayouts.length === 0 && workspacePanels.length === 0) return;
 
@@ -3128,6 +3258,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         <VisualizationPanel
           ros={ros}
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
+          panelId={panel.id}
+          onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
         />
       );
     }
@@ -3150,7 +3282,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel ros={ros} isActive={isPanelActive} />;
+      return <TfTreePanel ros={ros} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
     }
 
     if (panel.type === 'pad') {
@@ -4066,6 +4198,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onReviewPadProposal={handleReviewAssistantPad}
         onOpenResource={handleOpenAssistantResource}
         canOpenResource={canOpenAssistantResource}
+        onApplyWorkspaceEdit={handleAssistantWorkspaceEdit}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [
@@ -4142,6 +4275,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             })),
             layout: layout.layout,
           })),
+          panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
         })}
       />
     </div>

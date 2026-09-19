@@ -4,6 +4,7 @@ import type { CustomGamepadLayout } from '../customGamepad/types';
 import type { RosOperation } from '../../utils/rosOperations';
 import type { AssistantProviderId } from './providers/types';
 import type { RosActionValidationIssue } from './tools/rosActionValidator';
+import type { WorkspaceEditOperation, WorkspaceEditResult } from './tools/workspaceTool';
 
 export type { AssistantProviderId };
 
@@ -101,6 +102,9 @@ export interface WorkspaceSnapshotPanel {
   selected?: boolean;
   /** Host-owned configuration only. External-panel iframe state is never read through this field. */
   configuration?: Record<string, unknown>;
+  /** Live settings reported by the panel's own bridge, when it registered one. */
+  settings?: Record<string, unknown>;
+  settingsHelp?: string;
 }
 
 export interface WorkspaceLayoutContext {
@@ -122,6 +126,8 @@ export interface WorkspaceSnapshot {
   openBehaviorTreeId: string | null;
   currentLayout?: WorkspaceLayoutContext;
   savedLayouts: WorkspaceLayoutContext[];
+  /** Panel types the shell can add right now (built-in plus installed external panels). */
+  panelCatalog: Array<{ id: string; name: string }>;
   fetchedAt: number;
 }
 
@@ -172,6 +178,20 @@ export interface BehaviorTreeAssistantBridge {
   notify(notice: { type: 'success' | 'error'; title: string; message: string }): void;
 }
 
+/**
+ * Registered by a mounted panel (3D view, TF tree, …) so the assistant can read what the panel
+ * shows and change its settings on request. `describe()` is called when a turn is sent, so the
+ * model always sees the current values; `apply()` receives the model's patch and reports every
+ * outcome in the user's terms, exactly like the workspace tool's other operations.
+ */
+export interface PanelSettingsBridge {
+  panelType: string;
+  /** One paragraph for the model: which keys `apply` understands and what they mean. */
+  settingsHelp: string;
+  describe(): Record<string, unknown>;
+  apply(settings: Record<string, unknown>): Array<{ ok: boolean; message: string }>;
+}
+
 export interface PadValidationIssue {
   componentId: string;
   componentLabel: string;
@@ -216,12 +236,26 @@ export interface AssistantRosActionProposal {
   issues: RosActionValidationIssue[];
 }
 
+export interface AssistantWorkspaceEdit {
+  kind: 'workspaceEdit';
+  summary: string;
+  operations: WorkspaceEditOperation[];
+  /** Operations the parser dropped, with the reason — shown so a malformed turn is not silent. */
+  rejected: string[];
+  /** Filled in once the shell has applied the operations. */
+  results?: WorkspaceEditResult[];
+  /** The rest of a request that needs the change first ("…with a tree that moves the robot"):
+   * sent as the next turn automatically once the operations are applied. */
+  followUp?: string;
+}
+
 export type AssistantResponse =
   | AssistantExplanation
   | AssistantClarification
   | AssistantBehaviorTreeProposal
   | AssistantPadProposal
-  | AssistantRosActionProposal;
+  | AssistantRosActionProposal
+  | AssistantWorkspaceEdit;
 
 export interface OpenAssistantOptions {
   /** Pin a specific, currently-mounted BehaviorTreePanel as this turn's BT context — used by the

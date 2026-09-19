@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
+import { FaCog } from 'react-icons/fa';
+import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 
-import { getUrdfTopics } from '../utils/urdfTopics';
+import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -32,10 +33,71 @@ interface SettingsPopupProps {
   allTopics: TopicInfo[];
 }
 
-/** One section is expanded at a time and takes the remaining height, so the frame list gets the
- * room it needs instead of forcing a long scroll past everything else. */
-type OpenSection = 'tfFrames' | 'activeViz';
+/** Each section collapses on its own; the open ones share the remaining height so the frame
+ * list gets room instead of forcing a long scroll past everything else. */
+type SectionId = 'tfFrames' | 'activeViz';
 type PopupView = 'main' | 'frameDisplay';
+
+/** A length in scene metres. The slider is logarithmic so the small end (a few centimetres for a
+ * desktop robot) has as much travel as the large end, and the number next to it is typed into
+ * directly for an exact value. */
+const ScaleField: React.FC<{
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}> = ({ id, label, value, min, max, disabled, onChange }) => {
+  const SLIDER_STEPS = 1000;
+  const toSlider = (metres: number) => Math.round((Math.log(Math.min(Math.max(metres, min), max) / min) / Math.log(max / min)) * SLIDER_STEPS);
+  const fromSlider = (position: number) => min * Math.pow(max / min, position / SLIDER_STEPS);
+  const [draft, setDraft] = useState<string | null>(null);
+  const commitDraft = () => {
+    if (draft === null) return;
+    const parsed = parseFloat(draft);
+    if (Number.isFinite(parsed) && parsed > 0) onChange(Math.min(Math.max(parsed, min), max));
+    setDraft(null);
+  };
+
+  return (
+    <div className="scale-field">
+      <div className="control-heading-row">
+        <label htmlFor={id}>{label}</label>
+        <span className="scale-field-value">
+          <input
+            type="number"
+            className="scale-field-number"
+            aria-label={`${label} in metres`}
+            min={min}
+            max={max}
+            step="0.01"
+            disabled={disabled}
+            value={draft ?? value.toFixed(2)}
+            onChange={event => setDraft(event.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={event => {
+              if (event.key === 'Enter') commitDraft();
+            }}
+          />
+          <span>m</span>
+        </span>
+      </div>
+      <input
+        type="range"
+        id={id}
+        min={0}
+        max={SLIDER_STEPS}
+        step={1}
+        value={toSlider(value)}
+        disabled={disabled}
+        onChange={event => onChange(Number(fromSlider(Number(event.target.value)).toFixed(3)))}
+        className="range-input"
+      />
+    </div>
+  );
+};
 
 const FRAME_FILTER_THRESHOLD = 6;
 
@@ -68,12 +130,12 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onUpdateVisualizationTopic,
   allTopics = [],
 }) => {
-  const [openSection, setOpenSection] = useState<OpenSection>('tfFrames');
+  const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({ tfFrames: true, activeViz: false });
   const [view, setView] = useState<PopupView>('main');
   const [frameFilter, setFrameFilter] = useState('');
 
-  const toggleSection = (section: OpenSection) => {
-    setOpenSection(previous => (previous === section ? 'tfFrames' : section));
+  const toggleSection = (section: SectionId) => {
+    setOpenSections(previous => ({ ...previous, [section]: !previous[section] }));
   };
 
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,18 +160,8 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
     if (event.target.value) onUpdateVisualizationTopic?.(vizId, event.target.value);
   };
 
-  const getTopicsForVisualizationType = (vizType: VisualizationConfig['type']): TopicInfo[] => {
-    if (vizType === 'urdf') return getUrdfTopics(allTopics);
-
-    const typeToMessageTypes: Partial<Record<VisualizationConfig['type'], string[]>> = {
-      pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
-      camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
-      laserscan: ['sensor_msgs/LaserScan', 'sensor_msgs/msg/LaserScan'],
-      posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'],
-    };
-    const supportedTypes = typeToMessageTypes[vizType] ?? [];
-    return allTopics.filter(topic => supportedTypes.includes(topic.type));
-  };
+  const compatibleTopicsFor = (vizType: VisualizationConfig['type']): TopicInfo[] =>
+    isTopicVisualizationType(vizType) ? getTopicsForVisualizationType(vizType, allTopics) : [];
 
   if (view === 'frameDisplay') {
     return (
@@ -142,22 +194,14 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             />
           </label>
           <div className="tf-scale-control">
-            <div className="control-heading-row">
-              <label htmlFor="tf-axes-scale">Axes size</label>
-              <output htmlFor="tf-axes-scale" className="range-value">
-                {tfDisplay.tfAxesScale.toFixed(2)} m
-              </output>
-            </div>
-            <input
-              type="range"
+            <ScaleField
               id="tf-axes-scale"
-              min="0.05"
-              max="2"
-              step="0.05"
+              label="Axes size"
               value={tfDisplay.tfAxesScale}
+              min={0.01}
+              max={5}
               disabled={!tfDisplay.showTfAxes}
-              onChange={event => onTfDisplayChange({ tfAxesScale: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfAxesScale => onTfDisplayChange({ tfAxesScale })}
             />
             <div className="control-heading-row">
               <label htmlFor="tf-axes-opacity">Axes opacity</label>
@@ -196,22 +240,14 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             />
           </label>
           <div className="tf-scale-control">
-            <div className="control-heading-row">
-              <label htmlFor="tf-label-scale">Label size</label>
-              <output htmlFor="tf-label-scale" className="range-value">
-                {tfDisplay.tfLabelScale.toFixed(2)} m
-              </output>
-            </div>
-            <input
-              type="range"
+            <ScaleField
               id="tf-label-scale"
-              min="0.02"
-              max="1"
-              step="0.02"
+              label="Label size"
               value={tfDisplay.tfLabelScale}
+              min={0.01}
+              max={2}
               disabled={!tfDisplay.showTfFrameLabels}
-              onChange={event => onTfDisplayChange({ tfLabelScale: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfLabelScale => onTfDisplayChange({ tfLabelScale })}
             />
             <div className="control-heading-row">
               <label htmlFor="tf-label-opacity">Label opacity</label>
@@ -284,38 +320,49 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           </div>
         </section>
 
-        <section className={`popup-section tf-frames-section${openSection === 'tfFrames' ? ' is-open' : ''}`}>
-          <div className="section-header-with-action">
+        <section className={`popup-section tf-frames-section${openSections.tfFrames ? ' is-open' : ''}`}>
+          {/* The gear sits by the title, not by the chevron: it configures the frames, it does not
+              fold them. The title button is the accessible toggle; the badge/chevron strip is a
+              second click target for the same toggle, hidden from assistive tech. */}
+          <div className="section-header-row">
             <button
               type="button"
-              className="section-header"
+              className="section-header section-header--title"
               onClick={() => toggleSection('tfFrames')}
-              aria-expanded={openSection === 'tfFrames'}
+              aria-expanded={openSections.tfFrames}
               aria-label="TF frames"
             >
               <span className="section-heading-copy">
                 <span className="settings-menu-label">TF display</span>
                 <span className="section-heading-title">Frames</span>
               </span>
-              <span className="section-heading-meta">
-                <span className="settings-count-badge">
-                  {displayedTfFrames.length}/{availableFrames.length}
-                </span>
-                {openSection === 'tfFrames' ? <FiChevronDown /> : <FiChevronRight />}
-              </span>
             </button>
             <button
               type="button"
-              className="settings-icon-button section-action-button"
+              className="settings-icon-button section-title-action"
               onClick={() => setView('frameDisplay')}
               title="Frame display settings"
               aria-label="Frame display settings"
             >
-              <FiSettings aria-hidden="true" />
+              <FaCog aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="section-header section-header--meta"
+              onClick={() => toggleSection('tfFrames')}
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <span className="section-heading-meta">
+                <span className="settings-count-badge">
+                  {displayedTfFrames.length}/{availableFrames.length}
+                </span>
+                {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
+              </span>
             </button>
           </div>
 
-          {openSection === 'tfFrames' && (
+          {openSections.tfFrames && (
             <div className="section-content tf-section-content">
               <label className="settings-toggle-row">
                 <span>Show all frames</span>
@@ -364,40 +411,33 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           )}
         </section>
 
-        <section className={`popup-section active-visualizations-section${openSection === 'activeViz' ? ' is-open' : ''}`}>
-          <div className="section-header-with-action">
-            <button
-              type="button"
-              className="section-header"
-              onClick={() => toggleSection('activeViz')}
-              aria-expanded={openSection === 'activeViz'}
-            >
-              <span className="section-heading-copy">
-                <span className="settings-menu-label">Scene</span>
-                <span className="section-heading-title">Active visualizations</span>
-              </span>
-              <span className="section-heading-meta">
-                <span className="settings-count-badge">{activeVisualizations.length}</span>
-                {openSection === 'activeViz' ? <FiChevronDown /> : <FiChevronRight />}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="add-viz-popup-button"
-              onClick={onAddVisualizationClick}
-              title="Add visualization"
-              aria-label="Add visualization"
-            >
-              <FiPlus aria-hidden="true" />
-            </button>
-          </div>
+        <section className={`popup-section active-visualizations-section${openSections.activeViz ? ' is-open' : ''}`}>
+          <button
+            type="button"
+            className="section-header"
+            onClick={() => toggleSection('activeViz')}
+            aria-expanded={openSections.activeViz}
+          >
+            <span className="section-heading-copy">
+              <span className="settings-menu-label">Scene</span>
+              <span className="section-heading-title">Active visualizations</span>
+            </span>
+            <span className="section-heading-meta">
+              <span className="settings-count-badge">{activeVisualizations.length}</span>
+              {openSections.activeViz ? <FiChevronDown /> : <FiChevronRight />}
+            </span>
+          </button>
 
-          {openSection === 'activeViz' && (
+          {openSections.activeViz && (
             <div className="section-content active-visualizations-list">
+              <button type="button" className="settings-nav-row is-primary" onClick={onAddVisualizationClick} aria-label="Add visualization">
+                <FiPlus aria-hidden="true" />
+                <span>Add visualization</span>
+              </button>
               {activeVisualizations.length > 0 ? (
                 <ul>
                   {activeVisualizations.map(viz => {
-                    const compatibleTopics = getTopicsForVisualizationType(viz.type);
+                    const compatibleTopics = compatibleTopicsFor(viz.type);
                     const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
                     const selectId = `visualization-topic-${viz.id}`;
 
@@ -414,7 +454,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                                 title={`Configure ${TYPE_LABELS[viz.type]}`}
                                 aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
                               >
-                                <FiSettings aria-hidden="true" />
+                                <FaCog aria-hidden="true" />
                               </button>
                             )}
                             <button

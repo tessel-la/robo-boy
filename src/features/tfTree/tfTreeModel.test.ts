@@ -4,6 +4,7 @@ import {
   computeConnectedComponents,
   consumeTfMessage,
   createEmptyTfTreeState,
+  detectClockReset,
   getTfGraphDiagnostics,
   isTransformStale,
   quaternionToEulerRpy,
@@ -155,5 +156,28 @@ describe('tfTreeModel', () => {
     const record = state.transformsByChild.get('sensor')!;
 
     expect(isTransformStale(record, 1_000_000, 5_000)).toBe(false);
+  });
+
+  describe('clock resets', () => {
+    const stamped = (parent: string, child: string, sec: number) => ({
+      transforms: [{ header: { frame_id: parent, stamp: { sec, nanosec: 0 } }, child_frame_id: child }],
+    });
+
+    it('still drops a slightly late message but accepts one from a restarted clock', () => {
+      let state = consumeTfMessage(createEmptyTfTreeState(), stamped('map', 'base', 100), 'dynamic', 1_000);
+      state = consumeTfMessage(state, stamped('map', 'base', 99), 'dynamic', 1_001);
+      expect(state.transformsByChild.get('base')?.messageTimestampMs).toBe(100_000);
+
+      state = consumeTfMessage(state, stamped('map', 'base', 3), 'dynamic', 1_002);
+      expect(state.transformsByChild.get('base')?.messageTimestampMs).toBe(3_000);
+    });
+
+    it('detects a restart only from a dynamic stamp far behind the one it replaces', () => {
+      const state = consumeTfMessage(createEmptyTfTreeState(), stamped('map', 'base', 100), 'dynamic', 1_000);
+      expect(detectClockReset(state, stamped('map', 'base', 99))).toBe(false);
+      expect(detectClockReset(state, stamped('map', 'base', 3))).toBe(true);
+      expect(detectClockReset(state, stamped('map', 'other', 3))).toBe(false);
+      expect(detectClockReset(createEmptyTfTreeState(), stamped('map', 'base', 3))).toBe(false);
+    });
   });
 });

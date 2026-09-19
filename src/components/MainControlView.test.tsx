@@ -25,6 +25,12 @@ const rosConnection: { isConnected: boolean; connectionStatus: 'connected' | 'co
   connectionStatus: 'connected',
 };
 
+const sendAssistantChatMock = vi.hoisted(() => vi.fn());
+vi.mock('../features/assistant/providers/index', async importOriginal => {
+  const actual = await importOriginal<typeof import('../features/assistant/providers/index')>();
+  return { ...actual, sendAssistantChat: sendAssistantChatMock };
+});
+
 vi.mock('../hooks/useRos', () => ({
   useRos: () => ({
     ros: mockRos,
@@ -960,6 +966,99 @@ describe('MainControlView desktop workspace', () => {
     expect(exported.gamepads).toHaveLength(1);
     click.mockRestore();
     createObjectURL.mockRestore();
+  });
+
+  it('lets the assistant add, retarget and remove workspace panels through the same handlers as the menus', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Added a Behavior tree panel.',
+      operations: [
+        { op: 'addPanel', panelType: 'Behavior tree' },
+        { op: 'setCameraTopic', panelId: 'panel-camera', cameraTopic: '/not/a/camera' },
+        { op: 'removePanel', panelId: 'ghost' },
+      ],
+    }));
+    renderMainControlView();
+    await screen.findByLabelText('Camera');
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    const composer = () => screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ });
+    fireEvent.change(await composer(), { target: { value: 'edit the layout and add the bt panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Added a Behavior tree panel.', { selector: 'li' });
+    expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
+    expect(screen.getByText('"/not/a/camera" is not an available image topic.')).toBeInTheDocument();
+    expect(screen.getByText('No open panel with id "ghost".')).toBeInTheDocument();
+    // The model was told which panel types exist.
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"panelCatalog"');
+
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Removed the camera.',
+      operations: [{ op: 'removePanel', panelId: 'panel-camera' }],
+    }));
+    fireEvent.change(await composer(), { target: { value: 'remove the camera panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Removed the Camera panel.');
+    await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
+  });
+
+  it('lets the assistant retarget a Pad panel, load and save layouts, and refuses what does not exist', async () => {
+    const savedLayout = {
+      id: 'layout-one',
+      title: 'Inspection layout',
+      panels: [makePanel('panel-camera', 'camera', 'Camera'), makePanel('panel-3d', '3d', '3D view')],
+      tileOrder: ['panel-camera', 'panel-3d'],
+      layout: { rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] } },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    localStorage.setItem(workspaceSavedLayoutsKey, JSON.stringify([savedLayout]));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: '',
+      operations: [
+        { op: 'setPanelPad', panelId: 'panel-pad', padId: 'custom-drive' },
+        { op: 'setPanelPad', panelId: 'panel-pad', padId: 'no-such-pad' },
+        { op: 'addPanel', panelType: 'lidar' },
+        { op: 'applyLayout', layoutId: 'missing' },
+        { op: 'applyLayout', layoutId: 'layout-one' },
+        { op: 'saveLayout', title: 'Too early' },
+      ],
+    }));
+    renderMainControlView();
+    await screen.findByLabelText('Pad controls');
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    const composer = () => screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ });
+    fireEvent.change(await composer(), { target: { value: 'show my inspection layout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Loaded the "Inspection layout" layout.');
+    expect(screen.getByText('Pad controls now shows the "Drive Pad" Pad.')).toBeInTheDocument();
+    expect(screen.getByText('No saved Pad with id "no-such-pad".')).toBeInTheDocument();
+    expect(screen.getByText(/No panel type "lidar"; available: camera, 3d/)).toBeInTheDocument();
+    expect(screen.getByText('No saved layout with id "missing".')).toBeInTheDocument();
+    expect(screen.getByText('Ask again to save once the changes above are on screen.')).toBeInTheDocument();
+    expect(await screen.findByLabelText('3D view')).toBeInTheDocument();
+    expect(screen.getByText('Applied 2 of 6 workspace changes.')).toBeInTheDocument();
+
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Saved.',
+      operations: [{ op: 'saveLayout', title: 'Teleop' }],
+    }));
+    fireEvent.change(await composer(), { target: { value: 'save this layout as Teleop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Saved the current workspace as "Teleop".');
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(workspaceSavedLayoutsKey) ?? '[]').map((layout: { title: string }) => layout.title)).toEqual(['Inspection layout', 'Teleop'])
+    );
   });
 
   it('carries each 3D panel\'s scene settings through a bundle export and import', async () => {

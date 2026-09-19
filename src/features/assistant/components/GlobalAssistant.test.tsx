@@ -17,6 +17,7 @@ const workspace: WorkspaceSnapshot = {
   selectedPadLayoutId: null,
   openBehaviorTreeId: null,
   savedLayouts: [{ id: 'l1', title: 'Field setup', panels: [] }],
+  panelCatalog: [{ id: 'camera', name: 'Camera' }, { id: 'behaviorTree', name: 'Behavior tree' }],
   fetchedAt: Date.now(),
 };
 
@@ -68,6 +69,98 @@ describe('GlobalAssistant', () => {
     expect(sendAssistantChatMock).toHaveBeenCalledOnce();
     const request = sendAssistantChatMock.mock.calls[0][0];
     expect(request.messages[request.messages.length - 1]).toMatchObject({ role: 'user', content: 'Why can I not see a camera feed?' });
+  });
+
+  it('applies a workspace edit through the host at once and shows each outcome', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Added a Behavior tree panel.',
+      operations: [{ op: 'addPanel', panelType: 'behaviorTree' }, { op: 'removePanel', panelId: 'nope' }, { op: 'bogus' }],
+    }));
+    const onApplyWorkspaceEdit = vi.fn((operations: Array<{ op: string }>) =>
+      operations.map(operation =>
+        operation.op === 'addPanel'
+          ? { operation: operation as never, ok: true, message: 'Added a Behavior tree panel.' }
+          : { operation: operation as never, ok: false, message: 'No open panel with id "nope".' }
+      )
+    );
+    renderOpenAssistant({ onApplyWorkspaceEdit });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'edit the layout and add the bt panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByTestId('assistant-workspace-edit-card')).toBeInTheDocument());
+    expect(onApplyWorkspaceEdit).toHaveBeenCalledWith([
+      { op: 'addPanel', panelType: 'behaviorTree' },
+      { op: 'removePanel', panelId: 'nope' },
+    ]);
+    expect(screen.getByText('Applied 1 of 2 workspace changes.')).toBeInTheDocument();
+    expect(screen.getByText('No open panel with id "nope".')).toBeInTheDocument();
+    expect(screen.getByText('Operation 3: unknown op "bogus".')).toBeInTheDocument();
+    // The tool was offered to the model because the request talks about the layout.
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('## Workspace tool');
+  });
+
+  it('sends the rest of a request as the next turn once the workspace change is applied', async () => {
+    sendAssistantChatMock
+      .mockResolvedValueOnce(JSON.stringify({
+        kind: 'workspaceEdit',
+        summary: 'Added a Behavior tree panel.',
+        operations: [{ op: 'addPanel', panelType: 'behaviorTree' }],
+        followUp: 'Build a tree that moves the robot 0.1 m left and then right.',
+      }))
+      .mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'Here is the tree plan.' }));
+    const onApplyWorkspaceEdit = vi.fn((operations: Array<{ op: string }>) =>
+      operations.map(operation => ({ operation: operation as never, ok: true, message: 'Added a Behavior tree panel.' }))
+    );
+    renderOpenAssistant({ onApplyWorkspaceEdit });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a bt panel with a bt that moves the robot left and right' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('Here is the tree plan.')).toBeInTheDocument());
+    expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
+    const secondRequest = sendAssistantChatMock.mock.calls[1][0];
+    expect(secondRequest.messages[secondRequest.messages.length - 1]).toMatchObject({ role: 'user', content: 'Build a tree that moves the robot 0.1 m left and then right.' });
+    expect(screen.getByText('Build a tree that moves the robot 0.1 m left and then right.')).toBeInTheDocument();
+  });
+
+  it('routes configurePanel to the panel that registered a settings bridge and folds its live settings into the context', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Shown.',
+      operations: [
+        { op: 'configurePanel', panelType: '3d', settings: { showTfFrames: ['base_link'] } },
+        { op: 'configurePanel', panelId: 'nope', settings: { showTfFrames: ['base_link'] } },
+      ],
+    }));
+    const ref = createRef<GlobalAssistantHandle>();
+    render(<GlobalAssistant ref={ref} ros={null} isConnected={false} connectionGeneration={0} workspace={{ ...workspace, openPanels: [{ id: 'p3d', type: '3d', title: '3D view' }] }} />);
+    const apply = vi.fn(() => [{ ok: true, message: 'Showing base_link.' }]);
+    act(() => {
+      ref.current?.registerPanelSettingsBridge('p3d', { panelType: '3d', settingsHelp: 'Keys: showTfFrames.', describe: () => ({ displayedTfFrames: ['world'] }), apply });
+      ref.current?.open();
+    });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'show base_link in the 3d view' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('Showing base_link.')).toBeInTheDocument());
+    expect(apply).toHaveBeenCalledWith({ showTfFrames: ['base_link'] });
+    expect(screen.getByText('No open panel "nope" can be configured from here.')).toBeInTheDocument();
+    const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt as string;
+    expect(prompt).toContain('"displayedTfFrames":["world"]');
+    expect(prompt).toContain('Keys: showTfFrames.');
+  });
+
+  it('tells the user when no host is mounted to edit the workspace', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'workspaceEdit', summary: '', operations: [{ op: 'addPanel', panelType: 'camera' }] }));
+    renderOpenAssistant();
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a camera panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('The workspace cannot be edited from here.')).toBeInTheDocument());
   });
 
   it('opens pinned to a Behavior Tree panel via the imperative handle without starting a second conversation', async () => {

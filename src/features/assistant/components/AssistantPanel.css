@@ -1,4 +1,5 @@
-/* Docked on the same side as the launcher, so the panel opens where the button was pressed. */
+/* Docked on the same side as the launcher by default; on desktop the frame floats — dragged by
+   its header, resized from any edge — and `useFloatingFrame` sets left/top/width/height inline. */
 .assistant-overlay {
   position: fixed;
   z-index: 1400;
@@ -7,6 +8,15 @@
   bottom: 0;
   width: clamp(420px, 32vw, 480px);
   pointer-events: none;
+}
+
+.assistant-overlay.is-floating {
+  right: auto;
+  bottom: auto;
+}
+
+.assistant-overlay.is-dragging {
+  user-select: none;
 }
 
 .assistant-panel {
@@ -19,12 +29,59 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   border: 1px solid var(--border-color, #d9dee7);
-  border-width: 0 0 0 1px;
+  border-radius: 12px;
   background: var(--card-bg, #fff);
   color: var(--text-color, #1f2937);
-  box-shadow: -12px 0 30px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.2);
   pointer-events: auto;
 }
+
+.is-floating .assistant-header {
+  cursor: grab;
+}
+
+.is-dragging .assistant-header {
+  cursor: grabbing;
+}
+
+.assistant-resize-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.assistant-resize-handle.n,
+.assistant-resize-handle.s {
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.assistant-resize-handle.e,
+.assistant-resize-handle.w {
+  top: 12px;
+  bottom: 12px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.assistant-resize-handle.n { top: 0; }
+.assistant-resize-handle.s { bottom: 0; }
+.assistant-resize-handle.e { right: 0; }
+.assistant-resize-handle.w { left: 0; }
+
+.assistant-resize-handle.ne,
+.assistant-resize-handle.nw,
+.assistant-resize-handle.se,
+.assistant-resize-handle.sw {
+  width: 14px;
+  height: 14px;
+}
+
+.assistant-resize-handle.ne { top: 0; right: 0; cursor: nesw-resize; }
+.assistant-resize-handle.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.assistant-resize-handle.nw { top: 0; left: 0; cursor: nwse-resize; }
+.assistant-resize-handle.se { bottom: 0; right: 0; cursor: nwse-resize; }
 
 .assistant-header {
   display: flex;
@@ -388,11 +445,30 @@
 
 .assistant-status {
   align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--background-secondary, #f6f8fb);
   color: var(--text-secondary, #64748b);
   font-size: 12px;
+  /* Provider errors quote long URLs and JSON; they wrap instead of running out of the panel. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.assistant-status.error {
+  align-self: stretch;
+  background: color-mix(in srgb, var(--error-color, #dc2626) 10%, var(--card-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--error-color, #dc2626) 30%, transparent);
+}
+
+.assistant-message,
+.assistant-proposal-card,
+.assistant-attachment-error {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .assistant-status.error,
@@ -1263,6 +1339,7 @@
 
   .assistant-panel {
     border: 0;
+    border-radius: 0;
     box-shadow: none;
   }
 
@@ -1361,4 +1438,25 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+.assistant-result-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.assistant-result-list li::before {
+  content: '✓';
+  display: inline-block;
+  width: 1.2em;
+  color: var(--success-color, #16a34a);
+  font-weight: 700;
+}
+
+.assistant-result-list li.is-failed::before {
+  content: '✗';
+  color: var(--error-color, #dc3545);
 }

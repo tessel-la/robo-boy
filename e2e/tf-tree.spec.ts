@@ -75,7 +75,9 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
           if (!panel || !healthy || !staticNode) return false;
           return (
             getComputedStyle(panel).backgroundColor === resolveColor('--background-color') &&
-            getComputedStyle(healthy).borderTopColor === resolveColor('--primary-color') &&
+            // Healthy is the theme's green, not its accent — Solarized's orange accent must not
+            // read as a warning on a live frame.
+            getComputedStyle(healthy).borderTopColor === resolveColor('--success-color') &&
             getComputedStyle(staticNode).borderTopColor === resolveColor('--secondary-color')
           );
         })
@@ -93,12 +95,8 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
   await page.getByLabel('Search TF frame').press('Enter');
   await expect(page.locator('.tf-frame-node--match')).toHaveCount(1);
 
-  await page.getByLabel('Pause live TF updates').click();
+  // Live updates cannot be paused any more: a new frame shows up as soon as it is published.
   await publishTf(page, '/tf', [transform('base_link', 'imu', 102)]);
-  await page.getByTestId('tf-tree-menu-button').click();
-  await expect(summary).toContainText('5 frames');
-  await page.getByLabel('Close TF tree menu').click();
-  await page.getByLabel('Resume live TF updates').click();
   await page.getByTestId('tf-tree-menu-button').click();
   await expect(summary).toContainText('6 frames');
 
@@ -120,11 +118,8 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
     )
     .toBe(true);
 
-  await addPanel(page, 'Behavior tree');
-  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
-  const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
-  expect(tfControlBox?.width).toBe(btControlBox?.width);
-  expect(tfControlBox?.height).toBe(btControlBox?.height);
+  // The TF tree has its own Arrange button; the canvas zoom/fit controls would duplicate it.
+  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toHaveCount(0);
 });
 
 test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) => {
@@ -167,14 +162,14 @@ test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) =
     .poll(async () => {
       const panelBox = await panel.boundingBox();
       const searchBox = await page.getByTestId('tf-tree-search').boundingBox();
-      const pauseBox = await page.getByLabel('Pause live TF updates').boundingBox();
-      if (!panelBox || !searchBox || !pauseBox) return false;
+      const refreshBox = await page.getByLabel('Refresh TF tree').boundingBox();
+      if (!panelBox || !searchBox || !refreshBox) return false;
       return (
         panelBox.width < 500 &&
         searchBox.width <= 44 &&
-        pauseBox.width >= 42 &&
+        refreshBox.width >= 32 &&
         searchBox.x + searchBox.width <= panelBox.x + panelBox.width &&
-        pauseBox.x + pauseBox.width <= panelBox.x + panelBox.width
+        refreshBox.x + refreshBox.width <= panelBox.x + panelBox.width
       );
     })
     .toBe(true);
@@ -206,19 +201,21 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101)]);
   await publishTf(page, '/tf_static', [transform('world', 'camera_mount', 1)]);
 
-  await expect(page.getByLabel('Pause live TF updates')).toBeVisible();
-  await expect(page.getByLabel('Refresh TF subscriptions')).toBeVisible();
+  await expect(page.getByLabel('Pause live TF updates')).toHaveCount(0);
+  await expect(page.getByLabel('Refresh TF tree')).toBeVisible();
   await expect(page.getByLabel('Arrange TF tree')).toBeVisible();
   await expect(page.getByLabel('Search TF frame')).toBeVisible();
-  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toBeHidden();
+  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toHaveCount(0);
   await page.getByTestId('tf-tree-menu-button').click();
   await expect(page.getByLabel('Filter TF frames')).toBeVisible();
   await expect(page.getByTestId('tf-tree-menu-panel')).toBeVisible();
   await page.getByLabel('Close TF tree menu').click();
   await expect(details).toHaveCount(0);
 
-  await page.getByLabel('Refresh TF subscriptions').click();
-  await publishTf(page, '/tf', [transform('base_link', 'imu', 102)]);
+  // Refresh forgets every frame; the latched static comes back on its own, the dynamic ones
+  // only as they are published again.
+  await page.getByLabel('Refresh TF tree').click();
+  await publishTf(page, '/tf', [transform('map', 'base_link', 100), transform('base_link', 'laser', 101), transform('base_link', 'imu', 102)]);
   await expect(page.locator('.tf-frame-node').filter({ hasText: 'imu' })).toBeVisible();
 
   const laserNode = page.locator('.tf-frame-node').filter({ hasText: 'laser' });

@@ -7,9 +7,6 @@ import TfTreePanel from './TfTreePanel';
 
 const panelMock = vi.hoisted(() => ({
   state: null as TfTreeState | null,
-  isPaused: false,
-  pause: vi.fn(),
-  resume: vi.fn(),
   refresh: vi.fn(),
   fitView: vi.fn(),
   setCenter: vi.fn(),
@@ -18,9 +15,6 @@ const panelMock = vi.hoisted(() => ({
 vi.mock('../useTfTree', () => ({
   useTfTree: () => ({
     state: panelMock.state,
-    isPaused: panelMock.isPaused,
-    pause: panelMock.pause,
-    resume: panelMock.resume,
     refresh: panelMock.refresh,
   }),
 }));
@@ -99,9 +93,6 @@ const buildState = () => {
 describe('TfTreePanel', () => {
   beforeEach(() => {
     panelMock.state = buildState();
-    panelMock.isPaused = false;
-    panelMock.pause.mockReset();
-    panelMock.resume.mockReset();
     panelMock.refresh.mockReset();
     panelMock.fitView.mockReset();
     panelMock.setCenter.mockReset();
@@ -121,12 +112,11 @@ describe('TfTreePanel', () => {
     expect(screen.getByTestId('tf-node-world')).toBeInTheDocument();
   });
 
-  it('pauses updates, arranges the graph, and hides static transforms', () => {
+  it('refreshes, arranges the graph, and hides static transforms', () => {
     render(<TfTreePanel ros={{} as never} isActive />);
 
-    fireEvent.click(screen.getByLabelText('Pause live TF updates'));
-    expect(panelMock.pause).toHaveBeenCalledOnce();
-    const refreshButton = screen.getByLabelText('Refresh TF subscriptions');
+    expect(screen.queryByLabelText(/Pause live TF updates/)).not.toBeInTheDocument();
+    const refreshButton = screen.getByLabelText('Refresh TF tree');
     fireEvent.click(refreshButton);
     expect(panelMock.refresh).toHaveBeenCalledOnce();
     expect(refreshButton.querySelector('svg')).toHaveClass('tf-tree-refresh-icon');
