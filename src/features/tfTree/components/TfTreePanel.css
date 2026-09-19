@@ -759,15 +759,6 @@
   .tf-tree-float-bar {
     max-width: calc(100% - 124px);
   }
-  .tf-tree-live-button {
-    min-width: 36px;
-    width: 36px;
-    padding: 0;
-  }
-  .tf-tree-live-button span {
-    display: none;
-  }
-
   .tf-tree-search {
     width: 36px;
     transition: width 0.18s ease;
@@ -844,8 +835,7 @@
     max-width: min(96px, 32cqw);
     height: 34px;
   }
-  .tf-tree-icon-button,
-  .tf-tree-live-button {
+  .tf-tree-icon-button {
     width: 34px;
     min-width: 34px;
     height: 34px;
@@ -870,15 +860,6 @@
   }
 }
 
-@media (min-width: 769px) {
-  @container (max-width: 700px) {
-    .tf-tree-live-button {
-      min-width: 44px;
-      width: 44px;
-      height: 44px;
-    }
-  }
-}
 
 @media (pointer: coarse) {
   .tf-tree-component-row {
