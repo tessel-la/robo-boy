@@ -9,6 +9,7 @@ export interface BuildWorkspaceSnapshotInput {
   openBehaviorTreeId: string | null;
   currentLayout?: WorkspaceSnapshot['currentLayout'];
   savedLayouts?: WorkspaceSnapshot['savedLayouts'];
+  panelCatalog?: WorkspaceSnapshot['panelCatalog'];
 }
 
 /** Pure, serializable snapshot builder. MainControlView owns the underlying state (open panels,
@@ -24,5 +25,6 @@ export const buildWorkspaceSnapshot = (input: BuildWorkspaceSnapshotInput): Work
   openBehaviorTreeId: input.openBehaviorTreeId,
   ...(input.currentLayout ? { currentLayout: input.currentLayout } : {}),
   savedLayouts: input.savedLayouts ?? [],
+  panelCatalog: input.panelCatalog ?? [],
   fetchedAt: Date.now(),
 });

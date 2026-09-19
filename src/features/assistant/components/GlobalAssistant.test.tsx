@@ -17,6 +17,7 @@ const workspace: WorkspaceSnapshot = {
   selectedPadLayoutId: null,
   openBehaviorTreeId: null,
   savedLayouts: [{ id: 'l1', title: 'Field setup', panels: [] }],
+  panelCatalog: [{ id: 'camera', name: 'Camera' }, { id: 'behaviorTree', name: 'Behavior tree' }],
   fetchedAt: Date.now(),
 };
 
@@ -68,6 +69,46 @@ describe('GlobalAssistant', () => {
     expect(sendAssistantChatMock).toHaveBeenCalledOnce();
     const request = sendAssistantChatMock.mock.calls[0][0];
     expect(request.messages[request.messages.length - 1]).toMatchObject({ role: 'user', content: 'Why can I not see a camera feed?' });
+  });
+
+  it('applies a workspace edit through the host at once and shows each outcome', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Added a Behavior tree panel.',
+      operations: [{ op: 'addPanel', panelType: 'behaviorTree' }, { op: 'removePanel', panelId: 'nope' }, { op: 'bogus' }],
+    }));
+    const onApplyWorkspaceEdit = vi.fn((operations: Array<{ op: string }>) =>
+      operations.map(operation =>
+        operation.op === 'addPanel'
+          ? { operation: operation as never, ok: true, message: 'Added a Behavior tree panel.' }
+          : { operation: operation as never, ok: false, message: 'No open panel with id "nope".' }
+      )
+    );
+    renderOpenAssistant({ onApplyWorkspaceEdit });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'edit the layout and add the bt panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByTestId('assistant-workspace-edit-card')).toBeInTheDocument());
+    expect(onApplyWorkspaceEdit).toHaveBeenCalledWith([
+      { op: 'addPanel', panelType: 'behaviorTree' },
+      { op: 'removePanel', panelId: 'nope' },
+    ]);
+    expect(screen.getByText('Applied 1 of 2 workspace changes.')).toBeInTheDocument();
+    expect(screen.getByText('No open panel with id "nope".')).toBeInTheDocument();
+    expect(screen.getByText('Operation 3: unknown op "bogus".')).toBeInTheDocument();
+    // The tool was offered to the model because the request talks about the layout.
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('## Workspace tool');
+  });
+
+  it('tells the user when no host is mounted to edit the workspace', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'workspaceEdit', summary: '', operations: [{ op: 'addPanel', panelType: 'camera' }] }));
+    renderOpenAssistant();
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a camera panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('The workspace cannot be edited from here.')).toBeInTheDocument());
   });
 
   it('opens pinned to a Behavior Tree panel via the imperative handle without starting a second conversation', async () => {

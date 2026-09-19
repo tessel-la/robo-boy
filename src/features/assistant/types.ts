@@ -4,6 +4,7 @@ import type { CustomGamepadLayout } from '../customGamepad/types';
 import type { RosOperation } from '../../utils/rosOperations';
 import type { AssistantProviderId } from './providers/types';
 import type { RosActionValidationIssue } from './tools/rosActionValidator';
+import type { WorkspaceEditOperation, WorkspaceEditResult } from './tools/workspaceTool';
 
 export type { AssistantProviderId };
 
@@ -122,6 +123,8 @@ export interface WorkspaceSnapshot {
   openBehaviorTreeId: string | null;
   currentLayout?: WorkspaceLayoutContext;
   savedLayouts: WorkspaceLayoutContext[];
+  /** Panel types the shell can add right now (built-in plus installed external panels). */
+  panelCatalog: Array<{ id: string; name: string }>;
   fetchedAt: number;
 }
 
@@ -216,12 +219,23 @@ export interface AssistantRosActionProposal {
   issues: RosActionValidationIssue[];
 }
 
+export interface AssistantWorkspaceEdit {
+  kind: 'workspaceEdit';
+  summary: string;
+  operations: WorkspaceEditOperation[];
+  /** Operations the parser dropped, with the reason — shown so a malformed turn is not silent. */
+  rejected: string[];
+  /** Filled in once the shell has applied the operations. */
+  results?: WorkspaceEditResult[];
+}
+
 export type AssistantResponse =
   | AssistantExplanation
   | AssistantClarification
   | AssistantBehaviorTreeProposal
   | AssistantPadProposal
-  | AssistantRosActionProposal;
+  | AssistantRosActionProposal
+  | AssistantWorkspaceEdit;
 
 export interface OpenAssistantOptions {
   /** Pin a specific, currently-mounted BehaviorTreePanel as this turn's BT context — used by the

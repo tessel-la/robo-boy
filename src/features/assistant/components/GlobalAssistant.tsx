@@ -20,7 +20,7 @@ import {
   sampleRosTopic,
 } from '../context/rosContext';
 import { captureTfSnapshotOnDemand, lookupTransformOnDemand, parseDistanceRequest, parseTransformRequest, type TfLookupResult } from '../context/tfContext';
-import { composeAssistantSystemPrompt } from '../prompt';
+import { composeAssistantSystemPrompt, type AssistantTurnNeeds } from '../prompt';
 import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
 import { transcribeAssistantAudio } from '../providers/transcription';
@@ -28,6 +28,7 @@ import { getProviderDefaults, loadAssistantConversation, loadAssistantSettings, 
 import { fetchBehaviorTreeSchemas } from '../tools/behaviorTreeTool';
 import { validatePadAgainstRos } from '../tools/padValidator';
 import { validateRosActionProposal } from '../tools/rosActionValidator';
+import type { WorkspaceEditOperation, WorkspaceEditResult } from '../tools/workspaceTool';
 import type {
   AssistantAttachment,
   AssistantAutoContext,
@@ -57,6 +58,10 @@ export interface GlobalAssistantProps {
   onOpenResource?: (resourceId: string) => boolean;
   /** Whether that resource has a view to open at all, asked before a tag is drawn as clickable. */
   canOpenResource?: (resourceId: string) => boolean;
+  /** Applies the workspace tool's operations in order and reports each outcome. Absent when the
+   * host cannot edit the workspace (nothing is mounted to do it), in which case the assistant
+   * says so instead of pretending. */
+  onApplyWorkspaceEdit?: (operations: WorkspaceEditOperation[]) => WorkspaceEditResult[];
 }
 
 const MAX_ATTACHMENTS = 6;
@@ -100,12 +105,17 @@ const createAttachment = async (file: File): Promise<AssistantAttachment> => {
   };
 };
 
-const computeNeeds = (text: string, chips: AssistantContextChip[]) => {
+const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTurnNeeds => {
   const lower = text.toLowerCase();
   return {
     behaviorTree: chips.some(chip => chip.source === 'behaviorTree') || /\bbehavior[ -]?tree\b|\bbt\b/.test(lower),
     pad: chips.some(chip => chip.source === 'pad') || /\bpad\b|\bgamepad\b|\bjoystick\b|\bcontroller\b/.test(lower),
     rosAction: /\bpublish\b|\bcall\b|\bservice\b|\baction\b|\btopic\b|\bsend\b/.test(lower),
+    // Anything about what is on screen: the tool's fragment is short, so err on the side of
+    // offering it whenever a panel, layout or window is mentioned.
+    workspace:
+      chips.some(chip => chip.source === 'workspace') ||
+      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower),
   };
 };
 
@@ -187,7 +197,7 @@ const formatTfDistanceAnswer = (lookup: TfLookupResult): string => {
 };
 
 const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
-  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource }, ref) => {
+  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
@@ -733,6 +743,15 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         } else if (response.kind === 'padProposal') {
           const issues = discovery ? validatePadAgainstRos(response.layout, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: `Built Pad “${response.layout.name}”. Review its complete layout and bindings in the Pad editor before saving.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });
+        } else if (response.kind === 'workspaceEdit') {
+          const results = onApplyWorkspaceEdit
+            ? onApplyWorkspaceEdit(response.operations)
+            : response.operations.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }));
+          const applied = results.filter(result => result.ok).length;
+          const content = applied === results.length
+            ? response.summary || `Applied ${applied} workspace change${applied === 1 ? '' : 's'}.`
+            : `Applied ${applied} of ${results.length} workspace changes.`;
+          pushMessage({ id: uuidv4(), role: 'assistant', content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, results }, resolution: applied > 0 ? 'applied' : 'failed', contextUsed });
         } else {
           const issues = discovery ? validateRosActionProposal(response.operation, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: response.rationale || `Proposed ${response.operation.kind} “${response.operation.name}”.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });

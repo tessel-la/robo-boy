@@ -4,7 +4,7 @@ import { CONTEXT_CATALOG } from './capabilities';
 import type { AssistantAutoContext, AssistantContextChip } from './types';
 
 const autoContext = (overrides: Partial<AssistantAutoContext> = {}): AssistantAutoContext => ({
-  workspace: { connectionStatus: 'connected', openPanels: [], selectedPadLayoutId: null, openBehaviorTreeId: null, savedLayouts: [], fetchedAt: Date.now() },
+  workspace: { connectionStatus: 'connected', openPanels: [], selectedPadLayoutId: null, openBehaviorTreeId: null, savedLayouts: [], panelCatalog: [], fetchedAt: Date.now() },
   padLibrary: [],
   behaviorTreeLibrary: [],
   ...overrides,
@@ -15,7 +15,7 @@ const compose = (input: Partial<Parameters<typeof composeAssistantSystemPrompt>[
     settings: { systemContext: '', robotContext: '' },
     autoContext: autoContext(),
     pinnedChips: [],
-    needs: { behaviorTree: false, pad: false, rosAction: false },
+    needs: { behaviorTree: false, pad: false, rosAction: false, workspace: false },
     ...input,
   });
 
@@ -51,7 +51,7 @@ describe('composeAssistantSystemPrompt', () => {
     const plain = compose();
     expect(plain).not.toContain('## Pad tool');
 
-    const pad = compose({ needs: { behaviorTree: false, pad: true, rosAction: false } });
+    const pad = compose({ needs: { behaviorTree: false, pad: true, rosAction: false, workspace: false } });
     expect(pad).toContain('## Pad tool');
     expect(pad).toContain('The key is "topic", never "topicName"');
   });

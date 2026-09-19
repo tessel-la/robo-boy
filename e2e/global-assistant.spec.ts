@@ -52,6 +52,23 @@ test('uses a bottom-right launcher and opens a stable panel on the same side', a
   await expect(panel).toHaveCount(0);
 });
 
+test('adds a Behavior Tree panel to the workspace when asked to edit the layout', async ({ page }) => {
+  await connectWithMockRos(page);
+  await mockOpenAiCompatibleChat(page, {
+    kind: 'workspaceEdit',
+    summary: 'Added a Behavior tree panel.',
+    operations: [{ op: 'addPanel', panelType: 'behaviorTree' }],
+  });
+  await expect(page.getByRole('region', { name: 'Behavior tree' })).toHaveCount(0);
+
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('edit the layout and add the bt panel');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByTestId('assistant-workspace-edit-card')).toContainText('Added a Behavior tree panel.');
+  await expect(page.getByRole('region', { name: 'Behavior tree' })).toBeVisible();
+});
+
 test('Enter sends, Shift+Enter keeps editing, and parsing status clears after a reply', async ({ page }) => {
   await connectWithMockRos(page);
   await mockOpenAiCompatibleChat(page, { kind: 'explanation', message: 'Keyboard response.' });

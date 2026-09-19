@@ -25,6 +25,12 @@ const rosConnection: { isConnected: boolean; connectionStatus: 'connected' | 'co
   connectionStatus: 'connected',
 };
 
+const sendAssistantChatMock = vi.hoisted(() => vi.fn());
+vi.mock('../features/assistant/providers/index', async importOriginal => {
+  const actual = await importOriginal<typeof import('../features/assistant/providers/index')>();
+  return { ...actual, sendAssistantChat: sendAssistantChatMock };
+});
+
 vi.mock('../hooks/useRos', () => ({
   useRos: () => ({
     ros: mockRos,
@@ -960,6 +966,44 @@ describe('MainControlView desktop workspace', () => {
     expect(exported.gamepads).toHaveLength(1);
     click.mockRestore();
     createObjectURL.mockRestore();
+  });
+
+  it('lets the assistant add, retarget and remove workspace panels through the same handlers as the menus', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-camera', 'camera', 'Camera')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera']));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Added a Behavior tree panel.',
+      operations: [
+        { op: 'addPanel', panelType: 'Behavior tree' },
+        { op: 'setCameraTopic', panelId: 'panel-camera', cameraTopic: '/not/a/camera' },
+        { op: 'removePanel', panelId: 'ghost' },
+      ],
+    }));
+    renderMainControlView();
+    await screen.findByLabelText('Camera');
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    const composer = () => screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ });
+    fireEvent.change(await composer(), { target: { value: 'edit the layout and add the bt panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Added a Behavior tree panel.', { selector: 'li' });
+    expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
+    expect(screen.getByText('"/not/a/camera" is not an available image topic.')).toBeInTheDocument();
+    expect(screen.getByText('No open panel with id "ghost".')).toBeInTheDocument();
+    // The model was told which panel types exist.
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"panelCatalog"');
+
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Removed the camera.',
+      operations: [{ op: 'removePanel', panelId: 'panel-camera' }],
+    }));
+    fireEvent.change(await composer(), { target: { value: 'remove the camera panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Removed the Camera panel.');
+    await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
   });
 
   it('carries each 3D panel\'s scene settings through a bundle export and import', async () => {

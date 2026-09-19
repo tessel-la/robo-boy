@@ -1,5 +1,6 @@
 import { parseBehaviorTreeToolResponse } from './tools/behaviorTreeTool';
 import { normalizePadLayout } from './tools/padGeneration';
+import { parseWorkspaceEditOperations } from './tools/workspaceTool';
 import type { AssistantResponse } from './types';
 import type { BehaviorTreeResourceSchemas } from '../behaviorTree/agent/types';
 import type { RosOperation } from '../../utils/rosOperations';
@@ -65,6 +66,18 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
         operation,
         rationale: typeof value.rationale === 'string' ? value.rationale : '',
         issues: [],
+      };
+    }
+    case 'workspaceEdit': {
+      const { operations, rejected } = parseWorkspaceEditOperations(value.operations);
+      if (operations.length === 0) {
+        throw new Error(`The model proposed no valid workspace change. ${rejected.join(' ')}`.trim());
+      }
+      return {
+        kind: 'workspaceEdit',
+        summary: typeof value.summary === 'string' ? value.summary.trim() : '',
+        operations,
+        rejected,
       };
     }
     default:

@@ -1362,3 +1362,24 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+.assistant-result-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.assistant-result-list li::before {
+  content: '✓';
+  display: inline-block;
+  width: 1.2em;
+  color: var(--success-color, #16a34a);
+  font-weight: 700;
+}
+
+.assistant-result-list li.is-failed::before {
+  content: '✗';
+  color: var(--error-color, #dc3545);
+}
