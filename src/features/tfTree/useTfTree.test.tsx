@@ -43,8 +43,6 @@ const message = (parent: string, child: string, sec = 10) => ({
   ],
 });
 
-const stableRos = {} as never;
-
 describe('useTfTree', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -56,7 +54,8 @@ describe('useTfTree', () => {
   });
 
   it('subscribes to both TF topics, batches updates, and cleans up', () => {
-    const { result, unmount } = renderHook(() => useTfTree(stableRos));
+    const ros = {} as never;
+    const { result, unmount } = renderHook(() => useTfTree(ros));
 
     expect(topicMock.instances.map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
     act(() => {
@@ -131,7 +130,8 @@ describe('useTfTree', () => {
   });
 
   it('resets and resubscribes by itself when the publisher clock jumps backwards', () => {
-    const { result } = renderHook(() => useTfTree(stableRos));
+    const ros = {} as never;
+    const { result } = renderHook(() => useTfTree(ros));
     act(() => {
       topicMock.instances[0].callback?.(message('map', 'base', 500));
       topicMock.instances[1].callback?.(message('base', 'old_static', 500));

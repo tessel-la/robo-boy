@@ -118,11 +118,8 @@ test('visualizes live, static, and disconnected TF trees', async ({ page }) => {
     )
     .toBe(true);
 
-  await addPanel(page, 'Behavior tree');
-  const tfControlBox = await page.locator('.tf-tree-panel .react-flow__controls-button').first().boundingBox();
-  const btControlBox = await page.locator('.behavior-tree-panel .react-flow__controls-button').first().boundingBox();
-  expect(tfControlBox?.width).toBe(btControlBox?.width);
-  expect(tfControlBox?.height).toBe(btControlBox?.height);
+  // The TF tree has its own Arrange button; the canvas zoom/fit controls would duplicate it.
+  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toHaveCount(0);
 });
 
 test('adapts TF controls to a narrow desktop workspace tile', async ({ page }) => {
@@ -208,7 +205,7 @@ test('keeps the TF tree controls, graph, and details usable on mobile', async ({
   await expect(page.getByLabel('Refresh TF tree')).toBeVisible();
   await expect(page.getByLabel('Arrange TF tree')).toBeVisible();
   await expect(page.getByLabel('Search TF frame')).toBeVisible();
-  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toBeHidden();
+  await expect(page.locator('.tf-tree-panel .react-flow__controls')).toHaveCount(0);
   await page.getByTestId('tf-tree-menu-button').click();
   await expect(page.getByLabel('Filter TF frames')).toBeVisible();
   await expect(page.getByTestId('tf-tree-menu-panel')).toBeVisible();

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiSliders, FiTrash2, FiX } from 'react-icons/fi';
+import { FaCog } from 'react-icons/fa';
+import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import type { TfDisplaySettings } from '../utils/visualizationState';
@@ -73,7 +74,7 @@ const ScaleField: React.FC<{
             max={max}
             step="0.01"
             disabled={disabled}
-            value={draft ?? String(Number(value.toFixed(3)))}
+            value={draft ?? value.toFixed(2)}
             onChange={event => setDraft(event.target.value)}
             onBlur={commitDraft}
             onKeyDown={event => {
@@ -320,32 +321,49 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
         </section>
 
         <section className={`popup-section tf-frames-section${openSections.tfFrames ? ' is-open' : ''}`}>
-          <button
-            type="button"
-            className="section-header"
-            onClick={() => toggleSection('tfFrames')}
-            aria-expanded={openSections.tfFrames}
-            aria-label="TF frames"
-          >
-            <span className="section-heading-copy">
-              <span className="settings-menu-label">TF display</span>
-              <span className="section-heading-title">Frames</span>
-            </span>
-            <span className="section-heading-meta">
-              <span className="settings-count-badge">
-                {displayedTfFrames.length}/{availableFrames.length}
+          {/* The gear sits by the title, not by the chevron: it configures the frames, it does not
+              fold them. The title button is the accessible toggle; the badge/chevron strip is a
+              second click target for the same toggle, hidden from assistive tech. */}
+          <div className="section-header-row">
+            <button
+              type="button"
+              className="section-header section-header--title"
+              onClick={() => toggleSection('tfFrames')}
+              aria-expanded={openSections.tfFrames}
+              aria-label="TF frames"
+            >
+              <span className="section-heading-copy">
+                <span className="settings-menu-label">TF display</span>
+                <span className="section-heading-title">Frames</span>
               </span>
-              {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              className="settings-icon-button section-title-action"
+              onClick={() => setView('frameDisplay')}
+              title="Frame display settings"
+              aria-label="Frame display settings"
+            >
+              <FaCog aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="section-header section-header--meta"
+              onClick={() => toggleSection('tfFrames')}
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <span className="section-heading-meta">
+                <span className="settings-count-badge">
+                  {displayedTfFrames.length}/{availableFrames.length}
+                </span>
+                {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
+              </span>
+            </button>
+          </div>
 
           {openSections.tfFrames && (
             <div className="section-content tf-section-content">
-              <button type="button" className="settings-nav-row" onClick={() => setView('frameDisplay')}>
-                <FiSliders aria-hidden="true" />
-                <span>Frame display settings</span>
-                <FiChevronRight aria-hidden="true" />
-              </button>
               <label className="settings-toggle-row">
                 <span>Show all frames</span>
                 <input
@@ -436,7 +454,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                                 title={`Configure ${TYPE_LABELS[viz.type]}`}
                                 aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
                               >
-                                <FiSettings aria-hidden="true" />
+                                <FaCog aria-hidden="true" />
                               </button>
                             )}
                             <button

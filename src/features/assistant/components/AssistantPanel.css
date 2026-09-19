@@ -445,11 +445,30 @@
 
 .assistant-status {
   align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--background-secondary, #f6f8fb);
   color: var(--text-secondary, #64748b);
   font-size: 12px;
+  /* Provider errors quote long URLs and JSON; they wrap instead of running out of the panel. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.assistant-status.error {
+  align-self: stretch;
+  background: color-mix(in srgb, var(--error-color, #dc2626) 10%, var(--card-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--error-color, #dc2626) 30%, transparent);
+}
+
+.assistant-message,
+.assistant-proposal-card,
+.assistant-attachment-error {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .assistant-status.error,

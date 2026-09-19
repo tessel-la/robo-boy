@@ -152,6 +152,41 @@
   border-bottom: 1px solid var(--border-color, #dee2e6);
 }
 
+/* Header with an action beside the title: the action is placed over the header's own padding so
+   it reads as part of the title row while the whole row still toggles the section. */
+.section-header-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.section-header-row .section-header--title {
+  width: auto;
+  flex: 0 0 auto;
+  padding-right: 10px;
+}
+
+.section-header-row .section-header--meta {
+  width: auto;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  padding-left: 10px;
+}
+
+/* The whole row highlights as one bar, gear included. */
+.section-header-row:hover {
+  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, transparent);
+}
+
+.section-header-row .section-header:hover {
+  background: transparent;
+}
+
+.section-title-action {
+  align-self: center;
+  flex: 0 0 auto;
+}
+
 /* Expanded sections share the remaining height; their lists scroll instead of the whole menu. */
 .popup-section.is-open {
   flex: 1 1 auto;
@@ -213,10 +248,17 @@
   font-weight: 700;
 }
 
-.scale-field-number {
-  width: 78px;
-  height: 24px;
-  padding: 0 6px;
+/* Attribute selector to outrank index.css's generic input[type="number"] block (padding, margin
+   and a percentage width meant for forms). */
+input[type='number'].scale-field-number {
+  box-sizing: border-box;
+  width: 58px;
+  height: 22px;
+  margin: 0;
+  padding: 0 5px;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 6px;
   background: var(--card-bg, #ffffff);
@@ -226,12 +268,19 @@
   text-align: right;
 }
 
-.scale-field-number:focus {
+input[type='number'].scale-field-number::-webkit-outer-spin-button,
+input[type='number'].scale-field-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type='number'].scale-field-number:focus {
   border-color: var(--primary-color, #32cd32);
   outline: none;
 }
 
-.scale-field-number:disabled {
+input[type='number'].scale-field-number:disabled {
   opacity: 0.55;
 }
 
@@ -500,7 +549,7 @@
 
 .tf-checkbox-list {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 160px;
   margin: 0;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);

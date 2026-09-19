@@ -230,21 +230,20 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
             aria-hidden="true"
           />
         </button>
+        <TreePanelSearch
+          className="tf-tree-search"
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          results={searchResults}
+          onSelect={onSelectFrame}
+          placeholder={frameCount > 0 ? 'Search TF frames...' : 'No frames to search'}
+          ariaLabel="Search TF frame"
+          emptyText="No matching frames"
+          disabled={frameCount === 0}
+          testId="tf-tree-search"
+          listboxId="tf-frame-search-results"
+        />
       </div>
-
-      <TreePanelSearch
-        className="tf-tree-search"
-        query={searchQuery}
-        onQueryChange={onSearchQueryChange}
-        results={searchResults}
-        onSelect={onSelectFrame}
-        placeholder={frameCount > 0 ? 'Search TF frames...' : 'No frames to search'}
-        ariaLabel="Search TF frame"
-        emptyText="No matching frames"
-        disabled={frameCount === 0}
-        testId="tf-tree-search"
-        listboxId="tf-frame-search-results"
-      />
     </>
   );
 };

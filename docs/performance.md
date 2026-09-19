@@ -35,8 +35,10 @@ Changes to the 3D panel must preserve these properties:
 
 - An idle 3D scene has no pending animation frame and issues no WebGL draws.
 - Scene, camera, ROS visualization, URDF pose/resource, and resize changes request a coalesced frame.
-- All 3D panels on one live `ROSLIB.Ros` identity share one `/tf` and one `/tf_static`
-  subscription; removing the final panel releases both.
+- All 3D panels and TF tree panels on one live `ROSLIB.Ros` identity share one `/tf` and one
+  `/tf_static` subscription; removing the final consumer releases both. A second rosbridge client
+  on `/tf_static` would receive only part of the latched static set, so the TF tree's refresh
+  resets this shared stream instead of subscribing on its own.
 - A panel or visualizer mounted after TF arrives starts from the current TF snapshot.
 - Reconnects using a new ROS object do not inherit dynamic TF or URDF data from the old connection.
 - Panel teardown releases topics, TF callbacks, timers, observers, scene resources, canvases, and

@@ -134,4 +134,55 @@ describe('shared TF stream', () => {
     expect(mergeTfMessage(initial.transforms, { transforms: [{}] }, false)).toBeNull();
     expect(mergeTfMessage(initial.transforms, { transforms: 'invalid' }, false)).toBeNull();
   });
+
+  it('feeds raw messages to a message consumer on the same topic pair', async () => {
+    const { subscribeToTfMessages, subscribeToTfStream } = await import('./tfStream');
+    const ros = {} as any;
+    const messages = vi.fn();
+
+    const stopMessages = subscribeToTfMessages(ros, messages);
+    const stopStream = subscribeToTfStream(ros, vi.fn());
+    expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf', '/tf_static']);
+
+    const staticMessage = transformMessage('camera', 2);
+    topicMock.instances.find(topic => topic.name === '/tf_static')?.callback?.(staticMessage);
+    expect(messages).toHaveBeenCalledWith(staticMessage, 'static');
+
+    // A consumer joining later gets the latched statics the subscription already received, which
+    // rosbridge would not re-send to it.
+    const late = vi.fn();
+    const stopLate = subscribeToTfMessages(ros, late);
+    expect(late).toHaveBeenCalledWith(staticMessage, 'static');
+    expect(late).toHaveBeenCalledTimes(1);
+    stopLate();
+
+    stopStream();
+    expect(topicMock.instances.every(topic => topic.unsubscribe.mock.calls.length === 0)).toBe(true);
+    stopMessages();
+    expect(topicMock.instances.every(topic => topic.unsubscribe.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('reset forgets everything, tells stream consumers, and subscribes again', async () => {
+    const { resetTfStream, subscribeToTfStream } = await import('./tfStream');
+    const ros = {} as any;
+    const listener = vi.fn();
+    subscribeToTfStream(ros, listener);
+    topicMock.instances.find(topic => topic.name === '/tf_static')?.callback?.(transformMessage('camera', 2));
+    topicMock.instances.find(topic => topic.name === '/tf')?.callback?.(transformMessage('base_link', 1));
+    const originalTopics = [...topicMock.instances];
+
+    resetTfStream(ros);
+
+    expect(originalTopics.every(topic => topic.unsubscribe.mock.calls.length === 1)).toBe(true);
+    expect(listener).toHaveBeenLastCalledWith({ transforms: {}, changedFrames: new Set(['camera', 'base_link']) });
+    expect(topicMock.instances.slice(2).map(topic => topic.name)).toEqual(['/tf', '/tf_static']);
+
+    // Whatever the robot re-sends is the new truth.
+    topicMock.instances[3].callback?.(transformMessage('new_static', 3));
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ changedFrames: new Set(['new_static']) }));
+    expect(Object.keys(listener.mock.calls[listener.mock.calls.length - 1][0].transforms)).toEqual(["new_static"]);
+
+    // Resetting a connection nothing listens to is a no-op.
+    expect(() => resetTfStream({} as any)).not.toThrow();
+  });
 });

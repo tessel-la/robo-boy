@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
-  Controls,
   Edge,
   MarkerType,
   MiniMap,
@@ -388,7 +387,6 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
               border: '1px solid var(--border-color, #e0e0e0)',
             }}
           />
-          <Controls showInteractive={false} />
         </ReactFlow>
       </div>
 
