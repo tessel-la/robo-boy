@@ -82,8 +82,8 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.getByLabelText('Fixed Frame:')).toHaveValue('map');
     expect(screen.getByLabelText('odom')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
-    expect(screen.getByLabelText('Axes size')).toHaveValue('1.2');
-    expect(screen.getByLabelText('Label size')).toHaveValue('0.3');
+    expect(screen.getByLabelText('Axes size in metres')).toHaveValue(1.2);
+    expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.3);
     expect(screen.getByLabelText('Axes opacity')).toHaveValue('0.6');
     expect(screen.getByLabelText('Label opacity')).toHaveValue('0.7');
     expect(screen.getByLabelText('Show labels')).not.toBeChecked();
@@ -190,6 +190,7 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
 
     expect(screen.getByRole('heading', { name: 'Add Visualization' })).toBeInTheDocument();

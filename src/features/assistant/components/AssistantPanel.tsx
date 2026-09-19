@@ -187,6 +187,10 @@ const useMentionPicker = (
   };
 };
 
+import { useFloatingFrame, type ResizeEdge } from './useFloatingFrame';
+
+const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+
 const useCompactAssistant = () => {
   const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
   useEffect(() => {
@@ -407,12 +411,20 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     setEditingMessageId(null); setEditingDraft(''); onEditMessage(messageIndex, nextText);
   };
 
+  const floating = useFloatingFrame(!compact);
+
   if (!open) return null;
   const lastProgress = isGenerating ? progressMessages[progressMessages.length - 1] : '';
   const promptLabel = clarificationSuggestions ? 'Your answer' : messages.length ? 'Continue the conversation' : 'Ask the assistant';
 
+  const overlayStyle = compact
+    ? mobileViewportStyle
+    : floating.frame
+      ? { left: floating.frame.left, top: floating.frame.top, width: floating.frame.width, height: floating.frame.height }
+      : undefined;
+
   return (
-    <div className="assistant-overlay" style={mobileViewportStyle}>
+    <div className={`assistant-overlay${compact ? '' : ' is-floating'}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
       <section
         ref={panelRef}
         className={`assistant-panel${isDropTarget ? ' is-drop-target' : ''}`}
@@ -421,7 +433,13 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         onDragLeave={event => { if (!panelRef.current?.contains(event.relatedTarget as Node | null)) setIsDropTarget(false); }}
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
         data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
-        <header className="assistant-header">
+        <header
+          className="assistant-header"
+          // Desktop: the header is the drag handle; a double-click puts the panel back on its dock.
+          onPointerDown={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.startGesture(event, 'move'); }}
+          onDoubleClick={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.reset(); }}
+          title={compact ? undefined : 'Drag to move · double-click to dock'}
+        >
           <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><h2 id="assistant-title">Robo-Boy AI</h2></div>
           <div className="assistant-header-actions">
             {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
@@ -429,6 +447,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
             <button type="button" className="assistant-icon-button" onClick={onClose} aria-label="Close assistant" title="Close"><FaTimes aria-hidden="true" /></button>
           </div>
         </header>
+
+        {!compact && RESIZE_EDGES.map(edge => (
+          <div
+            key={edge}
+            className={`assistant-resize-handle ${edge}`}
+            role="separator"
+            aria-label={`Resize assistant from ${edge}`}
+            onPointerDown={event => floating.startGesture(event, edge)}
+          />
+        ))}
 
         {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} onClose={() => setShowSettings(false)} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 

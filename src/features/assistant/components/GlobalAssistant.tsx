@@ -39,6 +39,7 @@ import type {
   BehaviorTreeAssistantBridge,
   OpenAssistantOptions,
   WorkspaceSnapshot,
+ PanelSettingsBridge,
 } from '../types';
 import AssistantPanel, { type ContextPickerOption, type ContextPickerSection } from './AssistantPanel';
 
@@ -46,6 +47,8 @@ export interface GlobalAssistantHandle {
   open: (options?: OpenAssistantOptions) => void;
   toggle: () => void;
   registerBehaviorTreeBridge: (panelId: string, bridge: BehaviorTreeAssistantBridge | null) => void;
+  /** A panel that can report and change its own settings (see `PanelSettingsBridge`). */
+  registerPanelSettingsBridge: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 
 export interface GlobalAssistantProps {
@@ -229,6 +232,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const [pinnedBehaviorTreePanelId, setPinnedBehaviorTreePanelId] = useState<string | null>(null);
 
     const bridgesRef = useRef<Map<string, BehaviorTreeAssistantBridge>>(new Map());
+    const panelBridgesRef = useRef<Map<string, PanelSettingsBridge>>(new Map());
     const lastRegisteredBridgeIdRef = useRef<string | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     /** Every in-flight context retrieval. They are independent -- tagging a second resource must not
@@ -305,7 +309,49 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           if (lastRegisteredBridgeIdRef.current === panelId) lastRegisteredBridgeIdRef.current = null;
         }
       },
+      registerPanelSettingsBridge: (panelId, bridge) => {
+        if (bridge) panelBridgesRef.current.set(panelId, bridge);
+        else panelBridgesRef.current.delete(panelId);
+      },
     }), [pinnedBehaviorTreePanelId]);
+
+    /** The workspace snapshot with each bridged panel's live settings folded in, read at send
+     * time so the model sees what the panel shows now, not what it showed at the last render. */
+    const workspaceWithPanelSettings = (): WorkspaceSnapshot => ({
+      ...workspace,
+      openPanels: workspace.openPanels.map(panel => {
+        const bridge = panelBridgesRef.current.get(panel.id.replace(/^mobile:/, ''));
+        return bridge ? { ...panel, settings: bridge.describe(), settingsHelp: bridge.settingsHelp } : panel;
+      }),
+    });
+
+    /** `configurePanel` is answered by the panel itself; everything else by the host. */
+    const applyWorkspaceOperations = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
+      const hostOperations = operations.filter(operation => operation.op !== 'configurePanel');
+      const hostResults = hostOperations.length
+        ? onApplyWorkspaceEdit
+          ? onApplyWorkspaceEdit(hostOperations)
+          : hostOperations.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }))
+        : [];
+      let hostIndex = 0;
+      return operations.map(operation => {
+        if (operation.op !== 'configurePanel') return hostResults[hostIndex++];
+        const wantedId = operation.panelId?.replace(/^mobile:/, '');
+        const bridge = wantedId
+          ? panelBridgesRef.current.get(wantedId)
+          : [...panelBridgesRef.current.values()].find(candidate => candidate.panelType === operation.panelType);
+        if (!bridge) {
+          const target = wantedId ? `panel "${wantedId}"` : `a ${operation.panelType} panel`;
+          return { operation, ok: false, message: `No open ${target} can be configured from here.` };
+        }
+        const outcomes = bridge.apply(operation.settings);
+        return {
+          operation,
+          ok: outcomes.length > 0 && outcomes.every(outcome => outcome.ok),
+          message: outcomes.length ? outcomes.map(outcome => `${outcome.ok ? '' : '✗ '}${outcome.message}`).join(' ') : 'Nothing in those settings applied.',
+        };
+      });
+    };
 
     useEffect(() => {
       if (settings.provider !== 'ollama') {
@@ -386,7 +432,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const currentTree = bridge?.getCurrentTree() ?? null;
       const selection = bridge?.getSelectedTreeContext() ?? null;
       return {
-        workspace,
+        workspace: workspaceWithPanelSettings(),
         ...(discovery && rosGraph ? { ros: {
           resources: discovery, fetchedAt: rosGraph.fetchedAt, generation: rosGraph.generation,
           stale: rosGraph.generation !== connectionGeneration,
@@ -744,9 +790,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           const issues = discovery ? validatePadAgainstRos(response.layout, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: `Built Pad “${response.layout.name}”. Review its complete layout and bindings in the Pad editor before saving.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });
         } else if (response.kind === 'workspaceEdit') {
-          const results = onApplyWorkspaceEdit
-            ? onApplyWorkspaceEdit(response.operations)
-            : response.operations.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }));
+          const results = applyWorkspaceOperations(response.operations);
           const applied = results.filter(result => result.ok).length;
           const content = applied === results.length
             ? response.summary || `Applied ${applied} workspace change${applied === 1 ? '' : 's'}.`

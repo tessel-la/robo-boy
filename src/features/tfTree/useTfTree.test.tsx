@@ -34,14 +34,16 @@ vi.mock('roslib', () => ({
   }),
 }));
 
-const message = (parent: string, child: string) => ({
+const message = (parent: string, child: string, sec = 10) => ({
   transforms: [
     {
-      header: { frame_id: parent, stamp: { sec: 10, nanosec: 0 } },
+      header: { frame_id: parent, stamp: { sec, nanosec: 0 } },
       child_frame_id: child,
     },
   ],
 });
+
+const stableRos = {} as never;
 
 describe('useTfTree', () => {
   beforeEach(() => {
@@ -54,7 +56,7 @@ describe('useTfTree', () => {
   });
 
   it('subscribes to both TF topics, batches updates, and cleans up', () => {
-    const { result, unmount } = renderHook(() => useTfTree({} as never));
+    const { result, unmount } = renderHook(() => useTfTree(stableRos));
 
     expect(topicMock.instances.map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
     act(() => {
@@ -70,22 +72,7 @@ describe('useTfTree', () => {
     expect(topicMock.instances.every(instance => instance.unsubscribe.mock.calls.length === 1)).toBe(true);
   });
 
-  it('buffers incoming transforms while paused and publishes them on resume', () => {
-    const { result } = renderHook(() => useTfTree({} as never));
-
-    act(() => result.current.pause());
-    act(() => {
-      topicMock.instances[0].callback?.(message('map', 'base'));
-      vi.advanceTimersByTime(200);
-    });
-    expect(result.current.state.transformsByChild.size).toBe(0);
-
-    act(() => result.current.resume());
-    expect(result.current.state.transformsByChild.has('base')).toBe(true);
-    expect(result.current.isPaused).toBe(false);
-  });
-
-  it('unsubscribes while inactive and resumes without clearing the known tree', () => {
+  it('unsubscribes while inactive and starts from an empty tree when shown again', () => {
     const ros = {} as never;
     const { result, rerender } = renderHook(
       ({ active }) => useTfTree(ros, active),
@@ -103,15 +90,16 @@ describe('useTfTree', () => {
 
     rerender({ active: true });
     expect(topicMock.instances.slice(2).map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
-    expect(result.current.state.transformsByChild.has('base')).toBe(true);
+    expect(result.current.state.transformsByChild.size).toBe(0);
   });
 
-  it('rebuilds both subscriptions without clearing the known TF tree', () => {
+  it('refresh forgets every frame and rebuilds both subscriptions', () => {
     const ros = {} as never;
     const { result } = renderHook(() => useTfTree(ros));
 
     act(() => {
       topicMock.instances[0].callback?.(message('map', 'base'));
+      topicMock.instances[1].callback?.(message('base', 'old_static'));
       vi.advanceTimersByTime(50);
     });
     const originalTopics = [...topicMock.instances];
@@ -120,7 +108,43 @@ describe('useTfTree', () => {
 
     expect(originalTopics.every(instance => instance.unsubscribe.mock.calls.length === 1)).toBe(true);
     expect(topicMock.instances.slice(2).map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
+    expect(result.current.state.transformsByChild.size).toBe(0);
+
+    // The re-created subscriptions repopulate it: latched statics are re-sent to a new subscriber.
+    act(() => {
+      topicMock.instances[3].callback?.(message('base', 'new_static'));
+      vi.advanceTimersByTime(50);
+    });
+    expect([...result.current.state.transformsByChild.keys()]).toEqual(['new_static']);
+  });
+
+  it('starts over on a new ROS connection', () => {
+    const { result, rerender } = renderHook(({ ros }) => useTfTree(ros), { initialProps: { ros: {} as never } });
+    act(() => {
+      topicMock.instances[0].callback?.(message('map', 'base'));
+      vi.advanceTimersByTime(50);
+    });
     expect(result.current.state.transformsByChild.has('base')).toBe(true);
-    expect(result.current.isPaused).toBe(false);
+
+    rerender({ ros: {} as never });
+    expect(result.current.state.transformsByChild.size).toBe(0);
+  });
+
+  it('resets and resubscribes by itself when the publisher clock jumps backwards', () => {
+    const { result } = renderHook(() => useTfTree(stableRos));
+    act(() => {
+      topicMock.instances[0].callback?.(message('map', 'base', 500));
+      topicMock.instances[1].callback?.(message('base', 'old_static', 500));
+      vi.advanceTimersByTime(50);
+    });
+    expect(result.current.state.transformsByChild.size).toBe(2);
+
+    // The simulator restarted: stamps start again from zero.
+    act(() => {
+      topicMock.instances[0].callback?.(message('map', 'base', 1));
+      vi.advanceTimersByTime(50);
+    });
+    expect(topicMock.instances.slice(2).map(instance => instance.name)).toEqual(['/tf', '/tf_static']);
+    expect(result.current.state.transformsByChild.has('old_static')).toBe(false);
   });
 });

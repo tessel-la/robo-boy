@@ -24,7 +24,7 @@ const mockOpenAiCompatibleChat = (page: Page, message: Record<string, unknown>) 
     })
   );
 
-test('uses a bottom-right launcher and opens a stable panel on the same side', async ({ page }) => {
+test('uses a bottom-right launcher and opens a floating panel docked on the same side', async ({ page }) => {
   await connectWithMockRos(page);
   const launcher = page.getByLabel('Open Robo-Boy assistant');
   await expect(launcher).toBeVisible();
@@ -42,8 +42,28 @@ test('uses a bottom-right launcher and opens a stable panel on the same side', a
   expect(box!.width).toBeGreaterThanOrEqual(420);
   expect(box!.width).toBeLessThanOrEqual(481);
   // Docked against the right edge, where the launcher was pressed.
-  expect(Math.abs(box!.x + box!.width - (await page.evaluate(() => window.innerWidth)))).toBeLessThanOrEqual(1);
-  await expect(page.locator('.assistant-resize-handle, .assistant-minimize, .assistant-sheet-handle')).toHaveCount(0);
+  expect(Math.abs(box!.x + box!.width - (await page.evaluate(() => window.innerWidth)))).toBeLessThanOrEqual(2);
+
+  // Floating: the header drags it, an edge resizes it, and a double-click docks it again.
+  const header = page.locator('.assistant-header');
+  const headerBox = (await header.boundingBox())!;
+  await page.mouse.move(headerBox.x + 200, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x - 100, headerBox.y + 60, { steps: 5 });
+  await page.mouse.up();
+  const moved = (await panel.boundingBox())!;
+  expect(Math.round(moved.x)).toBe(Math.round(box!.x - 300));
+  const westHandle = (await page.locator('.assistant-resize-handle.w').boundingBox())!;
+  const grab = { x: westHandle.x + westHandle.width / 2, y: westHandle.y + 200 };
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  await page.mouse.move(grab.x - 80, grab.y, { steps: 5 });
+  await page.mouse.up();
+  expect(Math.round((await panel.boundingBox())!.width)).toBe(Math.round(moved.width + 80));
+  await header.dblclick({ position: { x: 200, y: 20 } });
+  const docked = (await panel.boundingBox())!;
+  expect(Math.abs(docked.x + docked.width - (await page.evaluate(() => window.innerWidth)))).toBeLessThanOrEqual(2);
+  await expect(page.locator('.assistant-minimize, .assistant-sheet-handle')).toHaveCount(0);
   // Nothing to choose: everything the app holds is carried every turn.
   await expect(page.getByRole('button', { name: /^Context/ })).toHaveCount(0);
   await expect(page.getByLabel('Status: Connected')).toBeVisible();

@@ -130,6 +130,28 @@ const addObservedParent = (parentsByChild: Map<string, Set<string>>, childFrame:
   return next;
 };
 
+/** Out-of-order delivery is a matter of milliseconds; a stamp older than this is a clock that
+ * went backwards (a simulator restarted), not a late message. */
+export const REORDER_TOLERANCE_MS = 2_000;
+
+/** True when a message's stamps sit far behind what the tree already holds: the publisher's clock
+ * restarted, so everything received before it describes a robot that no longer exists. */
+export const detectClockReset = (state: TfTreeState, message: TfMessage | null | undefined, toleranceMs = REORDER_TOLERANCE_MS): boolean => {
+  if (!Array.isArray(message?.transforms)) return false;
+  return message.transforms.some(candidate => {
+    const transform = candidate as TransformStamped;
+    const childFrame = normalizeFrameId(transform?.child_frame_id);
+    const current = childFrame ? state.transformsByChild.get(childFrame) : undefined;
+    const stampMs = stampToMilliseconds(transform?.header?.stamp);
+    return (
+      current?.source === 'dynamic' &&
+      current.messageTimestampMs !== null &&
+      stampMs !== null &&
+      current.messageTimestampMs - stampMs > toleranceMs
+    );
+  });
+};
+
 export const consumeTfMessage = (
   state: TfTreeState,
   message: TfMessage | null | undefined,
@@ -161,9 +183,11 @@ export const consumeTfMessage = (
     const current = transformsByChild.get(childFrame);
 
     if (current) {
+      // Keep the newer of two stamps, unless the "older" one is so far behind that the clock was
+      // reset — then it is the live one and the record it replaces is history.
       const isOlder =
         messageTimestampMs !== null && current.messageTimestampMs !== null
-          ? messageTimestampMs < current.messageTimestampMs
+          ? messageTimestampMs < current.messageTimestampMs && current.messageTimestampMs - messageTimestampMs <= REORDER_TOLERANCE_MS
           : receivedAtMs < current.receivedAtMs;
       if (isOlder) continue;
     }

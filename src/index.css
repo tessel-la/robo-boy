@@ -18,6 +18,7 @@
   --button-text-color: #ffffff; /* Text on primary button */
   --navbar-bg: #333333;
   --navbar-text: #ffffff;
+  --success-color: #28a745; /* Green: healthy, regardless of the theme's accent */
   --error-color: #dc3545; /* Red */
   --error-hover-color: #c82333; /* Darker Red */
   --error-rgb: 220, 53, 69; /* For RGBA shadows */
@@ -44,6 +45,7 @@
   --card-bg: #1e1e1e; /* Slightly lighter card background */
   --card-border: #333333;
   --button-text-color: #121212; /* Dark text on lime button */
+  --success-color: #2ecc71; /* Green */
   --error-color: #e74c3c; /* Brighter Red for dark */
   --error-hover-color: #c0392b; /* Darker Red */
   --error-rgb: 231, 76, 60; /* For RGBA shadows */
@@ -70,6 +72,7 @@
   --card-bg: #eee8d5; /* Base2 */
   --card-border: #93a1a1; /* Base0 */
   --button-text-color: #fdf6e3; /* Base3 - Sand text on orange button */
+  --success-color: #859900; /* Solarized green: the orange accent must not read as a health colour */
   --error-color: #dc322f; /* Red */
   --error-hover-color: #b5262a; /* Darker Red */
   --error-rgb: 220, 50, 47; /* For RGBA shadows */

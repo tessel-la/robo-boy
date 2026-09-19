@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaCalculator, FaExpand, FaPause, FaPlay, FaSyncAlt } from 'react-icons/fa';
+import { FaCalculator, FaExpand, FaSyncAlt } from 'react-icons/fa';
 
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
 import TreePanelSearch, { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
@@ -15,9 +15,6 @@ interface TfTreeControlsProps {
   menuOpen: boolean;
   onMenuOpen: () => void;
   onMenuClose: () => void;
-  isPaused: boolean;
-  onPause: () => void;
-  onResume: () => void;
   onRefresh: () => void;
   onArrange: () => void;
   calculatorOpen: boolean;
@@ -44,9 +41,6 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
   menuOpen,
   onMenuOpen,
   onMenuClose,
-  isPaused,
-  onPause,
-  onResume,
   onRefresh,
   onArrange,
   calculatorOpen,
@@ -226,8 +220,8 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
             setRefreshAnimation(animation => animation + 1);
             onRefresh();
           }}
-          title="Refresh TF subscriptions"
-          aria-label="Refresh TF subscriptions"
+          title="Forget all frames and subscribe again"
+          aria-label="Refresh TF tree"
           data-testid="tf-tree-refresh"
         >
           <FaSyncAlt
@@ -235,16 +229,6 @@ const TfTreeControls: React.FC<TfTreeControlsProps> = ({
             className={refreshAnimation > 0 ? 'tf-tree-refresh-icon' : undefined}
             aria-hidden="true"
           />
-        </button>
-        <button
-          type="button"
-          className={`tf-tree-live-button${isPaused ? ' paused' : ''}`}
-          onClick={isPaused ? onResume : onPause}
-          title={isPaused ? 'Resume live TF updates' : 'Pause live TF updates'}
-          aria-label={isPaused ? 'Resume live TF updates' : 'Pause live TF updates'}
-        >
-          {isPaused ? <FaPlay aria-hidden="true" /> : <FaPause aria-hidden="true" />}
-          <span>{isPaused ? 'Resume' : 'Pause'}</span>
         </button>
       </div>
 

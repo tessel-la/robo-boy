@@ -53,7 +53,7 @@ const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
 const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
 
 const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
-  const { state, isPaused, pause, resume, refresh } = useTfTree(ros, isActive);
+  const { state, refresh } = useTfTree(ros, isActive);
   const { fitView, setCenter } = useReactFlow();
   const panelRef = useRef<HTMLElement>(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -206,7 +206,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           target: transform.childFrame,
           label: transform.source === 'static' ? 'STATIC' : 'DYNAMIC',
           selected,
-          animated: transform.source === 'dynamic' && !isPaused,
+          animated: transform.source === 'dynamic',
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: edgeColor,
@@ -219,7 +219,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
           labelBgBorderRadius: 3,
         };
       }),
-    [highlightStale, isPaused, nowMs, selection, visibleTransforms]
+    [highlightStale, nowMs, selection, visibleTransforms]
   );
 
   useEffect(() => {
@@ -345,9 +345,6 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
         menuOpen={menuOpen}
         onMenuOpen={() => setMenuOpen(true)}
         onMenuClose={() => setMenuOpen(false)}
-        isPaused={isPaused}
-        onPause={pause}
-        onResume={resume}
         onRefresh={refresh}
         onArrange={handleArrange}
         calculatorOpen={calculatorOpen}

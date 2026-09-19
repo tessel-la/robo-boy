@@ -2,22 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as ROSLIB from 'roslib';
 import type { Ros } from 'roslib';
 
-import { TfSource, TfTreeState, consumeTfMessage, createEmptyTfTreeState } from './tfTreeModel';
+import { TfSource, TfTreeState, consumeTfMessage, createEmptyTfTreeState, detectClockReset } from './tfTreeModel';
 
 interface UseTfTreeResult {
   state: TfTreeState;
-  isPaused: boolean;
-  pause: () => void;
-  resume: () => void;
+  /** Forgets every transform and subscribes again, so latched static transforms are re-sent and
+   * frames that stopped existing disappear. */
   refresh: () => void;
 }
 
+/**
+ * Keeps the TF tree from `/tf` and `/tf_static`. The tree resets itself whenever the source does:
+ * a new ROS connection, or a publisher whose stamps jump backwards (a simulator restart) — in
+ * both cases what was collected before describes a robot that is gone. A static transform whose
+ * publisher simply died cannot be noticed from the browser (latched topics send no retraction),
+ * which is what the manual refresh is still for.
+ */
 export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => {
   const [state, setState] = useState<TfTreeState>(createEmptyTfTreeState);
-  const [isPaused, setIsPaused] = useState(false);
   const [subscriptionRevision, setSubscriptionRevision] = useState(0);
   const stateRef = useRef(state);
-  const pausedRef = useRef(false);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flush = useCallback(() => {
@@ -27,16 +31,26 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
   }, []);
 
   const scheduleFlush = useCallback(() => {
-    if (pausedRef.current || flushTimerRef.current !== null) return;
+    if (flushTimerRef.current !== null) return;
     flushTimerRef.current = setTimeout(flush, 50);
+  }, [flush]);
+
+  const refresh = useCallback(() => {
+    stateRef.current = createEmptyTfTreeState();
+    flush();
+    setSubscriptionRevision(revision => revision + 1);
   }, [flush]);
 
   const consume = useCallback(
     (message: unknown, source: TfSource) => {
-      stateRef.current = consumeTfMessage(stateRef.current, message as { transforms?: unknown }, source, Date.now());
+      const tfMessage = message as { transforms?: unknown };
+      if (source === 'dynamic' && detectClockReset(stateRef.current, tfMessage)) {
+        refresh();
+      }
+      stateRef.current = consumeTfMessage(stateRef.current, tfMessage, source, Date.now());
       scheduleFlush();
     },
-    [scheduleFlush]
+    [refresh, scheduleFlush]
   );
 
   useEffect(() => {
@@ -44,6 +58,11 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
       if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
       return;
+    }
+    // A different connection is a different robot until proven otherwise.
+    if (stateRef.current.knownFrames.size > 0) {
+      stateRef.current = createEmptyTfTreeState();
+      flush();
     }
 
     const dynamicTopic = new ROSLIB.Topic({
@@ -72,27 +91,7 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
       if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     };
-  }, [consume, isActive, ros, subscriptionRevision]);
+  }, [consume, flush, isActive, ros, subscriptionRevision]);
 
-  const pause = useCallback(() => {
-    pausedRef.current = true;
-    setIsPaused(true);
-    if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = null;
-  }, []);
-
-  const resume = useCallback(() => {
-    pausedRef.current = false;
-    setIsPaused(false);
-    flush();
-  }, [flush]);
-
-  const refresh = useCallback(() => {
-    pausedRef.current = false;
-    setIsPaused(false);
-    flush();
-    setSubscriptionRevision(revision => revision + 1);
-  }, [flush]);
-
-  return { state, isPaused, pause, resume, refresh };
+  return { state, refresh };
 };

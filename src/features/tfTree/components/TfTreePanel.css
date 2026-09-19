@@ -1,5 +1,7 @@
 .tf-tree-panel {
-  --tf-healthy: var(--primary-color, #32cd32);
+  /* Health is green and failure red in every theme; Solarized's orange accent would otherwise
+     make a live frame look like a warning. */
+  --tf-healthy: var(--success-color, #28a745);
   --tf-static: var(--secondary-color, #6c757d);
   --tf-stale: var(--error-color, #dc3545);
   --tf-warning: var(--warning-color, #f59e0b);
@@ -109,38 +111,6 @@
 .tf-tree-icon-button > svg {
   width: 18px;
   height: 18px;
-}
-
-.tf-tree-live-button {
-  min-width: 92px;
-  height: clamp(36px, 8cqw, 44px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 15px;
-  border: 0;
-  border-radius: 22px;
-  background: var(--tf-warning);
-  color: #ffffff;
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-warning) 36%, transparent);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.tf-tree-live-button.paused {
-  background: var(--tf-healthy);
-  color: var(--button-text-color, #ffffff);
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-healthy) 32%, transparent);
-}
-
-.tf-tree-live-button:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-}
-.tf-tree-live-button:active {
-  transform: scale(0.96);
 }
 
 .tf-tree-search {

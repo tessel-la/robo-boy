@@ -12,7 +12,10 @@ export type WorkspaceEditOperation =
   | { op: 'setCameraTopic'; panelId: string; cameraTopic: string }
   | { op: 'setPanelPad'; panelId: string; padId: string }
   | { op: 'applyLayout'; layoutId: string }
-  | { op: 'saveLayout'; title: string };
+  | { op: 'saveLayout'; title: string }
+  /** Routed to the panel's own settings bridge; `panelType` picks the first such panel when the
+   * user did not name one ("the 3D view"). */
+  | { op: 'configurePanel'; panelId?: string; panelType?: string; settings: Record<string, unknown> };
 
 export interface WorkspaceEditResult {
   operation: WorkspaceEditOperation;
@@ -23,12 +26,13 @@ export interface WorkspaceEditResult {
 
 export const WORKSPACE_CAPABILITY: AssistantCapability = {
   id: 'workspace-edit',
-  summary: 'You can change the workspace yourself: add or remove panels, switch a camera panel\'s topic or a Pad panel\'s Pad, apply a saved layout, or save the current one.',
+  summary: 'You can change the workspace yourself: add or remove panels, switch a camera panel\'s topic or a Pad panel\'s Pad, apply a saved layout, save the current one, and change the settings of an open panel (which TF frames the 3D view shows, its fixed frame, its URDF/point-cloud/laser visualizations, the TF tree\'s filters).',
   detail: [
     'Do it with the workspace tool below instead of telling the user which menu to use. The change is applied at once and you report what changed.',
     'Panel types you can add are listed in the workspace context ("panelCatalog"); use the exact id.',
+    'An open panel with a "settings" object in the workspace context can be configured; its "settingsHelp" says which keys it takes.',
   ],
-  invocations: ['add a behavior tree panel', 'remove the camera panel', 'load my inspection layout', 'save this layout as Teleop'],
+  invocations: ['add a behavior tree panel', 'remove the camera panel', 'load my inspection layout', 'save this layout as Teleop', 'show base_link and camera_link in the 3D view', 'turn on the URDF in the 3D panel'],
   responseKind: 'workspaceEdit',
 };
 
@@ -42,7 +46,8 @@ with one or more of these operations, in order:
 - {"op":"setPanelPad","panelId":"<pad panel id>","padId":"<saved Pad id>"}
 - {"op":"applyLayout","layoutId":"<id from savedLayouts>"}
 - {"op":"saveLayout","title":"name"}
-Use only panel ids, panel types, Pad ids, layout ids and topics that appear in the supplied context. On a phone the workspace has at most two windows, so adding a panel replaces the active window.`;
+- {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" instead of panelId when the user just says "the 3D view".
+Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace has at most two windows, so adding a panel replaces the active window.`;
 
 const asString = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 
@@ -91,6 +96,20 @@ export const parseWorkspaceEditOperations = (raw: unknown): { operations: Worksp
         const title = asString(item.title);
         if (!title) return rejected.push(`Operation ${index + 1}: saveLayout needs a title.`);
         return operations.push({ op: 'saveLayout', title });
+      }
+      case 'configurePanel': {
+        const panelType = asString(item.panelType);
+        const settings = item.settings;
+        if (!panelId && !panelType) return rejected.push(`Operation ${index + 1}: configurePanel needs a panelId or a panelType.`);
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings) || Object.keys(settings).length === 0) {
+          return rejected.push(`Operation ${index + 1}: configurePanel needs a non-empty settings object.`);
+        }
+        return operations.push({
+          op: 'configurePanel',
+          ...(panelId ? { panelId } : {}),
+          ...(panelType ? { panelType } : {}),
+          settings: settings as Record<string, unknown>,
+        });
       }
       default:
         rejected.push(`Operation ${index + 1}: unknown op "${String(item.op)}".`);
