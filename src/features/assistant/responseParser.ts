@@ -78,6 +78,7 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
         summary: typeof value.summary === 'string' ? value.summary.trim() : '',
         operations,
         rejected,
+        ...(typeof value.followUp === 'string' && value.followUp.trim() ? { followUp: value.followUp.trim() } : {}),
       };
     }
     default:

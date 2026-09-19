@@ -76,7 +76,7 @@ import {
 } from './workspaceLayout';
 import GlobalAssistant, { type GlobalAssistantHandle } from '../features/assistant/components/GlobalAssistant';
 import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceSnapshot';
-import type { BehaviorTreeAssistantBridge } from '../features/assistant/types';
+import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
 import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
 
 // --- Top Bar Icons ---
@@ -1033,6 +1033,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   }, []);
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
+  }, []);
+  const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
+    assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
   }, []);
   const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
@@ -3255,6 +3258,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         <VisualizationPanel
           ros={ros}
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
+          panelId={panel.id}
+          onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
         />
       );
     }
@@ -3277,7 +3282,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel ros={ros} isActive={isPanelActive} />;
+      return <TfTreePanel ros={ros} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
     }
 
     if (panel.type === 'pad') {

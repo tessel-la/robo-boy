@@ -795,7 +795,19 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           const content = applied === results.length
             ? response.summary || `Applied ${applied} workspace change${applied === 1 ? '' : 's'}.`
             : `Applied ${applied} of ${results.length} workspace changes.`;
-          pushMessage({ id: uuidv4(), role: 'assistant', content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, results }, resolution: applied > 0 ? 'applied' : 'failed', contextUsed });
+          const reply: AssistantMessage = { id: uuidv4(), role: 'assistant', content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, results }, resolution: applied > 0 ? 'applied' : 'failed', contextUsed };
+          pushMessage(reply);
+          // The rest of the request runs against the changed workspace — a panel added a moment
+          // ago has registered its bridge by the time the next turn gathers context.
+          if (response.followUp && applied > 0) {
+            const followUp = response.followUp;
+            const nextHistory = [...history, userMessage, reply];
+            // Queued so this turn's `finally` has released the generating flag first.
+            setTimeout(() => {
+              if (controller.signal.aborted) return;
+              void generateFromPrompt(followUp, nextHistory, null, []);
+            }, 0);
+          }
         } else {
           const issues = discovery ? validateRosActionProposal(response.operation, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: response.rationale || `Proposed ${response.operation.kind} “${response.operation.name}”.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });

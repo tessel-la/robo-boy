@@ -244,6 +244,9 @@ export interface AssistantWorkspaceEdit {
   rejected: string[];
   /** Filled in once the shell has applied the operations. */
   results?: WorkspaceEditResult[];
+  /** The rest of a request that needs the change first ("…with a tree that moves the robot"):
+   * sent as the next turn automatically once the operations are applied. */
+  followUp?: string;
 }
 
 export type AssistantResponse =

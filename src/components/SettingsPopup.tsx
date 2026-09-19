@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiSliders, FiTrash2, FiX } from 'react-icons/fi';
 
-import { getUrdfTopics } from '../utils/urdfTopics';
+import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -159,18 +159,8 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
     if (event.target.value) onUpdateVisualizationTopic?.(vizId, event.target.value);
   };
 
-  const getTopicsForVisualizationType = (vizType: VisualizationConfig['type']): TopicInfo[] => {
-    if (vizType === 'urdf') return getUrdfTopics(allTopics);
-
-    const typeToMessageTypes: Partial<Record<VisualizationConfig['type'], string[]>> = {
-      pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
-      camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
-      laserscan: ['sensor_msgs/LaserScan', 'sensor_msgs/msg/LaserScan'],
-      posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'],
-    };
-    const supportedTypes = typeToMessageTypes[vizType] ?? [];
-    return allTopics.filter(topic => supportedTypes.includes(topic.type));
-  };
+  const compatibleTopicsFor = (vizType: VisualizationConfig['type']): TopicInfo[] =>
+    isTopicVisualizationType(vizType) ? getTopicsForVisualizationType(vizType, allTopics) : [];
 
   if (view === 'frameDisplay') {
     return (
@@ -429,7 +419,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               {activeVisualizations.length > 0 ? (
                 <ul>
                   {activeVisualizations.map(viz => {
-                    const compatibleTopics = getTopicsForVisualizationType(viz.type);
+                    const compatibleTopics = compatibleTopicsFor(viz.type);
                     const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
                     const selectId = `visualization-topic-${viz.id}`;
 

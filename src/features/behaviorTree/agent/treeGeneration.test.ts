@@ -291,4 +291,19 @@ describe('parseGeneratedBehaviorTree', () => {
       suggestions: ['map', 'odom', 'base_link', 'camera'],
     });
   });
+
+  it('unwraps a tree nested under "tree" and turns a prose-only tree reply into an explanation', () => {
+    const wrapped = parseGeneratedAgentResponse(
+      JSON.stringify({ kind: 'tree', tree: { name: 'Wrapped', nodes: [{ id: 'a', type: 'sequence', label: 'Root' }], edges: [] } })
+    );
+    expect(wrapped.kind).toBe('tree');
+    if (wrapped.kind === 'tree') expect(wrapped.tree.name).toBe('Wrapped');
+
+    const prose = parseGeneratedAgentResponse(
+      JSON.stringify({ kind: 'tree', description: 'A publisher would stop at once; use an action instead.' })
+    );
+    expect(prose).toEqual({ kind: 'explanation', message: 'A publisher would stop at once; use an action instead.' });
+
+    expect(() => parseGeneratedAgentResponse(JSON.stringify({ kind: 'tree', name: 'Empty' }))).toThrow(/nodes and edges/);
+  });
 });

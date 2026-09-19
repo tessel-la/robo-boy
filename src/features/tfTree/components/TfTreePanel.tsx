@@ -28,6 +28,7 @@ import { useTfTree } from '../useTfTree';
 import TfCalculator from './TfCalculator';
 import TfTreeControls, { TfVisibleTree } from './TfTreeControls';
 import type { TreePanelSearchResult } from '../../treePanel/components/TreePanelSearch';
+import type { PanelSettingsBridge } from '../../assistant/types';
 import './TfTreePanel.css';
 
 const STALE_AFTER_MS = 5_000;
@@ -36,7 +37,13 @@ const COMPACT_PANEL_WIDTH = 520;
 interface TfTreePanelProps {
   ros: Ros | null;
   isActive: boolean;
+  /** Workspace panel id, used to register the assistant settings bridge. */
+  panelId?: string;
+  onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
+
+const ASSISTANT_SETTINGS_HELP =
+  'Keys: "filter" (string matched against frame names; "" clears it), "showStatic" (boolean), "highlightStale" (boolean), "refresh" (true forgets every frame and subscribes again).';
 
 type Selection = { type: 'node'; frame: string } | { type: 'edge'; childFrame: string } | null;
 type CalculatorPick = 'source' | 'target' | null;
@@ -52,7 +59,7 @@ const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
 
 const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
 
-const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
+const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, onRegisterAssistantBridge }) => {
   const { state, refresh } = useTfTree(ros, isActive);
   const { fitView, setCenter } = useReactFlow();
   const panelRef = useRef<HTMLElement>(null);
@@ -103,6 +110,50 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive }) => {
   }, [fitView, hasMeasuredPanel, isCompact]);
 
   const diagnostics = useMemo(() => getTfGraphDiagnostics(state), [state]);
+
+  // Assistant settings bridge: reads the latest state through a ref so it is registered once.
+  const assistantStateRef = useRef({ state, filterQuery, showStatic, highlightStale, refresh });
+  assistantStateRef.current = { state, filterQuery, showStatic, highlightStale, refresh };
+  useEffect(() => {
+    if (!panelId || !onRegisterAssistantBridge) return;
+    const bridge: PanelSettingsBridge = {
+      panelType: 'tfTree',
+      settingsHelp: ASSISTANT_SETTINGS_HELP,
+      describe: () => {
+        const current = assistantStateRef.current;
+        return {
+          frames: [...current.state.knownFrames],
+          transforms: [...current.state.transformsByChild.values()].map(transform => ({ parent: transform.parentFrame, child: transform.childFrame, source: transform.source })),
+          filter: current.filterQuery,
+          showStatic: current.showStatic,
+          highlightStale: current.highlightStale,
+        };
+      },
+      apply: settings => {
+        const outcomes: Array<{ ok: boolean; message: string }> = [];
+        if (typeof settings.filter === 'string') {
+          setFilterQuery(settings.filter);
+          outcomes.push({ ok: true, message: settings.filter ? `Filtering frames by "${settings.filter}".` : 'Cleared the frame filter.' });
+        }
+        if (typeof settings.showStatic === 'boolean') {
+          setShowStatic(settings.showStatic);
+          outcomes.push({ ok: true, message: settings.showStatic ? 'Showing static transforms.' : 'Hid static transforms.' });
+        }
+        if (typeof settings.highlightStale === 'boolean') {
+          setHighlightStale(settings.highlightStale);
+          outcomes.push({ ok: true, message: settings.highlightStale ? 'Highlighting stale transforms.' : 'No longer highlighting stale transforms.' });
+        }
+        if (settings.refresh === true) {
+          assistantStateRef.current.refresh();
+          outcomes.push({ ok: true, message: 'TF tree refreshed.' });
+        }
+        if (outcomes.length === 0) outcomes.push({ ok: false, message: `Nothing in those settings applies to the TF tree. ${ASSISTANT_SETTINGS_HELP}` });
+        return outcomes;
+      },
+    };
+    onRegisterAssistantBridge(panelId, bridge);
+    return () => onRegisterAssistantBridge(panelId, null);
+  }, [panelId, onRegisterAssistantBridge]);
   const normalizedFilter = filterQuery.trim().toLowerCase();
 
   const visibleTransforms = useMemo(() => {
