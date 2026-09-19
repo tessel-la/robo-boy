@@ -1006,6 +1006,61 @@ describe('MainControlView desktop workspace', () => {
     await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
   });
 
+  it('lets the assistant retarget a Pad panel, load and save layouts, and refuses what does not exist', async () => {
+    const savedLayout = {
+      id: 'layout-one',
+      title: 'Inspection layout',
+      panels: [makePanel('panel-camera', 'camera', 'Camera'), makePanel('panel-3d', '3d', '3D view')],
+      tileOrder: ['panel-camera', 'panel-3d'],
+      layout: { rowSizes: [2], rowRatios: [1], columnRatiosByRow: { 0: [1, 1] } },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    localStorage.setItem(workspaceSavedLayoutsKey, JSON.stringify([savedLayout]));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: '',
+      operations: [
+        { op: 'setPanelPad', panelId: 'panel-pad', padId: 'custom-drive' },
+        { op: 'setPanelPad', panelId: 'panel-pad', padId: 'no-such-pad' },
+        { op: 'addPanel', panelType: 'lidar' },
+        { op: 'applyLayout', layoutId: 'missing' },
+        { op: 'applyLayout', layoutId: 'layout-one' },
+        { op: 'saveLayout', title: 'Too early' },
+      ],
+    }));
+    renderMainControlView();
+    await screen.findByLabelText('Pad controls');
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    const composer = () => screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ });
+    fireEvent.change(await composer(), { target: { value: 'show my inspection layout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Loaded the "Inspection layout" layout.');
+    expect(screen.getByText('Pad controls now shows the "Drive Pad" Pad.')).toBeInTheDocument();
+    expect(screen.getByText('No saved Pad with id "no-such-pad".')).toBeInTheDocument();
+    expect(screen.getByText(/No panel type "lidar"; available: camera, 3d/)).toBeInTheDocument();
+    expect(screen.getByText('No saved layout with id "missing".')).toBeInTheDocument();
+    expect(screen.getByText('Ask again to save once the changes above are on screen.')).toBeInTheDocument();
+    expect(await screen.findByLabelText('3D view')).toBeInTheDocument();
+    expect(screen.getByText('Applied 2 of 6 workspace changes.')).toBeInTheDocument();
+
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Saved.',
+      operations: [{ op: 'saveLayout', title: 'Teleop' }],
+    }));
+    fireEvent.change(await composer(), { target: { value: 'save this layout as Teleop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Saved the current workspace as "Teleop".');
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(workspaceSavedLayoutsKey) ?? '[]').map((layout: { title: string }) => layout.title)).toEqual(['Inspection layout', 'Teleop'])
+    );
+  });
+
   it('carries each 3D panel\'s scene settings through a bundle export and import', async () => {
     localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-3d', '3d', '3D view')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-3d']));
