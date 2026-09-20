@@ -241,7 +241,7 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
 
     expect(screen.getByRole('heading', { name: 'Add Visualization' })).toBeInTheDocument();

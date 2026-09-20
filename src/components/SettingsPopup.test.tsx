@@ -72,10 +72,10 @@ describe('SettingsPopup', () => {
   });
 
   describe('TF frames section', () => {
-    it('opens on the frame list by default and toggles a single frame', () => {
+    it('opens on the Frames tab by default and toggles a single frame', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('tab', { name: /Frames/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByText('1/3')).toBeInTheDocument();
       fireEvent.click(screen.getByLabelText('odom'));
 
@@ -102,10 +102,10 @@ describe('SettingsPopup', () => {
       expect(mockOnDisplayedTfFramesChange).not.toHaveBeenCalled();
     });
 
-    it('hides the filter for short lists', () => {
-      render(<SettingsPopup {...defaultProps} />);
+    it('disables the filter until there are frames to filter', () => {
+      render(<SettingsPopup {...defaultProps} availableFrames={[]} />);
 
-      expect(screen.queryByLabelText('Filter frames')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Filter frames')).toBeDisabled();
     });
   });
 
@@ -184,25 +184,24 @@ describe('SettingsPopup', () => {
   });
 
   describe('visualizations section', () => {
-    it('is collapsed under the frame list and both sections toggle independently', () => {
+    it('lives on its own tab so each list gets the whole menu height', () => {
       render(<SettingsPopup {...defaultProps} />);
 
       expect(screen.queryByText('/points')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
+      expect(screen.getByRole('tab', { name: /Visualizations/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByTitle('/points')).toBeInTheDocument();
-      // Opening one section does not close the other; the frames header collapses its own list.
-      expect(screen.getByLabelText('odom')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'TF frames' }));
       expect(screen.queryByLabelText('odom')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.getByTitle('/points')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: /Frames/ }));
+      expect(screen.getByLabelText('odom')).toBeInTheDocument();
+      expect(screen.queryByTitle('/points')).not.toBeInTheDocument();
     });
 
     it('adds a visualization from a row at the top of the list', () => {
       render(<SettingsPopup {...defaultProps} />);
       expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
 
@@ -211,7 +210,7 @@ describe('SettingsPopup', () => {
 
     it('removes a visualization', () => {
       render(<SettingsPopup {...defaultProps} />);
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.click(screen.getByRole('button', { name: 'Remove Point Cloud visualization for topic /points' }));
 
@@ -228,7 +227,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.change(screen.getByLabelText('Topic', { selector: '#visualization-topic-viz-1' }), {
         target: { value: '/points_filtered' },
@@ -249,7 +248,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       const selector = screen.getByTitle('/robot_description');
       expect(selector).toHaveTextContent('/robot_description');

@@ -146,58 +146,83 @@
   padding: 14px 15px;
 }
 
-.settings-menu-section,
-.popup-section {
+.settings-menu-section {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--border-color, #dee2e6);
 }
 
-/* Header with an action beside the title: the action is placed over the header's own padding so
-   it reads as part of the title row while the whole row still toggles the section. */
-.section-header-row {
+/* Two tabs, each owning the whole remaining height: a list scrolls inside its tab instead of
+   splitting the menu with the other one. */
+.settings-tabs {
   flex: 0 0 auto;
   display: flex;
-  align-items: stretch;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
 }
 
-.section-header-row .section-header--title {
-  width: auto;
-  flex: 0 0 auto;
-  padding-right: 10px;
+.settings-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.section-header-row .section-header--meta {
-  width: auto;
-  flex: 1 1 auto;
-  justify-content: flex-end;
-  padding-left: 10px;
-}
-
-/* The whole row highlights as one bar, gear included. */
-.section-header-row:hover {
+.settings-tab:hover {
   background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, transparent);
 }
 
-.section-header-row .section-header:hover {
-  background: transparent;
+.settings-tab.is-active {
+  border-bottom-color: var(--primary-color, #32cd32);
+  color: var(--text-color, #212529);
 }
 
-.section-title-action {
-  align-self: center;
-  flex: 0 0 auto;
-}
-
-/* Expanded sections share the remaining height; their lists scroll instead of the whole menu. */
-.popup-section.is-open {
+.settings-tabpanel {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 12px 15px 14px;
+}
+
+.settings-tabpanel.active-visualizations-list {
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.tf-frame-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tf-frame-toolbar .tf-frame-filter {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tf-frame-toolbar .settings-icon-button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
 }
 
 /* A row that leads somewhere (a sub-view, the add sheet): full width, like the toggle rows. */
 .settings-nav-row {
   width: 100%;
+  flex: 0 0 auto;
   min-height: 42px;
   display: flex;
   align-items: center;
@@ -228,7 +253,6 @@
 }
 
 .settings-nav-row.is-primary {
-  margin-bottom: 8px;
   border-color: color-mix(in srgb, var(--primary-color, #32cd32) 26%, var(--border-color, #dee2e6));
   background: color-mix(in srgb, var(--primary-color, #32cd32) 10%, var(--card-bg, #ffffff));
   color: var(--primary-color, #32cd32);
@@ -288,18 +312,6 @@ input[type='number'].scale-field-number:disabled {
   margin-top: 12px;
 }
 
-.popup-section.is-open > .section-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.popup-section.is-open > .active-visualizations-list {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-
 .fixed-frame-section {
   padding: 13px 15px 14px;
 }
@@ -357,60 +369,6 @@ input[type='number'].scale-field-number:disabled {
   opacity: 0.55;
 }
 
-.section-header {
-  flex: 1 1 auto;
-}
-
-
-.section-header {
-  width: 100%;
-  min-width: 0;
-  min-height: 62px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 15px;
-  border: 0;
-  background: transparent;
-  color: var(--text-color, #212529);
-  text-align: left;
-  cursor: pointer;
-}
-
-.section-header:hover {
-  background: color-mix(in srgb, var(--primary-color, #32cd32) 7%, transparent);
-}
-
-.section-heading-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.section-heading-title {
-  overflow: hidden;
-  color: var(--text-color, #212529);
-  font-size: 13px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.section-heading-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
-}
-
-.section-heading-meta > svg {
-  width: 16px;
-  height: 16px;
-}
-
 .settings-count-badge {
   min-width: 20px;
   height: 20px;
@@ -426,10 +384,6 @@ input[type='number'].scale-field-number:disabled {
 }
 
 
-
-.section-content {
-  padding: 0 15px 14px;
-}
 
 .tf-section-content {
   display: flex;
@@ -721,13 +675,12 @@ input[type='number'].scale-field-number:disabled {
     padding: 11px 12px 12px;
   }
 
-  .section-header {
-    min-height: 56px;
-    padding: 8px 12px;
+  .settings-tab {
+    min-height: 48px;
   }
 
-  .section-content {
-    padding: 0 12px 12px;
+  .settings-tabpanel {
+    padding: 10px 12px 12px;
   }
 
   .settings-select-wrap select,
