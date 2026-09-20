@@ -9,6 +9,7 @@ import type { BehaviorTreeAgentCheckpoint, BehaviorTreeResourceSchemas } from '.
 import type { ROSDiscoveryResult } from '../../behaviorTree/types';
 import { loadGamepadLibrary } from '../../customGamepad/gamepadStorage';
 import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGamepad/types';
+import { CAMERA_MESSAGE_TYPES, JOY_MESSAGE_TYPES, POSE_STAMPED_MESSAGE_TYPES, TWIST_MESSAGE_TYPES } from '../../customGamepad/rosMessageUtils';
 import { createRosGraphCache } from '../context/rosGraphCache';
 import { CONTEXT_CATALOG, type ContextCatalogEntry } from '../capabilities';
 import {
@@ -71,6 +72,22 @@ const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_TOTAL_SIZE = 12 * 1024 * 1024;
 const MAX_SCHEMA_TYPES = 24;
+/**
+ * Message types a Pad component can bind to (the Pad prompt fragment lists the same set). A
+ * Pad turn fetches schemas for graph topics of these types only: asking rosapi to describe every
+ * type on the graph both bloated the prompt and hit rosapi's typedef walker, which asserts on some
+ * nested types (moveit_msgs/msg/RobotState, for one) and takes the whole node down with it.
+ */
+const PAD_BINDABLE_MESSAGE_TYPES = new Set([
+  ...JOY_MESSAGE_TYPES,
+  ...TWIST_MESSAGE_TYPES,
+  ...POSE_STAMPED_MESSAGE_TYPES,
+  ...CAMERA_MESSAGE_TYPES,
+  'std_msgs/Bool', 'std_msgs/msg/Bool',
+  'std_msgs/Float32', 'std_msgs/msg/Float32',
+  'std_msgs/Float64', 'std_msgs/msg/Float64',
+  'std_msgs/Int32', 'std_msgs/msg/Int32',
+]);
 const TEXT_ATTACHMENT_EXTENSIONS = new Set([
   'txt', 'md', 'json', 'yaml', 'yml', 'xml', 'csv', 'log', 'launch', 'urdf', 'xacro',
   'py', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'sh', 'toml', 'ini', 'cfg',
@@ -628,8 +645,10 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         topics: {}, services: { ...parser.services }, actions: { ...parser.actions },
       };
       const referenced = padReferencedTypes(selectedPad?.layout ?? null);
-      const topicTypes = [...new Set([...referenced.topics, ...(needs.pad ? discovery.topics.map(item => item.type) : [])])]
-        .filter(Boolean).slice(0, MAX_SCHEMA_TYPES);
+      const bindableGraphTypes = needs.pad
+        ? discovery.topics.map(item => item.type).filter(type => PAD_BINDABLE_MESSAGE_TYPES.has(type))
+        : [];
+      const topicTypes = [...new Set([...referenced.topics, ...bindableGraphTypes])].filter(Boolean).slice(0, MAX_SCHEMA_TYPES);
       for (const type of topicTypes) {
         const details = await fetchMessageSchema(ros!, type, signal);
         if (details) context.topics[type] = details;

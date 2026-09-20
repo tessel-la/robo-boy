@@ -8,6 +8,17 @@ vi.mock('../providers/index', async importOriginal => {
   return { ...actual, sendAssistantChat: sendAssistantChatMock };
 });
 
+const discoveryMock = vi.hoisted(() => ({
+  discoverAllROSResources: vi.fn(),
+  fetchMessageSchema: vi.fn(),
+  fetchServiceRequestSchema: vi.fn(),
+  fetchActionGoalDetails: vi.fn(),
+}));
+vi.mock('../../behaviorTree/services/rosDiscovery', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../behaviorTree/services/rosDiscovery')>();
+  return { ...actual, ...discoveryMock };
+});
+
 import GlobalAssistant, { type GlobalAssistantHandle } from './GlobalAssistant';
 import type { WorkspaceSnapshot } from '../types';
 
@@ -33,6 +44,30 @@ describe('GlobalAssistant', () => {
     act(() => ref.current?.open());
     return ref;
   };
+
+  it('asks rosapi only for Pad-bindable topic types on a Pad turn, never the whole graph', async () => {
+    discoveryMock.discoverAllROSResources.mockResolvedValue({
+      topics: [
+        { name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' },
+        { name: '/joy', type: 'sensor_msgs/msg/Joy' },
+        { name: '/display_robot_state', type: 'moveit_msgs/msg/RobotState' },
+        { name: '/connected_clients', type: 'rosbridge_msgs/msg/ConnectedClients' },
+      ],
+      services: [],
+      actions: [],
+    });
+    discoveryMock.fetchMessageSchema.mockResolvedValue({ fieldnames: ['data'] });
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Pad idea.' }));
+    const ros = { isConnected: true, getTopics: vi.fn(), callOnConnection: vi.fn() } as never;
+    renderOpenAssistant({ ros, isConnected: true });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a new pad to move the robot left and right' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('Pad idea.')).toBeInTheDocument());
+    const askedTypes = discoveryMock.fetchMessageSchema.mock.calls.map(call => call[1]).sort();
+    expect(askedTypes).toEqual(['geometry_msgs/msg/Twist', 'sensor_msgs/msg/Joy']);
+  });
 
   it('opens as a desktop complementary panel through its application-toolbar handle', () => {
     renderOpenAssistant();
