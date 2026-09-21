@@ -45,6 +45,18 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
+  # Linux only: the Electron shell exists for the distributions whose WebKitGTK has no WebRTC, and
+  # the Windows and macOS web views do have it.
+  electron:
+    name: Build the Electron Linux packages
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/electron-build.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+
   # Best effort, unlike the installers. The iPhone app is the one build that cannot be signed, and
   # a release of four working installers should not be withheld because it failed.
   iphone:
@@ -70,13 +82,14 @@ jobs:
 
   publish-installers:
     name: Attach installers to the release
-    needs: [release-please, desktop, iphone, android]
+    needs: [release-please, desktop, electron, iphone, android]
     # Runs even when the iPhone build failed, which is what makes that build optional; the desktop
     # installers are still required, and a release without them publishes nothing.
     if: >-
       ${{ !cancelled()
       && needs.release-please.outputs.release_created == 'true'
       && needs.desktop.result == 'success'
+      && needs.electron.result == 'success'
       && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -88,6 +101,13 @@ jobs:
         with:
           path: installers
           pattern: desktop-*
+          merge-multiple: true
+
+      - name: Download the built Electron packages
+        uses: actions/download-artifact@v4
+        with:
+          path: electron
+          pattern: electron-linux
           merge-multiple: true
 
       - name: Download the built iPhone app
@@ -144,6 +164,27 @@ jobs:
 
           find installers stable iphone -type f
 
+      # Kept out of the loop above, which insists on exactly one file per extension: Linux now has
+      # two debs, the Tauri one and this. The Tauri package keeps the unsuffixed stable name so
+      # links to it go on working, and this one is named beside it.
+      - name: Name a stable copy of the Electron packages
+        run: |
+          set -euo pipefail
+          declare -A stable_name=(
+            [deb]=Robo-Boy-linux-amd64-electron.deb
+            [AppImage]=Robo-Boy-linux-x86_64-electron.AppImage
+          )
+          mkdir -p stable
+          for extension in deb AppImage; do
+            mapfile -t built < <(find electron -type f -name "*.${extension}")
+            if [ "${#built[@]}" -ne 1 ]; then
+              echo "::error::expected one Electron .${extension}, found ${#built[@]}"
+              exit 1
+            fi
+            cp "${built[0]}" "stable/${stable_name[${extension}]}"
+          done
+          find electron stable -type f
+
       - name: Name the Android APK
         run: |
           set -euo pipefail
@@ -160,5 +201,5 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          mapfile -t installers < <(find installers stable iphone android -type f)
+          mapfile -t installers < <(find installers stable iphone android electron -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"

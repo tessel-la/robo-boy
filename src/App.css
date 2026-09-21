@@ -12,7 +12,7 @@
   bottom: 0;
 }
 
-:root[data-runtime='tauri'] .App {
+:root[data-desktop] .App {
   top: var(--title-bar-height);
   contain: layout;
 }

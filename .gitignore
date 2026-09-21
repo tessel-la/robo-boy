@@ -160,6 +160,10 @@ certs/
 
 node_modules
 dev-dist/
+
+# Electron desktop shell: compiled shell, its renderer, and the packaged installers.
+dist-electron/
+release/
 playwright-report/
 test-results/
 .panel-stage/

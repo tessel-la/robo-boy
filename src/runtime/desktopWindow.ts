@@ -27,10 +27,16 @@ export interface DesktopWindow {
 /**
  * Reaches the native window the app is drawn in.
  *
- * The window API only exists inside the desktop shell, so it is loaded on demand and the browser
- * build resolves a stub in its place. Call this only when `isDesktopRuntime()` holds.
+ * Two desktop shells answer this. Electron exposes its window through the preload bridge, which is
+ * already present by the time the app mounts. Tauri's window API lives in a package the browser
+ * build resolves to a stub, so it is imported on demand and only once the bridge has been ruled
+ * out. Call this only when `isDesktopRuntime()` holds.
  */
 export const getDesktopWindow = async (): Promise<DesktopWindow> => {
+  const { getDesktopBridge } = await import('./desktopBridge');
+  const bridge = getDesktopBridge();
+  if (bridge) return bridge.window;
+
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   return getCurrentWindow();
 };
