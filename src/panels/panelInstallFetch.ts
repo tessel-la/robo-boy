@@ -1,5 +1,5 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
-import { getDesktopBridge } from '../runtime/desktopBridge';
+import { getDesktopBridge, toResponse } from '../runtime/desktopBridge';
 
 /**
  * Transport for panel installation in the packaged app.
@@ -17,9 +17,11 @@ import { getDesktopBridge } from '../runtime/desktopBridge';
 export const panelInstallFetch: typeof fetch = (input, init) => {
   const bridge = getDesktopBridge();
   if (bridge) {
-    return bridge.fetchPanelAsset(String(input instanceof Request ? input.url : input), {
-      method: init?.method ?? (input instanceof Request ? input.method : 'GET'),
-    });
+    return bridge
+      .fetchPanelAsset(String(input instanceof Request ? input.url : input), {
+        method: init?.method ?? (input instanceof Request ? input.method : 'GET'),
+      })
+      .then(toResponse);
   }
 
   return (tauriFetch as unknown as typeof fetch)(input, init);

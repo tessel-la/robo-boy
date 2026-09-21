@@ -8,6 +8,14 @@ import { contextBridge, ipcRenderer } from 'electron';
  * escapes the app's own guards. What it can reach is named here, and nothing else crosses.
  */
 
+/** A fetched panel asset, in the only shape the context bridge can carry. */
+interface PanelFetchReply {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: ArrayBuffer;
+}
+
 /** Matches `ResizeDirection` in src/runtime/desktopWindow.ts, which names the edges as Tauri does. */
 type ResizeDirection =
   | 'North'
@@ -54,21 +62,14 @@ const desktopBridge = {
    * Only the hosts the main process lists are reachable. This changes how the bytes arrive and
    * nothing else: the caller still checks them against the origins the source allows and against
    * the SHA-256 published in the inventory entry and the manifest.
+   *
+   * The reply is a plain record rather than a Response. Only structured-cloneable values cross the
+   * context bridge, and a Response sent through it arrives as an object with none of its own
+   * accessors -- reading `status` off one gives undefined rather than failing outright, so the
+   * caller rebuilds the Response in its own world instead.
    */
-  fetchPanelAsset: async (url: string, init?: { method?: string }): Promise<Response> => {
-    const reply = (await ipcRenderer.invoke('roboboy:panel-fetch', url, init)) as {
-      status: number;
-      statusText: string;
-      headers: Record<string, string>;
-      body: ArrayBuffer;
-    };
-
-    return new Response(reply.body, {
-      status: reply.status,
-      statusText: reply.statusText,
-      headers: reply.headers,
-    });
-  },
+  fetchPanelAsset: (url: string, init?: { method?: string }): Promise<PanelFetchReply> =>
+    ipcRenderer.invoke('roboboy:panel-fetch', url, init) as Promise<PanelFetchReply>,
 };
 
 export type RoboBoyDesktopBridge = typeof desktopBridge;
