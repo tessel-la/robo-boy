@@ -42,10 +42,14 @@ concurrency:
 
 jobs:
   build:
-    name: Linux packages (deb, AppImage)
-    # Built on the oldest supported runner: Chromium links against that runner's glibc and will not
-    # start on anything older.
+    name: Linux ${{ matrix.arch }} packages (deb, AppImage)
+    # Both targets can be packaged on x64: the shell and renderer are JavaScript, and
+    # electron-builder downloads the prebuilt Electron runtime for the requested architecture.
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
 
     steps:
       - name: Check out the revision to build
@@ -77,12 +81,12 @@ jobs:
         run: npm run check:release-panels
 
       - name: Package the Linux targets
-        run: npx electron-builder --config config/electron-builder.yml --linux deb AppImage --publish never
+        run: npx electron-builder --config config/electron-builder.yml --linux deb AppImage --${{ matrix.arch }} --publish never
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: electron-linux
+          name: electron-linux-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 14
           path: |
