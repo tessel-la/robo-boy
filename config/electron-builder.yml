@@ -36,6 +36,9 @@ linux:
   icon: src-tauri/icons/icon.png
   # The video panels reach a WebRTC gateway over UDP; nothing here needs elevated privileges.
   executableName: robo-boy
+  # Named apart from the Tauri installers, which a release publishes beside these. Left to default
+  # the two debs would differ only in the case of their first letter.
+  artifactName: robo-boy-electron_${version}_${arch}.${ext}
 
 win:
   target:
@@ -49,10 +52,9 @@ mac:
   category: public.app-category.utilities
 
 deb:
-  # Otherwise both the package and its file are named after the npm package, which is not what the
-  # app is called anywhere else.
+  # Otherwise the package is named after the npm package, which is not what the app is called
+  # anywhere else.
   packageName: robo-boy
-  artifactName: robo-boy_${version}_${arch}.${ext}
 
 nsis:
   oneClick: false

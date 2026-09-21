@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
  * they are embedded in every installer, so this fails the build before anything is packaged.
  */
 const root = fileURLToPath(new URL('..', import.meta.url));
-const panelsDir = resolve(root, 'dist/panels');
+// The same variable the Vite config reads for its output directory, so this checks whichever tree
+// was just built -- `dist` for the web and Tauri builds, `dist-electron/renderer` for Electron.
+const distributionDir = process.env.ROBOBOY_DIST_DIR || 'dist';
+const panelsDir = resolve(root, distributionDir, 'panels');
 
 const fail = message => {
   console.error(`[release-panels] ${message}`);
@@ -19,7 +22,7 @@ let entries;
 try {
   entries = await readdir(panelsDir);
 } catch {
-  console.log('[release-panels] no dist/panels directory; nothing bundled');
+  console.log(`[release-panels] no ${distributionDir}/panels directory; nothing bundled`);
   process.exit(0);
 }
 
