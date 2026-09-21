@@ -5,13 +5,14 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 // import mkcert from 'vite-plugin-mkcert' // Ensure mkcert is commented out/removed
 
-const tauriHtmlCompatibilityPlugin = (): Plugin => ({
-  name: 'tauri-html-compatibility',
+const packagedHtmlCompatibilityPlugin = (): Plugin => ({
+  name: 'packaged-html-compatibility',
   apply: 'build',
   transformIndexHtml(html) {
-    // Tauri custom protocols do not need CORS on same-app assets. Keep the
-    // Vite entry as an ES module: production chunks contain imports/exports,
-    // and converting it to a classic deferred script prevents React booting.
+    // Neither packaged shell needs CORS on its own assets -- Tauri serves them over a custom
+    // protocol, Electron straight from disk -- and both refuse a crossorigin module fetched that
+    // way. Keep the Vite entry an ES module: production chunks contain imports/exports, and
+    // converting it to a classic deferred script prevents React booting.
     return html.replace(/\s+crossorigin(?=(\s|>|$))/g, '');
   },
 });
@@ -36,26 +37,38 @@ const parsePort = (value: string | undefined, fallback: number): number => {
   return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
 };
 
+/** Typed as a map so both branches of the alias choice agree on one shape. */
+const tauriStubAliases: Record<string, string> = {
+  '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)),
+  '@tauri-apps/api/window': fileURLToPath(new URL('../src/runtime/nativeWindow.web.ts', import.meta.url)),
+};
+
 // Set by the Tauri CLI when it serves the frontend to a phone or tablet.
 const devHost = process.env.TAURI_DEV_HOST;
 const devPort = parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173);
 
+// Vite rejects requests carrying a Host header it does not recognise, so a browser on the
+// network cannot trick it into serving source to another origin. Localhost and bare IPs are
+// allowed on their own; a deployment reached through Caddy under a real hostname has to name
+// that hostname here. A leading dot covers every subdomain of a fleet domain.
+const allowedHosts = (process.env.ROBOBOY_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map(host => host.trim())
+  .filter(Boolean);
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: mode === 'tauri' ? './' : '/',
+  // A packaged shell loads the built page from disk, so every asset has to be named relative to
+  // it. Only the web app is served from a site root.
+  base: mode === 'tauri' || mode === 'electron' ? './' : '/',
   // External panel releases are deployment inputs, not Robo-Boy source files.
   // Explicit panel builds point this at the generated .panel-stage/public tree.
   publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
   resolve: {
-    // Only the packaged shell installs panels over Tauri's native HTTP client. Web builds
-    // resolve a stub instead, so running the web app never requires the desktop-only package.
-    alias:
-      mode === 'tauri'
-        ? {}
-        : {
-            '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)),
-            '@tauri-apps/api/window': fileURLToPath(new URL('../src/runtime/nativeWindow.web.ts', import.meta.url)),
-          },
+    // Only the Tauri build reaches its native packages. Every other build -- the web app and the
+    // Electron shell, which brings its own bridge -- resolves stubs instead, so neither running
+    // nor type-checking them requires a desktop-only package to be installed.
+    alias: mode === 'tauri' ? {} : tauriStubAliases,
     // MainControlView is lazy-loaded after the connection screen. Keep hooks
     // and the renderer on one React instance across linked panel SDKs and
     // dependency-optimizer generations.
@@ -75,6 +88,8 @@ export default defineConfig(({ mode }) => ({
     // A device is told one port up front, so silently moving to the next free one would leave it
     // loading nothing.
     strictPort: Boolean(devHost),
+    // The Tauri dev host is a name the CLI picked for this run, so it is always trusted here.
+    allowedHosts: [...(devHost ? [devHost] : []), ...allowedHosts],
     hmr: devHost ? { protocol: 'ws', host: devHost, port: devPort + 1 } : undefined,
     proxy: {
       '/api/panels': {
@@ -106,8 +121,8 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     roslibGlobalThisPlugin(),
-    ...(mode === 'tauri' ? [tauriHtmlCompatibilityPlugin()] : []),
-    ...(mode === 'tauri'
+    ...(mode === 'tauri' || mode === 'electron' ? [packagedHtmlCompatibilityPlugin()] : []),
+    ...(mode === 'tauri' || mode === 'electron'
       ? []
       : [
           VitePWA({

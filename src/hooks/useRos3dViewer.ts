@@ -135,7 +135,6 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
             scene: viewer.scene,
             camera: viewer.camera,
             userZoomSpeed: 0.2,
-            userPanSpeed: 0.2,
             element: currentViewerRef,
             onChange: viewer.requestRender,
           });

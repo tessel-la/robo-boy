@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
 
 import { getUrdfTopics } from '../utils/urdfTopics';
+import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
 
@@ -12,27 +13,31 @@ interface TopicInfo {
 
 interface SettingsPopupProps {
   onClose: () => void;
+  /** The frame the scene is anchored to right now; it is picked automatically until the user
+   * chooses one, so the selector never asks for an "auto" mode. */
   fixedFrame: string;
   availableFrames: string[];
   onFixedFrameChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   displayedTfFrames: string[];
   onDisplayedTfFramesChange: (selectedFrames: string[]) => void;
-  showTfFrameLabels: boolean;
-  onShowTfFrameLabelsChange: (show: boolean) => void;
+  showAllTfFrames: boolean;
+  onShowAllTfFramesChange: (showAll: boolean) => void;
+  tfDisplay: TfDisplaySettings;
+  onTfDisplayChange: (patch: Partial<TfDisplaySettings>) => void;
   activeVisualizations: VisualizationConfig[];
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
-  tfAxesScale: number;
-  onTfAxesScaleChange: (newScale: number) => void;
 }
 
-interface SectionVisibility {
-  tfFrames: boolean;
-  activeViz: boolean;
-}
+/** One section is expanded at a time and takes the remaining height, so the frame list gets the
+ * room it needs instead of forcing a long scroll past everything else. */
+type OpenSection = 'tfFrames' | 'activeViz';
+type PopupView = 'main' | 'frameDisplay';
+
+const FRAME_FILTER_THRESHOLD = 6;
 
 const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   pointcloud: 'Point Cloud',
@@ -52,21 +57,23 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onFixedFrameChange,
   displayedTfFrames,
   onDisplayedTfFramesChange,
-  showTfFrameLabels,
-  onShowTfFrameLabelsChange,
+  showAllTfFrames,
+  onShowAllTfFramesChange,
+  tfDisplay,
+  onTfDisplayChange,
   activeVisualizations,
   onRemoveVisualization,
   onAddVisualizationClick,
   onEditVisualization,
   onUpdateVisualizationTopic,
   allTopics = [],
-  tfAxesScale,
-  onTfAxesScaleChange,
 }) => {
-  const [openSections, setOpenSections] = useState<SectionVisibility>({ tfFrames: false, activeViz: true });
+  const [openSection, setOpenSection] = useState<OpenSection>('tfFrames');
+  const [view, setView] = useState<PopupView>('main');
+  const [frameFilter, setFrameFilter] = useState('');
 
-  const toggleSection = (section: keyof SectionVisibility) => {
-    setOpenSections(previous => ({ ...previous, [section]: !previous[section] }));
+  const toggleSection = (section: OpenSection) => {
+    setOpenSection(previous => (previous === section ? 'tfFrames' : section));
   };
 
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,6 +83,11 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
       : displayedTfFrames.filter(frame => frame !== frameName);
     onDisplayedTfFramesChange(nextFrames);
   };
+
+  const normalizedFilter = frameFilter.trim().toLowerCase();
+  const filteredFrames = normalizedFilter
+    ? availableFrames.filter(frame => frame.toLowerCase().includes(normalizedFilter))
+    : availableFrames;
 
   const handleEditClick = (id: string) => {
     onEditVisualization?.(id);
@@ -99,10 +111,144 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
     return allTopics.filter(topic => supportedTypes.includes(topic.type));
   };
 
+  if (view === 'frameDisplay') {
+    return (
+      <div className="settings-popup">
+        <header className="settings-popup-header">
+          <button
+            type="button"
+            onClick={() => setView('main')}
+            className="close-button"
+            aria-label="Back to 3D view settings"
+          >
+            <FiArrowLeft aria-hidden="true" />
+          </button>
+          <div className="settings-popup-heading">
+            <span className="settings-popup-kicker">TF frames</span>
+            <h3>Frame display</h3>
+          </div>
+          <button type="button" onClick={onClose} className="close-button" aria-label="Close settings">
+            <FiX aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="settings-popup-content frame-display-content">
+          <label className="settings-toggle-row">
+            <span>Show axes</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ showTfAxes: event.target.checked })}
+            />
+          </label>
+          <div className="tf-scale-control">
+            <div className="control-heading-row">
+              <label htmlFor="tf-axes-scale">Axes size</label>
+              <output htmlFor="tf-axes-scale" className="range-value">
+                {tfDisplay.tfAxesScale.toFixed(2)} m
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-axes-scale"
+              min="0.05"
+              max="2"
+              step="0.05"
+              value={tfDisplay.tfAxesScale}
+              disabled={!tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ tfAxesScale: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+            <div className="control-heading-row">
+              <label htmlFor="tf-axes-opacity">Axes opacity</label>
+              <output htmlFor="tf-axes-opacity" className="range-value">
+                {Math.round(tfDisplay.tfAxesOpacity * 100)}%
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-axes-opacity"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={tfDisplay.tfAxesOpacity}
+              disabled={!tfDisplay.showTfAxes}
+              onChange={event => onTfDisplayChange({ tfAxesOpacity: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+          </div>
+
+          <label className="settings-toggle-row">
+            <span>Show labels</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ showTfFrameLabels: event.target.checked })}
+            />
+          </label>
+          <label className="settings-toggle-row">
+            <span>Label background</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfLabelBackground}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ showTfLabelBackground: event.target.checked })}
+            />
+          </label>
+          <div className="tf-scale-control">
+            <div className="control-heading-row">
+              <label htmlFor="tf-label-scale">Label size</label>
+              <output htmlFor="tf-label-scale" className="range-value">
+                {tfDisplay.tfLabelScale.toFixed(2)} m
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-label-scale"
+              min="0.02"
+              max="1"
+              step="0.02"
+              value={tfDisplay.tfLabelScale}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ tfLabelScale: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+            <div className="control-heading-row">
+              <label htmlFor="tf-label-opacity">Label opacity</label>
+              <output htmlFor="tf-label-opacity" className="range-value">
+                {Math.round(tfDisplay.tfLabelOpacity * 100)}%
+              </output>
+            </div>
+            <input
+              type="range"
+              id="tf-label-opacity"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={tfDisplay.tfLabelOpacity}
+              disabled={!tfDisplay.showTfFrameLabels}
+              onChange={event => onTfDisplayChange({ tfLabelOpacity: parseFloat(event.target.value) })}
+              className="range-input"
+            />
+          </div>
+
+          <label className="settings-toggle-row">
+            <span>Show parent links</span>
+            <input
+              type="checkbox"
+              checked={tfDisplay.showTfConnections}
+              onChange={event => onTfDisplayChange({ showTfConnections: event.target.checked })}
+            />
+          </label>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="settings-popup">
       <header className="settings-popup-header">
-        <div>
+        <div className="settings-popup-heading">
           <span className="settings-popup-kicker">Panel controls</span>
           <h3>3D View</h3>
         </div>
@@ -119,7 +265,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           <div className="settings-select-wrap">
             <select
               id="fixed-frame-select"
-              value={fixedFrame}
+              value={availableFrames.includes(fixedFrame) ? fixedFrame : ''}
               onChange={onFixedFrameChange}
               disabled={availableFrames.length === 0}
             >
@@ -138,61 +284,63 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           </div>
         </section>
 
-        <section className="popup-section">
-          <button
-            type="button"
-            className="section-header"
-            onClick={() => toggleSection('tfFrames')}
-            aria-expanded={openSections.tfFrames}
-            aria-label="Displayed TF Frames"
-          >
-            <span className="section-heading-copy">
-              <span className="settings-menu-label">TF display</span>
-              <span className="section-heading-title">Displayed frames</span>
-            </span>
-            <span className="section-heading-meta">
-              <span className="settings-count-badge">{displayedTfFrames.length}</span>
-              {openSections.tfFrames ? <FiChevronDown /> : <FiChevronRight />}
-            </span>
-          </button>
-          {openSections.tfFrames && (
-            <div className="section-content tf-section-content">
-              <div className="tf-scale-control">
-                <div className="control-heading-row">
-                  <label htmlFor="tf-axes-scale">TF Axes Size:</label>
-                  <output htmlFor="tf-axes-scale" className="range-value">
-                    {tfAxesScale.toFixed(1)}
-                  </output>
-                </div>
-                <input
-                  type="range"
-                  id="tf-axes-scale"
-                  min="0.1"
-                  max="2"
-                  step="0.1"
-                  value={tfAxesScale}
-                  onChange={event => onTfAxesScaleChange(parseFloat(event.target.value))}
-                  className="range-input"
-                />
-              </div>
+        <section className={`popup-section tf-frames-section${openSection === 'tfFrames' ? ' is-open' : ''}`}>
+          <div className="section-header-with-action">
+            <button
+              type="button"
+              className="section-header"
+              onClick={() => toggleSection('tfFrames')}
+              aria-expanded={openSection === 'tfFrames'}
+              aria-label="TF frames"
+            >
+              <span className="section-heading-copy">
+                <span className="settings-menu-label">TF display</span>
+                <span className="section-heading-title">Frames</span>
+              </span>
+              <span className="section-heading-meta">
+                <span className="settings-count-badge">
+                  {displayedTfFrames.length}/{availableFrames.length}
+                </span>
+                {openSection === 'tfFrames' ? <FiChevronDown /> : <FiChevronRight />}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="settings-icon-button section-action-button"
+              onClick={() => setView('frameDisplay')}
+              title="Frame display settings"
+              aria-label="Frame display settings"
+            >
+              <FiSettings aria-hidden="true" />
+            </button>
+          </div>
 
+          {openSection === 'tfFrames' && (
+            <div className="section-content tf-section-content">
               <label className="settings-toggle-row">
-                <span>Show frame labels</span>
+                <span>Show all frames</span>
                 <input
                   type="checkbox"
-                  checked={showTfFrameLabels}
-                  onChange={event => onShowTfFrameLabelsChange(event.target.checked)}
+                  checked={showAllTfFrames}
+                  onChange={event => onShowAllTfFramesChange(event.target.checked)}
                 />
               </label>
 
-              <div className="tf-frame-group">
-                <div className="tf-frame-list-heading">
-                  <span>Frames</span>
-                  <span>{availableFrames.length} available</span>
-                </div>
-                {availableFrames.length > 0 ? (
+              {availableFrames.length > FRAME_FILTER_THRESHOLD && (
+                <input
+                  type="search"
+                  className="tf-frame-filter"
+                  value={frameFilter}
+                  onChange={event => setFrameFilter(event.target.value)}
+                  placeholder="Filter frames"
+                  aria-label="Filter frames"
+                />
+              )}
+
+              {availableFrames.length > 0 ? (
+                filteredFrames.length > 0 ? (
                   <ul className="tf-checkbox-list">
-                    {availableFrames.map(frame => (
+                    {filteredFrames.map(frame => (
                       <li key={frame}>
                         <label>
                           <span className="tf-frame-name">{frame}</span>
@@ -207,20 +355,22 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                     ))}
                   </ul>
                 ) : (
-                  <p className="no-frames-message">No TF frames available.</p>
-                )}
-              </div>
+                  <p className="no-frames-message">No frames match “{frameFilter.trim()}”.</p>
+                )
+              ) : (
+                <p className="no-frames-message">No TF frames available.</p>
+              )}
             </div>
           )}
         </section>
 
-        <section className="popup-section active-visualizations-section">
+        <section className={`popup-section active-visualizations-section${openSection === 'activeViz' ? ' is-open' : ''}`}>
           <div className="section-header-with-action">
             <button
               type="button"
               className="section-header"
               onClick={() => toggleSection('activeViz')}
-              aria-expanded={openSections.activeViz}
+              aria-expanded={openSection === 'activeViz'}
             >
               <span className="section-heading-copy">
                 <span className="settings-menu-label">Scene</span>
@@ -228,7 +378,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               </span>
               <span className="section-heading-meta">
                 <span className="settings-count-badge">{activeVisualizations.length}</span>
-                {openSections.activeViz ? <FiChevronDown /> : <FiChevronRight />}
+                {openSection === 'activeViz' ? <FiChevronDown /> : <FiChevronRight />}
               </span>
             </button>
             <button
@@ -242,7 +392,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             </button>
           </div>
 
-          {openSections.activeViz && (
+          {openSection === 'activeViz' && (
             <div className="section-content active-visualizations-list">
               {activeVisualizations.length > 0 ? (
                 <ul>

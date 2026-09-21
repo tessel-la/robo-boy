@@ -94,7 +94,9 @@ backend it never names them and no amount of plugins makes the API appear.
 WebKitGTK also leaves `enable-webrtc` off by default, so the shell turns it on as the main window is
 created. That is required wherever the backend is compiled in, and harmless where it is not.
 
-Browsers carry their own WebRTC stack, so the same panel works in the web build on the same machine.
+The Electron shell sidesteps all of this by bundling Chromium -- see [The Electron Desktop
+Shell](#the-electron-desktop-shell). Browsers carry their own WebRTC stack too, so the same panel
+works in the web build on the same machine.
 This is a WebKitGTK property, not a desktop one: the Windows, macOS, iOS and Android shells all use
 engines with WebRTC compiled in.
 
@@ -109,6 +111,80 @@ One trap if you write such a panel: a panel's frame has an opaque origin, so the
 would normally make for its MediaSource comes back as `blob:null/...` and a media element refuses to
 load it. Attach the source with `srcObject` instead, which needs no URL. The camera view avoids all
 of this by reading the MJPEG endpoint, which needs neither WebRTC nor Media Source Extensions.
+
+## The Electron Desktop Shell
+
+Everything above describes the Tauri shell, which draws the app in whatever web view the operating
+system provides. On Linux that is WebKitGTK, with the consequences the previous section sets out:
+where the distribution compiled WebRTC out, the video panels fall back to HLS and the operator
+watches the robot seconds late.
+
+The Electron shell exists for that case. It bundles Chromium, so a packaged desktop app has the
+same WebRTC stack a browser does and the HLS fallback stays unused. It renders the identical React
+tree -- there is no second frontend -- and differs only in what draws it.
+
+Which shell to use:
+
+| | Tauri | Electron |
+| --- | --- | --- |
+| Download size | ~10 MB | ~100 MB |
+| WebRTC on Linux | Whatever the distribution built | Always, bundled |
+| iPhone and Android | Yes | Not supported |
+
+Tauri remains the shell for mobile, where bundling a browser is not an option, and the better choice
+on any desktop whose web view does speak WebRTC. Reach for Electron when the video panels matter
+more than the download.
+
+### Development
+
+```bash
+npm run dev:electron
+```
+
+Vite starts first and the window waits for it, so the shell never opens against a server that is not
+listening yet. Closing the window stops both.
+
+### Build an installer
+
+```bash
+npm run package:electron
+```
+
+Installers are written to `release/`. Linux produces an AppImage and a `.deb`, Windows an NSIS
+installer, macOS a `.dmg`; as with Tauri, each operating system builds and signs its own.
+
+`npm run build:electron` stops after producing the unpackaged app under `dist-electron/`, which is
+what `dev:electron` and the smoke checks use.
+
+### How the shell reaches the app
+
+The renderer runs with context isolation and no Node integration, because a panel is third-party
+code the operator installed. The one channel across is the preload bridge at
+`electron/preload.ts`, exposed as `window.roboBoyDesktop`, and the app finds it through
+`src/runtime/desktopBridge.ts`. It carries two things:
+
+- **The window.** The app draws its own title bar in both shells, so it needs to minimise, maximise
+  and close the real window. Chromium resizes a frameless window from CSS rather than from the
+  renderer, so the resize edges the app paints for Tauri are hidden here and the compositor does the
+  work.
+- **Panel installation.** Release assets carry no CORS headers, so neither shell can fetch them from
+  the renderer. Tauri uses its HTTP capability; Electron fetches in the main process, which is
+  outside CORS enforcement and therefore limited to an explicit list of hosts. Bytes are still
+  checked against the origins the source allows and the SHA-256 the inventory and manifest publish.
+
+The packaged renderer is served from `app://robo-boy`, not from disk. This is not a detail: Chromium
+gives every `file://` document an opaque origin, so `location.origin` reports `file://` while the
+origin arriving on a message event is `null`, and anything that compares the two disagrees with
+itself. The panel sandbox does compare them -- the host names the origin it will talk to, the
+sandbox checks messages against that name -- so under `file://` it discarded every probe and
+reported that it never started. A scheme registered as standard has a real origin and the packaged
+app behaves as the same code does over http. Tauri solves this the same way, with
+`tauri://localhost`.
+
+`isDesktopRuntime()` is true under either shell. Stylesheets tell them apart through
+`data-runtime`, which names the shell, and `data-desktop`, which only says the app is in a packaged
+window; the rules working around WebKitGTK stay keyed to the former so Chromium does not inherit
+them.
 
 ## Build An Installer
 

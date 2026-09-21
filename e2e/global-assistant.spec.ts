@@ -24,7 +24,7 @@ const mockOpenAiCompatibleChat = (page: Page, message: Record<string, unknown>) 
     })
   );
 
-test('uses a bottom-right launcher and opens a stable panel from the left', async ({ page }) => {
+test('uses a bottom-right launcher and opens a stable panel on the same side', async ({ page }) => {
   await connectWithMockRos(page);
   const launcher = page.getByLabel('Open Robo-Boy assistant');
   await expect(launcher).toBeVisible();
@@ -41,7 +41,8 @@ test('uses a bottom-right launcher and opens a stable panel from the left', asyn
   expect(box).not.toBeNull();
   expect(box!.width).toBeGreaterThanOrEqual(420);
   expect(box!.width).toBeLessThanOrEqual(481);
-  expect(box!.x).toBe(0);
+  // Docked against the right edge, where the launcher was pressed.
+  expect(Math.abs(box!.x + box!.width - (await page.evaluate(() => window.innerWidth)))).toBeLessThanOrEqual(1);
   await expect(page.locator('.assistant-resize-handle, .assistant-minimize, .assistant-sheet-handle')).toHaveCount(0);
   // Nothing to choose: everything the app holds is carried every turn.
   await expect(page.getByRole('button', { name: /^Context/ })).toHaveCount(0);
