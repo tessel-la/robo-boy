@@ -1144,6 +1144,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
   }, [normalizedWorkspaceTileOrder, workspacePanels]);
+  const activeStackedWorkspacePanel = useMemo(() => {
+    const selected = workspaceReplacementPanelId
+      ? workspacePanels.find(panel => panel.id === workspaceReplacementPanelId)
+      : null;
+    if (selected && workspaceTiles.slice(0, 2).some(tile => tile.id === selected.id)) return selected;
+    const firstVisible = workspaceTiles[0];
+    return firstVisible?.kind === 'panel' ? firstVisible.panel : null;
+  }, [workspacePanels, workspaceReplacementPanelId, workspaceTiles]);
   const workspaceDomOrderById = useMemo(
     () => new Map(workspacePanels.map((panel, index) => [panel.id, index])),
     [workspacePanels]
@@ -1725,6 +1733,31 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   };
   // --- End Panel Handlers ---
 
+  const replaceWorkspacePanel = (
+    panelId: string,
+    type: WorkspacePanelType,
+    options?: { cameraTopic?: string; layoutId?: string; title?: string }
+  ) => {
+    setWorkspacePanels(prev =>
+      prev.map(panel =>
+        panel.id === panelId
+          ? {
+              ...panel,
+              type,
+              title: options?.title || panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
+              cameraTopic:
+                type === 'camera'
+                  ? options?.cameraTopic || panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0]
+                  : undefined,
+              layoutId: type === 'pad' ? options?.layoutId || panel.layoutId || gamepadLibrary[0]?.id : undefined,
+              panelState: panel.type === type ? panel.panelState : undefined,
+              approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
+            }
+          : panel
+      )
+    );
+  };
+
   const handleAddWorkspacePanel = (
     type: WorkspacePanelType,
     insertIndex?: number,
@@ -1733,21 +1766,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   ) => {
     setIsWorkspaceOpen(true);
     if (workspaceReplacementPanelId && !options) {
-      setWorkspacePanels(prev =>
-        prev.map(panel =>
-          panel.id === workspaceReplacementPanelId
-            ? {
-                ...panel,
-                type,
-                title: panelCatalogById.get(type)?.name || getWorkspaceTitle(type),
-                cameraTopic: type === 'camera' ? selectedCameraTopic || availableCameraTopics[0] : undefined,
-                layoutId: type === 'pad' ? gamepadLibrary[0]?.id : undefined,
-                panelState: panel.type === type ? panel.panelState : undefined,
-                approvedRosTopics: panel.type === type ? panel.approvedRosTopics : undefined,
-              }
-            : panel
-        )
-      );
+      replaceWorkspacePanel(workspaceReplacementPanelId, type);
       setWorkspaceReplacementPanelId(null);
       setWorkspaceReplaceMenuStyle(null);
       setIsWorkspaceAddMenuOpen(false);
@@ -2465,17 +2484,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const panelName = (type: string) => panelCatalogById.get(type)?.name || getWorkspaceTitle(type);
     const findPanel = (panelId: string) => {
       const bareId = panelId.replace(/^mobile:/, '');
-      return (isWorkspaceStacked ? mobileWorkspacePanels : workspacePanels).find(panel => panel.id === bareId)
-        ?? workspacePanels.find(panel => panel.id === bareId)
-        ?? mobileWorkspacePanels.find(panel => panel.id === bareId);
+      return workspacePanels.find(panel => panel.id === bareId);
     };
     const results: WorkspaceEditResult[] = [];
     // Removals are batched so several in one turn do not race on stale panel lists.
     const removedIds = new Set<string>();
+    let stackedReplacementPanelId: string | null = null;
     // A save snapshots committed state, so it cannot follow a change made in the same turn.
     let panelsChanged = false;
 
-    for (const operation of operations) {
+    for (const [operationIndex, operation] of operations.entries()) {
       switch (operation.op) {
         case 'addPanel': {
           const type = resolvePanelType(operation.panelType, panelCatalog);
@@ -2484,16 +2502,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             break;
           }
           const padId = operation.padId && gamepadLibrary.some(item => item.id === operation.padId) ? operation.padId : undefined;
-          if (isWorkspaceStacked) {
-            const target = activeMobilePanel;
+          if (isWorkspaceStacked && (workspaceTiles.length >= 2 || stackedReplacementPanelId)) {
+            const target = (stackedReplacementPanelId
+              ? workspacePanels.find(panel => panel.id === stackedReplacementPanelId)
+              : null) ?? activeStackedWorkspacePanel;
             if (!target) {
-              results.push({ operation, ok: false, message: 'No mobile window to put the panel in.' });
+              results.push({ operation, ok: false, message: 'No visible mobile panel can be replaced.' });
               break;
             }
-            handleChangeMobileWorkspacePanel(target.id, type);
-            if (operation.cameraTopic && type === 'camera') handleWorkspaceCameraTopicChange(target.id, operation.cameraTopic);
-            if (padId && type === 'pad') handleWorkspacePadLayoutChange(target.id, padId);
-            results.push({ operation, ok: true, message: `Showing ${panelName(type)} in the active window.` });
+            replaceWorkspacePanel(target.id, type, {
+              cameraTopic: type === 'camera' ? operation.cameraTopic : undefined,
+              layoutId: type === 'pad' ? padId : undefined,
+              title: operation.title,
+            });
+            stackedReplacementPanelId = null;
+            panelsChanged = true;
+            results.push({ operation, ok: true, message: `Showing ${panelName(type)} in the mobile workspace.` });
             break;
           }
           handleAddWorkspacePanel(type, undefined, undefined, {
@@ -2511,8 +2535,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             results.push({ operation, ok: false, message: `No open panel with id "${operation.panelId}".` });
             break;
           }
-          if (isWorkspaceStacked) {
-            results.push({ operation, ok: false, message: `On a phone the two windows stay; switch what "${panel.title}" shows instead of removing it.` });
+          if (isWorkspaceStacked && operations.slice(operationIndex + 1).some(candidate => candidate.op === 'addPanel')) {
+            // Some models express a phone replacement as remove + add. Do not enqueue two React
+            // state updates against different snapshots; carry the requested target into addPanel
+            // and replace it atomically instead.
+            stackedReplacementPanelId = panel.id;
+            panelsChanged = true;
+            results.push({ operation, ok: true, message: `Replacing the ${panel.title} panel.` });
             break;
           }
           removedIds.add(panel.id);
@@ -4206,18 +4235,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               id: panel.id,
               type: panel.type,
               title: panel.title,
-              selected: !isWorkspaceStacked,
-              configuration: {
-                ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
-                ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
-                ...(panel.panelState ? { panelState: panel.panelState } : {}),
-              },
-            })),
-            ...mobileWorkspacePanels.map((panel, index) => ({
-              id: `mobile:${panel.id}`,
-              type: panel.type,
-              title: panel.title,
-              selected: isWorkspaceStacked && index === activeMobileWindowIndex,
+              selected: isWorkspaceStacked ? panel.id === activeStackedWorkspacePanel?.id : true,
               configuration: {
                 ...(panel.cameraTopic ? { cameraTopic: panel.cameraTopic } : {}),
                 ...(panel.layoutId ? { layoutId: panel.layoutId } : {}),
@@ -4233,7 +4251,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             })),
           ],
           selectedPadLayoutId:
-            (isWorkspaceStacked ? activeMobilePanel?.layoutId : workspacePanels.find(panel => panel.type === 'pad')?.layoutId) ??
+            (isWorkspaceStacked ? activeStackedWorkspacePanel?.layoutId : workspacePanels.find(panel => panel.type === 'pad')?.layoutId) ??
             activePanels.find(panel => panel.id === selectedPanelId)?.layoutId ??
             null,
           // The active BT bridge (registered by whichever BehaviorTreePanel is mounted) already

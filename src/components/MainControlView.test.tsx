@@ -1006,6 +1006,48 @@ describe('MainControlView desktop workspace', () => {
     await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
   });
 
+  it('lets the assistant add a visible panel in the unified mobile workspace', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    localStorage.setItem(
+      workspacePanelsKey,
+      JSON.stringify([makePanel('panel-camera', 'camera', 'Camera'), makePanel('panel-pad', 'pad', 'Pad controls')])
+    );
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-camera', 'panel-pad']));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Replaced the camera with a Behavior tree panel.',
+      operations: [
+        { op: 'removePanel', panelId: 'panel-camera' },
+        { op: 'addPanel', panelType: 'behaviorTree' },
+      ],
+    }));
+    renderMainControlView();
+    await screen.findByLabelText('Camera');
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), {
+      target: { value: 'add the BT panel' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Replacing the Camera panel.');
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Showing Behavior tree in the mobile workspace.');
+  });
+
   it('lets the assistant retarget a Pad panel, load and save layouts, and refuses what does not exist', async () => {
     const savedLayout = {
       id: 'layout-one',

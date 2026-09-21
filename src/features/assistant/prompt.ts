@@ -15,7 +15,7 @@ Always return ONLY one JSON object, no markdown fences, matching exactly one of:
 - The Behavior Tree tool's {"kind":"tree",...} shape, described below, when asked to create/change/fix/extend a behavior tree.
 - {"kind":"padProposal","layout":{...a complete CustomGamepadLayout...}} when asked to create or repair a Pad. Reuse the id/gridSize/cellSize/rosConfig/metadata shape of any Pad given as context; otherwise invent a reasonable new one.
 - {"kind":"rosAction","operation":{"kind":"topic"|"service"|"action","name":"/...","messageType":"pkg/Type","payload":{...},"timeoutMs":number},"rationale":"one sentence"} when asked what publish, service request, or action goal would be correct. This remains a review-only proposal in chat; direct execution is unavailable.
-- {"kind":"workspaceEdit","summary":"...","operations":[...]} — the workspace tool, described below, when asked to add, remove or change panels, or to load or save a layout.`;
+- {"kind":"workspaceEdit","summary":"...","operations":[...],"followUp":"optional exact remaining non-workspace request"} — the workspace tool, described below, when asked to add, remove or change panels, or to load or save a layout.`;
 
 const PAD_PROMPT_FRAGMENT = `## Pad tool
 A Pad ("custom gamepad") is a CustomGamepadLayout placed on a grid. Return it as

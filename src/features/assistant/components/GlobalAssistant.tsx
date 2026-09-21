@@ -139,6 +139,23 @@ const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTur
   };
 };
 
+/** Models sometimes obey the one-object response contract but omit the workspace tool's
+ * `followUp`. Recover an explicit second create/build clause so a multi-part request does not
+ * silently stop after changing the layout. Keep this narrow: a plain "add a Pad panel" must not
+ * be mistaken for a request to build a new Pad. */
+const inferWorkspaceFollowUp = (text: string, needs: AssistantTurnNeeds): string | null => {
+  if (!needs.workspace || (!needs.behaviorTree && !needs.pad)) return null;
+  const clauses = text.split(/\b(?:and then|then|and|also)\b/i).map(clause => clause.trim()).filter(Boolean);
+  const remaining = clauses.slice(1).find(clause =>
+    /\b(?:build|create|make|design|fix|extend|modify|edit)\b/i.test(clause) &&
+    /\b(?:behavior[ -]?tree|bt|pad|gamepad|joystick|controller)\b/i.test(clause)
+  );
+  if (remaining) return remaining.charAt(0).toUpperCase() + remaining.slice(1);
+
+  const withMatch = text.match(/\bwith\s+((?:a|an|the)\s+)?((?:behavior[ -]?tree|bt|tree|pad|gamepad)\b[\s\S]*)/i);
+  return withMatch ? `Build ${withMatch[0].slice(5).trim()}` : null;
+};
+
 const readPadLibrary = () => {
   try {
     return (loadGamepadLibrary() ?? []).filter(item => item && typeof item.id === 'string' && item.layout && Array.isArray(item.layout.components));
@@ -818,8 +835,8 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           pushMessage(reply);
           // The rest of the request runs against the changed workspace — a panel added a moment
           // ago has registered its bridge by the time the next turn gathers context.
-          if (response.followUp && applied > 0) {
-            const followUp = response.followUp;
+          const followUp = response.followUp || inferWorkspaceFollowUp(userText, needs);
+          if (followUp && applied > 0) {
             const nextHistory = [...history, userMessage, reply];
             // Queued so this turn's `finally` has released the generating flag first.
             setTimeout(() => {

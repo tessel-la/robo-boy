@@ -47,8 +47,8 @@ with one or more of these operations, in order:
 - {"op":"applyLayout","layoutId":"<id from savedLayouts>"}
 - {"op":"saveLayout","title":"name"}
 - {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" instead of panelId when the user just says "the 3D view".
-Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace has at most two windows, so adding a panel replaces the active window.
-A turn returns one JSON object, so when the request also needs a tree, a Pad or an answer after the change ("add a behavior tree panel with a tree that moves the robot left"), put the workspace operations in this object and the rest of the request, in full, in "followUp": it is sent as the next turn once the change is on screen.`;
+Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace shows at most two panels; adding another panel replaces the selected panel, or the first visible panel when none is selected.
+A turn returns one JSON object. If the user asks for both a workspace change and any other task, "followUp" is REQUIRED. Put only workspace operations in "operations", and copy every remaining task in full into "followUp". For example, "add a behavior tree panel with a tree that moves the robot left" must return the addPanel operation plus "followUp":"Build a behavior tree that moves the robot left." The app sends it as the next turn once the change is on screen.`;
 
 const asString = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 

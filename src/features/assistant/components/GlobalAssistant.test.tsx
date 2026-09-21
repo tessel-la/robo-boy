@@ -160,6 +160,30 @@ describe('GlobalAssistant', () => {
     expect(screen.getByText('Build a tree that moves the robot 0.1 m left and then right.')).toBeInTheDocument();
   });
 
+  it('continues an explicit second task when the model omits followUp', async () => {
+    sendAssistantChatMock
+      .mockResolvedValueOnce(JSON.stringify({
+        kind: 'workspaceEdit',
+        summary: 'Added a Behavior tree panel.',
+        operations: [{ op: 'addPanel', panelType: 'behaviorTree' }],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'Built the requested tree.' }));
+    const onApplyWorkspaceEdit = vi.fn((operations: Array<{ op: string }>) =>
+      operations.map(operation => ({ operation: operation as never, ok: true, message: 'Added a Behavior tree panel.' }))
+    );
+    renderOpenAssistant({ onApplyWorkspaceEdit });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add the BT panel and create a BT to move the robot' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('Built the requested tree.')).toBeInTheDocument());
+    expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
+    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1)).toMatchObject({
+      role: 'user',
+      content: 'Create a BT to move the robot',
+    });
+  });
+
   it('routes configurePanel to the panel that registered a settings bridge and folds its live settings into the context', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({
       kind: 'workspaceEdit',
