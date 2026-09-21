@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.11.0-alpha...robo-boy-v0.12.0-alpha) (2026-09-21)
+
+
+### Features
+
+* **assistant:** let the assistant edit the workspace ([#162](https://github.com/tessel-la/robo-boy/issues/162)) ([cc36531](https://github.com/tessel-la/robo-boy/commit/cc36531db2a402a5978ca153b96ba604f835f811))
+
+
+### Bug Fixes
+
+* **ci:** build and release Electron Linux for x64 and arm64 ([#167](https://github.com/tessel-la/robo-boy/issues/167)) ([396e82c](https://github.com/tessel-la/robo-boy/commit/396e82cba340a5308bc8e19015aa175c00c6d8cb))
+
 ## [0.11.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.10.0-alpha...robo-boy-v0.11.0-alpha) (2026-09-21)
 
 
