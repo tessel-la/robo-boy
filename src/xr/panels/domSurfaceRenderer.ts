@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { activateDomTarget, findDomTarget } from './domInteraction';
 import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 import type { XrGrabbableData } from '../types';
 import type { XrInputTarget } from '../XrInputManager';
@@ -130,8 +131,10 @@ class DomSurfacePanel implements XrPanelInstance {
   private readonly surface: THREE.Mesh;
   private readonly isMirror: boolean;
   private readonly highlight: THREE.Mesh;
+  private readonly domElement: HTMLElement | null;
 
   constructor(context: XrPanelContext) {
+    this.domElement = context.domElement;
     const reason = findUnrasterizableReason(context.domElement);
 
     if (reason || !context.domElement) {
@@ -191,20 +194,14 @@ class DomSurfacePanel implements XrPanelInstance {
     material.opacity = target ? 0.35 : 0;
   }
 
-  /**
-   * Replay an activation onto the real DOM.
-   *
-   * HTMLMesh listens for three events carrying the normalized surface coordinate and converts it
-   * back into an element-space position, so a trigger press in a headset reaches the same handler a
-   * mouse click would. Only the mirror path can do this; a placeholder has nothing behind it.
-   */
+  getActivationTarget(target: XrInputTarget): HTMLElement | null {
+    if (!this.isMirror || target.object !== this.surface || !target.uv || !this.domElement) return null;
+    return findDomTarget(this.domElement, target.uv);
+  }
+
   onActivate(target: XrInputTarget): void {
-    if (!this.isMirror || !target.uv) return;
-    const data = new THREE.Vector2(target.uv.x, 1 - target.uv.y);
-    const surface = this.surface as unknown as THREE.EventDispatcher<Record<string, unknown>>;
-    for (const type of ['mousedown', 'mouseup', 'click']) {
-      surface.dispatchEvent({ type, data } as never);
-    }
+    if (!this.getActivationTarget(target) || !target.uv || !this.domElement) return;
+    activateDomTarget(this.domElement, target.uv);
   }
 
   dispose(): void {

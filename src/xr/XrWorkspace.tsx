@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { Ros } from 'roslib';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { XrSceneManager } from './XrSceneManager';
-import { XrInputManager, type XrInputTarget } from './XrInputManager';
+import { XrInputManager } from './XrInputManager';
 import { XrGrabController, applyXrPose, defaultPanelPose, toXrPose } from './grabbable';
 import { RobotWorld } from './world/RobotWorld';
 import {
@@ -41,7 +41,8 @@ export interface XrWorkspaceProps {
   panels: readonly XrWorkspacePanel[];
   /** Per-connection storage scope, so an XR room belongs to one robot. */
   storageScope?: string;
-  fixedFrame?: string;
+  /** Read at entry so local edits inside the 3D panel are reflected without shell rerenders. */
+  getRobotOptions?: () => { fixedFrame: string; robotDescriptionTopic?: string };
 }
 
 // The generic renderer is installed once, at module load, so the registry never has to import it.
@@ -77,7 +78,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   isConnected,
   panels,
   storageScope,
-  fixedFrame = 'odom',
+  getRobotOptions,
 }) => {
   const support = useXrSupport();
   const { meshResourcesBaseUrl } = useRuntimeConfig();
@@ -86,6 +87,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
+  const generationRef = useRef(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<XrSceneManager | null>(null);
   const inputRef = useRef<XrInputManager | null>(null);
@@ -132,6 +134,8 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   );
 
   const teardown = useCallback(() => {
+    generationRef.current += 1;
+    setIsStarting(false);
     for (const mounted of mountedPanelsRef.current) {
       try {
         mounted.instance.dispose();
@@ -156,12 +160,10 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
 
   // Every exit path converges here. Unmount, a lost ROS connection and an ended session all have to
   // leave the same nothing behind: no session held open, no listeners, no orphaned WebGL context.
-  useEffect(() => () => teardown(), [teardown]);
+  useEffect(() => () => teardown(), [teardown, ros, storageScope]);
   useEffect(() => {
-    if (!isConnected && sceneRef.current) {
-      void sceneRef.current.end();
-    }
-  }, [isConnected]);
+    if (!isConnected) teardown();
+  }, [isConnected, teardown]);
 
   const buildScene = useCallback(
     (scene: XrSceneManager, activeRos: Ros) => {
@@ -174,6 +176,10 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           );
           if (worldRef.current) objects.push(worldRef.current.object);
           return objects;
+        },
+        getActivationTarget: target => {
+          const instance = findPanelForObject(target.object)?.instance;
+          return instance?.getActivationTarget ? instance.getActivationTarget(target) : target.object;
         },
         onActivate: (_pointer, target) => {
           const owner = findPanelForObject(target.object);
@@ -194,18 +200,14 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
             (target.object.userData as { allowScale?: boolean }).allowScale !== false;
           grabRef.current?.begin(target.object, pose, allowScale);
         },
-        onGrabEnd: () => {
-          // Placements are captured on release rather than per frame: writing localStorage at
-          // headset refresh rate would be absurd, and the value only matters once it settles.
-          for (const entry of mountedPanelsRef.current) {
-            if (grabRef.current?.isGrabbed(entry.instance.object)) {
-              capturePlacement(entry.instance.object);
-            }
-          }
-          if (worldRef.current && grabRef.current?.isGrabbed(worldRef.current.object)) {
-            capturePlacement(worldRef.current.object);
-          }
-          grabRef.current?.releaseAll();
+        onGrabEnd: (pointer, object) => {
+          capturePlacement(object);
+          const remaining = input.getGrabbingPointers().find(entry => entry.grabbed === object);
+          grabRef.current?.release(
+            object,
+            pointer.id,
+            remaining ? input.getPointerPose(remaining.pointer.id) ?? undefined : undefined
+          );
         },
       });
       inputRef.current = input;
@@ -215,7 +217,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         ros: activeRos,
         parent: scene.worldGroup,
         meshResourcesBaseUrl,
-        fixedFrame,
+        ...(getRobotOptions?.() ?? { fixedFrame: 'odom' }),
       });
       worldRef.current = world;
 
@@ -227,8 +229,6 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         world.object.position.set(0, 0, -1.6);
         world.object.scale.setScalar(1);
       }
-
-      mountPanels(scene);
 
       scene.addFrameListener((_time, delta) => {
         input.update();
@@ -250,7 +250,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         for (const entry of mountedPanelsRef.current) entry.instance.update?.(frameContext);
       });
     },
-    [capturePlacement, fixedFrame, meshResourcesBaseUrl]
+    [capturePlacement, getRobotOptions, meshResourcesBaseUrl]
   );
 
   const mountPanels = useCallback((scene: XrSceneManager) => {
@@ -299,6 +299,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       return;
     }
 
+    const generation = generationRef.current;
     setError(null);
     setIsStarting(true);
 
@@ -308,6 +309,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       panelsRef.current.map(panel => panel.id)
     );
 
+    try {
     const scene = new XrSceneManager({
       container,
       onSessionStart: startedMode => {
@@ -326,22 +328,25 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
     });
     sceneRef.current = scene;
 
-    try {
-      await scene.start(selectedMode);
       buildScene(scene, activeRos);
+      await scene.start(selectedMode);
+      if (sceneRef.current !== scene) return;
+      mountPanels(scene);
     } catch (startError) {
+      if (generationRef.current !== generation) return;
       const message =
         startError instanceof Error ? startError.message : 'The XR session could not be started.';
       setError(message);
       teardown();
     } finally {
-      setIsStarting(false);
+      if (generationRef.current === generation) setIsStarting(false);
     }
   }, [
     buildScene,
     capturePlacement,
     isConnected,
     isStarting,
+    mountPanels,
     ros,
     selectedMode,
     storageScope,
@@ -425,20 +430,7 @@ const pointerPose = (
   input: XrInputManager,
   pointerId: string
 ): { id: string; matrixWorld: THREE.Matrix4; origin: THREE.Vector3 } | null => {
-  const origin = input.getPointerOrigin(pointerId);
-  if (!origin) return null;
-  const pointer = input.getPointers().find(entry => entry.id === pointerId);
-  if (!pointer) return null;
-
-  // Rebuild a world matrix from the ray, which is all the grab needs: position plus the orientation
-  // implied by the pointing direction.
-  const matrixWorld = new THREE.Matrix4();
-  const quaternion = new THREE.Quaternion().setFromUnitVectors(
-    new THREE.Vector3(0, 0, -1),
-    pointer.ray.direction.clone().normalize()
-  );
-  matrixWorld.compose(origin, quaternion, new THREE.Vector3(1, 1, 1));
-  return { id: pointerId, matrixWorld, origin };
+  return input.getPointerPose(pointerId);
 };
 
 export default XrWorkspace;

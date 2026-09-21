@@ -85,6 +85,8 @@ import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceS
 import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
 import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
 
+import { getVisualizationStateForKey } from '../utils/visualizationState';
+
 const XrWorkspace = React.lazy(() => import('../xr/XrWorkspace'));
 
 // The presence of `navigator.xr` is the cheapest possible gate and costs no import. Checking it
@@ -4516,6 +4518,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             isConnected={isConnected}
             panels={workspacePanels}
             storageScope={storageScope}
+            getRobotOptions={() => {
+              const panel = workspacePanels.find(entry => entry.type === '3d');
+              if (!panel) return { fixedFrame: 'odom' };
+              const state = getVisualizationStateForKey(
+                getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)
+              );
+              const urdf = state.visualizations.find(entry => entry.type === 'urdf');
+              return {
+                fixedFrame: state.fixedFrame,
+                robotDescriptionTopic: urdf?.options?.robotDescriptionTopic || urdf?.topic,
+              };
+            }}
           />
         </React.Suspense>
       )}

@@ -67,6 +67,7 @@ class Viewer {
   renderer: THREE.WebGLRenderer;
   fixedFrame: string = '';
   private animationId: number | null = null;
+  private renderSuspended = false;
   private renderWidth = 0;
   private renderHeight = 0;
 
@@ -172,7 +173,7 @@ class Viewer {
   // Coalesce all invalidations in the same display frame. Keeping this loop alive continuously
   // made even an unchanged grid consume a substantial share of a renderer process and the GPU.
   public requestRender = (): void => {
-    if (this.animationId !== null) return;
+    if (this.renderSuspended || this.animationId !== null) return;
     this.animationId = requestAnimationFrame(this.render);
   };
 
@@ -181,7 +182,15 @@ class Viewer {
     this.renderer.render(this.scene, this.camera);
   };
 
-  // Stop rendering
+  /** Suspend invalidations while another presentation owns the GPU. */
+  setRenderSuspended(suspended: boolean): void {
+    if (this.renderSuspended === suspended) return;
+    this.renderSuspended = suspended;
+    if (suspended) this.stop();
+    else this.requestRender();
+  }
+
+  // Cancel the pending frame (without disabling later invalidations).
   stop(): void {
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);

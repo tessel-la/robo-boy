@@ -48,6 +48,7 @@ describe('useRos3dViewer', () => {
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
                 addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
                 scene: {},
                 camera: {},
                 resize: vi.fn()
@@ -79,6 +80,7 @@ describe('useRos3dViewer', () => {
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
                 addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
                 scene: {},
                 camera: {},
                 resize: vi.fn()
@@ -110,6 +112,7 @@ describe('useRos3dViewer', () => {
         // Setup mock to return a robust viewer object
         (ROS3D.Viewer as any).mockImplementation(function () { return {
             addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
             stop: stopMock,
             renderer: {
                 dispose: disposeRendererMock,
@@ -164,6 +167,7 @@ describe('useRos3dViewer', () => {
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
                 addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
                 stop: stopMock,
                 renderer: {
                     dispose: disposeRendererMock,
@@ -196,6 +200,7 @@ describe('useRos3dViewer', () => {
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
                 addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
                 scene: {},
                 camera: {},
                 resize: vi.fn()
@@ -216,6 +221,7 @@ describe('useRos3dViewer', () => {
         (ROS3D.Viewer as any).mockImplementation(function () {
             return {
                 addObject: vi.fn(),
+                setRenderSuspended: vi.fn(),
                 scene: {},
                 camera: {},
                 resize: resizeMock
