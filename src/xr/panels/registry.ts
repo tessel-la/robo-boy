@@ -39,6 +39,8 @@ export interface XrPanelInstance {
   setActive?(isActive: boolean): void;
   /** Called once per XR frame. Keep this cheap; it runs at headset refresh rate. */
   update?(frame: XrFrameContext): void;
+  /** Optional identity for a control within a shared surface; null rejects activation. */
+  getActivationTarget?(target: XrInputTarget): unknown;
   /** A completed activation on this panel's surface. */
   onActivate?(target: XrInputTarget): void;
   /** Pointer moved onto or off this panel's surface. `null` means the pointer left. */

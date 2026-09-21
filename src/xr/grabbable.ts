@@ -76,7 +76,7 @@ export class XrGrabController {
     }
     if (existing) return;
 
-    object.updateMatrixWorld();
+    object.updateWorldMatrix(true, false);
     scratchMatrix.copy(pointer.matrixWorld).invert().multiply(object.matrixWorld);
     this.grabs.set(object, {
       kind: 'single',
@@ -104,7 +104,7 @@ export class XrGrabController {
   }
 
   /** Release one pointer. A two-handed grab degrades to one hand rather than dropping the object. */
-  release(object: THREE.Object3D, pointerId: string): void {
+  release(object: THREE.Object3D, pointerId: string, remainingPose?: GrabPointerPose): void {
     const grab = this.grabs.get(object);
     if (!grab) return;
 
@@ -113,13 +113,11 @@ export class XrGrabController {
       return;
     }
 
-    const remaining = grab.pointerIds.find(id => id !== pointerId);
-    if (!remaining) {
-      this.grabs.delete(object);
-      return;
-    }
-    // Re-seat as a single grab so the object does not jump when the second hand leaves.
+    if (!grab.pointerIds.includes(pointerId)) return;
     this.grabs.delete(object);
+    if (remainingPose && grab.pointerIds.includes(remainingPose.id) && remainingPose.id !== pointerId) {
+      this.begin(object, remainingPose, true);
+    }
   }
 
   releaseAll(): void {
@@ -165,6 +163,7 @@ export class XrGrabController {
 
     // Seed on the first frame with both hands present, rather than at begin(), because the second
     // hand's pose is only known here.
+    if (distance < 1e-4) return;
     if (grab.startDistance === 0) {
       grab.startDistance = Math.max(distance, 1e-4);
       grab.startMidpoint.copy(midpoint);
@@ -175,12 +174,16 @@ export class XrGrabController {
       return;
     }
 
-    const ratio = distance / grab.startDistance;
-    const scale = THREE.MathUtils.clamp(grab.startScale * ratio, MIN_SCALE, MAX_SCALE);
+    const scale = THREE.MathUtils.clamp(grab.startScale * distance / grab.startDistance, MIN_SCALE, MAX_SCALE);
+    const ratio = scale / grab.startScale;
 
     // Rotation is the shortest arc between the two inter-hand directions, which gives a natural
     // twist without picking an arbitrary axis.
     const twist = new THREE.Quaternion().setFromUnitVectors(grab.startDirection, direction);
+    if (object.parent) {
+      const parentRotation = object.parent.getWorldQuaternion(new THREE.Quaternion());
+      twist.premultiply(parentRotation.clone().invert()).multiply(parentRotation);
+    }
 
     object.scale.setScalar(scale);
     object.quaternion.copy(twist).multiply(grab.startQuaternion);
@@ -206,7 +209,7 @@ export class XrGrabController {
     if (parent) {
       parent.updateMatrixWorld();
       scratchParentInverse.copy(parent.matrixWorld).invert();
-      scratchMatrix.copy(scratchParentInverse).multiply(worldMatrix);
+      scratchMatrix.copy(worldMatrix).premultiply(scratchParentInverse);
     } else {
       scratchMatrix.copy(worldMatrix);
     }
@@ -215,7 +218,7 @@ export class XrGrabController {
     object.quaternion.copy(scratchQuaternion);
     // Scale is owned by the two-hand gesture; a rigid carry must not drift it through matrix
     // round-tripping.
-    object.updateMatrixWorld();
+    object.updateWorldMatrix(true, false);
   }
 }
 
@@ -242,7 +245,7 @@ export const applyXrPose = (object: THREE.Object3D, pose: XrPose): void => {
   );
   object.quaternion.normalize();
   object.scale.setScalar(pose.scale);
-  object.updateMatrixWorld();
+  object.updateWorldMatrix(true, false);
 };
 
 /**

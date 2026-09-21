@@ -1,0 +1,25 @@
+# Microduck interface overlay.
+#
+# The simulator's ROS sidecar colcon-builds `microduck_interfaces` and copies the
+# resulting install tree into this named volume every time it starts. Mounting it
+# under /overlay_ws lets ros_entrypoint.sh activate it, which is what gives
+# rosbridge the action type support it needs to serialize `ExecuteMotion` and
+# `MoveRelative` goals -- and what lets Behavior Tree nodes discover their goal
+# schemas through /rosapi/action_goal_details. Without this file those types are
+# simply absent, and the action nodes cannot run at all.
+#
+# Start mujoco-warp-locomotion-sim at least once before layering this file. The
+# volume is external, so Compose refuses to start while it does not yet exist.
+#
+# Rebuild the simulator's sidecar and restart this stack together after an
+# interface version bump: an action's type hash changes with its fields, and a
+# stale overlay fails to deserialize goals rather than reporting a mismatch.
+services:
+  ros-stack:
+    volumes:
+      - microduck-interfaces:/overlay_ws/microduck:ro
+
+volumes:
+  microduck-interfaces:
+    external: true
+    name: ${MICRODUCK_INTERFACES_VOLUME:-microduck-interfaces}

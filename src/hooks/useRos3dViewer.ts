@@ -209,29 +209,10 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
   // With no XR session ever started, subscribeToXrPresentation reports false once and never fires
   // again, so this is inert for every existing deployment.
   useEffect(() => {
-    // The bus replays its current value to every new subscriber, so the first callback is a
-    // statement of where things already stand rather than a change. Acting on it would request a
-    // needless frame on every mount, which is exactly the waste the invalidation model exists to
-    // avoid.
-    let applied: boolean | null = null;
-
     return subscribeToXrPresentation(isPresenting => {
-      if (applied === isPresenting) return;
-      const isInitial = applied === null;
-      applied = isPresenting;
-
-      const viewer = ros3dViewer.current;
       const controls = orbitControlsRef.current;
       if (controls) controls.enabled = !isPresenting;
-      if (!viewer) return;
-
-      if (isPresenting) {
-        viewer.stop();
-      } else if (!isInitial) {
-        // One frame on the way back, so the panel is not left showing whatever was on screen when
-        // the session began. Skipped on the initial callback, where nothing was ever suspended.
-        viewer.requestRender();
-      }
+      ros3dViewer.current?.setRenderSuspended(isPresenting);
     });
   }, [viewerGeneration]);
 

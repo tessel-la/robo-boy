@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { XrInteractionMode, XrPointer, XrPointerSource } from './types';
 import { isXrGrabbable } from './types';
+import type { GrabPointerPose } from './grabbable';
 
 /** Distance the pointer ray is drawn and tested to, in metres. */
 const RAY_LENGTH = 8;
@@ -34,7 +35,9 @@ export interface XrInputManagerOptions {
   onActivate?: (pointer: XrPointer, target: XrInputTarget) => void;
   onHoverChange?: (pointer: XrPointer, target: XrInputTarget | null) => void;
   onGrabStart?: (pointer: XrPointer, target: XrInputTarget) => void;
-  onGrabEnd?: (pointer: XrPointer) => void;
+  onGrabEnd?: (pointer: XrPointer, object: THREE.Object3D) => void;
+  /** Identity of the actual control within a surface, not just its shared mesh. */
+  getActivationTarget?: (target: XrInputTarget) => unknown;
 }
 
 interface PointerState {
@@ -44,6 +47,8 @@ interface PointerState {
   object: THREE.Object3D | null;
   ray: THREE.Ray;
   selecting: boolean;
+  connected: boolean;
+  activationTarget: unknown;
   squeezing: boolean;
   hovered: THREE.Object3D | null;
   /** What select began on, so an activation can require it to end on the same thing. */
@@ -135,10 +140,24 @@ export class XrInputManager {
     return result;
   }
 
-  /** World-space origin of a pointer, used by the grab maths. */
-  getPointerOrigin(id: string): THREE.Vector3 | null {
+  /** Full tracked pose, including wrist roll which a ray direction cannot represent. */
+  getPointerPose(id: string): GrabPointerPose | null {
     const state = this.pointers.get(id);
-    return state ? state.ray.origin.clone() : null;
+    if (!state || !this.refreshRay(state) || !state.object) return null;
+    return {
+      id,
+      matrixWorld: state.object.matrixWorld.clone(),
+      origin: state.ray.origin.clone(),
+    };
+  }
+
+  private refreshRay(state: PointerState): boolean {
+    if (!state.connected || !state.object?.visible) return false;
+    state.object.updateWorldMatrix(true, false);
+    this.tempMatrix.extractRotation(state.object.matrixWorld);
+    state.ray.origin.setFromMatrixPosition(state.object.matrixWorld);
+    state.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix).normalize();
+    return true;
   }
 
   private attachControllers(): void {
@@ -159,6 +178,8 @@ export class XrInputManager {
         object: controller,
         ray: new THREE.Ray(),
         selecting: false,
+        connected: false,
+        activationTarget: null,
         squeezing: false,
         hovered: null,
         selectOrigin: null,
@@ -169,17 +190,20 @@ export class XrInputManager {
       this.pointers.set(id, state);
 
       const onConnected = (event: XrSourceEvent) => {
+        state.connected = true;
         state.handedness = event.data?.handedness ?? 'none';
         // A tracked hand reports through the same controller slot; recording it lets panels present
         // different affordances without the interaction layer branching.
         state.source = event.data?.hand ? 'hand' : 'controller';
       };
       const onDisconnected = () => {
+        state.connected = false;
         state.handedness = 'none';
         state.source = 'controller';
         this.releaseSelect(state);
         this.releaseSqueeze(state);
         state.hovered = null;
+        this.options.onHoverChange?.(this.toPointer(state), null);
       };
       const onSelectStart = () => this.beginSelect(state);
       const onSelectEnd = () => this.endSelect(state);
@@ -226,25 +250,27 @@ export class XrInputManager {
   }
 
   private beginSelect(state: PointerState): void {
+    if (this.mode === 'manipulate' || !this.refreshRay(state)) return;
     state.selecting = true;
     const target = this.hitTest(state);
     state.selectOrigin = target?.object ?? null;
     state.selectOriginPoint = target ? target.point.clone() : null;
-
-    // A squeeze already in progress owns the gesture; select must not also start a grab.
-    if (!state.squeezing && target && isXrGrabbable(target.object)) {
-      // Select on a grabbable is still a candidate activation, not a grab. Grabbing requires grip,
-      // which is what keeps a pointing gesture from dragging the room.
-      this.recomputeMode();
-      return;
-    }
+    state.activationTarget = target ? this.activationTarget(target) : null;
     this.recomputeMode();
+  }
+
+  private activationTarget(target: XrInputTarget): unknown {
+    return this.options.getActivationTarget
+      ? this.options.getActivationTarget(target)
+      : target.object;
   }
 
   private endSelect(state: PointerState): void {
     const wasSelecting = state.selecting;
     const origin = state.selectOrigin;
     const originPoint = state.selectOriginPoint;
+    const activationTarget = state.activationTarget;
+    const manipulating = this.mode === 'manipulate';
     this.releaseSelect(state);
 
     if (!wasSelecting || !origin) {
@@ -252,7 +278,7 @@ export class XrInputManager {
       return;
     }
     // A grab in progress consumes the gesture outright.
-    if (state.squeezing || state.grabbed) {
+    if (manipulating || !this.refreshRay(state)) {
       this.recomputeMode();
       return;
     }
@@ -262,7 +288,8 @@ export class XrInputManager {
     const travelled =
       target && originPoint ? target.point.distanceTo(originPoint) : Number.POSITIVE_INFINITY;
 
-    if (sameTarget && target && travelled <= ACTIVATION_SLOP_METRES) {
+    if (sameTarget && target && activationTarget != null &&
+        this.activationTarget(target) === activationTarget && travelled <= ACTIVATION_SLOP_METRES) {
       this.options.onActivate?.(this.toPointer(state), target);
     }
     this.recomputeMode();
@@ -272,9 +299,11 @@ export class XrInputManager {
     state.selecting = false;
     state.selectOrigin = null;
     state.selectOriginPoint = null;
+    state.activationTarget = null;
   }
 
   private beginSqueeze(state: PointerState): void {
+    if (!this.refreshRay(state)) return;
     state.squeezing = true;
     const target = this.hitTest(state);
     const grabbable = target ? this.findGrabbable(target.object) : null;
@@ -283,15 +312,15 @@ export class XrInputManager {
       this.options.onGrabStart?.(this.toPointer(state), { ...target, object: grabbable });
     }
     // Grip outranks trigger: any select in flight is abandoned so it cannot activate on release.
-    this.releaseSelect(state);
+    for (const pointer of this.pointers.values()) this.releaseSelect(pointer);
     this.recomputeMode();
   }
 
   private releaseSqueeze(state: PointerState): void {
-    const wasGrabbing = state.grabbed !== null;
+    const grabbed = state.grabbed;
     state.squeezing = false;
     state.grabbed = null;
-    if (wasGrabbing) this.options.onGrabEnd?.(this.toPointer(state));
+    if (grabbed) this.options.onGrabEnd?.(this.toPointer(state), grabbed);
     this.recomputeMode();
   }
 
@@ -328,12 +357,19 @@ export class XrInputManager {
   }
 
   private hitTest(state: PointerState): XrInputTarget | null {
+    if (!this.refreshRay(state)) return null;
     const interactables = this.options.getInteractables();
     if (interactables.length === 0) return null;
 
+    for (const object of interactables) object.updateWorldMatrix(true, true);
     this.raycaster.set(state.ray.origin, state.ray.direction);
     const intersections = this.raycaster.intersectObjects(interactables as THREE.Object3D[], true);
-    const hit = intersections.find(entry => entry.object.visible);
+    const hit = intersections.find(entry => {
+      for (let object: THREE.Object3D | null = entry.object; object; object = object.parent) {
+        if (!object.visible) return false;
+      }
+      return true;
+    });
     if (!hit) return null;
     return {
       object: hit.object,
@@ -351,17 +387,22 @@ export class XrInputManager {
    */
   update(): void {
     for (const state of this.pointers.values()) {
-      const object = state.object;
-      if (!object) continue;
-
-      object.updateMatrixWorld();
-      this.tempMatrix.identity().extractRotation(object.matrixWorld);
-      state.ray.origin.setFromMatrixPosition(object.matrixWorld);
-      state.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix).normalize();
-
+      if (!this.refreshRay(state)) {
+        this.releaseSelect(state);
+        this.releaseSqueeze(state);
+        if (state.hovered) this.options.onHoverChange?.(this.toPointer(state), null);
+        state.hovered = null;
+        continue;
+      }
       const target = state.grabbed ? null : this.hitTest(state);
+      // Remember excursions even when the ray returns to the original button before release.
+      if (state.selecting && (!target || target.object !== state.selectOrigin ||
+          !state.selectOriginPoint || target.point.distanceTo(state.selectOriginPoint) > ACTIVATION_SLOP_METRES ||
+          this.activationTarget(target) !== state.activationTarget)) {
+        this.releaseSelect(state);
+      }
       const hovered = target?.object ?? null;
-      if (hovered !== state.hovered) {
+      if (hovered || hovered !== state.hovered) {
         state.hovered = hovered;
         this.options.onHoverChange?.(this.toPointer(state), target);
       }
@@ -373,6 +414,7 @@ export class XrInputManager {
         material.opacity = hovered ? 1 : 0.45;
       }
     }
+    this.recomputeMode();
   }
 
   dispose(): void {

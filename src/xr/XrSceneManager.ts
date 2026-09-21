@@ -66,6 +66,8 @@ export class XrSceneManager {
   private lastFrameTime = 0;
   private environment: THREE.Object3D | null = null;
   private tornDown = false;
+  private starting = false;
+  private resourcesReleased = false;
 
   constructor(options: XrSceneManagerOptions) {
     this.options = options;
@@ -177,37 +179,44 @@ export class XrSceneManager {
     if (this.session) return;
     if (!navigator.xr) throw new Error('WebXR is unavailable in this browser.');
 
-    const session = await navigator.xr.requestSession(
-      mode,
-      buildSessionInit(mode, this.options.domOverlayRoot)
-    );
-
+    if (this.starting) throw new Error('An XR session is already starting.');
+    this.starting = true;
+    let acquired: XRSession | null = null;
     try {
-      const { type } = await requestBestReferenceSpace(session);
+      acquired = await navigator.xr.requestSession(
+        mode,
+        buildSessionInit(mode, this.options.domOverlayRoot)
+      );
+      if (this.tornDown) throw new Error('XR entry was cancelled.');
+      this.session = acquired;
+      // Listen before any asynchronous binding step: the runtime can end at any time.
+      acquired.addEventListener('end', this.handleSessionEnd);
+      const { type, space } = await requestBestReferenceSpace(acquired);
+      if (this.tornDown || this.session !== acquired) throw new Error('XR entry was cancelled.');
       this.referenceSpaceType = type;
       this.renderer.xr.setReferenceSpaceType(type);
-      await this.renderer.xr.setSession(session);
+      await this.renderer.xr.setSession(acquired);
+      if (this.tornDown || this.session !== acquired) throw new Error('XR entry was cancelled.');
+      this.renderer.xr.setReferenceSpace(space);
+      this.currentMode = mode;
+      this.passthrough = isPassthroughBlendMode(acquired.environmentBlendMode);
+      this.domOverlayGranted = Boolean(
+        (acquired as XRSession & { domOverlayState?: { type?: string } }).domOverlayState?.type
+      );
+      this.rootGroup.position.y = getFloorOffset(type);
+      this.applyEnvironment();
+      this.lastFrameTime = 0;
+      this.renderer.setAnimationLoop(this.handleFrame);
+      this.options.onSessionStart?.(mode);
     } catch (error) {
-      // Leaving a half-bound session open would hold the headset in a blank state with no way back.
-      await session.end().catch(() => undefined);
+      acquired?.removeEventListener('end', this.handleSessionEnd);
+      if (this.session === acquired) this.session = null;
+      await acquired?.end().catch(() => undefined);
       throw error instanceof Error ? error : new Error(String(error));
+    } finally {
+      this.starting = false;
+      if (this.tornDown) this.releaseResources();
     }
-
-    this.session = session;
-    this.currentMode = mode;
-    this.passthrough = isPassthroughBlendMode(session.environmentBlendMode);
-    this.domOverlayGranted = Boolean(
-      (session as XRSession & { domOverlayState?: { type?: string } }).domOverlayState?.type
-    );
-
-    this.rootGroup.position.y = getFloorOffset(this.referenceSpaceType ?? 'local-floor');
-    this.applyEnvironment();
-
-    session.addEventListener('end', this.handleSessionEnd);
-
-    this.lastFrameTime = 0;
-    this.renderer.setAnimationLoop(this.handleFrame);
-    this.options.onSessionStart?.(mode);
   }
 
   /** Ask the runtime to end the session. Teardown happens in the `end` handler either way. */
@@ -225,6 +234,7 @@ export class XrSceneManager {
 
   private readonly handleSessionEnd = (): void => {
     const session = this.session;
+    if (!session) return;
     this.session = null;
     this.currentMode = null;
     this.referenceSpaceType = null;
@@ -274,8 +284,17 @@ export class XrSceneManager {
       this.session = null;
     }
 
+    this.currentMode = null;
     this.renderer.setAnimationLoop(null);
     this.frameListeners.clear();
+    // Three may still be awaiting makeXRCompatible/reference-space binding. Do not dispose its
+    // context underneath that work; start's finally block finishes cleanup after cancellation.
+    if (!this.starting) this.releaseResources();
+  }
+
+  private releaseResources(): void {
+    if (this.resourcesReleased) return;
+    this.resourcesReleased = true;
     this.clearEnvironment();
 
     for (const dispose of this.disposables.splice(0)) dispose();

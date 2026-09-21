@@ -10,7 +10,7 @@ vi.mock('three', async () => {
 
   class WebGLRenderer {
     domElement = document.createElement('canvas');
-    xr = { enabled: false, setSession, setReferenceSpaceType };
+    xr = { enabled: false, setSession, setReferenceSpaceType, setReferenceSpace: vi.fn() };
     setPixelRatio = vi.fn();
     setSize = vi.fn();
     setClearAlpha = vi.fn();
@@ -127,6 +127,51 @@ describe('XR session lifecycle', () => {
     // twice has to be harmless.
     expect(() => manager.dispose()).not.toThrow();
     expect(rendererDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends a session acquired after disposal without binding it', async () => {
+    let resolve!: (session: FakeSession) => void;
+    requestSession.mockReturnValue(new Promise(r => { resolve = r; }));
+    const manager = new XrSceneManager({ container });
+    const start = manager.start('immersive-vr');
+    manager.dispose();
+    const session = createSession();
+    resolve(session);
+    await expect(start).rejects.toThrow('cancelled');
+    expect(session.end).toHaveBeenCalledOnce();
+    expect(setSession).not.toHaveBeenCalled();
+    expect(rendererDispose).toHaveBeenCalledOnce();
+    expect(manager.isPresenting).toBe(false);
+  });
+
+  it('does not restart rendering when disposed during renderer binding', async () => {
+    let resolve!: () => void;
+    setSession.mockImplementationOnce(() => new Promise<void>(r => { resolve = r; }));
+    requestSession.mockResolvedValue(createSession());
+    const onStart = vi.fn();
+    const manager = new XrSceneManager({ container, onSessionStart: onStart });
+    const start = manager.start('immersive-vr');
+    await vi.waitFor(() => expect(setSession).toHaveBeenCalled());
+    manager.dispose();
+    expect(rendererDispose).not.toHaveBeenCalled();
+    resolve();
+    await expect(start).rejects.toThrow('cancelled');
+    expect(onStart).not.toHaveBeenCalled();
+    expect(setAnimationLoop.mock.calls.every(([callback]) => callback === null)).toBe(true);
+    expect(rendererDispose).toHaveBeenCalledOnce();
+  });
+
+  it('notifies session end only once', async () => {
+    const session = createSession();
+    requestSession.mockResolvedValue(session);
+    const onEnd = vi.fn();
+    const manager = new XrSceneManager({ container, onSessionEnd: onEnd });
+    await manager.start('immersive-vr');
+    const end = session.addEventListener.mock.calls.find(([type]) => type === 'end')![1];
+    end();
+    end();
+    expect(onEnd).toHaveBeenCalledOnce();
+    manager.dispose();
   });
 
   it('removes its canvas from the page on dispose', async () => {

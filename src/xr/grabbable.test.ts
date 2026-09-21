@@ -172,3 +172,26 @@ describe('two-handed scale', () => {
     expect(object.scale.x).toBeCloseTo(1);
   });
 });
+
+it('continues carrying with the remaining hand after a two-handed release', () => {
+  const object = new THREE.Object3D();
+  const controller = new XrGrabController();
+  controller.begin(object, pointerAt('a', -1, 0, 0), true);
+  controller.begin(object, pointerAt('b', 1, 0, 0), true);
+  controller.update(new Map([['a', pointerAt('a', -1, 0, 0)], ['b', pointerAt('b', 1, 0, 0)]]));
+  controller.release(object, 'a', pointerAt('b', 1, 0, 0));
+  controller.update(new Map([['b', pointerAt('b', 2, 0, 0)]]));
+  expect(object.position.x).toBeCloseTo(1);
+  expect(controller.isGrabbed(object)).toBe(true);
+});
+
+it('carries correctly below a translated parent without aliasing the world matrix', () => {
+  const parent = new THREE.Group();
+  parent.position.y = -1.6;
+  const object = new THREE.Object3D();
+  parent.add(object);
+  const controller = new XrGrabController();
+  controller.begin(object, pointerAt('a', 0, 0, 0), true);
+  controller.update(new Map([['a', pointerAt('a', 1, 0, 0)]]));
+  expect(object.position.toArray()).toEqual([1, 0, 0]);
+});

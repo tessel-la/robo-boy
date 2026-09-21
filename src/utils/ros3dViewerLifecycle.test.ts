@@ -38,6 +38,18 @@ describe('ROS3D viewer render lifecycle', () => {
     document.body.innerHTML = '';
   });
 
+  it('suppresses repeated invalidations while suspended and resumes with one frame', async () => {
+    const { Viewer } = await import('./ros3d');
+    const viewer = new Viewer({ divID: 'viewer', width: 640, height: 480, antialias: true });
+    viewer.setRenderSuspended(true);
+    viewer.requestRender();
+    viewer.requestRender();
+    expect(scheduledFrames).toHaveLength(0);
+    viewer.setRenderSuspended(false);
+    expect(scheduledFrames).toHaveLength(1);
+    viewer.stop();
+  });
+
   it('coalesces invalidations and stops after rendering the latest scene state', async () => {
     const { Viewer } = await import('./ros3d');
     const viewer = new Viewer({ divID: 'viewer', width: 640, height: 480, antialias: true });
