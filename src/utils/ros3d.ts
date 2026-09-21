@@ -15,7 +15,7 @@ import { LaserScan } from './ros3d/visualizers/LaserScan';
 const urdfDescriptionsByRos = new WeakMap<Ros, Map<string, string>>();
 
 const isDesktopRuntime = (): boolean =>
-  typeof document !== 'undefined' && document.documentElement.dataset.runtime === 'tauri';
+  typeof document !== 'undefined' && document.documentElement.hasAttribute('data-desktop');
 
 const getRendererPixelRatio = (): number => {
   if (typeof window === 'undefined') return 1;

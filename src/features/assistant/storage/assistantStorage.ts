@@ -16,8 +16,12 @@ const PROVIDER_DEFAULTS: Record<AssistantProviderId, Pick<AssistantSettings, 'ba
 };
 
 const getOllamaDefaultBaseUrl = (): string => {
+  // A packaged shell reaches Ollama on the machine it runs on; only the web app has a proxy route
+  // in front of it. Both shells qualify: Tauri announces itself on the window, Electron through
+  // the bridge its preload script exposes.
   const desktop =
-    typeof window !== 'undefined' && (window.location.protocol === 'tauri:' || '__TAURI_INTERNALS__' in window);
+    typeof window !== 'undefined' &&
+    (window.location.protocol === 'tauri:' || '__TAURI_INTERNALS__' in window || 'roboBoyDesktop' in window);
   return desktop ? 'http://localhost:11434' : '/ollama';
 };
 

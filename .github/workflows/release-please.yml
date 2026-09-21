@@ -45,6 +45,18 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
+  # Linux only: the Electron shell exists for the distributions whose WebKitGTK has no WebRTC, and
+  # the Windows and macOS web views do have it.
+  electron:
+    name: Build the Electron Linux packages
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/electron-build.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+
   # Best effort, unlike the installers. The iPhone app is the one build that cannot be signed, and
   # a release of four working installers should not be withheld because it failed.
   iphone:
@@ -70,13 +82,14 @@ jobs:
 
   publish-installers:
     name: Attach installers to the release
-    needs: [release-please, desktop, iphone, android]
+    needs: [release-please, desktop, electron, iphone, android]
     # Runs even when the iPhone build failed, which is what makes that build optional; the desktop
     # installers are still required, and a release without them publishes nothing.
     if: >-
       ${{ !cancelled()
       && needs.release-please.outputs.release_created == 'true'
       && needs.desktop.result == 'success'
+      && needs.electron.result == 'success'
       && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -89,6 +102,12 @@ jobs:
           path: installers
           pattern: desktop-*
           merge-multiple: true
+
+      - name: Download the built Electron packages
+        uses: actions/download-artifact@v4
+        with:
+          path: electron
+          pattern: electron-linux-*
 
       - name: Download the built iPhone app
         uses: actions/download-artifact@v4
@@ -144,6 +163,29 @@ jobs:
 
           find installers stable iphone -type f
 
+      # Keep each architecture's artifact directory separate so every expected architecture must
+      # supply a Debian package. Preserve the existing x64 download name alongside the ARM64 one.
+      - name: Name a stable copy of the Electron packages
+        run: |
+          set -euo pipefail
+          mkdir -p stable
+          for arch in x64 arm64; do
+            artifact_dir="electron/electron-linux-${arch}"
+            if [ ! -d "${artifact_dir}" ]; then
+              echo "::error::missing Electron ${arch} artifact"
+              exit 1
+            fi
+            mapfile -t built < <(find "${artifact_dir}" -type f -name '*.deb')
+            if [ "${#built[@]}" -ne 1 ]; then
+              echo "::error::expected one Electron ${arch} .deb, found ${#built[@]}"
+              exit 1
+            fi
+            platform_arch="${arch}"
+            if [ "${arch}" = x64 ]; then platform_arch=amd64; fi
+            cp "${built[0]}" "stable/Robo-Boy-linux-${platform_arch}-electron.deb"
+          done
+          find electron stable -type f
+
       - name: Name the Android APK
         run: |
           set -euo pipefail
@@ -160,5 +202,5 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          mapfile -t installers < <(find installers stable iphone android -type f)
+          mapfile -t installers < <(find installers stable iphone android electron -type f)
           gh release upload "${TAG_NAME}" "${installers[@]}" --clobber --repo "${GITHUB_REPOSITORY}"

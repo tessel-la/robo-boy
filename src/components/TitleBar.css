@@ -123,3 +123,23 @@
 .title-bar-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
 .title-bar-resize-ne { top: 0; right: 0; cursor: nesw-resize; }
 .title-bar-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* The Electron shell.
+   Chromium decides what drags a frameless window from CSS rather than from an attribute, so the
+   bar is declared draggable here and the controls are excluded again -- a button inside a drag
+   region never receives its click otherwise.
+   Chromium also draws its own invisible resize border around a frameless window. The edges the
+   app paints for Tauri sit exactly on top of it and would swallow the press, so they are taken
+   out of the way and the compositor is left to do the resizing. */
+:root[data-runtime='electron'] .title-bar {
+  -webkit-app-region: drag;
+}
+
+:root[data-runtime='electron'] .title-bar-controls,
+:root[data-runtime='electron'] .title-bar-button {
+  -webkit-app-region: no-drag;
+}
+
+:root[data-runtime='electron'] .title-bar-resize {
+  display: none;
+}

@@ -2,9 +2,34 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   drawsOwnWindowChrome,
   getDefaultConnectionHost,
+  isDesktopRuntime,
   isMobilePlatform,
   resolveRuntimeEndpoints,
 } from './runtimeConfig';
+
+describe('desktop runtime detection', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['roboBoyDesktop', '__TAURI_INTERNALS__'])('uses direct connections and window chrome with %s', marker => {
+    vi.stubGlobal(marker, {});
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', maxTouchPoints: 0 });
+
+    expect(isDesktopRuntime()).toBe(true);
+    expect(drawsOwnWindowChrome()).toBe(true);
+    expect(getDefaultConnectionHost()).toBe('');
+    expect(resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.local' }, isDesktopRuntime())).toMatchObject({
+      mode: 'desktop',
+      rosbridgeUrl: 'ws://robot.local:9090',
+      webrtcWhepBaseUrl: 'http://robot.local:8889/',
+    });
+  });
+
+  it('does not detect a desktop shell in a browser or without a window', () => {
+    expect(isDesktopRuntime()).toBe(false);
+    vi.stubGlobal('window', undefined);
+    expect(isDesktopRuntime()).toBe(false);
+  });
+});
 
 describe('resolveRuntimeEndpoints', () => {
   it('keeps the same-origin proxy contract for domain-based web connections', () => {

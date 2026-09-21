@@ -18,6 +18,9 @@ services:
       - VITE_OLLAMA_PORT=${OLLAMA_PORT:-11434}
       - VITE_WEB_BACKEND_MODE=${VITE_WEB_BACKEND_MODE:-auto}
       - PANEL_MANAGER_PROXY_TARGET=${PANEL_MANAGER_PROXY_TARGET:-http://panel-manager:4100}
+      # Hostnames the dev server may be reached under, comma separated. Caddy passes the
+      # browser's Host header through, so every domain the app is served on belongs here.
+      - ROBOBOY_ALLOWED_HOSTS=${ROBOBOY_ALLOWED_HOSTS:-}
     networks:
       - app-net
 

@@ -1,0 +1,92 @@
+name: Electron Build
+
+# Builds the Linux packages for the Electron desktop shell. Linux only, and deliberately so: the
+# shell exists because several distributions compile WebRTC out of WebKitGTK, which is what the
+# Tauri build draws in, so the video panels there fall back to HLS. The Windows and macOS web
+# views have WebRTC, so those platforms gain nothing from a second, much larger package.
+#
+# It publishes nothing. Release Please owns releases and calls this workflow for the packages it
+# then attaches, exactly as it does for the Tauri installers.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Revision to build. Defaults to the triggering revision.
+        type: string
+        required: false
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [dev, main]
+    paths:
+      - 'electron/**'
+      - 'src/**'
+      - 'panel-sdk/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'config/**'
+      - 'src-tauri/icons/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index.html'
+      - 'tsconfig.json'
+      - '.github/workflows/electron-build.yml'
+      - '.github/workflows/release-please.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-build-${{ github.event_name }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Linux ${{ matrix.arch }} package (deb)
+    # Both targets can be packaged on x64: the shell and renderer are JavaScript, and
+    # electron-builder downloads the prebuilt Electron runtime for the requested architecture.
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - name: Check out the revision to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # esbuild transpiles the shell without type-checking it, and the renderer's tsc excludes it.
+      - name: Type-check the Electron shell
+        run: npm run typecheck:electron
+
+      # The ordinary production build, against the tracked public tree. No panel staging happens
+      # here, so nothing local reaches the package.
+      - name: Build the renderer and the shell
+        run: npm run build:electron
+
+      - name: Verify the build bundles no panels
+        env:
+          ROBOBOY_DIST_DIR: dist-electron/renderer
+        run: npm run check:release-panels
+
+      - name: Package the Linux targets
+        run: npx electron-builder --config config/electron-builder.yml --linux deb --${{ matrix.arch }} --publish never
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-linux-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: release/*.deb

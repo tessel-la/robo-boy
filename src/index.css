@@ -251,7 +251,10 @@ textarea {
     }
 }
 
-:root[data-runtime='tauri'] {
+/* Either packaged shell draws its own title bar, so the app has to leave room for it. The rules
+   further down that stay keyed to Tauri are working around its web view and are not wanted here:
+   the Electron shell renders in the same Chromium the browser build targets. */
+:root[data-desktop] {
     color-scheme: light;
     --title-bar-height: 34px;
 }
@@ -271,7 +274,7 @@ textarea {
     backdrop-filter: none !important;
 }
 
-:root[data-runtime='tauri'][data-theme='dark'] {
+:root[data-desktop][data-theme='dark'] {
     color-scheme: dark;
 }
 
