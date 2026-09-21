@@ -9,6 +9,7 @@ import type { BehaviorTreeAgentCheckpoint, BehaviorTreeResourceSchemas } from '.
 import type { ROSDiscoveryResult } from '../../behaviorTree/types';
 import { loadGamepadLibrary } from '../../customGamepad/gamepadStorage';
 import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGamepad/types';
+import { CAMERA_MESSAGE_TYPES, JOY_MESSAGE_TYPES, POSE_STAMPED_MESSAGE_TYPES, TWIST_MESSAGE_TYPES } from '../../customGamepad/rosMessageUtils';
 import { createRosGraphCache } from '../context/rosGraphCache';
 import { CONTEXT_CATALOG, type ContextCatalogEntry } from '../capabilities';
 import {
@@ -20,7 +21,7 @@ import {
   sampleRosTopic,
 } from '../context/rosContext';
 import { captureTfSnapshotOnDemand, lookupTransformOnDemand, parseDistanceRequest, parseTransformRequest, type TfLookupResult } from '../context/tfContext';
-import { composeAssistantSystemPrompt } from '../prompt';
+import { composeAssistantSystemPrompt, type AssistantTurnNeeds } from '../prompt';
 import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
 import { transcribeAssistantAudio } from '../providers/transcription';
@@ -28,6 +29,7 @@ import { getProviderDefaults, loadAssistantConversation, loadAssistantSettings, 
 import { fetchBehaviorTreeSchemas } from '../tools/behaviorTreeTool';
 import { validatePadAgainstRos } from '../tools/padValidator';
 import { validateRosActionProposal } from '../tools/rosActionValidator';
+import type { WorkspaceEditOperation, WorkspaceEditResult } from '../tools/workspaceTool';
 import type {
   AssistantAttachment,
   AssistantAutoContext,
@@ -38,6 +40,7 @@ import type {
   BehaviorTreeAssistantBridge,
   OpenAssistantOptions,
   WorkspaceSnapshot,
+ PanelSettingsBridge,
 } from '../types';
 import AssistantPanel, { type ContextPickerOption, type ContextPickerSection } from './AssistantPanel';
 
@@ -45,6 +48,8 @@ export interface GlobalAssistantHandle {
   open: (options?: OpenAssistantOptions) => void;
   toggle: () => void;
   registerBehaviorTreeBridge: (panelId: string, bridge: BehaviorTreeAssistantBridge | null) => void;
+  /** A panel that can report and change its own settings (see `PanelSettingsBridge`). */
+  registerPanelSettingsBridge: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 
 export interface GlobalAssistantProps {
@@ -57,12 +62,32 @@ export interface GlobalAssistantProps {
   onOpenResource?: (resourceId: string) => boolean;
   /** Whether that resource has a view to open at all, asked before a tag is drawn as clickable. */
   canOpenResource?: (resourceId: string) => boolean;
+  /** Applies the workspace tool's operations in order and reports each outcome. Absent when the
+   * host cannot edit the workspace (nothing is mounted to do it), in which case the assistant
+   * says so instead of pretending. */
+  onApplyWorkspaceEdit?: (operations: WorkspaceEditOperation[]) => WorkspaceEditResult[];
 }
 
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_TOTAL_SIZE = 12 * 1024 * 1024;
 const MAX_SCHEMA_TYPES = 24;
+/**
+ * Message types a Pad component can bind to (the Pad prompt fragment lists the same set). A
+ * Pad turn fetches schemas for graph topics of these types only: asking rosapi to describe every
+ * type on the graph both bloated the prompt and hit rosapi's typedef walker, which asserts on some
+ * nested types (moveit_msgs/msg/RobotState, for one) and takes the whole node down with it.
+ */
+const PAD_BINDABLE_MESSAGE_TYPES = new Set([
+  ...JOY_MESSAGE_TYPES,
+  ...TWIST_MESSAGE_TYPES,
+  ...POSE_STAMPED_MESSAGE_TYPES,
+  ...CAMERA_MESSAGE_TYPES,
+  'std_msgs/Bool', 'std_msgs/msg/Bool',
+  'std_msgs/Float32', 'std_msgs/msg/Float32',
+  'std_msgs/Float64', 'std_msgs/msg/Float64',
+  'std_msgs/Int32', 'std_msgs/msg/Int32',
+]);
 const TEXT_ATTACHMENT_EXTENSIONS = new Set([
   'txt', 'md', 'json', 'yaml', 'yml', 'xml', 'csv', 'log', 'launch', 'urdf', 'xacro',
   'py', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'sh', 'toml', 'ini', 'cfg',
@@ -100,13 +125,35 @@ const createAttachment = async (file: File): Promise<AssistantAttachment> => {
   };
 };
 
-const computeNeeds = (text: string, chips: AssistantContextChip[]) => {
+const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTurnNeeds => {
   const lower = text.toLowerCase();
   return {
     behaviorTree: chips.some(chip => chip.source === 'behaviorTree') || /\bbehavior[ -]?tree\b|\bbt\b/.test(lower),
     pad: chips.some(chip => chip.source === 'pad') || /\bpad\b|\bgamepad\b|\bjoystick\b|\bcontroller\b/.test(lower),
     rosAction: /\bpublish\b|\bcall\b|\bservice\b|\baction\b|\btopic\b|\bsend\b/.test(lower),
+    // Anything about what is on screen: the tool's fragment is short, so err on the side of
+    // offering it whenever a panel, layout or window is mentioned.
+    workspace:
+      chips.some(chip => chip.source === 'workspace') ||
+      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower),
   };
+};
+
+/** Models sometimes obey the one-object response contract but omit the workspace tool's
+ * `followUp`. Recover an explicit second create/build clause so a multi-part request does not
+ * silently stop after changing the layout. Keep this narrow: a plain "add a Pad panel" must not
+ * be mistaken for a request to build a new Pad. */
+const inferWorkspaceFollowUp = (text: string, needs: AssistantTurnNeeds): string | null => {
+  if (!needs.workspace || (!needs.behaviorTree && !needs.pad)) return null;
+  const clauses = text.split(/\b(?:and then|then|and|also)\b/i).map(clause => clause.trim()).filter(Boolean);
+  const remaining = clauses.slice(1).find(clause =>
+    /\b(?:build|create|make|design|fix|extend|modify|edit)\b/i.test(clause) &&
+    /\b(?:behavior[ -]?tree|bt|pad|gamepad|joystick|controller)\b/i.test(clause)
+  );
+  if (remaining) return remaining.charAt(0).toUpperCase() + remaining.slice(1);
+
+  const withMatch = text.match(/\bwith\s+((?:a|an|the)\s+)?((?:behavior[ -]?tree|bt|tree|pad|gamepad)\b[\s\S]*)/i);
+  return withMatch ? `Build ${withMatch[0].slice(5).trim()}` : null;
 };
 
 const readPadLibrary = () => {
@@ -187,7 +234,7 @@ const formatTfDistanceAnswer = (lookup: TfLookupResult): string => {
 };
 
 const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
-  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource }, ref) => {
+  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
@@ -219,6 +266,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const [pinnedBehaviorTreePanelId, setPinnedBehaviorTreePanelId] = useState<string | null>(null);
 
     const bridgesRef = useRef<Map<string, BehaviorTreeAssistantBridge>>(new Map());
+    const panelBridgesRef = useRef<Map<string, PanelSettingsBridge>>(new Map());
     const lastRegisteredBridgeIdRef = useRef<string | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     /** Every in-flight context retrieval. They are independent -- tagging a second resource must not
@@ -295,7 +343,49 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           if (lastRegisteredBridgeIdRef.current === panelId) lastRegisteredBridgeIdRef.current = null;
         }
       },
+      registerPanelSettingsBridge: (panelId, bridge) => {
+        if (bridge) panelBridgesRef.current.set(panelId, bridge);
+        else panelBridgesRef.current.delete(panelId);
+      },
     }), [pinnedBehaviorTreePanelId]);
+
+    /** The workspace snapshot with each bridged panel's live settings folded in, read at send
+     * time so the model sees what the panel shows now, not what it showed at the last render. */
+    const workspaceWithPanelSettings = (): WorkspaceSnapshot => ({
+      ...workspace,
+      openPanels: workspace.openPanels.map(panel => {
+        const bridge = panelBridgesRef.current.get(panel.id.replace(/^mobile:/, ''));
+        return bridge ? { ...panel, settings: bridge.describe(), settingsHelp: bridge.settingsHelp } : panel;
+      }),
+    });
+
+    /** `configurePanel` is answered by the panel itself; everything else by the host. */
+    const applyWorkspaceOperations = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
+      const hostOperations = operations.filter(operation => operation.op !== 'configurePanel');
+      const hostResults = hostOperations.length
+        ? onApplyWorkspaceEdit
+          ? onApplyWorkspaceEdit(hostOperations)
+          : hostOperations.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }))
+        : [];
+      let hostIndex = 0;
+      return operations.map(operation => {
+        if (operation.op !== 'configurePanel') return hostResults[hostIndex++];
+        const wantedId = operation.panelId?.replace(/^mobile:/, '');
+        const bridge = wantedId
+          ? panelBridgesRef.current.get(wantedId)
+          : [...panelBridgesRef.current.values()].find(candidate => candidate.panelType === operation.panelType);
+        if (!bridge) {
+          const target = wantedId ? `panel "${wantedId}"` : `a ${operation.panelType} panel`;
+          return { operation, ok: false, message: `No open ${target} can be configured from here.` };
+        }
+        const outcomes = bridge.apply(operation.settings);
+        return {
+          operation,
+          ok: outcomes.length > 0 && outcomes.every(outcome => outcome.ok),
+          message: outcomes.length ? outcomes.map(outcome => `${outcome.ok ? '' : '✗ '}${outcome.message}`).join(' ') : 'Nothing in those settings applied.',
+        };
+      });
+    };
 
     useEffect(() => {
       if (settings.provider !== 'ollama') {
@@ -376,7 +466,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const currentTree = bridge?.getCurrentTree() ?? null;
       const selection = bridge?.getSelectedTreeContext() ?? null;
       return {
-        workspace,
+        workspace: workspaceWithPanelSettings(),
         ...(discovery && rosGraph ? { ros: {
           resources: discovery, fetchedAt: rosGraph.fetchedAt, generation: rosGraph.generation,
           stale: rosGraph.generation !== connectionGeneration,
@@ -572,8 +662,10 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         topics: {}, services: { ...parser.services }, actions: { ...parser.actions },
       };
       const referenced = padReferencedTypes(selectedPad?.layout ?? null);
-      const topicTypes = [...new Set([...referenced.topics, ...(needs.pad ? discovery.topics.map(item => item.type) : [])])]
-        .filter(Boolean).slice(0, MAX_SCHEMA_TYPES);
+      const bindableGraphTypes = needs.pad
+        ? discovery.topics.map(item => item.type).filter(type => PAD_BINDABLE_MESSAGE_TYPES.has(type))
+        : [];
+      const topicTypes = [...new Set([...referenced.topics, ...bindableGraphTypes])].filter(Boolean).slice(0, MAX_SCHEMA_TYPES);
       for (const type of topicTypes) {
         const details = await fetchMessageSchema(ros!, type, signal);
         if (details) context.topics[type] = details;
@@ -733,6 +825,25 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         } else if (response.kind === 'padProposal') {
           const issues = discovery ? validatePadAgainstRos(response.layout, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: `Built Pad “${response.layout.name}”. Review its complete layout and bindings in the Pad editor before saving.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });
+        } else if (response.kind === 'workspaceEdit') {
+          const results = applyWorkspaceOperations(response.operations);
+          const applied = results.filter(result => result.ok).length;
+          const content = applied === results.length
+            ? response.summary || `Applied ${applied} workspace change${applied === 1 ? '' : 's'}.`
+            : `Applied ${applied} of ${results.length} workspace changes.`;
+          const reply: AssistantMessage = { id: uuidv4(), role: 'assistant', content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, results }, resolution: applied > 0 ? 'applied' : 'failed', contextUsed };
+          pushMessage(reply);
+          // The rest of the request runs against the changed workspace — a panel added a moment
+          // ago has registered its bridge by the time the next turn gathers context.
+          const followUp = response.followUp || inferWorkspaceFollowUp(userText, needs);
+          if (followUp && applied > 0) {
+            const nextHistory = [...history, userMessage, reply];
+            // Queued so this turn's `finally` has released the generating flag first.
+            setTimeout(() => {
+              if (controller.signal.aborted) return;
+              void generateFromPrompt(followUp, nextHistory, null, []);
+            }, 0);
+          }
         } else {
           const issues = discovery ? validateRosActionProposal(response.operation, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: response.rationale || `Proposed ${response.operation.kind} “${response.operation.name}”.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });

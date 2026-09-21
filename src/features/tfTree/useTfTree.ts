@@ -1,23 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import * as ROSLIB from 'roslib';
 import type { Ros } from 'roslib';
 
-import { TfSource, TfTreeState, consumeTfMessage, createEmptyTfTreeState } from './tfTreeModel';
+import { resetTfStream, subscribeToTfMessages } from '../../utils/tfStream';
+import { TfSource, TfTreeState, consumeTfMessage, createEmptyTfTreeState, detectClockReset } from './tfTreeModel';
 
 interface UseTfTreeResult {
   state: TfTreeState;
-  isPaused: boolean;
-  pause: () => void;
-  resume: () => void;
+  /** Forgets every transform on this connection (the 3D panels' shared stream included) and
+   * subscribes again, so latched static transforms are re-sent and frames that stopped existing
+   * disappear. */
   refresh: () => void;
 }
 
+/**
+ * Builds the TF tree from the connection's shared `/tf` + `/tf_static` stream, so it never adds
+ * a second rosbridge client (which would receive only part of the latched static set — see
+ * `SharedTfStream`). The tree resets itself whenever the source does: a new ROS connection, or a
+ * publisher whose stamps jump backwards (a simulator restart). A static transform whose publisher
+ * simply died cannot be noticed from the browser (latched topics send no retraction), which is
+ * what the manual refresh is still for.
+ */
 export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => {
   const [state, setState] = useState<TfTreeState>(createEmptyTfTreeState);
-  const [isPaused, setIsPaused] = useState(false);
-  const [subscriptionRevision, setSubscriptionRevision] = useState(0);
   const stateRef = useRef(state);
-  const pausedRef = useRef(false);
+  const rosRef = useRef(ros);
+  rosRef.current = ros;
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flush = useCallback(() => {
@@ -27,17 +34,15 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
   }, []);
 
   const scheduleFlush = useCallback(() => {
-    if (pausedRef.current || flushTimerRef.current !== null) return;
+    if (flushTimerRef.current !== null) return;
     flushTimerRef.current = setTimeout(flush, 50);
   }, [flush]);
 
-  const consume = useCallback(
-    (message: unknown, source: TfSource) => {
-      stateRef.current = consumeTfMessage(stateRef.current, message as { transforms?: unknown }, source, Date.now());
-      scheduleFlush();
-    },
-    [scheduleFlush]
-  );
+  const refresh = useCallback(() => {
+    stateRef.current = createEmptyTfTreeState();
+    flush();
+    if (rosRef.current) resetTfStream(rosRef.current);
+  }, [flush]);
 
   useEffect(() => {
     if (!ros || !isActive) {
@@ -45,54 +50,27 @@ export const useTfTree = (ros: Ros | null, isActive = true): UseTfTreeResult => 
       flushTimerRef.current = null;
       return;
     }
+    // A different connection is a different robot until proven otherwise.
+    if (stateRef.current.knownFrames.size > 0) {
+      stateRef.current = createEmptyTfTreeState();
+      flush();
+    }
 
-    const dynamicTopic = new ROSLIB.Topic({
-      ros,
-      name: '/tf',
-      messageType: 'tf2_msgs/TFMessage',
-      queue_length: 1,
-      throttle_rate: 50,
-      compression: 'cbor',
+    const unsubscribe = subscribeToTfMessages(ros, (message, source: TfSource) => {
+      const tfMessage = message as { transforms?: unknown };
+      if (source === 'dynamic' && detectClockReset(stateRef.current, tfMessage)) {
+        refresh();
+      }
+      stateRef.current = consumeTfMessage(stateRef.current, tfMessage, source, Date.now());
+      scheduleFlush();
     });
-    const staticTopic = new ROSLIB.Topic({
-      ros,
-      name: '/tf_static',
-      messageType: 'tf2_msgs/TFMessage',
-      queue_length: 1,
-      throttle_rate: 0,
-      compression: 'cbor',
-    });
-
-    dynamicTopic.subscribe(message => consume(message, 'dynamic'));
-    staticTopic.subscribe(message => consume(message, 'static'));
 
     return () => {
-      dynamicTopic.unsubscribe();
-      staticTopic.unsubscribe();
+      unsubscribe();
       if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     };
-  }, [consume, isActive, ros, subscriptionRevision]);
+  }, [flush, isActive, refresh, ros, scheduleFlush]);
 
-  const pause = useCallback(() => {
-    pausedRef.current = true;
-    setIsPaused(true);
-    if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = null;
-  }, []);
-
-  const resume = useCallback(() => {
-    pausedRef.current = false;
-    setIsPaused(false);
-    flush();
-  }, [flush]);
-
-  const refresh = useCallback(() => {
-    pausedRef.current = false;
-    setIsPaused(false);
-    flush();
-    setSubscriptionRevision(revision => revision + 1);
-  }, [flush]);
-
-  return { state, isPaused, pause, resume, refresh };
+  return { state, refresh };
 };

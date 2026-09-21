@@ -51,6 +51,7 @@ describe('assistant capability registry', () => {
         operation: { kind: 'topic', name: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist', payload: {} },
         rationale: 'why',
       },
+      workspaceEdit: { kind: 'workspaceEdit', summary: 'Add a tree', operations: [{ op: 'addPanel', panelType: 'behaviorTree' }] },
     };
 
     for (const capability of ASSISTANT_CAPABILITIES) {

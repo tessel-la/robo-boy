@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FiArrowLeft, FiChevronDown, FiChevronRight, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
+import { FaCog } from 'react-icons/fa';
+import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
 
-import { getUrdfTopics } from '../utils/urdfTopics';
+import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -32,12 +33,74 @@ interface SettingsPopupProps {
   allTopics: TopicInfo[];
 }
 
-/** One section is expanded at a time and takes the remaining height, so the frame list gets the
- * room it needs instead of forcing a long scroll past everything else. */
-type OpenSection = 'tfFrames' | 'activeViz';
+/** Each section collapses on its own; the open ones share the remaining height so the frame
+ * list gets room instead of forcing a long scroll past everything else. */
+/** One tab at a time owns the menu's height, so a frame list and a visualization list never
+ * have to share it. */
+type SettingsTab = 'frames' | 'visualizations';
 type PopupView = 'main' | 'frameDisplay';
 
-const FRAME_FILTER_THRESHOLD = 6;
+/** A length in scene metres. The slider is logarithmic so the small end (a few centimetres for a
+ * desktop robot) has as much travel as the large end, and the number next to it is typed into
+ * directly for an exact value. */
+const ScaleField: React.FC<{
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}> = ({ id, label, value, min, max, disabled, onChange }) => {
+  const SLIDER_STEPS = 1000;
+  const toSlider = (metres: number) => Math.round((Math.log(Math.min(Math.max(metres, min), max) / min) / Math.log(max / min)) * SLIDER_STEPS);
+  const fromSlider = (position: number) => min * Math.pow(max / min, position / SLIDER_STEPS);
+  const [draft, setDraft] = useState<string | null>(null);
+  const commitDraft = () => {
+    if (draft === null) return;
+    const parsed = parseFloat(draft);
+    if (Number.isFinite(parsed) && parsed > 0) onChange(Math.min(Math.max(parsed, min), max));
+    setDraft(null);
+  };
+
+  return (
+    <div className="scale-field">
+      <div className="control-heading-row">
+        <label htmlFor={id}>{label}</label>
+        <span className="scale-field-value">
+          <input
+            type="number"
+            className="scale-field-number"
+            aria-label={`${label} in metres`}
+            min={min}
+            max={max}
+            step="0.01"
+            disabled={disabled}
+            value={draft ?? value.toFixed(2)}
+            onChange={event => setDraft(event.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={event => {
+              if (event.key === 'Enter') commitDraft();
+            }}
+          />
+          <span>m</span>
+        </span>
+      </div>
+      <input
+        type="range"
+        id={id}
+        min={0}
+        max={SLIDER_STEPS}
+        step={1}
+        value={toSlider(value)}
+        disabled={disabled}
+        onChange={event => onChange(Number(fromSlider(Number(event.target.value)).toFixed(3)))}
+        className="range-input"
+      />
+    </div>
+  );
+};
+
 
 const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   pointcloud: 'Point Cloud',
@@ -68,13 +131,9 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onUpdateVisualizationTopic,
   allTopics = [],
 }) => {
-  const [openSection, setOpenSection] = useState<OpenSection>('tfFrames');
+  const [tab, setTab] = useState<SettingsTab>('frames');
   const [view, setView] = useState<PopupView>('main');
   const [frameFilter, setFrameFilter] = useState('');
-
-  const toggleSection = (section: OpenSection) => {
-    setOpenSection(previous => (previous === section ? 'tfFrames' : section));
-  };
 
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const frameName = event.target.value;
@@ -98,18 +157,8 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
     if (event.target.value) onUpdateVisualizationTopic?.(vizId, event.target.value);
   };
 
-  const getTopicsForVisualizationType = (vizType: VisualizationConfig['type']): TopicInfo[] => {
-    if (vizType === 'urdf') return getUrdfTopics(allTopics);
-
-    const typeToMessageTypes: Partial<Record<VisualizationConfig['type'], string[]>> = {
-      pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
-      camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
-      laserscan: ['sensor_msgs/LaserScan', 'sensor_msgs/msg/LaserScan'],
-      posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'],
-    };
-    const supportedTypes = typeToMessageTypes[vizType] ?? [];
-    return allTopics.filter(topic => supportedTypes.includes(topic.type));
-  };
+  const compatibleTopicsFor = (vizType: VisualizationConfig['type']): TopicInfo[] =>
+    isTopicVisualizationType(vizType) ? getTopicsForVisualizationType(vizType, allTopics) : [];
 
   if (view === 'frameDisplay') {
     return (
@@ -142,22 +191,14 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             />
           </label>
           <div className="tf-scale-control">
-            <div className="control-heading-row">
-              <label htmlFor="tf-axes-scale">Axes size</label>
-              <output htmlFor="tf-axes-scale" className="range-value">
-                {tfDisplay.tfAxesScale.toFixed(2)} m
-              </output>
-            </div>
-            <input
-              type="range"
+            <ScaleField
               id="tf-axes-scale"
-              min="0.05"
-              max="2"
-              step="0.05"
+              label="Axes size"
               value={tfDisplay.tfAxesScale}
+              min={0.01}
+              max={5}
               disabled={!tfDisplay.showTfAxes}
-              onChange={event => onTfDisplayChange({ tfAxesScale: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfAxesScale => onTfDisplayChange({ tfAxesScale })}
             />
             <div className="control-heading-row">
               <label htmlFor="tf-axes-opacity">Axes opacity</label>
@@ -196,22 +237,14 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             />
           </label>
           <div className="tf-scale-control">
-            <div className="control-heading-row">
-              <label htmlFor="tf-label-scale">Label size</label>
-              <output htmlFor="tf-label-scale" className="range-value">
-                {tfDisplay.tfLabelScale.toFixed(2)} m
-              </output>
-            </div>
-            <input
-              type="range"
+            <ScaleField
               id="tf-label-scale"
-              min="0.02"
-              max="1"
-              step="0.02"
+              label="Label size"
               value={tfDisplay.tfLabelScale}
+              min={0.01}
+              max={2}
               disabled={!tfDisplay.showTfFrameLabels}
-              onChange={event => onTfDisplayChange({ tfLabelScale: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfLabelScale => onTfDisplayChange({ tfLabelScale })}
             />
             <div className="control-heading-row">
               <label htmlFor="tf-label-opacity">Label opacity</label>
@@ -284,186 +317,178 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           </div>
         </section>
 
-        <section className={`popup-section tf-frames-section${openSection === 'tfFrames' ? ' is-open' : ''}`}>
-          <div className="section-header-with-action">
-            <button
-              type="button"
-              className="section-header"
-              onClick={() => toggleSection('tfFrames')}
-              aria-expanded={openSection === 'tfFrames'}
-              aria-label="TF frames"
-            >
-              <span className="section-heading-copy">
-                <span className="settings-menu-label">TF display</span>
-                <span className="section-heading-title">Frames</span>
-              </span>
-              <span className="section-heading-meta">
-                <span className="settings-count-badge">
-                  {displayedTfFrames.length}/{availableFrames.length}
-                </span>
-                {openSection === 'tfFrames' ? <FiChevronDown /> : <FiChevronRight />}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="settings-icon-button section-action-button"
-              onClick={() => setView('frameDisplay')}
-              title="Frame display settings"
-              aria-label="Frame display settings"
-            >
-              <FiSettings aria-hidden="true" />
-            </button>
-          </div>
+        <div className="settings-tabs" role="tablist" aria-label="3D view settings sections">
+          <button
+            type="button"
+            role="tab"
+            id="settings-tab-frames"
+            aria-selected={tab === 'frames'}
+            aria-controls="settings-tabpanel-frames"
+            className={`settings-tab${tab === 'frames' ? ' is-active' : ''}`}
+            onClick={() => setTab('frames')}
+          >
+            <span>Frames</span>
+            <span className="settings-count-badge">
+              {displayedTfFrames.length}/{availableFrames.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="settings-tab-visualizations"
+            aria-selected={tab === 'visualizations'}
+            aria-controls="settings-tabpanel-visualizations"
+            className={`settings-tab${tab === 'visualizations' ? ' is-active' : ''}`}
+            onClick={() => setTab('visualizations')}
+          >
+            <span>Visualizations</span>
+            <span className="settings-count-badge">{activeVisualizations.length}</span>
+          </button>
+        </div>
 
-          {openSection === 'tfFrames' && (
-            <div className="section-content tf-section-content">
-              <label className="settings-toggle-row">
-                <span>Show all frames</span>
-                <input
-                  type="checkbox"
-                  checked={showAllTfFrames}
-                  onChange={event => onShowAllTfFramesChange(event.target.checked)}
-                />
-              </label>
-
-              {availableFrames.length > FRAME_FILTER_THRESHOLD && (
-                <input
-                  type="search"
-                  className="tf-frame-filter"
-                  value={frameFilter}
-                  onChange={event => setFrameFilter(event.target.value)}
-                  placeholder="Filter frames"
-                  aria-label="Filter frames"
-                />
-              )}
-
-              {availableFrames.length > 0 ? (
-                filteredFrames.length > 0 ? (
-                  <ul className="tf-checkbox-list">
-                    {filteredFrames.map(frame => (
-                      <li key={frame}>
-                        <label>
-                          <span className="tf-frame-name">{frame}</span>
-                          <input
-                            type="checkbox"
-                            value={frame}
-                            checked={displayedTfFrames.includes(frame)}
-                            onChange={handleTfCheckboxChange}
-                          />
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="no-frames-message">No frames match “{frameFilter.trim()}”.</p>
-                )
-              ) : (
-                <p className="no-frames-message">No TF frames available.</p>
-              )}
+        {tab === 'frames' && (
+          <section
+            className="settings-tabpanel tf-section-content"
+            role="tabpanel"
+            id="settings-tabpanel-frames"
+            aria-labelledby="settings-tab-frames"
+          >
+            <div className="tf-frame-toolbar">
+              <input
+                type="search"
+                className="tf-frame-filter"
+                value={frameFilter}
+                onChange={event => setFrameFilter(event.target.value)}
+                placeholder="Filter frames"
+                aria-label="Filter frames"
+                disabled={availableFrames.length === 0}
+              />
+              <button
+                type="button"
+                className="settings-icon-button"
+                onClick={() => setView('frameDisplay')}
+                title="Frame display settings"
+                aria-label="Frame display settings"
+              >
+                <FiSettings aria-hidden="true" />
+              </button>
             </div>
-          )}
-        </section>
 
-        <section className={`popup-section active-visualizations-section${openSection === 'activeViz' ? ' is-open' : ''}`}>
-          <div className="section-header-with-action">
-            <button
-              type="button"
-              className="section-header"
-              onClick={() => toggleSection('activeViz')}
-              aria-expanded={openSection === 'activeViz'}
-            >
-              <span className="section-heading-copy">
-                <span className="settings-menu-label">Scene</span>
-                <span className="section-heading-title">Active visualizations</span>
-              </span>
-              <span className="section-heading-meta">
-                <span className="settings-count-badge">{activeVisualizations.length}</span>
-                {openSection === 'activeViz' ? <FiChevronDown /> : <FiChevronRight />}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="add-viz-popup-button"
-              onClick={onAddVisualizationClick}
-              title="Add visualization"
-              aria-label="Add visualization"
-            >
-              <FiPlus aria-hidden="true" />
-            </button>
-          </div>
+            <label className="settings-toggle-row">
+              <span>Show all frames</span>
+              <input
+                type="checkbox"
+                checked={showAllTfFrames}
+                onChange={event => onShowAllTfFramesChange(event.target.checked)}
+              />
+            </label>
 
-          {openSection === 'activeViz' && (
-            <div className="section-content active-visualizations-list">
-              {activeVisualizations.length > 0 ? (
-                <ul>
-                  {activeVisualizations.map(viz => {
-                    const compatibleTopics = getTopicsForVisualizationType(viz.type);
-                    const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
-                    const selectId = `visualization-topic-${viz.id}`;
-
-                    return (
-                      <li key={viz.id} className="visualization-item">
-                        <div className="visualization-item-heading">
-                          <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
-                          <div className="visualization-item-actions">
-                            {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
-                              <button
-                                type="button"
-                                className="viz-settings-button"
-                                onClick={() => handleEditClick(viz.id)}
-                                title={`Configure ${TYPE_LABELS[viz.type]}`}
-                                aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
-                              >
-                                <FiSettings aria-hidden="true" />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="remove-viz-button"
-                              onClick={() => onRemoveVisualization(viz.id)}
-                              title="Remove visualization"
-                              aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
-                            >
-                              <FiTrash2 aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <label className="viz-topic-label" htmlFor={selectId}>
-                          Topic
-                        </label>
-                        <div className="topic-dropdown-container">
-                          <select
-                            id={selectId}
-                            value={viz.topic}
-                            onChange={event => handleTopicChange(viz.id, event)}
-                            className="topic-dropdown"
-                            title={viz.topic}
-                          >
-                            {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
-                            {compatibleTopics.length > 0 ? (
-                              compatibleTopics.map(topic => (
-                                <option key={topic.name} value={topic.name}>
-                                  {topic.name}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="" disabled>
-                                No compatible topics available
-                              </option>
-                            )}
-                          </select>
-                        </div>
-                      </li>
-                    );
-                  })}
+            {availableFrames.length > 0 ? (
+              filteredFrames.length > 0 ? (
+                <ul className="tf-checkbox-list">
+                  {filteredFrames.map(frame => (
+                    <li key={frame}>
+                      <label>
+                        <span className="tf-frame-name">{frame}</span>
+                        <input
+                          type="checkbox"
+                          value={frame}
+                          checked={displayedTfFrames.includes(frame)}
+                          onChange={handleTfCheckboxChange}
+                        />
+                      </label>
+                    </li>
+                  ))}
                 </ul>
               ) : (
-                <p className="no-visualizations-message">No active visualizations.</p>
-              )}
-            </div>
+                <p className="no-frames-message">No frames match “{frameFilter.trim()}”.</p>
+              )
+            ) : (
+              <p className="no-frames-message">No TF frames available.</p>
+            )}
+          </section>
+        )}
+
+        {tab === 'visualizations' && (
+          <section
+            className="settings-tabpanel active-visualizations-list"
+            role="tabpanel"
+            id="settings-tabpanel-visualizations"
+            aria-labelledby="settings-tab-visualizations"
+          >
+            <button type="button" className="settings-nav-row is-primary" onClick={onAddVisualizationClick} aria-label="Add visualization">
+              <FiPlus aria-hidden="true" />
+              <span>Add visualization</span>
+            </button>
+          {activeVisualizations.length > 0 ? (
+            <ul>
+              {activeVisualizations.map(viz => {
+                const compatibleTopics = compatibleTopicsFor(viz.type);
+                const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
+                const selectId = `visualization-topic-${viz.id}`;
+
+                return (
+                  <li key={viz.id} className="visualization-item">
+                    <div className="visualization-item-heading">
+                      <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
+                      <div className="visualization-item-actions">
+                        {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
+                          <button
+                            type="button"
+                            className="viz-settings-button"
+                            onClick={() => handleEditClick(viz.id)}
+                            title={`Configure ${TYPE_LABELS[viz.type]}`}
+                            aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                          >
+                            <FaCog aria-hidden="true" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="remove-viz-button"
+                          onClick={() => onRemoveVisualization(viz.id)}
+                          title="Remove visualization"
+                          aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                        >
+                          <FiTrash2 aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="viz-topic-label" htmlFor={selectId}>
+                      Topic
+                    </label>
+                    <div className="topic-dropdown-container">
+                      <select
+                        id={selectId}
+                        value={viz.topic}
+                        onChange={event => handleTopicChange(viz.id, event)}
+                        className="topic-dropdown"
+                        title={viz.topic}
+                      >
+                        {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
+                        {compatibleTopics.length > 0 ? (
+                          compatibleTopics.map(topic => (
+                            <option key={topic.name} value={topic.name}>
+                              {topic.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>
+                            No compatible topics available
+                          </option>
+                        )}
+                      </select>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="no-visualizations-message">No active visualizations.</p>
           )}
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );

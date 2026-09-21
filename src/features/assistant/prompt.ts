@@ -2,6 +2,7 @@ import { BEHAVIOR_TREE_CAPABILITY, BEHAVIOR_TREE_PROMPT_FRAGMENT } from './tools
 import { PAD_CAPABILITY } from './tools/padGeneration';
 import { ROS_OPERATION_CAPABILITY } from './tools/rosActionValidator';
 import { TF_CAPABILITY } from './context/tfContext';
+import { WORKSPACE_CAPABILITY, WORKSPACE_PROMPT_FRAGMENT } from './tools/workspaceTool';
 import { describeCapabilities, type AssistantCapability } from './capabilities';
 import type { AssistantAutoContext, AssistantContextChip, AssistantSettings } from './types';
 
@@ -13,7 +14,8 @@ Always return ONLY one JSON object, no markdown fences, matching exactly one of:
 - {"kind":"clarification","question":"...","suggestions":["...","..."]} — only when truly blocked by a safety-critical unknown. Ask at most once per conversation; otherwise make the best reasonable assumption and proceed.
 - The Behavior Tree tool's {"kind":"tree",...} shape, described below, when asked to create/change/fix/extend a behavior tree.
 - {"kind":"padProposal","layout":{...a complete CustomGamepadLayout...}} when asked to create or repair a Pad. Reuse the id/gridSize/cellSize/rosConfig/metadata shape of any Pad given as context; otherwise invent a reasonable new one.
-- {"kind":"rosAction","operation":{"kind":"topic"|"service"|"action","name":"/...","messageType":"pkg/Type","payload":{...},"timeoutMs":number},"rationale":"one sentence"} when asked what publish, service request, or action goal would be correct. This remains a review-only proposal in chat; direct execution is unavailable.`;
+- {"kind":"rosAction","operation":{"kind":"topic"|"service"|"action","name":"/...","messageType":"pkg/Type","payload":{...},"timeoutMs":number},"rationale":"one sentence"} when asked what publish, service request, or action goal would be correct. This remains a review-only proposal in chat; direct execution is unavailable.
+- {"kind":"workspaceEdit","summary":"...","operations":[...],"followUp":"optional exact remaining non-workspace request"} — the workspace tool, described below, when asked to add, remove or change panels, or to load or save a layout.`;
 
 const PAD_PROMPT_FRAGMENT = `## Pad tool
 A Pad ("custom gamepad") is a CustomGamepadLayout placed on a grid. Return it as
@@ -56,14 +58,23 @@ Complete valid example (two sticks driving one Joy topic):
  * tool means adding it here; the registry is what the model is told, and `capabilities.test.ts`
  * holds each entry to what its implementation actually does. */
 export const ASSISTANT_CAPABILITIES: readonly AssistantCapability[] = [
+  WORKSPACE_CAPABILITY,
   TF_CAPABILITY,
   PAD_CAPABILITY,
   BEHAVIOR_TREE_CAPABILITY,
   ROS_OPERATION_CAPABILITY,
 ];
 
-const domainFragments = (needs: { behaviorTree: boolean; pad: boolean; rosAction: boolean }): string[] => {
+export interface AssistantTurnNeeds {
+  behaviorTree: boolean;
+  pad: boolean;
+  rosAction: boolean;
+  workspace: boolean;
+}
+
+const domainFragments = (needs: AssistantTurnNeeds): string[] => {
   const fragments: string[] = [];
+  if (needs.workspace) fragments.push(WORKSPACE_PROMPT_FRAGMENT);
   if (needs.behaviorTree) fragments.push(BEHAVIOR_TREE_PROMPT_FRAGMENT);
   if (needs.pad) fragments.push(PAD_PROMPT_FRAGMENT);
   return fragments;
@@ -77,7 +88,7 @@ export interface ComposeSystemPromptInput {
   pinnedChips: AssistantContextChip[];
   /** Which domain-specific instruction fragments are relevant to this turn — keeping prompts
    * small for simple turns instead of always paying for every domain's schema text. */
-  needs: { behaviorTree: boolean; pad: boolean; rosAction: boolean };
+  needs: AssistantTurnNeeds;
 }
 
 const describeAutoContext = (auto: AssistantAutoContext): string => {

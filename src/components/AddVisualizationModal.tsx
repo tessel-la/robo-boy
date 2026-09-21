@@ -4,25 +4,13 @@ import './AddVisualizationModal.css';
 // Import icons for visualization types
 import { FaCloud, FaCamera, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
 import { getPreferredUrdfTopic, getUrdfTopics } from '../utils/urdfTopics';
+import { getTopicsForVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
 
 // Define structure for storing fetched topics (duplicated from Panel for now)
 interface TopicInfo {
   name: string;
   type: string;
 }
-
-// Define known visualization types and their corresponding ROS message types
-const SUPPORTED_VIZ_TYPES: Record<Exclude<VisualizationConfig['type'], 'tf'>, string[]> = {
-  pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
-  camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
-  urdf: ['std_msgs/String', 'std_msgs/msg/String'], // URDF is often a string on /robot_description
-  laserscan: ['sensor_msgs/msg/LaserScan'], // Added LaserScan
-  posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'], // Added PoseStamped
-  // TF is excluded - controlled via Settings menu "Displayed TF Frames" section
-  // Add more types here, e.g.:
-  // marker: ['visualization_msgs/Marker', 'visualization_msgs/msg/Marker'],
-  // markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
-};
 
 // Define visualization type icons
 const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.ReactNode> = {
@@ -70,17 +58,8 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   }, [availableUrdfTopics, urdfRobotDescriptionTopic, useManualInput]);
 
   // Check if a type has available topics
-  const getAvailableTopics = (type: Exclude<VisualizationConfig['type'], 'tf'>): TopicInfo[] => {
-    if (type === 'urdf') {
-      // For URDF, just return all available URDF topics
-      return availableUrdfTopics;
-    }
-
-    const validRosTypes = SUPPORTED_VIZ_TYPES[type] || [];
-    const filteredTopics = allTopics.filter(topic => validRosTypes.includes(topic.type));
-
-    return filteredTopics;
-  };
+  const getAvailableTopics = (type: Exclude<VisualizationConfig['type'], 'tf'>): TopicInfo[] =>
+    type === 'urdf' ? availableUrdfTopics : getTopicsForVisualizationType(type, allTopics);
 
   // Add quick visualization (auto-select first available topic)
   const addQuickVisualization = (type: Exclude<VisualizationConfig['type'], 'tf'>) => {
@@ -178,7 +157,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
           <div className="viz-grid-section">
             <p className="section-label">Available Visualizations:</p>
             <div className="viz-grid">
-              {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
+              {TOPIC_VISUALIZATION_TYPES.map(type => {
                 const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
                 const availableTopics = getAvailableTopics(vizType);
                 const hasTopics = availableTopics.length > 0;
@@ -230,7 +209,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
                     <option value="" disabled>
                       -- Select Type --
                     </option>
-                    {Object.keys(SUPPORTED_VIZ_TYPES).map(type => {
+                    {TOPIC_VISUALIZATION_TYPES.map(type => {
                       const vizType = type as Exclude<VisualizationConfig['type'], 'tf'>;
                       const hasTopics = getAvailableTopics(vizType).length > 0;
                       const canAdd = vizType === 'urdf' || hasTopics;
