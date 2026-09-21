@@ -4,7 +4,6 @@ productName: Robo-Boy
 # layout under the same keys, and a half-migrated layout is worse than a fresh one.
 directories:
   output: release
-  buildResources: src-tauri/icons
 
 # Only what the shell needs at runtime. The renderer is built ahead of this and copied in whole;
 # nothing from src/, config/ or the Tauri crate belongs in the package.
@@ -12,6 +11,10 @@ files:
   - dist-electron/shell/**
   - dist-electron/renderer/**
   - package.json
+  # Vite bundles the renderer and esbuild bundles the shell, so every runtime dependency is
+  # already inside those two outputs. Shipping node_modules as well would add a second, unused
+  # copy of React, three.js and the rest -- about a hundred megabytes of it.
+  - '!node_modules/**'
 
 extraMetadata:
   main: dist-electron/shell/main.js
@@ -21,7 +24,16 @@ linux:
     - AppImage
     - deb
   category: Utility
-  icon: src-tauri/icons
+  # Debian refuses a package without one. This names the project rather than whoever ran the
+  # build, so a package built on a laptop does not point support at that laptop's owner.
+  maintainer: Tessel <robo-boy@tessel.la>
+  # Without this the desktop environment cannot tie a running window to the launcher entry, and
+  # the app shows up as a generic icon separate from the one that started it.
+  syncDesktopName: true
+  synopsis: Web, desktop and mobile interface for ROS 2 robots
+  # A single 512x512 source; electron-builder derives the rest. The icons directory beside it
+  # also holds Windows Store tiles, which do not follow the <size>x<size> names it looks for.
+  icon: src-tauri/icons/icon.png
   # The video panels reach a WebRTC gateway over UDP; nothing here needs elevated privileges.
   executableName: robo-boy
 
@@ -35,6 +47,12 @@ mac:
     - dmg
   icon: src-tauri/icons/icon.icns
   category: public.app-category.utilities
+
+deb:
+  # Otherwise both the package and its file are named after the npm package, which is not what the
+  # app is called anywhere else.
+  packageName: robo-boy
+  artifactName: robo-boy_${version}_${arch}.${ext}
 
 nsis:
   oneClick: false

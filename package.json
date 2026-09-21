@@ -2,6 +2,8 @@
   "name": "robot-web-controller",
   "private": true,
   "version": "0.10.0-alpha",
+  "description": "Web, desktop and mobile interface for controlling and visualizing ROS 2 robots.",
+  "desktopName": "robo-boy.desktop",
   "type": "module",
   "scripts": {
     "dev": "npm run panels:sandbox && vite --config config/vite.config.ts --host",
