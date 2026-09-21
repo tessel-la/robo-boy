@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   build:
-    name: Linux ${{ matrix.arch }} packages (deb, AppImage)
+    name: Linux ${{ matrix.arch }} package (deb)
     # Both targets can be packaged on x64: the shell and renderer are JavaScript, and
     # electron-builder downloads the prebuilt Electron runtime for the requested architecture.
     runs-on: ubuntu-22.04
@@ -81,7 +81,7 @@ jobs:
         run: npm run check:release-panels
 
       - name: Package the Linux targets
-        run: npx electron-builder --config config/electron-builder.yml --linux deb AppImage --${{ matrix.arch }} --publish never
+        run: npx electron-builder --config config/electron-builder.yml --linux deb --${{ matrix.arch }} --publish never
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -89,6 +89,4 @@ jobs:
           name: electron-linux-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 14
-          path: |
-            release/*.deb
-            release/*.AppImage
+          path: release/*.deb

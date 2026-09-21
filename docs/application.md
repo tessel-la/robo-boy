@@ -150,17 +150,17 @@ listening yet. Closing the window stops both.
 npm run package:electron
 ```
 
-Installers are written to `release/`. Linux produces an AppImage and a `.deb`, Windows an NSIS
+Installers are written to `release/`. Linux produces a `.deb`, Windows an NSIS
 installer, macOS a `.dmg`; as with Tauri, each operating system builds and signs its own.
 
 Local packaging defaults to the host architecture. Official Linux CI builds both **x86_64 (AMD64)**
-and **ARM64**, each as an AppImage and a `.deb`: four distinct Electron packages. Release Please
+and **ARM64**, each as a `.deb`: two distinct Electron packages. Release Please
 also publishes a stable copy of each package for permanent download links:
 
-| Architecture | AppImage | Debian package |
-| --- | --- | --- |
-| x86_64 / AMD64 | `Robo-Boy-linux-x86_64-electron.AppImage` | `Robo-Boy-linux-amd64-electron.deb` |
-| ARM64 | `Robo-Boy-linux-arm64-electron.AppImage` | `Robo-Boy-linux-arm64-electron.deb` |
+| Architecture | Debian package |
+| --- | --- |
+| x86_64 / AMD64 | `Robo-Boy-linux-amd64-electron.deb` |
+| ARM64 | `Robo-Boy-linux-arm64-electron.deb` |
 
 The versioned files and stable copies contain the same packages. AMD64 and x86_64 name the same
 64-bit architecture; neither is a 32-bit x86 build. Tauri installers are published separately.

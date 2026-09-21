@@ -164,7 +164,7 @@ jobs:
           find installers stable iphone -type f
 
       # Keep each architecture's artifact directory separate so every expected architecture must
-      # supply both formats. Preserve the existing x64 download names alongside the ARM64 ones.
+      # supply a Debian package. Preserve the existing x64 download name alongside the ARM64 one.
       - name: Name a stable copy of the Electron packages
         run: |
           set -euo pipefail
@@ -175,18 +175,14 @@ jobs:
               echo "::error::missing Electron ${arch} artifact"
               exit 1
             fi
-            for extension in deb AppImage; do
-              mapfile -t built < <(find "${artifact_dir}" -type f -name "*.${extension}")
-              if [ "${#built[@]}" -ne 1 ]; then
-                echo "::error::expected one Electron ${arch} .${extension}, found ${#built[@]}"
-                exit 1
-              fi
-              platform_arch="${arch}"
-              if [ "${arch}" = x64 ]; then
-                if [ "${extension}" = deb ]; then platform_arch=amd64; else platform_arch=x86_64; fi
-              fi
-              cp "${built[0]}" "stable/Robo-Boy-linux-${platform_arch}-electron.${extension}"
-            done
+            mapfile -t built < <(find "${artifact_dir}" -type f -name '*.deb')
+            if [ "${#built[@]}" -ne 1 ]; then
+              echo "::error::expected one Electron ${arch} .deb, found ${#built[@]}"
+              exit 1
+            fi
+            platform_arch="${arch}"
+            if [ "${arch}" = x64 ]; then platform_arch=amd64; fi
+            cp "${built[0]}" "stable/Robo-Boy-linux-${platform_arch}-electron.deb"
           done
           find electron stable -type f
 
