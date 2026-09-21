@@ -40,6 +40,15 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 const devHost = process.env.TAURI_DEV_HOST;
 const devPort = parsePort(process.env.FRONTEND_PORT ?? process.env.VITE_PORT, 5173);
 
+// Vite rejects requests carrying a Host header it does not recognise, so a browser on the
+// network cannot trick it into serving source to another origin. Localhost and bare IPs are
+// allowed on their own; a deployment reached through Caddy under a real hostname has to name
+// that hostname here. A leading dot covers every subdomain of a fleet domain.
+const allowedHosts = (process.env.ROBOBOY_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map(host => host.trim())
+  .filter(Boolean);
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'tauri' ? './' : '/',
@@ -75,6 +84,8 @@ export default defineConfig(({ mode }) => ({
     // A device is told one port up front, so silently moving to the next free one would leave it
     // loading nothing.
     strictPort: Boolean(devHost),
+    // The Tauri dev host is a name the CLI picked for this run, so it is always trusted here.
+    allowedHosts: [...(devHost ? [devHost] : []), ...allowedHosts],
     hmr: devHost ? { protocol: 'ws', host: devHost, port: devPort + 1 } : undefined,
     proxy: {
       '/api/panels': {
