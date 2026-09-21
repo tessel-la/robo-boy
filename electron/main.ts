@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, net, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, shell, session } from 'electron';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,77 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 /** Set by the dev script to the Vite server the renderer is served from. */
 const devServerUrl = process.env.ROBOBOY_DEV_SERVER_URL;
 const isDev = Boolean(devServerUrl);
+
+/**
+ * The origin the packaged renderer is served from.
+ *
+ * Loading the built page straight off disk seems simpler, and is wrong: Chromium gives every
+ * file:// document an opaque origin. `location.origin` still reports "file://", but the origin
+ * that actually arrives on a message event is "null", and anything comparing the two disagrees
+ * with itself. The panel sandbox does exactly that -- the host tells it which origin to trust, the
+ * sandbox checks incoming messages against that name -- so under file:// it discarded every probe
+ * and never reported that it had started.
+ *
+ * A scheme registered as standard carries a real, non-opaque origin, so the packaged app behaves
+ * the way the same code does over http in a browser. Tauri solves this the same way, with
+ * tauri://localhost.
+ */
+const RENDERER_SCHEME = 'app';
+const RENDERER_HOST = 'robo-boy';
+const RENDERER_ORIGIN = `${RENDERER_SCHEME}://${RENDERER_HOST}`;
+
+/** Enough of a content type for what a built Vite renderer actually contains. */
+const CONTENT_TYPES = new Map(
+  Object.entries({
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.mjs': 'text/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.wasm': 'application/wasm',
+    '.webmanifest': 'application/manifest+json',
+    '.map': 'application/json',
+  })
+);
+
+/**
+ * Serves the built renderer over {@link RENDERER_SCHEME}.
+ *
+ * Files are read rather than fetched off disk because a packaged app keeps them inside app.asar,
+ * which Node's filesystem understands and the network stack does not.
+ */
+const serveRenderer = (rendererRoot: string): void => {
+  protocol.handle(RENDERER_SCHEME, async request => {
+    const { pathname } = new URL(request.url);
+    const relativePath = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+    const target = path.join(rendererRoot, relativePath);
+
+    // A request is only ever for something inside the built renderer. Anything that climbs out of
+    // it -- through .. segments, or an absolute path -- is refused rather than resolved.
+    if (target !== rendererRoot && !target.startsWith(rendererRoot + path.sep)) {
+      return new Response('Not found', { status: 404 });
+    }
+
+    try {
+      const body = await readFile(target);
+      return new Response(body, {
+        headers: { 'content-type': CONTENT_TYPES.get(path.extname(target).toLowerCase()) ?? 'application/octet-stream' },
+      });
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
+  });
+};
 
 /**
  * Hosts the renderer may install panels from, matching the scope Tauri's HTTP capability grants.
@@ -100,11 +172,7 @@ const createWindow = async (): Promise<BrowserWindow> => {
     return { action: 'deny' };
   });
 
-  if (devServerUrl) {
-    await window.loadURL(devServerUrl);
-  } else {
-    await window.loadFile(path.join(currentDir, '../renderer/index.html'));
-  }
+  await window.loadURL(devServerUrl ?? `${RENDERER_ORIGIN}/index.html`);
 
   return window;
 };
@@ -169,7 +237,16 @@ if (!app.requestSingleInstanceLock()) {
 
   configureChromium();
 
+  // Has to be declared before the app is ready, while the schemes are still being decided.
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: RENDERER_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+    },
+  ]);
+
   void app.whenReady().then(async () => {
+    if (!devServerUrl) serveRenderer(path.join(currentDir, '../renderer'));
     configurePermissions();
     registerPanelFetch();
     registerWindowControls();

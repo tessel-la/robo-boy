@@ -172,6 +172,15 @@ code the operator installed. The one channel across is the preload bridge at
   outside CORS enforcement and therefore limited to an explicit list of hosts. Bytes are still
   checked against the origins the source allows and the SHA-256 the inventory and manifest publish.
 
+The packaged renderer is served from `app://robo-boy`, not from disk. This is not a detail: Chromium
+gives every `file://` document an opaque origin, so `location.origin` reports `file://` while the
+origin arriving on a message event is `null`, and anything that compares the two disagrees with
+itself. The panel sandbox does compare them -- the host names the origin it will talk to, the
+sandbox checks messages against that name -- so under `file://` it discarded every probe and
+reported that it never started. A scheme registered as standard has a real origin and the packaged
+app behaves as the same code does over http. Tauri solves this the same way, with
+`tauri://localhost`.
+
 `isDesktopRuntime()` is true under either shell. Stylesheets tell them apart through
 `data-runtime`, which names the shell, and `data-desktop`, which only says the app is in a packaged
 window; the rules working around WebKitGTK stay keyed to the former so Chromium does not inherit
