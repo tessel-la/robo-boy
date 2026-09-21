@@ -1,5 +1,7 @@
 .tf-tree-panel {
-  --tf-healthy: var(--primary-color, #32cd32);
+  /* Health is green and failure red in every theme; Solarized's orange accent would otherwise
+     make a live frame look like a warning. */
+  --tf-healthy: var(--success-color, #28a745);
   --tf-static: var(--secondary-color, #6c757d);
   --tf-stale: var(--error-color, #dc3545);
   --tf-warning: var(--warning-color, #f59e0b);
@@ -52,7 +54,8 @@
   top: 12px;
   z-index: 30;
   display: flex;
-  align-items: center;
+  /* Top-aligned so the search's result list, which grows in flow, does not push the button down. */
+  align-items: flex-start;
   gap: 7px;
   pointer-events: none;
 }
@@ -111,44 +114,61 @@
   height: 18px;
 }
 
-.tf-tree-live-button {
-  min-width: 92px;
-  height: clamp(36px, 8cqw, 44px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 15px;
-  border: 0;
-  border-radius: 22px;
-  background: var(--tf-warning);
-  color: #ffffff;
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-warning) 36%, transparent);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.tf-tree-live-button.paused {
-  background: var(--tf-healthy);
-  color: var(--button-text-color, #ffffff);
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--tf-healthy) 32%, transparent);
-}
-
-.tf-tree-live-button:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-}
-.tf-tree-live-button:active {
-  transform: scale(0.96);
-}
-
+/* The search keeps a fixed icon-sized slot beside the refresh button, so opening it never moves
+   anything: the field and its results grow leftwards as an overlay above the row. */
 .tf-tree-search {
-  position: absolute;
-  top: 66px;
-  right: 12px;
+  position: relative;
   z-index: 35;
-  width: min(270px, calc(100% - 24px));
+  width: clamp(36px, 8cqw, 44px);
+  height: clamp(36px, 8cqw, 44px);
+  flex: 0 0 auto;
+}
+
+.tf-tree-search .tree-panel-search-field {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  transition: width 0.18s ease;
+}
+
+.tf-tree-search .tree-panel-search-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(300px, calc(100cqw - 24px));
+  margin-top: 0;
+}
+
+.tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-field {
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-clear {
+  display: none;
+}
+
+.tf-tree-search:focus-within .tree-panel-search-field,
+.tf-tree-search.has-query .tree-panel-search-field {
+  width: min(300px, calc(100cqw - 24px));
 }
 
 .tf-tree-menu-panel {
@@ -749,27 +769,11 @@
   fill-opacity: 0.95;
 }
 
-.tf-tree-panel .react-flow__controls,
 .tf-tree-panel .react-flow__minimap {
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 8px;
   background: var(--card-bg, #ffffff);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-.tf-tree-panel .react-flow__controls-button {
-  box-sizing: content-box;
-  width: 16px;
-  height: 16px;
-  padding: 5px;
-  border-bottom-color: var(--border-color, #dee2e6);
-  background: var(--card-bg, #ffffff);
-  color: var(--text-color, #212529);
-}
-.tf-tree-panel .react-flow__controls-button:hover {
-  background: var(--background-secondary, #f8f9fa);
-}
-.tf-tree-panel .react-flow__controls-button svg {
-  fill: var(--text-color, #212529);
 }
 .tf-tree-panel .react-flow__minimap-mask {
   fill: rgba(66, 133, 244, 0.1);
@@ -789,35 +793,17 @@
   .tf-tree-float-bar {
     max-width: calc(100% - 124px);
   }
-  .tf-tree-live-button {
-    min-width: 36px;
-    width: 36px;
-    padding: 0;
+  /* In a narrow panel the open field covers the menu bar on the left; it stacks above it. */
+  .tf-tree-float-actions:has(.tf-tree-search:focus-within),
+  .tf-tree-float-actions:has(.tf-tree-search.has-query) {
+    z-index: 36;
   }
-  .tf-tree-live-button span {
-    display: none;
+  .tf-tree-search:focus-within .tree-panel-search-field,
+  .tf-tree-search.has-query .tree-panel-search-field {
+    width: calc(100cqw - 24px);
   }
-
-  .tf-tree-search {
-    width: 36px;
-    transition: width 0.18s ease;
-  }
-  .tf-tree-search:focus-within,
-  .tf-tree-search.has-query {
-    width: calc(100% - 24px);
-  }
-  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-field {
-    height: 36px;
-    justify-content: center;
-    padding: 0;
-    border-radius: 18px;
-  }
-  .tf-tree-search:not(:focus-within):not(.has-query) .tree-panel-search-input {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    cursor: pointer;
-    opacity: 0;
+  .tf-tree-search .tree-panel-search-menu {
+    width: calc(100cqw - 24px);
   }
 
   .tf-tree-details {
@@ -831,9 +817,6 @@
   }
 
   .tf-tree-panel .react-flow__minimap {
-    display: none;
-  }
-  .tf-tree-panel .react-flow__controls {
     display: none;
   }
 
@@ -874,19 +857,19 @@
     max-width: min(96px, 32cqw);
     height: 34px;
   }
-  .tf-tree-icon-button,
-  .tf-tree-live-button {
+  .tf-tree-icon-button {
     width: 34px;
     min-width: 34px;
     height: 34px;
   }
   .tf-tree-search {
-    top: 64px;
-    right: 10px;
+    width: 34px;
+    height: 34px;
   }
-  .tf-tree-search:focus-within,
-  .tf-tree-search.has-query {
-    width: calc(100% - 20px);
+  .tf-tree-search:focus-within .tree-panel-search-field,
+  .tf-tree-search.has-query .tree-panel-search-field,
+  .tf-tree-search .tree-panel-search-menu {
+    width: calc(100cqw - 20px);
   }
   .tf-tree-details {
     right: 10px;
@@ -900,15 +883,6 @@
   }
 }
 
-@media (min-width: 769px) {
-  @container (max-width: 700px) {
-    .tf-tree-live-button {
-      min-width: 44px;
-      width: 44px;
-      height: 44px;
-    }
-  }
-}
 
 @media (pointer: coarse) {
   .tf-tree-component-row {

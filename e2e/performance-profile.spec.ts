@@ -411,6 +411,7 @@ profileDescribe('frontend resource profile', () => {
     // the link immediately when the visualizer subscribes.
     await publishTfOnce(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: /Visualizations/ }).click();
     await page.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByRole('button', { name: /URDF/ }).click();
     await waitForRosSubscription(page, '/robot_description');
@@ -483,6 +484,7 @@ profileDescribe('frontend resource profile', () => {
     await addPanel(page, '3D panel');
     await expect(page.locator('.visualization-panel canvas')).toHaveCount(1);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: /Visualizations/ }).click();
     await page.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByRole('button', { name: /PoseStamped/ }).click();
     await waitForRosSubscription(page, '/pose');
@@ -500,6 +502,7 @@ profileDescribe('frontend resource profile', () => {
     await addPanel(page, '3D panel');
     await expect(page.locator('.visualization-panel canvas')).toHaveCount(1);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: /Visualizations/ }).click();
     await page.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByRole('button', { name: /LaserScan/ }).click();
     await waitForRosSubscription(page, '/scan');
@@ -519,6 +522,7 @@ profileDescribe('frontend resource profile', () => {
     await addPanel(page, '3D panel');
     await expect(page.locator('.visualization-panel canvas')).toHaveCount(1);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: /Visualizations/ }).click();
     await page.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByRole('button', { name: /LaserScan/ }).click();
     await waitForRosSubscription(page, '/scan');

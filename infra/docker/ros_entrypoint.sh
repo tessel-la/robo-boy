@@ -101,15 +101,13 @@ echo "--- Launching ROS Components ---"
     sleep 2
 done) &
 
-# Launch rosapi with respawn loop (the Node subclass has a bug; it may crash on first
-# graph query, so we respawn it automatically)
-(while true; do
-    ros2 run rosapi rosapi_node --ros-args -r __ns:=/
-    echo "[rosapi] exited, restarting in 2s..."
-    sleep 2
-done) &
-
-# Launch rosbridge WebSocket server.
+# Launch rosbridge WebSocket server together with the single rosapi node the launch
+# file provides. respawn=true brings either node back if it dies: rosapi's typedef walker
+# asserts on some nested message types (moveit_msgs/msg/RobotState, for one), and a crash
+# there must not take the WebSocket down or leave the graph without /rosapi services.
+# A second, hand-started rosapi used to sit beside the launch file's own; two nodes with
+# the same name answered the same services, and rosbridge intermittently reported them as
+# missing.
 # call_services_in_new_thread=true prevents service calls from blocking
 # rosbridge's WebSocket event loop (which would freeze the connection).
 # send_action_goals_in_new_thread=true does the same for action goals.
@@ -119,7 +117,8 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
     port:="${ROSBRIDGE_PORT}" \
     call_services_in_new_thread:=true \
     send_action_goals_in_new_thread:=true \
-    default_call_service_timeout:=5.0 &
+    default_call_service_timeout:=5.0 \
+    respawn:=true &
 
 # Launch web_video_server
 ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &

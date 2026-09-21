@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VisualizationPanel from './VisualizationPanel';
 import { clearVisualizationState } from '../utils/visualizationState';
@@ -82,8 +82,8 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.getByLabelText('Fixed Frame:')).toHaveValue('map');
     expect(screen.getByLabelText('odom')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
-    expect(screen.getByLabelText('Axes size')).toHaveValue('1.2');
-    expect(screen.getByLabelText('Label size')).toHaveValue('0.3');
+    expect(screen.getByLabelText('Axes size in metres')).toHaveValue(1.2);
+    expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.3);
     expect(screen.getByLabelText('Axes opacity')).toHaveValue('0.6');
     expect(screen.getByLabelText('Label opacity')).toHaveValue('0.7');
     expect(screen.getByLabelText('Show labels')).not.toBeChecked();
@@ -178,6 +178,57 @@ describe('VisualizationPanel state restoration', () => {
     expect(pointCloudVizMock).toHaveBeenCalled();
   });
 
+  it('registers an assistant bridge that reports and changes what the scene shows', () => {
+    tfProviderLifecycleMock.availableFrames = ['base_link', 'map', 'odom'];
+    const ros = {
+      isConnected: true,
+      getTopics: (onSuccess: (response: { topics: string[]; types: string[] }) => void) => {
+        onSuccess({ topics: ['/robot_description', '/scan'], types: ['std_msgs/msg/String', 'sensor_msgs/msg/LaserScan'] });
+      },
+    };
+    const register = vi.fn();
+    const { unmount } = render(<VisualizationPanel ros={ros as any} storageKey="bridge" panelId="p3d" onRegisterAssistantBridge={register} />);
+    const bridge = register.mock.calls[0][1];
+    expect(register).toHaveBeenCalledWith('p3d', expect.objectContaining({ panelType: '3d' }));
+
+    expect(bridge.describe()).toMatchObject({ fixedFrame: 'map', displayedTfFrames: [], showAllTfFrames: false, visualizations: [] });
+    expect(bridge.describe().availableVisualizationTopics).toMatchObject({ urdf: ['/robot_description'], laserscan: ['/scan'], pointcloud: [] });
+
+    let outcomes: Array<{ ok: boolean; message: string }> = [];
+    act(() => {
+      outcomes = bridge.apply({
+        fixedFrame: 'odom',
+        showTfFrames: ['base_link', 'ghost'],
+        tfDisplay: { showTfFrameLabels: false, tfAxesScale: 0.3, bogus: 1 },
+        addVisualizations: [{ type: 'urdf' }, { type: 'pointcloud' }],
+      });
+    });
+    expect(outcomes).toEqual([
+      { ok: true, message: 'Fixed frame set to odom.' },
+      { ok: true, message: 'Showing base_link.' },
+      { ok: false, message: 'No TF frame named ghost.' },
+      { ok: true, message: 'Frame display updated (showTfFrameLabels, tfAxesScale).' },
+      { ok: false, message: 'Ignored unknown or invalid frame display keys: bogus.' },
+      { ok: true, message: 'Added urdf on /robot_description.' },
+      { ok: false, message: 'No topic on this robot can feed a pointcloud visualization.' },
+    ]);
+    const visualized = (useTfVisualizer as any).mock.calls.at(-1)[0];
+    expect(visualized).toMatchObject({ displayedTfFrames: ['base_link'], showFrameLabels: false, axesScale: 0.3 });
+    expect(bridge.describe()).toMatchObject({ displayedTfFrames: ['base_link'], visualizations: [{ type: 'urdf', topic: '/robot_description' }] });
+
+    act(() => {
+      outcomes = bridge.apply({ removeVisualizations: [{ type: 'urdf' }], showAllTfFrames: true });
+    });
+    expect(outcomes).toEqual([
+      { ok: true, message: 'Showing every TF frame.' },
+      { ok: true, message: 'Removed urdf on /robot_description.' },
+    ]);
+    expect(bridge.describe()).toMatchObject({ showAllTfFrames: true, displayedTfFrames: ['base_link', 'map', 'odom'], visualizations: [] });
+
+    unmount();
+    expect(register).toHaveBeenLastCalledWith('p3d', null);
+  });
+
   it('keeps add visualization inside the shared settings menu', () => {
     const ros = {
       isConnected: true,
@@ -190,6 +241,7 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
 
     expect(screen.getByRole('heading', { name: 'Add Visualization' })).toBeInTheDocument();

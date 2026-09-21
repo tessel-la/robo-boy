@@ -38,10 +38,16 @@ import {
   saveVisualizationStateForKey,
   type TfDisplaySettings,
 } from '../utils/visualizationState';
+import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
+import { getPreferredUrdfTopic } from '../utils/urdfTopics';
+import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
   storageKey?: string;
+  /** Workspace panel id, used to register the assistant settings bridge. */
+  panelId?: string;
+  onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 
 // Define the structure for a visualization configuration
@@ -83,9 +89,21 @@ const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 
+const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
+  'showTfAxes', 'showTfFrameLabels', 'showTfConnections', 'tfAxesScale', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity', 'showTfLabelBackground',
+];
+
+const ASSISTANT_SETTINGS_HELP =
+  'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
+  '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale, tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
+
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   ros,
   storageKey = DEFAULT_STORAGE_KEY,
+  panelId,
+  onRegisterAssistantBridge,
 }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
@@ -298,6 +316,139 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     setShowAllTfFrames(showAll);
     if (!showAll) setDisplayedTfFrames([]);
   };
+
+  // --- Assistant settings bridge: what the panel shows, and the same changes the menu makes.
+  // Registered once; the latest state and handlers are read through a ref so the bridge never
+  // acts on a stale render.
+  const assistantStateRef = useRef({
+    fixedFrame, availableFrames, visibleTfFrames, showAllTfFrames, tfDisplay, visualizations, allTopics,
+    setFixedFramePreference, handleDisplayedTfFramesChange, handleShowAllTfFramesChange, updateTfDisplay, setVisualizations,
+  });
+  assistantStateRef.current = {
+    fixedFrame, availableFrames, visibleTfFrames, showAllTfFrames, tfDisplay, visualizations, allTopics,
+    setFixedFramePreference, handleDisplayedTfFramesChange, handleShowAllTfFramesChange, updateTfDisplay, setVisualizations,
+  };
+  useEffect(() => {
+    if (!panelId || !onRegisterAssistantBridge) return;
+    const bridge: PanelSettingsBridge = {
+      panelType: '3d',
+      settingsHelp: ASSISTANT_SETTINGS_HELP,
+      describe: () => {
+        const current = assistantStateRef.current;
+        return {
+          fixedFrame: current.fixedFrame,
+          availableFrames: current.availableFrames,
+          displayedTfFrames: current.visibleTfFrames,
+          showAllTfFrames: current.showAllTfFrames,
+          tfDisplay: current.tfDisplay,
+          visualizations: current.visualizations.map(viz => ({ id: viz.id, type: viz.type, topic: viz.topic })),
+          availableVisualizationTopics: Object.fromEntries(
+            TOPIC_VISUALIZATION_TYPES.map(type => [type, getTopicsForVisualizationType(type, current.allTopics).map(topic => topic.name)])
+          ),
+        };
+      },
+      apply: settings => {
+        const current = assistantStateRef.current;
+        const outcomes: Array<{ ok: boolean; message: string }> = [];
+        const asStringArray = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+
+        if (typeof settings.fixedFrame === 'string') {
+          const frame = settings.fixedFrame.replace(/^\//, '');
+          if (current.availableFrames.includes(frame)) {
+            current.setFixedFramePreference(frame);
+            outcomes.push({ ok: true, message: `Fixed frame set to ${frame}.` });
+          } else {
+            outcomes.push({ ok: false, message: `No TF frame "${frame}" (available: ${current.availableFrames.join(', ') || 'none yet'}).` });
+          }
+        }
+        if (typeof settings.showAllTfFrames === 'boolean') {
+          current.handleShowAllTfFramesChange(settings.showAllTfFrames);
+          outcomes.push({ ok: true, message: settings.showAllTfFrames ? 'Showing every TF frame.' : 'Hid all TF frames.' });
+        }
+        let frames = settings.showAllTfFrames === true ? current.availableFrames : settings.showAllTfFrames === false ? [] : current.visibleTfFrames;
+        const toShow = asStringArray(settings.showTfFrames).map(frame => frame.replace(/^\//, ''));
+        const toHide = new Set(asStringArray(settings.hideTfFrames).map(frame => frame.replace(/^\//, '')));
+        if (toShow.length || toHide.size) {
+          const unknown = toShow.filter(frame => !current.availableFrames.includes(frame));
+          const shown = toShow.filter(frame => current.availableFrames.includes(frame));
+          frames = Array.from(new Set([...frames.filter(frame => !toHide.has(frame)), ...shown]));
+          current.handleDisplayedTfFramesChange(frames);
+          if (shown.length) outcomes.push({ ok: true, message: `Showing ${shown.join(', ')}.` });
+          if (toHide.size) outcomes.push({ ok: true, message: `Hid ${[...toHide].join(', ')}.` });
+          if (unknown.length) outcomes.push({ ok: false, message: `No TF frame named ${unknown.join(', ')}.` });
+        }
+        if (settings.tfDisplay && typeof settings.tfDisplay === 'object') {
+          const patch: Partial<TfDisplaySettings> = {};
+          const rejected: string[] = [];
+          Object.entries(settings.tfDisplay as Record<string, unknown>).forEach(([key, value]) => {
+            if (!TF_DISPLAY_KEYS.includes(key as keyof TfDisplaySettings)) return rejected.push(key);
+            const expectsBoolean = key.startsWith('show');
+            if (expectsBoolean ? typeof value === 'boolean' : typeof value === 'number' && Number.isFinite(value) && value > 0) {
+              (patch as Record<string, unknown>)[key] = value;
+            } else {
+              rejected.push(key);
+            }
+          });
+          if (Object.keys(patch).length) {
+            current.updateTfDisplay(patch);
+            outcomes.push({ ok: true, message: `Frame display updated (${Object.keys(patch).join(', ')}).` });
+          }
+          if (rejected.length) outcomes.push({ ok: false, message: `Ignored unknown or invalid frame display keys: ${rejected.join(', ')}.` });
+        }
+        if (Array.isArray(settings.addVisualizations)) {
+          settings.addVisualizations.forEach(entry => {
+            const type = (entry as { type?: unknown })?.type;
+            const requestedTopic = (entry as { topic?: unknown })?.topic;
+            if (!isTopicVisualizationType(type)) {
+              outcomes.push({ ok: false, message: `Unknown visualization type "${String(type)}".` });
+              return;
+            }
+            const candidates = getTopicsForVisualizationType(type, current.allTopics);
+            const topic = typeof requestedTopic === 'string'
+              ? candidates.find(candidate => candidate.name === requestedTopic)?.name
+              : (type === 'urdf' ? getPreferredUrdfTopic(candidates)?.name : candidates[0]?.name);
+            if (!topic) {
+              outcomes.push({ ok: false, message: typeof requestedTopic === 'string' ? `"${requestedTopic}" is not a ${type} topic on this robot.` : `No topic on this robot can feed a ${type} visualization.` });
+              return;
+            }
+            if (current.visualizations.some(viz => viz.type === type && viz.topic === topic)) {
+              outcomes.push({ ok: true, message: `${type} on ${topic} is already shown.` });
+              return;
+            }
+            const newViz: VisualizationConfig = {
+              id: uuidv4(), type, topic,
+              options: type === 'urdf' ? ({ robotDescriptionTopic: topic } as UrdfOptions) : {},
+            };
+            current.setVisualizations(prev => [...prev, newViz]);
+            current.visualizations = [...current.visualizations, newViz];
+            outcomes.push({ ok: true, message: `Added ${type} on ${topic}.` });
+          });
+        }
+        if (Array.isArray(settings.removeVisualizations)) {
+          settings.removeVisualizations.forEach(entry => {
+            const match = (entry ?? {}) as { id?: unknown; type?: unknown; topic?: unknown };
+            const targets = current.visualizations.filter(viz =>
+              (typeof match.id === 'string' && viz.id === match.id) ||
+              (typeof match.type === 'string' && viz.type === match.type && (typeof match.topic !== 'string' || viz.topic === match.topic)) ||
+              (typeof match.id !== 'string' && typeof match.type !== 'string' && typeof match.topic === 'string' && viz.topic === match.topic)
+            );
+            if (targets.length === 0) {
+              outcomes.push({ ok: false, message: `No visualization matches ${JSON.stringify(match)}.` });
+              return;
+            }
+            const ids = new Set(targets.map(viz => viz.id));
+            current.setVisualizations(prev => prev.filter(viz => !ids.has(viz.id)));
+            current.visualizations = current.visualizations.filter(viz => !ids.has(viz.id));
+            outcomes.push({ ok: true, message: `Removed ${targets.map(viz => `${viz.type} on ${viz.topic}`).join(', ')}.` });
+          });
+        }
+        if (outcomes.length === 0) outcomes.push({ ok: false, message: `Nothing in those settings applies to the 3D view. ${ASSISTANT_SETTINGS_HELP}` });
+        return outcomes;
+      },
+    };
+    onRegisterAssistantBridge(panelId, bridge);
+    return () => onRegisterAssistantBridge(panelId, null);
+  }, [panelId, onRegisterAssistantBridge]);
 
   // Visualization-specific editors still use their legacy popovers. The shared
   // panel menu and add-visualization sheet handle their own outside clicks.

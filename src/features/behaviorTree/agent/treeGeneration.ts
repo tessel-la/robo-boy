@@ -255,5 +255,14 @@ export const parseGeneratedAgentResponse = (
     }
     return { kind: 'explanation', message: value.message.trim() };
   }
-  return { kind: 'tree', tree: normalizeTree(value, schemas) };
+  // Models sometimes wrap the tree ({"kind":"tree","tree":{...}}) or answer a follow-up remark
+  // in the tree shape with only prose in it; neither deserves a hard failure.
+  const treeSource = !Array.isArray(value.nodes) && value.tree && typeof value.tree === 'object' ? value.tree : value;
+  if (!Array.isArray(treeSource.nodes)) {
+    const prose = [value.message, value.explanation, value.answer, value.description].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
+    );
+    if (prose) return { kind: 'explanation', message: prose.trim() };
+  }
+  return { kind: 'tree', tree: normalizeTree(treeSource, schemas) };
 };

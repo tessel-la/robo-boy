@@ -187,6 +187,10 @@ const useMentionPicker = (
   };
 };
 
+import { useFloatingFrame, type ResizeEdge } from './useFloatingFrame';
+
+const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+
 const useCompactAssistant = () => {
   const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
   useEffect(() => {
@@ -407,12 +411,20 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     setEditingMessageId(null); setEditingDraft(''); onEditMessage(messageIndex, nextText);
   };
 
+  const floating = useFloatingFrame(!compact);
+
   if (!open) return null;
   const lastProgress = isGenerating ? progressMessages[progressMessages.length - 1] : '';
   const promptLabel = clarificationSuggestions ? 'Your answer' : messages.length ? 'Continue the conversation' : 'Ask the assistant';
 
+  const overlayStyle = compact
+    ? mobileViewportStyle
+    : floating.frame
+      ? { left: floating.frame.left, top: floating.frame.top, width: floating.frame.width, height: floating.frame.height }
+      : undefined;
+
   return (
-    <div className="assistant-overlay" style={mobileViewportStyle}>
+    <div className={`assistant-overlay${compact ? '' : ' is-floating'}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
       <section
         ref={panelRef}
         className={`assistant-panel${isDropTarget ? ' is-drop-target' : ''}`}
@@ -421,7 +433,13 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         onDragLeave={event => { if (!panelRef.current?.contains(event.relatedTarget as Node | null)) setIsDropTarget(false); }}
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
         data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
-        <header className="assistant-header">
+        <header
+          className="assistant-header"
+          // Desktop: the header is the drag handle; a double-click puts the panel back on its dock.
+          onPointerDown={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.startGesture(event, 'move'); }}
+          onDoubleClick={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.reset(); }}
+          title={compact ? undefined : 'Drag to move · double-click to dock'}
+        >
           <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><h2 id="assistant-title">Robo-Boy AI</h2></div>
           <div className="assistant-header-actions">
             {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
@@ -429,6 +447,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
             <button type="button" className="assistant-icon-button" onClick={onClose} aria-label="Close assistant" title="Close"><FaTimes aria-hidden="true" /></button>
           </div>
         </header>
+
+        {!compact && RESIZE_EDGES.map(edge => (
+          <div
+            key={edge}
+            className={`assistant-resize-handle ${edge}`}
+            role="separator"
+            aria-label={`Resize assistant from ${edge}`}
+            onPointerDown={event => floating.startGesture(event, edge)}
+          />
+        ))}
 
         {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} onClose={() => setShowSettings(false)} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
@@ -475,6 +503,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               )}
 
               {message.response?.kind === 'rosAction' && <div className="assistant-proposal-card"><strong>Review-only {message.response.operation.kind}: {message.response.operation.name}</strong><p>{message.response.rationale}</p><pre>{JSON.stringify(message.response.operation, null, 2)}</pre>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<small>Robo-Boy does not run robot operations from assistant chat. Add the reviewed operation through a Pad or Behavior Tree.</small></div>}
+              {message.response?.kind === 'workspaceEdit' && <div className="assistant-proposal-card" data-testid="assistant-workspace-edit-card"><strong>Workspace changes</strong><ul className="assistant-result-list">{(message.response.results ?? []).map((result, resultIndex) => <li key={resultIndex} className={result.ok ? 'is-ok' : 'is-failed'}>{result.message}</li>)}{message.response.rejected.map((reason, reasonIndex) => <li key={`rejected-${reasonIndex}`} className="is-failed">{reason}</li>)}</ul></div>}
               {message.response?.kind === 'padProposal' && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-pad-proposal-card"><strong>Proposed Pad: {message.response.layout.name}</strong><p>{message.response.layout.components.length} components · review every binding before saving.</p>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<div className="assistant-inline-actions"><button type="button" onClick={() => onReviewPadProposal(message.id)}>Review in Pad editor</button></div></div>}
               {message.response?.kind === 'padProposal' && message.resolution === 'applied' && <p className="assistant-message-note">Opened in the Pad editor for review.</p>}
               {message.response?.kind === 'behaviorTree' && !hasActiveBehaviorTreeBridge && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-bt-proposal-card"><strong>Built “{message.response.tree.name}”</strong><p>{message.response.tree.nodes.length} nodes · {message.response.tree.edges.length} connections</p><div className="assistant-inline-actions"><button type="button" onClick={() => onSaveBehaviorTreeProposal(message.id)}>Save to Behavior Tree library</button></div></div>}

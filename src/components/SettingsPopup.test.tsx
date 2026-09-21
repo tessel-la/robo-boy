@@ -72,10 +72,10 @@ describe('SettingsPopup', () => {
   });
 
   describe('TF frames section', () => {
-    it('opens on the frame list by default and toggles a single frame', () => {
+    it('opens on the Frames tab by default and toggles a single frame', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('tab', { name: /Frames/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByText('1/3')).toBeInTheDocument();
       fireEvent.click(screen.getByLabelText('odom'));
 
@@ -102,10 +102,10 @@ describe('SettingsPopup', () => {
       expect(mockOnDisplayedTfFramesChange).not.toHaveBeenCalled();
     });
 
-    it('hides the filter for short lists', () => {
-      render(<SettingsPopup {...defaultProps} />);
+    it('disables the filter until there are frames to filter', () => {
+      render(<SettingsPopup {...defaultProps} availableFrames={[]} />);
 
-      expect(screen.queryByLabelText('Filter frames')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Filter frames')).toBeDisabled();
     });
   });
 
@@ -118,13 +118,16 @@ describe('SettingsPopup', () => {
 
       expect(screen.getByRole('heading', { name: 'Frame display' })).toBeInTheDocument();
       expect(screen.queryByLabelText('Fixed Frame:')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Axes size')).toHaveValue('0.5');
-      expect(screen.getByLabelText('Label size')).toHaveValue('0.12');
+      expect(screen.getByLabelText('Axes size in metres')).toHaveValue(0.5);
+      expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.12);
       expect(screen.getByLabelText('Label opacity')).toHaveValue('0.8');
       expect(screen.getByText('80%')).toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText('Axes size'), { target: { value: '0.25' } });
-      fireEvent.change(screen.getByLabelText('Label size'), { target: { value: '0.3' } });
+      // Typed values commit on blur/Enter, clamped to the field's range.
+      fireEvent.change(screen.getByLabelText('Axes size in metres'), { target: { value: '0.25' } });
+      fireEvent.blur(screen.getByLabelText('Axes size in metres'));
+      fireEvent.change(screen.getByLabelText('Label size in metres'), { target: { value: '0.3' } });
+      fireEvent.keyDown(screen.getByLabelText('Label size in metres'), { key: 'Enter' });
       fireEvent.change(screen.getByLabelText('Axes opacity'), { target: { value: '0.5' } });
       fireEvent.change(screen.getByLabelText('Label opacity'), { target: { value: '0.35' } });
       fireEvent.click(screen.getByLabelText('Show axes'));
@@ -147,6 +150,21 @@ describe('SettingsPopup', () => {
       expect(screen.getByLabelText('Fixed Frame:')).toBeInTheDocument();
     });
 
+    it('gives the size sliders a logarithmic travel so centimetre values are reachable', () => {
+      render(<SettingsPopup {...defaultProps} tfDisplay={{ ...defaultProps.tfDisplay, tfAxesScale: 0.01 }} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
+
+      const slider = screen.getByLabelText('Axes size');
+      expect(slider).toHaveValue('0');
+      fireEvent.change(slider, { target: { value: '500' } });
+      // Halfway along a 0.01–5 m log scale is sqrt(0.05) ≈ 0.224 m, not 2.5 m.
+      expect(mockOnTfDisplayChange).toHaveBeenLastCalledWith({ tfAxesScale: 0.224 });
+
+      fireEvent.change(screen.getByLabelText('Axes size in metres'), { target: { value: '9' } });
+      fireEvent.blur(screen.getByLabelText('Axes size in metres'));
+      expect(mockOnTfDisplayChange).toHaveBeenLastCalledWith({ tfAxesScale: 5 });
+    });
+
     it('disables the controls of a feature that is switched off', () => {
       render(
         <SettingsPopup
@@ -157,6 +175,7 @@ describe('SettingsPopup', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
 
       expect(screen.getByLabelText('Axes size')).toBeDisabled();
+      expect(screen.getByLabelText('Axes size in metres')).toBeDisabled();
       expect(screen.getByLabelText('Axes opacity')).toBeDisabled();
       expect(screen.getByLabelText('Label size')).toBeDisabled();
       expect(screen.getByLabelText('Label opacity')).toBeDisabled();
@@ -165,19 +184,24 @@ describe('SettingsPopup', () => {
   });
 
   describe('visualizations section', () => {
-    it('is collapsed behind the frame list and expands in its place', () => {
+    it('lives on its own tab so each list gets the whole menu height', () => {
       render(<SettingsPopup {...defaultProps} />);
 
       expect(screen.queryByText('/points')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
+      expect(screen.getByRole('tab', { name: /Visualizations/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByTitle('/points')).toBeInTheDocument();
       expect(screen.queryByLabelText('odom')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'TF frames' })).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(screen.getByRole('tab', { name: /Frames/ }));
+      expect(screen.getByLabelText('odom')).toBeInTheDocument();
+      expect(screen.queryByTitle('/points')).not.toBeInTheDocument();
     });
 
-    it('keeps the add button reachable while collapsed', () => {
+    it('adds a visualization from a row at the top of the list', () => {
       render(<SettingsPopup {...defaultProps} />);
+      expect(screen.queryByRole('button', { name: 'Add visualization' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.click(screen.getByRole('button', { name: 'Add visualization' }));
 
@@ -186,7 +210,7 @@ describe('SettingsPopup', () => {
 
     it('removes a visualization', () => {
       render(<SettingsPopup {...defaultProps} />);
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.click(screen.getByRole('button', { name: 'Remove Point Cloud visualization for topic /points' }));
 
@@ -203,7 +227,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       fireEvent.change(screen.getByLabelText('Topic', { selector: '#visualization-topic-viz-1' }), {
         target: { value: '/points_filtered' },
@@ -224,7 +248,7 @@ describe('SettingsPopup', () => {
           ]}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /active visualizations/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
 
       const selector = screen.getByTitle('/robot_description');
       expect(selector).toHaveTextContent('/robot_description');

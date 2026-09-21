@@ -73,6 +73,16 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
             message.topic,
             (MockWebSocket.subscriptionCounts.get(message.topic) ?? 0) + 1
           );
+          // Latched topics are re-sent to a new subscriber, as rosbridge does for transient-local
+          // publishers such as /tf_static.
+          const latched = MockWebSocket.latched.get(message.topic);
+          if (latched) {
+            setTimeout(() => {
+              if (this.readyState === MockWebSocket.OPEN) {
+                this.emit('message', { data: JSON.stringify({ op: 'publish', topic: message.topic, msg: latched }) });
+              }
+            }, 0);
+          }
           return;
         }
         if (message.op === 'unsubscribe') {
@@ -107,7 +117,10 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
         this.emit('close', { type: 'close' });
       }
 
+      static latched = new Map<string, unknown>();
+
       static publish(topic: string, msg: unknown) {
+        if (topic === '/tf_static') MockWebSocket.latched.set(topic, msg);
         const event = {
           data: JSON.stringify({ op: 'publish', topic, msg }),
         };

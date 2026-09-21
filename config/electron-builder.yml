@@ -21,7 +21,6 @@ extraMetadata:
 
 linux:
   target:
-    - AppImage
     - deb
   category: Utility
   # Debian refuses a package without one. This names the project rather than whoever ran the
