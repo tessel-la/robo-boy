@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.11.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.10.0-alpha...robo-boy-v0.11.0-alpha) (2026-09-21)
+
+
+### Features
+
+* **3d:** TF opacity and label background settings, carried by layout export ([92f7d11](https://github.com/tessel-la/robo-boy/commit/92f7d11f1c567dd111c525702a6c993fe3082b52))
+* electron linux desktop ([#164](https://github.com/tessel-la/robo-boy/issues/164)) ([3db56b1](https://github.com/tessel-la/robo-boy/commit/3db56b1ea81490b94bd14ddcca280660f33e1c2b))
+* electron linux desktop and 3d panel improvements([#164](https://github.com/tessel-la/robo-boy/issues/164)) ([f6e6bcc](https://github.com/tessel-la/robo-boy/commit/f6e6bcc907d269fdfc4c3efebae362e450a7f7f9))
+
+
+### Bug Fixes
+
+* **3d:** keep TF axes across viewer rebuilds and rework frame settings ([6705c3a](https://github.com/tessel-la/robo-boy/commit/6705c3a70e2dd04d3b9f1c645491060b842d4cb2))
+* **3d:** keep TF axes across viewer rebuilds, rework frame settings, grab-style pan ([3e55b74](https://github.com/tessel-la/robo-boy/commit/3e55b74d9bf61bc27327e13369641babd9edf71e))
+* **assistant:** dock the panel on the launcher's side ([5709a81](https://github.com/tessel-la/robo-boy/commit/5709a81537ba81e1dcc4fe779cedb47cae97b595))
+* **dev-server:** allow serving under configured hostnames ([7b6f0e2](https://github.com/tessel-la/robo-boy/commit/7b6f0e224026b5cc0ec699f217ad14d39932534d))
+
 ## [0.10.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.9.3-alpha...robo-boy-v0.10.0-alpha) (2026-09-16)
 
 
