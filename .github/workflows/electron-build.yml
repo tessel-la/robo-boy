@@ -17,7 +17,21 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [main]
+    branches: [dev, main]
+    paths:
+      - 'electron/**'
+      - 'src/**'
+      - 'panel-sdk/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'config/**'
+      - 'src-tauri/icons/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index.html'
+      - 'tsconfig.json'
+      - '.github/workflows/electron-build.yml'
+      - '.github/workflows/release-please.yml'
 
 permissions:
   contents: read
@@ -29,10 +43,6 @@ concurrency:
 jobs:
   build:
     name: Linux packages (deb, AppImage)
-    # On a pull request this validates the promotion of dev into main before it lands, matching how
-    # the Tauri desktop build is gated. Every other trigger is explicit.
-    if: >-
-      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
     # Built on the oldest supported runner: Chromium links against that runner's glibc and will not
     # start on anything older.
     runs-on: ubuntu-22.04
@@ -52,6 +62,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # esbuild transpiles the shell without type-checking it, and the renderer's tsc excludes it.
+      - name: Type-check the Electron shell
+        run: npm run typecheck:electron
+
       # The ordinary production build, against the tracked public tree. No panel staging happens
       # here, so nothing local reaches the package.
       - name: Build the renderer and the shell
@@ -63,7 +77,7 @@ jobs:
         run: npm run check:release-panels
 
       - name: Package the Linux targets
-        run: npx electron-builder --config config/electron-builder.yml --linux deb AppImage
+        run: npx electron-builder --config config/electron-builder.yml --linux deb AppImage --publish never
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

@@ -40,12 +40,12 @@ describe('assistantStorage', () => {
     expect(loadAssistantSettings()).toEqual(getDefaultAssistantSettings());
   });
 
-  it('connects directly to local Ollama from the desktop runtime', () => {
-    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+  it.each(['__TAURI_INTERNALS__', 'roboBoyDesktop'])('connects directly to local Ollama with %s', marker => {
+    vi.stubGlobal(marker, {});
     try {
       expect(getProviderDefaults('ollama').baseUrl).toBe('http://localhost:11434');
     } finally {
-      delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+      vi.unstubAllGlobals();
     }
   });
 

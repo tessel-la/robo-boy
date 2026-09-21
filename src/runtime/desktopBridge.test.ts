@@ -1,7 +1,32 @@
-import { describe, expect, it } from 'vitest';
-import { toResponse } from './desktopBridge';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getDesktopBridge, isElectronRuntime, toResponse } from './desktopBridge';
 
 const encode = (text: string): ArrayBuffer => new TextEncoder().encode(text).buffer as ArrayBuffer;
+
+describe('desktop bridge detection', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns the preload bridge in Electron', () => {
+    const bridge = { shell: 'electron' };
+    vi.stubGlobal('roboBoyDesktop', bridge);
+
+    expect(getDesktopBridge()).toBe(bridge);
+    expect(isElectronRuntime()).toBe(true);
+  });
+
+  it('does not report an Electron bridge in a browser or Tauri', () => {
+    expect(getDesktopBridge()).toBeUndefined();
+    expect(isElectronRuntime()).toBe(false);
+    vi.stubGlobal('__TAURI_INTERNALS__', {});
+    expect(isElectronRuntime()).toBe(false);
+  });
+
+  it('can be queried without a browser window', () => {
+    vi.stubGlobal('window', undefined);
+    expect(getDesktopBridge()).toBeUndefined();
+    expect(isElectronRuntime()).toBe(false);
+  });
+});
 
 describe('toResponse', () => {
   /**
