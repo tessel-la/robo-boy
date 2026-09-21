@@ -107,8 +107,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: electron
-          pattern: electron-linux
-          merge-multiple: true
+          pattern: electron-linux-*
 
       - name: Download the built iPhone app
         uses: actions/download-artifact@v4
@@ -164,24 +163,26 @@ jobs:
 
           find installers stable iphone -type f
 
-      # Kept out of the loop above, which insists on exactly one file per extension: Linux now has
-      # two debs, the Tauri one and this. The Tauri package keeps the unsuffixed stable name so
-      # links to it go on working, and this one is named beside it.
+      # Keep each architecture's artifact directory separate so every expected architecture must
+      # supply a Debian package. Preserve the existing x64 download name alongside the ARM64 one.
       - name: Name a stable copy of the Electron packages
         run: |
           set -euo pipefail
-          declare -A stable_name=(
-            [deb]=Robo-Boy-linux-amd64-electron.deb
-            [AppImage]=Robo-Boy-linux-x86_64-electron.AppImage
-          )
           mkdir -p stable
-          for extension in deb AppImage; do
-            mapfile -t built < <(find electron -type f -name "*.${extension}")
-            if [ "${#built[@]}" -ne 1 ]; then
-              echo "::error::expected one Electron .${extension}, found ${#built[@]}"
+          for arch in x64 arm64; do
+            artifact_dir="electron/electron-linux-${arch}"
+            if [ ! -d "${artifact_dir}" ]; then
+              echo "::error::missing Electron ${arch} artifact"
               exit 1
             fi
-            cp "${built[0]}" "stable/${stable_name[${extension}]}"
+            mapfile -t built < <(find "${artifact_dir}" -type f -name '*.deb')
+            if [ "${#built[@]}" -ne 1 ]; then
+              echo "::error::expected one Electron ${arch} .deb, found ${#built[@]}"
+              exit 1
+            fi
+            platform_arch="${arch}"
+            if [ "${arch}" = x64 ]; then platform_arch=amd64; fi
+            cp "${built[0]}" "stable/Robo-Boy-linux-${platform_arch}-electron.deb"
           done
           find electron stable -type f
 
