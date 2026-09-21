@@ -84,8 +84,16 @@ const getBrowserLocation = (): BrowserLocation => {
   return window.location;
 };
 
+/**
+ * Whether the app is running inside a packaged desktop shell rather than a browser tab.
+ *
+ * Either shell counts. Tauri announces itself on the window object; Electron is known by the
+ * bridge its preload script exposes. What follows from it is the same for both: the app reaches
+ * the robot's services directly instead of through a reverse proxy, and it owns its window frame.
+ */
 export const isDesktopRuntime = (): boolean => {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  if (typeof window === 'undefined') return false;
+  return '__TAURI_INTERNALS__' in window || 'roboBoyDesktop' in window;
 };
 
 /** The facts about the device that separate a phone or tablet from a desktop window. */

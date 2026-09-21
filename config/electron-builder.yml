@@ -1,0 +1,41 @@
+appId: la.tessel.roboboy
+productName: Robo-Boy
+# Kept apart from the Tauri identifier's data directory: the two shells store a window's panel
+# layout under the same keys, and a half-migrated layout is worse than a fresh one.
+directories:
+  output: release
+  buildResources: src-tauri/icons
+
+# Only what the shell needs at runtime. The renderer is built ahead of this and copied in whole;
+# nothing from src/, config/ or the Tauri crate belongs in the package.
+files:
+  - dist-electron/shell/**
+  - dist-electron/renderer/**
+  - package.json
+
+extraMetadata:
+  main: dist-electron/shell/main.js
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  icon: src-tauri/icons
+  # The video panels reach a WebRTC gateway over UDP; nothing here needs elevated privileges.
+  executableName: robo-boy
+
+win:
+  target:
+    - nsis
+  icon: src-tauri/icons/icon.ico
+
+mac:
+  target:
+    - dmg
+  icon: src-tauri/icons/icon.icns
+  category: public.app-category.utilities
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

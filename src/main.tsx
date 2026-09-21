@@ -8,10 +8,18 @@ const roboBoyWindow = window as typeof window & {
   __ROBOBOY_APP_STARTED?: boolean;
   __TAURI__?: unknown;
   __TAURI_INTERNALS__?: unknown;
+  roboBoyDesktop?: unknown;
 };
 
-if (window.location.protocol === 'tauri:' || roboBoyWindow.__TAURI__ || roboBoyWindow.__TAURI_INTERNALS__) {
-  document.documentElement.setAttribute('data-runtime', 'tauri');
+const isTauriShell =
+  window.location.protocol === 'tauri:' || Boolean(roboBoyWindow.__TAURI__ || roboBoyWindow.__TAURI_INTERNALS__);
+const isElectronShell = Boolean(roboBoyWindow.roboBoyDesktop);
+
+if (isTauriShell || isElectronShell) {
+  // Which shell is drawing the app, for the few rules that have to tell them apart, and a plain
+  // marker for the many that only care that this is a packaged window rather than a browser tab.
+  document.documentElement.setAttribute('data-runtime', isElectronShell ? 'electron' : 'tauri');
+  document.documentElement.setAttribute('data-desktop', '');
 
   // A desktop window is undecorated and leaves its chrome to the app; a phone draws its own bars
   // around the app instead. The stylesheet needs that apart before React mounts, so that the app
