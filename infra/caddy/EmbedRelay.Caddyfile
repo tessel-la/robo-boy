@@ -1,0 +1,26 @@
+{
+	admin off
+	auto_https off
+}
+
+# Bridges the host network to a Unix socket shared with the public Caddy container. Most
+# development servers bind 127.0.0.1 only, which the public proxy's bridge network cannot reach at
+# all; running here on the host network reaches them on loopback exactly as a local browser would.
+#
+# ROBOBOY_EMBED_PORTS names the ports a deployment publishes for embedding, as a regular-expression
+# alternation such as "8089|3000". It is closed by default: loopback services are usually
+# unauthenticated precisely because they are unreachable, and this relay is reached from an origin
+# that is served to the network, so each one is opened deliberately rather than all at once.
+:80 {
+	bind unix//run/embed-relay/embed.sock|0666
+
+	@hostport path_regexp hostport ^/({$ROBOBOY_EMBED_PORTS:x})(/.*)?$
+	handle @hostport {
+		uri strip_prefix /{re.hostport.1}
+		reverse_proxy 127.0.0.1:{re.hostport.1}
+	}
+
+	handle {
+		respond "This port is not published for embedding." 404
+	}
+}
