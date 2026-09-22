@@ -75,6 +75,47 @@
 		reverse_proxy unix//run/ollama-relay/ollama.sock
 	}
 
+	# Same-origin viewport onto a port of the machine. The port is resolved on this side rather
+	# than in the browser, so a framed page is the robot's port even when the browser is on
+	# another machine, and it stays within the panel sandbox's `frame-src 'self'`. The embed relay
+	# carries it because a development server usually binds loopback, which this bridge network
+	# cannot reach. Upstream framing refusals are dropped because being framed is the whole point.
+	@hostport path_regexp hostport ^/(\d{1,5})(/.*)?$
+	handle @hostport {
+		# An embedded app ships its own runtime -- scripts, WebAssembly, model payloads -- and a
+		# robot link is not a datacentre one. The upstream is a development server that sends
+		# everything plain, so compressing here is what makes a large payload arrive at all.
+		encode {
+			zstd
+			gzip
+			match {
+				header Content-Type text/*
+				header Content-Type application/javascript*
+				header Content-Type application/json*
+				header Content-Type application/wasm*
+				header Content-Type application/octet-stream*
+			}
+		}
+		reverse_proxy unix//run/embed-relay/embed.sock {
+			# Read the upstream's response at local speed instead of at the browser's. A
+			# development server typically writes a large payload under a short socket timeout,
+			# which a viewer on a robot link cannot drain in time: the upstream then gives up
+			# mid-body and the page sees a truncated file rather than an error.
+			response_buffers 128MB
+			header_down -X-Frame-Options
+			header_down -Content-Security-Policy
+			header_down Location ^/(.*)$ /{re.hostport.1}/$1
+			# The panel sandbox gives the framed page an opaque origin, which makes the page's own
+			# module scripts, WebAssembly and data requests cross-origin to itself. Module scripts
+			# are always fetched in CORS mode, so without this the page renders and nothing under
+			# it ever runs. Exposing the response headers matters just as much: a CORS response
+			# hides every header a page set for itself, and a page that reads one back -- a session
+			# or version stamp it compares against -- otherwise sees null and reloads forever.
+			header_down >Access-Control-Allow-Origin "*"
+			header_down >Access-Control-Expose-Headers "*"
+		}
+	}
+
 	# Installed panel assets are public static files with no credentials attached. The packaged
 	# desktop shell reads this registry and its bundles cross-origin, so they need CORS; the web
 	# app is same-origin and unaffected. The ">" prefix replaces rather than appends, and defers
@@ -143,6 +184,47 @@
 	handle @ollama_api {
 		uri strip_prefix /ollama
 		reverse_proxy unix//run/ollama-relay/ollama.sock
+	}
+
+	# Same-origin viewport onto a port of the machine. The port is resolved on this side rather
+	# than in the browser, so a framed page is the robot's port even when the browser is on
+	# another machine, and it stays within the panel sandbox's `frame-src 'self'`. The embed relay
+	# carries it because a development server usually binds loopback, which this bridge network
+	# cannot reach. Upstream framing refusals are dropped because being framed is the whole point.
+	@hostport path_regexp hostport ^/(\d{1,5})(/.*)?$
+	handle @hostport {
+		# An embedded app ships its own runtime -- scripts, WebAssembly, model payloads -- and a
+		# robot link is not a datacentre one. The upstream is a development server that sends
+		# everything plain, so compressing here is what makes a large payload arrive at all.
+		encode {
+			zstd
+			gzip
+			match {
+				header Content-Type text/*
+				header Content-Type application/javascript*
+				header Content-Type application/json*
+				header Content-Type application/wasm*
+				header Content-Type application/octet-stream*
+			}
+		}
+		reverse_proxy unix//run/embed-relay/embed.sock {
+			# Read the upstream's response at local speed instead of at the browser's. A
+			# development server typically writes a large payload under a short socket timeout,
+			# which a viewer on a robot link cannot drain in time: the upstream then gives up
+			# mid-body and the page sees a truncated file rather than an error.
+			response_buffers 128MB
+			header_down -X-Frame-Options
+			header_down -Content-Security-Policy
+			header_down Location ^/(.*)$ /{re.hostport.1}/$1
+			# The panel sandbox gives the framed page an opaque origin, which makes the page's own
+			# module scripts, WebAssembly and data requests cross-origin to itself. Module scripts
+			# are always fetched in CORS mode, so without this the page renders and nothing under
+			# it ever runs. Exposing the response headers matters just as much: a CORS response
+			# hides every header a page set for itself, and a page that reads one back -- a session
+			# or version stamp it compares against -- otherwise sees null and reloads forever.
+			header_down >Access-Control-Allow-Origin "*"
+			header_down >Access-Control-Expose-Headers "*"
+		}
 	}
 
 	# Installed panel assets are public static files with no credentials attached. The packaged
