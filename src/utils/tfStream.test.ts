@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as ROSLIB from 'roslib';
 
 const topicMock = vi.hoisted(() => ({
   instances: [] as Array<{
@@ -66,6 +67,27 @@ describe('shared TF stream', () => {
 
     unsubscribeSecond();
     expect(topicMock.instances.every(topic => topic.unsubscribe.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('preserves interleaved publishers without topic-wide throttling or replacement queues', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const listener = vi.fn();
+    const stop = subscribeToTfStream({} as any, listener);
+    expect(ROSLIB.Topic).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '/tf', throttle_rate: 0, queue_length: 0 })
+    );
+    expect(ROSLIB.Topic).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '/tf_static', throttle_rate: 0, queue_length: 0 })
+    );
+    const dynamic = topicMock.instances.find(topic => topic.name === '/tf')!;
+    for (let i = 0; i < 60; i++) {
+      dynamic.callback?.(transformMessage('robot_small_link_1', i));
+      dynamic.callback?.(transformMessage('robot_big_link_1', i + 10));
+    }
+    const last = listener.mock.calls[listener.mock.calls.length - 1][0].transforms;
+    expect(last.robot_small_link_1.transform.translation.x).toBe(59);
+    expect(last.robot_big_link_1.transform.translation.x).toBe(69);
+    stop();
   });
 
   it('replays current data to a panel joining an active connection', async () => {

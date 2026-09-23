@@ -27,6 +27,7 @@ import { useTfVisualizer } from '../hooks/useTfVisualizer';
 // Import Wrapper Components
 import PointCloudViz from './visualizers/PointCloudViz';
 import CameraInfoViz from './visualizers/CameraInfoViz';
+import MarkerArrayViz from './visualizers/MarkerArrayViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
 import PoseStampedViz from './visualizers/PoseStampedViz'; // Import PoseStampedViz
@@ -53,7 +54,7 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped'; // Added 'laserscan', 'tf', and 'posestamped'
+  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped' | 'markerarray'; // Added 'laserscan', 'tf', and 'posestamped'
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
   options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
@@ -85,6 +86,7 @@ const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
   'laserscan',
   'tf',
   'posestamped',
+  'markerarray',
 ];
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
@@ -96,7 +98,7 @@ const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
   '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale, tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
-  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
@@ -559,6 +561,9 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
               options={viz.options as CameraInfoOptions}
             />
           );
+        } else if (viz.type === 'markerarray') {
+          return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
+            provider={customTFProvider} ready={isProviderReady} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>

@@ -343,7 +343,9 @@ export const createPanelSandboxDocument = (bootstrapSource: string): string => {
     "connect-src 'none'",
     "font-src 'none'",
     "object-src 'none'",
-    "frame-src 'none'",
+    // Same-origin only: a panel may frame a deployment route such as Caddy's /embed/<port>,
+    // never an arbitrary origin. Nested frames still inherit this sandbox's opaque origin.
+    "frame-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; ');
