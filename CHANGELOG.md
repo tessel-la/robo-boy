@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.12.0-alpha...robo-boy-v0.13.0-alpha) (2026-09-23)
+
+
+### Features
+
+* caddy reroute for embedding view ([#170](https://github.com/tessel-la/robo-boy/issues/170)) ([ca9e572](https://github.com/tessel-la/robo-boy/commit/ca9e572d39faf3ebe4b0f249b985f4cf232f44e6))
+* marker array support ([#171](https://github.com/tessel-la/robo-boy/issues/171)) ([2cabf1d](https://github.com/tessel-la/robo-boy/commit/2cabf1d70848005d82a730e77ab99ee4a77285ed))
+
+
+### Bug Fixes
+
+* **bt:** open node settings on touch double tap ([#172](https://github.com/tessel-la/robo-boy/issues/172)) ([751352c](https://github.com/tessel-la/robo-boy/commit/751352c50930caaa5efaf7f045b93e70a6fa5cbf))
+* **desktop:** enable pad drag and drop on Windows ([#173](https://github.com/tessel-la/robo-boy/issues/173)) ([0271334](https://github.com/tessel-la/robo-boy/commit/0271334b2611a2585e319e59a09a4b907cf01041))
+
 ## [0.12.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.11.0-alpha...robo-boy-v0.12.0-alpha) (2026-09-21)
 
 
