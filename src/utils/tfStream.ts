@@ -190,8 +190,11 @@ class SharedTfStream {
       ros: this.ros,
       name: '/tf',
       messageType: 'tf2_msgs/TFMessage',
-      throttle_rate: 25,
-      queue_length: 1,
+      // TFMessages carry disjoint frame subsets from independent publishers.
+      // Topic-wide throttling or replacement queues drop other arms. Merge
+      // every message; the viewer already coalesces renders with rAF.
+      throttle_rate: 0,
+      queue_length: 0,
       compression: 'cbor',
     });
     this.staticTopic = new ROSLIB.Topic({
@@ -199,7 +202,7 @@ class SharedTfStream {
       name: '/tf_static',
       messageType: 'tf2_msgs/TFMessage',
       throttle_rate: 0,
-      queue_length: 1,
+      queue_length: 0,
       compression: 'cbor',
     });
 

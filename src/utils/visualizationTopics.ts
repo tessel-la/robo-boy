@@ -1,12 +1,13 @@
 import { getUrdfTopics, type RosTopicInfo } from './urdfTopics';
 
 /** Visualization types that bind to a topic; TF is driven by the frame list instead. */
-export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped';
+export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray';
 
-export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped'];
+export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray'];
 
 /** ROS 1 and ROS 2 spellings of the message types each visualization can render. */
 const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'urdf'>, readonly string[]> = {
+  markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
   pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
   laserscan: ['sensor_msgs/LaserScan', 'sensor_msgs/msg/LaserScan'],
