@@ -494,6 +494,77 @@ describe('BehaviorTreePanel', () => {
     );
   });
 
+  it.each([
+    {
+      label: 'action',
+      type: 'action',
+      data: {
+        label: 'Navigate',
+        actionName: '/navigate_to_pose',
+        actionType: 'nav2_msgs/action/NavigateToPose',
+      },
+    },
+    {
+      label: 'service',
+      type: 'service',
+      data: {
+        label: 'Reset',
+        serviceName: '/reset',
+        serviceType: 'std_srvs/srv/Trigger',
+      },
+    },
+    {
+      label: 'topic',
+      type: 'topic',
+      data: {
+        label: 'Command',
+        topicName: '/command',
+        messageType: 'std_msgs/msg/String',
+      },
+    },
+  ])('opens $label settings from two touch taps at any viewport width', async ({ type, data }) => {
+    const now = Date.now();
+    localStorage.setItem(
+      'robo-boy-behavior-trees',
+      JSON.stringify([
+        {
+          version: '1.0.0',
+          tree: {
+            id: `touch-${type}-tree`,
+            name: `Touch ${type} tree`,
+            nodes: [{ id: `${type}-node`, type, position: { x: 0, y: 0 }, data }],
+            edges: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ])
+    );
+
+    render(<BehaviorTreePanel ros={null} isConnected={false} isActive />);
+    setCanvasRect();
+    fireEvent.click(screen.getByTestId('bt-menu-button'));
+    fireEvent.click(screen.getByText(`Touch ${type} tree`));
+    const node = await screen.findByTestId(`rf-node-${type}-node`);
+
+    for (let tap = 0; tap < 2; tap += 1) {
+      firePointerEvent(node, 'pointerdown', {
+        pointerId: 7,
+        pointerType: 'touch',
+        clientX: 120,
+        clientY: 160,
+      });
+      firePointerEvent(node, 'pointerup', {
+        pointerId: 7,
+        pointerType: 'touch',
+        clientX: 120,
+        clientY: 160,
+      });
+    }
+
+    expect(document.querySelector('.ape-overlay')).toBeInTheDocument();
+  });
+
   it('does not ask React Flow to fit a hidden behavior tree canvas', async () => {
     const now = Date.now();
     localStorage.setItem(
