@@ -1,7 +1,7 @@
 {
   "name": "robot-web-controller",
   "private": true,
-  "version": "0.12.0-alpha",
+  "version": "0.13.0-alpha",
   "description": "Web, desktop and mobile interface for controlling and visualizing ROS 2 robots.",
   "homepage": "https://github.com/tessel-la/robo-boy",
   "desktopName": "robo-boy.desktop",
