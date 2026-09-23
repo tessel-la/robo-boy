@@ -17,6 +17,7 @@ const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.R
   pointcloud: <FaCloud />,
   camerainfo: <FaCamera />,
   urdf: <FaCube />,
+  markerarray: <FaCube />,
   laserscan: <FaDotCircle />, // Updated LaserScan icon
   posestamped: <FaArrowRight />, // PoseStamped icon
   // TF icon excluded - controlled via Settings menu
@@ -92,6 +93,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
   // Helper function to capitalize type name for display
   const formatTypeName = (type: string): string => {
     if (type === 'urdf') return 'URDF';
+    if (type === 'markerarray') return 'Mesh markers';
     if (type === 'posestamped') return 'PoseStamped';
     if (type === 'laserscan') return 'LaserScan';
     return type.charAt(0).toUpperCase() + type.slice(1);

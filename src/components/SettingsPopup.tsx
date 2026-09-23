@@ -106,6 +106,7 @@ const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   pointcloud: 'Point Cloud',
   camerainfo: 'Camera Info',
   urdf: 'URDF',
+  markerarray: 'Mesh markers',
   laserscan: 'Laser Scan',
   tf: 'TF',
   posestamped: 'Pose Stamped',
