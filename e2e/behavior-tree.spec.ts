@@ -80,6 +80,25 @@ async function multiSelectClick(locator: Locator) {
   }, MULTI_SELECT_MODIFIER);
 }
 
+async function touchDoubleTap(locator: Locator) {
+  await locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const eventInit = {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+
+    for (let tap = 0; tap < 2; tap += 1) {
+      element.dispatchEvent(new PointerEvent('pointerdown', { ...eventInit, buttons: 1 }));
+      element.dispatchEvent(new PointerEvent('pointerup', { ...eventInit, buttons: 0 }));
+    }
+  });
+}
+
 async function seedSavedTree(page: Page) {
   await page.evaluate(() => {
     const now = Date.now();
@@ -373,8 +392,7 @@ test.describe('Behavior Tree panel', () => {
     await page.getByTestId('bt-menu-button').click();
     await page.locator('.bt-menu-tree-row').filter({ hasText: 'Long Action Tree' }).click();
     const actionNode = page.locator('.react-flow__node').filter({ hasText: 'Navigate' });
-    await actionNode.dispatchEvent('click');
-    await actionNode.dispatchEvent('click');
+    await touchDoubleTap(actionNode);
     const inputs = page.getByLabel('input blackboard bindings');
     await inputs.getByRole('button', { name: '+ Connect' }).click();
     await page.getByLabel('Goal field 1').click();
@@ -908,8 +926,7 @@ test.describe('Behavior Tree panel', () => {
     const actionNode = page.locator('.react-flow__node').filter({ hasText: 'Navigate' });
     await expect(actionNode).toHaveCount(1);
 
-    await actionNode.dispatchEvent('click');
-    await actionNode.dispatchEvent('click');
+    await touchDoubleTap(actionNode);
 
     await expect(page.locator('.ape-overlay')).toBeVisible();
   });

@@ -168,6 +168,13 @@ interface CustomBoxSelectionBox {
   height: number;
 }
 
+interface TouchNodeTapGesture {
+  pointerId: number;
+  nodeId: string;
+  startX: number;
+  startY: number;
+}
+
 interface ManualEdgeSelection {
   nodeIds: Set<string>;
   edgeIds: Set<string>;
@@ -188,6 +195,8 @@ const SELECTION_ACTIONS_MOBILE_GAP = 14;
 const SELECTION_ACTIONS_MOBILE_ESTIMATED_HEIGHT = 110;
 const BOX_SELECTION_CLEAR_SUPPRESSION_MS = 120;
 const BOX_SELECTION_DRAG_THRESHOLD = 4;
+const TOUCH_DOUBLE_TAP_TIMEOUT_MS = 420;
+const TOUCH_TAP_MOVE_THRESHOLD = 10;
 const PALETTE_ADD_NODE_X_GAP = 190;
 const PALETTE_ADD_NODE_Y_GAP = 130;
 const PALETTE_ADD_NODE_COLUMNS = 3;
@@ -578,7 +587,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
   const executionStartedAt = useRef<number | undefined>(undefined);
-  const lastMobileNodeTap = useRef<{ nodeId: string; timestamp: number } | null>(null);
+  const touchNodeTapGestureRef = useRef<TouchNodeTapGesture | null>(null);
+  const lastTouchNodeTapRef = useRef<{ nodeId: string; timestamp: number } | null>(null);
   const currentTreeRef = useRef<BehaviorTree | null>(null);
   const rootTreeRef = useRef<BehaviorTree | null>(null);
   const treePathRef = useRef<string[]>([]);
@@ -719,6 +729,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       boxSelectionEndPendingRef.current = false;
       customBoxSelectionGestureRef.current = null;
       customBoxSelectionRectRef.current = null;
+      touchNodeTapGestureRef.current = null;
+      lastTouchNodeTapRef.current = null;
       setCustomBoxSelection(null);
       setOrderingParentId(null);
       setRenamingNodeId(null);
@@ -1530,32 +1542,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       }
 
       nodeMultiSelectSnapshotRef.current = null;
-
-      if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
-      if (
-        node.type !== BehaviorNodeType.Action &&
-        node.type !== BehaviorNodeType.Service &&
-        node.type !== BehaviorNodeType.Topic &&
-        node.type !== BehaviorNodeType.Subscriber &&
-        node.type !== BehaviorNodeType.Timeout &&
-        node.type !== BehaviorNodeType.IfElse &&
-        node.type !== BehaviorNodeType.Subtree &&
-        !isIteratingControlNode(node) &&
-        !isOrderedControlNode(node as BehaviorTreeNode)
-      ) {
-        return;
-      }
-
-      const now = Date.now();
-      const previousTap = lastMobileNodeTap.current;
-      lastMobileNodeTap.current = { nodeId: node.id, timestamp: now };
-
-      if (previousTap?.nodeId === node.id && now - previousTap.timestamp < 420) {
-        lastMobileNodeTap.current = null;
-        openNodeEditor(node);
-      }
     },
-    [commitSelectionState, openNodeEditor]
+    [commitSelectionState]
   );
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -2650,6 +2638,21 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       const target = event.target;
       if (!(target instanceof Element)) return;
 
+      if (event.pointerType === 'touch') {
+        const nodeId = target.closest<HTMLElement>('.react-flow__node')?.dataset.id;
+        if (nodeId && !nodeId.startsWith(AGENT_PREVIEW_ID_PREFIX)) {
+          touchNodeTapGestureRef.current = {
+            pointerId: event.pointerId,
+            nodeId,
+            startX: event.clientX,
+            startY: event.clientY,
+          };
+        } else {
+          touchNodeTapGestureRef.current = null;
+          lastTouchNodeTapRef.current = null;
+        }
+      }
+
       nodeMultiSelectSnapshotRef.current =
         (event.ctrlKey || event.metaKey) && target.closest('.react-flow__node')
           ? new Set(selectedNodeIdsRef.current)
@@ -2709,6 +2712,16 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleCanvasPointerMoveCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const touchGesture = touchNodeTapGestureRef.current;
+      if (
+        touchGesture?.pointerId === event.pointerId &&
+        Math.hypot(event.clientX - touchGesture.startX, event.clientY - touchGesture.startY) >=
+          TOUCH_TAP_MOVE_THRESHOLD
+      ) {
+        touchNodeTapGestureRef.current = null;
+        lastTouchNodeTapRef.current = null;
+      }
+
       const gesture = customBoxSelectionGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
@@ -2731,6 +2744,36 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const handleCanvasPointerEndCapture = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const touchGesture = touchNodeTapGestureRef.current;
+      if (touchGesture?.pointerId === event.pointerId) {
+        touchNodeTapGestureRef.current = null;
+        const target = event.target;
+        const releasedNodeId =
+          target instanceof Element
+            ? target.closest<HTMLElement>('.react-flow__node')?.dataset.id
+            : undefined;
+        const moved =
+          Math.hypot(event.clientX - touchGesture.startX, event.clientY - touchGesture.startY) >=
+          TOUCH_TAP_MOVE_THRESHOLD;
+
+        if (event.type === 'pointercancel' || moved || releasedNodeId !== touchGesture.nodeId) {
+          lastTouchNodeTapRef.current = null;
+        } else {
+          const now = Date.now();
+          const previousTap = lastTouchNodeTapRef.current;
+          if (
+            previousTap?.nodeId === touchGesture.nodeId &&
+            now - previousTap.timestamp <= TOUCH_DOUBLE_TAP_TIMEOUT_MS
+          ) {
+            lastTouchNodeTapRef.current = null;
+            const node = behaviorNodes.find((candidate) => candidate.id === touchGesture.nodeId);
+            if (node) openNodeEditor(node);
+          } else {
+            lastTouchNodeTapRef.current = { nodeId: touchGesture.nodeId, timestamp: now };
+          }
+        }
+      }
+
       const gesture = customBoxSelectionGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
@@ -2740,7 +2783,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       gesture.currentY = event.clientY;
       finishCustomBoxSelection();
     },
-    [finishCustomBoxSelection]
+    [behaviorNodes, finishCustomBoxSelection, openNodeEditor]
   );
 
   const handlePaneClick = useCallback(() => {
