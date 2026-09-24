@@ -19,6 +19,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
   URDF, and panel lifecycle invariants.
 - [Adding a custom panel](custom-panels.md): get a panel you wrote into the web app and into a desktop build,
   the four kinds of panel, enable/disable, and what an update changes.
+- [Native Time Series](native-time-series.md): live telemetry, zoom, filters, derived signals, and migration.
 - [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.
 
 ## Source Map

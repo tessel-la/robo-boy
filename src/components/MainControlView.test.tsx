@@ -17,6 +17,7 @@ const importGamepadFile = vi.fn();
 const saveGamepadFromEditor = vi.fn();
 const useInstalledPanels = vi.fn();
 const externalPanelHostProps = vi.fn();
+const nativeTimeSeriesProps = vi.fn();
 
 // The connection the view is handed. Most tests want a live one; the status button needs a dropped
 // one to have anything to do.
@@ -66,6 +67,10 @@ vi.mock('../panels/ExternalPanelHost', () => ({
       </div>
     );
   },
+}));
+
+vi.mock('../features/timeSeries/TimeSeriesPanel', () => ({
+  default: (props: any) => { nativeTimeSeriesProps(props); return <div data-testid="native-time-series" />; },
 }));
 
 vi.mock('../panels/PanelManagerDialog', () => ({
@@ -515,6 +520,17 @@ describe('MainControlView desktop workspace', () => {
         expect.objectContaining({ type: 'la.tessel.roboboy.hello', title: 'Hello Panel' }),
       ]);
     });
+  });
+
+  it('migrates external Time Series tiles to native panels without losing IDs or saved settings', async () => {
+    const values = { config: { schemaVersion: 3, series: [{ topic: '/joint_states', messageType: 'JointState', fieldPath: 'position[0]', enabled: false }] } };
+    const legacy = 'la.tessel.roboboy.timeseries';
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([{ ...makePanel('existing-series', legacy, 'Telemetry'), panelState: { schemaVersion: 1, panelId: legacy, values } }]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['existing-series']));
+    renderMainControlView();
+    await screen.findByTestId('native-time-series');
+    expect(nativeTimeSeriesProps.mock.lastCall?.[0].state).toEqual(values);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')[0]).toMatchObject({ id: 'existing-series', type: 'timeSeries', title: 'Telemetry', panelState: { panelId: 'timeSeries', values } }));
   });
 
   it('persists trusted ROS topic grants as host-owned tile metadata', async () => {

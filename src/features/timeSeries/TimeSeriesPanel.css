@@ -1,0 +1,609 @@
+.timeseries-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text-color);
+  background: var(--background-color);
+  font-size: 12px;
+  container-type: inline-size;
+}
+.timeseries-panel *,
+.timeseries-panel *::before {
+  box-sizing: border-box;
+  min-width: 0;
+}
+:where(.timeseries-panel) button,
+:where(.timeseries-panel) input,
+:where(.timeseries-panel) select {
+  font: inherit;
+  color: var(--text-color);
+  background: var(--input-background, var(--background-color));
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  min-height: 32px;
+  padding: 6px 9px;
+  max-width: 100%;
+}
+:where(.timeseries-panel) button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  touch-action: manipulation;
+}
+.timeseries-panel button:hover {
+  background: var(--hover-color, var(--secondary-background));
+}
+.timeseries-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.timeseries-panel :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+.timeseries-panel button[aria-pressed='true'] {
+  border-color: var(--primary-color);
+}
+.timeseries-plot {
+  position: relative;
+  flex: 1;
+  min-height: 70px;
+  overflow: hidden;
+  padding-top: 52px;
+}
+.timeseries-plot canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+.timeseries-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  text-align: center;
+  pointer-events: none;
+  align-content: center;
+  gap: 12px;
+}
+.timeseries-legend {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  max-height: 52px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.timeseries-legend > button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: min(220px, 70cqw);
+  min-height: 36px;
+  border-radius: 18px;
+  background: var(--card-bg);
+}
+.timeseries-legend-signal[aria-pressed='false'] > i {
+  opacity: 0.4;
+}
+.timeseries-legend button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeseries-legend-signal strong {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.timeseries-panel i {
+  display: inline-block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.timeseries-footer {
+  justify-content: space-between;
+  font-size: 10px;
+  padding-right: 64px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 2px 64px 2px 8px;
+  min-height: 20px;
+}
+.timeseries-error {
+  margin: 4px 8px;
+  overflow-wrap: anywhere;
+  color: var(--error-color);
+}
+.timeseries-settings {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(440px, 100%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-color);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -4px 0 20px #0002;
+}
+.timeseries-settings > header,
+.timeseries-settings > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.timeseries-settings > footer {
+  border-top: 1px solid var(--border-color);
+  justify-content: flex-start;
+  gap: 12px;
+  padding-right: 64px;
+}
+.timeseries-settings-content {
+  flex: 1;
+  overflow: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  overscroll-behavior: contain;
+  scroll-padding: 12px;
+}
+.timeseries-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+.timeseries-settings label > input,
+.timeseries-settings label > select {
+  width: 100%;
+  text-overflow: ellipsis;
+}
+.timeseries-settings p {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.timeseries-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+}
+.timeseries-section,
+.timeseries-signal {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.timeseries-signal-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.timeseries-signal-heading strong {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeseries-settings input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--primary-color);
+}
+.timeseries-settings .timeseries-check {
+  flex-direction: row;
+  align-items: center;
+}
+.timeseries-settings summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-weight: 600;
+}
+.timeseries-source {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+}
+.timeseries-topic-list {
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 8px;
+}
+.timeseries-topic-list button {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  width: 100%;
+  margin: 4px 0;
+}
+.timeseries-topic-list span,
+.timeseries-topic-list small {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+@container (max-width: 520px) {
+  .timeseries-settings {
+    width: 100%;
+    border: 0;
+  }
+  .timeseries-panel button,
+  .timeseries-panel input,
+  .timeseries-panel select {
+    min-height: 40px;
+  }
+  .timeseries-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .timeseries-footer .timeseries-cursor-readout {
+    display: none;
+  }
+  .timeseries-connection[data-connected='true']::before {
+    background: var(--success-color, #28a745);
+  }
+  :where(.timeseries-panel) button {
+    min-height: 44px;
+    border-radius: 9px;
+  }
+  .timeseries-toolbar > button,
+  .timeseries-more > button {
+    width: 100%;
+    gap: 5px;
+    padding: 6px 4px;
+  }
+  .timeseries-settings input:not([type='checkbox']),
+  .timeseries-settings select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .timeseries-settings summary {
+    min-height: 44px;
+    padding: 13px 0;
+  }
+  .timeseries-settings .timeseries-check {
+    min-height: 44px;
+  }
+  .timeseries-settings > footer > span {
+    font-size: 10px;
+  }
+}
+
+.timeseries-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Keep common touch actions in one predictable row; secondary actions use a disclosure. */
+.timeseries-panel button svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.timeseries-more {
+  position: relative;
+}
+.timeseries-more-actions {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(300px, calc(100cqw - 16px));
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--background-color);
+  box-shadow: 0 8px 24px #0003;
+}
+.timeseries-more-actions button {
+  min-height: 44px;
+}
+.timeseries-panel .timeseries-accent,
+.timeseries-panel button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--background-color));
+  border-color: var(--primary-color);
+}
+.timeseries-panel .timeseries-danger {
+  color: var(--error-color, #d84949);
+}
+.timeseries-interaction-hint {
+  padding: 0 10px 6px;
+  font-size: 11px;
+  color: var(--text-color-secondary, var(--text-secondary));
+  flex-shrink: 0;
+  grid-column: 1 / -1;
+}
+.timeseries-empty button {
+  pointer-events: auto;
+  min-height: 44px;
+  justify-self: center;
+}
+.timeseries-settings .timeseries-signal-toggle {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  cursor: pointer;
+}
+.timeseries-signal-heading > button,
+.timeseries-settings > header > button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+.timeseries-settings > footer > button {
+  margin-left: auto;
+  min-width: 88px;
+  min-height: 44px;
+}
+
+/* The same floating pill and circular action pattern used by BT, TF and 3D. */
+.timeseries-header {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  max-width: calc(100% - 152px);
+}
+.timeseries-header .tree-panel-menu-button {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 18px;
+  padding: 0 11px;
+  gap: 7px;
+}
+.timeseries-header .tree-panel-menu-button > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeseries-connection {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--secondary-color, #888);
+}
+.timeseries-connection[data-connected='true'] {
+  background: var(--success-color, #28a745);
+}
+.timeseries-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.timeseries-panel .timeseries-icon-button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px #0000001a;
+  flex: 0 0 auto;
+}
+.timeseries-panel .timeseries-icon-button:hover {
+  color: var(--primary-color);
+  box-shadow: 0 4px 14px #00000024;
+}
+.timeseries-panel .timeseries-icon-button.timeseries-accent {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+}
+.timeseries-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+.timeseries-muted,
+.timeseries-footer {
+  color: var(--text-color-secondary, var(--text-secondary));
+}
+.timeseries-footer output {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeseries-footer > span {
+  white-space: nowrap;
+}
+.timeseries-error {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: var(--card-bg);
+}
+/* A bounded overlay keeps large selections from taking space away from the plot. */
+.timeseries-legend .timeseries-legend-trigger {
+  max-width: 100%;
+  gap: 9px;
+}
+.timeseries-legend-dots {
+  display: flex;
+  gap: 3px;
+}
+.timeseries-legend-dots:empty {
+  display: none;
+}
+.timeseries-legend-trigger > svg {
+  transition: transform 180ms ease;
+}
+.timeseries-legend-trigger[aria-expanded='true'] > svg {
+  transform: rotate(180deg);
+}
+.timeseries-signal-picker {
+  position: absolute;
+  z-index: 3;
+  bottom: 68px;
+  left: 8px;
+  right: 8px;
+  max-width: 420px;
+  max-height: min(360px, calc(100% - 128px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--background-color);
+  box-shadow: 0 8px 28px #0003;
+  transform-origin: bottom left;
+  animation: timeseries-picker-in 180ms ease-out;
+}
+.timeseries-signal-picker header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.timeseries-signal-picker header div {
+  display: grid;
+  gap: 3px;
+}
+.timeseries-signal-picker header span {
+  color: var(--text-color-secondary, var(--text-secondary));
+  font-size: 11px;
+}
+.timeseries-signal-picker > input {
+  width: 100%;
+  min-height: 44px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.timeseries-signal-list {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeseries-signal-list .timeseries-legend-signal {
+  width: 100%;
+  min-height: 44px;
+  flex-shrink: 0;
+  gap: 8px;
+  border-radius: 10px;
+  text-align: left;
+}
+.timeseries-signal-list .timeseries-legend-signal > span:first-of-type {
+  flex: 1;
+}
+.timeseries-signal-list strong {
+  max-width: 28%;
+  font-size: 11px;
+}
+.timeseries-legend-signal {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.timeseries-legend-signal:active {
+  transform: scale(0.97);
+}
+.timeseries-legend-signal .timeseries-signal-switch {
+  width: 30px;
+  height: 18px;
+  flex: 0 0 30px;
+  border-radius: 10px;
+  background: var(--border-color);
+  padding: 2px;
+  transition: background-color 160ms ease;
+}
+.timeseries-signal-switch > span {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--primary-color);
+  background: var(--background-color);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1.3);
+}
+.timeseries-panel .timeseries-signal-switch svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+}
+.timeseries-legend-signal[aria-pressed='true'] .timeseries-signal-switch {
+  background: var(--primary-color);
+}
+.timeseries-legend-signal[aria-pressed='true'] .timeseries-signal-switch > span {
+  transform: translateX(12px);
+}
+.timeseries-legend-signal[aria-pressed='true'] .timeseries-signal-switch svg {
+  opacity: 1;
+}
+@keyframes timeseries-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeseries-signal-picker {
+    animation: none;
+  }
+  .timeseries-legend-signal,
+  .timeseries-legend-trigger > svg,
+  .timeseries-signal-switch,
+  .timeseries-signal-switch > span {
+    transition: none;
+  }
+  .timeseries-legend-signal:active {
+    transform: none;
+  }
+}
+@container (max-width: 520px) {
+  .timeseries-legend > button {
+    min-height: 36px;
+  }
+  .timeseries-footer {
+    font-size: 9px;
+  }
+}

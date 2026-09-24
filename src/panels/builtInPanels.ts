@@ -1,5 +1,7 @@
 import type { BuiltInPanelCatalogEntry, BuiltInPanelId, PanelCatalogEntry, ResolvedPanelManifest } from './types';
 
+export const LEGACY_TIME_SERIES_ID = 'la.tessel.roboboy.timeseries';
+
 export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
   {
     id: 'camera',
@@ -51,6 +53,16 @@ export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
     icon: 'pad',
     source: 'built-in',
   },
+  {
+    id: 'timeSeries',
+    name: 'Time Series',
+    menuLabel: 'Time Series',
+    description: 'Plot and analyze live ROS signals.',
+    version: 'built-in',
+    capabilities: ['ros', 'storage'],
+    icon: 'timeSeries',
+    source: 'built-in',
+  },
 ];
 
 const builtInPanelIds = new Set<string>(BUILT_IN_PANELS.map(panel => panel.id));
@@ -59,17 +71,19 @@ export const isBuiltInPanelId = (id: string): id is BuiltInPanelId => builtInPan
 
 export const createPanelCatalog = (externalPanels: readonly ResolvedPanelManifest[]): PanelCatalogEntry[] => [
   ...BUILT_IN_PANELS,
-  ...externalPanels.map(
-    (manifest): PanelCatalogEntry => ({
-      id: manifest.id,
-      name: manifest.name,
-      menuLabel: manifest.name,
-      description: manifest.description,
-      version: manifest.version,
-      capabilities: manifest.capabilities || [],
-      icon: 'external',
-      source: 'external',
-      manifest,
-    })
-  ),
+  ...externalPanels
+    .filter(panel => panel.id !== LEGACY_TIME_SERIES_ID)
+    .map(
+      (manifest): PanelCatalogEntry => ({
+        id: manifest.id,
+        name: manifest.name,
+        menuLabel: manifest.name,
+        description: manifest.description,
+        version: manifest.version,
+        capabilities: manifest.capabilities || [],
+        icon: 'external',
+        source: 'external',
+        manifest,
+      })
+    ),
 ];

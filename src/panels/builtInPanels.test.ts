@@ -3,8 +3,21 @@ import { BUILT_IN_PANELS, createPanelCatalog } from './builtInPanels';
 import type { ResolvedPanelManifest } from './types';
 
 describe('panel catalog', () => {
+  it('replaces the legacy external Time Series catalog entry with the native panel', () => {
+    const catalog = createPanelCatalog([{ id: 'la.tessel.roboboy.timeseries' } as ResolvedPanelManifest]);
+    expect(catalog.filter(panel => panel.id === 'timeSeries')).toHaveLength(1);
+    expect(catalog.some(panel => panel.id === 'la.tessel.roboboy.timeseries')).toBe(false);
+  });
+
   it('keeps every existing built-in workspace panel registered', () => {
-    expect(BUILT_IN_PANELS.map(panel => panel.id)).toEqual(['camera', '3d', 'behaviorTree', 'tfTree', 'pad']);
+    expect(BUILT_IN_PANELS.map(panel => panel.id)).toEqual([
+      'camera',
+      '3d',
+      'behaviorTree',
+      'tfTree',
+      'pad',
+      'timeSeries',
+    ]);
   });
 
   it('appends external manifests without changing built-in definitions', () => {

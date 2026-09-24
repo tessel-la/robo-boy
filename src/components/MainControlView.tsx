@@ -1,5 +1,6 @@
+import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FiSettings, FiX } from 'react-icons/fi';
+import { FiActivity, FiSettings, FiX } from 'react-icons/fi';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
 import {
@@ -48,7 +49,7 @@ import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import anime from 'animejs';
 import ExternalPanelHost from '../panels/ExternalPanelHost';
 import PanelManagerDialog from '../panels/PanelManagerDialog';
-import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
+import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId, LEGACY_TIME_SERIES_ID } from '../panels/builtInPanels';
 import {
   isJsonObject,
   isStoredPanelState,
@@ -358,6 +359,7 @@ const getPanelCatalogIcon = (panel: PanelCatalogEntry) => {
   if (panel.id === '3d') return icons.view3d;
   if (panel.id === 'behaviorTree') return icons.bt;
   if (panel.id === 'tfTree') return icons.tf;
+  if (panel.id === 'timeSeries') return <FiActivity />;
   return icons.grip;
 };
 
@@ -525,11 +527,14 @@ const normalizeWorkspacePanel = (panel: unknown, allowApprovedRosTopics = true):
 
   return {
     id: candidate.id,
-    type: candidate.type as WorkspacePanelType,
+    type: (candidate.type === LEGACY_TIME_SERIES_ID ? 'timeSeries' : candidate.type) as WorkspacePanelType,
     title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
-    panelState: storedPanelState,
+    panelState:
+      storedPanelState && candidate.type === LEGACY_TIME_SERIES_ID
+        ? { ...storedPanelState, panelId: 'timeSeries' }
+        : storedPanelState,
     approvedRosTopics: allowApprovedRosTopics ? normalizeApprovedRosTopics(candidate.approvedRosTopics) : undefined,
   };
 };
@@ -1948,7 +1953,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
-      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree'].includes(draft.type)) return;
+      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries'].includes(draft.type)) return;
 
       const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
       const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
@@ -3208,6 +3213,29 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
   const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
     const catalogEntry = panelCatalogById.get(panel.type);
+
+    if (panel.type === 'timeSeries') {
+      return (
+        <TimeSeriesPanel
+          key={panel.id}
+          ros={ros}
+          connected={isConnected}
+          connectionGeneration={connectionGeneration}
+          isActive={isPanelActive}
+          state={panel.panelState?.values}
+          onStateChange={values => {
+            const update = (previous: WorkspacePanel[]) =>
+              previous.map(candidate =>
+                candidate.id === panel.id && candidate.type === panel.type
+                  ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: panel.type, values } }
+                  : candidate
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
+          }}
+        />
+      );
+    }
 
     if (catalogEntry?.source === 'external') {
       return (
