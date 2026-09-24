@@ -82,9 +82,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
   const [recentConnections, setRecentConnections] = useState<RecentConnection[]>(() => loadRecentConnections());
 
   // Where Quick Connect goes: the host the page was served from in a browser, and in the packaged
-  // app the last one that worked. A packaged app on its first launch has neither, so there is
-  // nothing to connect quickly to and the form that asks for a host is the screen itself.
-  const currentHostname = getDefaultConnectionHost() || recentConnections[0]?.host || '';
+  // app the last one that worked, including its saved ports. A packaged app on its first launch
+  // has neither, so there is nothing to connect quickly to and the form that asks for a host is the screen itself.
+  const defaultHostname = getDefaultConnectionHost();
+  const quickConnectHistory = defaultHostname ? undefined : recentConnections[0];
+  const currentHostname = defaultHostname || quickConnectHistory?.host || '';
   const needsConnectionTarget = !currentHostname;
 
   const [showAdvanced, setShowAdvanced] = useState(needsConnectionTarget);
@@ -285,7 +287,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
       easing: 'easeInOutQuad',
       complete: () => {
         // Call onConnect after animation completes
-        const selectedPorts = normalizeSelectedPorts();
+        const selectedPorts = normalizeRuntimeServicePorts(quickConnectHistory ?? servicePorts, defaultServicePorts);
         const params: ConnectionParams = {
           ros2Option: 'ip',
           ros2Value: currentHostname,
