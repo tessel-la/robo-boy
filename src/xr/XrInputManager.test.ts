@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { XrInputManager } from './XrInputManager';
+import { XrInputManager, type XrInputManagerOptions } from './XrInputManager';
 
 const controllers = [new THREE.Group(), new THREE.Group()];
 let manager: XrInputManager;
 let panel: THREE.Mesh;
-let activate: ReturnType<typeof vi.fn>;
+let activate: ReturnType<typeof vi.fn<NonNullable<XrInputManagerOptions['onActivate']>>>;
 function event(index: number, type: string) {
   controllers[index].dispatchEvent({ type } as never);
 }

@@ -85,8 +85,6 @@ import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceS
 import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
 import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
 
-import { getVisualizationStateForKey } from '../utils/visualizationState';
-
 const XrWorkspace = React.lazy(() => import('../xr/XrWorkspace'));
 
 // The presence of `navigator.xr` is the cheapest possible gate and costs no import. Checking it
