@@ -226,6 +226,30 @@ npm run build
 npm run e2e
 ```
 
+## Dependency security
+
+Audit both committed lockfiles when updating dependencies:
+
+```bash
+npm audit
+cargo audit --file src-tauri/Cargo.lock
+```
+
+Install the Rust auditor with `cargo install cargo-audit --locked` if needed. Dependency review
+also runs on pull requests that change either the npm or Rust manifests and lockfiles.
+Keep Vitest and its coverage providers on matching releases. The XML parser override requires
+`@xmldom/xmldom` 0.9.12 or newer because ROSLIB's dependency otherwise resolves to an older line.
+If npm 9 or 10 fails dependency resolution with `edgesOut`, use npm 11 to update the lockfile;
+the resulting lockfile still supports `npm ci` with the project's existing tooling.
+
+As of 2026-09-24, both audits report zero vulnerabilities after the security updates. RustSec
+still reports six unmaintained crates (`proc-macro-error` and five `unic-*` crates) and the
+[`glib::VariantStrIter` soundness warning](https://rustsec.org/advisories/RUSTSEC-2024-0429.html).
+These arrive through Tauri's GTK3/WebKitGTK and URL-pattern dependencies. The `glib` fix requires
+0.20 or newer, while this GTK3 stack uses 0.18; adding a second `glib` version would not fix it.
+These warnings remain unresolved and are not suppressed. Revisit them when upgrading the upstream
+desktop stack; an audit with zero vulnerabilities does not mean these warnings are resolved.
+
 ## Releases
 
 Feature pull requests target `dev`. The only development promotion into `main` should be a pull request from `dev`; feature branches should not target `main` directly.
