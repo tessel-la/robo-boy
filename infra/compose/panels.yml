@@ -6,14 +6,13 @@ services:
       dockerfile: infra/docker/Dockerfile.panel-manager
     environment:
       - ROBOBOY_PANEL_WORKSPACE=/panel-workspace
+      - ROBOBOY_PANEL_MANAGER_CONFIG=${ROBOBOY_PANEL_MANAGER_CONFIG:-/state/panel-sources.json}
     env_file:
       - path: ${ROBOBOY_PANEL_SECRETS_FILE:-./config/panel-secrets.env}
         required: false
     volumes:
       - ${ROBOBOY_PANEL_SOURCES_FILE:-./config/panel-sources.local.json}:/config/panel-sources.json:ro
-      - ../robo-boy-hello-panel:/panel-workspace/robo-boy-hello-panel:ro
-      - ../robo-boy-timeseries-panel:/panel-workspace/robo-boy-timeseries-panel:ro
-      - ../robo-boy-webrtc-panel:/panel-workspace/robo-boy-webrtc-panel:ro
+      - ${ROBOBOY_PANEL_WORKSPACE_DIR:-..}:/panel-workspace:ro
       - roboboy-installed-panels:/panels
       - roboboy-panel-manager-state:/state
     healthcheck:
