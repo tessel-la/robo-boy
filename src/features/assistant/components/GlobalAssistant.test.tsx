@@ -72,22 +72,37 @@ describe('GlobalAssistant', () => {
   it('opens as a desktop complementary panel through its application-toolbar handle', () => {
     renderOpenAssistant();
 
-    expect(screen.getByTestId('assistant-panel')).toBeInTheDocument();
+    const panel = screen.getByTestId('assistant-panel');
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveClass('tree-panel-resize-frame');
+    expect(document.querySelectorAll('.assistant-resize-handle.tree-panel-menu-resize-handle')).toHaveLength(4);
     // Non-modal (WAI-ARIA dialog pattern, plan §2): no aria-modal attribute, and no full-page
     // click-outside-to-close handler that would swallow clicks meant for the rest of the app
     // (unlike the old BT-agent's `.bt-agent-overlay` onPointerDown-closes-on-outside-click).
     // Pointer-events:none on `.assistant-overlay` (see AssistantPanel.css) is the CSS half of
     // this; jsdom does not apply imported stylesheets, so it isn't asserted here.
-    expect(screen.getByTestId('assistant-panel')).not.toHaveAttribute('aria-modal');
+    expect(panel).not.toHaveAttribute('aria-modal');
     expect(document.querySelector('.assistant-overlay')).toBeTruthy();
   });
 
-  it('closes on Escape', () => {
+  it('keeps the launcher visible and toggles closed with an exit phase', async () => {
     renderOpenAssistant();
     expect(screen.getByTestId('assistant-panel')).toBeInTheDocument();
+    const launcher = screen.getByRole('button', { name: 'Close Robo-Boy assistant' });
+    expect(launcher).toBeVisible();
+    expect(launcher).toHaveAttribute('aria-expanded', 'true');
 
+    fireEvent.click(launcher);
+    expect(screen.getByTestId('assistant-panel')).toHaveClass('is-closing');
+    await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Open Robo-Boy assistant' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes on Escape after playing the exit phase', async () => {
+    renderOpenAssistant();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('assistant-panel')).toHaveClass('is-closing');
+    await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
   });
 
   it('sends a message, requires no ROS connection for a plain explanation, and renders the response', async () => {

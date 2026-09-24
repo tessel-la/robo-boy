@@ -37,6 +37,28 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
 
   const panel = page.getByTestId('assistant-panel');
   await expect(panel).toBeVisible();
+  await expect(panel).toHaveClass(/is-open/);
+  await expect(panel).toHaveClass(/tree-panel-resize-frame/);
+  await expect(page.locator('.assistant-resize-handle.tree-panel-menu-resize-handle')).toHaveCount(4);
+  const northwestCorner = panel.locator('.tree-panel-menu-resize-handle.nw');
+  const cornerStyle = await northwestCorner.evaluate(element => {
+    const handle = getComputedStyle(element);
+    const marker = getComputedStyle(element, '::after');
+    return {
+      width: handle.width,
+      opacity: handle.opacity,
+      markerWidth: marker.width,
+      markerBorderTop: marker.borderTopWidth,
+      markerBorderLeft: marker.borderLeftWidth,
+    };
+  });
+  expect(cornerStyle).toEqual({
+    width: '24px',
+    opacity: '0.48',
+    markerWidth: '14px',
+    markerBorderTop: '2px',
+    markerBorderLeft: '2px',
+  });
   const box = await panel.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.width).toBeGreaterThanOrEqual(420);
@@ -70,6 +92,33 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
 
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
+});
+
+test('keeps the launcher visible and reverses the panel animation when toggled', async ({ page }) => {
+  await connectWithMockRos(page);
+  await page.getByLabel('Open Robo-Boy assistant').click();
+
+  const panel = page.getByTestId('assistant-panel');
+  const closeLauncher = page.getByLabel('Close Robo-Boy assistant', { exact: true });
+  await expect(panel).toBeVisible();
+  await expect(closeLauncher).toBeVisible();
+  await expect(closeLauncher).toHaveAttribute('aria-expanded', 'true');
+  const entrance = await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { name: style.animationName, duration: style.animationDuration };
+  });
+  expect(entrance.name).toBe('assistant-panel-enter');
+  expect(entrance.duration).toBe('0.26s');
+  await closeLauncher.click();
+  await expect(panel).toHaveClass(/is-closing/);
+  const exit = await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { name: style.animationName, duration: style.animationDuration };
+  });
+  expect(exit.name).toBe('assistant-panel-exit');
+  expect(exit.duration).toBe('0.21s');
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByLabel('Open Robo-Boy assistant')).toBeVisible();
 });
 
 test('adds a Behavior Tree panel to the workspace when asked to edit the layout', async ({ page }) => {
@@ -168,6 +217,7 @@ test('320px portrait keeps header, transcript, context, and composer reachable a
   const composer = panel.locator('.assistant-composer');
   await expect(header).toBeVisible();
   await expect(composer).toBeVisible();
+  await expect(panel).toHaveClass(/is-open/);
   let box = await panel.boundingBox();
   expect(box!.x).toBe(0);
   expect(box!.width).toBe(320);
@@ -211,7 +261,9 @@ test('mobile back closes the full-height assistant and landscape uses a side pan
 
   await page.setViewportSize({ width: 844, height: 390 });
   await page.getByLabel('Open Robo-Boy assistant').click();
-  const box = await page.getByTestId('assistant-panel').boundingBox();
+  const landscapePanel = page.getByTestId('assistant-panel');
+  await expect(landscapePanel).toHaveClass(/is-open/);
+  const box = await landscapePanel.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(420);
   expect(box!.width).toBeLessThan(844);
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
@@ -224,7 +276,7 @@ test('honors reduced motion in the assistant surface', async ({ page }) => {
   const duration = await page.getByTestId('assistant-panel').evaluate(element =>
     getComputedStyle(element.querySelector('.spinning') ?? element).animationDuration
   );
-  expect(['0s', '0.001ms']).toContain(duration);
+  expect(['0s', '0.001ms', '1e-06s']).toContain(duration);
 });
 
 test('the launcher uses the former theme corner and theme selection stays in the session menu', async ({ page }) => {

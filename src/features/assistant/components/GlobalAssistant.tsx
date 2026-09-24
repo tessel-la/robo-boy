@@ -934,11 +934,17 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     return (
       <>
-      {!isOpen && (
-        <button type="button" className="assistant-launcher" onClick={() => setIsOpen(true)} aria-label="Open Robo-Boy assistant" title="Robo-Boy assistant">
-          <HiSparkles aria-hidden="true" />
-        </button>
-      )}
+      <button
+        type="button"
+        className={`assistant-launcher${isOpen ? ' is-open' : ''}`}
+        onClick={() => isOpen ? closeAssistant() : setIsOpen(true)}
+        aria-label={`${isOpen ? 'Close' : 'Open'} Robo-Boy assistant`}
+        aria-controls="robo-boy-assistant-panel"
+        aria-expanded={isOpen}
+        title={`${isOpen ? 'Close' : 'Open'} Robo-Boy assistant`}
+      >
+        <HiSparkles aria-hidden="true" />
+      </button>
       <AssistantPanel
         open={isOpen}
         onClose={closeAssistant}

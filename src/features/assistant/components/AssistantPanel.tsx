@@ -5,6 +5,7 @@ import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage,
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
+import '../../treePanel/components/TreePanelChrome.css';
 import './AssistantPanel.css';
 
 export interface ContextPickerOption {
@@ -190,6 +191,8 @@ const useMentionPicker = (
 import { useFloatingFrame, type ResizeEdge } from './useFloatingFrame';
 
 const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const ASSISTANT_EXIT_FALLBACK_MS = 260;
+type AssistantMotionPhase = 'closed' | 'entering' | 'open' | 'closing';
 
 const useCompactAssistant = () => {
   const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
@@ -222,6 +225,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [expandedImage, setExpandedImage] = useState<AssistantAttachment | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [mobileViewportStyle, setMobileViewportStyle] = useState<React.CSSProperties>();
+  const [isRendered, setIsRendered] = useState(open);
+  const [motionPhase, setMotionPhase] = useState<AssistantMotionPhase>(open ? 'entering' : 'closed');
   const panelRef = useRef<HTMLElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -230,6 +235,28 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const nearBottomRef = useRef(true);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Keep the surface mounted just long enough to play its exit. Reopening during that short exit
+  // cancels the pending unmount and runs the entrance again from the persistent launcher.
+  useEffect(() => {
+    if (open) {
+      setIsRendered(true);
+      setMotionPhase('entering');
+      return;
+    }
+    if (!isRendered) return;
+    setMotionPhase('closing');
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setIsRendered(false);
+      setMotionPhase('closed');
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setIsRendered(false);
+      setMotionPhase('closed');
+    }, ASSISTANT_EXIT_FALLBACK_MS);
+    return () => window.clearTimeout(timeout);
+  }, [isRendered, open]);
 
   const allContextOptions = useMemo(() => contextPickerSections.flatMap(section => section.options), [contextPickerSections]);
   /**
@@ -413,7 +440,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
   const floating = useFloatingFrame(!compact);
 
-  if (!open) return null;
+  if (!isRendered) return null;
   const lastProgress = isGenerating ? progressMessages[progressMessages.length - 1] : '';
   const promptLabel = clarificationSuggestions ? 'Your answer' : messages.length ? 'Continue the conversation' : 'Ask the assistant';
 
@@ -426,13 +453,22 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   return (
     <div className={`assistant-overlay${compact ? '' : ' is-floating'}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
       <section
+        id="robo-boy-assistant-panel"
         ref={panelRef}
-        className={`assistant-panel${isDropTarget ? ' is-drop-target' : ''}`}
+        className={`assistant-panel is-${motionPhase}${compact ? '' : ' tree-panel-resize-frame'}${floating.isDragging ? ' is-resizing' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+        onAnimationEnd={event => {
+          if (event.target !== panelRef.current) return;
+          if (open && motionPhase === 'entering') setMotionPhase('open');
+          else if (!open && motionPhase === 'closing') {
+            setIsRendered(false);
+            setMotionPhase('closed');
+          }
+        }}
         // Dropping a file anywhere on the panel attaches it, which is where people aim.
         onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(true); } }}
         onDragLeave={event => { if (!panelRef.current?.contains(event.relatedTarget as Node | null)) setIsDropTarget(false); }}
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
-        data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-labelledby="assistant-title">
+        data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-hidden={open ? undefined : true} aria-labelledby="assistant-title">
         <header
           className="assistant-header"
           // Desktop: the header is the drag handle; a double-click puts the panel back on its dock.
@@ -451,7 +487,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         {!compact && RESIZE_EDGES.map(edge => (
           <div
             key={edge}
-            className={`assistant-resize-handle ${edge}`}
+            className={`assistant-resize-handle ${edge}${edge.length === 2 ? ' tree-panel-menu-resize-handle' : ''}`}
             role="separator"
             aria-label={`Resize assistant from ${edge}`}
             onPointerDown={event => floating.startGesture(event, edge)}
