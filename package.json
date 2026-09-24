@@ -48,6 +48,13 @@
     "check:release-panels": "node scripts/check-release-panels.mjs"
   },
   "dependencies": {
+    "@foxglove/rosmsg": "^5.0.5",
+    "@foxglove/rosmsg-serialization": "^2.1.2",
+    "@foxglove/rosmsg2-serialization": "^3.1.2",
+    "@foxglove/wasm-lz4": "^1.0.2",
+    "@foxglove/wasm-zstd": "^1.0.1",
+    "@mcap/browser": "^1.1.0",
+    "@mcap/core": "^2.2.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-http": "^2.6.0",
     "@types/lodash-es": "^4.17.12",

@@ -356,6 +356,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
         </div>
 
         <div className="connection-options">
+          <button type="button" className="advanced-toggle" onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}>Open local recordings</button>
           {needsConnectionTarget ? (
             <p className="connection-prompt">
               Enter the address of the computer running the ROS stack. It is remembered for next time.

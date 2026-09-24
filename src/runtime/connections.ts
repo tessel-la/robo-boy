@@ -2,6 +2,7 @@ import { normalizeConnectionHost } from './connectionHost';
 import { getDefaultServicePorts, normalizeRuntimeServicePorts, resolveRuntimeEndpoints } from './runtimeConfig';
 
 export interface ConnectionParams {
+  offline?: boolean;
   ros2Option: 'domain' | 'ip';
   ros2Value: string | number;
   rosbridgePort?: string;
@@ -20,6 +21,10 @@ export interface ConnectionTarget {
 }
 
 export const describeConnectionTarget = (params: ConnectionParams): ConnectionTarget => {
+  if (params.offline) return {
+    key: 'local-replay', storageScope: 'local-replay', label: 'Local replay',
+    description: 'Local MCAP recordings', params,
+  };
   const ports = normalizeRuntimeServicePorts(params, getDefaultServicePorts());
   const isHost = params.ros2Option === 'ip';
   const value = isHost

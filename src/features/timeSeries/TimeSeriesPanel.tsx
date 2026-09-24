@@ -9,6 +9,7 @@ import TimeSeriesPlot from './TimeSeriesPlot';
 import TimeSeriesSettings from './TimeSeriesSettings';
 import '../treePanel/components/TreePanelChrome.css';
 import './TimeSeriesPanel.css';
+import { getReplaySession } from '../recordReplay/ReplaySession';
 
 interface Props {
   ros: Ros | null;
@@ -106,7 +107,7 @@ export default function TimeSeriesPanel({
         };
       },
       (source, message) => {
-        const next = engine.receive(source, message, Date.now());
+        const next = engine.receive(source, message, getReplaySession(ros)?.messageTime ?? Date.now());
         if (next) {
           setConfig({ ...next });
           saveRef.current({ config: next as unknown as RoboBoyJsonObject });

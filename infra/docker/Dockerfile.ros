@@ -28,6 +28,8 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-type-description-interfaces \
       ros-${ROS_DISTRO}-trajectory-msgs \
       ros-${ROS_DISTRO}-vision-msgs \
+      ros-${ROS_DISTRO}-rosbag2-py \
+      ros-${ROS_DISTRO}-rosbag2-storage-mcap \
     && rm -rf /var/lib/apt/lists/*
 
 # Patch rosapi's action lookup. Some distros ship ros2action.api with a helper
@@ -44,6 +46,7 @@ WORKDIR /ros_ws
 
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
+COPY infra/ros/recording_runner.py /ros_ws/recording_runner.py
 RUN chmod +x /ros_ws/entrypoint.sh
 
 ENTRYPOINT ["/ros_ws/entrypoint.sh"]
