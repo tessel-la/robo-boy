@@ -382,7 +382,11 @@ const handleRequest = async (
     const result = await new Promise<unknown>((resolve, reject) => {
       service!.callService(new ROSLIB.ServiceRequest(request), resolve, reject);
     });
-    return requireJsonPayload(result, 'ROS service response');
+    // ROSLIB wraps replies in ServiceResponse instances, just as topic messages
+    // arrive in Message instances. Normalize before enforcing the JSON boundary.
+    const normalized = normalizeRosMessage(result);
+    if (!normalized) throw new Error('ROS service response must be a finite JSON object.');
+    return requireJsonPayload(normalized.value, 'ROS service response');
   }
   if (message.method === 'network.fetch') {
     if (resources.requests.size >= MAX_NETWORK_REQUESTS) throw new Error('Panel network request limit reached.');
