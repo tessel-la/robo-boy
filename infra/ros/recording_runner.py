@@ -96,6 +96,7 @@ def main():
     from rclpy.node import Node
     from rclpy.parameter import Parameter
     from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+    from rosbag2_py._storage import QoS as BagQoS  # Not re-exported by rosbag2_py in Jazzy.
     from rosidl_runtime_py.utilities import get_message
     from std_msgs.msg import String
 
@@ -119,7 +120,8 @@ def main():
             self.create_timer(0.5, self.tick)
 
         def publish(self):
-            self.publisher.publish(String(data=json.dumps(self.status)))
+            # The writer thread updates counters; copying first keeps json.dumps off a changing dict.
+            self.publisher.publish(String(data=json.dumps(dict(self.status))))
 
         def command(self, message):
             request = {}
@@ -154,8 +156,10 @@ def main():
                     if not directory.is_relative_to(self.root) or not directory.is_dir():
                         raise ValueError('Choose a directory inside the recording root')
                     self.status['directory'] = str(directory.relative_to(self.root))
-                    self.status['folders'] = sorted(p.name for p in directory.iterdir()
-                                                   if p.is_dir() and p.resolve().is_relative_to(self.root))[:500]
+                    entries = [p for p in directory.iterdir() if p.is_dir() and p.resolve().is_relative_to(self.root)]
+                    # A bag is a directory too; list it separately so nobody records into one.
+                    self.status['folders'] = sorted(p.name for p in entries if not (p / 'metadata.yaml').exists())[:500]
+                    self.status['recordings'] = sorted(p.name for p in entries if (p / 'metadata.yaml').exists())[:500]
                 elif action != 'status':
                     raise ValueError('Unknown recorder command')
             except Exception as error:
@@ -206,6 +210,7 @@ def main():
                         self.status['bytes'] += len(data)
                 writer.close()
                 writer = None
+                self.hand_over(self.options['destination'])
                 self.status['state'] = 'idle'
             except Exception as error:
                 self.status.update(state='error', error=str(error))
@@ -216,8 +221,29 @@ def main():
                         writer.close()
                     except Exception:
                         pass
+                    self.hand_over(self.options['destination'])
                 if config_path:
                     os.unlink(config_path)
+
+        def hand_over(self, destination):
+            """Give a finished bag to whoever owns the recording root: the host user on a bind mount.
+
+            The container writes as root, and snap browsers only open files their user owns.
+            """
+            owner = self.root.stat()
+            if (owner.st_uid, owner.st_gid) == (os.getuid(), os.getgid()):
+                return
+            try:
+                path = Path(destination)
+                for directory, _, files in os.walk(path):
+                    for name in [directory, *(os.path.join(directory, file) for file in files)]:
+                        os.chown(name, owner.st_uid, owner.st_gid)
+                parent = path.parent  # Folders created for the destination path.
+                while parent != self.root and parent.is_relative_to(self.root):
+                    os.chown(parent, owner.st_uid, owner.st_gid)
+                    parent = parent.parent
+            except OSError as error:
+                self.status['error'] = f'Saved, but the files still belong to the container user: {error}'
 
         def cleanup_subscriptions(self):
             for sub in self.subs.values():
@@ -260,7 +286,7 @@ def main():
                                      durability=DurabilityPolicy.TRANSIENT_LOCAL if durable else DurabilityPolicy.VOLATILE)
                     offered = []
                     for publisher in publishers:
-                        profile = rosbag2_py.QoS(publisher.qos_profile.depth or 1)
+                        profile = BagQoS(publisher.qos_profile.depth or 1)
                         profile.reliable() if publisher.qos_profile.reliability == ReliabilityPolicy.RELIABLE else profile.best_effort()
                         profile.transient_local() if publisher.qos_profile.durability == DurabilityPolicy.TRANSIENT_LOCAL else profile.durability_volatile()
                         offered.append(profile)
@@ -279,11 +305,13 @@ def main():
             stamp = self.get_clock().now().nanoseconds
             if self.options.get('useSimTime') and stamp == 0:
                 return  # Wait for the first /clock before mixing clock domains.
-            now = time.monotonic()
             rate = self.options['frequency']
-            if rate and now - self.last_sample.get(topic, -math.inf) < 1 / rate:
-                return
-            self.last_sample[topic] = now
+            if rate:
+                # Keep a fixed schedule so arrival jitter does not push the kept rate below N Hz.
+                now, due, period = time.monotonic(), self.last_sample.get(topic, -math.inf), 1 / rate
+                if now < due:
+                    return
+                self.last_sample[topic] = due + period if now - due < period else now + period
             if not self.queue.put(('message', topic, data, stamp), len(data)):
                 self.status['dropped'] += 1
 

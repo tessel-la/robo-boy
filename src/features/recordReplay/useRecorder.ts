@@ -7,7 +7,7 @@ export function useRecorder(ros: Ros | null, connected: boolean) {
   const [online, setOnline] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [folders, setFolders] = useState<{ directory: string; folders: string[] }>();
+  const [folders, setFolders] = useState<{ directory: string; folders: string[]; recordings: string[] }>();
   const publisher = useRef<Topic>();
   const waiting = useRef<{ id: string; timer: ReturnType<typeof setTimeout> }>();
   useEffect(() => {
@@ -26,7 +26,7 @@ export function useRecorder(ros: Ros | null, connected: boolean) {
         if (request && request.id === value.requestId) {
           clearTimeout(request.timer); waiting.current = undefined; setPending(false);
           setError(value.requestError ?? '');
-          if (!value.requestError && Array.isArray(value.folders)) setFolders({ directory: value.directory, folders: value.folders });
+          if (!value.requestError && Array.isArray(value.folders)) setFolders({ directory: value.directory, folders: value.folders, recordings: Array.isArray(value.recordings) ? value.recordings : [] });
         }
       } catch { /* Ignore unrelated or malformed protocol messages. */ }
     });

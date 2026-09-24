@@ -9,7 +9,6 @@ import TimeSeriesPlot from './TimeSeriesPlot';
 import TimeSeriesSettings from './TimeSeriesSettings';
 import '../treePanel/components/TreePanelChrome.css';
 import './TimeSeriesPanel.css';
-import { getReplaySession } from '../recordReplay/ReplaySession';
 
 interface Props {
   ros: Ros | null;
@@ -18,6 +17,8 @@ interface Props {
   isActive: boolean;
   state?: RoboBoyJsonObject;
   onStateChange: (values: RoboBoyJsonObject) => void;
+  /** Sample timestamps in epoch milliseconds; replay passes the recording's clock. */
+  clock?: () => number;
 }
 export default function TimeSeriesPanel({
   ros,
@@ -26,6 +27,7 @@ export default function TimeSeriesPanel({
   isActive,
   state,
   onStateChange,
+  clock = Date.now,
 }: Props) {
   const [engine] = useState(() => new TimeSeriesEngine(sanitizeConfig(state?.config)));
   const [config, setConfig] = useState(engine.config);
@@ -38,6 +40,8 @@ export default function TimeSeriesPanel({
   const [visible, setVisible] = useState(document.visibilityState !== 'hidden');
   const saveRef = useRef(onStateChange);
   saveRef.current = onStateChange;
+  const clockRef = useRef(clock);
+  clockRef.current = clock;
   const controllerRef = useRef<SubscriptionController | null>(null);
   const closeSettings = () => {
     setSettings(false);
@@ -107,7 +111,7 @@ export default function TimeSeriesPanel({
         };
       },
       (source, message) => {
-        const next = engine.receive(source, message, getReplaySession(ros)?.messageTime ?? Date.now());
+        const next = engine.receive(source, message, clockRef.current());
         if (next) {
           setConfig({ ...next });
           saveRef.current({ config: next as unknown as RoboBoyJsonObject });

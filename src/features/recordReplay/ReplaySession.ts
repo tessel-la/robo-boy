@@ -12,24 +12,25 @@ export interface ReplaySnapshot {
   loop: boolean;
   error?: string;
 }
-const replaySources = new WeakMap<Ros, ReplaySession>();
-export const getReplaySession = (ros: Ros | null) => ros ? replaySources.get(ros) : undefined;
+const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static';
+type Transform = { child_frame_id: string };
 
 /** A ROSLIB-compatible read adapter with no socket and no publishing path. */
 class ReplayRos extends ROSLIB.Ros {
   private subscriptions = new Map<string, string>();
+  /** Last message per subscribed topic, so a panel that subscribes later starts from the cursor. */
   private latest = new Map<string, ReplayMessage>();
-  private cacheBytes = 0;
+  /** TF messages are deltas; their latest state is every child frame's last transform. */
+  private frames = new Map<string, Map<string, Transform>>();
   constructor(private session: ReplaySession) {
     super({ url: '' });
     this.isConnected = true;
-    replaySources.set(this, session);
   }
   emitEvent(name: string, value: unknown) { (this as unknown as Emitter).emit(name, value); }
   callOnConnection = (message: WireMessage) => {
     if (message.op === 'subscribe' && message.topic && message.id) {
       this.subscriptions.set(message.id, message.topic);
-      const last = this.latest.get(message.topic);
+      const last = this.last(message.topic);
       if (last) queueMicrotask(() => { if (this.subscriptions.has(message.id!)) this.deliver(last); });
       else this.session.refreshTopics();
     } else if (message.op === 'unsubscribe' && message.id) {
@@ -52,21 +53,30 @@ class ReplayRos extends ROSLIB.Ros {
     callback(this.session.snapshot.info?.topics.find(t => t.name === topic)?.type ?? '');
   }
   get topics() { return [...new Set(this.subscriptions.values())]; }
+  get unseenTopics() { return this.topics.filter(topic => !this.latest.has(topic)); }
+  private last(topic: string): ReplayMessage | undefined {
+    const frames = this.frames.get(topic);
+    if (!frames) return this.latest.get(topic);
+    return { topic, time: this.latest.get(topic)!.time, message: { transforms: [...frames.values()] } };
+  }
+  private remember(item: ReplayMessage) {
+    this.latest.set(item.topic, item);
+    if (!isTf(item.topic)) return;
+    let frames = this.frames.get(item.topic);
+    if (!frames) this.frames.set(item.topic, frames = new Map());
+    for (const transform of (item.message.transforms ?? []) as Transform[]) frames.set(transform.child_frame_id, transform);
+  }
   deliver(item: ReplayMessage) {
+    this.remember(item);
     this.session.messageTime = Number(item.time / 1000n) / 1000;
     this.emitEvent(item.topic, item.message);
   }
-  hydrate(items: ReplayMessage[]) {
-    // Only seek state is cached; streaming payloads are released immediately.
-    this.latest.clear(); this.cacheBytes = 0;
-    for (const item of items) {
-      this.cacheBytes += 1;
-      if (this.cacheBytes <= 512) this.latest.set(item.topic, item);
-      this.deliver(item);
-    }
+  /** State at a new cursor. `onlyNew` answers late subscribers without repeating others' data. */
+  hydrate(items: ReplayMessage[], onlyNew: boolean) {
+    if (!onlyNew) { this.latest.clear(); this.frames.clear(); }
+    for (const item of items) if (!onlyNew || !this.latest.has(item.topic)) this.deliver(item);
   }
-  reset() { this.latest.clear(); this.emitEvent('replay-reset', undefined); }
-  dispose() { this.latest.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
+  dispose() { this.latest.clear(); this.frames.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
 }
 
 export class ReplaySession {
@@ -83,6 +93,7 @@ export class ReplaySession {
   private pendingEnd = 0;
   private lastTick = 0;
   private seeking = false;
+  private refreshing = false;
   private disposed = false;
   constructor(private createWorker = () => new Worker(new URL('./replay.worker.ts', import.meta.url), { type: 'module' })) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -114,10 +125,10 @@ export class ReplaySession {
       this.sourceChanged(this.adapter);
       this.seek(0, false);
     } else {
-      if (this.seeking) this.adapter?.hydrate(response.messages);
+      if (this.seeking) this.adapter?.hydrate(response.messages, this.refreshing);
       else for (const item of response.messages) this.adapter?.deliver(item);
       if (!response.done) { this.worker?.postMessage({ op: 'ack', id: response.id }); return; }
-      this.seeking = false;
+      this.seeking = false; this.refreshing = false;
       this.update({ phase: 'ready', position: this.pendingEnd });
       if (this.snapshot.playing) {
         if (this.snapshot.position >= this.duration) {
@@ -129,15 +140,23 @@ export class ReplaySession {
   }
   refreshTopics() {
     clearTimeout(this.topicTimer);
-    this.topicTimer = setTimeout(() => { if (this.snapshot.info) this.seek(this.snapshot.position, false); }, 50);
+    this.topicTimer = setTimeout(() => {
+      if (!this.snapshot.info) return;
+      // A pending seek was discarded, so its full state is still owed to every panel.
+      this.seek(this.seeking ? this.pendingEnd : this.snapshot.position, false, !this.seeking || this.refreshing);
+    }, 50);
   }
-  seek(position: number, reset = true) {
+  /**
+   * Moving forward keeps panel state, like live data would. Moving backward remounts consumers
+   * through a new source, because TF buffers and plots cannot take messages older than they hold.
+   */
+  seek(position: number, reset = Math.min(this.duration, Math.max(0, position)) < this.snapshot.position, onlyNew = false) {
     if (!this.snapshot.info || !Number.isFinite(position)) return;
     clearTimeout(this.timer);
     this.pendingEnd = Math.min(this.duration, Math.max(0, position));
-    this.seeking = true;
+    this.seeking = true; this.refreshing = onlyNew && !reset;
     this.update({ phase: 'seeking', position: this.pendingEnd });
-    const topics = this.adapter?.topics ?? [];
+    const topics = (this.refreshing ? this.adapter?.unseenTopics : this.adapter?.topics) ?? [];
     if (reset) {
       this.adapter?.dispose();
       this.adapter = new ReplayRos(this);
@@ -171,7 +190,7 @@ export class ReplaySession {
   close() {
     clearTimeout(this.timer); clearTimeout(this.topicTimer);
     this.worker?.terminate(); this.worker = undefined; ++this.requestId;
-    this.adapter?.dispose(); this.adapter = undefined; this.seeking = false;
+    this.adapter?.dispose(); this.adapter = undefined; this.seeking = false; this.refreshing = false;
     this.update({ phase: 'empty', info: undefined, position: 0, playing: false, error: undefined });
     if (this.source.ros) this.sourceChanged(null);
   }

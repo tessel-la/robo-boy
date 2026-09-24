@@ -17,6 +17,7 @@ describe('panel catalog', () => {
       'tfTree',
       'pad',
       'timeSeries',
+      'recordReplay',
     ]);
   });
 

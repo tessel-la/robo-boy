@@ -3,9 +3,32 @@ import { BlobReadable } from '@mcap/browser';
 import { parse } from '@foxglove/rosmsg';
 import { MessageReader as Ros2Reader } from '@foxglove/rosmsg2-serialization';
 import { MessageReader as Ros1Reader } from '@foxglove/rosmsg-serialization';
-import * as zstd from '@foxglove/wasm-zstd';
-import lz4 from '@foxglove/wasm-lz4';
+import { decompress as zstd } from 'fzstd';
+import { decompressLz4Frame } from './lz4';
 import type { BagInfo, ReplayMessage } from './types';
+
+export interface TimedMessage extends ReplayMessage {
+  /** Encoded size, used to bound worker batches. */
+  size: number;
+}
+const NS = 1_000_000_000n;
+/** tf2 keeps 10 s by default; older dynamic transforms are stale for every consumer. */
+const TF_LOOKBACK = 30n * NS;
+
+/** rosbridge delivers int64 as JSON numbers; panels do arithmetic that bigint would break. */
+const toRosbridgeValues = (value: unknown): unknown => {
+  if (typeof value === 'bigint') return Number(value);
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof BigInt64Array || value instanceof BigUint64Array) return Array.from(value, Number);
+  if (ArrayBuffer.isView(value)) return value;
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) value[index] = toRosbridgeValues(value[index]);
+  } else {
+    const record = value as Record<string, unknown>;
+    for (const key in record) record[key] = toRosbridgeValues(record[key]);
+  }
+  return value;
+};
 
 const MAX_CHUNK = 256 * 1024 * 1024;
 const checkSize = (size: bigint) => {
@@ -20,14 +43,14 @@ export class BagReader {
   info!: BagInfo;
 
   async open(file: File): Promise<BagInfo> {
-    await Promise.all([zstd.isLoaded, lz4.isLoaded]);
     const blob = new BlobReadable(file);
     this.reader = await McapIndexedReader.Initialize({
       readable: { size: () => blob.size(), read: (offset, size) => { checkSize(size); return blob.read(offset, size); } },
       messageIndexCacheSizeBytes: 8 * 1024 * 1024,
       decompressHandlers: {
-        zstd: (bytes, size) => zstd.decompress(bytes, checkSize(size)),
-        lz4: (bytes, size) => lz4(bytes, checkSize(size)),
+        // Pure JS: no wasm loader or CSP exception is needed on web, desktop or mobile.
+        zstd: (bytes, size) => zstd(bytes, new Uint8Array(checkSize(size))),
+        lz4: (bytes, size) => decompressLz4Frame(bytes, checkSize(size)),
       },
     });
     if (!this.reader.chunkIndexes.length) throw new Error('This MCAP has no chunk index. Open an indexed MCAP (the default ros2 bag format), or re-index it with the MCAP CLI.');
@@ -62,34 +85,44 @@ export class BagReader {
     return this.info;
   }
 
-  async *read(start: bigint, end: bigint, topics: string[], reverse = false): AsyncGenerator<ReplayMessage> {
+  async *read(start: bigint, end: bigint | undefined, topics: string[], reverse = false): AsyncGenerator<TimedMessage> {
     if (!topics.length) return;
     for await (const record of this.reader.readMessages({ startTime: start, endTime: end, topics, reverse })) {
       const decode = this.decoders.get(record.channelId);
       if (!decode) continue;
-      yield { topic: this.reader.channelsById.get(record.channelId)!.topic, time: record.logTime, message: decode(record.data) };
+      yield {
+        topic: this.reader.channelsById.get(record.channelId)!.topic, time: record.logTime,
+        message: toRosbridgeValues(decode(record.data)) as Record<string, unknown>, size: record.data.byteLength,
+      };
     }
   }
 
-  /** Causal state at the cursor; TF messages are deltas, so merge by child frame. */
+  /**
+   * Causal state at the cursor: the latest message per topic. Each topic is read backwards on its
+   * own, so a sparse topic never forces decoding every dense message in between. TF messages are
+   * deltas, so they merge by child frame; dynamic TF only looks back as far as tf2 would keep it.
+   */
   async seek(time: bigint, topics: string[], cancelled: () => boolean): Promise<ReplayMessage[]> {
-    const result = new Map<string, ReplayMessage>();
-    const normal = topics.filter(t => t !== '/tf' && t !== '/tf_static');
-    for await (const item of this.read(this.info.start, time, normal, true)) {
+    const result: ReplayMessage[] = [];
+    for (const topic of topics) {
       if (cancelled()) return [];
-      if (!result.has(item.topic)) result.set(item.topic, item);
-      if (result.size === normal.length) break;
-    }
-    for (const topic of topics.filter(t => t === '/tf' || t === '/tf_static')) {
+      if (topic !== '/tf' && topic !== '/tf_static') {
+        for await (const item of this.read(this.info.start, time, [topic], true)) {
+          result.push({ topic: item.topic, time: item.time, message: item.message });
+          break;
+        }
+        continue;
+      }
+      const from = topic === '/tf' && time - TF_LOOKBACK > this.info.start ? time - TF_LOOKBACK : this.info.start;
       const frames = new Map<string, unknown>();
-      for await (const item of this.read(this.info.start, time, [topic], true)) {
+      for await (const item of this.read(from, time, [topic], true)) {
         if (cancelled()) return [];
         for (const transform of (item.message.transforms ?? []) as { child_frame_id: string }[]) {
           if (!frames.has(transform.child_frame_id)) frames.set(transform.child_frame_id, transform);
         }
       }
-      if (frames.size) result.set(topic, { topic, time, message: { transforms: [...frames.values()] } });
+      if (frames.size) result.push({ topic, time, message: { transforms: [...frames.values()] } });
     }
-    return [...result.values()].sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+    return result.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
   }
 }

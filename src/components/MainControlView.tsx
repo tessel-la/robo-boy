@@ -1045,6 +1045,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const replaySource = useSyncExternalStore(replaySession.subscribeSource, replaySession.getSource);
   const visualizationRos = replaySource.ros ?? ros;
   const visualizationConnected = Boolean(replaySource.ros) || isConnected;
+  const replayClock = useCallback(() => replaySession.messageTime, [replaySession]);
   useEffect(() => () => replaySession.dispose(), [replaySession]);
   useEffect(() => {
     if (!isActive) replaySession.pause();
@@ -3253,6 +3254,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           ros={visualizationRos}
           connected={visualizationConnected}
           connectionGeneration={connectionGeneration + replaySource.generation}
+          clock={replaySource.ros ? replayClock : undefined}
           isActive={isPanelActive}
           state={panel.panelState?.values}
           onStateChange={values => {
@@ -3322,7 +3324,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if ((!isConnected || !ros) && !(['3d', 'tfTree'].includes(panel.type) && replaySource.ros)) {
-      return <div className="placeholder">Connecting to ROS...</div>;
+      return <div className="placeholder">
+        {!connectionParams.offline ? 'Connecting to ROS...'
+          : ['3d', 'tfTree'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
+            : 'This panel needs a live robot connection.'}
+      </div>;
     }
 
     if (panel.type === 'camera') {

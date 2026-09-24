@@ -78,7 +78,20 @@ export default defineConfig(({ mode }) => ({
     // semver is first reached through the lazy external-panel registry. Make
     // it part of the initial dev optimization pass so login cannot trigger a
     // dependency re-bundle while React is mounting MainControlView.
-    include: ['react', 'react-dom', 'react-dom/client', 'semver'],
+    // The replay worker's dependencies are only reached when a recording is opened; the
+    // resulting re-bundle would reload the page and abort that first load.
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'semver',
+      '@mcap/core',
+      '@mcap/browser',
+      '@foxglove/rosmsg',
+      '@foxglove/rosmsg-serialization',
+      '@foxglove/rosmsg2-serialization',
+      'fzstd',
+    ],
   },
   server: {
     // `tauri ios dev` runs the app on a device that reaches this server over the network, and

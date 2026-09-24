@@ -4,16 +4,6 @@ export const LEGACY_TIME_SERIES_ID = 'la.tessel.roboboy.timeseries';
 
 export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
   {
-    id: 'recordReplay',
-    name: 'Record & Replay',
-    menuLabel: 'Record & Replay',
-    description: 'Record ROS topics and replay local MCAP files across visualization panels.',
-    version: 'built-in',
-    capabilities: ['ros', 'storage'],
-    icon: 'recordReplay',
-    source: 'built-in',
-  },
-  {
     id: 'camera',
     name: 'Camera',
     menuLabel: 'Camera',
@@ -71,6 +61,16 @@ export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
     version: 'built-in',
     capabilities: ['ros', 'storage'],
     icon: 'timeSeries',
+    source: 'built-in',
+  },
+  {
+    id: 'recordReplay',
+    name: 'Record & Replay',
+    menuLabel: 'Record & Replay',
+    description: 'Record ROS topics and replay local MCAP files across visualization panels.',
+    version: 'built-in',
+    capabilities: ['ros', 'storage'],
+    icon: 'recordReplay',
     source: 'built-in',
   },
 ];
