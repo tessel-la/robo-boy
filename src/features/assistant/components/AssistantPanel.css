@@ -36,6 +36,58 @@
   pointer-events: auto;
 }
 
+.assistant-panel.is-entering,
+.assistant-panel.is-closing {
+  transform-origin: 100% 100%;
+  will-change: transform, opacity, border-radius;
+}
+
+.assistant-panel.is-entering {
+  animation: assistant-panel-enter 260ms cubic-bezier(0.2, 0.82, 0.28, 1.08) both;
+}
+
+.assistant-panel.is-closing {
+  pointer-events: none;
+  animation: assistant-panel-exit 210ms cubic-bezier(0.46, 0.04, 0.78, 0.42) both;
+}
+
+@keyframes assistant-panel-enter {
+  0% {
+    opacity: 0;
+    border-radius: 32px;
+    transform: translate3d(24px, 28px, 0) scale(0.82, 0.76);
+  }
+  68% {
+    opacity: 1;
+    transform: translate3d(-4px, -3px, 0) scale(1.018);
+  }
+  84% {
+    transform: translate3d(1px, 1px, 0) scale(0.994);
+  }
+  100% {
+    opacity: 1;
+    border-radius: 12px;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes assistant-panel-exit {
+  0% {
+    opacity: 1;
+    border-radius: 12px;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  22% {
+    opacity: 1;
+    transform: translate3d(-2px, -1px, 0) scale(1.008);
+  }
+  100% {
+    opacity: 0;
+    border-radius: 32px;
+    transform: translate3d(24px, 28px, 0) scale(0.82, 0.76);
+  }
+}
+
 .is-floating .assistant-header {
   cursor: grab;
 }
@@ -74,8 +126,8 @@
 .assistant-resize-handle.nw,
 .assistant-resize-handle.se,
 .assistant-resize-handle.sw {
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
 }
 
 .assistant-resize-handle.ne { top: 0; right: 0; cursor: nesw-resize; }
@@ -915,7 +967,7 @@
 
 .assistant-launcher {
   position: fixed;
-  z-index: 1250;
+  z-index: 1420;
   bottom: var(--floating-action-bottom);
   right: max(var(--floating-action-inset), env(safe-area-inset-right, 0px));
   display: grid;
@@ -929,6 +981,15 @@
   color: var(--button-text-color, #fff);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
   cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.assistant-launcher.is-open {
+  transform: rotate(8deg) scale(0.94);
+}
+
+.assistant-launcher:active {
+  transform: scale(0.88);
 }
 
 .assistant-launcher:hover,
@@ -1430,12 +1491,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .assistant-panel,
   .assistant-panel *,
   .assistant-panel *::before,
   .assistant-panel *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .assistant-launcher {
     transition-duration: 0.001ms !important;
   }
 }
