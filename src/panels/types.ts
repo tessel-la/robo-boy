@@ -38,7 +38,7 @@ export type {
   RoboBoyRosTopicSelectionOptions,
 } from '../../panel-sdk';
 
-export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad';
+export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad' | 'timeSeries';
 
 export interface BuiltInPanelCatalogEntry {
   id: BuiltInPanelId;

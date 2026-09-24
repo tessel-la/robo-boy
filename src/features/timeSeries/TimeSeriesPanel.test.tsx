@@ -1,0 +1,86 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
+import type { Ros } from 'roslib';
+import type { RoboBoyJsonObject } from '../../panels/types';
+import TimeSeriesPanel from './TimeSeriesPanel';
+import { sanitizeConfig } from './config';
+import type { TimeSeriesEngine } from './engine';
+const mocks = vi.hoisted(() => ({
+  topics: [] as Array<{ name: string; listener?: (m: unknown) => void; unsubscribe: ReturnType<typeof vi.fn> }>,
+  engine: null as TimeSeriesEngine | null,
+}));
+vi.mock('roslib', () => ({
+  default: {
+    Topic: class {
+      name: string;
+      callForSubscribeAndAdvertise = vi.fn();
+      listener?: (m: unknown) => void;
+      unsubscribe = vi.fn();
+      constructor(options: { name: string }) {
+        this.name = options.name;
+        mocks.topics.push(this);
+      }
+      subscribe(listener: (m: unknown) => void) {
+        this.listener = listener;
+      }
+    },
+  },
+}));
+vi.mock('./TimeSeriesPlot', () => ({
+  default: ({ engine, onToggle }: { engine: TimeSeriesEngine; onToggle: (id: string) => void }) => {
+    mocks.engine = engine;
+    return <button onClick={() => onToggle('a')}>Toggle signal</button>;
+  },
+}));
+const cfg = () =>
+  sanitizeConfig({
+    schemaVersion: 3,
+    series: [
+      { id: 'a', topic: '/a', messageType: 'T', fieldPath: 'x' },
+      { id: 'b', topic: '/a', messageType: 'T', fieldPath: 'y' },
+    ],
+  });
+const props = () => ({
+  ros: { getTopics: vi.fn() } as unknown as Ros,
+  connected: true,
+  connectionGeneration: 1,
+  isActive: true,
+  state: { config: cfg() } as unknown as RoboBoyJsonObject,
+  onStateChange: vi.fn(),
+});
+beforeEach(() => {
+  mocks.topics.length = 0;
+});
+it('deduplicates subscriptions, ignores late callbacks, and cleans up inactive/unmounted/reconnected tiles', async () => {
+  const p = props(),
+    { rerender, unmount } = render(<TimeSeriesPanel {...p} />);
+  await act(async () => {});
+  expect(mocks.topics).toHaveLength(1);
+  act(() => mocks.topics[0].listener?.({ x: 1, y: 2 }));
+  expect(mocks.engine!.runtime.get('a')!.buffer.size).toBe(1);
+  rerender(<TimeSeriesPanel {...p} connectionGeneration={2} />);
+  await act(async () => {});
+  expect(mocks.topics).toHaveLength(2);
+  expect(mocks.topics[0].unsubscribe).toHaveBeenCalledOnce();
+  act(() => mocks.topics[0].listener?.({ x: 5 }));
+  expect(mocks.engine!.runtime.get('a')!.buffer.size).toBe(1);
+  rerender(<TimeSeriesPanel {...p} isActive={false} connectionGeneration={2} />);
+  await act(async () => {});
+  expect(mocks.topics[1].unsubscribe).toHaveBeenCalledOnce();
+  rerender(<TimeSeriesPanel {...p} connectionGeneration={2} />);
+  await act(async () => {});
+  unmount();
+  await act(async () => {});
+  expect(mocks.topics[2].unsubscribe).toHaveBeenCalledOnce();
+});
+it('saves visibility without losing config and restores a changed layout on the same mounted tile', async () => {
+  const p = props(),
+    { rerender } = render(<TimeSeriesPanel {...p} />);
+  fireEvent.click(screen.getByText('Toggle signal'));
+  expect(p.onStateChange.mock.lastCall?.[0].config.series[0]).toMatchObject({ enabled: false, fieldPath: 'x' });
+  const next = cfg();
+  next.series[0].math.scale = 3;
+  rerender(<TimeSeriesPanel {...p} state={{ config: next } as unknown as RoboBoyJsonObject} />);
+  await waitFor(() => expect(mocks.engine!.config.series[0].math.scale).toBe(3));
+  expect(mocks.topics).toHaveLength(1);
+});

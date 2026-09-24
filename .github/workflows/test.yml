@@ -297,14 +297,6 @@ jobs:
         ref: 45323eb6fac60899dbc6e7d609fe7c23e71d8ef5
         path: .panel-workspace/robo-boy-hello-panel
 
-    - name: Checkout Time Series Panel test artifact
-      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      uses: actions/checkout@v4
-      with:
-        repository: tessel-la/roboboy-timeseries-panel
-        ref: f536db29d339a8d3c856525face31d8588d9308c
-        path: .panel-workspace/robo-boy-timeseries-panel
-
     - name: Checkout WebRTC Panel test artifact
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/checkout@v4
