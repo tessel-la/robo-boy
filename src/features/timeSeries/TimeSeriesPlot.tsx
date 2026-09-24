@@ -13,6 +13,7 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 import type { TimeSeriesEngine } from './engine';
 import { displayName, type TimeseriesConfig } from './config';
+import TimeSeriesLegend from './TimeSeriesLegend';
 import { createCsv, type TimeseriesSample } from './data';
 import {
   drawPlot,
@@ -414,20 +415,7 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           </div>
         )}
       </div>
-      <div className="timeseries-legend" aria-label="Signal visibility and values">
-        {config.series.map(s => (
-          <button
-            key={s.id}
-            aria-pressed={s.enabled}
-            onClick={() => onToggle(s.id)}
-            title={`${displayName(s)} · ${legend.values[s.id] ?? '—'}`}
-          >
-            <i style={{ background: s.color }} />
-            <span>{displayName(s)}</span>
-            <strong>{legend.values[s.id] ?? '—'}</strong>
-          </button>
-        ))}
-      </div>
+      <TimeSeriesLegend series={config.series} values={legend.values} onToggle={onToggle} />
       <div className="timeseries-footer">
         <output aria-label="Visible plot range" ref={rangeReadout} />
         <output className="timeseries-cursor-readout" ref={readout}>

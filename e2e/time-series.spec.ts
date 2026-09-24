@@ -15,10 +15,10 @@ async function publish(page: Page, topic: string, message: unknown) {
     { topic, message }
   );
 }
-async function seed(page: Page, mobile = false) {
+async function seed(page: Page, mobile = false, signalCount = 2) {
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1200, height: 820 });
   await page.addInitScript(
-    ({ topic }) => {
+    ({ topic, signalCount }) => {
       if (localStorage.getItem('time-series-seeded')) return;
       localStorage.setItem('time-series-seeded', 'true');
       const type = 'la.tessel.roboboy.timeseries';
@@ -36,6 +36,13 @@ async function seed(page: Page, mobile = false) {
                 config: {
                   schemaVersion: 3,
                   series: [
+                    ...Array.from({ length: signalCount - 2 }, (_, index) => ({
+                      id: `extra-${index}`,
+                      topic,
+                      messageType: 'Test',
+                      fieldPath: 'value',
+                      label: `Joint ${index + 1}`,
+                    })),
                     {
                       id: 'a',
                       topic,
@@ -67,7 +74,7 @@ async function seed(page: Page, mobile = false) {
       );
       localStorage.setItem('robo-boy-desktop-workspace-tile-order-v1', JSON.stringify(['time-series-test']));
     },
-    { topic: longTopic }
+    { topic: longTopic, signalCount }
   );
   await installRosMock(page, {
     topics: [
@@ -325,7 +332,8 @@ test('adds the native panel and discovers multiple numeric fields without extern
   });
   await expect(panel.getByText('4 / 16 signals', { exact: false })).toBeVisible();
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(panel.locator('.timeseries-legend button')).toHaveCount(4);
+  await panel.getByRole('button', { name: 'Switch signals', exact: true }).click();
+  await expect(panel.locator('.timeseries-signal-list button')).toHaveCount(4);
   await expect(panel.locator('.timeseries-legend')).toContainText('position[0]');
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('button', { name: 'Remove /joint_states · velocity[1]', exact: true }).click();
@@ -339,6 +347,7 @@ test('adds the native panel and discovers multiple numeric fields without extern
   await panel.getByRole('button', { name: 'Add field', exact: true }).click();
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await publish(page, '/joint_states', { position: [1, 2, 3, 4, 5, 6, 7, 8], velocity: [3, 4] });
+  await panel.getByRole('button', { name: 'Switch signals', exact: true }).click();
   await expect(panel.locator('.timeseries-legend').getByRole('button', { name: /position\[7\]/ })).toContainText('8');
 });
 
@@ -432,4 +441,68 @@ test('remains interactive with 16 topics at 200 Hz and caps both canvas work and
   await page.getByLabel('Remove Streaming telemetry', { exact: true }).click();
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream0')).toBe(0);
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream15')).toBe(0);
+});
+
+test('large legends stay compact and switch signals without closing or resizing the plot', async ({ page }) => {
+  await seed(page, true, 16);
+  const panel = page.locator('.timeseries-panel');
+  const trigger = panel.getByRole('button', { name: 'Switch signals', exact: true });
+  const picker = panel.getByRole('group', { name: 'Switch signals', exact: true });
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 1200, height: 820 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(trigger).toHaveText('15 / 16 visible');
+    const height = await panel.locator('canvas').evaluate(el => el.getBoundingClientRect().height);
+    await trigger.click();
+    await expect(picker).toBeFocused();
+    await expect(picker).toBeVisible();
+    expect(await panel.locator('canvas').evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(
+      height
+    );
+    expect(
+      await panel.locator('.timeseries-legend').evaluate(el => el.getBoundingClientRect().height)
+    ).toBeLessThanOrEqual(52);
+    expect(
+      await picker.evaluate(el => {
+        const r = el.getBoundingClientRect(),
+          p = el.closest('.timeseries-panel')!.getBoundingClientRect();
+        return (
+          r.top >= p.top &&
+          r.bottom <= p.bottom &&
+          r.left >= p.left &&
+          r.right <= p.right &&
+          el.scrollWidth <= el.clientWidth
+        );
+      })
+    ).toBe(true);
+    const search = picker.getByRole('searchbox');
+    await search.fill('reference');
+    const reference = picker.getByRole('button', { name: 'Reference', exact: true });
+    await reference.click();
+    await expect(reference).toHaveAttribute('aria-pressed', 'true');
+    await expect(trigger).toHaveText('16 / 16 visible');
+    await expect.poll(() => getActiveRosSubscriptionCount(page, '/reference')).toBe(1);
+    await publish(page, '/reference', { value: 42 });
+    await expect(reference).toContainText('42');
+    await reference.click();
+    await expect.poll(() => getActiveRosSubscriptionCount(page, '/reference')).toBe(0);
+    await search.fill('no such signal');
+    await expect(picker.getByRole('status')).toContainText('No matching signals');
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await trigger.click();
+  await expect(picker.getByRole('searchbox')).toHaveValue('');
+  expect(await picker.evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  await page.screenshot({ path: '/tmp/roboboy-signal-switcher.png' });
+  await panel.getByRole('button', { name: 'Close signal switcher' }).click();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await panel.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(picker).toHaveCount(0);
 });
