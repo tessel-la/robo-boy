@@ -54,6 +54,15 @@ export default defineConfig({
                     : undefined,
             },
         },
+        {
+            name: 'firefox',
+            use: {
+                ...devices['Desktop Firefox'],
+                // Firefox needs a display for WebGL on the Linux CI runner. The workflow
+                // supplies Xvfb; keep Chromium's existing headless configuration.
+                headless: process.env.CI ? false : undefined,
+            },
+        },
     ],
 
     /* Run your local dev server before starting the tests */

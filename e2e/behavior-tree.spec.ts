@@ -525,6 +525,9 @@ test.describe('Behavior Tree panel', () => {
 
     const firstAction = page.locator('.react-flow__node').filter({ hasText: 'First Action' });
     const secondAction = page.locator('.react-flow__node').filter({ hasText: 'Second Action' });
+    await page.getByTestId('bt-select-mode').click();
+    // Loading a tree animates fitView. Wait for stable nodes before taking drag coordinates.
+    await firstAction.click({ trial: true });
     const firstBox = await firstAction.boundingBox();
     const secondBox = await secondAction.boundingBox();
     const canvasBox = await page.getByTestId('bt-canvas').boundingBox();
@@ -539,7 +542,6 @@ test.describe('Behavior Tree panel', () => {
     const endX = Math.max((firstBox?.x ?? 0) + (firstBox?.width ?? 0), (secondBox?.x ?? 0) + (secondBox?.width ?? 0)) + 36;
     const endY = Math.max((firstBox?.y ?? 0) + (firstBox?.height ?? 0), (secondBox?.y ?? 0) + (secondBox?.height ?? 0)) + 36;
 
-    await page.getByTestId('bt-select-mode').click();
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(firstCenterX, firstCenterY, { steps: 5 });

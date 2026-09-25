@@ -210,7 +210,7 @@ test('rectangle zoom, wheel, pan, keyboard reset and clear work on the native ca
   await expect(panel.locator('.timeseries-footer')).toContainText('0 samples');
 });
 
-test('mobile settings contain long names and touch selection/pinch preserve a usable plot', async ({ page }) => {
+test('mobile settings contain long names and preserve a usable plot', async ({ page }) => {
   await seed(page, true);
   const panel = page.locator('.timeseries-panel');
   for (const viewport of [
@@ -281,6 +281,12 @@ test('mobile settings contain long names and touch selection/pinch preserve a us
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '/tmp/roboboy-timeseries-mobile-settings.png' });
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
+});
+
+test('native touch selection and pinch change the plot range', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native multi-touch injection requires Chromium CDP.');
+  await seed(page, true);
+  const panel = page.locator('.timeseries-panel');
   await publish(page, longTopic, { value: 2 });
   const canvas = panel.locator('canvas'),
     r = (await canvas.boundingBox())!;

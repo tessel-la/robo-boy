@@ -318,7 +318,7 @@ jobs:
 
     - name: Install Playwright browsers
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: npx playwright install --with-deps chromium
+      run: npx playwright install --with-deps chromium firefox
 
     - name: Install external panel test artifacts
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -329,12 +329,13 @@ jobs:
       id: e2e_tests
       env:
         ROBOBOY_PUBLIC_DIR: ${{ github.workspace }}/.panel-stage/public
+        LIBGL_ALWAYS_SOFTWARE: '1'
       run: |
         set +e
-        npm run e2e 2>&1 | tee playwright-output.log
+        xvfb-run --auto-servernum npm run e2e 2>&1 | tee playwright-output.log
         status=${PIPESTATUS[0]}
         echo "status=${status}" >> "$GITHUB_OUTPUT"
-        .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "npm run e2e" 260
+        .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "xvfb-run --auto-servernum npm run e2e" 260
         exit 0
 
     - name: Upload Playwright report
