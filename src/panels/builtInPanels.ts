@@ -63,6 +63,16 @@ export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
     icon: 'timeSeries',
     source: 'built-in',
   },
+  {
+    id: 'recordReplay',
+    name: 'Record & Replay',
+    menuLabel: 'Record & Replay',
+    description: 'Record ROS topics and replay local MCAP files across visualization panels.',
+    version: 'built-in',
+    capabilities: ['ros', 'storage'],
+    icon: 'recordReplay',
+    source: 'built-in',
+  },
 ];
 
 const builtInPanelIds = new Set<string>(BUILT_IN_PANELS.map(panel => panel.id));

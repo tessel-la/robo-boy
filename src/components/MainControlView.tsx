@@ -1,6 +1,8 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FiActivity, FiSettings, FiX } from 'react-icons/fi';
+import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
+import { ReplaySession } from '../features/recordReplay/ReplaySession';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
+import { FiActivity, FiDisc, FiSettings, FiX } from 'react-icons/fi';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
 import {
@@ -360,6 +362,7 @@ const getPanelCatalogIcon = (panel: PanelCatalogEntry) => {
   if (panel.id === 'behaviorTree') return icons.bt;
   if (panel.id === 'tfTree') return icons.tf;
   if (panel.id === 'timeSeries') return <FiActivity />;
+  if (panel.id === 'recordReplay') return <FiDisc />;
   return icons.grip;
 };
 
@@ -967,18 +970,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   );
   const panelCatalogById = useMemo(() => new Map(panelCatalog.map(panel => [panel.id, panel])), [panelCatalog]);
   const [viewMode, setViewMode] = useState<ViewMode>('camera');
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(() => loadWorkspaceOpenPreference(storageScope));
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(() => connectionParams.offline || loadWorkspaceOpenPreference(storageScope));
   const [isMobileSplitView, setIsMobileSplitView] = useState(() => loadMobileSplitViewPreference(storageScope));
   const [activeMobileWindowIndex, setActiveMobileWindowIndex] = useState(0);
   const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
-  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(() =>
-    loadUnifiedWorkspacePanels(storageScope)
-  );
+  const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(() => {
+    const saved = loadUnifiedWorkspacePanels(storageScope);
+    return connectionParams.offline && !saved.length
+      ? [createWorkspacePanel({ type: 'recordReplay' }, {}), createWorkspacePanel({ type: 'timeSeries' }, {})]
+      : saved;
+  });
   const workspacePanelsRef = useRef(workspacePanels);
   workspacePanelsRef.current = workspacePanels;
-  const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(() =>
-    loadMobileWorkspacePanels(storageScope)
-  );
+  const [mobileWorkspacePanels, setMobileWorkspacePanels] = useState<WorkspacePanel[]>(() => {
+    const saved = loadMobileWorkspacePanels(storageScope);
+    return connectionParams.offline && !saved.some(panel => panel.type === 'recordReplay')
+      ? saved.map((panel, index) => index === 0 ? { ...panel, type: 'recordReplay', title: 'Record & Replay' } : panel)
+      : saved;
+  });
   const [mountedMobilePanelTypes, setMountedMobilePanelTypes] = useState<Record<string, WorkspacePanelType[]>>(() =>
     mobileWorkspacePanels.reduce<Record<string, WorkspacePanelType[]>>((mountedTypes, panel) => {
       mountedTypes[panel.id] = [panel.type];
@@ -1032,6 +1041,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentBtSessionId = useRef<string | undefined>(undefined);
   const { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect } = useRos(); // Use the hook
+  const [replaySession] = useState(() => new ReplaySession());
+  const replaySource = useSyncExternalStore(replaySession.subscribeSource, replaySession.getSource);
+  const visualizationRos = replaySource.ros ?? ros;
+  const visualizationConnected = Boolean(replaySource.ros) || isConnected;
+  const replayClock = useCallback(() => replaySession.messageTime, [replaySession]);
+  useEffect(() => () => replaySession.dispose(), [replaySession]);
+  useEffect(() => {
+    if (!isActive) replaySession.pause();
+    const visibility = () => { if (document.hidden) replaySession.pause(); };
+    document.addEventListener('visibilitychange', visibility);
+    return () => document.removeEventListener('visibilitychange', visibility);
+  }, [isActive, replaySession]);
   const assistantRef = useRef<GlobalAssistantHandle>(null);
   const handleOpenAssistant = useCallback((context: { panelId: string }) => {
     assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
@@ -1101,8 +1122,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   }, [onConnectionStatusChange]);
 
   useEffect(() => {
-    onConnectionStatusChangeRef.current?.(connectionStatus);
-  }, [connectionStatus]);
+    onConnectionStatusChangeRef.current?.(connectionParams.offline ? 'connected' : connectionStatus);
+  }, [connectionStatus, connectionParams.offline]);
 
   useEffect(() => {
     if (isActive) return;
@@ -1495,7 +1516,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
   // Connect on mount and disconnect on unmount or when connectionParams change
   useEffect(() => {
-    if (connectionParams) {
+    if (connectionParams && !connectionParams.offline) {
       connect(connectionParams);
     }
 
@@ -1574,10 +1595,10 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   // A bridge that went away is the usual reason to want the whole app restarted, when the same
   // parameters are still here and the hook only needs asking again.
   const handleReconnect = () => {
-    connect(connectionParams);
+    if (!connectionParams.offline) connect(connectionParams);
   };
 
-  const connectionStatusLabel = {
+  const connectionStatusLabel = connectionParams.offline ? 'Local replay · no robot connection' : {
     connected: 'Status: Connected',
     connecting: 'Status: Connecting',
     disconnected: 'Status: Disconnected. Click to reconnect',
@@ -1953,7 +1974,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
-      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries'].includes(draft.type)) return;
+      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries', 'recordReplay'].includes(draft.type)) return;
 
       const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
       const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
@@ -3214,13 +3235,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
     const catalogEntry = panelCatalogById.get(panel.type);
 
+    if (panel.type === 'recordReplay') {
+      return <RecordReplayPanel session={replaySession} ros={ros} connected={isConnected}
+        isActive={isPanelActive && isActive} state={panel.panelState?.values}
+        onStateChange={values => {
+          const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
+            candidate.id === panel.id && candidate.type === panel.type
+              ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: panel.type, values } }
+              : candidate);
+          setWorkspacePanels(update); setMobileWorkspacePanels(update);
+        }} />;
+    }
+
     if (panel.type === 'timeSeries') {
       return (
         <TimeSeriesPanel
-          key={panel.id}
-          ros={ros}
-          connected={isConnected}
-          connectionGeneration={connectionGeneration}
+          key={`${panel.id}:${replaySource.generation}`}
+          ros={visualizationRos}
+          connected={visualizationConnected}
+          connectionGeneration={connectionGeneration + replaySource.generation}
+          clock={replaySource.ros ? replayClock : undefined}
           isActive={isPanelActive}
           state={panel.panelState?.values}
           onStateChange={values => {
@@ -3289,15 +3323,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       );
     }
 
-    if (!isConnected || !ros) {
-      return <div className="placeholder">Connecting to ROS...</div>;
+    if ((!isConnected || !ros) && !(['3d', 'tfTree'].includes(panel.type) && replaySource.ros)) {
+      return <div className="placeholder">
+        {!connectionParams.offline ? 'Connecting to ROS...'
+          : ['3d', 'tfTree'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
+            : 'This panel needs a live robot connection.'}
+      </div>;
     }
 
     if (panel.type === 'camera') {
       const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
       return cameraTopic ? (
         <CameraView
-          ros={ros}
+          ros={ros!}
           cameraTopic={cameraTopic}
           availableTopics={availableCameraTopics}
           onTopicChange={newTopic => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
@@ -3313,7 +3351,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     if (panel.type === '3d') {
       return (
         <VisualizationPanel
-          ros={ros}
+          key={`${panel.id}:${replaySource.generation}`}
+          ros={visualizationRos!}
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
           panelId={panel.id}
           onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
@@ -3339,7 +3378,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel ros={ros} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
+      return <TfTreePanel key={`${panel.id}:${replaySource.generation}`} ros={visualizationRos!} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
     }
 
     if (panel.type === 'pad') {
@@ -4148,7 +4187,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             className={`connection-status-icon ${connectionStatus}`}
             onClick={handleReconnect}
             // Connected or already trying, there is nothing to ask for: it reads as status again.
-            disabled={connectionStatus !== 'disconnected'}
+            disabled={Boolean(connectionParams.offline) || connectionStatus !== 'disconnected'}
             title={connectionStatusLabel}
             aria-label={connectionStatusLabel}
             aria-live="polite"

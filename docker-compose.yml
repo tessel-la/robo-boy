@@ -109,9 +109,11 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
+      - ${ROBOBOY_RECORDINGS_PATH:-./recordings}:/recordings:rw
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+      - ROBOBOY_RECORDINGS_ROOT=/recordings
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
       - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
