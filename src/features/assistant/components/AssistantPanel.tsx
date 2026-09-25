@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
@@ -519,7 +519,19 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><h2 id="assistant-title">Robo-Boy AI</h2></div>
           <div className="assistant-header-actions">
             {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
-            <button type="button" className="assistant-icon-button" onClick={() => setShowSettings(true)} aria-label="Assistant settings" title="Assistant settings"><FaCog aria-hidden="true" /></button>
+            <button
+              type="button"
+              className={`assistant-icon-button${showSettings ? ' is-active' : ''}`}
+              onClick={() => setShowSettings(current => !current)}
+              aria-label={showSettings ? 'Back to assistant' : 'Assistant settings'}
+              aria-pressed={showSettings}
+              title={showSettings ? 'Back to assistant' : 'Assistant settings'}
+            >
+              <span className="assistant-settings-icon-swap" aria-hidden="true">
+                <FaCog className="assistant-settings-icon-gear" />
+                <FaArrowLeft className="assistant-settings-icon-back" />
+              </span>
+            </button>
             <button type="button" className="assistant-icon-button" onClick={onClose} aria-label="Close assistant" title="Close"><FaTimes aria-hidden="true" /></button>
           </div>
         </header>
@@ -534,7 +546,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           />
         ))}
 
-        {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} onClose={() => setShowSettings(false)} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
+        {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
         <div ref={chatRef} className="assistant-chat" onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
           {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Ask Robo-Boy AI to build a Pad or a Behavior Tree, look up a transform, or explain anything in your current workspace.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}

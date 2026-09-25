@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaSyncAlt } from 'react-icons/fa';
 import type { AssistantProviderId, AssistantSettings } from '../types';
 import { transcribeAssistantAudio } from '../providers/transcription';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
@@ -9,7 +9,6 @@ interface AssistantSettingsPopoverProps {
   resolvedBaseUrl: string;
   onProviderChange: (provider: AssistantProviderId) => void;
   onUpdate: (patch: Partial<AssistantSettings>) => void;
-  onClose: () => void;
   ollamaModels: string[];
   ollamaModelsError: string;
   isLoadingOllamaModels: boolean;
@@ -23,7 +22,6 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
   resolvedBaseUrl,
   onProviderChange,
   onUpdate,
-  onClose,
   ollamaModels,
   ollamaModelsError,
   isLoadingOllamaModels,
@@ -35,9 +33,6 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
         <span>AI assistant</span>
         <h3>Settings</h3>
       </div>
-      <button type="button" className="assistant-settings-close" onClick={onClose} aria-label="Close assistant settings">
-        <FaTimes aria-hidden="true" />
-      </button>
     </div>
     <div className="assistant-settings">
       <section className="assistant-settings-section" aria-labelledby="assistant-connection-settings">

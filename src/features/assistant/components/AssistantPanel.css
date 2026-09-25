@@ -7,6 +7,7 @@
   right: 0;
   bottom: 0;
   width: clamp(420px, 32vw, 480px);
+  background: transparent;
   pointer-events: none;
 }
 
@@ -219,10 +220,46 @@
 .assistant-icon-button:hover,
 .assistant-header-actions .assistant-new:hover,
 .assistant-icon-button:focus-visible,
-.assistant-header-actions .assistant-new:focus-visible {
+.assistant-header-actions .assistant-new:focus-visible,
+.assistant-icon-button.is-active {
   outline: none;
   background: color-mix(in srgb, var(--primary-color, #2563eb) 9%, transparent);
   color: var(--primary-color, #2563eb);
+}
+
+.assistant-settings-icon-swap {
+  position: relative;
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
+.assistant-settings-icon-swap > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 170ms ease, transform 210ms cubic-bezier(0.2, 0.78, 0.28, 1);
+}
+
+.assistant-settings-icon-gear {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.assistant-settings-icon-back {
+  opacity: 0;
+  transform: translateX(5px) rotate(22deg) scale(0.72);
+}
+
+.assistant-icon-button.is-active .assistant-settings-icon-gear {
+  opacity: 0;
+  transform: rotate(70deg) scale(0.72);
+}
+
+.assistant-icon-button.is-active .assistant-settings-icon-back {
+  opacity: 1;
+  transform: translateX(0) rotate(0deg) scale(1);
 }
 
 .assistant-chat {
@@ -1250,7 +1287,6 @@
   display: flex;
   min-height: 66px;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 12px 15px;
   border-bottom: 1px solid var(--border-color, #d9dee7);
@@ -1275,28 +1311,6 @@
   color: var(--text-color, #1f2937);
   font-size: 16px;
   line-height: 1.2;
-}
-
-.assistant-settings-close {
-  display: inline-flex;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-secondary, #64748b);
-  cursor: pointer;
-}
-
-.assistant-settings-close:hover,
-.assistant-settings-close:focus-visible {
-  outline: none;
-  background: var(--background-secondary, #f3f4f6);
-  color: var(--text-color, #1f2937);
 }
 
 .assistant-settings {
@@ -1463,7 +1477,9 @@
   }
 
   :root.assistant-is-open:not(.assistant-mobile-takeover) .main-control-view > .main-content-area {
-    padding-bottom: calc(5px + var(--assistant-mobile-workspace-inset, 0px));
+    /* Let the workspace continue behind the rounded lip so its corners reveal real content rather
+       than the main area's square background. The fixed sheet remains the hit-test surface. */
+    padding-bottom: max(0px, calc(var(--assistant-mobile-workspace-inset, 0px) - 14px));
   }
 
   .assistant-overlay {
@@ -1609,11 +1625,6 @@
   .assistant-settings-popover-header {
     min-height: 60px;
     padding: 8px 10px 8px 14px;
-  }
-
-  .assistant-settings-close {
-    width: 44px;
-    height: 44px;
   }
 
   .assistant-settings {

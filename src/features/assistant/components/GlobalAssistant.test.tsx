@@ -126,6 +126,13 @@ describe('GlobalAssistant', () => {
       expect(screen.queryByRole('button', { name: 'Close Robo-Boy assistant' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Close assistant' })).toBeVisible();
 
+      fireEvent.click(screen.getByRole('button', { name: 'Assistant settings' }));
+      expect(screen.getByRole('dialog', { name: 'Assistant settings' })).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Close assistant settings' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to assistant' }));
+      expect(screen.queryByRole('dialog', { name: 'Assistant settings' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Assistant settings' })).toBeVisible();
+
       fireEvent.click(screen.getByRole('button', { name: 'Close assistant' }));
       expect(launcher).not.toHaveAttribute('aria-hidden');
       expect(launcher).not.toHaveAttribute('tabindex');

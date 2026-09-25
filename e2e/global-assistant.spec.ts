@@ -267,7 +267,8 @@ test('mobile assistant docks into the workspace, restores its launcher, and land
     const workspaceAfter = (await workspace.boundingBox())!;
     expect(panelBox.y).toBeGreaterThan(250);
     expect(workspaceAfter.height).toBeLessThan(workspaceBefore.height - 400);
-    expect(Math.abs(workspaceAfter.y + workspaceAfter.height - panelBox.y)).toBeLessThanOrEqual(6);
+    expect(workspaceAfter.y + workspaceAfter.height - panelBox.y).toBeGreaterThanOrEqual(8);
+    expect(workspaceAfter.y + workspaceAfter.height - panelBox.y).toBeLessThanOrEqual(20);
   }).toPass();
 
   await expect(mobilePanel).toHaveClass(/is-open/);
@@ -281,7 +282,8 @@ test('mobile assistant docks into the workspace, restores its launcher, and land
     const resizedPanel = (await mobilePanel.boundingBox())!;
     const resizedWorkspace = (await workspace.boundingBox())!;
     expect(resizedPanel.height).toBeGreaterThan(initialPanelBox.height + 80);
-    expect(Math.abs(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y)).toBeLessThanOrEqual(6);
+    expect(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y).toBeGreaterThanOrEqual(8);
+    expect(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y).toBeLessThanOrEqual(20);
   }).toPass();
 
   await mobilePanel.getByRole('button', { name: 'Assistant settings' }).click();
@@ -290,7 +292,8 @@ test('mobile assistant docks into the workspace, restores its launcher, and land
   await expect(settings.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'Connection' })).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'Voice' })).toBeVisible();
-  await settings.getByRole('button', { name: 'Close assistant settings' }).click();
+  await expect(settings.getByRole('button', { name: 'Close assistant settings' })).toHaveCount(0);
+  await mobilePanel.getByRole('button', { name: 'Back to assistant' }).click();
   await expect(settings).toHaveCount(0);
 
   await page.goBack();
