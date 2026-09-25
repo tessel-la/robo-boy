@@ -3255,6 +3255,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           connected={visualizationConnected}
           connectionGeneration={connectionGeneration + replaySource.generation}
           clock={replaySource.ros ? replayClock : undefined}
+          panelId={panel.id}
+          onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
           isActive={isPanelActive}
           state={panel.panelState?.values}
           onStateChange={values => {

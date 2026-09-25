@@ -18,9 +18,13 @@ continue updating; **Clear** also resets processing. **CSV** exports the display
 
 Each signal supports raw, moving-average (2–500 samples), and EMA smoothing. Under **Math
 and derived signal**, use **Duplicate as derived signal** to keep the original curve.
-Expressions support x, y, numbers, parentheses, + - * / ^, abs, sqrt, sin, cos, min and max.
-For example `x - y` compares measured and commanded values. y references another configured
-signal's **raw** field, including hidden signals. Its latest value must be no older than the
+Expressions support x, y, z, w, numbers, `pi`, `e`, parentheses, + - * / ^ and abs, sqrt,
+sin, cos, tan, asin, acos, atan, atan2, exp, log, log10, sign, floor, ceil, round, pow,
+hypot, min, max, clamp, deg and rad. For example `x - y` compares measured and commanded
+values, `sqrt(x^2 + y^2 + z^2)` is the speed of a velocity vector, and
+`deg(atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2)))` is yaw from a quaternion. y, z and w each
+reference another configured signal's **raw** field, including hidden signals; the settings
+show a picker for each one the expression uses. Their latest values must be no older than the
 time window; output follows x arrivals, without interpolation or extrapolation. Expressions
 never execute JavaScript. Normalization maps a fixed input range to 0–1 without clamping;
 derivatives use backward differences and integrals use the trapezoidal rule in seconds.
@@ -32,6 +36,22 @@ retention (1–600 seconds), per-signal capacity (100–10,000 samples), bridge 
 rendering (5–60 Hz), point markers and automatic/manual Y. Edits save with the workspace and
 travel with exported layouts. Filter/math/source edits clear affected history; label/color/
 visibility edits retain it. Native panels use the same trusted ROS connection as other built-ins.
+
+## Assistant control
+
+The AI assistant can configure an open Time Series panel through its settings bridge
+(`assistantSettings.ts`): add, remove, hide, relabel and recolour signals, derive curves
+("plot /odom speed squared"), combine up to four signals with an expression, set smoothing,
+scale, offset, normalization, derivative or integral, and change the time window, sample
+limit, Y axis, points, throttle and render rate, or pause and clear. A field that is not yet
+plotted can be named as `{topic, fieldPath}` and is added as a hidden input.
+
+Each turn the model sees every signal's status: plotting (with sample count and latest value),
+waiting for an input, no samples yet, or "sample limit reached", which says how much of the
+window is actually kept. Changes go through the same validation as the settings: a wrong field
+path on a topic the panel has already seen is refused with the closest real fields, an
+expression that does not compile or names an input without a signal is refused, and clamped
+values are reported as clamped. Changes save with the workspace like any settings edit.
 
 ## Baseline and architecture (before implementation)
 

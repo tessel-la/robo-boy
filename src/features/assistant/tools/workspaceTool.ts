@@ -26,13 +26,13 @@ export interface WorkspaceEditResult {
 
 export const WORKSPACE_CAPABILITY: AssistantCapability = {
   id: 'workspace-edit',
-  summary: 'You can change the workspace yourself: add or remove panels, switch a camera panel\'s topic or a Pad panel\'s Pad, apply a saved layout, save the current one, and change the settings of an open panel (which TF frames the 3D view shows, its fixed frame, its URDF/point-cloud/laser visualizations, the TF tree\'s filters).',
+  summary: 'You can change the workspace yourself: add or remove panels, switch a camera panel\'s topic or a Pad panel\'s Pad, apply a saved layout, save the current one, and change the settings of an open panel (which TF frames the 3D view shows, its fixed frame, its URDF/point-cloud/laser visualizations, the TF tree\'s filters, and everything a Time Series panel plots: signals, labels, colours, smoothing, math on one or several signals, time window, Y axis, pause and clear).',
   detail: [
     'Do it with the workspace tool below instead of telling the user which menu to use. The change is applied at once and you report what changed.',
     'Panel types you can add are listed in the workspace context ("panelCatalog"); use the exact id.',
     'An open panel with a "settings" object in the workspace context can be configured; its "settingsHelp" says which keys it takes.',
   ],
-  invocations: ['add a behavior tree panel', 'remove the camera panel', 'load my inspection layout', 'save this layout as Teleop', 'show base_link and camera_link in the 3D view', 'turn on the URDF in the 3D panel'],
+  invocations: ['add a behavior tree panel', 'remove the camera panel', 'load my inspection layout', 'save this layout as Teleop', 'show base_link and camera_link in the 3D view', 'turn on the URDF in the 3D panel', 'plot /odom linear x squared', 'show the difference between commanded and measured speed', 'set the time series window to 60 seconds', 'smooth the speed signal'],
   responseKind: 'workspaceEdit',
 };
 
@@ -46,7 +46,8 @@ with one or more of these operations, in order:
 - {"op":"setPanelPad","panelId":"<pad panel id>","padId":"<saved Pad id>"}
 - {"op":"applyLayout","layoutId":"<id from savedLayouts>"}
 - {"op":"saveLayout","title":"name"}
-- {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" instead of panelId when the user just says "the 3D view".
+- {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" / "timeSeries" instead of panelId when the user just says "the 3D view" / "the plot".
+To plot something when no Time Series panel is open, add one ("panelType":"timeSeries") and put the plotting request in "followUp"; the panel reports its settings once it is on screen. Field paths follow the message type's definition ("twist.twist.linear.x" for nav_msgs/msg/Odometry); prefer the panel's "numericFieldsByTopic" once a topic has been seen. Read each signal's "status" to confirm a change actually plots, and fix a signal that stays at "no samples yet".
 Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace shows at most two panels; adding another panel replaces the selected panel, or the first visible panel when none is selected.
 A turn returns one JSON object. If the user asks for both a workspace change and any other task, "followUp" is REQUIRED. Put only workspace operations in "operations", and copy every remaining task in full into "followUp". For example, "add a behavior tree panel with a tree that moves the robot left" must return the addPanel operation plus "followUp":"Build a behavior tree that moves the robot left." The app sends it as the next turn once the change is on screen.`;
 

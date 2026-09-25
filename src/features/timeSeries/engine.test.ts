@@ -12,6 +12,17 @@ describe('signal math', () => {
     expect(compileExpression('-2^2 + 2^-2').evaluate(0, 0)).toBe(-3.75);
     expect(compileExpression('min(abs(x), max(y, 2e1))').evaluate(-30, 10)).toBe(20);
     expect(compileExpression('2^3^2').evaluate(0, 0)).toBe(512);
+    expect(compileExpression('x + y + z + w').evaluate(1, 2, 3, 4)).toBe(10);
+    expect(compileExpression('x + y + z + w').inputs).toEqual(['y', 'z', 'w']);
+    expect(compileExpression('x * 2').inputs).toEqual([]);
+    expect(compileExpression('deg(atan2(1, 1))').evaluate(0)).toBeCloseTo(45);
+    expect(compileExpression('clamp(x, -1, 1) + sign(-3) + pow(2, 3) + log10(100) + round(pi)').evaluate(5)).toBe(1 - 1 + 8 + 2 + 3);
+    expect(compileExpression('max(x, 1, 7, 3) - min(4, 2) + hypot(3, 4) + floor(e)').evaluate(0)).toBe(7 - 2 + 5 + 2);
+    expect(compileExpression('rad(180) + exp(0) + ceil(0.2) + abs(tan(0)) + asin(0) + acos(1) + atan(0) + log(1)').evaluate(0)).toBeCloseTo(Math.PI + 2);
+    expect(() => compileExpression('atan2(1)')).toThrow('atan2 needs 2 argument(s).');
+    expect(() => compileExpression('hypot(1, 2, 3, 4, 5)')).toThrow('hypot needs 2–4 argument(s).');
+    expect(() => compileExpression('x +')).toThrow(/^The expression ends too early/);
+    expect(() => compileExpression('constructor(1)')).toThrow(/^Unexpected "constructor"/);
     for (const input of [
       'window.alert(1)',
       'x.constructor',
@@ -67,6 +78,23 @@ describe('streaming engine', () => {
     engine.receive(source('/b'), { value: NaN }, 20001);
     engine.receive(source(), { value: 10 }, 20002);
     expect(engine.runtime.get('a')!.buffer.size).toBe(1);
+  });
+  it('combines up to four signals through y, z and w, subscribing every input', () => {
+    const engine = new TimeSeriesEngine(
+      config([
+        series('a', '/a', { expression: 'hypot(x, y, z)', secondaryId: 'b', tertiaryId: 'c' }),
+        { ...series('b', '/b'), enabled: false },
+        { ...series('c', '/c'), enabled: false },
+      ])
+    );
+    expect(getDesiredSources(engine.config).map(s => s.topic)).toEqual(['/a', '/b', '/c']);
+    engine.receive(source('/b'), { value: 2 }, 1000);
+    engine.receive(source(), { value: 1 }, 1100);
+    expect(engine.errors.get('a')).toBe('Waiting for a fresh input signal (z).');
+    engine.receive(source('/c'), { value: 2 }, 1200);
+    engine.receive(source(), { value: 1 }, 1300);
+    expect(engine.runtime.get('a')!.buffer.latest()?.value).toBe(3);
+    expect(engine.errors.has('a')).toBe(false);
   });
   it('updates filters during pause, resets affected histories only, and preserves presentation edits', () => {
     const engine = new TimeSeriesEngine(

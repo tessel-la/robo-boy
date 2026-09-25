@@ -148,6 +148,8 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           values[s.id] = engine.errors.get(s.id) ?? (p ? `${Number(p.value.toPrecision(6))} ${s.unit}` : '—');
         }
         setLegend({ count, values });
+        // Pause can also be changed by the assistant, straight on the engine.
+        setPaused(engine.paused);
         if (readout.current)
           readout.current.textContent =
             cursorTime === null

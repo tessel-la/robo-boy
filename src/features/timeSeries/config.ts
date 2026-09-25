@@ -1,4 +1,4 @@
-import { sanitizeMath, type MathConfig } from './math';
+import { compileExpression, INPUT_ID_KEYS, sanitizeMath, type MathConfig } from './math';
 import type { FilterConfig } from './data';
 import { chooseAutoPlotFields, isRosTimestampField } from './data';
 
@@ -234,15 +234,26 @@ export const getDesiredSources = (config: TimeseriesConfig): TopicSource[] => {
       });
     });
   config.series
-    .filter(series => series.enabled && series.math.expression.includes('y'))
+    .filter(series => series.enabled)
     .forEach(series => {
-      const input = config.series.find(item => item.id === series.math.secondaryId);
-      if (input) {
+      // Inputs are raw fields of other signals, often hidden ones; their topics must stay subscribed.
+      mathInputs(series.math).forEach(name => {
+        const input = config.series.find(item => item.id === series.math[INPUT_ID_KEYS[name]]);
+        if (!input) return;
         const key = sourceKey(input.topic, input.messageType);
         sources.set(key, { key, topic: input.topic, messageType: input.messageType, throttleMs: config.throttleMs });
-      }
+      });
     });
   return [...sources.values()];
+};
+
+/** The input variables an expression reads; none when it does not compile. */
+export const mathInputs = (math: MathConfig) => {
+  try {
+    return compileExpression(math.expression).inputs;
+  } catch {
+    return [];
+  }
 };
 
 export const displayName = (series: TimeseriesSeriesConfig): string => {

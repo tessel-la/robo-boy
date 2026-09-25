@@ -5,6 +5,7 @@ import type { RoboBoyJsonObject } from '../../panels/types';
 import TimeSeriesPanel from './TimeSeriesPanel';
 import { sanitizeConfig } from './config';
 import type { TimeSeriesEngine } from './engine';
+import type { PanelSettingsBridge } from '../assistant/types';
 const mocks = vi.hoisted(() => ({
   topics: [] as Array<{ name: string; listener?: (m: unknown) => void; unsubscribe: ReturnType<typeof vi.fn> }>,
   engine: null as TimeSeriesEngine | null,
@@ -83,4 +84,32 @@ it('saves visibility without losing config and restores a changed layout on the 
   rerender(<TimeSeriesPanel {...p} state={{ config: next } as unknown as RoboBoyJsonObject} />);
   await waitFor(() => expect(mocks.engine!.config.series[0].math.scale).toBe(3));
   expect(mocks.topics).toHaveLength(1);
+});
+it('lets the assistant read and change the plot through its settings bridge', async () => {
+  const p = props();
+  (p.ros.getTopics as ReturnType<typeof vi.fn>).mockImplementation((done: (result: { topics: string[]; types: string[] }) => void) =>
+    done({ topics: ['/a', '/b'], types: ['T', 'U'] })
+  );
+  const register = vi.fn();
+  const { unmount } = render(<TimeSeriesPanel {...p} panelId="plot-1" onRegisterAssistantBridge={register} />);
+  await act(async () => {});
+  const bridge = register.mock.lastCall?.[1] as PanelSettingsBridge;
+  expect(register.mock.lastCall?.[0]).toBe('plot-1');
+  expect(bridge.panelType).toBe('timeSeries');
+  expect(bridge.settingsHelp).toContain('addSignals');
+  expect(bridge.describe()).toMatchObject({ timeWindowSec: 15, signals: [{ id: 'a' }, { id: 'b' }] });
+
+  let outcomes: ReturnType<PanelSettingsBridge['apply']> = [];
+  act(() => {
+    outcomes = bridge.apply({ addSignals: [{ topic: '/b', fieldPath: 'value', label: 'B²', math: { expression: 'x^2' } }], timeWindowSec: 60, paused: true });
+  });
+  expect(outcomes.every(outcome => outcome.ok)).toBe(true);
+  expect(p.onStateChange.mock.lastCall?.[0].config).toMatchObject({ timeWindowSec: 60, series: [{ id: 'a' }, { id: 'b' }, { topic: '/b', messageType: 'U', label: 'B²' }] });
+  expect(mocks.engine!.paused).toBe(true);
+  await act(async () => {});
+  expect(mocks.topics.map(topic => topic.name)).toEqual(['/a', '/b']);
+
+  act(() => { bridge.apply({ clear: true }); });
+  unmount();
+  expect(register).toHaveBeenLastCalledWith('plot-1', null);
 });

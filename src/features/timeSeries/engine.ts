@@ -16,7 +16,7 @@ import {
   SampleBuffer,
   type TimeseriesSample,
 } from './data';
-import { SignalMath } from './math';
+import { INPUT_ID_KEYS, INPUT_VARIABLES, SignalMath } from './math';
 
 interface Runtime {
   signature: string;
@@ -24,17 +24,18 @@ interface Runtime {
   filter: RealtimeFilter;
   math: SignalMath | null;
 }
-const signature = (s: TimeseriesSeriesConfig, config: TimeseriesConfig) => {
-  const secondary = config.series.find(item => item.id === s.math.secondaryId);
-  return JSON.stringify([
+const signature = (s: TimeseriesSeriesConfig, config: TimeseriesConfig) =>
+  JSON.stringify([
     s.topic,
     s.messageType,
     s.fieldPath,
     s.filter,
     s.math,
-    secondary && [secondary.topic, secondary.messageType, secondary.fieldPath],
+    INPUT_VARIABLES.map(name => {
+      const input = config.series.find(item => item.id === s.math[INPUT_ID_KEYS[name]]);
+      return input && [input.topic, input.messageType, input.fieldPath];
+    }),
   ]);
-};
 
 /** One per tile. Incoming messages never cause a React render except field discovery. */
 export class TimeSeriesEngine {
@@ -142,15 +143,18 @@ export class TimeSeriesEngine {
       const runtime = this.runtime.get(s.id)!;
       const input = this.raw.get(s.id);
       if (!input || !runtime.math) continue;
-      const secondary = this.raw.get(s.math.secondaryId);
-      if (
-        runtime.math.expression.usesY &&
-        (!secondary || now - secondary.time > this.config.timeWindowSec * 1000 || secondary.time > now)
-      ) {
-        this.errors.set(s.id, 'Waiting for a fresh secondary signal (y).');
+      const values = { y: 0, z: 0, w: 0 };
+      const stale = runtime.math.expression.inputs.find(name => {
+        const sample = this.raw.get(s.math[INPUT_ID_KEYS[name]]);
+        if (!sample || now - sample.time > this.config.timeWindowSec * 1000 || sample.time > now) return true;
+        values[name] = sample.value;
+        return false;
+      });
+      if (stale) {
+        this.errors.set(s.id, `Waiting for a fresh input signal (${stale}).`);
         continue;
       }
-      const value = runtime.math.next(input.value, secondary?.value ?? 0, now);
+      const value = runtime.math.next(input.value, values.y, now, values.z, values.w);
       if (value === null) {
         if (s.math.operation !== 'derivative') this.errors.set(s.id, 'Math produced no finite value.');
         continue;
