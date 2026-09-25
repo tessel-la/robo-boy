@@ -49,8 +49,14 @@ describe('GlobalAssistant', () => {
   it('docks on a tall phone and takes over short or keyboard-reduced viewports', () => {
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40 }))
       .toEqual({ top: 313.36, height: 530.64, workspaceInset: 530.64, takeover: false });
+    expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40, requestedHeight: 650 }))
+      .toEqual({ top: 194, height: 650, workspaceInset: 650, takeover: false });
+    expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40, requestedHeight: 200 }))
+      .toEqual({ top: 482.2, height: 361.8, workspaceInset: 361.8, takeover: false });
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 568, viewportWidth: 320, toolbarBottom: 40 }))
       .toEqual({ top: 40, height: 528, workspaceInset: 0, takeover: true });
+    expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 568, viewportWidth: 320, toolbarBottom: 40, requestedHeight: 360 }))
+      .toEqual({ top: 208, height: 360, workspaceInset: 360, takeover: false });
   });
 
   it('asks rosapi only for Pad-bindable topic types on a Pad turn, never the whole graph', async () => {

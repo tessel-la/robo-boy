@@ -214,6 +214,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [expandedImage, setExpandedImage] = useState<AssistantAttachment | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [compactFrame, setCompactFrame] = useState<CompactAssistantFrame>();
+  const [isMobileResizing, setIsMobileResizing] = useState(false);
   const [isRendered, setIsRendered] = useState(open);
   const [motionPhase, setMotionPhase] = useState<AssistantMotionPhase>(open ? 'entering' : 'closed');
   const panelRef = useRef<HTMLElement>(null);
@@ -224,6 +225,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const nearBottomRef = useRef(true);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const mobileHeightRef = useRef<number>();
+  const mobileResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
   // Keep the surface mounted just long enough to play its exit. Reopening during that short exit
   // cancels the pending unmount and runs the entrance again from the persistent launcher.
@@ -233,6 +236,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       setMotionPhase('entering');
       return;
     }
+    mobileResizeRef.current = null;
+    setIsMobileResizing(false);
+    document.documentElement.classList.remove('assistant-mobile-resizing');
     if (!isRendered) return;
     setMotionPhase('closing');
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -358,29 +364,33 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
   }, [compact, open]);
 
+  const placeCompactPanel = useCallback((requestedHeight = mobileHeightRef.current) => {
+    const viewport = window.visualViewport;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const toolbarBottom = document.querySelector('.top-bar')?.getBoundingClientRect().bottom ?? viewportTop;
+    const frame = resolveCompactAssistantFrame({
+      viewportTop,
+      viewportHeight: viewport?.height ?? window.innerHeight,
+      viewportWidth: viewport?.width ?? window.innerWidth,
+      toolbarBottom,
+      requestedHeight,
+    });
+    setCompactFrame(frame);
+    const root = document.documentElement;
+    root.style.setProperty('--assistant-mobile-workspace-inset', `${frame.workspaceInset}px`);
+    root.classList.toggle('assistant-mobile-takeover', frame.takeover);
+  }, []);
+
   /** Fits the mobile sheet to the visual viewport and tells the workspace how much room it owns. */
   useLayoutEffect(() => {
     const root = document.documentElement;
     if (!compact || !isRendered) {
       setCompactFrame(undefined);
       root.style.removeProperty('--assistant-mobile-workspace-inset');
-      root.classList.remove('assistant-mobile-takeover');
+      root.classList.remove('assistant-mobile-resizing', 'assistant-mobile-takeover');
       return;
     }
-    const place = () => {
-      const viewport = window.visualViewport;
-      const viewportTop = viewport?.offsetTop ?? 0;
-      const toolbarBottom = document.querySelector('.top-bar')?.getBoundingClientRect().bottom ?? viewportTop;
-      const frame = resolveCompactAssistantFrame({
-        viewportTop,
-        viewportHeight: viewport?.height ?? window.innerHeight,
-        viewportWidth: viewport?.width ?? window.innerWidth,
-        toolbarBottom,
-      });
-      setCompactFrame(frame);
-      root.style.setProperty('--assistant-mobile-workspace-inset', `${frame.workspaceInset}px`);
-      root.classList.toggle('assistant-mobile-takeover', frame.takeover);
-    };
+    const place = () => placeCompactPanel();
     place();
     const viewport = window.visualViewport;
     viewport?.addEventListener('resize', place);
@@ -391,9 +401,34 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       viewport?.removeEventListener('scroll', place);
       window.removeEventListener('resize', place);
       root.style.removeProperty('--assistant-mobile-workspace-inset');
-      root.classList.remove('assistant-mobile-takeover');
+      root.classList.remove('assistant-mobile-resizing', 'assistant-mobile-takeover');
     };
-  }, [compact, isRendered]);
+  }, [compact, isRendered, placeCompactPanel]);
+
+  const startMobileResize: React.PointerEventHandler<HTMLElement> = event => {
+    if (!compactFrame || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    mobileResizeRef.current = { pointerId: event.pointerId, startY: event.clientY, startHeight: compactFrame.height };
+    setIsMobileResizing(true);
+    document.documentElement.classList.add('assistant-mobile-resizing');
+  };
+
+  const moveMobileResize: React.PointerEventHandler<HTMLElement> = event => {
+    const gesture = mobileResizeRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const requestedHeight = gesture.startHeight + gesture.startY - event.clientY;
+    mobileHeightRef.current = requestedHeight;
+    placeCompactPanel(requestedHeight);
+  };
+
+  const finishMobileResize: React.PointerEventHandler<HTMLElement> = event => {
+    if (mobileResizeRef.current?.pointerId !== event.pointerId) return;
+    mobileResizeRef.current = null;
+    setIsMobileResizing(false);
+    document.documentElement.classList.remove('assistant-mobile-resizing');
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   useEffect(() => {
     if (!open || !compact) return;
@@ -450,7 +485,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       : undefined;
 
   return (
-    <div className={`assistant-overlay${compact ? ' is-compact' : ' is-floating'}${compactFrame?.takeover ? ' is-mobile-takeover' : ''}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
+    <div className={`assistant-overlay${compact ? ' is-compact' : ' is-floating'}${compactFrame?.takeover ? ' is-mobile-takeover' : ''}${isMobileResizing ? ' is-mobile-resizing' : ''}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
       <section
         id="robo-boy-assistant-panel"
         ref={panelRef}
@@ -471,7 +506,13 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         <header
           className="assistant-header"
           // Desktop: the header is the drag handle; a double-click puts the panel back on its dock.
-          onPointerDown={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.startGesture(event, 'move'); }}
+          // Mobile: dragging the same surface vertically resizes a docked sheet without adding a
+          // second toolbar. Buttons remain normal touch targets; a default takeover can be pulled
+          // down into a sheet when the user wants more workspace.
+          onPointerDown={compact ? startMobileResize : event => { if (!(event.target as HTMLElement).closest('button')) floating.startGesture(event, 'move'); }}
+          onPointerMove={compact ? moveMobileResize : undefined}
+          onPointerUp={compact ? finishMobileResize : undefined}
+          onPointerCancel={compact ? finishMobileResize : undefined}
           onDoubleClick={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.reset(); }}
           title={compact ? undefined : 'Drag to move · double-click to dock'}
         >

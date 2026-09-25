@@ -270,6 +270,29 @@ test('mobile assistant docks into the workspace, restores its launcher, and land
     expect(Math.abs(workspaceAfter.y + workspaceAfter.height - panelBox.y)).toBeLessThanOrEqual(6);
   }).toPass();
 
+  await expect(mobilePanel).toHaveClass(/is-open/);
+  const initialPanelBox = (await mobilePanel.boundingBox())!;
+  const headerBox = (await mobilePanel.locator('.assistant-header').boundingBox())!;
+  await page.mouse.move(headerBox.x + 90, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 90, headerBox.y - 100, { steps: 6 });
+  await page.mouse.up();
+  await expect(async () => {
+    const resizedPanel = (await mobilePanel.boundingBox())!;
+    const resizedWorkspace = (await workspace.boundingBox())!;
+    expect(resizedPanel.height).toBeGreaterThan(initialPanelBox.height + 80);
+    expect(Math.abs(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y)).toBeLessThanOrEqual(6);
+  }).toPass();
+
+  await mobilePanel.getByRole('button', { name: 'Assistant settings' }).click();
+  const settings = mobilePanel.getByRole('dialog', { name: 'Assistant settings' });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Connection' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Voice' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Close assistant settings' }).click();
+  await expect(settings).toHaveCount(0);
+
   await page.goBack();
   await expect(mobilePanel).toHaveCount(0);
   await expect(launcher).toBeVisible();
