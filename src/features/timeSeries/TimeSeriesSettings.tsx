@@ -6,13 +6,14 @@ import {
   SERIES_LIMIT,
   createSeriesId,
   displayName,
+  mathInputs,
   sanitizeConfig,
   sourceKey,
   type TimeseriesConfig,
   type TimeseriesSeriesConfig,
 } from './config';
 import type { TimeSeriesEngine } from './engine';
-import { sanitizeMath } from './math';
+import { EXPRESSION_HELP, INPUT_ID_KEYS, INPUT_VARIABLES, sanitizeMath } from './math';
 
 function NumberSetting({
   label,
@@ -290,8 +291,8 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
             <details>
               <summary>Math and derived signal</summary>
               <p className="timeseries-muted">
-                Expression → scale + offset → operation → smoothing. x is this raw field; y is another raw field.
-                Duplicate to retain the original curve.
+                Expression → scale + offset → operation → smoothing. x is this raw field; y, z and w are other
+                signals' raw fields. Duplicate to retain the original curve.
               </p>
               <label>
                 Expression
@@ -303,24 +304,26 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
                 />
               </label>
               <p className="timeseries-muted">
-                Use + − * / ^, parentheses, abs, sqrt, sin, cos, min, max. Example: sqrt(x*x + y*y).
+                {EXPRESSION_HELP} Examples: sqrt(x^2 + y^2 + z^2), deg(atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2))).
               </p>
-              <label>
-                Secondary signal (y)
-                <select
-                  value={s.math.secondaryId}
-                  onChange={e => changeSeries(s.id, { math: { ...s.math, secondaryId: e.target.value } })}
-                >
-                  <option value="">Choose a signal…</option>
-                  {config.series
-                    .filter(item => item.id !== s.id && item.fieldPath)
-                    .map(item => (
-                      <option key={item.id} value={item.id}>
-                        {displayName(item)}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              {INPUT_VARIABLES.filter(name => name === 'y' || mathInputs(s.math).includes(name) || s.math[INPUT_ID_KEYS[name]]).map(name => (
+                <label key={name}>
+                  {name === 'y' ? 'Secondary signal (y)' : `Input signal (${name})`}
+                  <select
+                    value={s.math[INPUT_ID_KEYS[name]]}
+                    onChange={e => changeSeries(s.id, { math: { ...s.math, [INPUT_ID_KEYS[name]]: e.target.value } })}
+                  >
+                    <option value="">Choose a signal…</option>
+                    {config.series
+                      .filter(item => item.id !== s.id && item.fieldPath)
+                      .map(item => (
+                        <option key={item.id} value={item.id}>
+                          {displayName(item)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ))}
               <p className="timeseries-muted">
                 Samples follow x arrivals, using the latest y within the time window. Hidden inputs remain subscribed
                 when needed.

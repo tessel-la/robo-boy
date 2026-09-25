@@ -135,7 +135,9 @@ const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTur
     // offering it whenever a panel, layout or window is mentioned.
     workspace:
       chips.some(chip => chip.source === 'workspace') ||
-      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower),
+      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower) ||
+      // Time Series requests rarely say "panel": "plot the speed squared", "smooth that signal".
+      /\bplot|\bgraph|\bchart|\bsignals?\b|\btime ?series\b|\bcurves?\b|\baxis\b|\bsmooth|\bfilter|\bderivative\b|\bintegra|\bsquared?\b|\bexpression\b|\bscale\b|\boffset\b|\bnormali[sz]e/.test(lower),
   };
 };
 
