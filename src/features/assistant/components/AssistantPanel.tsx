@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
+import { resolveCompactAssistantFrame, type CompactAssistantFrame } from './mobileAssistantLayout';
 import '../../treePanel/components/TreePanelChrome.css';
 import './AssistantPanel.css';
 
@@ -34,6 +35,7 @@ export interface ContextPickerSection {
 
 export interface AssistantPanelProps {
   open: boolean;
+  compact: boolean;
   onClose: () => void;
   messages: AssistantMessage[];
   isGenerating: boolean;
@@ -194,21 +196,9 @@ const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const ASSISTANT_EXIT_FALLBACK_MS = 260;
 type AssistantMotionPhase = 'closed' | 'entering' | 'open' | 'closing';
 
-const useCompactAssistant = () => {
-  const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
-  useEffect(() => {
-    const query = window.matchMedia?.('(max-width: 767px)');
-    if (!query) return;
-    const update = () => setCompact(query.matches);
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-  return compact;
-};
-
 const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
-    open, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
+    open, compact, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
     onOpenResource, canOpenResource, contextPickerSections,
     attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
@@ -216,7 +206,6 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
   } = props;
 
-  const compact = useCompactAssistant();
   const [showSettings, setShowSettings] = useState(false);
   const [showSketchEditor, setShowSketchEditor] = useState(false);
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
@@ -224,7 +213,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [editingDraft, setEditingDraft] = useState('');
   const [expandedImage, setExpandedImage] = useState<AssistantAttachment | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const [mobileViewportStyle, setMobileViewportStyle] = useState<React.CSSProperties>();
+  const [compactFrame, setCompactFrame] = useState<CompactAssistantFrame>();
   const [isRendered, setIsRendered] = useState(open);
   const [motionPhase, setMotionPhase] = useState<AssistantMotionPhase>(open ? 'entering' : 'closed');
   const panelRef = useRef<HTMLElement>(null);
@@ -340,7 +329,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         else if (editingMessageId) { setEditingMessageId(null); setEditingDraft(''); }
         else onClose();
       }
-      if (event.key === 'Tab' && compact && panelRef.current) {
+      if (event.key === 'Tab' && compactFrame?.takeover && panelRef.current) {
         const focusable = [...panelRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')].filter(element => element.offsetParent !== null);
         if (!focusable.length) return;
         const first = focusable[0];
@@ -351,13 +340,15 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [compact, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSettings, showSketchEditor]);
+  }, [compactFrame?.takeover, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSettings, showSketchEditor]);
 
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const frame = window.requestAnimationFrame(() => {
-      promptRef.current?.focus({ preventScroll: true });
+      // Opening a mobile sheet must not immediately summon the software keyboard and turn the
+      // docked layout into a full-height keyboard layout. The composer focuses when it is tapped.
+      if (!compact) promptRef.current?.focus({ preventScroll: true });
       if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
     });
     return () => {
@@ -365,24 +356,30 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       previousFocusRef.current?.focus({ preventScroll: true });
       previousFocusRef.current = null;
     };
-  }, [open]);
+  }, [compact, open]);
 
-  /**
-   * Fits the panel to the room actually left under the app bar. The CSS starting point can only
-   * guess at that bar's height, and a guess that is wrong by a few pixels on a platform whose
-   * chrome differs -- the packaged desktop shell, a phone with a keyboard up -- either leaves a
-   * strip of page showing above or pushes the composer off the bottom. Measuring is the same on
-   * every platform, so it is done on every platform.
-   */
-  useEffect(() => {
-    if (!open) { setMobileViewportStyle(undefined); return; }
+  /** Fits the mobile sheet to the visual viewport and tells the workspace how much room it owns. */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!compact || !isRendered) {
+      setCompactFrame(undefined);
+      root.style.removeProperty('--assistant-mobile-workspace-inset');
+      root.classList.remove('assistant-mobile-takeover');
+      return;
+    }
     const place = () => {
       const viewport = window.visualViewport;
       const viewportTop = viewport?.offsetTop ?? 0;
-      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
       const toolbarBottom = document.querySelector('.top-bar')?.getBoundingClientRect().bottom ?? viewportTop;
-      const top = Math.max(viewportTop, toolbarBottom);
-      setMobileViewportStyle({ top, height: Math.max(240, viewportBottom - top) });
+      const frame = resolveCompactAssistantFrame({
+        viewportTop,
+        viewportHeight: viewport?.height ?? window.innerHeight,
+        viewportWidth: viewport?.width ?? window.innerWidth,
+        toolbarBottom,
+      });
+      setCompactFrame(frame);
+      root.style.setProperty('--assistant-mobile-workspace-inset', `${frame.workspaceInset}px`);
+      root.classList.toggle('assistant-mobile-takeover', frame.takeover);
     };
     place();
     const viewport = window.visualViewport;
@@ -393,8 +390,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       viewport?.removeEventListener('resize', place);
       viewport?.removeEventListener('scroll', place);
       window.removeEventListener('resize', place);
+      root.style.removeProperty('--assistant-mobile-workspace-inset');
+      root.classList.remove('assistant-mobile-takeover');
     };
-  }, [open]);
+  }, [compact, isRendered]);
 
   useEffect(() => {
     if (!open || !compact) return;
@@ -445,13 +444,13 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const promptLabel = clarificationSuggestions ? 'Your answer' : messages.length ? 'Continue the conversation' : 'Ask the assistant';
 
   const overlayStyle = compact
-    ? mobileViewportStyle
+    ? compactFrame ? { top: compactFrame.top, height: compactFrame.height } : undefined
     : floating.frame
       ? { left: floating.frame.left, top: floating.frame.top, width: floating.frame.width, height: floating.frame.height }
       : undefined;
 
   return (
-    <div className={`assistant-overlay${compact ? '' : ' is-floating'}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
+    <div className={`assistant-overlay${compact ? ' is-compact' : ' is-floating'}${compactFrame?.takeover ? ' is-mobile-takeover' : ''}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
       <section
         id="robo-boy-assistant-panel"
         ref={panelRef}
@@ -468,7 +467,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
         onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(true); } }}
         onDragLeave={event => { if (!panelRef.current?.contains(event.relatedTarget as Node | null)) setIsDropTarget(false); }}
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setIsDropTarget(false); onAttachFiles(event.dataTransfer.files); } }}
-        data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compact || undefined} aria-hidden={open ? undefined : true} aria-labelledby="assistant-title">
+        data-testid="assistant-panel" role={compact ? 'dialog' : 'complementary'} aria-modal={compactFrame?.takeover || undefined} aria-hidden={open ? undefined : true} aria-labelledby="assistant-title">
         <header
           className="assistant-header"
           // Desktop: the header is the drag handle; a double-click puts the panel back on its dock.

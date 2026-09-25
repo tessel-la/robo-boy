@@ -1389,6 +1389,16 @@
 }
 
 @media (max-width: 767px) {
+  /* The sheet and workspace move as one layout change. Short viewports use takeover mode because
+     preserving a sliver of workspace there would only crowd the composer. */
+  .main-control-view > .main-content-area {
+    transition: padding-bottom 260ms cubic-bezier(0.2, 0.78, 0.28, 1);
+  }
+
+  :root.assistant-is-open:not(.assistant-mobile-takeover) .main-control-view > .main-content-area {
+    padding-bottom: calc(5px + var(--assistant-mobile-workspace-inset, 0px));
+  }
+
   .assistant-overlay {
     top: calc(46px + var(--safe-area-top, 0px));
     right: 0;
@@ -1400,14 +1410,48 @@
 
   .assistant-panel {
     border: 0;
+    border-top: 1px solid var(--border-color, #d9dee7);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.22);
+  }
+
+  .assistant-overlay.is-mobile-takeover .assistant-panel {
+    border-top: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  .assistant-panel.is-entering,
+  .assistant-panel.is-closing {
+    transform-origin: 50% 100%;
+    will-change: transform;
+  }
+
+  .assistant-panel.is-entering {
+    animation: assistant-mobile-panel-enter 260ms cubic-bezier(0.2, 0.78, 0.28, 1) both;
+  }
+
+  .assistant-panel.is-closing {
+    animation: assistant-mobile-panel-exit 220ms cubic-bezier(0.4, 0, 0.7, 0.2) both;
+  }
+
+  .assistant-launcher.is-compact {
+    visibility: visible;
+    transition: opacity 150ms ease 130ms, transform 180ms ease 130ms, box-shadow 160ms ease, visibility 0s linear;
+  }
+
+  .assistant-launcher.is-compact.is-open {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(12px) scale(0.82);
+    transition-delay: 0ms, 0ms, 0ms, 150ms;
   }
 
   /* Keep the mark and the name -- that is the panel's identity -- but on one line. The height came
      from stacking a kicker above the title, not from the title itself. */
   .assistant-header {
-    min-height: 36px;
+    min-height: 44px;
     gap: 7px;
     padding: 0 2px 0 9px;
   }
@@ -1433,13 +1477,13 @@
   }
 
   .assistant-icon-button {
-    width: 36px;
-    min-height: 36px;
+    width: 44px;
+    min-height: 44px;
     font-size: 14px;
   }
 
   .assistant-header-actions .assistant-new {
-    min-height: 36px;
+    min-height: 44px;
     padding: 0 7px;
     font-size: 11px;
   }
@@ -1469,6 +1513,16 @@
   }
 }
 
+@keyframes assistant-mobile-panel-enter {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes assistant-mobile-panel-exit {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, 100%, 0); }
+}
+
 @media (max-width: 380px) {
   .assistant-header {
     padding-right: 4px;
@@ -1491,6 +1545,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .main-control-view > .main-content-area,
   .assistant-panel,
   .assistant-panel *,
   .assistant-panel *::before,
