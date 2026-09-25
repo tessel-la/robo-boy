@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ROSLIB, { type Ros, type Topic } from 'roslib';
+import { v4 as uuidv4 } from 'uuid';
 import type { RecorderStatus, RecordOptions } from './types';
 
 export function useRecorder(ros: Ros | null, connected: boolean) {
@@ -38,7 +39,7 @@ export function useRecorder(ros: Ros | null, connected: boolean) {
   }, [ros, connected]);
   const command = useCallback((action: string, options?: RecordOptions, path?: string) => {
     if (!publisher.current || !online || waiting.current) return;
-    const id = crypto.randomUUID();
+    const id = uuidv4();
     setPending(true); setError('');
     waiting.current = { id, timer: setTimeout(() => {
       waiting.current = undefined; setPending(false);

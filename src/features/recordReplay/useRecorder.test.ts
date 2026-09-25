@@ -27,6 +27,7 @@ vi.mock('roslib', () => ({
 }));
 
 const ros = {} as Ros;
+const getRandomValues = crypto.getRandomValues.bind(crypto);
 const topic = (name: string) => mocks.topics.filter(candidate => candidate.name === name).pop()!;
 const status = (value: Record<string, unknown>) => act(() => {
   topic('/roboboy/recorder/status').listener?.({ data: JSON.stringify({ version: 1, state: 'idle', root: '/recordings', path: '', messages: 0, bytes: 0, dropped: 0, elapsed: 0, topics: [], ...value }) });
@@ -47,6 +48,18 @@ afterEach(() => {
 });
 
 describe('useRecorder', () => {
+  it('starts a recording over HTTP where randomUUID is unavailable', () => {
+    vi.stubGlobal('crypto', { getRandomValues });
+    const { result } = renderHook(() => useRecorder(ros, true));
+    status({});
+    act(() => result.current.command('start', defaultRecordOptions()));
+    const sent = lastCommand();
+    expect(sent.action).toBe('start');
+    expect(sent.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    status({ state: 'recording', requestId: sent.id, messages: 1 });
+    expect(result.current).toMatchObject({ pending: false, error: '', status: { state: 'recording', messages: 1 } });
+  });
+
   it('stays offline without a connection', () => {
     const { result } = renderHook(() => useRecorder(null, false));
     expect(result.current.online).toBe(false);

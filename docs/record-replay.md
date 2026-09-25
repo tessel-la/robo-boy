@@ -59,6 +59,36 @@ message bytes never cross the browser connection, and a recording continues if t
 The panel talks to the recorder over `/roboboy/recorder/command` and `/roboboy/recorder/status` (`std_msgs/String`
 JSON, protocol version 1). Status is latched, so a panel opened later sees a running recording.
 
+### Desktop and external ROS applications
+
+The Electron and Tauri apps use the recorder on the ROS host selected on the connection screen,
+just like the browser. Receiving topics through rosbridge alone is not enough: the host also needs
+the recording service and the MCAP storage plugin. After upgrading an older Compose installation,
+rebuild and recreate `ros-stack` to install those dependencies and start the recorder:
+
+```bash
+docker compose up -d --build ros-stack
+```
+
+For a ROS host outside Compose, source its ROS environment and any robot interface workspace,
+then run the service from this repository:
+
+```bash
+sudo apt-get install "ros-${ROS_DISTRO}-rosbag2-py" "ros-${ROS_DISTRO}-rosbag2-storage-mcap"
+mkdir -p "$HOME/recordings"
+ROBOBOY_RECORDINGS_ROOT="$HOME/recordings" python3 infra/ros/recording_runner.py
+```
+
+The recorder, rosbridge, and the external application must discover the same ROS graph. Use the
+same domain and compatible DDS settings, and make custom message definitions available to the
+recorder through [robot workspace overlays](robot-overlays.md). Keep QoS on **Match publishers**
+unless a particular topic requires an override; this also supports best-effort sensor publishers.
+
+**Ready to record** confirms the service is reachable. After **Start recording**, the state should
+change to **Recording in progress** and its message count should rise. Files are saved on the ROS
+host, even when using a desktop app on another computer. After **Stop & save**, copy the `.mcap`
+file to the desktop device to open it in Replay. Local replay needs no ROS installation or connection.
+
 The container writes as root, so each finished bag is handed to the owner of the recording root (on a bind mount,
 the host user). This matters for snap browsers (Ubuntu's Firefox and Chromium): they only open files your user
 owns, and report other files as "The operation was aborted". If the recording root itself is owned by root, create
