@@ -318,7 +318,7 @@ jobs:
 
     - name: Install Playwright browsers
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: npx playwright install --with-deps chromium
+      run: npx playwright install --with-deps chromium firefox
 
     - name: Install external panel test artifacts
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'

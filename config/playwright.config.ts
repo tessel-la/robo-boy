@@ -54,6 +54,10 @@ export default defineConfig({
                     : undefined,
             },
         },
+        {
+            name: 'firefox',
+            use: { ...devices['Desktop Firefox'] },
+        },
     ],
 
     /* Run your local dev server before starting the tests */

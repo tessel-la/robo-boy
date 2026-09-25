@@ -191,7 +191,15 @@ npm run e2e
 Set `ROBOBOY_DIST_DIR` when build artifacts need to be written outside the default `dist/` directory. The web and
 Tauri Vite builds honor it, and the Tauri post-build module check validates the same directory.
 
-`npm run e2e` starts its own Vite server. To test an already-running Docker/Caddy stack, use:
+`npm run e2e` starts its own Vite server and runs Chromium and Firefox. Install both test
+browsers with `npx playwright install --with-deps chromium firefox`. To run the camera-stream
+and 3D lifecycle regressions in Firefox only:
+
+```bash
+npm run e2e -- --project=firefox e2e/camera-lifecycle.spec.ts e2e/visualization-lifecycle.spec.ts
+```
+
+To test an already-running Docker/Caddy stack, use:
 
 ```bash
 npm run e2e:stack

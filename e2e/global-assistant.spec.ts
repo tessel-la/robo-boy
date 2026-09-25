@@ -276,7 +276,9 @@ test('honors reduced motion in the assistant surface', async ({ page }) => {
   const duration = await page.getByTestId('assistant-panel').evaluate(element =>
     getComputedStyle(element.querySelector('.spinning') ?? element).animationDuration
   );
-  expect(['0s', '0.001ms', '1e-06s']).toContain(duration);
+  // Firefox serializes small durations as decimals; Chromium may use exponent notation.
+  const durationMs = Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000);
+  expect(durationMs).toBeLessThanOrEqual(0.001);
 });
 
 test('the launcher uses the former theme corner and theme selection stays in the session menu', async ({ page }) => {

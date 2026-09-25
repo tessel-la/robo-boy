@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeCameraImageSrc } from './SafeCameraImage';
+import { render, screen } from '@testing-library/react';
+import SafeCameraImage, { isSafeCameraImageSrc } from './SafeCameraImage';
 
 describe('SafeCameraImage', () => {
+  it('releases the image source when the camera is unmounted', () => {
+    const { unmount } = render(
+      <SafeCameraImage src="/video_stream/stream?topic=/camera/image_raw&type=mjpeg" alt="Camera" />
+    );
+    const image = screen.getByAltText('Camera');
+    expect(image).toHaveAttribute('src');
+    unmount();
+    expect(image).not.toHaveAttribute('src');
+  });
+
   it('allows relative proxied camera streams', () => {
     expect(isSafeCameraImageSrc('/video_stream/stream?topic=/camera/image_raw&type=mjpeg')).toBe(true);
     expect(isSafeCameraImageSrc('/video_stream/stream?topic=%2Fcamera%2Fimage_raw&type=mjpeg')).toBe(true);
