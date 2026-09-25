@@ -199,6 +199,13 @@ and 3D lifecycle regressions in Firefox only:
 npm run e2e -- --project=firefox e2e/camera-lifecycle.spec.ts e2e/visualization-lifecycle.spec.ts
 ```
 
+On Linux CI, Firefox runs with a virtual display so the 3D tests have WebGL. Playwright's
+`--with-deps` installation includes Xvfb. To reproduce that setup on a machine without a display:
+
+```bash
+CI=1 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run --auto-servernum npm run e2e
+```
+
 To test an already-running Docker/Caddy stack, use:
 
 ```bash
