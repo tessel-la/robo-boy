@@ -15,12 +15,18 @@ const NS = 1_000_000_000n;
 /** tf2 keeps 10 s by default; older dynamic transforms are stale for every consumer. */
 const TF_LOOKBACK = 30n * NS;
 
-/** rosbridge delivers int64 as JSON numbers; panels do arithmetic that bigint would break. */
+/**
+ * Give panels the message shapes rosbridge delivers live: int64 as numbers (bigint would break their
+ * arithmetic) and numeric arrays as plain arrays (panels index them, e.g. a Time Series signal on
+ * `position[3]`). Byte arrays stay typed: they carry image and point-cloud payloads, and rosbridge's own
+ * form for them (base64) would only have to be decoded again.
+ */
 const toRosbridgeValues = (value: unknown): unknown => {
   if (typeof value === 'bigint') return Number(value);
   if (!value || typeof value !== 'object') return value;
   if (value instanceof BigInt64Array || value instanceof BigUint64Array) return Array.from(value, Number);
-  if (ArrayBuffer.isView(value)) return value;
+  if (value instanceof Uint8Array || value instanceof Int8Array || value instanceof Uint8ClampedArray || value instanceof DataView) return value;
+  if (ArrayBuffer.isView(value)) return Array.from(value as unknown as ArrayLike<number>);
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index++) value[index] = toRosbridgeValues(value[index]);
   } else {
