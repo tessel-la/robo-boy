@@ -195,6 +195,26 @@ describe('parseGeneratedBehaviorTree', () => {
     expect(tree.edges.map(edge => edge.sourceHandle)).toEqual([null, 'then', 'else']);
   });
 
+  it('drops branch handles on edges whose source is not an if/else node', () => {
+    const tree = parseGeneratedBehaviorTree(
+      JSON.stringify({
+        name: 'Pick',
+        nodes: [
+          { id: 'root', type: 'sequence' },
+          { id: 'first', type: 'sequence' },
+          { id: 'second', type: 'sequence' },
+        ],
+        edges: [
+          { source: 'root', target: 'first', sourceHandle: 'then' },
+          { source: 'root', target: 'second', sourceHandle: 'else' },
+        ],
+      })
+    );
+
+    // Small models copy the if/else wiring onto sequences; those edges must bind to the default handle.
+    expect(tree.edges.map(edge => edge.sourceHandle)).toEqual([null, null]);
+  });
+
   it('normalizes fallback ids, labels, control defaults, and raw runtime fields', () => {
     const tree = parseGeneratedBehaviorTree(
       JSON.stringify({
