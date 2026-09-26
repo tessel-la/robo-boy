@@ -864,6 +864,32 @@ test.describe('Behavior Tree panel', () => {
     expect(paletteBox?.y ?? 0).toBeLessThan(arrangeBox?.y ?? 0);
   });
 
+  test('keeps desktop toolbar groups apart at mid panel widths', async ({ page }) => {
+    await openBehaviorTree(page);
+    await seedSavedTree(page);
+    await page.getByTestId('bt-menu-button').click();
+    await page.locator('.bt-menu-tree-row').filter({ hasText: 'Duplicate Source' }).click();
+
+    // Wide enough for the labelled actions group, then inside the compact (<= 640px panel) range.
+    for (const width of [1000, 780, 640]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const actions = document.querySelector('.bt-float-actions')!.getBoundingClientRect();
+            const tools = [...document.querySelectorAll('.bt-float-bar button')]
+              .map(element => element.getBoundingClientRect())
+              .filter(box => box.width > 0 && box.height > 0);
+            return tools.filter(
+              box =>
+                box.right > actions.left && box.left < actions.right && box.bottom > actions.top && box.top < actions.bottom
+            ).length;
+          })
+        )
+        .toBe(0);
+    }
+  });
+
   test('shows sequence child order and reorders children', async ({ page }) => {
     await openBehaviorTree(page);
     await seedOrderedSequenceTree(page);
