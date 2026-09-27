@@ -451,6 +451,27 @@
   cursor: not-allowed;
 }
 
+/* The first panel's button has just landed in this one: it settles with a small bump. */
+.workspace-add-button {
+  position: relative;
+}
+
+.workspace-add-button.is-landing {
+  animation: workspace-add-land 260ms ease-out;
+}
+
+@keyframes workspace-add-land {
+  0% {
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .workspace-template-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -1275,6 +1296,90 @@ body.no-scroll {
 .workspace-empty-add-button svg {
   width: 18px;
   height: 18px;
+  transition: transform 180ms ease;
+}
+
+/* The one way into an empty workspace; its menu opens from it. */
+.workspace-empty-add-control {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  /* Just above the middle, where the eye settles, and where the catalog has room to open below it. */
+  margin-bottom: min(18vh, 180px);
+}
+
+.workspace-empty-add-button {
+  transition:
+    transform 150ms ease,
+    filter 150ms ease;
+}
+
+.workspace-empty-add-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.workspace-empty-add-button:active {
+  transform: scale(0.97);
+}
+
+.workspace-empty-add-button.is-open svg {
+  transform: rotate(45deg);
+}
+
+/* Its copy is flying to the toolbar. */
+.workspace-empty-add-button.is-launched {
+  visibility: hidden;
+}
+
+/* Anchored at every width: phones otherwise pin the add menu under the top bar, which is not where
+   this one was opened from. */
+.workspace-add-menu.workspace-add-menu-anchored {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: auto;
+  left: 50%;
+  width: min(320px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  transform-origin: 50% 0;
+  animation: workspace-menu-pop 180ms ease-out;
+}
+
+.workspace-add-menu.workspace-add-menu-anchored.opens-up {
+  top: auto;
+  bottom: calc(100% + 10px);
+  transform-origin: 50% 100%;
+}
+
+.workspace-add-menu-anchored button {
+  animation: workspace-menu-item-in 180ms ease-out backwards;
+  animation-delay: calc(var(--item-index, 0) * 18ms + 30ms);
+}
+
+@keyframes workspace-menu-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes workspace-menu-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-add-menu.workspace-add-menu-anchored,
+  .workspace-add-menu-anchored button,
+  .workspace-add-button.is-landing {
+    animation: none;
+  }
 }
 
 .workspace-card-header.is-selected {

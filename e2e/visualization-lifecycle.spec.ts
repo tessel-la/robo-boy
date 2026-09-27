@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import { installRosMock } from './helpers/rosMock';
 
 test('repeated 3D panel creation, resize and removal keeps the tab responsive', async ({ page }) => {
+  // Every cycle empties the workspace, so every add is a first panel: its button flies into the
+  // toolbar before the panel appears. Twenty of those need more than the default budget.
+  test.setTimeout(60_000);
   await installRosMock(page);
   await page.goto('/');
   await page.getByTitle('Advanced Options').click();

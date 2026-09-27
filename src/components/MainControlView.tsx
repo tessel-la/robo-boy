@@ -22,6 +22,7 @@ import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the 
 import './MainControlView.css';
 // Import placeholder components (we'll create these next)
 import CameraView from './CameraView'; // Import the new CameraView
+import FirstPanelFlight, { type FlightRect } from './FirstPanelFlight';
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
 import CustomGamepadWrapper from './gamepads/custom/CustomGamepadWrapper'; // Import the custom gamepad wrapper
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
@@ -942,6 +943,8 @@ const WORKSPACE_MENU_MARGIN = 12;
 const WORKSPACE_MENU_MIN_HEIGHT = 180;
 // Padding and border of .workspace-add-menu, which sit outside the height it is capped to.
 const WORKSPACE_MENU_CHROME = 22;
+// Room below the empty workspace's add button that shows the built-in panels without scrolling.
+const WORKSPACE_MENU_COMFORT = 320;
 
 const MainControlView: React.FC<MainControlViewProps> = ({
   connectionParams,
@@ -1011,6 +1014,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [workspaceReplacementPanelId, setWorkspaceReplacementPanelId] = useState<string | null>(null);
   const [workspaceReplaceMenuStyle, setWorkspaceReplaceMenuStyle] = useState<React.CSSProperties | null>(null);
   const [workspaceAddMenuMaxHeight, setWorkspaceAddMenuMaxHeight] = useState<number | null>(null);
+  // In an empty workspace the catalog hangs off the button in the middle, above it when it would not fit below.
+  const [workspaceAddMenuOpensUp, setWorkspaceAddMenuOpensUp] = useState(false);
+  // The first panel's button flying into the toolbar's add button, which wakes up when it lands.
+  const [firstPanelFlight, setFirstPanelFlight] = useState<{ from: FlightRect; to: FlightRect; landed: boolean } | null>(null);
+  const [isWorkspaceAddButtonLanding, setIsWorkspaceAddButtonLanding] = useState(false);
   const [isWorkspaceTemplateMenuOpen, setIsWorkspaceTemplateMenuOpen] = useState(false);
   const [workspaceLayoutName, setWorkspaceLayoutName] = useState('');
   const [isWorkspaceDragActive, setIsWorkspaceDragActive] = useState(false);
@@ -1114,6 +1122,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const workspacePadNoticeTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const workspaceTemplateControlRef = useRef<HTMLDivElement>(null);
   const workspaceAddControlRef = useRef<HTMLDivElement>(null);
+  const workspaceAddButtonRef = useRef<HTMLButtonElement>(null);
+  const workspaceEmptyAddControlRef = useRef<HTMLDivElement>(null);
+  const workspaceEmptyAddButtonRef = useRef<HTMLButtonElement>(null);
   const workspaceReplaceMenuRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const onConnectionStatusChangeRef = useRef(onConnectionStatusChange);
@@ -1171,6 +1182,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return panel ? [{ kind: 'panel' as const, id, panel }] : [];
     });
   }, [normalizedWorkspaceTileOrder, workspacePanels]);
+  const isWorkspaceEmpty = workspaceTiles.length === 0;
   const activeStackedWorkspacePanel = useMemo(() => {
     const selected = workspaceReplacementPanelId
       ? workspacePanels.find(panel => panel.id === workspaceReplacementPanelId)
@@ -1394,7 +1406,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       const target = event.target;
       const clickedToolbarMenu = target instanceof Node && Boolean(workspaceAddControlRef.current?.contains(target));
       const clickedReplaceMenu = target instanceof Node && Boolean(workspaceReplaceMenuRef.current?.contains(target));
-      if (target instanceof Node && !clickedToolbarMenu && !clickedReplaceMenu) {
+      const clickedEmptyMenu = target instanceof Node && Boolean(workspaceEmptyAddControlRef.current?.contains(target));
+      if (target instanceof Node && !clickedToolbarMenu && !clickedReplaceMenu && !clickedEmptyMenu) {
         setIsWorkspaceAddMenuOpen(false);
         setWorkspaceReplaceMenuStyle(null);
         if (workspaceReplacementPanelId) setWorkspaceReplacementPanelId(null);
@@ -1418,6 +1431,19 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     const measureAvailableHeight = () => {
+      // In an empty workspace the catalog opens from the button in the middle, inside a workspace that clips it.
+      const emptyButton = isWorkspaceEmpty ? workspaceEmptyAddButtonRef.current : null;
+      if (emptyButton) {
+        const bounds = workspaceRef.current?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+        const button = emptyButton.getBoundingClientRect();
+        const spare = WORKSPACE_MENU_GAP + WORKSPACE_MENU_MARGIN + WORKSPACE_MENU_CHROME;
+        const below = bounds.bottom - button.bottom - spare;
+        const above = button.top - bounds.top - spare;
+        const opensUp = below < WORKSPACE_MENU_COMFORT && above > below;
+        setWorkspaceAddMenuOpensUp(opensUp);
+        setWorkspaceAddMenuMaxHeight(Math.max(WORKSPACE_MENU_MIN_HEIGHT, opensUp ? above : below));
+        return;
+      }
       const control = workspaceAddControlRef.current;
       if (!control) return;
       const room =
@@ -1432,7 +1458,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     measureAvailableHeight();
     window.addEventListener('resize', measureAvailableHeight);
     return () => window.removeEventListener('resize', measureAvailableHeight);
-  }, [isActive, isWorkspaceAddMenuOpen, workspaceReplacementPanelId]);
+  }, [isActive, isWorkspaceAddMenuOpen, isWorkspaceEmpty, workspaceReplacementPanelId]);
 
   useEffect(() => {
     if (!isActive || !workspaceReplacementPanelId) return;
@@ -1785,6 +1811,34 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     );
   };
 
+  // The first panel sends the empty workspace's button flying into the toolbar's add button, which
+  // stays asleep until the button lands in it: from then on, that is where panels come from. The
+  // panel itself appears once the flight is over.
+  const firstPanelAddRef = useRef<() => void>();
+  const addAfterFirstPanelFlight = (add: () => void) => {
+    const from = isWorkspaceEmpty ? workspaceEmptyAddButtonRef.current?.getBoundingClientRect() : undefined;
+    const to = workspaceAddButtonRef.current?.getBoundingClientRect();
+    const reduceMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!from || !to || reduceMotion || firstPanelFlight || typeof document.body.animate !== 'function') {
+      add();
+      return;
+    }
+    firstPanelAddRef.current = add;
+    setIsWorkspaceAddMenuOpen(false);
+    setFirstPanelFlight({ from, to, landed: false });
+  };
+  const handleFirstPanelLanded = useCallback(() => {
+    setFirstPanelFlight(flight => flight && { ...flight, landed: true });
+    setIsWorkspaceAddButtonLanding(true);
+  }, []);
+  const handleFirstPanelFlightDone = useCallback(() => {
+    const add = firstPanelAddRef.current;
+    firstPanelAddRef.current = undefined;
+    setFirstPanelFlight(null);
+    add?.();
+  }, []);
+  const isWorkspaceAddButtonAsleep = firstPanelFlight ? !firstPanelFlight.landed : isWorkspaceEmpty;
+
   const handleAddWorkspacePanel = (
     type: WorkspacePanelType,
     insertIndex?: number,
@@ -1977,38 +2031,40 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       const draft = JSON.parse(payload) as WorkspaceDraft;
       if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries', 'recordReplay'].includes(draft.type)) return;
 
-      const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
-      const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
-      const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
-      const newPanel = createWorkspacePanel(
-        { type: draft.type },
-        {
-          cameraTopic: selectedCameraTopic || availableCameraTopics[0],
-          layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
-        }
-      );
-
-      setWorkspacePanels(prev => [...prev, newPanel]);
-      setWorkspaceTileOrder(prevOrder => {
-        const currentOrder = normalizeWorkspaceTileOrder(
-          prevOrder,
-          workspacePanels.map(panel => panel.id)
+      addAfterFirstPanelFlight(() => {
+        const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
+        const tileIndex = snapTarget ? snapTarget.zoneIndex : undefined;
+        const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
+        const newPanel = createWorkspacePanel(
+          { type: draft.type },
+          {
+            cameraTopic: selectedCameraTopic || availableCameraTopics[0],
+            layoutId: selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+          }
         );
-        if (snapTemplate && typeof tileIndex === 'number') {
-          const nextOrder = [...currentOrder];
-          nextOrder.splice(clamp(tileIndex, 0, nextOrder.length), 0, newPanel.id);
-          setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder));
-          return nextOrder;
-        }
 
-        const currentLayout = normalizeWorkspaceLayout(capturedWorkspaceLayout, currentOrder);
-        const nextLayout = placeWorkspaceLayoutTile(currentLayout.root, newPanel.id, dropPlacement);
-        setWorkspaceLayout(nextLayout);
-        return getWorkspaceLayoutTileIds(nextLayout.root);
+        setWorkspacePanels(prev => [...prev, newPanel]);
+        setWorkspaceTileOrder(prevOrder => {
+          const currentOrder = normalizeWorkspaceTileOrder(
+            prevOrder,
+            workspacePanels.map(panel => panel.id)
+          );
+          if (snapTemplate && typeof tileIndex === 'number') {
+            const nextOrder = [...currentOrder];
+            nextOrder.splice(clamp(tileIndex, 0, nextOrder.length), 0, newPanel.id);
+            setWorkspaceLayout(createWorkspaceLayoutFromTemplate(snapTemplate, nextOrder));
+            return nextOrder;
+          }
+
+          const currentLayout = normalizeWorkspaceLayout(capturedWorkspaceLayout, currentOrder);
+          const nextLayout = placeWorkspaceLayoutTile(currentLayout.root, newPanel.id, dropPlacement);
+          setWorkspaceLayout(nextLayout);
+          return getWorkspaceLayoutTileIds(nextLayout.root);
+        });
+        setLastAddedWorkspacePanelId(newPanel.id);
+        setIsWorkspaceAddMenuOpen(false);
+        setIsWorkspaceTemplateMenuOpen(false);
       });
-      setLastAddedWorkspacePanelId(newPanel.id);
-      setIsWorkspaceAddMenuOpen(false);
-      setIsWorkspaceTemplateMenuOpen(false);
     } catch (error) {
       console.error('Failed to add dropped workspace panel:', error);
     }
@@ -3515,12 +3571,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     </div>
   );
 
-  const renderWorkspaceAddMenu = (placement: 'toolbar' | 'replacement' = 'toolbar') => {
+  const renderWorkspaceAddMenu = (placement: 'toolbar' | 'replacement' | 'empty' = 'toolbar') => {
     if (!isWorkspaceAddMenuOpen) return null;
     if (isWorkspaceStacked && workspacePanels.length >= 2 && !workspaceReplacementPanelId) return null;
-    if (placement === 'toolbar' && workspaceReplacementPanelId) return null;
+    if (placement === 'toolbar' && (workspaceReplacementPanelId || (isDesktopWorkspace && isWorkspaceEmpty))) return null;
     if (placement === 'replacement' && !workspaceReplacementPanelId) return null;
+    if (placement === 'empty' && (workspaceReplacementPanelId || !isWorkspaceEmpty)) return null;
     const isReplacementMenu = placement === 'replacement';
+    const isEmptyWorkspaceMenu = placement === 'empty';
     const builtInPanels = panelCatalog.filter(panel => panel.source === 'built-in');
     const externalPanels = panelCatalog.filter(panel => panel.source === 'external');
     const installation = installedPanelRegistry.installation;
@@ -3543,7 +3601,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       event.currentTarget.draggable = canDragFromMenu && event.pointerType !== 'touch';
     };
 
-    const renderPanelButton = (panel: PanelCatalogEntry) => (
+    const renderPanelButton = (panel: PanelCatalogEntry, index: number) => (
       <button
         key={panel.id}
         type="button"
@@ -3551,9 +3609,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onPointerDown={handlePanelPointerDown}
         onDragStart={event => handleWorkspaceDragStart(event, panel.id)}
         onDragEnd={handleWorkspaceDragEnd}
-        onClick={() => handleAddWorkspacePanel(panel.id)}
+        onClick={() =>
+          isEmptyWorkspaceMenu ? addAfterFirstPanelFlight(() => handleAddWorkspacePanel(panel.id)) : handleAddWorkspacePanel(panel.id)
+        }
         title={panel.description}
         data-panel-source={panel.source}
+        style={{ '--item-index': index } as React.CSSProperties}
       >
         {getPanelCatalogIcon(panel)}
         <span>{panel.menuLabel}</span>
@@ -3562,7 +3623,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
     return (
       <div
-        className={`workspace-add-menu ${isReplacementMenu ? 'workspace-add-menu-floating' : ''}`}
+        className={`workspace-add-menu ${isReplacementMenu ? 'workspace-add-menu-floating' : ''} ${
+          isEmptyWorkspaceMenu ? `workspace-add-menu-anchored ${workspaceAddMenuOpensUp ? 'opens-up' : ''}` : ''
+        }`}
         ref={isReplacementMenu ? workspaceReplaceMenuRef : undefined}
         role="menu"
         style={
@@ -3587,7 +3650,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               {installation && !installedPanelRegistry.isLoading ? ` · ${externalPanels.length} installed` : ''}
             </span>
           )}
-          {externalPanels.map(renderPanelButton)}
+          {externalPanels.map((panel, index) => renderPanelButton(panel, builtInPanels.length + index))}
           {installedPanelRegistry.isLoading && <span className="workspace-panel-catalog-note">Discovering…</span>}
           {!installedPanelRegistry.isLoading && installation && externalPanels.length === 0 && (
             <span className="workspace-panel-catalog-note">No external panels selected</span>
@@ -4180,16 +4243,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             <div className="workspace-add-control" ref={workspaceAddControlRef}>
               <button
                 type="button"
-                className="workspace-add-button"
+                ref={workspaceAddButtonRef}
+                className={`workspace-add-button ${isWorkspaceAddButtonLanding ? 'is-landing' : ''}`}
                 onClick={() => {
                   setWorkspaceReplacementPanelId(null);
                   setWorkspaceReplaceMenuStyle(null);
                   setIsWorkspaceAddMenuOpen(prev => !prev);
                   setIsWorkspaceTemplateMenuOpen(false);
                 }}
-                title="Add workspace panel"
-                aria-label="Add workspace panel"
-                disabled={isWorkspaceStacked && workspaceTiles.length >= 2}
+                onAnimationEnd={event => {
+                  if (event.animationName === 'workspace-add-land') setIsWorkspaceAddButtonLanding(false);
+                }}
+                // Until the workspace has a panel, the button in its middle is the one way in.
+                title={isWorkspaceAddButtonAsleep ? 'Add the first panel from the middle of the workspace' : 'Add workspace panel'}
+                aria-label={isWorkspaceAddButtonAsleep ? 'Add the first panel from the middle of the workspace' : 'Add workspace panel'}
+                disabled={(isWorkspaceStacked && workspaceTiles.length >= 2) || isWorkspaceAddButtonAsleep}
               >
                 {icons.add}
               </button>
@@ -4240,18 +4308,27 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               {workspaceLayoutTree.root ? renderWorkspaceLayout() : null}
               {workspaceTiles.length === 0 && (
                 <div className="workspace-empty-drop-zone">
-                  <button
-                    type="button"
-                    className="workspace-empty-add-button"
-                    onClick={() => {
-                      setWorkspaceReplacementPanelId(null);
-                      setIsWorkspaceAddMenuOpen(true);
-                    }}
-                    aria-label="Add workspace panel"
-                  >
-                    {icons.add}
-                    <span>Add panel</span>
-                  </button>
+                  <div className="workspace-empty-add-control" ref={workspaceEmptyAddControlRef}>
+                    <button
+                      type="button"
+                      ref={workspaceEmptyAddButtonRef}
+                      // While its copy is in the air, the button has left.
+                      className={`workspace-empty-add-button ${isWorkspaceAddMenuOpen ? 'is-open' : ''} ${firstPanelFlight ? 'is-launched' : ''}`}
+                      disabled={Boolean(firstPanelFlight)}
+                      onClick={() => {
+                        setWorkspaceReplacementPanelId(null);
+                        setIsWorkspaceTemplateMenuOpen(false);
+                        setIsWorkspaceAddMenuOpen(prev => !prev);
+                      }}
+                      aria-label="Add workspace panel"
+                      aria-haspopup="menu"
+                      aria-expanded={isWorkspaceAddMenuOpen}
+                    >
+                      {icons.add}
+                      <span>Add panel</span>
+                    </button>
+                    {renderWorkspaceAddMenu('empty')}
+                  </div>
                 </div>
               )}
             </div>
@@ -4263,6 +4340,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         )}
         {renderWorkspaceAddMenu('replacement')}
       </div>
+
+      {firstPanelFlight && (
+        <FirstPanelFlight
+          from={firstPanelFlight.from}
+          to={firstPanelFlight.to}
+          icon={icons.add}
+          label="Add panel"
+          onArrive={handleFirstPanelLanded}
+          onDone={handleFirstPanelFlightDone}
+        />
+      )}
 
       {/* Render AddPanelMenu using Portal outside main flow */}
       <AddPanelMenu

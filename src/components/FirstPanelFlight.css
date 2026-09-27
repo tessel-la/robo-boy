@@ -1,0 +1,33 @@
+.first-panel-flight {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  border-radius: 7px;
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  font-weight: 700;
+  pointer-events: none;
+  will-change: transform, width, height;
+}
+
+.first-panel-flight-glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.first-panel-flight-glyph svg {
+  width: 18px;
+  height: 18px;
+}
+
+.first-panel-flight-label {
+  display: inline-block;
+  overflow: hidden;
+  margin-left: 8px;
+}
