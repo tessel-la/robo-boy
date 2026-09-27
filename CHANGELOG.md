@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.14.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.13.0-alpha...robo-boy-v0.14.0-alpha) (2026-09-27)
+
+
+### Features
+
+* **assistant:** configure the Time Series panel from chat ([#184](https://github.com/tessel-la/robo-boy/issues/184)) ([ed44313](https://github.com/tessel-la/robo-boy/commit/ed44313ebf78fff942f55276fa23c5649e2385a6))
+* **assistant:** polish panel interactions ([#181](https://github.com/tessel-la/robo-boy/issues/181)) ([8848292](https://github.com/tessel-la/robo-boy/commit/88482926d7062cd32c74ab1483e8db46977d9172))
+* better ux mobile assistant ([#188](https://github.com/tessel-la/robo-boy/issues/188)) ([be2cd36](https://github.com/tessel-la/robo-boy/commit/be2cd36d6100dd4e9635a251abb106a353731b3d))
+* guide the first panel from the empty workspace ([#190](https://github.com/tessel-la/robo-boy/issues/190)) ([c07fe66](https://github.com/tessel-la/robo-boy/commit/c07fe66e2736c8c00616bf9da6b1bef7ffa59922))
+* native timeseries panel ([#180](https://github.com/tessel-la/robo-boy/issues/180)) ([bfead90](https://github.com/tessel-la/robo-boy/commit/bfead90b67ddb3faccb8cbc64c51bdac5b84faaa))
+* record & replay panel ([#183](https://github.com/tessel-la/robo-boy/issues/183)) ([7d53956](https://github.com/tessel-la/robo-boy/commit/7d53956a4e0ddb1cef2d11b9dc3f7752971a17c6))
+* record & replay, time series, remote recordings and desktop updates ([180b773](https://github.com/tessel-la/robo-boy/commit/180b773513376006c3a9e0e745648df81c147c15))
+* replay and download recordings from the ROS host ([#189](https://github.com/tessel-la/robo-boy/issues/189)) ([8a2059d](https://github.com/tessel-la/robo-boy/commit/8a2059d71433fbe8ca2ca6381a2214fdf25c4627))
+* service response normalization ([#178](https://github.com/tessel-la/robo-boy/issues/178)) ([788a915](https://github.com/tessel-la/robo-boy/commit/788a915823dc123b03c6ecbe638a35d00d82d340))
+* update the desktop app from inside it ([#191](https://github.com/tessel-la/robo-boy/issues/191)) ([c346036](https://github.com/tessel-la/robo-boy/commit/c346036dee099cded58366c3cd8905f8b86c38dd))
+
+
+### Bug Fixes
+
+* patch vulnerable npm and Rust dependencies ([#182](https://github.com/tessel-la/robo-boy/issues/182)) ([f7465ec](https://github.com/tessel-la/robo-boy/commit/f7465ecea07dc544bea4d5e806eda03b03b4f60a))
+* preserve saved ports in desktop quick connect ([#179](https://github.com/tessel-la/robo-boy/issues/179)) ([88b7f1b](https://github.com/tessel-la/robo-boy/commit/88b7f1bd88b4a25a6bda2df43c6ba722313f0a8b))
+* release camera streams and add Firefox regression coverage ([#185](https://github.com/tessel-la/robo-boy/issues/185)) ([208d76a](https://github.com/tessel-la/robo-boy/commit/208d76af48cf147afc6dff26b1d1226f9915cb4a))
+* start recordings over insecure HTTP ([#186](https://github.com/tessel-la/robo-boy/issues/186)) ([885a2a4](https://github.com/tessel-la/robo-boy/commit/885a2a4f89f4a757e922764684c5e40ce9459600))
+
 ## [0.13.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.12.0-alpha...robo-boy-v0.13.0-alpha) (2026-09-23)
 
 
