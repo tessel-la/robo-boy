@@ -65,7 +65,8 @@ for (const secureContext of [true, false]) {
   });
 }
 
-test('opens a local MCAP through the replay worker without a ROS connection', async ({ page }) => {
+/** Ten seconds of /value at 1 Hz, as an indexed MCAP. */
+async function sampleMcap(): Promise<Uint8Array> {
   const buffer = new TempBuffer();
   const writer = new McapWriter({ writable: buffer });
   await writer.start({ profile: '', library: 'record-replay-test' });
@@ -85,12 +86,17 @@ test('opens a local MCAP through the replay worker without a ROS connection', as
     });
   }
   await writer.end();
+  return buffer.get();
+}
+
+test('opens a local MCAP through the replay worker without a ROS connection', async ({ page }) => {
+  const bytes = await sampleMcap();
   await page.goto('/');
   await page.getByRole('button', { name: 'Open local recordings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Record & Replay', exact: true });
   await panel
     .getByLabel('Open MCAP recording')
-    .setInputFiles({ name: 'sample.mcap', mimeType: 'application/octet-stream', buffer: Buffer.from(buffer.get()) });
+    .setInputFiles({ name: 'sample.mcap', mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });
   await expect(panel.getByText('sample.mcap', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
   await panel.getByText('Topics in this recording').click();
@@ -100,4 +106,49 @@ test('opens a local MCAP through the replay worker without a ROS connection', as
   await expect(panel.locator('output')).not.toHaveText('00:00');
   await panel.getByRole('button', { name: 'Pause playback', exact: true }).click();
   await expect(panel.getByRole('alert')).toHaveCount(0);
+});
+
+test('replays a recording on the ROS host in place, reading it by byte ranges', async ({ page, context }) => {
+  const bytes = await sampleMcap();
+  const ranges: string[] = [];
+  // Stands in for the recorder's file service behind the proxy. Routed on the context so the replay worker's requests are served too.
+  await context.route('**/recordings/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/recordings/list') {
+      return route.fulfill({ json: { version: 1, directory: '.', folders: [], files: [], recordings: [
+        { name: 'field_run', path: 'field_run', active: false, duration: 10, messages: 11, files: [{ name: 'field_run_0.mcap', path: 'field_run/field_run_0.mcap', size: bytes.length, modified: 0 }] },
+      ] } });
+    }
+    if (url.pathname !== '/recordings/files/field_run/field_run_0.mcap') return route.fulfill({ status: 404, json: { error: 'Not found' } });
+    const range = /^bytes=(\d+)-(\d+)$/.exec(route.request().headers().range ?? '');
+    if (!range) return route.fulfill({ status: 400, json: { error: 'expected a range request' } });
+    ranges.push(range[0]);
+    const start = Number(range[1]), end = Math.min(Number(range[2]), bytes.length - 1);
+    return route.fulfill({
+      status: 206, body: Buffer.from(bytes.slice(start, end + 1)),
+      headers: { 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Accept-Ranges': 'bytes', ETag: '"v1"', 'Content-Type': 'application/octet-stream' },
+    });
+  });
+  await installRosMock(page, { topics: [{ name: '/value', type: 'std_msgs/msg/Float64' }] });
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await page.getByTitle('Advanced Options').click();
+  await page.locator('#ros2Value').fill('127.0.0.1');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  await page.getByLabel('Add workspace panel').first().click();
+  await page.getByRole('button', { name: 'Record & Replay', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Record & Replay', exact: true });
+  const host = panel.getByRole('region', { name: 'Recordings on the ROS host' });
+  await expect(host.getByText('00:10 · 11 messages', { exact: false })).toBeVisible();
+  await host.getByRole('button', { name: 'Replay field_run_0.mcap from the ROS host', exact: true }).click();
+  await expect(panel.getByText(/Replaying from the ROS host/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
+  await panel.getByRole('button', { name: 'Play recording', exact: true }).click();
+  await expect(panel.locator('output')).not.toHaveText('00:00');
+  await panel.getByRole('button', { name: 'Pause playback', exact: true }).click();
+  expect(ranges.length).toBeGreaterThan(0);
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

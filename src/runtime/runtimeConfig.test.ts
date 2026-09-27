@@ -43,6 +43,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'wss://robot.local:8443/websocket',
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
+      recordingsBaseUrl: '/recordings',
       ollamaBaseUrl: '/ollama',
       webrtcWhepBaseUrl: '/webrtc/',
       webrtcHlsBaseUrl: '',
@@ -63,6 +64,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://192.168.1.20:9090',
       videoStreamBaseUrl: 'http://192.168.1.20:8080',
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
+      recordingsBaseUrl: 'http://192.168.1.20:9091',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
       webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
@@ -96,6 +98,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://robot.tailnet.ts.net:9090',
       videoStreamBaseUrl: 'http://robot.tailnet.ts.net:8080',
       meshResourcesBaseUrl: 'http://robot.tailnet.ts.net:8000',
+      recordingsBaseUrl: 'http://robot.tailnet.ts.net:9091',
       ollamaBaseUrl: 'http://robot.tailnet.ts.net:11434',
       webrtcWhepBaseUrl: 'http://robot.tailnet.ts.net:8889/',
       webrtcHlsBaseUrl: 'http://robot.tailnet.ts.net:8888/',
@@ -118,6 +121,7 @@ describe('resolveRuntimeEndpoints', () => {
         rosbridgePort: '9090',
         videoStreamPort: '8080',
         meshResourcesPort: '8000',
+        recordingsPort: '9091',
         ollamaPort: '11434',
         webrtcPort: '8889',
         webrtcDiscoveryPort: '9997',
@@ -129,6 +133,7 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.rosbridgeUrl).toBe('ws://operator.local/websocket');
     expect(endpoints.videoStreamBaseUrl).toBe('/video_stream');
     expect(endpoints.meshResourcesBaseUrl).toBe('/mesh_resources');
+    expect(endpoints.recordingsBaseUrl).toBe('/recordings');
   });
 
   it('connects the desktop shell directly to an installed ROS stack', () => {
@@ -138,6 +143,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgeUrl: 'ws://192.168.1.20:9090',
       videoStreamBaseUrl: 'http://192.168.1.20:8080',
       meshResourcesBaseUrl: 'http://192.168.1.20:8000',
+      recordingsBaseUrl: 'http://192.168.1.20:9091',
       ollamaBaseUrl: 'http://192.168.1.20:11434',
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
       webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
@@ -167,6 +173,7 @@ describe('resolveRuntimeEndpoints', () => {
       rosbridgePort: '19090',
       videoStreamPort: '18080',
       meshResourcesPort: '18000',
+      recordingsPort: '19091',
       ollamaPort: '11435',
       webrtcPort: '8889', webrtcDiscoveryPort: '9997',
   webrtcHlsPort: '8888', webBackendMode: 'auto',
@@ -176,6 +183,7 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.videoStreamBaseUrl).toBe('http://robot.local:18080');
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
     expect(endpoints.ollamaBaseUrl).toBe('http://robot.local:11435');
+    expect(endpoints.recordingsBaseUrl).toBe('http://robot.local:19091');
   });
 
   it('allows the landing page connection to override service ports', () => {

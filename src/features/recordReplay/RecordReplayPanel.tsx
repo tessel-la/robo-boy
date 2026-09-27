@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
-import { FiArrowLeft, FiCircle, FiDisc, FiFile, FiFolder, FiPause, FiPlay, FiRepeat, FiRotateCcw, FiRotateCw, FiScissors, FiSquare, FiUpload, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiCircle, FiDisc, FiFile, FiFolder, FiPause, FiPlay, FiRefreshCw, FiRepeat, FiRotateCcw, FiRotateCw, FiScissors, FiServer, FiSquare, FiUpload, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import type { RoboBoyJsonObject } from '../../panels/types';
+import { useRuntimeConfig } from '../../runtime/runtimeConfig';
+import { canSaveToDisk, chooseSaveTarget, downloadWithBrowser, RecordingDownload, type DownloadSnapshot } from './downloadRecording';
+import { DownloadCard, RemoteBrowser } from './RemoteBrowser';
+import { remoteBag, useRemoteRecordings, type RemoteRecordingFile } from './remoteRecordings';
 import type { ReplaySession } from './ReplaySession';
-import { defaultRecordOptions, type RecordOptions } from './types';
+import { defaultRecordOptions, type BagSource, type RecordOptions } from './types';
+import { formatBytes as bytes, formatDuration } from './format';
 import { useRecorder } from './useRecorder';
 import './RecordReplayPanel.css';
 
-const formatDuration = (seconds: number) => {
-  const total = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(total / 3600) ? `${Math.floor(total / 3600)}:` : ''}${String(Math.floor(total / 60) % 60).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-};
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
-const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(1)} GiB`
-  : value >= 1024 ** 2 ? `${(value / 1024 ** 2).toFixed(1)} MiB` : `${Math.ceil(value / 1024)} KiB`;
 function restoreOptions(state?: RoboBoyJsonObject): RecordOptions {
   const defaults = defaultRecordOptions();
   if (state?.version !== 1 || !state.options || typeof state.options !== 'object' || Array.isArray(state.options)) return defaults;
@@ -79,7 +78,25 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
     const values = next as unknown as RoboBoyJsonObject;
     lastSaved.current = values; onStateChange({ version: 1, options: values });
   };
-  const load = (file?: File) => { if (file) { setTab('replay'); setScrub(null); clearTimeout(seekTimer.current); session.open(file); } };
+  const load = (source?: BagSource) => { if (source) { setTab('replay'); setScrub(null); clearTimeout(seekTimer.current); session.open(source); } };
+  const { recordingsBaseUrl } = useRuntimeConfig();
+  const [remotePath, setRemotePath] = useState('');
+  const remote = useRemoteRecordings(recordingsBaseUrl, remotePath, connected && isActive && tab === 'replay' && !replay.info);
+  const [download, setDownload] = useState<{ job?: RecordingDownload; snapshot?: DownloadSnapshot; browser?: string; error?: string }>();
+  const downloading = download?.snapshot?.phase === 'downloading' || download?.snapshot?.phase === 'retrying';
+  const startDownload = (file: RemoteRecordingFile) => {
+    const bag = remoteBag(recordingsBaseUrl, file);
+    if (!canSaveToDisk()) { downloadWithBrowser(bag.url); setDownload({ browser: bag.name }); return; }
+    // The save dialog must open from the click itself, before anything is awaited.
+    chooseSaveTarget(bag.name).then(handle => {
+      if (!handle) return;
+      const job = new RecordingDownload(bag, handle, snapshot => setDownload(current => current?.job === job ? { job, snapshot } : current));
+      setDownload({ job, snapshot: job.snapshot });
+      void job.run();
+    }).catch((error: unknown) => setDownload({ error: `This device could not create the file: ${error instanceof Error ? error.message : String(error)}` }));
+  };
+  const dismissDownload = () => { if (download?.snapshot?.phase !== 'done') void download?.job?.cancel(); setDownload(undefined); };
+  const openDownload = () => { download?.job?.file().then(file => { setDownload(undefined); load(file); }, (error: unknown) => setDownload({ error: `The saved file could not be opened: ${String(error)}` })); };
   const seek = (position: number) => {
     setScrub(position); clearTimeout(seekTimer.current);
     seekTimer.current = setTimeout(() => { session.seek(position); setScrub(null); }, 90);
@@ -96,6 +113,8 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
   const loading = replay.phase === 'loading' || replay.phase === 'seeking';
   const position = scrub ?? replay.position;
   const folderPath = recorder.folders?.directory === '.' ? '' : recorder.folders?.directory ?? '';
+  // Where the last recording landed, relative to the root the file service lists.
+  const savedPath = recorder.status?.path && recorder.status.path.startsWith(`${recorder.status.root}/`) ? recorder.status.path.slice(recorder.status.root.length + 1) : undefined;
 
   return <section className={`record-replay-panel${dragging ? ' is-dragging' : ''}`} aria-label="Record & Replay"
     onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth.current++; setDragging(true); } }}
@@ -107,23 +126,31 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
         <button aria-pressed={tab === 'replay'} onClick={() => setTab('replay')}><FiPlay /> Replay</button>
         <button aria-pressed={tab === 'record'} onClick={() => setTab('record')}><FiCircle className={recording ? 'rr-record-dot' : ''} /> Record</button>
       </div>
-      <span className="rr-location">{tab === 'replay' ? 'On this device' : 'On ROS host'}</span>
+      <span className="rr-location">{tab === 'record' || replay.remote ? 'On ROS host' : 'On this device'}</span>
     </header>
     <input ref={input} type="file" accept=".mcap" aria-label="Open MCAP recording" className="rr-file-input" onChange={event => { load(event.target.files?.[0]); event.target.value = ''; }} />
     {tab === 'replay' ? <div className="rr-body" key="replay">
-      {!replay.info ? <button className={`rr-dropzone${loading ? ' is-loading' : ''}`} onClick={() => input.current?.click()}>
-        <span className="rr-bag"><FiFile /><i /><i /><i /></span>
-        <strong>{loading ? 'Unpacking your recording…' : 'Drop an MCAP here'}</strong>
-        <span>{loading ? 'Reading the index. Your file stays on this device.' : 'or click to choose a recording'}</span>
-      </button> : <>
+      {download?.snapshot && <DownloadCard snapshot={download.snapshot} canResume={Boolean(download.job?.canResume)} onCancel={dismissDownload}
+        onResume={() => void download.job?.run()} onOpen={openDownload} onDismiss={dismissDownload} />}
+      {download?.browser && <p className="rr-download-note" role="status">Your browser is downloading {download.browser}. When it finishes, drop it here to replay it. <button className="rr-icon" aria-label="Dismiss" onClick={() => setDownload(undefined)}><FiX /></button></p>}
+      {download?.error && <p className="rr-error" role="alert">{download.error}</p>}
+      {!replay.info ? <>
+        <button className={`rr-dropzone${loading ? ' is-loading' : ''}${remote.state.status !== 'idle' ? ' is-compact' : ''}`} onClick={() => input.current?.click()}>
+          <span className="rr-bag">{replay.remote ? <FiServer /> : <FiFile />}<i /><i /><i /></span>
+          <strong>{loading ? 'Unpacking your recording…' : 'Drop an MCAP here'}</strong>
+          <span>{loading ? replay.remote ? 'Reading its index on the ROS host. Only the parts you play are transferred.' : 'Reading the index. Your file stays on this device.' : 'or click to choose a recording'}</span>
+        </button>
+        {!loading && <RemoteBrowser state={remote.state} path={remotePath} downloading={downloading} onBrowse={setRemotePath} onRefresh={remote.refresh}
+          onReplay={file => load(remoteBag(recordingsBaseUrl, file))} onDownload={startDownload} />}
+      </> : <>
         <div className="rr-file-card">
-          <FiFile className={loading ? 'rr-loading-icon' : ''} />
-          <div><strong title={replay.info.name}>{replay.info.name}</strong><span>{bytes(replay.info.size)} · {replay.info.topics.length} topics · Local replay</span></div>
+          {replay.remote ? <FiServer className={loading ? 'rr-loading-icon' : ''} /> : <FiFile className={loading ? 'rr-loading-icon' : ''} />}
+          <div><strong title={replay.info.name}>{replay.info.name}</strong><span>{bytes(replay.info.size)} · {replay.info.topics.length} topics · {replay.remote ? 'Replaying from the ROS host' : 'Local replay'}</span></div>
           <button aria-label="Replace recording" title="Replace recording" onClick={() => input.current?.click()}><FiUpload /></button>
           <button aria-label="Close recording and return to live data" title="Return to live data" onClick={() => session.close()}><FiX /></button>
         </div>
         <div className="rr-timeline" aria-busy={loading}>
-          <div className="rr-time"><output aria-label="Playback position">{formatDuration(position)}</output><span>{loading ? 'Seeking…' : replay.playing ? 'Playing' : 'Paused'}</span><span>{formatDuration(session.duration)}</span></div>
+          <div className="rr-time"><output aria-label="Playback position">{formatDuration(position)}</output><span>{loading ? 'Seeking…' : !replay.playing ? 'Paused' : replay.buffering ? 'Buffering…' : 'Playing'}</span><span>{formatDuration(session.duration)}</span></div>
           <input type="range" aria-label="Playback position" min="0" max={session.duration || 1} step="0.001" value={position}
             style={{ '--progress': `${session.duration ? (position / session.duration) * 100 : 0}%` } as CSSProperties} disabled={!ready || !session.duration} onChange={event => seek(Number(event.target.value))} />
           <div className="rr-transport">
@@ -147,11 +174,15 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
         </details>
       </>}
       {replay.error && <p className="rr-error" role="alert">{replay.error}</p>}
-      {replay.phase === 'error' && <button onClick={() => input.current?.click()}>Choose another MCAP</button>}
+      {replay.phase === 'error' && <div className="rr-error-actions">
+        {session.canRetry && <button onClick={() => session.retry()}><FiRefreshCw /> {replay.info ? 'Reconnect and continue' : 'Try again'}</button>}
+        <button onClick={() => input.current?.click()}>Choose another MCAP</button>
+      </div>}
     </div> : <div className="rr-body" key="record">
       <div className="rr-recorder-status" role="status"><i data-online={recorder.online} data-recording={recorder.status?.state === 'recording'} /><strong>{!connected ? 'Connect to ROS to record' : !recorder.online ? 'Waiting for the ROS recorder…' : busy ? `Recording ${recorder.status?.state === 'paused' ? 'paused' : recorder.status?.state === 'stopping' ? 'is finishing…' : 'in progress'}` : 'Ready to record'}</strong></div>
       {connected && !recorder.online && <p className="rr-hint">The ROS host needs the Robo-Boy recording service. Recordings are written there, and continue if you close this panel.</p>}
-      {recorder.status?.path && <div className="rr-record-summary"><strong>{recorder.status.path}</strong><span>{formatDuration(recorder.status.elapsed)} · {recorder.status.messages.toLocaleString()} messages · {bytes(recorder.status.bytes)} payload</span>{recorder.status.dropped > 0 && <span className="rr-error">{recorder.status.dropped.toLocaleString()} messages dropped: writer queue full.</span>}</div>}
+      {recorder.status?.path && <div className="rr-record-summary"><strong>{recorder.status.path}</strong><span>{formatDuration(recorder.status.elapsed)} · {recorder.status.messages.toLocaleString()} messages · {bytes(recorder.status.bytes)} payload</span>{recorder.status.dropped > 0 && <span className="rr-error">{recorder.status.dropped.toLocaleString()} messages dropped: writer queue full.</span>}
+        {!busy && savedPath && !replay.info && <button type="button" onClick={() => { setRemotePath(savedPath); setTab('replay'); }}><FiPlay /> Find it in Replay</button>}</div>}
       <form onSubmit={event => { event.preventDefault(); recorder.command('start', options); }}>
         <fieldset disabled={busy || recorder.pending}>
           <label>Destination on ROS host<div className="rr-inline"><input value={options.path} placeholder={recorder.status?.root ?? '/recordings'} onChange={event => change({ path: event.target.value })} /><button type="button" disabled={!recorder.online} onClick={() => { setBrowse(!browse); recorder.command('folders', undefined, options.path); }} aria-label="Browse recording folders"><FiFolder /></button></div></label>

@@ -2,7 +2,8 @@
 
 The Record & Replay panel has two views:
 
-- **Replay** opens an MCAP file on this device and plays it through Time Series, TF tree and 3D panels.
+- **Replay** plays an MCAP through Time Series, TF tree and 3D panels: a file on this device, or a recording on the
+  ROS host, read in place without copying it first.
 - **Record** asks the ROS host to write selected topics to an MCAP bag.
 
 Robot controls (pads, camera, behavior trees, services) always stay on the live connection. Replay never publishes.
@@ -19,6 +20,42 @@ connection screen when no robot is available.
   dynamic TF looks back at most 30 seconds, like a tf2 buffer.
 - The file stays on the device. It is read with random access through its index, so only summary data and the chunks
   being played enter memory.
+
+### Recordings on the ROS host
+
+While connected, the empty Replay view lists the recording root of the ROS host under **On the ROS host**: folders,
+finished bags (with duration, message count and size) and loose `.mcap` files. A split bag lists each part. A bag
+that is still being recorded is shown but cannot be opened until it stops. **Find it in Replay** in the Record view
+opens the folder of the recording that just finished.
+
+Each MCAP file has two actions:
+
+- **Replay** reads it in place over HTTP range requests, through the same reader as a local file. Opening a bag
+  transfers only its header, footer and index; playback then fetches the chunks it plays, reading ahead up to 8 MiB
+  once it moves forward through the file, and keeps at most 64 MiB in memory. A multi-gigabyte bag opens in a few
+  tens of kilobytes. On a slow link the clock waits (the panel shows **Buffering…**) instead of queueing data.
+- **Download** copies it to this device. Where the browser can write files (Chromium browsers and Electron), you
+  choose where to save it and the copy streams straight to disk with progress, cancel, and automatic resume from the
+  last byte after a dropped connection; **Replay** then opens the copy exactly like a dropped file. Elsewhere
+  (Firefox, Safari, mobile web views) the browser's own download takes over; drop the file on the panel when it
+  finishes.
+
+Failures stay recoverable. A dropped connection is retried with backoff; if it persists, playback stops with
+**Reconnect and continue**, which reopens the recording where it stopped. A download that runs out of retries keeps
+what it has and offers **Resume**. A recording that disappears, or changes while it is being read (detected through
+its size and ETag), is reported instead of being read inconsistently.
+
+The ROS host's recorder serves these files read-only on port 9091 (`RECORDINGS_PORT` in Compose,
+`ROBOBOY_RECORDINGS_PORT` on the host, `0` turns it off): `GET /list?path=` and `GET /files/<path>.mcap` with Range,
+HEAD and CORS. Nothing outside the recording root and nothing but `.mcap` files is served. The browser reaches it
+through Caddy at `/recordings`, so a web client needs no extra port; the desktop and mobile apps connect to
+`HOST:9091` directly (`VITE_RECORDINGS_PORT`), like rosbridge. Like the robot's other services it is
+unauthenticated: keep it on a trusted network or VPN.
+
+Caddy reaches the recorder from the Docker network through the host gateway, like rosbridge. If the host firewall
+filters that traffic, **On the ROS host** says the recordings service did not answer and Caddy logs a dial timeout
+to port 9091; allow the port the same way rosbridge's is allowed, for example
+`sudo ufw allow from 172.16.0.0/12 to any port 9091 proto tcp` for Docker's default bridge networks.
 
 Supported files: indexed MCAP (the `ros2 bag` default) with `ros2msg`/CDR, `ros1msg`, or JSON channels, and
 uncompressed, zstd or LZ4 chunks. A file without a chunk index can be fixed with `mcap recover`.
@@ -40,7 +77,8 @@ int64 fields are converted to numbers, as rosbridge does. Decompression is plain
 ## Record
 
 Recording runs on the ROS host in `infra/ros/recording_runner.py`, started by the ROS container's entrypoint. Raw
-message bytes never cross the browser connection, and a recording continues if the browser closes.
+message bytes never cross the browser connection, and a recording continues if the browser closes. The same process
+serves the finished recordings to Replay (see [Recordings on the ROS host](#recordings-on-the-ros-host)).
 
 | Option                | Meaning                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -79,6 +117,10 @@ mkdir -p "$HOME/recordings"
 ROBOBOY_RECORDINGS_ROOT="$HOME/recordings" python3 infra/ros/recording_runner.py
 ```
 
+The service also serves the recording root read-only on port 9091 (set `ROBOBOY_RECORDINGS_PORT`, or `0` to turn it
+off, and `ROBOBOY_RECORDINGS_ADDRESS` to bind one interface); allow that port through the firewall for desktop and
+mobile clients.
+
 The recorder, rosbridge, and the external application must discover the same ROS graph. Use the
 same domain and compatible DDS settings, and make custom message definitions available to the
 recorder through [robot workspace overlays](robot-overlays.md). Keep QoS on **Match publishers**
@@ -86,8 +128,8 @@ unless a particular topic requires an override; this also supports best-effort s
 
 **Ready to record** confirms the service is reachable. After **Start recording**, the state should
 change to **Recording in progress** and its message count should rise. Files are saved on the ROS
-host, even when using a desktop app on another computer. After **Stop & save**, copy the `.mcap`
-file to the desktop device to open it in Replay. Local replay needs no ROS installation or connection.
+host, even when using a desktop app on another computer. After **Stop & save**, replay the bag from
+the ROS host or download it from the Replay view. Local replay needs no ROS installation or connection.
 
 The container writes as root, so each finished bag is handed to the owner of the recording root (on a bind mount,
 the host user). This matters for snap browsers (Ubuntu's Firefox and Chromium): they only open files your user

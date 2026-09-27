@@ -151,6 +151,9 @@ export default defineConfig(({ mode }) => ({
               // Registry and manifest JSON must be available before any lazy
               // panel bundle can be discovered while the PWA is offline.
               globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+              // A recording opened or downloaded from the ROS host is a navigation too; it must
+              // reach the recorder instead of being answered with the app shell.
+              navigateFallbackDenylist: [/^\/recordings\//],
             },
             // The manifest is now defined in the manifest.webmanifest file
           }),

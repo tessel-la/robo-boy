@@ -3,6 +3,9 @@
 
 Protocol v1: std_msgs/String JSON on /roboboy/recorder/{command,status}.
 The writer thread owns rosbag2; the ROS executor only discovers and queues raw bytes.
+
+Finished recordings are also served read-only over HTTP (ROBOBOY_RECORDINGS_PORT, 9091 by default),
+so the app can list them and replay one in place with range requests, or download it.
 """
 import json
 import math
@@ -14,6 +17,183 @@ import tempfile
 import threading
 import time
 from collections import deque
+from email.utils import formatdate
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, quote, unquote, urlsplit
+
+LISTING_LIMIT = 500
+
+
+def resolve_inside(root, relative):
+    """The path of `relative` under `root`, refusing anything that resolves outside it (.., symlinks)."""
+    path = (root / str(relative).lstrip('/')).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError('Choose a path inside the recording root')
+    return path
+
+
+def bag_details(bag):
+    """Duration and message count from a finished bag's metadata.yaml, when it can be read."""
+    try:
+        import yaml
+        info = yaml.safe_load((bag / 'metadata.yaml').read_text())['rosbag2_bagfile_information']
+        return {'duration': info['duration']['nanoseconds'] / 1e9, 'messages': int(info['message_count'])}
+    except Exception:
+        return {}
+
+
+def list_directory(root, relative='', active=None):
+    """Folders, bags and loose MCAP files in one directory of the recording root.
+
+    A bag is a directory with metadata.yaml, which rosbag2 writes when the recording closes. The bag
+    being written has none yet, so it is recognised by `active` (its path) and marked instead.
+    """
+    directory = resolve_inside(root, relative)
+    if not directory.is_dir():
+        raise ValueError('Choose a directory inside the recording root')
+    active = Path(active).resolve() if active else None
+    listing = {'directory': str(directory.relative_to(root)), 'folders': [], 'recordings': [], 'files': []}
+
+    def mcap(path):
+        stat = path.stat()
+        return {'name': path.name, 'path': str(path.relative_to(root)), 'size': stat.st_size, 'modified': stat.st_mtime}
+
+    for entry in sorted(directory.iterdir(), key=lambda p: p.name):
+        if entry.name.startswith('.') or not entry.resolve().is_relative_to(root):
+            continue
+        if entry.is_dir():
+            recording = active == entry.resolve()
+            if recording or (entry / 'metadata.yaml').exists():
+                files = sorted((p for p in entry.iterdir() if p.is_file() and p.suffix == '.mcap'), key=lambda p: p.name)
+                listing['recordings'].append({'name': entry.name, 'path': str(entry.relative_to(root)), 'active': recording,
+                                              'files': [mcap(p) for p in files], **({} if recording else bag_details(entry))})
+            else:
+                listing['folders'].append(entry.name)
+        elif entry.is_file() and entry.suffix == '.mcap':
+            listing['files'].append(mcap(entry))
+    for key in ('folders', 'recordings', 'files'):
+        listing[key] = listing[key][:LISTING_LIMIT]
+    return listing
+
+
+class HttpError(Exception):
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
+def parse_range(header, size):
+    """The (start, end) byte range a single-range header asks for, None for the whole file."""
+    match = re.fullmatch(r'bytes=(\d*)-(\d*)', (header or '').strip())
+    if not match or match.group(1) == match.group(2) == '':
+        return None  # Absent, multi-range or malformed: RFC 9110 allows answering with the whole file.
+    first, last = match.groups()
+    if first == '':
+        start, end = max(0, size - int(last)), size - 1
+    else:
+        start, end = int(first), min(size - 1, int(last)) if last else size - 1
+    if start >= size or start > end:
+        raise HttpError(416, 'The requested range is outside the file')
+    return start, end
+
+
+def recording_files_handler(root, active):
+    """Read-only HTTP access to the recording root: `/list?path=` and `/files/<path>.mcap`.
+
+    Files support Range, HEAD and If-Range, so a bag can be replayed in place by reading only its
+    index and the chunks being played. CORS is open because these are unauthenticated public reads,
+    like the robot's other services, and the packaged apps fetch them from their own origin.
+    """
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+        server_version = 'RoboBoyRecordings/1'
+
+        def log_message(self, *_):
+            pass
+
+        def cors(self):
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified')
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.cors()
+            self.send_header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Range, If-Range')
+            self.send_header('Access-Control-Max-Age', '600')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+
+        def do_HEAD(self):
+            self.respond(body=False)
+
+        def do_GET(self):
+            self.respond(body=True)
+
+        def respond(self, body):
+            try:
+                url = urlsplit(self.path)
+                if url.path == '/list':
+                    self.send_json(200, dict(list_directory(root, parse_qs(url.query).get('path', [''])[0], active()), version=1), body)
+                elif url.path.startswith('/files/'):
+                    self.send_file(unquote(url.path[len('/files/'):]), body)
+                else:
+                    raise HttpError(404, 'Not found')
+            except HttpError as error:
+                self.send_json(error.status, {'error': str(error)}, body)
+            except ValueError as error:
+                self.send_json(400, {'error': str(error)}, body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # The client stopped reading: a seek, a cancelled download.
+
+        def send_json(self, status, value, body):
+            data = json.dumps(value).encode()
+            self.send_response(status)
+            self.cors()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            if body:
+                self.wfile.write(data)
+
+        def send_file(self, relative, body):
+            path = resolve_inside(root, relative)
+            if path.suffix != '.mcap' or not path.is_file():
+                raise HttpError(404, 'No MCAP recording at that path')
+            recording = active()
+            if recording and path.is_relative_to(Path(recording).resolve()):
+                raise HttpError(409, 'This recording is still being written. Stop it before opening it.')
+            with open(path, 'rb') as file:
+                stat = os.fstat(file.fileno())
+                size, etag = stat.st_size, f'"{stat.st_size:x}-{stat.st_mtime_ns:x}"'
+                if_range = self.headers.get('If-Range')
+                span = parse_range(self.headers.get('Range'), size) if not if_range or if_range == etag else None
+                start, end = span or (0, size - 1)
+                self.send_response(206 if span else 200)
+                self.cors()
+                self.send_header('Accept-Ranges', 'bytes')
+                self.send_header('Content-Type', 'application/octet-stream')
+                self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{quote(path.name)}")
+                self.send_header('ETag', etag)
+                self.send_header('Last-Modified', formatdate(stat.st_mtime, usegmt=True))
+                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('Content-Length', str(max(0, end - start + 1)))
+                if span:
+                    self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+                self.end_headers()
+                if body and size:
+                    self.connection.sendfile(file, start, end - start + 1)
+
+    return Handler
+
+
+def serve_recordings(root, active, address, port):
+    """Start the read-only recordings service on a background thread; returns the server."""
+    server = ThreadingHTTPServer((address, port), recording_files_handler(root, active))
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, name='recording-files', daemon=True).start()
+    return server
 
 
 def validate_options(value, root):
@@ -119,6 +299,10 @@ def main():
             self.create_subscription(String, '/roboboy/recorder/command', self.command, 10)
             self.create_timer(0.5, self.tick)
 
+        def active_destination(self):
+            """The bag being written, if any; the file service refuses to serve it until it is closed."""
+            return self.status['path'] if self.status['state'] in ('recording', 'paused', 'stopping') else None
+
         def publish(self):
             # The writer thread updates counters; copying first keeps json.dumps off a changing dict.
             self.publisher.publish(String(data=json.dumps(dict(self.status))))
@@ -152,14 +336,11 @@ def main():
                         raise ValueError('No active recording')
                     self.queue.put(('split',))
                 elif action == 'folders':
-                    directory = (self.root / str(request.get('path', ''))).resolve()
-                    if not directory.is_relative_to(self.root) or not directory.is_dir():
-                        raise ValueError('Choose a directory inside the recording root')
-                    self.status['directory'] = str(directory.relative_to(self.root))
-                    entries = [p for p in directory.iterdir() if p.is_dir() and p.resolve().is_relative_to(self.root)]
+                    listing = list_directory(self.root, request.get('path', ''), self.active_destination())
+                    self.status['directory'] = listing['directory']
                     # A bag is a directory too; list it separately so nobody records into one.
-                    self.status['folders'] = sorted(p.name for p in entries if not (p / 'metadata.yaml').exists())[:500]
-                    self.status['recordings'] = sorted(p.name for p in entries if (p / 'metadata.yaml').exists())[:500]
+                    self.status['folders'] = listing['folders']
+                    self.status['recordings'] = [bag['name'] for bag in listing['recordings']]
                 elif action != 'status':
                     raise ValueError('Unknown recorder command')
             except Exception as error:
@@ -317,11 +498,22 @@ def main():
 
     rclpy.init()
     node = Recorder()
+    files = None
+    port = int(os.environ.get('ROBOBOY_RECORDINGS_PORT', '9091') or 0)
+    if port:
+        try:
+            files = serve_recordings(node.root, node.active_destination, os.environ.get('ROBOBOY_RECORDINGS_ADDRESS', '0.0.0.0'), port)
+            node.get_logger().info(f'Serving recordings read-only on port {port}')
+        except OSError as error:
+            # Recording does not depend on the file service; keep it available either way.
+            node.get_logger().error(f'Recordings cannot be served on port {port}: {error}')
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
+        if files:
+            files.shutdown()
         node.stop()
         if node.thread:
             node.thread.join()  # Drain queued bytes and finalize MCAP/metadata before exit.

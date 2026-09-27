@@ -1,5 +1,5 @@
 import ROSLIB, { type Ros } from 'roslib';
-import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
+import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage } from './types';
 
 type WireMessage = { op: string; id?: string; topic?: string; service?: string; args?: { topic?: string; type?: string } };
 type Emitter = { emit: (name: string, value: unknown) => void; removeAllListeners: () => void };
@@ -10,6 +10,10 @@ export interface ReplaySnapshot {
   playing: boolean;
   speed: number;
   loop: boolean;
+  /** The recording is read in place on the ROS host rather than from this device. */
+  remote: boolean;
+  /** Playback is waiting for data longer than a frame or two: a slow link or a slow machine. */
+  buffering: boolean;
   error?: string;
 }
 const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static';
@@ -80,7 +84,7 @@ class ReplayRos extends ROSLIB.Ros {
 }
 
 export class ReplaySession {
-  snapshot: ReplaySnapshot = { phase: 'empty', position: 0, playing: false, speed: 1, loop: false };
+  snapshot: ReplaySnapshot = { phase: 'empty', position: 0, playing: false, speed: 1, loop: false, remote: false, buffering: false };
   messageTime = 0;
   source: { ros: Ros | null; generation: number } = { ros: null, generation: 0 };
   private listeners = new Set<() => void>();
@@ -90,6 +94,9 @@ export class ReplaySession {
   private requestId = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private topicTimer?: ReturnType<typeof setTimeout>;
+  private bufferTimer?: ReturnType<typeof setTimeout>;
+  private bag?: BagSource;
+  private resumeAt = 0;
   private pendingEnd = 0;
   private lastTick = 0;
   private seeking = false;
@@ -104,30 +111,40 @@ export class ReplaySession {
   private update(patch: Partial<ReplaySnapshot>) { this.snapshot = { ...this.snapshot, ...patch }; this.listeners.forEach(fn => fn()); }
   private sourceChanged(ros: Ros | null) { this.source = { ros, generation: this.source.generation + 1 }; this.sourceListeners.forEach(fn => fn()); }
   private post(request: ReaderRequest) { this.worker?.postMessage(request); }
-  open(file: File) {
+  open(source: BagSource, resumeAt = 0) {
     this.close();
-    if (!file.name.toLowerCase().endsWith('.mcap')) { this.update({ phase: 'error', error: 'Choose an .mcap recording.' }); return; }
+    if (!source.name.toLowerCase().endsWith('.mcap')) { this.update({ phase: 'error', error: 'Choose an .mcap recording.' }); return; }
     this.disposed = false;
-    this.update({ phase: 'loading', error: undefined });
+    this.bag = source;
+    this.resumeAt = resumeAt;
+    this.update({ phase: 'loading', error: undefined, remote: isRemoteBag(source) });
     try {
       this.worker = this.createWorker();
       this.worker.onmessage = ({ data }: MessageEvent<ReaderResponse>) => this.receive(data);
       this.worker.onerror = event => { this.update({ phase: 'error', playing: false, error: event.message || 'The recording reader stopped unexpectedly.' }); };
-      this.post({ id: ++this.requestId, op: 'open', file });
+      this.post({ id: ++this.requestId, op: 'open', source });
     } catch (error) { this.update({ phase: 'error', error: String(error) }); }
+  }
+  /** Whether a failed recording can be opened again as it was: remote reads fail with the connection. */
+  get canRetry() { return this.snapshot.phase === 'error' && Boolean(this.bag && isRemoteBag(this.bag)); }
+  /** Reopen a recording whose connection failed, back where it stopped. */
+  retry() {
+    if (!this.canRetry || !this.bag) return;
+    this.open(this.bag, this.snapshot.info ? this.snapshot.position : 0);
   }
   private receive(response: ReaderResponse) {
     if (this.disposed || response.id !== this.requestId) return;
-    if (response.op === 'error') { this.update({ phase: 'error', playing: false, error: response.error }); return; }
+    if (response.op === 'error') { this.settled(); this.update({ phase: 'error', playing: false, error: response.error }); return; }
     if (response.op === 'opened') {
       this.adapter = new ReplayRos(this);
       this.update({ phase: 'ready', info: response.info, position: 0 });
       this.sourceChanged(this.adapter);
-      this.seek(0, false);
+      this.seek(this.resumeAt, false);
     } else {
       if (this.seeking) this.adapter?.hydrate(response.messages, this.refreshing);
       else for (const item of response.messages) this.adapter?.deliver(item);
       if (!response.done) { this.worker?.postMessage({ op: 'ack', id: response.id }); return; }
+      this.settled();
       this.seeking = false; this.refreshing = false;
       this.update({ phase: 'ready', position: this.pendingEnd });
       if (this.snapshot.playing) {
@@ -153,6 +170,7 @@ export class ReplaySession {
   seek(position: number, reset = Math.min(this.duration, Math.max(0, position)) < this.snapshot.position, onlyNew = false) {
     if (!this.snapshot.info || !Number.isFinite(position)) return;
     clearTimeout(this.timer);
+    this.settled();
     this.pendingEnd = Math.min(this.duration, Math.max(0, position));
     this.seeking = true; this.refreshing = onlyNew && !reset;
     this.update({ phase: 'seeking', position: this.pendingEnd });
@@ -185,13 +203,20 @@ export class ReplaySession {
       this.lastTick = now;
       this.pendingEnd = Math.min(this.duration, this.snapshot.position + elapsed * this.snapshot.speed);
       this.post({ id: ++this.requestId, op: 'read', start: this.toTime(this.snapshot.position) + 1n, end: this.toTime(this.pendingEnd), topics: this.adapter?.topics ?? [] });
+      clearTimeout(this.bufferTimer);
+      this.bufferTimer = setTimeout(() => this.update({ buffering: true }), 400);
     }, 33);
   }
+  /** A read finished (or failed): playback is no longer waiting on it. */
+  private settled() {
+    clearTimeout(this.bufferTimer);
+    if (this.snapshot.buffering) this.update({ buffering: false });
+  }
   close() {
-    clearTimeout(this.timer); clearTimeout(this.topicTimer);
+    clearTimeout(this.timer); clearTimeout(this.topicTimer); clearTimeout(this.bufferTimer);
     this.worker?.terminate(); this.worker = undefined; ++this.requestId;
-    this.adapter?.dispose(); this.adapter = undefined; this.seeking = false; this.refreshing = false;
-    this.update({ phase: 'empty', info: undefined, position: 0, playing: false, error: undefined });
+    this.adapter?.dispose(); this.adapter = undefined; this.seeking = false; this.refreshing = false; this.bag = undefined;
+    this.update({ phase: 'empty', info: undefined, position: 0, playing: false, error: undefined, remote: false, buffering: false });
     if (this.source.ros) this.sourceChanged(null);
   }
   dispose() { this.close(); this.disposed = true; }

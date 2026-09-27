@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Ros } from 'roslib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rangeServer } from '../../test/rangeServer';
 import RecordReplayPanel from './RecordReplayPanel';
 import { ReplaySession } from './ReplaySession';
 import type { BagInfo, ReaderRequest, ReaderResponse, RecorderStatus } from './types';
@@ -39,6 +40,23 @@ class FakeWorker {
   last(op: ReaderRequest['op']) { return [...this.requests].reverse().find(request => request.op === op)!; }
 }
 
+/** The ROS host's recordings, by folder. 'down' fails like an unreachable host; a folder not set here never answers. */
+let listings: Record<string, unknown>;
+const EMPTY = { version: 1, folders: [], files: [], recordings: [] };
+const LISTING = {
+  version: 1, directory: '.', folders: ['field'],
+  files: [{ name: 'loose.mcap', path: 'loose.mcap', size: 2048, modified: 0 }],
+  recordings: [
+    { name: 'run_1', path: 'run_1', active: false, duration: 75, messages: 1200, files: [{ name: 'run_1_0.mcap', path: 'run_1/run_1_0.mcap', size: 3 * 1024 ** 2, modified: 0 }] },
+    { name: 'live', path: 'live', active: true, files: [] },
+    { name: 'long', path: 'long', active: false, files: [{ name: 'long_0.mcap', path: 'long/long_0.mcap', size: 1024, modified: 0 }, { name: 'long_1.mcap', path: 'long/long_1.mcap', size: 1024, modified: 0 }] },
+  ],
+};
+const BAG_BYTES = Uint8Array.from({ length: 5000 }, (_, index) => index % 7);
+let fetchMock: ReturnType<typeof vi.fn>;
+const settle = async () => { for (let turn = 0; turn < 5; turn++) await act(async () => { await Promise.resolve(); }); };
+const remoteUrl = (path: string) => `${location.origin}/recordings/files/${path}`;
+
 let worker: FakeWorker;
 let session: ReplaySession;
 const onStateChange = vi.fn();
@@ -64,10 +82,24 @@ beforeEach(() => {
   session = new ReplaySession(() => worker as unknown as Worker);
   onStateChange.mockClear();
   recorder.value = { status: undefined, online: false, pending: false, error: '', folders: undefined, command: vi.fn() };
+  listings = {};
+  const files = rangeServer(BAG_BYTES);
+  fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+    const url = new URL(input, location.href);
+    if (url.pathname.startsWith('/recordings/files/')) return files.fetch(input, init);
+    const path = url.searchParams.get('path') ?? '';
+    if (!(path in listings)) return new Promise(() => undefined);
+    const listing = listings[path];
+    if (listing === 'down') throw new TypeError('Failed to fetch');
+    return { status: 200, ok: true, json: async () => listing };
+  });
+  vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => {
+  cleanup(); // Unmount first: a mounted panel reacts to its recording closing by listing the ROS host again.
   session.dispose();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('RecordReplayPanel replay', () => {
@@ -156,7 +188,116 @@ describe('RecordReplayPanel replay', () => {
     renderPanel();
     const input = screen.getByLabelText('Open MCAP recording') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [new File(['x'], 'picked.mcap')] } });
-    expect(worker.last('open')).toMatchObject({ file: { name: 'picked.mcap' } });
+    expect(worker.last('open')).toMatchObject({ source: { name: 'picked.mcap' } });
+  });
+});
+
+describe('RecordReplayPanel recordings on the ROS host', () => {
+  it('lists folders, bags and files, and replays one in place', async () => {
+    listings[''] = LISTING;
+    renderPanel();
+    await settle();
+    const host = screen.getByRole('region', { name: 'Recordings on the ROS host' });
+    expect(within(host).getByRole('button', { name: 'field' })).toBeInTheDocument();
+    expect(within(host).getByText('01:15 · 1,200 messages · 3.0 MiB')).toBeInTheDocument();
+    expect(within(host).getByText('Being recorded · available when it stops')).toBeInTheDocument();
+    expect(within(host).queryByRole('button', { name: /live/ })).not.toBeInTheDocument();
+    expect(within(host).getByRole('list', { name: 'Parts of long' })).toHaveTextContent('Part 2 of 2');
+
+    fireEvent.click(within(host).getByRole('button', { name: 'Replay run_1_0.mcap from the ROS host' }));
+    expect(worker.last('open')).toMatchObject({ source: { url: remoteUrl('run_1/run_1_0.mcap'), name: 'run_1_0.mcap', size: 3 * 1024 ** 2 } });
+    expect(screen.getByText(/Reading its index on the ROS host/)).toBeInTheDocument();
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: { ...INFO, name: 'run_1_0.mcap' } });
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    expect(screen.getByText('3.0 MiB · 2 topics · Replaying from the ROS host')).toBeInTheDocument();
+    expect(screen.getByText('On ROS host')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recordings on the ROS host' })).not.toBeInTheDocument();
+  });
+
+  it('moves through folders with breadcrumbs', async () => {
+    listings[''] = LISTING;
+    listings.field = { ...EMPTY, directory: 'field' };
+    renderPanel();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'field' }));
+    await settle();
+    expect(fetchMock).toHaveBeenLastCalledWith('/recordings/list?path=field', expect.anything());
+    expect(screen.getByText(/No recordings here yet/)).toBeInTheDocument();
+    const crumbs = screen.getByRole('navigation', { name: 'Recording folder' });
+    expect(within(crumbs).getByRole('button', { name: 'field' })).toHaveAttribute('aria-current', 'location');
+    fireEvent.click(within(crumbs).getByRole('button', { name: 'recordings' }));
+    await settle();
+    expect(fetchMock).toHaveBeenLastCalledWith('/recordings/list?path=', expect.anything());
+  });
+
+  it('explains an unreachable host and tries again on request', async () => {
+    listings[''] = 'down';
+    renderPanel();
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('The ROS host’s recordings are not reachable');
+    listings[''] = LISTING;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await settle();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('run_1')).toBeInTheDocument();
+  });
+
+  it('only looks on the ROS host while connected', async () => {
+    renderPanel({ connected: false, ros: null });
+    await settle();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Recordings on the ROS host' })).not.toBeInTheDocument();
+  });
+
+  it('reconnects a remote recording where it stopped after the connection drops', async () => {
+    listings[''] = LISTING;
+    renderPanel();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Replay run_1_0.mcap from the ROS host' }));
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Play recording' }));
+    act(() => { vi.advanceTimersByTime(40); });
+    worker.reply({ id: worker.last('read').id, op: 'error', error: 'Lost the connection to the ROS host while reading the recording (Failed to fetch).' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Lost the connection to the ROS host');
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect and continue' }));
+    expect(worker.last('open')).toMatchObject({ source: { url: remoteUrl('run_1/run_1_0.mcap') } });
+  });
+
+  it('downloads a recording with progress, then replays the copy like a dropped file', async () => {
+    vi.useRealTimers();
+    listings[''] = { ...EMPTY, files: [{ name: 'run_1_0.mcap', path: 'run_1/run_1_0.mcap', size: BAG_BYTES.length, modified: 0 }] };
+    const written: number[] = [];
+    const handle = {
+      createWritable: async () => ({ write: async (chunk: Uint8Array) => { written.push(...chunk); }, close: async () => undefined, abort: async () => undefined }),
+      getFile: async () => new File([new Uint8Array(written)], 'run_1_0.mcap'),
+    };
+    const picker = vi.fn(async () => handle);
+    vi.stubGlobal('showSaveFilePicker', picker);
+    renderPanel();
+    await screen.findByText('run_1_0.mcap');
+    fireEvent.click(screen.getByRole('button', { name: 'Download run_1_0.mcap' }));
+    expect(picker).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'run_1_0.mcap' }));
+    const card = await screen.findByRole('status', { name: 'Download of run_1_0.mcap' });
+    await waitFor(() => expect(card).toHaveTextContent('Saved · 5 KiB'));
+    expect(written).toEqual([...BAG_BYTES]);
+    fireEvent.click(within(card).getByRole('button', { name: 'Replay' }));
+    await waitFor(() => expect(worker.last('open')).toMatchObject({ source: { name: 'run_1_0.mcap', size: BAG_BYTES.length } }));
+    expect((worker.last('open') as Extract<ReaderRequest, { op: 'open' }>).source).toBeInstanceOf(File);
+  });
+
+  it('hands the download to the browser where it cannot write files itself, without leaving the page', async () => {
+    listings[''] = LISTING;
+    renderPanel();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Download loose.mcap' }));
+    // A hidden frame downloads it; navigating the page itself would drop the robot connection in Firefox.
+    const frame = document.querySelector('iframe');
+    expect(frame).toHaveAttribute('src', remoteUrl('loose.mcap'));
+    expect(frame?.hidden).toBe(true);
+    expect(screen.getByRole('status')).toHaveTextContent('Your browser is downloading loose.mcap');
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(document.querySelector('iframe')).toBeNull();
   });
 });
 
@@ -242,5 +383,15 @@ describe('RecordReplayPanel record', () => {
     rerender(<RecordReplayPanel session={session} ros={ros} connected isActive onStateChange={onStateChange} state={{ version: 1, options: { name: 'run_9' } }} />);
     expect(screen.getByLabelText('Recording name')).not.toHaveValue('run_9');
     expect(screen.getByRole('alert')).toHaveTextContent('Disk full');
+  });
+
+  it('finds a saved recording in Replay on the ROS host', async () => {
+    recorder.value = { ...recorder.value, online: true, status: recorderStatus({ state: 'idle', path: '/recordings/field/run_9' }) };
+    renderPanel();
+    openRecord();
+    fireEvent.click(screen.getByRole('button', { name: 'Find it in Replay' }));
+    await settle();
+    expect(screen.getByRole('button', { name: 'Replay' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fetchMock).toHaveBeenLastCalledWith('/recordings/list?path=field%2Frun_9', expect.anything());
   });
 });
