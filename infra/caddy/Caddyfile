@@ -67,6 +67,14 @@
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
 	}
 
+	# Recordings on the ROS host, served read-only by its recorder: a listing and the MCAP files,
+	# with range requests so a bag replays in place without being copied first. The recorder listens
+	# on a socket in a shared volume, so this needs no port on the host and no firewall rule. A
+	# recorder on another machine can be reached with RECORDINGS_UPSTREAM=<host>:<its TCP port>.
+	handle_path /recordings/* {
+		reverse_proxy {$RECORDINGS_UPSTREAM:unix//run/roboboy-recordings/recordings.sock}
+	}
+
 	# Keep the read/chat Ollama endpoints same-origin without exposing its
 	# model-management API through the public web proxy.
 	@ollama_api path /ollama/api/tags /ollama/api/chat
@@ -177,6 +185,11 @@
 	# Proxy mesh resources to the configured robot backend.
 	handle_path /mesh_resources/* {
 		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+	}
+
+	# Recordings on the ROS host; see the HTTPS block.
+	handle_path /recordings/* {
+		reverse_proxy {$RECORDINGS_UPSTREAM:unix//run/roboboy-recordings/recordings.sock}
 	}
 
 	# Proxy only the Ollama endpoints used by the BT agent.

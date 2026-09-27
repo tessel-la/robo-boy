@@ -46,6 +46,7 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 | ROS node and parameter names | ✅ (every turn) | | | |
 | Live topic sample | | ✅ (3 messages by default, 40 at most, 24 KiB each) | | |
 | Workspace: add/remove panels, camera topic or Pad of a panel, load/save layouts | | | ✅ applied at once through the same handlers as the menus; each outcome is listed in the reply | |
+| Open panel settings: 3D view (frames, visualizations), TF tree (filters), Time Series (signals, math, smoothing, window, Y axis, pause/clear) | ✅ (each bridged panel's current settings and signal status) | | ✅ applied at once through the panel's settings bridge; each outcome is listed in the reply | |
 | Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
 | Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | |
 | Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |

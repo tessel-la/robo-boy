@@ -28,10 +28,13 @@ export default function SafeCameraImage({ src, allowedStreamBaseUrl, ...imagePro
     const safeSrc = getSafeCameraImageSrc(src, allowedStreamBaseUrl);
     if (safeSrc) {
       imageElement.src = safeSrc;
-      return;
+    } else {
+      imageElement.removeAttribute('src');
     }
 
-    imageElement.removeAttribute('src');
+    // Detaching an <img> does not cancel an ongoing MJPEG response in Firefox or Chrome.
+    // Release the source on replacement and unmount so hidden cameras stop streaming/decoding.
+    return () => imageElement.removeAttribute('src');
   }, [allowedStreamBaseUrl, src]);
 
   return <img ref={imageRef} {...imageProps} />;

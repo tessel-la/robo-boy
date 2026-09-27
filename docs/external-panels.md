@@ -299,19 +299,16 @@ The complete standalone example is the sibling `robo-boy-hello-panel` repository
 Robo-Boy checkout or build. The desired-state installer reads its manifest, verifies its local release artifact,
 and places it in a generated deployment tree without importing it into application source.
 
-## ROS Time Series Reference Panel
+## Time Series Is Now Native
 
-The sibling `robo-boy-timeseries-panel` is a fuller external-author example that exercises the brokered `ros`,
-`storage`, `connection`, `viewport`, and theme APIs. It asks the user to choose any topic through Robo-Boy's trusted
-picker, subscribes through the broker, plots up to eight nested numeric message fields, and provides bounded
-retention, bridge throttling, auto or fixed Y ranges, pause/clear controls, point markers, and long-form CSV export.
-Leaving the field list blank discovers numeric fields from the first received message. Its source-first settings
-drawer presents the approved topic and numeric fields before placing retention and rendering controls in a
-scrollable advanced section for short mobile tiles.
+Time Series is built into Robo-Boy and needs no external artifact or installation. Existing
+`la.tessel.roboboy.timeseries` workspace tiles migrate to the native `timeSeries` panel with
+settings and layout intact. See [Native Time Series](native-time-series.md) for behavior,
+interaction, math, architecture and migration details.
 
-The release uses the API v2 ROS broker and contains no ROSLIB client or direct rosbridge connection. Its manifest
-permits the panel to open the trusted picker, but the panel never receives the unselected graph. An explicitly
-staged artifact is loaded only when a user adds that panel.
+The sibling `robo-boy-timeseries-panel` remains a historical SDK reference for brokered ROS,
+storage, connection and viewport APIs. Its old installed catalog entry is superseded by the
+native panel. Installing that artifact does not create a second Time Series menu entry.
 
 ## WebRTC / RTSP Camera Reference Panel
 
@@ -550,7 +547,7 @@ the same configuration and installer; they differ only in their default configur
   ],
   "selection": {
     "mode": "include",
-    "panelIds": ["la.tessel.roboboy.timeseries", "com.company.robot.private-telemetry"]
+    "panelIds": ["la.tessel.roboboy.hello", "com.company.robot.private-telemetry"]
   }
 }
 ```
@@ -571,7 +568,7 @@ ignored deployment-local copy:
 cp config/panel-sources.official.json config/panel-sources.json
 ```
 
-Add the exact IDs to its top-level object. For example, this installs only Time Series and WebRTC:
+Add the exact IDs to its top-level object. For example, this installs only Hello and WebRTC:
 
 ```json
 {
@@ -590,7 +587,7 @@ Add the exact IDs to its top-level object. For example, this installs only Time 
   ],
   "selection": {
     "mode": "include",
-    "panelIds": ["la.tessel.roboboy.timeseries", "la.tessel.roboboy.webrtc"]
+    "panelIds": ["la.tessel.roboboy.hello", "la.tessel.roboboy.webrtc"]
   }
 }
 ```
@@ -668,7 +665,7 @@ It should build against a pinned panel SDK GitHub release, publish a browser-rea
 stable reverse-domain ID under a domain it controls. Neither private panel source nor an npm-registry publication
 is required.
 
-The official Hello, Time Series, and WebRTC examples are independently released from their panel repositories;
+The official Hello and WebRTC examples are independently released from their panel repositories;
 their source and bundles are not copied into Robo-Boy. The sibling directories remain convenient coordinated
 development checkouts only. A production pipeline must verify inventory metadata and artifact hashes before
 staging, then publish the complete Robo-Boy build atomically.

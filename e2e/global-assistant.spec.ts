@@ -37,6 +37,28 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
 
   const panel = page.getByTestId('assistant-panel');
   await expect(panel).toBeVisible();
+  await expect(panel).toHaveClass(/is-open/);
+  await expect(panel).toHaveClass(/tree-panel-resize-frame/);
+  await expect(page.locator('.assistant-resize-handle.tree-panel-menu-resize-handle')).toHaveCount(4);
+  const northwestCorner = panel.locator('.tree-panel-menu-resize-handle.nw');
+  const cornerStyle = await northwestCorner.evaluate(element => {
+    const handle = getComputedStyle(element);
+    const marker = getComputedStyle(element, '::after');
+    return {
+      width: handle.width,
+      opacity: handle.opacity,
+      markerWidth: marker.width,
+      markerBorderTop: marker.borderTopWidth,
+      markerBorderLeft: marker.borderLeftWidth,
+    };
+  });
+  expect(cornerStyle).toEqual({
+    width: '24px',
+    opacity: '0.48',
+    markerWidth: '14px',
+    markerBorderTop: '2px',
+    markerBorderLeft: '2px',
+  });
   const box = await panel.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.width).toBeGreaterThanOrEqual(420);
@@ -70,6 +92,33 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
 
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
+});
+
+test('keeps the launcher visible and reverses the panel animation when toggled', async ({ page }) => {
+  await connectWithMockRos(page);
+  await page.getByLabel('Open Robo-Boy assistant').click();
+
+  const panel = page.getByTestId('assistant-panel');
+  const closeLauncher = page.getByLabel('Close Robo-Boy assistant', { exact: true });
+  await expect(panel).toBeVisible();
+  await expect(closeLauncher).toBeVisible();
+  await expect(closeLauncher).toHaveAttribute('aria-expanded', 'true');
+  const entrance = await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { name: style.animationName, duration: style.animationDuration };
+  });
+  expect(entrance.name).toBe('assistant-panel-enter');
+  expect(entrance.duration).toBe('0.26s');
+  await closeLauncher.click();
+  await expect(panel).toHaveClass(/is-closing/);
+  const exit = await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { name: style.animationName, duration: style.animationDuration };
+  });
+  expect(exit.name).toBe('assistant-panel-exit');
+  expect(exit.duration).toBe('0.21s');
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByLabel('Open Robo-Boy assistant')).toBeVisible();
 });
 
 test('adds a Behavior Tree panel to the workspace when asked to edit the layout', async ({ page }) => {
@@ -168,6 +217,7 @@ test('320px portrait keeps header, transcript, context, and composer reachable a
   const composer = panel.locator('.assistant-composer');
   await expect(header).toBeVisible();
   await expect(composer).toBeVisible();
+  await expect(panel).toHaveClass(/is-open/);
   let box = await panel.boundingBox();
   expect(box!.x).toBe(0);
   expect(box!.width).toBe(320);
@@ -184,9 +234,8 @@ test('320px portrait keeps header, transcript, context, and composer reachable a
     expect(resized!.y + resized!.height).toBeLessThanOrEqual(360);
   }).toPass();
 
-  // The composer is what gets tapped over and over, so it keeps full-size touch targets. The
-  // header's two chrome controls are deliberately smaller: a second full-height title bar under the
-  // app bar costs transcript room it cannot earn, and back also closes the panel.
+  // The composer and header controls are all frequent touch targets, while the single-line header
+  // keeps their full hit area without spending another row of vertical space.
   const composerControls = await panel.locator('.assistant-speech-toolbar button:visible').evaluateAll(buttons =>
     buttons.map(button => button.getBoundingClientRect())
   );
@@ -196,22 +245,68 @@ test('320px portrait keeps header, transcript, context, and composer reachable a
   const headerControls = await panel.locator('.assistant-header button:visible').evaluateAll(buttons =>
     buttons.map(button => button.getBoundingClientRect())
   );
-  expect(headerControls.every(box => box.width >= 36 && box.height >= 36)).toBe(true);
+  expect(headerControls.every(box => box.width >= 44 && box.height >= 44)).toBe(true);
   const headerHeight = (await panel.locator('.assistant-header').boundingBox())!.height;
-  expect(headerHeight).toBeLessThanOrEqual(40);
+  expect(headerHeight).toBeLessThanOrEqual(46);
 });
 
-test('mobile back closes the full-height assistant and landscape uses a side panel', async ({ page }) => {
+test('mobile assistant docks into the workspace, restores its launcher, and landscape uses a side panel', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await connectWithMockRos(page);
-  await page.getByLabel('Open Robo-Boy assistant').click();
-  await expect(page.getByTestId('assistant-panel')).toBeVisible();
+  const launcher = page.locator('.assistant-launcher');
+  const workspace = page.locator('.desktop-workspace');
+  const workspaceBefore = (await workspace.boundingBox())!;
+  await launcher.click();
+  const mobilePanel = page.getByTestId('assistant-panel');
+  await expect(mobilePanel).toBeVisible();
+  await expect(mobilePanel.getByRole('textbox', { name: 'Ask the assistant' })).not.toBeFocused();
+  await expect(launcher).toBeHidden();
+  await expect(launcher).toHaveAttribute('aria-hidden', 'true');
+  await expect(async () => {
+    const panelBox = (await mobilePanel.boundingBox())!;
+    const workspaceAfter = (await workspace.boundingBox())!;
+    expect(panelBox.y).toBeGreaterThan(250);
+    expect(workspaceAfter.height).toBeLessThan(workspaceBefore.height - 400);
+    expect(workspaceAfter.y + workspaceAfter.height - panelBox.y).toBeGreaterThanOrEqual(8);
+    expect(workspaceAfter.y + workspaceAfter.height - panelBox.y).toBeLessThanOrEqual(20);
+  }).toPass();
+
+  await expect(mobilePanel).toHaveClass(/is-open/);
+  const initialPanelBox = (await mobilePanel.boundingBox())!;
+  const headerBox = (await mobilePanel.locator('.assistant-header').boundingBox())!;
+  await page.mouse.move(headerBox.x + 90, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 90, headerBox.y - 100, { steps: 6 });
+  await page.mouse.up();
+  await expect(async () => {
+    const resizedPanel = (await mobilePanel.boundingBox())!;
+    const resizedWorkspace = (await workspace.boundingBox())!;
+    expect(resizedPanel.height).toBeGreaterThan(initialPanelBox.height + 80);
+    expect(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y).toBeGreaterThanOrEqual(8);
+    expect(resizedWorkspace.y + resizedWorkspace.height - resizedPanel.y).toBeLessThanOrEqual(20);
+  }).toPass();
+
+  await mobilePanel.getByRole('button', { name: 'Assistant settings' }).click();
+  const settings = mobilePanel.getByRole('dialog', { name: 'Assistant settings' });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Connection' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Voice' })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Close assistant settings' })).toHaveCount(0);
+  await mobilePanel.getByRole('button', { name: 'Back to assistant' }).click();
+  await expect(settings).toHaveCount(0);
+
   await page.goBack();
-  await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
+  await expect(mobilePanel).toHaveCount(0);
+  await expect(launcher).toBeVisible();
+  await expect(launcher).toHaveAttribute('aria-label', 'Open Robo-Boy assistant');
+  await expect(async () => expect((await workspace.boundingBox())!.height).toBeGreaterThan(workspaceBefore.height - 6)).toPass();
 
   await page.setViewportSize({ width: 844, height: 390 });
-  await page.getByLabel('Open Robo-Boy assistant').click();
-  const box = await page.getByTestId('assistant-panel').boundingBox();
+  await launcher.click();
+  const landscapePanel = page.getByTestId('assistant-panel');
+  await expect(landscapePanel).toHaveClass(/is-open/);
+  const box = await landscapePanel.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(420);
   expect(box!.width).toBeLessThan(844);
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
@@ -224,7 +319,9 @@ test('honors reduced motion in the assistant surface', async ({ page }) => {
   const duration = await page.getByTestId('assistant-panel').evaluate(element =>
     getComputedStyle(element.querySelector('.spinning') ?? element).animationDuration
   );
-  expect(['0s', '0.001ms']).toContain(duration);
+  // Firefox serializes small durations as decimals; Chromium may use exponent notation.
+  const durationMs = Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000);
+  expect(durationMs).toBeLessThanOrEqual(0.001);
 });
 
 test('the launcher uses the former theme corner and theme selection stays in the session menu', async ({ page }) => {

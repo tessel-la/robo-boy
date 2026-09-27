@@ -89,6 +89,83 @@ describe('panel capability broker', () => {
     }
   });
 
+  it('recreates cached ROS services and removes stale subscriptions after transport replacement', async () => {
+    const port = { onmessage: null, postMessage: vi.fn(), start: vi.fn(), close: vi.fn() } as unknown as MessagePort;
+    const makeRos = () => ({ idCounter: 0, on: vi.fn(), once: vi.fn(), off: vi.fn(), callOnConnection: vi.fn(), isConnected: true });
+    const original = makeRos();
+    const options = {
+      manifest: { ...manifest, permissions: { ros: { services: ['/catalog'], subscribe: ['/status'] } } },
+      ros: original as never,
+      runtime: { target: 'web' as const }, runtimeEndpoints: {}, hostElement: document.createElement('div'), logger: console,
+    };
+    const dispose = connectPanelCapabilityBroker(port, options, vi.fn());
+    const request = (requestId: string, method: string, params: unknown) =>
+      port.onmessage?.({ data: { type: 'request', requestId, method, params } } as MessageEvent);
+    const service = { service: '/catalog', serviceType: 'std_srvs/srv/Trigger', request: {} };
+    request('first', 'ros.callService', service);
+    request('subscribe', 'ros.subscribe', { topic: '/status', messageType: 'std_msgs/msg/String' });
+    expect(original.callOnConnection).toHaveBeenCalledWith(expect.objectContaining({ op: 'call_service' }));
+    const replacement = makeRos();
+    options.ros = replacement as never;
+    request('second', 'ros.callService', service);
+    expect(replacement.callOnConnection).toHaveBeenCalledWith(expect.objectContaining({ op: 'call_service' }));
+    expect(original.callOnConnection).toHaveBeenCalledWith(expect.objectContaining({ op: 'unsubscribe', topic: '/status' }));
+    const reply = replacement.once.mock.calls.find(([name]) => String(name).startsWith('call_service:'))![1];
+    reply({ result: true, values: { success: true, message: 'current runner' } });
+    await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({ type: 'response', requestId: 'second', value: { success: true, message: 'current runner' } }));
+    replacement.isConnected = false;
+    request('offline', 'ros.callService', service);
+    await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'offline', error: 'ROS is unavailable.' })));
+    dispose();
+  });
+
+  it('normalizes real ROSLIB ServiceResponse instances for external panels', async () => {
+    const port = {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: vi.fn(),
+      start: vi.fn(),
+      close: vi.fn(),
+    } as unknown as MessagePort;
+    let reply: (value: unknown) => void = () => {};
+    const ros = {
+      idCounter: 0,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn((_id: string, listener: (value: unknown) => void) => {
+        reply = listener;
+      }),
+      callOnConnection: vi.fn(() => reply({ values: { success: true, message: 'catalog' } })),
+    };
+    const disconnect = connectPanelCapabilityBroker(
+      port,
+      {
+        manifest: { ...manifest, capabilities: ['ros'], permissions: { ros: { services: ['/catalog'] } } },
+        ros: ros as never,
+        runtime: { target: 'web' },
+        runtimeEndpoints: {},
+        hostElement: document.createElement('div'),
+        logger: console,
+      },
+      vi.fn()
+    );
+    port.onmessage?.({
+      data: {
+        type: 'request',
+        requestId: 'catalog',
+        method: 'ros.callService',
+        params: { service: '/catalog', serviceType: 'std_srvs/srv/Trigger', request: {} },
+      },
+    } as MessageEvent);
+    await vi.waitFor(() =>
+      expect(port.postMessage).toHaveBeenCalledWith({
+        type: 'response',
+        requestId: 'catalog',
+        value: { success: true, message: 'catalog' },
+      })
+    );
+    disconnect();
+  });
+
   it('normalizes ROS messages with non-finite values before crossing the sandbox boundary', () => {
     class RosMessage {
       position = [1.25, 2.5];

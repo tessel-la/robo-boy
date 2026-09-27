@@ -92,6 +92,13 @@ fi
 
 echo "--- Launching ROS Components ---"
 
+# Recording survives browser/panel lifetimes. A process restart never restarts a bag.
+(while true; do
+    python3 /ros_ws/recording_runner.py
+    echo "[recording_runner] exited, restarting in 2s..."
+    sleep 2
+done) &
+
 # Owns behavior-tree sessions that are explicitly configured to outlive the
 # browser. It uses only standard ROS interfaces and dynamically loads the
 # robot's action/service/message types from the active overlays.

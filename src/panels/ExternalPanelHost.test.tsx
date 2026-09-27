@@ -122,6 +122,20 @@ describe('ExternalPanelHost sandbox', () => {
     expect(container.textContent).not.toContain('export default');
   });
 
+  it('exposes the replacement ROS connection to the existing broker after tab resume', async () => {
+    const { container, props, rerender } = renderHost();
+    announceSandboxReady(container.querySelector('iframe')!);
+    await waitFor(() => expect(broker.connect).toHaveBeenCalledTimes(1));
+    const options = broker.connect.mock.calls[0][1];
+    expect(options.ros).toBe(props.ros);
+    rerender(<ExternalPanelHost {...props} ros={null} connectionStatus="disconnected" />);
+    expect(options.ros).toBeNull();
+    const replacement = {} as never;
+    rerender(<ExternalPanelHost {...props} ros={replacement} connectionGeneration={2} />);
+    expect(options.ros).toBe(replacement);
+    expect(broker.connect).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects sandbox-ready messages that do not come from the opaque iframe origin', async () => {
     const { container, sourceLoader } = renderHost();
     const iframe = container.querySelector('iframe')!;

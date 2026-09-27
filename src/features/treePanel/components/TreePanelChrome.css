@@ -115,7 +115,7 @@
   background: var(--primary-color, #4285f4);
 }
 
-.tree-panel-menu-panel::before {
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame)::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -125,14 +125,14 @@
   pointer-events: none;
 }
 
-.tree-panel-menu-panel:hover::before,
-.tree-panel-menu-panel:focus-within::before,
-.tree-panel-menu-panel.is-resizing::before {
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame):hover::before,
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame):focus-within::before,
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame).is-resizing::before {
   border-color: color-mix(in srgb, var(--primary-color, #4285f4) 58%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #4285f4) 12%, transparent);
 }
 
-.tree-panel-menu-panel.is-resizing {
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame).is-resizing {
   transition: none;
 }
 
@@ -200,9 +200,9 @@
   border-bottom: 2px solid;
 }
 
-.tree-panel-menu-panel:hover .tree-panel-menu-resize-handle,
-.tree-panel-menu-panel:focus-within .tree-panel-menu-resize-handle,
-.tree-panel-menu-panel.is-resizing .tree-panel-menu-resize-handle {
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame):hover .tree-panel-menu-resize-handle,
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame):focus-within .tree-panel-menu-resize-handle,
+:is(.tree-panel-menu-panel, .tree-panel-resize-frame).is-resizing .tree-panel-menu-resize-handle {
   opacity: 0.9;
 }
 

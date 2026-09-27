@@ -194,7 +194,7 @@
   margin-bottom: 14px;
 }
 
-.advanced-toggle {
+.add-viz-modal .advanced-toggle {
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--primary-color, #8ab4f8);
@@ -202,7 +202,7 @@
   margin: 0;
 }
 
-.advanced-toggle:hover {
+.add-viz-modal .advanced-toggle:hover {
   color: var(--text-color, #e8eaed);
 }
 

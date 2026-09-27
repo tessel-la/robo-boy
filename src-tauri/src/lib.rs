@@ -1,3 +1,5 @@
+mod updater;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   configure_linux_webkit_runtime();
@@ -9,6 +11,15 @@ pub fn run() {
     // bundles as GitHub release assets, which send no CORS headers and are therefore
     // unreachable from the webview. This client performs those requests natively instead.
     .plugin(tauri_plugin_http::init())
+    .manage(updater::UpdateState::default())
+    .invoke_handler(tauri::generate_handler![
+      updater::update_target,
+      updater::update_download,
+      updater::update_cancel,
+      updater::update_install,
+      updater::update_open_installer,
+      updater::update_open_release_page,
+    ])
     .setup(|app| {
       configure_ui_zoom(app);
       configure_webrtc(app);

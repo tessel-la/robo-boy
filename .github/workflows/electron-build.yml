@@ -6,7 +6,8 @@ name: Electron Build
 # views have WebRTC, so those platforms gain nothing from a second, much larger package.
 #
 # It publishes nothing. Release Please owns releases and calls this workflow for the packages it
-# then attaches, exactly as it does for the Tauri installers.
+# then attaches, exactly as it does for the Tauri installers. The pull-request trigger only checks
+# the dev-to-main promotion; ordinary pull requests into dev use the regular frontend checks.
 on:
   workflow_call:
     inputs:
@@ -17,7 +18,7 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [dev, main]
+    branches: [main]
     paths:
       - 'electron/**'
       - 'src/**'
@@ -43,6 +44,10 @@ concurrency:
 jobs:
   build:
     name: Linux ${{ matrix.arch }} package (deb)
+    # On a pull request this validates the promotion of dev into main before it lands, matching
+    # the Tauri, iOS, and Android installer builds. Every other trigger is explicit.
+    if: >-
+      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
     # Both targets can be packaged on x64: the shell and renderer are JavaScript, and
     # electron-builder downloads the prebuilt Electron runtime for the requested architecture.
     runs-on: ubuntu-22.04

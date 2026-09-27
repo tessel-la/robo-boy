@@ -2,6 +2,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { isMobilePlatform } from './runtime/runtimeConfig.tsx';
+import { applyThemeToDocument, readStoredTheme } from './features/theme/themeUtils';
 import './index.css';
 
 const roboBoyWindow = window as typeof window & {
@@ -36,6 +37,10 @@ if (isTauriShell || isElectronShell) {
     }
   }
 }
+
+// Theme before the first paint, so nothing renders (or transitions) from the light defaults first.
+const storedTheme = readStoredTheme();
+applyThemeToDocument(storedTheme.themeId, storedTheme.customThemes);
 
 roboBoyWindow.__ROBOBOY_APP_STARTED = true;
 

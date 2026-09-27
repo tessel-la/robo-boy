@@ -91,6 +91,7 @@ const ExternalPanelHost = ({
   sourceLoader = loadExternalPanelSource,
 }: ExternalPanelHostProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
+  const rosRef = useRef(ros);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const portRef = useRef<MessagePort | null>(null);
   const sandboxCleanupRef = useRef<(() => void) | null>(null);
@@ -203,6 +204,10 @@ const ExternalPanelHost = ({
   }, [isActive, publishViewport]);
 
   useEffect(() => {
+    rosRef.current = ros;
+  }, [ros]);
+
+  useEffect(() => {
     post({
       type: 'connection',
       value: { status: connectionStatus, generation: connectionGeneration },
@@ -309,7 +314,10 @@ const ExternalPanelHost = ({
       channel.port1,
       {
         manifest,
-        ros: capabilities.includes('ros') ? ros : null,
+        // The sandbox outlives ROS reconnects (including tab resume).
+        get ros() {
+          return capabilities.includes('ros') ? rosRef.current : null;
+        },
         runtime: { target: runtime.target },
         runtimeEndpoints: runtime.endpoints,
         hostElement: host,

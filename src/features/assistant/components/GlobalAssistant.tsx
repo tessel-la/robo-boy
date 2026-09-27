@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
 import { v4 as uuidv4 } from 'uuid';
 import { useRuntimeConfig } from '../../../runtime/runtimeConfig';
@@ -68,6 +68,18 @@ export interface GlobalAssistantProps {
   onApplyWorkspaceEdit?: (operations: WorkspaceEditOperation[]) => WorkspaceEditResult[];
 }
 
+const useCompactAssistant = () => {
+  const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false);
+  useEffect(() => {
+    const query = window.matchMedia?.('(max-width: 767px)');
+    if (!query) return;
+    const update = () => setCompact(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return compact;
+};
+
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_TOTAL_SIZE = 12 * 1024 * 1024;
@@ -135,7 +147,9 @@ const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTur
     // offering it whenever a panel, layout or window is mentioned.
     workspace:
       chips.some(chip => chip.source === 'workspace') ||
-      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower),
+      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower) ||
+      // Time Series requests rarely say "panel": "plot the speed squared", "smooth that signal".
+      /\bplot|\bgraph|\bchart|\bsignals?\b|\btime ?series\b|\bcurves?\b|\baxis\b|\bsmooth|\bfilter|\bderivative\b|\bintegra|\bsquared?\b|\bexpression\b|\bscale\b|\boffset\b|\bnormali[sz]e/.test(lower),
   };
 };
 
@@ -237,6 +251,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
   ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
+    const compact = useCompactAssistant();
     const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
     const [messages, setMessages] = useState<AssistantMessage[]>(() => loadAssistantConversation().map(stored => ({
       id: uuidv4(), role: stored.role, content: stored.content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: stored.createdAt,
@@ -289,7 +304,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setProgress([]);
     }, [abortContextWork]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       document.documentElement.classList.toggle('assistant-is-open', isOpen);
       return () => document.documentElement.classList.remove('assistant-is-open');
     }, [isOpen]);
@@ -934,13 +949,22 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     return (
       <>
-      {!isOpen && (
-        <button type="button" className="assistant-launcher" onClick={() => setIsOpen(true)} aria-label="Open Robo-Boy assistant" title="Robo-Boy assistant">
-          <HiSparkles aria-hidden="true" />
-        </button>
-      )}
+      <button
+        type="button"
+        className={`assistant-launcher${compact ? ' is-compact' : ''}${isOpen ? ' is-open' : ''}`}
+        onClick={() => isOpen ? closeAssistant() : setIsOpen(true)}
+        aria-label={`${isOpen ? 'Close' : 'Open'} Robo-Boy assistant`}
+        aria-controls="robo-boy-assistant-panel"
+        aria-expanded={isOpen}
+        aria-hidden={compact && isOpen ? true : undefined}
+        tabIndex={compact && isOpen ? -1 : undefined}
+        title={`${isOpen ? 'Close' : 'Open'} Robo-Boy assistant`}
+      >
+        <HiSparkles aria-hidden="true" />
+      </button>
       <AssistantPanel
         open={isOpen}
+        compact={compact}
         onClose={closeAssistant}
         messages={messages}
         isGenerating={isGenerating}

@@ -41,6 +41,8 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 const tauriStubAliases: Record<string, string> = {
   '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)),
   '@tauri-apps/api/window': fileURLToPath(new URL('../src/runtime/nativeWindow.web.ts', import.meta.url)),
+  '@tauri-apps/api/core': fileURLToPath(new URL('../src/runtime/nativeTauri.web.ts', import.meta.url)),
+  '@tauri-apps/api/event': fileURLToPath(new URL('../src/runtime/nativeTauri.web.ts', import.meta.url)),
 };
 
 // Set by the Tauri CLI when it serves the frontend to a phone or tablet.
@@ -78,7 +80,20 @@ export default defineConfig(({ mode }) => ({
     // semver is first reached through the lazy external-panel registry. Make
     // it part of the initial dev optimization pass so login cannot trigger a
     // dependency re-bundle while React is mounting MainControlView.
-    include: ['react', 'react-dom', 'react-dom/client', 'semver'],
+    // The replay worker's dependencies are only reached when a recording is opened; the
+    // resulting re-bundle would reload the page and abort that first load.
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'semver',
+      '@mcap/core',
+      '@mcap/browser',
+      '@foxglove/rosmsg',
+      '@foxglove/rosmsg-serialization',
+      '@foxglove/rosmsg2-serialization',
+      'fzstd',
+    ],
   },
   server: {
     // `tauri ios dev` runs the app on a device that reaches this server over the network, and
@@ -138,6 +153,9 @@ export default defineConfig(({ mode }) => ({
               // Registry and manifest JSON must be available before any lazy
               // panel bundle can be discovered while the PWA is offline.
               globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+              // A recording opened or downloaded from the ROS host is a navigation too; it must
+              // reach the recorder instead of being answered with the app shell.
+              navigateFallbackDenylist: [/^\/recordings\//],
             },
             // The manifest is now defined in the manifest.webmanifest file
           }),

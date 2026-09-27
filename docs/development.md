@@ -62,6 +62,8 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
 | `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
 | `MESH_RESOURCES_PORT`           | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `ROBOBOY_RECORDINGS_PORT`       | unset                    | Optional TCP port for the recorder's file service          |
+| `RECORDINGS_UPSTREAM`           | recorder socket          | Caddy `/recordings` upstream                               |
 | `OLLAMA_BACKEND_URL`            | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
 | `OLLAMA_PORT`                   | `11434`                  | Desktop direct-connect Ollama port                         |
 | `OLLAMA_PROXY_TARGET`           | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream                      |
@@ -70,6 +72,7 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VITE_ROSBRIDGE_PORT`           | `9090`                   | Desktop direct-connect rosbridge URL                       |
 | `VITE_VIDEO_STREAM_PORT`        | `8080`                   | Desktop direct-connect video URL                           |
 | `VITE_MESH_RESOURCES_PORT`      | `8000`                   | Desktop direct-connect mesh URL                            |
+| `VITE_RECORDINGS_PORT`          | `9091`                   | Direct-connect recordings URL (needs the TCP port)         |
 | `VITE_OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama URL                          |
 | `VITE_WEB_BACKEND_MODE`         | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
 
@@ -191,7 +194,22 @@ npm run e2e
 Set `ROBOBOY_DIST_DIR` when build artifacts need to be written outside the default `dist/` directory. The web and
 Tauri Vite builds honor it, and the Tauri post-build module check validates the same directory.
 
-`npm run e2e` starts its own Vite server. To test an already-running Docker/Caddy stack, use:
+`npm run e2e` starts its own Vite server and runs Chromium and Firefox. Install both test
+browsers with `npx playwright install --with-deps chromium firefox`. To run the camera-stream
+and 3D lifecycle regressions in Firefox only:
+
+```bash
+npm run e2e -- --project=firefox e2e/camera-lifecycle.spec.ts e2e/visualization-lifecycle.spec.ts
+```
+
+On Linux CI, Firefox runs with a virtual display so the 3D tests have WebGL. Playwright's
+`--with-deps` installation includes Xvfb. To reproduce that setup on a machine without a display:
+
+```bash
+CI=1 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run --auto-servernum npm run e2e
+```
+
+To test an already-running Docker/Caddy stack, use:
 
 ```bash
 npm run e2e:stack
@@ -225,6 +243,30 @@ npm run test:run
 npm run build
 npm run e2e
 ```
+
+## Dependency security
+
+Audit both committed lockfiles when updating dependencies:
+
+```bash
+npm audit
+cargo audit --file src-tauri/Cargo.lock
+```
+
+Install the Rust auditor with `cargo install cargo-audit --locked` if needed. Dependency review
+also runs on pull requests that change either the npm or Rust manifests and lockfiles.
+Keep Vitest and its coverage providers on matching releases. The XML parser override requires
+`@xmldom/xmldom` 0.9.12 or newer because ROSLIB's dependency otherwise resolves to an older line.
+If npm 9 or 10 fails dependency resolution with `edgesOut`, use npm 11 to update the lockfile;
+the resulting lockfile still supports `npm ci` with the project's existing tooling.
+
+As of 2026-09-24, both audits report zero vulnerabilities after the security updates. RustSec
+still reports six unmaintained crates (`proc-macro-error` and five `unic-*` crates) and the
+[`glib::VariantStrIter` soundness warning](https://rustsec.org/advisories/RUSTSEC-2024-0429.html).
+These arrive through Tauri's GTK3/WebKitGTK and URL-pattern dependencies. The `glib` fix requires
+0.20 or newer, while this GTK3 stack uses 0.18; adding a second `glib` version would not fix it.
+These warnings remain unresolved and are not suppressed. Revisit them when upgrading the upstream
+desktop stack; an audit with zero vulnerabilities does not mean these warnings are resolved.
 
 ## Releases
 

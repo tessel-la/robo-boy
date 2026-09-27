@@ -7,7 +7,10 @@ vi.mock('animejs', () => ({
   default: Object.assign(
     vi.fn(() => ({ pause: vi.fn(), add: vi.fn() })),
     {
-      timeline: vi.fn(() => ({ add: vi.fn().mockReturnThis(), pause: vi.fn() })),
+      timeline: vi.fn((options: { complete?: () => void }) => {
+        options.complete?.();
+        return { add: vi.fn().mockReturnThis(), pause: vi.fn() };
+      }),
     }
   ),
 }));
@@ -32,6 +35,7 @@ describe('EntrySection connection target', () => {
 
   afterEach(() => {
     delete packagedApp.__TAURI_INTERNALS__;
+    vi.unstubAllGlobals();
   });
 
   it('asks the packaged app for a host rather than offering localhost', () => {
@@ -69,19 +73,75 @@ describe('EntrySection connection target', () => {
       JSON.stringify([{ host: 'robot.local', lastConnectedAt: 10 }])
     );
     runPackaged();
+    const onConnect = vi.fn();
 
-    render(<EntrySection onConnect={vi.fn()} />);
+    render(<EntrySection onConnect={onConnect} />);
 
     // The host also appears in the Recent list, so name the button rather than the text.
     expect(screen.getByRole('button', { name: /Quick Connect/ })).toHaveTextContent('robot.local');
     expect(screen.queryByText(/Enter the address of the computer/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Quick Connect/ }));
+
+    expect(onConnect).toHaveBeenCalledWith({
+      ros2Option: 'ip',
+      ros2Value: 'robot.local',
+      rosbridgePort: '9090',
+      videoStreamPort: '8080',
+      meshResourcesPort: '8000',
+    });
   });
 
+  it.each(['roboBoyDesktop', '__TAURI_INTERNALS__'])(
+    'quick connects with the latest saved host and ports in %s',
+    marker => {
+      vi.stubGlobal(marker, {});
+      localStorage.setItem(
+        RECENT_CONNECTIONS_STORAGE_KEY,
+        JSON.stringify([
+          { host: 'older.local', rosbridgePort: '29090', lastConnectedAt: 10 },
+          {
+            host: '192.168.1.42',
+            rosbridgePort: '19090',
+            videoStreamPort: '18080',
+            meshResourcesPort: '18000',
+            lastConnectedAt: 20,
+          },
+        ])
+      );
+      const onConnect = vi.fn();
+
+      render(<EntrySection onConnect={onConnect} />);
+      fireEvent.click(screen.getByRole('button', { name: /Quick Connect/ }));
+
+      expect(onConnect).toHaveBeenCalledExactlyOnceWith({
+        ros2Option: 'ip',
+        ros2Value: '192.168.1.42',
+        rosbridgePort: '19090',
+        videoStreamPort: '18080',
+        meshResourcesPort: '18000',
+      });
+    }
+  );
+
   it('still offers the page it was served from in a browser', () => {
-    render(<EntrySection onConnect={vi.fn()} />);
+    localStorage.setItem(
+      RECENT_CONNECTIONS_STORAGE_KEY,
+      JSON.stringify([{ host: 'robot.local', rosbridgePort: '19090', lastConnectedAt: 10 }])
+    );
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
 
     expect(screen.getByText('Quick Connect')).toBeInTheDocument();
     expect(screen.getByTitle(`Connect to ${window.location.hostname}`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Quick Connect/ }));
+
+    expect(onConnect).toHaveBeenCalledWith({
+      ros2Option: 'ip',
+      ros2Value: window.location.hostname,
+      rosbridgePort: '9090',
+      videoStreamPort: '8080',
+      meshResourcesPort: '8000',
+    });
   });
 });
 

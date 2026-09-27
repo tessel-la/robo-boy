@@ -10,7 +10,7 @@
   <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
 </p>
 
-Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, behavior-tree editing, and custom themes. All interfaces run the same React codebase and connect to a separately installed ROS stack. The mobile packages are lightweight Tauri shells; the desktop can be built either as one of those or as an Electron shell, which is larger but brings its own Chromium and so has WebRTC wherever it runs.
+Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, native time-series plotting and signal analysis, behavior-tree editing, and custom themes. All interfaces run the same React codebase and connect to a separately installed ROS stack. The mobile packages are lightweight Tauri shells; the desktop can be built either as one of those or as an Electron shell, which is larger but brings its own Chromium and so has WebRTC wherever it runs.
 
 ## Start With The App
 

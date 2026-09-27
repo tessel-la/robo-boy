@@ -1,10 +1,12 @@
 /* ── Floating bar — top-left ──────────────────────────────────────────────── */
 
+/* The bar's max-width reserves room for .bt-float-actions (top-right) so the two never overlap:
+   the actions group width plus both 12px insets and a small gap. Keep in step with that group. */
 .bt-float-bar {
   position: absolute;
   top: 12px;
   left: 12px;
-  max-width: calc(100% - 238px);
+  max-width: calc(100% - 430px);
   z-index: 10;
   display: flex;
   align-items: center;
@@ -990,7 +992,7 @@
 
 @container (max-width: 640px) {
   .bt-float-bar {
-    max-width: calc(100% - 154px);
+    max-width: calc(100% - 228px);
     gap: 5px;
   }
 
@@ -1024,7 +1026,7 @@
 
 @container (max-width: 420px) {
   .bt-float-bar {
-    max-width: calc(100% - 100px);
+    max-width: calc(100% - 212px);
     gap: 4px;
   }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import {
   DEFAULT_THEMES,
   DEFAULT_THEME_FONT_FAMILY,
@@ -6,6 +6,8 @@ import {
   THEME_STORAGE_KEY,
   CUSTOM_THEMES_STORAGE_KEY,
   generateThemeCss,
+  applyThemeToDocument,
+  readStoredTheme,
   type CustomTheme,
 } from './themeUtils'
 
@@ -263,6 +265,47 @@ describe('themeUtils', () => {
       const css = generateThemeCss(theme)
 
       expect(css).toContain(':root[data-theme="invalid"]')
+    })
+  })
+
+  describe('document theme', () => {
+    const ocean: CustomTheme = { id: 'ocean', name: 'Ocean', colors: { primary: '#0077be', secondary: '#88a', background: '#001f3f' } }
+
+    afterEach(() => {
+      localStorage.clear()
+      document.documentElement.removeAttribute('data-theme')
+      document.head.querySelectorAll('style').forEach(style => style.remove())
+    })
+
+    it('applies a default theme without leaving custom theme CSS behind', () => {
+      applyThemeToDocument('ocean', [ocean])
+      expect(applyThemeToDocument('solarized', [ocean])).toBe('solarized')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('solarized')
+      expect(document.head.querySelectorAll('style')).toHaveLength(0)
+    })
+
+    it('keeps a single style element for custom themes and updates it in place', () => {
+      applyThemeToDocument('ocean', [ocean])
+      applyThemeToDocument('ocean', [{ ...ocean, colors: { ...ocean.colors, primary: '#ff8722' } }])
+      const styles = document.head.querySelectorAll('style')
+      expect(styles).toHaveLength(1)
+      expect(styles[0].textContent).toContain(':root[data-theme="ocean"]')
+      expect(styles[0].textContent).toContain('--primary-color: #ff8722')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('ocean')
+    })
+
+    it('falls back to the dark theme for an unknown custom theme', () => {
+      expect(applyThemeToDocument('deleted-theme', [ocean])).toBe('dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    })
+
+    it('reads the stored selection and tolerates corrupt custom themes', () => {
+      expect(readStoredTheme()).toEqual({ themeId: 'dark', customThemes: [] })
+      localStorage.setItem(THEME_STORAGE_KEY, 'ocean')
+      localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([ocean]))
+      expect(readStoredTheme()).toEqual({ themeId: 'ocean', customThemes: [ocean] })
+      localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, '{not json')
+      expect(readStoredTheme().customThemes).toEqual([])
     })
   })
 })

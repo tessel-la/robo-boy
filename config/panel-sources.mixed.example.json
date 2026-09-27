@@ -22,6 +22,6 @@
   ],
   "selection": {
     "mode": "include",
-    "panelIds": ["la.tessel.roboboy.timeseries", "com.example.robot.my-panel"]
+    "panelIds": ["la.tessel.roboboy.hello", "com.example.robot.my-panel"]
   }
 }

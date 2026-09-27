@@ -322,6 +322,7 @@ const publishLaserScanForSample = (page: Page) =>
   }, SAMPLE_MS);
 
 profileDescribe('frontend resource profile', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', 'Resource metrics require Chromium CDP.');
   test.beforeEach(async ({ page }) => {
     await installRuntimeCounters(page);
   });

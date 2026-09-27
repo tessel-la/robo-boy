@@ -43,6 +43,58 @@ export const resolveThemeFontFamily = (fontFamily?: string): string => {
     : DEFAULT_THEME_FONT_FAMILY;
 };
 
+export const DEFAULT_THEME_ID = 'dark';
+const CUSTOM_THEME_STYLE_ID = 'robo-boy-custom-theme';
+
+const readStorage = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`Unable to read ${key} from localStorage. Falling back to defaults.`, error);
+    return null;
+  }
+};
+
+/** The persisted theme selection, tolerant of missing, blocked or corrupt storage. */
+export const readStoredTheme = (): { themeId: string; customThemes: CustomTheme[] } => {
+  let customThemes: CustomTheme[] = [];
+  const stored = readStorage(CUSTOM_THEMES_STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) customThemes = parsed;
+    } catch (error) {
+      console.error('Failed to parse custom themes from localStorage', error);
+    }
+  }
+  return { themeId: readStorage(THEME_STORAGE_KEY) || DEFAULT_THEME_ID, customThemes };
+};
+
+/**
+ * Puts a theme on the document: `data-theme` plus, for a custom theme, its CSS variables.
+ * Called before the first render as well as on every change, so the first paint already uses
+ * the chosen theme instead of the light `:root` defaults (elements with colour transitions would
+ * otherwise visibly animate from light to the selected theme on every load).
+ * Returns the theme actually applied: an unknown custom theme falls back to the default.
+ */
+export const applyThemeToDocument = (themeId: string, customThemes: readonly CustomTheme[]): string => {
+  const custom = DEFAULT_THEMES.includes(themeId) ? undefined : customThemes.find(theme => theme.id === themeId);
+  const applied = DEFAULT_THEMES.includes(themeId) || custom ? themeId : DEFAULT_THEME_ID;
+  let style = document.getElementById(CUSTOM_THEME_STYLE_ID);
+  if (custom) {
+    if (!style) {
+      style = document.createElement('style');
+      style.id = CUSTOM_THEME_STYLE_ID;
+      document.head.appendChild(style);
+    }
+    style.textContent = generateThemeCss(custom);
+  } else {
+    style?.remove();
+  }
+  document.documentElement.setAttribute('data-theme', applied);
+  return applied;
+};
+
 // Helper to generate dynamic CSS (basic version)
 export const generateThemeCss = (theme: CustomTheme): string => {
   const colors = theme.colors;

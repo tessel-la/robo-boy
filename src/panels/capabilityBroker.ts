@@ -44,6 +44,7 @@ interface CapabilityBrokerOptions {
 }
 
 interface BrokerResources {
+  ros: Ros | null;
   subscriptions: Map<string, { topic: Topic; listener: (message: RoboBoyJsonObject) => void }>;
   nextSubscriptionSequence: number;
   publishers: Map<string, Topic>;
@@ -245,7 +246,7 @@ const respond = (port: MessagePort, requestId: string, value?: unknown, error?: 
 };
 
 const requireRos = (ros: Ros | null): Ros => {
-  if (!ros) throw new Error('ROS is unavailable.');
+  if (!ros || ros.isConnected === false) throw new Error('ROS is unavailable.');
   return ros;
 };
 
@@ -255,6 +256,22 @@ const handleRequest = async (
   options: CapabilityBrokerOptions,
   resources: BrokerResources
 ) => {
+  // ROSLIB services/topics capture their Ros instance. Discard those objects
+  // when the host replaces its connection, while keeping the sandbox alive.
+  if (message.method.startsWith('ros.') && resources.ros !== options.ros) {
+    resources.subscriptions.forEach(({ topic }) => topic.unsubscribe());
+    resources.publishers.forEach(topic => {
+      try {
+        topic.unadvertise();
+      } catch {
+        // The old transport may already be closed.
+      }
+    });
+    resources.subscriptions.clear();
+    resources.publishers.clear();
+    resources.services.clear();
+    resources.ros = options.ros;
+  }
   const params = (message.params || {}) as Record<string, unknown>;
   const rosPermissions = options.manifest.permissions?.ros;
   if (message.method === 'viewport.requestFullscreen') {
@@ -382,7 +399,11 @@ const handleRequest = async (
     const result = await new Promise<unknown>((resolve, reject) => {
       service!.callService(new ROSLIB.ServiceRequest(request), resolve, reject);
     });
-    return requireJsonPayload(result, 'ROS service response');
+    // ROSLIB wraps replies in ServiceResponse instances, just as topic messages
+    // arrive in Message instances. Normalize before enforcing the JSON boundary.
+    const normalized = normalizeRosMessage(result);
+    if (!normalized) throw new Error('ROS service response must be a finite JSON object.');
+    return requireJsonPayload(normalized.value, 'ROS service response');
   }
   if (message.method === 'network.fetch') {
     if (resources.requests.size >= MAX_NETWORK_REQUESTS) throw new Error('Panel network request limit reached.');
@@ -446,6 +467,7 @@ export const connectPanelCapabilityBroker = (
   onMessage: (message: PanelSandboxToHostMessage) => void
 ): (() => void) => {
   const resources: BrokerResources = {
+    ros: options.ros,
     subscriptions: new Map(),
     nextSubscriptionSequence: 0,
     publishers: new Map(),

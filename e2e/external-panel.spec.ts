@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { getRosSubscriptionCount, installRosMock, waitForRosSubscription } from './helpers/rosMock';
+import { installRosMock } from './helpers/rosMock';
 import { installWebRtcMock } from './helpers/webrtcMock';
 
 const desktopWorkspacePanelsKey = 'robo-boy-desktop-workspace-panels-v1';
@@ -48,102 +48,6 @@ test('discovers and lazily loads the standalone Hello Panel artifact', async ({ 
       }, desktopWorkspacePanelsKey)
     )
     .toBe(1);
-});
-
-test('configures an external time-series panel and plots live ROS messages', async ({ page }) => {
-  await installRosMock(page, {
-    topics: [{ name: '/telemetry', type: 'example_msgs/msg/Telemetry' }],
-  });
-  await page.goto('/');
-  await page.getByTitle('Advanced Options').click();
-  await page.locator('#ros2Value').fill('127.0.0.1');
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(page.getByLabel('Status: Connected')).toBeVisible();
-
-  await page.getByLabel('Add workspace panel').first().click();
-  await page.getByRole('button', { name: 'ROS Time Series', exact: true }).click();
-
-  const panel = page.frameLocator('iframe[title="ROS Time Series"]').getByLabel('ROS Time Series panel');
-  await expect(panel).toBeVisible();
-  await panel.getByRole('button', { name: 'Configure' }).click();
-  await panel.getByRole('button', { name: 'Choose ROS topic' }).click();
-  const topicPicker = page.getByRole('dialog', { name: 'Choose ROS topic' });
-  await topicPicker.getByLabel('Available topics').selectOption('/telemetry');
-  await topicPicker.getByRole('button', { name: 'Allow selected topic' }).click();
-  await panel.getByRole('button', { name: 'Configure' }).click();
-  await expect(panel.getByText('Auto-detect is enabled')).toBeVisible();
-  await panel.getByText('Advanced plot settings').click();
-  await panel.getByLabel('Bridge throttle').selectOption('0');
-  await panel.getByLabel('Point markers').check();
-  const initialSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
-  await panel.getByRole('button', { name: 'Apply' }).click();
-  await waitForRosSubscription(page, '/telemetry', initialSubscriptionCount);
-
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __publishRosTopic: (topic: string, message: unknown) => void;
-      }
-    ).__publishRosTopic('/telemetry', { data: 10, nested: { value: -2 } });
-    (
-      window as unknown as {
-        __publishRosTopic: (topic: string, message: unknown) => void;
-      }
-    ).__publishRosTopic('/telemetry', { data: 12.5, nested: { value: -3.25 } });
-  });
-
-  await expect(panel.getByText('Live · /telemetry')).toBeVisible();
-  await expect(panel.getByText('4 samples')).toBeVisible();
-  await expect(panel.getByText('12.5000')).toBeVisible();
-  await expect(panel.getByText('-3.25000')).toBeVisible();
-  await expect(panel.getByLabel('ROS numeric time-series chart')).toBeVisible();
-
-  await panel.getByRole('button', { name: 'Configure' }).click();
-  await expect(panel.getByRole('button', { name: 'Remove data' })).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Remove nested.value' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Remove nested.value' }).click();
-  const replacementSubscriptionCount = await getRosSubscriptionCount(page, '/telemetry');
-  await panel.getByRole('button', { name: 'Apply' }).click();
-  await waitForRosSubscription(page, '/telemetry', replacementSubscriptionCount);
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __publishRosTopic: (topic: string, message: unknown) => void;
-      }
-    ).__publishRosTopic('/telemetry', { data: 20, nested: { value: 20 } });
-  });
-  await expect(panel.getByText('1 sample')).toBeVisible();
-  await expect(panel.getByText('20.0000')).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 360 });
-  await panel.getByRole('button', { name: 'Configure' }).click();
-  await panel.getByText('Advanced plot settings').click();
-  const configuration = panel.getByLabel('Time series configuration');
-  await expect(configuration).toBeVisible();
-  await expect
-    .poll(() =>
-      configuration.evaluate(element => {
-        const style = getComputedStyle(element);
-        return style.overflowY === 'auto' && element.scrollHeight > element.clientHeight;
-      })
-    )
-    .toBe(true);
-  await panel.getByRole('button', { name: 'Cancel' }).click();
-
-  await panel.getByRole('button', { name: 'Pause' }).click();
-  await page.evaluate(() => {
-    (
-      window as unknown as {
-        __publishRosTopic: (topic: string, message: unknown) => void;
-      }
-    ).__publishRosTopic('/telemetry', { data: 99, nested: { value: 99 } });
-  });
-  await expect(panel.getByText('Paused')).toBeVisible();
-  await expect(panel.getByText('1 sample')).toBeVisible();
-
-  await panel.getByRole('button', { name: 'Clear' }).click();
-  await expect(panel.getByText('0 samples')).toBeVisible();
-  await expect(page.getByText('Something went wrong')).toHaveCount(0);
 });
 
 test('negotiates and controls the standalone WebRTC camera panel', async ({ page }) => {

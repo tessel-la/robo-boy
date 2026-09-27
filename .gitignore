@@ -187,3 +187,6 @@ public/panel-sandbox.html
 
 # Local-only panel selection for personal builds; never shipped
 local-panel-sources.json
+
+# Local ROS recording output
+/recordings/
