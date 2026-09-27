@@ -2,7 +2,9 @@ import { McapWriter, TempBuffer } from '@mcap/core';
 import { parse } from '@foxglove/rosmsg';
 import { MessageWriter } from '@foxglove/rosmsg2-serialization';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { rangeServer } from '../../test/rangeServer';
 import { BagReader } from './bagReader';
+import { HttpReadable } from './httpReadable';
 import type { ReaderResponse, ReplayMessage } from './types';
 
 const START = 1_700_000_000n * 1_000_000_000n;
@@ -38,12 +40,14 @@ async function createBag(): Promise<File> {
   await writer.end();
   // jsdom's Blob has no arrayBuffer(); this is the part of File that BlobReadable uses.
   const bytes = buffer.get();
+  bagBytes = bytes;
   return { name: 'test.mcap', size: bytes.byteLength, slice: (from: number, to: number) => ({
     arrayBuffer: async () => bytes.slice(from, to).buffer,
   }) } as unknown as File;
 }
 
 let bag: File;
+let bagBytes: Uint8Array;
 beforeAll(async () => { bag = await createBag(); });
 
 describe('BagReader', () => {
@@ -95,13 +99,37 @@ describe('BagReader', () => {
   });
 });
 
+describe('BagReader on the ROS host', () => {
+  it('replays a recording in place, reading its index and only the chunks it plays', async () => {
+    const server = rangeServer(bagBytes);
+    const reader = new BagReader();
+    const info = await reader.open({ url: 'http://robot.local:9091/files/field/test.mcap', name: 'test.mcap', size: bagBytes.length },
+      (url, size) => new HttpReadable(url, size, { fetch: server.fetch, readAhead: 0 }));
+    const local = new BagReader();
+    expect(info).toEqual({ ...(await local.open(bag)), name: 'test.mcap' });
+    expect(server.requests.every(request => request.url === 'http://robot.local:9091/files/field/test.mcap')).toBe(true);
+    const transferred = () => server.requests.reduce((total, { range }) => {
+      const [from, to] = range!.slice('bytes='.length).split('-').map(Number);
+      return total + to - from + 1;
+    }, 0);
+    const opened = transferred();
+    expect(opened).toBeLessThan(bagBytes.length / 2);
+
+    const remote = [], expected = [];
+    for await (const item of reader.read(at(1), at(2), ['/value'])) remote.push(item.message);
+    for await (const item of local.read(at(1), at(2), ['/value'])) expected.push(item.message);
+    expect(remote).toEqual(expected);
+    expect(transferred() - opened).toBeLessThan(bagBytes.length / 2);
+  });
+});
+
 describe('replay worker', () => {
   it('streams consecutive windows exactly once and restarts cleanly after a seek', async () => {
     const posted: ReaderResponse[] = [];
     vi.stubGlobal('postMessage', (response: ReaderResponse) => posted.push(response));
     await import('./replay.worker');
     const handle = (data: unknown) => (globalThis as unknown as { onmessage: (event: { data: unknown }) => Promise<void> }).onmessage({ data });
-    await handle({ id: 1, op: 'open', file: bag });
+    await handle({ id: 1, op: 'open', source: bag });
     expect(posted[posted.length - 1]?.op).toBe('opened');
 
     const received: ReplayMessage[] = [];

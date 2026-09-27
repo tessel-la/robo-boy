@@ -2,10 +2,19 @@
 
 The Record & Replay panel has two views:
 
-- **Replay** opens an MCAP file on this device and plays it through Time Series, TF tree and 3D panels.
+- **Replay** plays an MCAP through Camera, Time Series, TF tree and 3D panels: a file on this device, or a recording
+  on the ROS host, read in place without copying it first.
 - **Record** asks the ROS host to write selected topics to an MCAP bag.
 
-Robot controls (pads, camera, behavior trees, services) always stay on the live connection. Replay never publishes.
+Robot controls (pads, behavior trees, services) always stay on the live connection. Replay never publishes.
+
+While a recording is open, Camera panels show its camera instead of the live stream. Live, the image comes from
+web_video_server on the robot, which knows nothing about the recording, so replay draws the recorded
+`sensor_msgs/Image` or `sensor_msgs/CompressedImage` messages in the browser. A panel uses its own topic from the
+recording, preferring its `/compressed` twin when both were recorded (a fraction of the data, decoded natively), and
+its selector lists every camera topic in the recording without changing the live choice. Raw images in
+`rgb8`, `bgr8`, `rgba8`, `bgra8`, `mono8`, `mono16`/`16UC1`, `32FC1` and packed YUV 4:2:2 are supported, and JPEG or
+PNG compressed images, including compressed depth. Camera widgets inside pads stay live with the pad.
 
 ## Replay
 
@@ -19,6 +28,42 @@ connection screen when no robot is available.
   dynamic TF looks back at most 30 seconds, like a tf2 buffer.
 - The file stays on the device. It is read with random access through its index, so only summary data and the chunks
   being played enter memory.
+
+### Recordings on the ROS host
+
+While connected, the empty Replay view lists the recording root of the ROS host under **On the ROS host**: folders,
+finished bags (with duration, message count and size) and loose `.mcap` files. A split bag lists each part. A bag
+that is still being recorded is shown but cannot be opened until it stops. **Find it in Replay** in the Record view
+opens the folder of the recording that just finished.
+
+Each MCAP file has two actions:
+
+- **Replay** reads it in place over HTTP range requests, through the same reader as a local file. Opening a bag
+  transfers only its header, footer and index; playback then fetches the chunks it plays, reading ahead up to 8 MiB
+  once it moves forward through the file, and keeps at most 64 MiB in memory. A multi-gigabyte bag opens in a few
+  tens of kilobytes. On a slow link the clock waits (the panel shows **Buffering…**) instead of queueing data.
+- **Download** copies it to this device. Where the browser can write files (Chromium browsers and Electron), you
+  choose where to save it and the copy streams straight to disk with progress, cancel, and automatic resume from the
+  last byte after a dropped connection; **Replay** then opens the copy exactly like a dropped file. Elsewhere
+  (Firefox, Safari, mobile web views) the browser's own download takes over; drop the file on the panel when it
+  finishes.
+
+Failures stay recoverable. A dropped connection is retried with backoff; if it persists, playback stops with
+**Reconnect and continue**, which reopens the recording where it stopped. A download that runs out of retries keeps
+what it has and offers **Resume**. A recording that disappears, or changes while it is being read (detected through
+its size and ETag), is reported instead of being read inconsistently.
+
+The ROS host's recorder serves these files read-only: `GET /list?path=` and `GET /files/<path>.mcap` with Range,
+HEAD and CORS. Nothing outside the recording root and nothing but `.mcap` files is served. In Compose it listens on
+a Unix socket shared with Caddy (`ROBOBOY_RECORDINGS_SOCKET`), and the browser reaches it at `/recordings` on
+Robo-Boy's own port: no port is opened on the host and no firewall rule is needed.
+
+Apps that connect to the ROS host directly rather than through Caddy (the desktop and mobile apps, or a web page
+connected to another host) need the recorder to serve over TCP as well: set `ROBOBOY_RECORDINGS_PORT=9091` for
+`ros-stack` and allow that port from those clients, like rosbridge's. They look for it on `HOST:9091`
+(`VITE_RECORDINGS_PORT`). Where Caddy and the ROS host are different machines (`BACKEND_HOST`), set the port on the
+ROS host and point Caddy at it with `RECORDINGS_UPSTREAM=<host>:9091`. Like the robot's other services the file
+service is unauthenticated: keep it on a trusted network or VPN.
 
 Supported files: indexed MCAP (the `ros2 bag` default) with `ros2msg`/CDR, `ros1msg`, or JSON channels, and
 uncompressed, zstd or LZ4 chunks. A file without a chunk index can be fixed with `mcap recover`.
@@ -40,7 +85,8 @@ int64 fields are converted to numbers, as rosbridge does. Decompression is plain
 ## Record
 
 Recording runs on the ROS host in `infra/ros/recording_runner.py`, started by the ROS container's entrypoint. Raw
-message bytes never cross the browser connection, and a recording continues if the browser closes.
+message bytes never cross the browser connection, and a recording continues if the browser closes. The same process
+serves the finished recordings to Replay (see [Recordings on the ROS host](#recordings-on-the-ros-host)).
 
 | Option                | Meaning                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -79,6 +125,10 @@ mkdir -p "$HOME/recordings"
 ROBOBOY_RECORDINGS_ROOT="$HOME/recordings" python3 infra/ros/recording_runner.py
 ```
 
+To browse and replay its recordings from Robo-Boy, also set `ROBOBOY_RECORDINGS_PORT=9091` (and
+`ROBOBOY_RECORDINGS_ADDRESS` to bind one interface) and allow that port from the clients; without a Caddy on the same
+machine there is no socket to share.
+
 The recorder, rosbridge, and the external application must discover the same ROS graph. Use the
 same domain and compatible DDS settings, and make custom message definitions available to the
 recorder through [robot workspace overlays](robot-overlays.md). Keep QoS on **Match publishers**
@@ -86,8 +136,8 @@ unless a particular topic requires an override; this also supports best-effort s
 
 **Ready to record** confirms the service is reachable. After **Start recording**, the state should
 change to **Recording in progress** and its message count should rise. Files are saved on the ROS
-host, even when using a desktop app on another computer. After **Stop & save**, copy the `.mcap`
-file to the desktop device to open it in Replay. Local replay needs no ROS installation or connection.
+host, even when using a desktop app on another computer. After **Stop & save**, replay the bag from
+the ROS host or download it from the Replay view. Local replay needs no ROS installation or connection.
 
 The container writes as root, so each finished bag is handed to the owner of the recording root (on a bind mount,
 the host user). This matters for snap browsers (Ubuntu's Firefox and Chromium): they only open files your user

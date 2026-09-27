@@ -16,8 +16,17 @@ export interface ReplayMessage {
   time: bigint;
   message: Record<string, unknown>;
 }
+/** A recording on the ROS host, replayed in place with range requests instead of being copied first. */
+export interface RemoteBag {
+  url: string;
+  name: string;
+  size: number;
+}
+/** What Replay opens: a file on this device, or a recording on the ROS host. */
+export type BagSource = File | RemoteBag;
+export const isRemoteBag = (source: BagSource): source is RemoteBag => 'url' in source;
 export type ReaderRequest =
-  | { id: number; op: 'open'; file: File }
+  | { id: number; op: 'open'; source: BagSource }
   | { id: number; op: 'read'; start: bigint; end: bigint; topics: string[] }
   | { id: number; op: 'seek'; time: bigint; topics: string[] };
 export type ReaderResponse =

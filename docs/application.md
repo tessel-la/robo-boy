@@ -13,11 +13,12 @@ The desktop frontend connects directly to these services on the selected ROS hos
 | rosbridge            | `ws://HOST:9090`   |
 | web_video_server     | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
+| Optional recordings  | `http://HOST:9091` |
 
 Override the desktop direct-connect defaults with Vite environment variables when needed:
 
 ```bash
-VITE_ROSBRIDGE_PORT=19090 VITE_VIDEO_STREAM_PORT=18080 VITE_MESH_RESOURCES_PORT=18000 npm run desktop:dev
+VITE_ROSBRIDGE_PORT=19090 VITE_VIDEO_STREAM_PORT=18080 VITE_MESH_RESOURCES_PORT=18000 VITE_RECORDINGS_PORT=19091 npm run desktop:dev
 ```
 
 When the backend runs on another laptop, use the advanced connection box, select **Host or IP**, and enter that laptop's hostname, VPN DNS name, or IP. Desktop connects directly to rosbridge, video, and mesh services on that host.

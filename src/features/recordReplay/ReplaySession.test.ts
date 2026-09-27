@@ -56,6 +56,51 @@ afterEach(() => {
 });
 
 describe('ReplaySession', () => {
+  it('replays a recording on the ROS host and reconnects where it stopped', () => {
+    const bag = { url: 'http://robot.local:9091/files/run_0.mcap', name: 'run_0.mcap', size: 4096 };
+    session.open(bag);
+    expect(session.getSnapshot()).toMatchObject({ phase: 'loading', remote: true });
+    expect(worker.last('open')).toMatchObject({ op: 'open', source: bag });
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    session.seek(12);
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    session.play();
+    vi.advanceTimersByTime(40);
+    worker.reply({ id: worker.last('read').id, op: 'error', error: 'Lost the connection to the ROS host while reading the recording (Failed to fetch).' });
+    expect(session.getSnapshot()).toMatchObject({ phase: 'error', playing: false, remote: true });
+    expect(session.canRetry).toBe(true);
+
+    const opens = worker.requests.filter(request => request.op === 'open').length;
+    session.retry();
+    expect(worker.requests.filter(request => request.op === 'open')).toHaveLength(opens + 1);
+    expect(worker.last('open')).toMatchObject({ source: bag });
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
+    expect(worker.last('seek')).toMatchObject({ time: at(12) });
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    expect(session.getSnapshot()).toMatchObject({ phase: 'ready', position: 12, remote: true });
+  });
+
+  it('offers no reconnect for a file on this device', () => {
+    open();
+    session.play();
+    vi.advanceTimersByTime(40);
+    worker.reply({ id: worker.last('read').id, op: 'error', error: 'The browser could not read this file.' });
+    expect(session.getSnapshot().remote).toBe(false);
+    expect(session.canRetry).toBe(false);
+  });
+
+  it('reports buffering while playback waits on a slow read', () => {
+    open();
+    session.play();
+    vi.advanceTimersByTime(40);
+    expect(session.getSnapshot().buffering).toBe(false);
+    vi.advanceTimersByTime(400);
+    expect(session.getSnapshot().buffering).toBe(true);
+    worker.reply({ id: worker.last('read').id, op: 'messages', messages: [], done: true });
+    expect(session.getSnapshot().buffering).toBe(false);
+  });
+
   it('rejects files that are not MCAP', () => {
     session.open(file('notes.txt'));
     expect(session.getSnapshot()).toMatchObject({ phase: 'error', error: 'Choose an .mcap recording.' });
@@ -69,7 +114,7 @@ describe('ReplaySession', () => {
     session.subscribeSource(sourceListener);
     session.open(file());
     expect(session.getSnapshot().phase).toBe('loading');
-    expect(worker.last('open')).toMatchObject({ op: 'open', file: { name: 'bag.mcap' } });
+    expect(worker.last('open')).toMatchObject({ op: 'open', source: { name: 'bag.mcap' } });
 
     worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
     expect(session.getSnapshot()).toMatchObject({ phase: 'seeking', info: INFO, position: 0 });

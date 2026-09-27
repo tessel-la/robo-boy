@@ -4,8 +4,9 @@ import { parse } from '@foxglove/rosmsg';
 import { MessageReader as Ros2Reader } from '@foxglove/rosmsg2-serialization';
 import { MessageReader as Ros1Reader } from '@foxglove/rosmsg-serialization';
 import { decompress as zstd } from 'fzstd';
+import { HttpReadable, type RangeReadable } from './httpReadable';
 import { decompressLz4Frame } from './lz4';
-import type { BagInfo, ReplayMessage } from './types';
+import { isRemoteBag, type BagInfo, type BagSource, type ReplayMessage } from './types';
 
 export interface TimedMessage extends ReplayMessage {
   /** Encoded size, used to bound worker batches. */
@@ -42,16 +43,19 @@ const checkSize = (size: bigint) => {
   return Number(size);
 };
 
-/** File-backed random access. Only summary indexes and requested chunks enter memory. */
+/**
+ * Random access to a recording on this device or on the ROS host. Only summary indexes and requested
+ * chunks enter memory, and for a remote recording only those cross the network.
+ */
 export class BagReader {
   private reader!: McapIndexedReader;
   private decoders = new Map<number, (bytes: Uint8Array) => Record<string, unknown>>();
   info!: BagInfo;
 
-  async open(file: File): Promise<BagInfo> {
-    const blob = new BlobReadable(file);
+  async open(source: BagSource, remote: (url: string, size: number) => RangeReadable = (url, size) => new HttpReadable(url, size)): Promise<BagInfo> {
+    const readable: RangeReadable = isRemoteBag(source) ? remote(source.url, source.size) : new BlobReadable(source);
     this.reader = await McapIndexedReader.Initialize({
-      readable: { size: () => blob.size(), read: (offset, size) => { checkSize(size); return blob.read(offset, size); } },
+      readable: { size: () => readable.size(), read: (offset, size) => { checkSize(size); return readable.read(offset, size); } },
       messageIndexCacheSizeBytes: 8 * 1024 * 1024,
       decompressHandlers: {
         // Pure JS: no wasm loader or CSP exception is needed on web, desktop or mobile.
@@ -83,7 +87,7 @@ export class BagReader {
     }
     const indexes = this.reader.chunkIndexes;
     this.info = {
-      name: file.name, size: file.size,
+      name: source.name, size: source.size,
       start: indexes.reduce((a, c) => c.messageStartTime < a ? c.messageStartTime : a, indexes[0].messageStartTime),
       end: indexes.reduce((a, c) => c.messageEndTime > a ? c.messageEndTime : a, indexes[0].messageEndTime),
       topics: [...topics.values()].sort((a, b) => a.name.localeCompare(b.name)),

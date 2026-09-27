@@ -62,6 +62,8 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
 | `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
 | `MESH_RESOURCES_PORT`           | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `ROBOBOY_RECORDINGS_PORT`       | unset                    | Optional TCP port for the recorder's file service          |
+| `RECORDINGS_UPSTREAM`           | recorder socket          | Caddy `/recordings` upstream                               |
 | `OLLAMA_BACKEND_URL`            | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
 | `OLLAMA_PORT`                   | `11434`                  | Desktop direct-connect Ollama port                         |
 | `OLLAMA_PROXY_TARGET`           | `http://127.0.0.1:11434` | Frontend-only Vite `/ollama` upstream                      |
@@ -70,6 +72,7 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VITE_ROSBRIDGE_PORT`           | `9090`                   | Desktop direct-connect rosbridge URL                       |
 | `VITE_VIDEO_STREAM_PORT`        | `8080`                   | Desktop direct-connect video URL                           |
 | `VITE_MESH_RESOURCES_PORT`      | `8000`                   | Desktop direct-connect mesh URL                            |
+| `VITE_RECORDINGS_PORT`          | `9091`                   | Direct-connect recordings URL (needs the TCP port)         |
 | `VITE_OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama URL                          |
 | `VITE_WEB_BACKEND_MODE`         | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
 

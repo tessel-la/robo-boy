@@ -34,7 +34,7 @@ onmessage = async ({ data }: MessageEvent<ReaderRequest | { op: 'ack'; id: numbe
   try {
     if (data.op === 'open') {
       stream = undefined;
-      const info = await reader.open(data.file);
+      const info = await reader.open(data.source);
       if (!cancelled()) send({ id: data.id, op: 'opened', info });
     } else if (data.op === 'seek') {
       const messages = await reader.seek(data.time, data.topics, cancelled);

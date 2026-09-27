@@ -6,6 +6,8 @@ export interface RuntimeEndpoints {
   rosbridgeUrl: string;
   videoStreamBaseUrl: string;
   meshResourcesBaseUrl: string;
+  /** The ROS host's recordings, served read-only by its recorder (a listing and the MCAP files). */
+  recordingsBaseUrl: string;
   ollamaBaseUrl: string;
   /**
    * The WebRTC stream gateway, named directly rather than worked out from the video server.
@@ -30,6 +32,7 @@ export interface RuntimePortConfig {
   rosbridgePort: string;
   videoStreamPort: string;
   meshResourcesPort: string;
+  recordingsPort: string;
   ollamaPort: string;
   webrtcPort: string;
   webrtcDiscoveryPort: string;
@@ -59,6 +62,7 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   rosbridgePort: normalizeRuntimePort(import.meta.env.VITE_ROSBRIDGE_PORT, '9090'),
   videoStreamPort: normalizeRuntimePort(import.meta.env.VITE_VIDEO_STREAM_PORT, '8080'),
   meshResourcesPort: normalizeRuntimePort(import.meta.env.VITE_MESH_RESOURCES_PORT, '8000'),
+  recordingsPort: normalizeRuntimePort(import.meta.env.VITE_RECORDINGS_PORT, '9091'),
   ollamaPort: normalizeRuntimePort(import.meta.env.VITE_OLLAMA_PORT, '11434'),
   // MediaMTX serves WHEP and its read-only path list on separate ports, so a gateway that is not
   // the stock one can be reached without either of them being written into a caller.
@@ -151,6 +155,7 @@ const resolveDirectEndpoints = (
     rosbridgeUrl: `${websocketScheme}://${urlHost}:${ports.rosbridgePort}`,
     videoStreamBaseUrl: `${httpScheme}://${urlHost}:${ports.videoStreamPort}`,
     meshResourcesBaseUrl: `${httpScheme}://${urlHost}:${ports.meshResourcesPort}`,
+    recordingsBaseUrl: `${httpScheme}://${urlHost}:${ports.recordingsPort}`,
     ollamaBaseUrl: `${httpScheme}://${urlHost}:${ports.ollamaPort}`,
     webrtcWhepBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcPort}/`,
     webrtcDiscoveryUrl: `${httpScheme}://${urlHost}:${ports.webrtcDiscoveryPort}/v3/paths/list`,
@@ -190,6 +195,7 @@ export function resolveRuntimeEndpoints(
       rosbridgeUrl: `${websocketScheme}://${authority}/websocket`,
       videoStreamBaseUrl: '/video_stream',
       meshResourcesBaseUrl: '/mesh_resources',
+      recordingsBaseUrl: '/recordings',
       ollamaBaseUrl: '/ollama',
       // Same-origin, because a browser on an HTTPS page cannot reach the gateway's own ports.
       webrtcWhepBaseUrl: '/webrtc/',
