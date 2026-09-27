@@ -4,8 +4,10 @@
 Protocol v1: std_msgs/String JSON on /roboboy/recorder/{command,status}.
 The writer thread owns rosbag2; the ROS executor only discovers and queues raw bytes.
 
-Finished recordings are also served read-only over HTTP (ROBOBOY_RECORDINGS_PORT, 9091 by default),
-so the app can list them and replay one in place with range requests, or download it.
+Finished recordings are also served read-only over HTTP, so the app can list them and replay one in
+place with range requests, or download it. The proxy in front of the app reaches that service through a
+Unix socket (ROBOBOY_RECORDINGS_SOCKET), so it needs no port on the host; ROBOBOY_RECORDINGS_PORT
+additionally serves it over TCP, for apps that connect to the ROS host without the proxy.
 """
 import json
 import math
@@ -19,6 +21,7 @@ import time
 from collections import deque
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingUnixStreamServer
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 LISTING_LIMIT = 500
@@ -188,9 +191,17 @@ def recording_files_handler(root, active):
     return Handler
 
 
-def serve_recordings(root, active, address, port):
-    """Start the read-only recordings service on a background thread; returns the server."""
-    server = ThreadingHTTPServer((address, port), recording_files_handler(root, active))
+def serve_recordings(root, active, address):
+    """Start the read-only recordings service on a background thread; returns the server.
+
+    `address` is a (host, port) pair, or the path of a Unix socket shared with a proxy on this machine.
+    """
+    handler = recording_files_handler(root, active)
+    if isinstance(address, str):
+        Path(address).unlink(missing_ok=True)  # Left behind by a previous run of the recorder.
+        server = ThreadingUnixStreamServer(address, handler)
+    else:
+        server = ThreadingHTTPServer(address, handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, name='recording-files', daemon=True).start()
     return server
@@ -498,22 +509,24 @@ def main():
 
     rclpy.init()
     node = Recorder()
-    files = None
-    port = int(os.environ.get('ROBOBOY_RECORDINGS_PORT', '9091') or 0)
-    if port:
+    servers = []
+    socket_path = os.environ.get('ROBOBOY_RECORDINGS_SOCKET', '')
+    port = int(os.environ.get('ROBOBOY_RECORDINGS_PORT', '') or 0)
+    addresses = ([socket_path] if socket_path else []) + ([(os.environ.get('ROBOBOY_RECORDINGS_ADDRESS', '0.0.0.0'), port)] if port else [])
+    for address in addresses:
         try:
-            files = serve_recordings(node.root, node.active_destination, os.environ.get('ROBOBOY_RECORDINGS_ADDRESS', '0.0.0.0'), port)
-            node.get_logger().info(f'Serving recordings read-only on port {port}')
+            servers.append(serve_recordings(node.root, node.active_destination, address))
+            node.get_logger().info(f'Serving recordings read-only on {address}')
         except OSError as error:
             # Recording does not depend on the file service; keep it available either way.
-            node.get_logger().error(f'Recordings cannot be served on port {port}: {error}')
+            node.get_logger().error(f'Recordings cannot be served on {address}: {error}')
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
-        if files:
-            files.shutdown()
+        for server in servers:
+            server.shutdown()
         node.stop()
         if node.thread:
             node.thread.join()  # Drain queued bytes and finalize MCAP/metadata before exit.

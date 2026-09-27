@@ -13,7 +13,7 @@ The desktop frontend connects directly to these services on the selected ROS hos
 | rosbridge            | `ws://HOST:9090`   |
 | web_video_server     | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
-| Recordings           | `http://HOST:9091` |
+| Optional recordings  | `http://HOST:9091` |
 
 Override the desktop direct-connect defaults with Vite environment variables when needed:
 

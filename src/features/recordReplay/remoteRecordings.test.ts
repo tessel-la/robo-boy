@@ -37,8 +37,8 @@ describe('remote recordings', () => {
 
   it('explains why recordings cannot be listed', async () => {
     const unreachable = vi.fn(async () => { throw new TypeError('Failed to fetch'); }) as unknown as typeof fetch;
-    await expect(fetchListing('/recordings', '', undefined, unreachable)).rejects.toThrow('not reachable');
-    await expect(fetchListing('/recordings', '', undefined, json({}, 502))).rejects.toThrow('lets the proxy reach its recordings port (9091)');
+    await expect(fetchListing('/recordings', '', undefined, unreachable)).rejects.toThrow('set ROBOBOY_RECORDINGS_PORT there');
+    await expect(fetchListing('/recordings', '', undefined, json({}, 502))).rejects.toThrow('The recorder on the ROS host did not answer');
     await expect(fetchListing('/recordings', '', undefined, json({}, 500))).rejects.toThrow('does not serve its recordings');
     await expect(fetchListing('/recordings', '', undefined, json({}, 404))).rejects.toThrow('does not serve its recordings');
     await expect(fetchListing('/recordings', '..', undefined, json({ error: 'Choose a path inside the recording root' }, 400))).rejects.toThrow('Choose a path inside the recording root');

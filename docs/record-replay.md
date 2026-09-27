@@ -45,17 +45,17 @@ Failures stay recoverable. A dropped connection is retried with backoff; if it p
 what it has and offers **Resume**. A recording that disappears, or changes while it is being read (detected through
 its size and ETag), is reported instead of being read inconsistently.
 
-The ROS host's recorder serves these files read-only on port 9091 (`RECORDINGS_PORT` in Compose,
-`ROBOBOY_RECORDINGS_PORT` on the host, `0` turns it off): `GET /list?path=` and `GET /files/<path>.mcap` with Range,
-HEAD and CORS. Nothing outside the recording root and nothing but `.mcap` files is served. The browser reaches it
-through Caddy at `/recordings`, so a web client needs no extra port; the desktop and mobile apps connect to
-`HOST:9091` directly (`VITE_RECORDINGS_PORT`), like rosbridge. Like the robot's other services it is
-unauthenticated: keep it on a trusted network or VPN.
+The ROS host's recorder serves these files read-only: `GET /list?path=` and `GET /files/<path>.mcap` with Range,
+HEAD and CORS. Nothing outside the recording root and nothing but `.mcap` files is served. In Compose it listens on
+a Unix socket shared with Caddy (`ROBOBOY_RECORDINGS_SOCKET`), and the browser reaches it at `/recordings` on
+Robo-Boy's own port: no port is opened on the host and no firewall rule is needed.
 
-Caddy reaches the recorder from the Docker network through the host gateway, like rosbridge. If the host firewall
-filters that traffic, **On the ROS host** says the recordings service did not answer and Caddy logs a dial timeout
-to port 9091; allow the port the same way rosbridge's is allowed, for example
-`sudo ufw allow from 172.16.0.0/12 to any port 9091 proto tcp` for Docker's default bridge networks.
+Apps that connect to the ROS host directly rather than through Caddy (the desktop and mobile apps, or a web page
+connected to another host) need the recorder to serve over TCP as well: set `ROBOBOY_RECORDINGS_PORT=9091` for
+`ros-stack` and allow that port from those clients, like rosbridge's. They look for it on `HOST:9091`
+(`VITE_RECORDINGS_PORT`). Where Caddy and the ROS host are different machines (`BACKEND_HOST`), set the port on the
+ROS host and point Caddy at it with `RECORDINGS_UPSTREAM=<host>:9091`. Like the robot's other services the file
+service is unauthenticated: keep it on a trusted network or VPN.
 
 Supported files: indexed MCAP (the `ros2 bag` default) with `ros2msg`/CDR, `ros1msg`, or JSON channels, and
 uncompressed, zstd or LZ4 chunks. A file without a chunk index can be fixed with `mcap recover`.
@@ -117,9 +117,9 @@ mkdir -p "$HOME/recordings"
 ROBOBOY_RECORDINGS_ROOT="$HOME/recordings" python3 infra/ros/recording_runner.py
 ```
 
-The service also serves the recording root read-only on port 9091 (set `ROBOBOY_RECORDINGS_PORT`, or `0` to turn it
-off, and `ROBOBOY_RECORDINGS_ADDRESS` to bind one interface); allow that port through the firewall for desktop and
-mobile clients.
+To browse and replay its recordings from Robo-Boy, also set `ROBOBOY_RECORDINGS_PORT=9091` (and
+`ROBOBOY_RECORDINGS_ADDRESS` to bind one interface) and allow that port from the clients; without a Caddy on the same
+machine there is no socket to share.
 
 The recorder, rosbridge, and the external application must discover the same ROS graph. Use the
 same domain and compatible DDS settings, and make custom message definitions available to the

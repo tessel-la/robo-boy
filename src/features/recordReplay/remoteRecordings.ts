@@ -65,10 +65,11 @@ export async function fetchListing(baseUrl: string, path: string, signal?: Abort
     response = await fetcher(`${baseUrl.replace(/\/+$/, '')}/list?path=${encodeURIComponent(path)}`, { cache: 'no-store', signal });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new Error('The ROS host’s recordings are not reachable. Check that its Robo-Boy recorder is running and that its recordings port is open.');
+    // Only a direct connection gets here: the proxy is this page's own server.
+    throw new Error('The ROS host’s recordings are not reachable. Apps that connect to the ROS host directly need its recorder to serve them over TCP: set ROBOBOY_RECORDINGS_PORT there, or open Robo-Boy in the browser.');
   }
   // The proxy answers 502-504 when it cannot reach the recorder; a server without the service answers 404.
-  if (response.status >= 502 && response.status <= 504) throw new Error('The recordings service on the ROS host did not answer. Check that its Robo-Boy recorder is running and that the host firewall lets the proxy reach its recordings port (9091).');
+  if (response.status >= 502 && response.status <= 504) throw new Error('The recorder on the ROS host did not answer. Check that it is running and up to date: docker compose up -d --build ros-stack caddy.');
   if (response.status === 404 || response.status >= 500) throw new Error('The ROS host does not serve its recordings. Update and restart its Robo-Boy recorder.');
   let body: unknown;
   try { body = await response.json(); } catch { throw new Error('The ROS host answered with something other than a recordings list.'); }

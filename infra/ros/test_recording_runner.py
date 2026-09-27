@@ -5,6 +5,7 @@
 import http.client
 import json
 import os
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -79,7 +80,7 @@ class RangeTest(unittest.TestCase):
 class FileServiceTest(RecordingRootTest):
     def setUp(self):
         super().setUp()
-        self.server = serve_recordings(self.root, lambda: self.active, '127.0.0.1', 0)
+        self.server = serve_recordings(self.root, lambda: self.active, ('127.0.0.1', 0))
 
     def tearDown(self):
         self.server.shutdown()
@@ -143,6 +144,36 @@ class FileServiceTest(RecordingRootTest):
                 response, body = self.request('GET', path)
                 self.assertEqual(response.status, status)
                 self.assertIn('error', json.loads(body))
+
+
+class UnixConnection(http.client.HTTPConnection):
+    def __init__(self, path):
+        super().__init__('localhost', timeout=5)
+        self.path = path
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect(self.path)
+
+
+class UnixSocketTest(RecordingRootTest):
+    """How the proxy reaches the service: a socket in a shared volume, so no port is opened on the host."""
+    def test_serves_listings_and_ranges_over_a_socket_replacing_a_stale_one(self):
+        path = str(self.root / '.files.sock')
+        Path(path).write_text('left by a previous run')
+        server = serve_recordings(self.root, lambda: None, path)
+        try:
+            connection = UnixConnection(path)
+            connection.request('GET', '/list?path=field')
+            response = connection.getresponse()
+            self.assertEqual((response.status, json.loads(response.read())['recordings'][0]['name']), (200, 'run_1'))
+            connection.request('GET', '/files/field/run_1/run_1_0.mcap', headers={'Range': 'bytes=256-259'})
+            response = connection.getresponse()
+            self.assertEqual((response.status, response.read()), (206, bytes([0, 1, 2, 3])))
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == '__main__':

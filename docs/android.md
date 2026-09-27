@@ -73,7 +73,7 @@ advanced connection options, choose **Host or IP**, and enter the ROS computer's
 | rosbridge            | `ws://HOST:9090`   |
 | web_video_server     | `http://HOST:8080` |
 | Optional mesh server | `http://HOST:8000` |
-| Recordings           | `http://HOST:9091` |
+| Optional recordings  | `http://HOST:9091` |
 
 Android blocks plaintext network traffic in release apps by default. Robo-Boy explicitly permits
 it because the standard ROS endpoints above are plaintext and the host is selected at runtime.
