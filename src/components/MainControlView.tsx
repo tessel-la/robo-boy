@@ -1,6 +1,7 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
+import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { FiActivity, FiDisc, FiSettings, FiX } from 'react-icons/fi';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
@@ -2995,7 +2996,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const renderViewContent = () => (
     <div className="view-panel card" ref={viewPanelRef}>
       {viewMode === 'camera' ? (
-        isConnected && ros && selectedCameraTopic ? (
+        replaySource.ros ? (
+          <RecordedCameraView key={`view:${replaySource.generation}`} ros={replaySource.ros} preferredTopic={selectedCameraTopic} />
+        ) : isConnected && ros && selectedCameraTopic ? (
           <CameraView
             ros={ros}
             cameraTopic={selectedCameraTopic}
@@ -3325,15 +3328,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       );
     }
 
-    if ((!isConnected || !ros) && !(['3d', 'tfTree'].includes(panel.type) && replaySource.ros)) {
+    if ((!isConnected || !ros) && !(['3d', 'tfTree', 'camera'].includes(panel.type) && replaySource.ros)) {
       return <div className="placeholder">
         {!connectionParams.offline ? 'Connecting to ROS...'
-          : ['3d', 'tfTree'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
+          : ['3d', 'tfTree', 'camera'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
             : 'This panel needs a live robot connection.'}
       </div>;
     }
 
     if (panel.type === 'camera') {
+      // web_video_server streams the live robot; during replay the recorded frames are drawn instead.
+      if (replaySource.ros) {
+        return (
+          <RecordedCameraView
+            key={`${panel.id}:${replaySource.generation}`}
+            ros={replaySource.ros}
+            preferredTopic={panel.cameraTopic || selectedCameraTopic || ''}
+            selectId={`camera-topic-select-${panel.id}`}
+          />
+        );
+      }
       const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
       return cameraTopic ? (
         <CameraView

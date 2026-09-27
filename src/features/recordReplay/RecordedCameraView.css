@@ -1,0 +1,15 @@
+.recorded-camera .recorded-camera-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.recorded-camera .recorded-camera-frame[hidden] { display: none; }
+.recorded-camera-badge {
+  position: absolute; right: 10px; bottom: 10px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; letter-spacing: .02em;
+  color: var(--text-color, #fff); background: color-mix(in srgb, var(--background-color, #000) 72%, transparent);
+  border: 1px solid var(--border-color, rgb(255 255 255 / 20%));
+  pointer-events: none;
+}

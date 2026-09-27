@@ -168,7 +168,7 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
             </div>
           </div>
         </div>
-        <p className="rr-hint">Time Series, TF and 3D follow this recording. Robot controls stay connected to the live robot.</p>
+        <p className="rr-hint">Camera, Time Series, TF and 3D follow this recording. Robot controls stay connected to the live robot.</p>
         <details className="rr-details"><summary>Topics in this recording <span>{replay.info.topics.length}</span></summary>
           <ul className="rr-topic-list">{replay.info.topics.map(topic => <li key={topic.name}><div><strong>{topic.name}</strong><span>{topic.type}</span>{topic.error && <span className="rr-error">{topic.error}</span>}</div><span>{topic.count.toLocaleString()}</span></li>)}</ul>
         </details>

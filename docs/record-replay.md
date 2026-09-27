@@ -2,11 +2,19 @@
 
 The Record & Replay panel has two views:
 
-- **Replay** plays an MCAP through Time Series, TF tree and 3D panels: a file on this device, or a recording on the
-  ROS host, read in place without copying it first.
+- **Replay** plays an MCAP through Camera, Time Series, TF tree and 3D panels: a file on this device, or a recording
+  on the ROS host, read in place without copying it first.
 - **Record** asks the ROS host to write selected topics to an MCAP bag.
 
-Robot controls (pads, camera, behavior trees, services) always stay on the live connection. Replay never publishes.
+Robot controls (pads, behavior trees, services) always stay on the live connection. Replay never publishes.
+
+While a recording is open, Camera panels show its camera instead of the live stream. Live, the image comes from
+web_video_server on the robot, which knows nothing about the recording, so replay draws the recorded
+`sensor_msgs/Image` or `sensor_msgs/CompressedImage` messages in the browser. A panel uses its own topic from the
+recording, preferring its `/compressed` twin when both were recorded (a fraction of the data, decoded natively), and
+its selector lists every camera topic in the recording without changing the live choice. Raw images in
+`rgb8`, `bgr8`, `rgba8`, `bgra8`, `mono8`, `mono16`/`16UC1`, `32FC1` and packed YUV 4:2:2 are supported, and JPEG or
+PNG compressed images, including compressed depth. Camera widgets inside pads stay live with the pad.
 
 ## Replay
 
