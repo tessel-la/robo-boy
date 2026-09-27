@@ -16,6 +16,14 @@ interface PanelFetchReply {
   body: ArrayBuffer;
 }
 
+/** Matches `UpdateTarget` in src/features/appUpdate/releases.ts. */
+interface UpdateTarget {
+  shell: 'electron';
+  os: 'linux';
+  arch: 'x64' | 'arm64';
+  package: 'deb';
+}
+
 /** Matches `ResizeDirection` in src/runtime/desktopWindow.ts, which names the edges as Tauri does. */
 type ResizeDirection =
   | 'North'
@@ -70,6 +78,27 @@ const desktopBridge = {
    */
   fetchPanelAsset: (url: string, init?: { method?: string }): Promise<PanelFetchReply> =>
     ipcRenderer.invoke('roboboy:panel-fetch', url, init) as Promise<PanelFetchReply>,
+
+  /**
+   * Updates. The page names a release and an installer; the main process looks them up, downloads
+   * and checks them itself, and installs only the file it checked.
+   */
+  updater: {
+    target: () => ipcRenderer.invoke('roboboy:update-target') as Promise<UpdateTarget | null>,
+    download: async (asset: { tag: string; name: string }, onProgress: (received: number, total: number) => void): Promise<void> => {
+      const listener = (_event: unknown, received: number, total: number) => onProgress(received, total);
+      ipcRenderer.on('roboboy:update-progress', listener);
+      try {
+        await ipcRenderer.invoke('roboboy:update-download', asset.tag, asset.name);
+      } finally {
+        ipcRenderer.removeListener('roboboy:update-progress', listener);
+      }
+    },
+    cancel: () => ipcRenderer.invoke('roboboy:update-cancel') as Promise<void>,
+    install: () => ipcRenderer.invoke('roboboy:update-install') as Promise<void>,
+    openInstaller: () => ipcRenderer.invoke('roboboy:update-open-installer') as Promise<void>,
+    openReleasePage: (tag: string) => ipcRenderer.invoke('roboboy:update-open-release', tag) as Promise<void>,
+  },
 };
 
 export type RoboBoyDesktopBridge = typeof desktopBridge;

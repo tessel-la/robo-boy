@@ -1,3 +1,4 @@
+import type { DesktopUpdater } from './desktopUpdater';
 import type { DesktopWindow, ResizeDirection } from './desktopWindow';
 
 /**
@@ -23,6 +24,8 @@ export interface RoboBoyDesktopBridge {
   shell: 'electron';
   window: DesktopWindow;
   fetchPanelAsset(url: string, init?: { method?: string }): Promise<PanelFetchReply>;
+  /** Absent in shells built before updates existed. */
+  updater?: DesktopUpdater;
 }
 
 /** Statuses the Response constructor refuses to pair with a body. */

@@ -2692,6 +2692,7 @@ version = "0.3.1-alpha"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-http",

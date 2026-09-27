@@ -21,6 +21,8 @@ export interface ConnectionTabsProps {
   onManagePanels?: () => void;
   workspaceLayoutLabel?: string;
   themeControl?: ReactNode;
+  /** The running version and its updates, where the shell can update itself. */
+  appUpdateControl?: ReactNode;
 }
 
 const statusLabel: Record<ConnectionStatus, string> = {
@@ -58,6 +60,7 @@ export default function ConnectionTabs({
   onManagePanels,
   workspaceLayoutLabel,
   themeControl,
+  appUpdateControl,
 }: ConnectionTabsProps) {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
@@ -200,6 +203,7 @@ export default function ConnectionTabs({
             </button>
           )}
           {themeControl}
+          {appUpdateControl}
           <button type="button" className="connection-switcher-add" onClick={openAnotherConnection}>
             <PlusIcon />
             <span>Open another connection</span>
