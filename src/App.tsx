@@ -10,7 +10,8 @@ import {
   DEFAULT_THEMES,
   THEME_STORAGE_KEY,
   CUSTOM_THEMES_STORAGE_KEY,
-  generateThemeCss,
+  applyThemeToDocument,
+  readStoredTheme,
 } from './features/theme/themeUtils';
 import { RuntimeConfigProvider } from './runtime/runtimeConfig';
 import {
@@ -32,15 +33,6 @@ interface ConnectionSession extends ConnectionTarget {
   isClosing: boolean;
 }
 
-const safeGetStorageItem = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch (error) {
-    console.warn(`Unable to read ${key} from localStorage. Falling back to defaults.`, error);
-    return null;
-  }
-};
-
 const safeSetStorageItem = (key: string, value: string): void => {
   try {
     localStorage.setItem(key, value);
@@ -55,26 +47,12 @@ function App() {
   const [isAddingConnection, setIsAddingConnection] = useState(false);
   const closeTimersRef = useRef(new Map<string, number>());
 
-  // --- Theme State ---
-  const [selectedThemeId, setSelectedThemeId] = useState<string>(() => {
-    return safeGetStorageItem(THEME_STORAGE_KEY) || 'dark';
-  });
-
-  const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => {
-    const stored = safeGetStorageItem(CUSTOM_THEMES_STORAGE_KEY);
-    try {
-      return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-      console.error('Failed to parse custom themes from localStorage', e);
-      return [];
-    }
-  });
+  // --- Theme State --- (main.tsx has already applied the stored theme before the first render)
+  const [selectedThemeId, setSelectedThemeId] = useState<string>(() => readStoredTheme().themeId);
+  const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => readStoredTheme().customThemes);
 
   const [isThemeCreatorOpen, setIsThemeCreatorOpen] = useState(false);
   const [themeToEdit, setThemeToEdit] = useState<CustomTheme | null>(null);
-
-  // Ref for the dynamic style tag
-  const themeStyleTagRef = useRef<HTMLStyleElement | null>(null);
 
   useEffect(
     () => () => {
@@ -86,43 +64,14 @@ function App() {
 
   // --- Theme Application Effect ---
   useEffect(() => {
-    // Remove previous dynamic styles if they exist
-    if (themeStyleTagRef.current) {
-      themeStyleTagRef.current.remove();
-      themeStyleTagRef.current = null;
+    const applied = applyThemeToDocument(selectedThemeId, customThemes);
+    if (applied !== selectedThemeId) {
+      console.warn(`Custom theme with ID ${selectedThemeId} not found. Falling back to ${applied}.`);
+      setSelectedThemeId(applied);
+      return;
     }
-
-    // Check if it's a default theme
-    if (DEFAULT_THEMES.includes(selectedThemeId)) {
-      document.documentElement.setAttribute('data-theme', selectedThemeId);
-      // Style tag already removed at effect start
-      console.log(`Applied default theme: ${selectedThemeId}`);
-    } else {
-      // It's a custom theme
-      const customTheme = customThemes.find((t: CustomTheme) => t.id === selectedThemeId);
-      if (customTheme) {
-        // Generate and apply dynamic CSS
-        const css = generateThemeCss(customTheme);
-        // Previous tag already removed at effect start
-        const styleTag = document.createElement('style');
-        styleTag.id = `custom-theme-styles-${customTheme.id}`;
-        styleTag.innerHTML = css;
-        document.head.appendChild(styleTag);
-        themeStyleTagRef.current = styleTag; // Store ref to remove later
-        // Set data-theme attribute for potential general custom theme styling
-        document.documentElement.setAttribute('data-theme', customTheme.id);
-        console.log(`Applied custom theme: ${customTheme.name} (ID: ${customTheme.id})`);
-      } else {
-        // Fallback if custom theme not found (e.g., deleted)
-        console.warn(`Custom theme with ID ${selectedThemeId} not found. Falling back to dark.`);
-        document.documentElement.setAttribute('data-theme', 'dark');
-        // Style tag already removed at effect start
-        setSelectedThemeId('dark'); // Reset state
-      }
-    }
-    // Save the selected theme ID
     safeSetStorageItem(THEME_STORAGE_KEY, selectedThemeId);
-  }, [selectedThemeId, customThemes]); // Re-run when selection or custom themes change
+  }, [selectedThemeId, customThemes]);
 
   // --- Theme CRUD Functions ---
   const selectTheme = (themeId: string) => {

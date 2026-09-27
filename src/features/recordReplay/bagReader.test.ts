@@ -9,6 +9,7 @@ const START = 1_700_000_000n * 1_000_000_000n;
 const at = (seconds: number) => START + BigInt(Math.round(seconds * 1e9));
 const TF = 'test_msgs/Transform[] transforms\n================================================================================\nMSG: test_msgs/Transform\nstring child_frame_id\nfloat64 x';
 const VALUE = 'int64 big\nfloat64 x';
+const JOINTS = 'float64[] position\nuint8[] data';
 
 /** Ten seconds: /value and /tf at 10 Hz (TF alternating frames a and b), one /sparse message. */
 async function createBag(): Promise<File> {
@@ -23,6 +24,7 @@ async function createBag(): Promise<File> {
   const value = await channel('/value', 'test_msgs/msg/Value', VALUE);
   const tf = await channel('/tf', 'tf2_msgs/msg/TFMessage', TF);
   const sparse = await channel('/sparse', 'test_msgs/msg/Value', VALUE);
+  const joints = await channel('/joints', 'test_msgs/msg/Joints', JOINTS);
   let sequence = 0;
   const add = (target: typeof value, time: bigint, message: unknown) =>
     writer.addMessage({ channelId: target.id, sequence: sequence++, logTime: time, publishTime: time, data: target.encode.writeMessage(message) });
@@ -31,6 +33,7 @@ async function createBag(): Promise<File> {
     await add(value, time, { big: BigInt(step), x: step / 10 });
     await add(tf, time, { transforms: [{ child_frame_id: step % 2 ? 'b' : 'a', x: step }] });
     if (step === 5) await add(sparse, time, { big: 7n, x: 0.5 });
+    if (step === 5) await add(joints, time, { position: new Float64Array([0.25, -0.5, 1.5]), data: new Uint8Array([1, 2, 3]) });
   }
   await writer.end();
   // jsdom's Blob has no arrayBuffer(); this is the part of File that BlobReadable uses.
@@ -50,6 +53,7 @@ describe('BagReader', () => {
     expect(info.start).toBe(START);
     expect(info.end).toBe(at(9.9));
     expect(info.topics.map(t => [t.name, t.type, t.count, t.error])).toEqual([
+      ['/joints', 'test_msgs/msg/Joints', 1, undefined],
       ['/sparse', 'test_msgs/msg/Value', 1, undefined],
       ['/tf', 'tf2_msgs/msg/TFMessage', 100, undefined],
       ['/value', 'test_msgs/msg/Value', 100, undefined],
@@ -63,6 +67,18 @@ describe('BagReader', () => {
     for await (const item of reader.read(at(1), at(2), ['/value'])) messages.push(item);
     expect(messages).toHaveLength(11);
     expect(messages[0].message).toEqual({ big: 10, x: 1 });
+  });
+
+  it('delivers numeric arrays as plain arrays like rosbridge, keeping byte arrays typed', async () => {
+    const reader = new BagReader();
+    await reader.open(bag);
+    const messages = [];
+    for await (const item of reader.read(at(0), at(1), ['/joints'])) messages.push(item);
+    const { position, data } = messages[0].message as { position: unknown; data: unknown };
+    // Panels index these like live messages (e.g. a Time Series signal on position[1]).
+    expect(Array.isArray(position)).toBe(true);
+    expect(position).toEqual([0.25, -0.5, 1.5]);
+    expect(data).toBeInstanceOf(Uint8Array);
   });
 
   it('seeks to the latest state per topic and merges TF frames', async () => {

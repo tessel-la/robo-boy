@@ -172,6 +172,7 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
     };
   });
 
+  const typeById = new Map(nodes.map(node => [node.id, node.type]));
   const edges: Edge[] = raw.edges.map((value: unknown, index: number) => {
     const candidate = asRecord(value, `Edge ${index + 1}`);
     const source = String(candidate.source ?? '');
@@ -179,8 +180,12 @@ const normalizeTree = (value: unknown, schemas: BehaviorTreeResourceSchemas): Be
     if (!usedIds.has(source) || !usedIds.has(target)) {
       throw new Error(`Edge ${index + 1} references a missing node.`);
     }
+    // Branch handles exist only on if/else nodes; elsewhere they point at no handle and the edge is not drawn.
     const sourceHandle =
-      candidate.sourceHandle === 'then' || candidate.sourceHandle === 'else' ? candidate.sourceHandle : null;
+      typeById.get(source) === BehaviorNodeType.IfElse &&
+      (candidate.sourceHandle === 'then' || candidate.sourceHandle === 'else')
+        ? candidate.sourceHandle
+        : null;
     return { id: `edge-${index}-${uuidv4()}`, source, target, sourceHandle, targetHandle: null };
   });
 

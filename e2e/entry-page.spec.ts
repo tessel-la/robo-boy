@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { installRosMock } from './helpers/rosMock';
 
 test.describe('Entry Page', () => {
     test('should display the entry page with branding', async ({ page }) => {
@@ -58,6 +59,28 @@ test.describe('Quick Connect Flow', () => {
         // Page should still be interactive
         await expect(page.locator('.entry-section')).toBeVisible();
     });
+});
+
+test('keeps the local recordings button neutral after connecting and disconnecting', async ({ page }) => {
+    await installRosMock(page);
+    await page.goto('/');
+
+    const recordings = page.getByRole('button', { name: 'Open local recordings', exact: true });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /.+/);
+    const colors = () => recordings.evaluate(element => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, border: style.borderColor, text: style.color };
+    });
+    const initialColors = await colors();
+
+    await page.getByTitle('Advanced Options').click();
+    await page.locator('#ros2Value').fill('127.0.0.1');
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await page.getByRole('button', { name: 'Disconnect' }).click();
+
+    await expect(recordings).toBeVisible();
+    expect(await colors()).toEqual(initialColors);
 });
 
 test.describe('Visual Elements', () => {
