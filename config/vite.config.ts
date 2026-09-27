@@ -41,6 +41,8 @@ const parsePort = (value: string | undefined, fallback: number): number => {
 const tauriStubAliases: Record<string, string> = {
   '@tauri-apps/plugin-http': fileURLToPath(new URL('../src/panels/nativeHttpFetch.web.ts', import.meta.url)),
   '@tauri-apps/api/window': fileURLToPath(new URL('../src/runtime/nativeWindow.web.ts', import.meta.url)),
+  '@tauri-apps/api/core': fileURLToPath(new URL('../src/runtime/nativeTauri.web.ts', import.meta.url)),
+  '@tauri-apps/api/event': fileURLToPath(new URL('../src/runtime/nativeTauri.web.ts', import.meta.url)),
 };
 
 // Set by the Tauri CLI when it serves the frontend to a phone or tablet.

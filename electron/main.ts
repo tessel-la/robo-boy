@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, net, protocol, shell, session } from 'elec
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerUpdater } from './updater';
 
 /**
  * The Electron desktop shell.
@@ -250,6 +251,7 @@ if (!app.requestSingleInstanceLock()) {
     configurePermissions();
     registerPanelFetch();
     registerWindowControls();
+    registerUpdater();
 
     const window = await createWindow();
     if (isDev) window.webContents.openDevTools({ mode: 'detach' });

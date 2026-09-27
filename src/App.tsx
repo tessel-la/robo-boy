@@ -4,6 +4,7 @@ import './App.css';
 import EntrySection from './components/EntrySection';
 import ConnectionTabs from './components/ConnectionTabs';
 import TitleBar from './components/TitleBar';
+import AppUpdatePrompt, { AppUpdateMenuItem } from './features/appUpdate/AppUpdatePrompt';
 import ThemeSelector from './features/theme/components/ThemeSelector';
 import {
   CustomTheme,
@@ -227,6 +228,7 @@ function App() {
   return (
     <>
       <TitleBar />
+      <AppUpdatePrompt />
       <div className="App">
         <main>
           <div className="connection-shell">
@@ -259,6 +261,7 @@ function App() {
                             onClose: handleCloseConnection,
                             onAdd: () => setIsAddingConnection(true),
                             themeControl,
+                            appUpdateControl: <AppUpdateMenuItem />,
                           }}
                         />
                       </Suspense>
@@ -277,6 +280,7 @@ function App() {
                       onClose={handleCloseConnection}
                       onAdd={() => setIsAddingConnection(true)}
                       themeControl={themeControl}
+                      appUpdateControl={<AppUpdateMenuItem />}
                     />
                   </div>
                   <EntrySection onConnect={handleConnect} embedded />

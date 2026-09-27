@@ -211,6 +211,42 @@ npm run desktop:build
 
 Installers are written below `src-tauri/target/release/bundle/`. Building installers does not build or package the ROS image. Each target operating system should build and sign its own artifacts.
 
+## Updates
+
+A packaged desktop app keeps itself up to date. A few seconds after launch, and every six hours, it
+looks for a newer `robo-boy-v*` release (the Panel SDK's releases share the repository and are
+ignored). When there is one, a card in the bottom-left corner shows the version, its release notes,
+and whether it also changes the ROS stack. **Update and restart** downloads the installer this copy
+was installed from, with progress, installs it and opens the new version. **Later** keeps the offer
+in the connection menu, where **Robo-Boy** also checks on request; **Skip this version** stays quiet
+until a newer one appears.
+
+| Installation                 | Installer                            | How it is installed                                               |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------- |
+| Linux, Electron `.deb`       | `Robo-Boy-linux-{amd64,arm64}-electron.deb` | `pkexec apt-get install`: the system asks for the password |
+| Linux, Tauri `.deb` / `.rpm` | `Robo-Boy-linux-amd64.deb`, `Robo-Boy-linux-x86_64.rpm` | `pkexec apt-get install` / `pkexec dnf install` |
+| Windows                      | `Robo-Boy-windows-x64-setup.exe`     | The NSIS installer in passive mode, which reopens the app         |
+| macOS                        | `Robo-Boy-macos-universal.dmg`       | The app bundle is replaced from the disk image, then reopened     |
+
+Everything that has to be trusted happens in the desktop shell, never in the page: the shell looks
+the release up on GitHub over its own certificate-checked connection (the Electron page runs with
+certificate errors ignored, for robots' self-signed certificates), downloads the installer only
+from GitHub's hosts, and installs it only if its size and SHA-256 match what GitHub publishes for
+that release asset. Nothing needs to be signed or configured in CI. If installing in place is not
+possible (the password prompt is dismissed, no `pkexec`, the app cannot replace its bundle), the
+card says why and offers **Open installer**, which hands the checked file to the system's own
+installer. Development builds, the web app and the phone apps do not update themselves.
+
+When a release changes what runs on the ROS host (`infra/ros`, the ROS and Caddy images, the
+Compose files or the DDS configuration), the offer says so, and after the restart the app shows the
+command to bring the ROS host up to date, to run in its `robo-boy` checkout:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+The app never touches the ROS host itself; the reminder stays until it is marked done.
+
 ## Web And Mobile
 
 The web build uses same-origin Caddy routes (`/websocket`, `/video_stream`, and `/mesh_resources`) for proxy-backed connections and can use direct backend host URLs when the advanced host connection points at another machine. Runtime endpoint selection lives in `src/runtime/runtimeConfig.tsx`.
