@@ -459,15 +459,102 @@ describe('MainControlView desktop workspace', () => {
     expect(document.querySelector('.workspace-add-menu-floating')).not.toBeInTheDocument();
   });
 
-  it('sizes the panel catalog to the room beneath its button so the whole list stays on screen', async () => {
+  it('opens the catalog from the button in an empty workspace, keeping the toolbar button asleep', async () => {
+    renderMainControlView();
+    const workspace = await screen.findByLabelText('Desktop workspace');
+
+    // Until a panel exists, the toolbar button says where panels come from instead of adding one.
+    const toolbarButton = document.querySelector('.workspace-add-button') as HTMLButtonElement;
+    expect(toolbarButton).toBeDisabled();
+    expect(toolbarButton).toHaveAccessibleName('Add the first panel from the middle of the workspace');
+    const button = screen.getByRole('button', { name: 'Add workspace panel' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    // jsdom lays everything out at zero: a button low in a workspace has more room above it.
+    workspace.getBoundingClientRect = () => ({ top: 40, bottom: 700 }) as DOMRect;
+    button.getBoundingClientRect = () => ({ top: 450, bottom: 494 }) as DOMRect;
+    fireEvent.click(button);
+    const menu = screen.getByRole('menu');
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(button.parentElement).toContainElement(menu);
+    expect(menu).toHaveClass('workspace-add-menu-anchored', 'opens-up');
+    // The room above the button inside the workspace, less the gap, a margin and the menu's own chrome.
+    expect(menu.style.maxHeight).toBe(`${450 - 40 - 8 - 12 - 22}px`);
+
+    fireEvent.click(button);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    button.getBoundingClientRect = () => ({ top: 150, bottom: 194 }) as DOMRect;
+    fireEvent.click(button);
+    expect(screen.getByRole('menu')).not.toHaveClass('opens-up');
+    expect(screen.getByRole('menu').style.maxHeight).toBe(`${700 - 194 - 8 - 12 - 22}px`);
+
+    // Choosing from it keeps the menu working like the toolbar's.
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    expect(toolbarButton).toBeEnabled();
+    expect(toolbarButton).toHaveAccessibleName('Add workspace panel');
+  });
+
+  it('flies the first panel button into the toolbar button, then adds the panel', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const flights: { keyframes: Keyframe[]; animation: { onfinish: (() => void) | null; cancel: () => void } }[] = [];
+    const animate = vi.fn(function (this: HTMLElement, keyframes: Keyframe[]) {
+      const animation = { onfinish: null as (() => void) | null, cancel: vi.fn() };
+      if (this.classList.contains('first-panel-flight')) flights.push({ keyframes, animation });
+      return animation;
+    });
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    try {
+      renderMainControlView();
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      const toolbarButton = document.querySelector('.workspace-add-button') as HTMLButtonElement;
+      const button = screen.getByRole('button', { name: 'Add workspace panel' });
+      button.getBoundingClientRect = () => ({ left: 560, top: 350, width: 140, height: 44, right: 700, bottom: 394 }) as DOMRect;
+      toolbarButton.getBoundingClientRect = () => ({ left: 624, top: 4, width: 32, height: 32, right: 656, bottom: 36 }) as DOMRect;
+      fireEvent.click(button);
+      fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+
+      // It sets off from the button as it was, and ends shrunk into the toolbar button.
+      const [{ keyframes, animation }] = flights;
+      expect(keyframes[0]).toMatchObject({ offset: 0, width: '140px', height: '44px', transform: 'translate(560px, 350px)' });
+      expect(keyframes[keyframes.length - 1]).toMatchObject({ offset: 1, opacity: 0 });
+      expect(document.querySelector('.first-panel-flight')).toHaveAttribute('aria-hidden', 'true');
+      expect(toolbarButton).toBeDisabled();
+      // The button has left for the toolbar, and the panel waits for the flight to end.
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(button).toHaveClass('is-launched');
+      expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+
+      act(() => { vi.advanceTimersByTime(650); });
+      expect(toolbarButton).toBeEnabled();
+      expect(toolbarButton).toHaveClass('is-landing');
+      expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+      act(() => animation.onfinish?.());
+      expect(document.querySelector('.first-panel-flight')).not.toBeInTheDocument();
+      vi.useRealTimers(); // findBy polls with timers.
+      expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+      // jsdom has no AnimationEvent, so the name the button listens for is set by hand.
+      fireEvent(toolbarButton, Object.assign(new Event('animationend', { bubbles: true }), { animationName: 'workspace-add-land' }));
+      expect(toolbarButton).not.toHaveClass('is-landing');
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+      vi.useRealTimers();
+    }
+  });
+
+  it('sizes the toolbar catalog to the room beneath its button so the whole list stays on screen', async () => {
     renderMainControlView();
     expect(await screen.findByLabelText('Desktop workspace')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add workspace panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    await screen.findByTestId('camera-view');
 
     // The catalog hangs below this control, and jsdom lays everything out at zero.
     const control = document.querySelector('.workspace-add-control') as HTMLElement;
     control.getBoundingClientRect = () => ({ bottom: 120 }) as DOMRect;
 
-    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add workspace panel' }));
 
     const menu = document.querySelector('.workspace-add-menu') as HTMLElement;
     // Room left under the button, less the gap it sits on, a margin from the bottom edge, and
