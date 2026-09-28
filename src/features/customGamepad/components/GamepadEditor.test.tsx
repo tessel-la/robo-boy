@@ -24,7 +24,7 @@ vi.mock('./CustomGamepadLayout', () => ({
     layout: {
       name: string;
       gridSize: { width: number; height: number };
-      components: Array<{ type: string; position: { x: number; y: number; width: number; height: number } }>;
+      components: Array<{ id: string; type: string; position: { x: number; y: number; width: number; height: number } }>;
     };
     dropPreview?: { x: number; y: number; width: number; height: number; isValid: boolean } | null;
   }) => (
