@@ -132,6 +132,19 @@ const configureChromium = (): void => {
   app.commandLine.appendSwitch('ignore-certificate-errors');
 };
 
+/**
+ * How the window frame is drawn.
+ *
+ * Elsewhere the app draws its own title bar and resize edges, exactly as it does under Tauri. A Mac
+ * user expects the system's close, minimise and zoom buttons at the top left, so there the native
+ * frame stays and only its title bar is hidden: the system buttons sit inside the app's own bar,
+ * centred on its height (--title-bar-height in src/index.css), and the app leaves its own out.
+ */
+const windowFrame = (): Electron.BrowserWindowConstructorOptions =>
+  process.platform === 'darwin'
+    ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 12, y: 10 } }
+    : { frame: false };
+
 const createWindow = async (): Promise<BrowserWindow> => {
   const window = new BrowserWindow({
     width: 1280,
@@ -139,8 +152,7 @@ const createWindow = async (): Promise<BrowserWindow> => {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#1f242d',
-    // The app draws its own title bar and resize edges, exactly as it does under Tauri.
-    frame: false,
+    ...windowFrame(),
     show: false,
     webPreferences: {
       preload: path.join(currentDir, 'preload.cjs'),

@@ -143,3 +143,16 @@
 :root[data-runtime='electron'] .title-bar-resize {
   display: none;
 }
+
+/* The Electron shell on a Mac keeps the system's close, minimise and zoom buttons, which sit at the
+   left of this bar. The app's own are left out and the brand is centred, as a Mac window title
+   is, well clear of the system ones. */
+:root[data-native-window-controls] .title-bar-controls {
+  display: none;
+}
+
+:root[data-native-window-controls] .title-bar-brand {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}

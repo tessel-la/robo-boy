@@ -35,8 +35,16 @@ type ResizeDirection =
   | 'SouthEast'
   | 'SouthWest';
 
+/**
+ * Whether the system draws the window buttons. On a Mac the shell keeps the native close, minimise
+ * and zoom buttons (see `windowFrame` in main.ts), so the title bar leaves room for them instead of
+ * drawing its own.
+ */
+const nativeWindowControls = process.platform === 'darwin';
+
 const desktopBridge = {
   shell: 'electron' as const,
+  nativeWindowControls,
 
   window: {
     minimize: () => ipcRenderer.invoke('roboboy:window-minimize') as Promise<void>,

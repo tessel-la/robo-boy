@@ -22,6 +22,8 @@ export interface PanelFetchReply {
 
 export interface RoboBoyDesktopBridge {
   shell: 'electron';
+  /** True on a Mac, where the system draws the window buttons. Absent in older shells. */
+  nativeWindowControls?: boolean;
   window: DesktopWindow;
   fetchPanelAsset(url: string, init?: { method?: string }): Promise<PanelFetchReply>;
   /** Absent in shells built before updates existed. */
