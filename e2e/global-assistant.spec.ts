@@ -13,6 +13,8 @@ async function connectWithMockRos(page: Page) {
   await page.locator('#ros2Value').fill('127.0.0.1');
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  // The opening screen steps aside just after; hover-dependent styles are only settled once it has.
+  await expect(page.getByRole('status', { name: /^Connected to / })).toHaveCount(0);
 }
 
 const mockOpenAiCompatibleChat = (page: Page, message: Record<string, unknown>) =>

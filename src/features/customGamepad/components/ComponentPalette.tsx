@@ -153,23 +153,16 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     e.dataTransfer.setData('text/plain', componentType);
     e.dataTransfer.effectAllowed = 'move';
     
-    // Create a custom drag image
+    // The same card that follows a component moved on the grid.
+    const definition = componentLibrary.find(c => c.type === componentType);
     const dragImage = document.createElement('div');
-    dragImage.className = 'drag-ghost';
-    dragImage.innerHTML = `<span>📦 ${componentLibrary.find(c => c.type === componentType)?.name || componentType}</span>`;
-    dragImage.style.cssText = `
-      position: absolute;
-      top: -1000px;
-      padding: 10px 16px;
-      background: linear-gradient(135deg, #007bff, #0056b3);
-      color: white;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 14px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-      pointer-events: none;
-      z-index: 10000;
-    `;
+    dragImage.className = 'pad-drag-ghost';
+    dragImage.textContent = definition?.name || componentType;
+    if (definition) {
+      const size = document.createElement('small');
+      size.textContent = `${definition.defaultSize.width}×${definition.defaultSize.height}`;
+      dragImage.appendChild(size);
+    }
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, 50, 25);
     

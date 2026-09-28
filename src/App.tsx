@@ -3,6 +3,7 @@ import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
 import ConnectionTabs from './components/ConnectionTabs';
+import WorkspaceOpening from './components/WorkspaceOpening';
 import TitleBar from './components/TitleBar';
 import AppUpdatePrompt, { AppUpdateMenuItem } from './features/appUpdate/AppUpdatePrompt';
 import ThemeSelector from './features/theme/components/ThemeSelector';
@@ -14,7 +15,7 @@ import {
   applyThemeToDocument,
   readStoredTheme,
 } from './features/theme/themeUtils';
-import { RuntimeConfigProvider } from './runtime/runtimeConfig';
+import { RuntimeConfigProvider, resolveRuntimeEndpoints } from './runtime/runtimeConfig';
 import {
   createConnectionSessionId,
   describeConnectionTarget,
@@ -246,7 +247,17 @@ function App() {
                     key={session.id}
                   >
                     <RuntimeConfigProvider connectionParams={session.params}>
-                      <Suspense fallback={<div className="app-loading-workspace">Loading workspace...</div>}>
+                      <Suspense
+                        fallback={
+                          <WorkspaceOpening
+                            stage="loading"
+                            target={session.label}
+                            url={session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl}
+                            offline={session.params.offline}
+                            standalone
+                          />
+                        }
+                      >
                         <MainControlView
                           connectionParams={session.params}
                           isActive={isActive}

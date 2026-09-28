@@ -32,20 +32,28 @@
   outline-offset: -2px;
 }
 
+/* ===== Editing: the selection frame, its handles and its toolbar ===== */
 .gamepad-component.editing {
-  border-color: var(--border-color, #ddd);
+  border-color: color-mix(in srgb, var(--border-color, #444) 80%, transparent);
   cursor: pointer;
 }
 
-.gamepad-component.editing:hover {
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+/* While editing, a component is one thing to select, move and resize: what is inside it (a joystick is a disabled
+   button then, and a disabled button swallows clicks) stays out of the way of the pointer. */
+.gamepad-component.editing > :not(.component-controls-popup, .component-resize-handles, .component-size-badge) {
+  pointer-events: none;
 }
 
-/* Selected state - draggable for moving */
+.gamepad-component.editing:not(.selected):hover {
+  border-color: color-mix(in srgb, var(--primary-color, #32cd32) 55%, var(--border-color, #444));
+}
+
+/* Selected: the frame a focused panel has elsewhere in the app, lifted over its neighbours, and a grab hand for
+   moving it. */
 .gamepad-component.selected {
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+  z-index: 20;
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 16%, transparent);
   cursor: grab;
   touch-action: none;
   -webkit-user-select: none;
@@ -56,23 +64,19 @@
   cursor: grabbing;
 }
 
-/* Resizing state */
 .gamepad-component.resizing {
   cursor: default;
-  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.5);
-  border-color: #ffc107;
-  /* Animate size changes */
-  transition: width 0.15s ease, height 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-color, #32cd32) 24%, transparent);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Being dragged state */
+/* Its place while it is being moved: a dashed outline of where it came from. */
 .gamepad-component.being-dragged {
   opacity: 0.4;
-  transform: scale(0.98);
   border-style: dashed !important;
-  border-color: var(--border-color, #ddd) !important;
+  border-color: color-mix(in srgb, var(--primary-color, #32cd32) 45%, var(--border-color, #444)) !important;
   box-shadow: none !important;
-  transition: all 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 .gamepad-component.being-dragged * {
@@ -104,311 +108,278 @@
   background-color: rgba(255, 255, 255, 0.92);
 }
 
-/* Control buttons container - centered at top */
-/* Controls popup - positioned above the component */
+/* The toolbar of the selected component: its size, its settings, removing it. */
 .component-controls-popup {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%);
+  z-index: 40;
   display: inline-flex;
-  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-  z-index: 100;
-  background: rgba(20, 20, 20, 0.96);
-  padding: 8px;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-color, #444);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: popupFadeIn 0.15s ease-out;
+  background: color-mix(in srgb, var(--background-secondary, #2c2c2c) 94%, transparent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
   white-space: nowrap;
-  overflow: visible;
-  width: auto;
-  min-width: max-content;
-  backdrop-filter: blur(4px);
-}
-
-@keyframes popupFadeIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-@keyframes popupFadeInBelow {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.component-controls-popup::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
+  cursor: default;
   transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(20, 20, 20, 0.96);
+  animation: component-toolbar-in 140ms ease-out;
 }
 
-/* Popup positioned below (when component is at top of grid) */
+/* At the top of the grid it hangs below; spanning the grid's full height, it sits inside along the bottom. */
 .component-controls-popup.popup-below {
   bottom: auto;
   top: calc(100% + 8px);
-  animation: popupFadeInBelow 0.15s ease-out;
 }
 
-.component-controls-popup.popup-below::after {
-  top: auto;
-  bottom: 100%;
-  border-top-color: transparent;
-  border-bottom-color: rgba(20, 20, 20, 0.96);
-}
-
-/* Popup positioned inside when the component touches both vertical grid edges */
 .component-controls-popup.popup-inside {
-  top: auto;
-  bottom: 12px;
-  animation: popupFadeIn 0.15s ease-out;
+  bottom: 8px;
 }
 
-.component-controls-popup.popup-inside::after {
-  display: none;
+.component-controls-size {
+  margin-right: 2px;
+  padding: 0 7px 0 6px;
+  border-right: 1px solid var(--border-color, #444);
+  color: var(--text-color-secondary, #adb5bd);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
 }
 
-/* Control buttons (delete, settings) */
 .control-button {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0;
-  flex-shrink: 0;
-  border: none;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: inline-grid;
+  place-items: center;
   margin: 0;
-  /* Increase touch target size */
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-color-secondary, #adb5bd);
+  background: transparent;
+  cursor: pointer;
   touch-action: manipulation;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
-.control-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+.control-button svg {
+  width: 15px;
+  height: 15px;
 }
 
-.control-button:active {
-  transform: translateY(0);
+.control-button:hover,
+.control-button:focus-visible {
+  color: var(--text-color, #e0e0e0);
+  background: var(--background-dark-transparent, rgba(0, 0, 0, 0.2));
 }
 
-.settings-button {
-  background-color: var(--primary-color, #007bff);
-  color: var(--button-text-color, #ffffff) !important;
+.control-button.delete-button:hover,
+.control-button.delete-button:focus-visible {
+  color: var(--error-color, #e74c3c);
+  background: color-mix(in srgb, var(--error-color, #e74c3c) 14%, transparent);
 }
 
-.settings-button:hover {
-  background-color: var(--primary-color-dark, #0056b3);
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+@keyframes component-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(3px);
+  }
 }
 
-.delete-button {
-  background-color: #dc3545;
-  color: white !important;
+/* The size while resizing, in the middle of the frame. */
+.component-size-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 35;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 55%, var(--border-color, #444));
+  border-radius: 999px;
+  color: var(--text-color, #e0e0e0);
+  background: color-mix(in srgb, var(--background-secondary, #2c2c2c) 94%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
-.delete-button:hover {
-  background-color: #c82333;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
-}
-
-/* ===== COMPONENT RESIZE HANDLES ===== */
+/* ===== Resize handles =====
+   Corners are the L-brackets the app's resizable panels use; edges carry a short grip. Each has a larger target
+   than it draws, and a larger one again for fingers. */
 .component-resize-handles {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: -2px;
+  z-index: 30;
   pointer-events: none;
-  z-index: 25;
 }
 
 .component-resize-handle {
   position: absolute;
+  color: var(--primary-color, #32cd32);
   pointer-events: auto;
-  transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 0.14s ease;
 }
 
-/* Corner handles - with diagonal arrows */
+.component-resize-handle::after {
+  content: '';
+  position: absolute;
+  transition: width 0.14s ease, height 0.14s ease;
+}
+
 .component-resize-handle.corner {
-  width: 20px;
-  height: 20px;
-  background-color: var(--primary-color, #007bff);
-  border: none;
-  border-radius: 6px;
-  z-index: 26;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --hit: 22px;
+  --arm: 11px;
+  width: var(--hit);
+  height: var(--hit);
 }
 
 .component-resize-handle.corner::after {
-  content: '⇔';
-  font-size: 12px;
-  color: white;
-  line-height: 1;
-  font-weight: bold;
-}
-
-/* Corner-specific diagonal arrow rotations */
-.component-resize-handle.corner.nw::after {
-  transform: rotate(45deg);
-}
-
-.component-resize-handle.corner.ne::after {
-  transform: rotate(135deg);
-}
-
-.component-resize-handle.corner.sw::after {
-  transform: rotate(-45deg);
-}
-
-.component-resize-handle.corner.se::after {
-  transform: rotate(-135deg);
+  width: var(--arm);
+  height: var(--arm);
+  border: 0 solid currentColor;
 }
 
 .component-resize-handle.corner:hover,
 .component-resize-handle.corner.active {
-  background-color: var(--primary-color-dark, #0056b3);
-  transform: scale(1.15);
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+  --arm: 15px;
 }
 
-.component-resize-handle.corner.nw {
-  top: -10px;
-  left: -10px;
-  cursor: nw-resize;
-}
+.component-resize-handle.nw { top: calc(var(--hit) / -2); left: calc(var(--hit) / -2); cursor: nwse-resize; }
+.component-resize-handle.ne { top: calc(var(--hit) / -2); right: calc(var(--hit) / -2); cursor: nesw-resize; }
+.component-resize-handle.sw { bottom: calc(var(--hit) / -2); left: calc(var(--hit) / -2); cursor: nesw-resize; }
+.component-resize-handle.se { right: calc(var(--hit) / -2); bottom: calc(var(--hit) / -2); cursor: nwse-resize; }
 
-.component-resize-handle.corner.ne {
-  top: -10px;
-  right: -10px;
-  cursor: ne-resize;
-}
+.component-resize-handle.nw::after { top: calc(50% - 4px); left: calc(50% - 4px); border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 5px; }
+.component-resize-handle.ne::after { top: calc(50% - 4px); right: calc(50% - 4px); border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 5px; }
+.component-resize-handle.sw::after { bottom: calc(50% - 4px); left: calc(50% - 4px); border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 5px; }
+.component-resize-handle.se::after { right: calc(50% - 4px); bottom: calc(50% - 4px); border-right-width: 3px; border-bottom-width: 3px; border-bottom-right-radius: 5px; }
 
-.component-resize-handle.corner.sw {
-  bottom: -10px;
-  left: -10px;
-  cursor: sw-resize;
-}
-
-.component-resize-handle.corner.se {
-  bottom: -10px;
-  right: -10px;
-  cursor: se-resize;
-}
-
-/* Edge handles - with direction arrows */
 .component-resize-handle.edge {
-  background-color: var(--primary-color, #007bff);
-  border-radius: 4px;
-  z-index: 25;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --along: 28px;
+  --across: 16px;
+  --grip: 16px;
 }
 
 .component-resize-handle.edge::after {
-  content: '⇔';
-  font-size: 10px;
-  color: white;
-  line-height: 1;
-  font-weight: bold;
-}
-
-/* Horizontal edges (top/bottom) */
-.component-resize-handle.edge.n,
-.component-resize-handle.edge.s {
-  left: 50%;
-  transform: translateX(-50%);
-  width: 36px;
-  height: 12px;
-}
-
-.component-resize-handle.edge.n::after,
-.component-resize-handle.edge.s::after {
-  transform: rotate(90deg);
-}
-
-.component-resize-handle.edge.n {
-  top: -6px;
-  cursor: n-resize;
-}
-
-.component-resize-handle.edge.s {
-  bottom: -6px;
-  cursor: s-resize;
-}
-
-/* Vertical edges (left/right) */
-.component-resize-handle.edge.w,
-.component-resize-handle.edge.e {
-  top: 50%;
-  transform: translateY(-50%);
-  width: 12px;
-  height: 36px;
-}
-
-.component-resize-handle.edge.w {
-  left: -6px;
-  cursor: w-resize;
-}
-
-.component-resize-handle.edge.e {
-  right: -6px;
-  cursor: e-resize;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--card-bg, #1e1e1e);
 }
 
 .component-resize-handle.edge:hover,
 .component-resize-handle.edge.active {
-  background-color: var(--primary-color-dark, #0056b3);
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+  --grip: 22px;
 }
 
-.component-resize-handle.edge.n:hover,
-.component-resize-handle.edge.n.active,
-.component-resize-handle.edge.s:hover,
-.component-resize-handle.edge.s.active {
-  transform: translateX(-50%) scale(1.1);
+.component-resize-handle.n,
+.component-resize-handle.s {
+  left: 50%;
+  width: var(--along);
+  height: var(--across);
+  margin-left: calc(var(--along) / -2);
+  cursor: ns-resize;
 }
 
-.component-resize-handle.edge.w:hover,
-.component-resize-handle.edge.w.active,
-.component-resize-handle.edge.e:hover,
-.component-resize-handle.edge.e.active {
-  transform: translateY(-50%) scale(1.1);
+.component-resize-handle.n { top: calc(var(--across) / -2); }
+.component-resize-handle.s { bottom: calc(var(--across) / -2); }
+
+.component-resize-handle.n::after,
+.component-resize-handle.s::after {
+  top: 50%;
+  left: 50%;
+  width: var(--grip);
+  height: 4px;
+  margin: -2px 0 0 calc(var(--grip) / -2);
+}
+
+.component-resize-handle.w,
+.component-resize-handle.e {
+  top: 50%;
+  width: var(--across);
+  height: var(--along);
+  margin-top: calc(var(--along) / -2);
+  cursor: ew-resize;
+}
+
+.component-resize-handle.w { left: calc(var(--across) / -2); }
+.component-resize-handle.e { right: calc(var(--across) / -2); }
+
+.component-resize-handle.w::after,
+.component-resize-handle.e::after {
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: var(--grip);
+  margin: calc(var(--grip) / -2) 0 0 -2px;
+}
+
+/* Small components keep their corners only; while one handle is pulled, the others step back. */
+.component-resize-handles.is-compact .component-resize-handle.edge {
+  display: none;
+}
+
+.component-resize-handles.is-resizing .component-resize-handle:not(.active) {
+  opacity: 0.3;
+}
+
+@media (pointer: coarse) {
+  .component-resize-handle.corner {
+    --hit: 34px;
+    --arm: 13px;
+  }
+
+  .component-resize-handle.edge {
+    --along: 38px;
+    --across: 26px;
+    --grip: 20px;
+  }
+
+  .control-button {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+
+  .control-button svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+/* The card that follows the pointer when a component is dragged. */
+.pad-drag-ghost {
+  position: absolute;
+  top: -1000px;
+  left: 0;
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--primary-color, #32cd32);
+  border-radius: 8px;
+  color: var(--text-color, #e0e0e0);
+  background: var(--background-secondary, #2c2c2c);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  font: 700 13px var(--font-family-ui, monospace);
+  pointer-events: none;
+}
+
+.pad-drag-ghost small {
+  color: var(--primary-color, #32cd32);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* Component-specific styles */
@@ -546,54 +517,12 @@ button.joystick-disabled {
   border: 1px dashed var(--error-color, #721c24);
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments. The editing handles and buttons size themselves by pointer (see above): a phone gets the
+   larger targets, not smaller ones. */
 @media (max-width: 768px) {
   .component-label {
     font-size: 0.65em;
     padding: 1px 3px;
-  }
-  
-  .control-button {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
-    font-size: 14px;
-  }
-  
-  .component-controls-popup {
-    padding: 6px;
-    gap: 6px;
-  }
-  
-  .component-resize-handle.corner {
-    width: 18px;
-    height: 18px;
-  }
-  
-  .component-resize-handle.corner::after {
-    font-size: 11px;
-  }
-  
-  .component-resize-handle.corner.nw { top: -9px; left: -9px; }
-  .component-resize-handle.corner.ne { top: -9px; right: -9px; }
-  .component-resize-handle.corner.sw { bottom: -9px; left: -9px; }
-  .component-resize-handle.corner.se { bottom: -9px; right: -9px; }
-  
-  .component-resize-handle.edge.n,
-  .component-resize-handle.edge.s {
-    width: 32px;
-    height: 10px;
-  }
-  
-  .component-resize-handle.edge.w,
-  .component-resize-handle.edge.e {
-    width: 10px;
-    height: 32px;
-  }
-  
-  .component-resize-handle.edge::after {
-    font-size: 9px;
   }
 }
 
@@ -601,48 +530,5 @@ button.joystick-disabled {
   .component-label {
     font-size: 0.6em;
     padding: 1px 2px;
-  }
-  
-  .control-button {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
-    font-size: 13px;
-  }
-  
-  .component-controls-popup {
-    padding: 5px;
-    gap: 5px;
-  }
-  
-  .component-resize-handle.corner {
-    width: 16px;
-    height: 16px;
-  }
-  
-  .component-resize-handle.corner::after {
-    font-size: 10px;
-  }
-  
-  .component-resize-handle.corner.nw { top: -8px; left: -8px; }
-  .component-resize-handle.corner.ne { top: -8px; right: -8px; }
-  .component-resize-handle.corner.sw { bottom: -8px; left: -8px; }
-  .component-resize-handle.corner.se { bottom: -8px; right: -8px; }
-  
-  .component-resize-handle.edge.n,
-  .component-resize-handle.edge.s {
-    width: 28px;
-    height: 8px;
-  }
-  
-  .component-resize-handle.edge.w,
-  .component-resize-handle.edge.e {
-    width: 8px;
-    height: 28px;
-  }
-  
-  .component-resize-handle.edge::after {
-    font-size: 8px;
   }
 }

@@ -21,7 +21,12 @@ const nativeTimeSeriesProps = vi.fn();
 
 // The connection the view is handed. Most tests want a live one; the status button needs a dropped
 // one to have anything to do.
-const rosConnection: { isConnected: boolean; connectionStatus: 'connected' | 'connecting' | 'disconnected' } = {
+const rosConnection: {
+  isConnected: boolean;
+  connectionStatus: 'connected' | 'connecting' | 'disconnected';
+  /** Attempts made so far; by default one if connected, none otherwise. */
+  connectionGeneration?: number;
+} = {
   isConnected: true,
   connectionStatus: 'connected',
 };
@@ -37,7 +42,7 @@ vi.mock('../hooks/useRos', () => ({
     ros: mockRos,
     isConnected: rosConnection.isConnected,
     connectionStatus: rosConnection.connectionStatus,
-    connectionGeneration: rosConnection.isConnected ? 1 : 0,
+    connectionGeneration: rosConnection.connectionGeneration ?? (rosConnection.isConnected ? 1 : 0),
     connect,
     disconnect,
   }),
@@ -279,6 +284,7 @@ describe('MainControlView desktop workspace', () => {
     localStorage.clear();
     rosConnection.isConnected = true;
     rosConnection.connectionStatus = 'connected';
+    rosConnection.connectionGeneration = undefined;
     loadGamepadLibrary.mockReturnValue([
       { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
     ]);
@@ -360,6 +366,51 @@ describe('MainControlView desktop workspace', () => {
     renderMainControlView();
 
     expect(screen.getByLabelText('Status: Connecting')).toBeDisabled();
+  });
+
+  it('opens behind a screen that follows the link until the robot answers, then hands over the workspace', async () => {
+    rosConnection.isConnected = false;
+    rosConnection.connectionStatus = 'connecting';
+    rosConnection.connectionGeneration = 1;
+    const view = renderMainControlView();
+
+    expect(screen.getByRole('status', { name: 'Connecting to Domain 0' })).toBeInTheDocument();
+    expect(screen.getByText('Workspace ready')).toBeInTheDocument();
+
+    rosConnection.isConnected = true;
+    rosConnection.connectionStatus = 'connected';
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} connectionNavigation={connectionNavigation} />);
+    expect(screen.getByRole('status', { name: 'Connected to Domain 0' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('status', { name: /Domain 0/ })).not.toBeInTheDocument(), { timeout: 2000 });
+
+    // A later drop only shows in the top bar; the workspace stays in front.
+    rosConnection.isConnected = false;
+    rosConnection.connectionStatus = 'disconnected';
+    view.rerender(<MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} connectionNavigation={connectionNavigation} />);
+    expect(screen.queryByRole('status', { name: /Domain 0/ })).not.toBeInTheDocument();
+  });
+
+  it('says when the robot did not answer, and retries, opens the workspace anyway, or goes back', () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-3d', '3d', '3D')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-3d']));
+    rosConnection.isConnected = false;
+    rosConnection.connectionStatus = 'disconnected';
+    rosConnection.connectionGeneration = 1;
+    const onDisconnect = vi.fn();
+    render(<MainControlView connectionParams={connectionParams} onDisconnect={onDisconnect} connectionNavigation={connectionNavigation} />);
+    connect.mockClear();
+
+    expect(screen.getByRole('status', { name: "Couldn't reach Domain 0" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(connect).toHaveBeenCalledWith(connectionParams);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to connections' }));
+    expect(onDisconnect).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace anyway' }));
+    expect(screen.queryByRole('status', { name: /Domain 0/ })).not.toBeInTheDocument();
+    // Panels that need the robot say it is not there, rather than that it is on its way.
+    expect(screen.getByText('Not connected to the robot')).toBeInTheDocument();
+    expect(screen.queryByText('Connecting to ROS...')).not.toBeInTheDocument();
   });
 
   it('suspends panel resources without reconnecting when its connection tab enters the background', async () => {

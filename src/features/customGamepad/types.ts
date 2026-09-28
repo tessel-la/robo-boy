@@ -200,6 +200,8 @@ export interface DropPreview {
   width: number;
   height: number;
   isValid: boolean;
+  /** Smaller than the component's default size, to fit the room there is. */
+  isFitted?: boolean;
 }
 
 export interface EditorState {

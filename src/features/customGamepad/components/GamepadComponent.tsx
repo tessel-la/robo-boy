@@ -1,6 +1,8 @@
-import React, { useRef, useCallback, useState, useEffect } from 'react';
+import React, { useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
+import { FiSettings, FiTrash2 } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { GamepadComponentConfig, JoyAxesPublisher, TwistAxesPublisher } from '../types';
+import { measureGridCells, resizeWithin, type GridRect, type ResizeEdge } from '../padGeometry';
 import JoystickComponent from './JoystickComponent';
 import ButtonComponent from './ButtonComponent';
 import DPadComponent from './DPadComponent';
@@ -20,6 +22,8 @@ interface GamepadComponentProps {
   isBeingDragged?: boolean;
   scaleFactor?: number;
   gridSize?: { width: number; height: number };
+  /** Where the other components are, so a resize stops at them. */
+  occupied?: readonly GridRect[];
   onSelect?: (id: string) => void;
   onUpdate?: (config: GamepadComponentConfig) => void;
   onDelete?: (id: string) => void;
@@ -30,8 +34,17 @@ interface GamepadComponentProps {
   onTwistAxesChange?: TwistAxesPublisher;
 }
 
-type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null;
+type ResizeHandle = ResizeEdge | null;
 type ControlsPlacement = 'above' | 'below' | 'inside';
+
+const RESIZE_EDGES: ResizeEdge[] = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'];
+const EDGE_LABELS: Record<ResizeEdge, string> = {
+  n: 'top edge', s: 'bottom edge', e: 'right edge', w: 'left edge',
+  nw: 'top-left corner', ne: 'top-right corner', sw: 'bottom-left corner', se: 'bottom-right corner',
+};
+/** Below this size (px) a component shows its corner handles only: edge grips would crowd it. */
+const COMPACT_PX = 64;
+const NO_OCCUPIED: readonly GridRect[] = [];
 
 const GamepadComponent: React.FC<GamepadComponentProps> = ({
   config,
@@ -41,6 +54,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   isBeingDragged = false,
   scaleFactor = 1,
   gridSize = { width: 8, height: 4 },
+  occupied = NO_OCCUPIED,
   onSelect,
   onUpdate,
   onDelete,
@@ -53,32 +67,28 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   const componentRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [activeHandle, setActiveHandle] = useState<ResizeHandle>(null);
-  const [showControls, setShowControls] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   const resizeStartRef = useRef<{
+    pointerId: number;
     x: number;
     y: number;
-    position: { x: number; y: number; width: number; height: number };
-    cellWidth: number;
-    cellHeight: number;
+    position: GridRect;
+    columnStep: number;
+    rowStep: number;
   } | null>(null);
 
-  // Hide controls when deselected
-  useEffect(() => {
-    if (!isSelected) {
-      setShowControls(false);
-    }
-  }, [isSelected]);
+  // Small components keep only their corner handles.
+  useLayoutEffect(() => {
+    if (!isEditing || !isSelected || !componentRef.current) return;
+    const rect = componentRef.current.getBoundingClientRect();
+    setIsCompact(rect.width < COMPACT_PX || rect.height < COMPACT_PX);
+  }, [isEditing, isSelected, config.position.width, config.position.height, scaleFactor]);
 
+  // Selecting shows the handles and the toolbar together; a click on a selected component leaves it selected.
   const handleClick = (e: React.MouseEvent) => {
     if (isEditing && !isResizing) {
       e.stopPropagation();
-      if (isSelected) {
-        // Toggle controls visibility when already selected
-        setShowControls(prev => !prev);
-      } else if (onSelect) {
-        // Select the component (controls hidden by default)
-        onSelect(config.id);
-      }
+      if (!isSelected) onSelect?.(config.id);
     }
   };
 
@@ -97,28 +107,20 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    // A press on a resize handle is a resize, even if the pointer moves before React has re-rendered.
+    if (resizeStartRef.current) { e.preventDefault(); return; }
     if (!isEditing || !isSelected || isResizing) return;
     
     e.stopPropagation();
     e.dataTransfer.setData('text/plain', config.id);
     e.dataTransfer.effectAllowed = 'move';
     
-    // Create simple drag image
     const dragImage = document.createElement('div');
-    dragImage.innerHTML = `<span>${config.label || config.type}</span>`;
-    dragImage.style.cssText = `
-      position: absolute;
-      top: -1000px;
-      padding: 8px 12px;
-      background: var(--primary-color, #007bff);
-      color: white;
-      border-radius: 6px;
-      font-weight: 500;
-      font-size: 13px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      pointer-events: none;
-      z-index: 10000;
-    `;
+    dragImage.className = 'pad-drag-ghost';
+    dragImage.textContent = config.label || config.type;
+    const size = document.createElement('small');
+    size.textContent = `${config.position.width}×${config.position.height}`;
+    dragImage.appendChild(size);
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, 40, 20);
     
@@ -137,144 +139,59 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     }
   };
 
-  // Get cell dimensions from the grid
-  const getCellDimensions = useCallback(() => {
-    if (!componentRef.current) return { cellWidth: 80, cellHeight: 80 };
-    
-    const gridEl = componentRef.current.closest('.gamepad-grid') as HTMLElement;
-    if (!gridEl) return { cellWidth: 80, cellHeight: 80 };
-    
-    const gridRect = gridEl.getBoundingClientRect();
-    const computedStyle = window.getComputedStyle(gridEl);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 8;
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 8;
-    
-    const innerWidth = gridRect.width - paddingLeft * 2;
-    const innerHeight = gridRect.height - paddingTop * 2;
-    
+  // The step between columns and rows of the rendered grid, which is what a pointer moves across.
+  const measureSteps = useCallback(() => {
+    const gridEl = componentRef.current?.closest('.gamepad-grid');
+    const cells = gridEl ? measureGridCells(gridEl, gridSize) : null;
+    if (cells) return { columnStep: cells.columnStep, rowStep: cells.rowStep };
+    const box = componentRef.current?.getBoundingClientRect();
     return {
-      cellWidth: innerWidth / gridSize.width,
-      cellHeight: innerHeight / gridSize.height
+      columnStep: box && box.width > 0 ? box.width / config.position.width : 80,
+      rowStep: box && box.height > 0 ? box.height / config.position.height : 80,
     };
-  }, [gridSize]);
+  }, [gridSize, config.position.width, config.position.height]);
 
-  // Resize handle mouse down
-  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent, handle: ResizeHandle) => {
+  // Resizing follows one pointer (mouse, touch or pen), captured by the handle it pressed.
+  const handleResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>, handle: ResizeEdge) => {
     if (!isEditing || !isSelected || !onUpdate) return;
-    
     e.stopPropagation();
     e.preventDefault();
-    
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
-    const { cellWidth, cellHeight } = getCellDimensions();
-    
-    resizeStartRef.current = {
-      x: clientX,
-      y: clientY,
-      position: { ...config.position },
-      cellWidth,
-      cellHeight
-    };
-    
+    // Firefox would otherwise start dragging the whole component from this press before React re-renders.
+    if (componentRef.current) componentRef.current.draggable = false;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    resizeStartRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, position: { ...config.position }, ...measureSteps() };
     setIsResizing(true);
     setActiveHandle(handle);
-  }, [isEditing, isSelected, onUpdate, getCellDimensions, config.position]);
+  }, [isEditing, isSelected, onUpdate, config.position, measureSteps]);
 
-  // Handle resize move
-  const handleResizeMove = useCallback((clientX: number, clientY: number) => {
-    if (!isResizing || !resizeStartRef.current || !onUpdate || !activeHandle) return;
-    
-    const { x: startX, y: startY, position, cellWidth, cellHeight } = resizeStartRef.current;
-    
-    const deltaX = clientX - startX;
-    const deltaY = clientY - startY;
-    
-    // Convert pixel delta to grid cells
-    const cellDeltaX = Math.round(deltaX / cellWidth);
-    const cellDeltaY = Math.round(deltaY / cellHeight);
-    
-    let newX = position.x;
-    let newY = position.y;
-    let newWidth = position.width;
-    let newHeight = position.height;
-    
-    // Apply deltas based on which handle is being dragged
-    if (activeHandle.includes('e')) {
-      newWidth = Math.max(1, Math.min(position.width + cellDeltaX, gridSize.width - position.x));
-    }
-    if (activeHandle.includes('w')) {
-      const widthChange = Math.min(cellDeltaX, position.width - 1);
-      const actualChange = Math.max(-position.x, widthChange);
-      newX = position.x + actualChange;
-      newWidth = position.width - actualChange;
-    }
-    if (activeHandle.includes('s')) {
-      newHeight = Math.max(1, Math.min(position.height + cellDeltaY, gridSize.height - position.y));
-    }
-    if (activeHandle.includes('n')) {
-      const heightChange = Math.min(cellDeltaY, position.height - 1);
-      const actualChange = Math.max(-position.y, heightChange);
-      newY = position.y + actualChange;
-      newHeight = position.height - actualChange;
-    }
-    
-    // Only update if something changed
-    if (newX !== config.position.x || newY !== config.position.y || 
-        newWidth !== config.position.width || newHeight !== config.position.height) {
-      onUpdate({
-        ...config,
-        position: {
-          x: newX,
-          y: newY,
-          width: newWidth,
-          height: newHeight
-        }
-      });
-    }
-  }, [isResizing, activeHandle, onUpdate, config, gridSize]);
-
-  // Handle resize end
-  const handleResizeEnd = useCallback(() => {
+  const handleResizeEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (resizeStartRef.current && e.pointerId !== resizeStartRef.current.pointerId) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    resizeStartRef.current = null;
     setIsResizing(false);
     setActiveHandle(null);
-    resizeStartRef.current = null;
   }, []);
 
-  // Global mouse/touch event listeners for resize
-  useEffect(() => {
-    if (!isResizing) return;
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      handleResizeMove(e.clientX, e.clientY);
-    };
-    
-    const handleTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      handleResizeMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
-    
-    const handleMouseUp = () => {
-      handleResizeEnd();
-    };
-    
-    const handleTouchEnd = () => {
-      handleResizeEnd();
-    };
-    
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isResizing, handleResizeMove, handleResizeEnd]);
+  const handleResizeMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const start = resizeStartRef.current;
+    if (!start || e.pointerId !== start.pointerId || !activeHandle || !onUpdate) return;
+    // A mouse whose button is no longer held has let go somewhere the handle did not hear.
+    if (e.pointerType === 'mouse' && e.buttons === 0) { handleResizeEnd(e); return; }
+    e.preventDefault();
+    const next = resizeWithin(
+      start.position,
+      activeHandle,
+      Math.round((e.clientX - start.x) / start.columnStep),
+      Math.round((e.clientY - start.y) / start.rowStep),
+      gridSize,
+      occupied
+    );
+    const current = config.position;
+    if (next.x !== current.x || next.y !== current.y || next.width !== current.width || next.height !== current.height) {
+      onUpdate({ ...config, position: next });
+    }
+  }, [activeHandle, onUpdate, config, gridSize, occupied, handleResizeEnd]);
+
 
   // Touch handling for component body - differentiate between tap and drag
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -286,7 +203,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     
     // Don't start drag if touching a resize handle or control button
     const target = e.target as HTMLElement;
-    if (target.classList.contains('component-resize-handle')) return;
+    if (target.closest('.component-resize-handle')) return;
     if (target.classList.contains('control-button') || target.closest('.control-button')) return;
     if (target.closest('.component-controls-popup')) return;
     
@@ -320,13 +237,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
     
     if (!isDraggingRef.current) {
       e.stopPropagation();
-      if (isSelected) {
-        // Toggle controls visibility when already selected
-        setShowControls(prev => !prev);
-      } else if (onSelect) {
-        // Select the component (controls hidden by default)
-        onSelect(config.id);
-      }
+      if (!isSelected) onSelect?.(config.id);
     }
     
     touchStartRef.current = null;
@@ -441,76 +352,64 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         </div>
       )}
       
-      {/* Editing controls - only when selected AND controls toggled on */}
-      {isEditing && isSelected && showControls && (
-        <div className={`component-controls-popup popup-${controlsPlacement}`}>
+      {/* Size while resizing */}
+      {isEditing && isResizing && (
+        <div className="component-size-badge" aria-live="polite">
+          {config.position.width} × {config.position.height}
+        </div>
+      )}
+
+      {/* The selected component's tools: its size, its settings, removing it */}
+      {isEditing && isSelected && !isResizing && !isBeingDragged && (
+        <div
+          className={`component-controls-popup popup-${controlsPlacement}`}
+          role="toolbar"
+          aria-label={`${config.label || config.type} tools`}
+        >
+          <span className="component-controls-size" title="Size in grid cells">
+            {config.position.width}×{config.position.height}
+          </span>
           <button
+            type="button"
             className="control-button settings-button"
             onClick={handleOpenSettings}
             onTouchStart={handleButtonTouchStart}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onOpenSettings?.(config.id))}
             title="Settings"
+            aria-label="Settings"
           >
-            ⚙
+            <FiSettings aria-hidden="true" />
           </button>
           <button
+            type="button"
             className="control-button delete-button"
             onClick={handleDelete}
             onTouchStart={handleButtonTouchStart}
             onTouchEnd={(e) => handleButtonTouchEnd(e, () => onDelete?.(config.id))}
             title="Delete"
+            aria-label="Delete"
           >
-            🗑
+            <FiTrash2 aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Resize handles - only when selected */}
       {isEditing && isSelected && (
-        <div className="component-resize-handles">
-            {/* Corner handles */}
-            <div 
-              className={`component-resize-handle corner nw ${activeHandle === 'nw' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'nw')}
-              onTouchStart={(e) => handleResizeStart(e, 'nw')}
+        <div className={`component-resize-handles ${isCompact ? 'is-compact' : ''} ${isResizing ? 'is-resizing' : ''}`}>
+          {RESIZE_EDGES.map(edge => (
+            <div
+              key={edge}
+              className={`component-resize-handle ${edge.length === 2 ? 'corner' : 'edge'} ${edge} ${activeHandle === edge ? 'active' : ''}`}
+              role="presentation"
+              aria-label={`Resize from the ${EDGE_LABELS[edge]}`}
+              draggable={false}
+              onPointerDown={(e) => handleResizeStart(e, edge)}
+              onPointerMove={handleResizeMove}
+              onPointerUp={handleResizeEnd}
+              onPointerCancel={handleResizeEnd}
             />
-            <div 
-              className={`component-resize-handle corner ne ${activeHandle === 'ne' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'ne')}
-              onTouchStart={(e) => handleResizeStart(e, 'ne')}
-            />
-            <div 
-              className={`component-resize-handle corner sw ${activeHandle === 'sw' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'sw')}
-              onTouchStart={(e) => handleResizeStart(e, 'sw')}
-            />
-            <div 
-              className={`component-resize-handle corner se ${activeHandle === 'se' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'se')}
-              onTouchStart={(e) => handleResizeStart(e, 'se')}
-            />
-            
-            {/* Edge handles */}
-            <div 
-              className={`component-resize-handle edge n ${activeHandle === 'n' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'n')}
-              onTouchStart={(e) => handleResizeStart(e, 'n')}
-            />
-            <div 
-              className={`component-resize-handle edge s ${activeHandle === 's' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 's')}
-              onTouchStart={(e) => handleResizeStart(e, 's')}
-            />
-            <div 
-              className={`component-resize-handle edge w ${activeHandle === 'w' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'w')}
-              onTouchStart={(e) => handleResizeStart(e, 'w')}
-            />
-            <div 
-              className={`component-resize-handle edge e ${activeHandle === 'e' ? 'active' : ''}`}
-              onMouseDown={(e) => handleResizeStart(e, 'e')}
-              onTouchStart={(e) => handleResizeStart(e, 'e')}
-            />
+          ))}
         </div>
       )}
     </div>

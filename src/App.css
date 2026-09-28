@@ -89,12 +89,4 @@
   display: none;
 }
 
-.app-loading-workspace {
-  display: grid;
-  min-height: 100%;
-  place-items: center;
-  background: var(--background-color);
-  color: var(--text-color);
-}
-
 /* Add more specific styles for App component elements here */

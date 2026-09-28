@@ -9,6 +9,9 @@ interface GridSettingsMenuProps {
   onNameChange: (name: string) => void;
   onDescriptionChange: (description: string) => void;
   onGridSizeChange: (width: number, height: number) => void;
+  /** The grid cannot shrink past the last column and row a component uses. */
+  minGridWidth?: number;
+  minGridHeight?: number;
   onExpandedChange?: (expanded: boolean) => void;
   forceCollapsed?: boolean;
   contentOnly?: boolean;
@@ -22,6 +25,8 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
   onNameChange: _onNameChange,
   onDescriptionChange,
   onGridSizeChange,
+  minGridWidth = 1,
+  minGridHeight = 1,
   onExpandedChange,
   forceCollapsed = false,
   contentOnly = false
@@ -42,12 +47,12 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
   };
 
   const handleWidthChange = (delta: number) => {
-    const newWidth = Math.max(1, Math.min(16, gridWidth + delta));
+    const newWidth = Math.max(minGridWidth, Math.min(16, gridWidth + delta));
     onGridSizeChange(newWidth, gridHeight);
   };
 
   const handleHeightChange = (delta: number) => {
-    const newHeight = Math.max(1, Math.min(12, gridHeight + delta));
+    const newHeight = Math.max(minGridHeight, Math.min(12, gridHeight + delta));
     onGridSizeChange(gridWidth, newHeight);
   };
 
@@ -122,8 +127,8 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
                     <button
                       className="control-btn minus"
                       onClick={() => handleWidthChange(-1)}
-                      disabled={gridWidth <= 1}
-                      title="Decrease width"
+                      disabled={gridWidth <= minGridWidth}
+                      title={gridWidth <= minGridWidth && minGridWidth > 1 ? 'A component uses the last column: move or shrink it first' : 'Decrease width'}
                     >
                       −
                     </button>
@@ -145,8 +150,8 @@ const GridSettingsMenu: React.FC<GridSettingsMenuProps> = ({
                     <button
                       className="control-btn minus"
                       onClick={() => handleHeightChange(-1)}
-                      disabled={gridHeight <= 1}
-                      title="Decrease height"
+                      disabled={gridHeight <= minGridHeight}
+                      title={gridHeight <= minGridHeight && minGridHeight > 1 ? 'A component uses the last row: move or shrink it first' : 'Decrease height'}
                     >
                       −
                     </button>

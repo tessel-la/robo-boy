@@ -208,39 +208,45 @@
 
 /* Dark theme support is now handled by the --border-color-light CSS variable */
 
-/* Drop Preview Styles */
+/* Drop Preview Styles: where a component will land, at the size it will have. */
 .drop-preview {
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 5;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
   pointer-events: none;
-  transition: all 0.15s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
 .drop-preview.valid {
-  background-color: rgba(40, 167, 69, 0.15);
-  border: 2px dashed #28a745;
+  border: 2px dashed color-mix(in srgb, var(--primary-color, #32cd32) 72%, transparent);
+  background-color: color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
 }
 
 .drop-preview.invalid {
-  background-color: rgba(220, 53, 69, 0.15);
-  border: 2px dashed #dc3545;
+  border: 2px dashed color-mix(in srgb, var(--error-color, #e74c3c) 72%, transparent);
+  background-color: color-mix(in srgb, var(--error-color, #e74c3c) 12%, transparent);
 }
 
 .drop-preview-inner {
-  font-size: 20px;
-  font-weight: bold;
-  opacity: 0.7;
+  max-width: calc(100% - 6px);
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-secondary, #2c2c2c) 92%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .drop-preview.valid .drop-preview-inner {
-  color: #28a745;
+  color: var(--primary-color, #32cd32);
 }
 
 .drop-preview.invalid .drop-preview-inner {
-  color: #dc3545;
+  color: var(--error-color, #e74c3c);
 }
 
 /* Component drop animation */

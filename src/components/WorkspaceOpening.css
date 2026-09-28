@@ -1,0 +1,352 @@
+/* The screen a workspace opens behind. Over a mounted workspace it covers the main area and leaves the
+   top bar (connection tabs, disconnect) usable; before the workspace exists it draws the bar's strip
+   itself, so nothing moves when the real one arrives. */
+.workspace-opening {
+  display: flex;
+  flex-direction: column;
+  background: var(--background-color);
+  color: var(--text-color);
+  box-sizing: border-box;
+}
+
+.workspace-opening.is-standalone {
+  height: 100%;
+  min-height: 100%;
+}
+
+.workspace-opening-bar {
+  flex: none;
+  height: calc(40px + var(--safe-area-top, 0px));
+  background: var(--navbar-bg, #333);
+}
+
+.main-content-area:has(> .workspace-opening) {
+  position: relative;
+}
+
+.workspace-opening.is-over-workspace {
+  position: absolute;
+  inset: 0;
+  z-index: 150;
+}
+
+.workspace-opening-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: auto;
+}
+
+.workspace-opening-card {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+/* The link: this device and the robot, joined by the brand's dash. */
+.workspace-opening-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workspace-opening-node {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--text-color-secondary);
+  background: var(--background-secondary);
+  transition: border-color 300ms ease, color 300ms ease;
+}
+
+.workspace-opening-node svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-opening-node.is-device,
+.workspace-opening.is-connected .workspace-opening-node.is-robot {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.workspace-opening.is-failed .workspace-opening-node.is-robot {
+  border-color: var(--error-color);
+  color: var(--error-color);
+  animation: workspace-opening-shake 360ms ease-in-out;
+}
+
+.workspace-opening-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 2px;
+  border-radius: 1px;
+  background-image: repeating-linear-gradient(90deg, var(--border-color) 0 6px, transparent 6px 11px);
+}
+
+.workspace-opening.is-failed .workspace-opening-track {
+  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--error-color) 55%, transparent) 0 6px, transparent 6px 11px);
+}
+
+.workspace-opening-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary-color);
+  box-shadow: 0 0 6px var(--primary-color);
+  transition: width 350ms ease-out;
+}
+
+.workspace-opening.is-connected .workspace-opening-fill {
+  width: 100%;
+}
+
+.workspace-opening-dash {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--primary-color);
+  box-shadow: 0 0 6px var(--primary-color);
+  opacity: 0;
+}
+
+/* Opening: the dash waits at this device's end. Connecting: it runs to the robot and back again. */
+.workspace-opening.is-loading .workspace-opening-dash {
+  opacity: 1;
+  transform-origin: left center;
+  animation: workspace-opening-wait 900ms ease-in-out infinite alternate;
+}
+
+.workspace-opening.is-connecting .workspace-opening-dash {
+  animation: workspace-opening-travel 1300ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.workspace-opening-break {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  color: var(--error-color);
+  background: var(--card-bg, var(--background-color));
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.workspace-opening-break svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-opening.is-failed .workspace-opening-break {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.workspace-opening-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -8px;
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+}
+
+.workspace-opening-ends span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The steps, each with its state. */
+.workspace-opening-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-opening-step {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.workspace-opening-step.is-pending {
+  color: var(--text-color-secondary);
+}
+
+.workspace-opening-mark {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--button-text-color, #111);
+}
+
+.workspace-opening-mark svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+.workspace-opening-step.is-active .workspace-opening-mark {
+  border: 0;
+  background: var(--primary-color);
+  animation: workspace-opening-beat 1100ms ease-in-out infinite;
+}
+
+.workspace-opening-step.is-done .workspace-opening-mark {
+  border: 0;
+  background: var(--primary-color);
+}
+
+.workspace-opening-step.is-failed .workspace-opening-mark {
+  border: 0;
+  color: #fff;
+  background: var(--error-color);
+}
+
+.workspace-opening-step-text {
+  min-width: 0;
+}
+
+.workspace-opening-url {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.workspace-opening-time {
+  color: var(--text-color-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-opening-help {
+  margin: 0;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  animation: workspace-opening-appear 200ms ease-out;
+}
+
+.workspace-opening-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  animation: workspace-opening-appear 200ms ease-out;
+}
+
+.workspace-opening-actions button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-color);
+  background: var(--background-color);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-opening-actions button:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 54%, var(--border-color));
+}
+
+.workspace-opening-actions button.is-primary {
+  border-color: var(--primary-color);
+  color: var(--button-text-color);
+  background: var(--primary-color);
+}
+
+.workspace-opening-actions button.is-link {
+  margin-left: auto;
+  padding: 6px 4px;
+  border: 0;
+  color: var(--text-color-secondary);
+  background: none;
+}
+
+.workspace-opening-actions button.is-link:hover {
+  color: var(--text-color);
+}
+
+/* Once the robot answers, the link fills and the screen gives way to the workspace. */
+.workspace-opening.is-connected.is-over-workspace {
+  pointer-events: none;
+  animation: workspace-opening-leave 300ms ease-in 450ms forwards;
+}
+
+@keyframes workspace-opening-wait {
+  from { opacity: 0.35; transform: scaleX(0.55); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes workspace-opening-travel {
+  0% { left: 0; opacity: 0; }
+  12%, 85% { opacity: 1; }
+  100% { left: calc(100% - 16px); opacity: 0; }
+}
+
+@keyframes workspace-opening-beat {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-color) 45%, transparent); }
+  60% { box-shadow: 0 0 0 5px transparent; }
+}
+
+@keyframes workspace-opening-shake {
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+}
+
+@keyframes workspace-opening-appear {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+@keyframes workspace-opening-leave {
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-opening *,
+  .workspace-opening {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .workspace-opening.is-connecting .workspace-opening-dash {
+    left: calc(50% - 8px);
+    opacity: 1;
+  }
+}
