@@ -287,12 +287,14 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const scaling = calculateScaling();
 
   // Calculate fixed cell dimensions that fit within the scaled grid
+  // In use, the pad shares out whatever room its panel has: cells shrink with a small tile rather than pushing the
+  // pad past its edges.
   const cellWidth = isEditing
     ? Math.floor(layout.cellSize * scaling.scaleFactor)
-    : `minmax(${Math.floor(layout.cellSize * 0.5)}px, 1fr)`;
+    : 'minmax(0, 1fr)';
   const cellHeight = isEditing
     ? Math.floor(layout.cellSize * scaling.scaleFactor)
-    : `minmax(${Math.floor(layout.cellSize * 0.5)}px, 1fr)`;
+    : 'minmax(0, 1fr)';
   const gap = Math.max(1, Math.floor(4 * scaling.scaleFactor));
   const padding = isEditing ? Math.max(2, Math.floor(8 * scaling.scaleFactor)) : 8;
 
@@ -450,7 +452,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
             }}
           >
             <div className="drop-preview-inner">
-              {dropPreview.isValid ? '✓' : '✕'}
+              {!dropPreview.isValid ? 'No room' : `${dropPreview.isFitted ? 'Fits ' : ''}${dropPreview.width}×${dropPreview.height}`}
             </div>
           </div>
         )}
@@ -468,6 +470,7 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
               isSelected={selectedComponentId === component.id}
               isBeingDragged={isBeingDragged}
               gridSize={layout.gridSize}
+              occupied={isEditing ? layout.components.filter(other => other.id !== component.id).map(other => other.position) : undefined}
               onSelect={handleComponentSelect}
               onUpdate={handleComponentUpdate}
               onDelete={handleComponentDelete}

@@ -17,8 +17,12 @@ vi.mock('./CustomGamepadLayout', () => ({
     layout,
     dropPreview,
   }: {
-    layout: { name: string; gridSize: { width: number; height: number } };
-    dropPreview?: { x: number; y: number; width: number; height: number } | null;
+    layout: {
+      name: string;
+      gridSize: { width: number; height: number };
+      components: Array<{ type: string; position: { x: number; y: number; width: number; height: number } }>;
+    };
+    dropPreview?: { x: number; y: number; width: number; height: number; isValid: boolean } | null;
   }) => (
     <div data-testid="editor-canvas">
       {layout.name}
@@ -31,6 +35,10 @@ vi.mock('./CustomGamepadLayout', () => ({
       </div>
       <output data-testid="drop-position">
         {dropPreview ? `${dropPreview.x},${dropPreview.y},${dropPreview.width},${dropPreview.height}` : ''}
+      </output>
+      <output data-testid="drop-valid">{dropPreview ? String(dropPreview.isValid) : ''}</output>
+      <output data-testid="components">
+        {layout.components.map(c => `${c.type}@${c.position.x},${c.position.y},${c.position.width},${c.position.height}`).join(' ')}
       </output>
     </div>
   ),
@@ -47,6 +55,7 @@ vi.mock('./ComponentPalette', () => ({
     <div data-testid="component-gallery">
       {contentOnly ? 'contained gallery' : 'legacy gallery'}
       <button type="button" onClick={() => onDragStart?.('joystick')}>Drag joystick</button>
+      <button type="button" onClick={() => onDragStart?.('physical-gamepad')}>Drag physical gamepad</button>
     </div>
   ),
 }));
@@ -99,6 +108,54 @@ describe('GamepadEditor tool panels', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close gamepad editor' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Lays the mocked grid's cells out 50px wide with a 4px gap, from (20, 100).
+  const layOutCells = (columns: number) => {
+    document.querySelectorAll<HTMLElement>('.grid-cell').forEach((cell, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue({
+        bottom: 150 + row * 54, height: 50, left: 20 + column * 54, right: 70 + column * 54,
+        top: 100 + row * 54, width: 50, x: 20 + column * 54, y: 100 + row * 54, toJSON: () => ({}),
+      });
+    });
+  };
+
+  it('fits a component larger than the free room into the space around the finger', () => {
+    const initialLayout = {
+      id: 'small', name: 'Small pad', gridSize: { width: 4, height: 3 }, cellSize: 80,
+      components: [{ id: 'stick', type: 'joystick' as const, position: { x: 0, y: 0, width: 2, height: 3 } }],
+      rosConfig: { defaultTopic: '/joy', defaultMessageType: 'sensor_msgs/Joy' },
+      metadata: { created: '', modified: '', version: '1.0.0' },
+    };
+    render(<GamepadEditor isOpen onClose={vi.fn()} onSave={vi.fn()} ros={{} as Ros} initialLayout={initialLayout} />);
+    layOutCells(4);
+
+    // A 6x4 physical gamepad, over the free cell in column 3, row 1: it takes the 2x3 that is left.
+    fireEvent.click(screen.getByRole('button', { name: 'Drag physical gamepad' }));
+    fireEvent.touchMove(document, { touches: [{ identifier: 1, clientX: 205, clientY: 175 }] });
+    expect(screen.getByTestId('drop-position')).toHaveTextContent('2,0,2,3');
+    expect(screen.getByTestId('drop-valid')).toHaveTextContent('true');
+
+    fireEvent.touchEnd(document, { changedTouches: [{ identifier: 1, clientX: 205, clientY: 175 }] });
+    expect(screen.getByTestId('components')).toHaveTextContent('joystick@0,0,2,3 physical-gamepad@2,0,2,3');
+  });
+
+  it('does not place anything over another component', () => {
+    render(<GamepadEditor isOpen onClose={vi.fn()} onSave={vi.fn()} ros={{} as Ros} initialLayout={{
+      id: 'full', name: 'Full pad', gridSize: { width: 4, height: 3 }, cellSize: 80,
+      components: [{ id: 'stick', type: 'joystick' as const, position: { x: 0, y: 0, width: 4, height: 3 } }],
+      rosConfig: { defaultTopic: '/joy', defaultMessageType: 'sensor_msgs/Joy' },
+      metadata: { created: '', modified: '', version: '1.0.0' },
+    }} />);
+    layOutCells(4);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Drag joystick' }));
+    fireEvent.touchMove(document, { touches: [{ identifier: 1, clientX: 100, clientY: 150 }] });
+    expect(screen.getByTestId('drop-valid')).toHaveTextContent('false');
+    fireEvent.touchEnd(document, { changedTouches: [{ identifier: 1, clientX: 100, clientY: 150 }] });
+    expect(screen.getByTestId('components')).toHaveTextContent(/^joystick@0,0,4,3$/);
   });
 
   it('aligns a touch drop preview with the rendered grid cells and centers it under the finger', () => {
