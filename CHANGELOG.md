@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.14.0-alpha...robo-boy-v0.15.0-alpha) (2026-09-28)
+
+
+### Features
+
+* redesign pad editing controls and fit new components to the room ([#195](https://github.com/tessel-la/robo-boy/issues/195)) ([2b6741e](https://github.com/tessel-la/robo-boy/commit/2b6741ecb951c0e34c2ef924aa3c0e78c0b5ed21))
+* show the workspace opening and the link to the robot ([#194](https://github.com/tessel-la/robo-boy/issues/194)) ([da92f92](https://github.com/tessel-la/robo-boy/commit/da92f92fe39a40f683f01d09d5faa0c3c6a029f6))
+* workspace opening screen and pad editor redesign ([f53ef14](https://github.com/tessel-la/robo-boy/commit/f53ef14c93df65121e555f236689ea207cb79d21))
+
 ## [0.14.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.13.0-alpha...robo-boy-v0.14.0-alpha) (2026-09-27)
 
 
