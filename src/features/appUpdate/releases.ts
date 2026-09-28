@@ -99,6 +99,7 @@ export const isNewer = (candidate: string, current: string = APP_VERSION) =>
 const INSTALLERS: Record<string, string> = {
   'electron/linux/deb/x64': 'Robo-Boy-linux-amd64-electron.deb',
   'electron/linux/deb/arm64': 'Robo-Boy-linux-arm64-electron.deb',
+  'electron/macos/dmg/arm64': 'Robo-Boy-macos-arm64-electron.dmg',
   'tauri/linux/deb/x64': 'Robo-Boy-linux-amd64.deb',
   'tauri/linux/rpm/x64': 'Robo-Boy-linux-x86_64.rpm',
   'tauri/windows/nsis/x64': 'Robo-Boy-windows-x64-setup.exe',
