@@ -7,6 +7,7 @@ import {
   EditorState
 } from '../types';
 import { componentLibrary } from '../defaultLayouts';
+import { fitNewComponent, isAreaFree, measureGridCells, occupiedExtent, type GridPoint, type GridRect } from '../padGeometry';
 import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
@@ -87,18 +88,21 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     setLayout(prev => ({ ...prev, description }));
   }, []);
 
+  // The grid never shrinks from under a component: it stops at the last column and row in use.
+  const contentExtent = occupiedExtent(layout.components);
   const handleGridSizeChange = useCallback((width: number, height: number) => {
-    setLayout(prev => ({
-      ...prev,
-      gridSize: { width, height }
-    }));
+    setLayout(prev => {
+      const extent = occupiedExtent(prev.components);
+      return { ...prev, gridSize: { width: Math.max(width, extent.width), height: Math.max(height, extent.height) } };
+    });
     setEditorState(prev => ({
       ...prev,
       gridSize: { width, height }
     }));
   }, []);
 
-  const handleAddComponent = useCallback((componentType: string, x: number, y: number) => {
+  // Adds a component where it was placed, at the size that fitted there (see placementFor).
+  const handleAddComponent = useCallback((componentType: string, placement: GridRect) => {
     const componentDef = componentLibrary.find(c => c.type === componentType);
     if (!componentDef) return;
 
@@ -161,12 +165,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     const newComponent: GamepadComponentConfig = {
       id: `${componentType}-${Date.now()}`,
       type: componentType as any,
-      position: {
-        x,
-        y,
-        width: componentDef.defaultSize.width,
-        height: componentDef.defaultSize.height
-      },
+      position: { ...placement },
       label: componentDef.name,
       action: action,
       config: defaultConfig
@@ -258,24 +257,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     }
   }, [layout, onSave, onClose]);
 
-  const handleGridClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!editorState.draggedComponent) return;
-
-    const gridRect = event.currentTarget.getBoundingClientRect();
-    const cellWidth = (gridRect.width - 32) / layout.gridSize.width;
-    const cellHeight = (gridRect.height - 32) / layout.gridSize.height;
-    
-    const x = Math.floor((event.clientX - gridRect.left - 16) / cellWidth);
-    const y = Math.floor((event.clientY - gridRect.top - 16) / cellHeight);
-
-    if (x >= 0 && x < layout.gridSize.width && y >= 0 && y < layout.gridSize.height) {
-      handleAddComponent(editorState.draggedComponent.componentType, x, y);
-    }
-
-    setEditorState(prev => ({ ...prev, draggedComponent: null }));
-  }, [editorState.draggedComponent, layout.gridSize, handleAddComponent]);
-
-  // Calculate grid position from mouse/touch event
+  // Where a pointer is on the grid: in cell units, and as the top-left cell that centres an item of the given size
+  // under it.
   const getGridPositionFromEvent = useCallback((
     clientX: number,
     clientY: number,
@@ -283,78 +266,113 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     itemHeight = 1
   ) => {
     if (!designAreaRef.current) return null;
-    
-    // Try to find the grid element
-    let gridEl = designAreaRef.current.querySelector('.gamepad-grid') as HTMLElement;
-    
-    // Fallback: use the design area itself
-    if (!gridEl) {
-      gridEl = designAreaRef.current;
-    }
-    
-    const cells = gridEl.querySelectorAll<HTMLElement>('.grid-background .grid-cell');
-    const firstCell = cells[0]?.getBoundingClientRect();
-    const nextColumn = layout.gridSize.width > 1 ? cells[1]?.getBoundingClientRect() : null;
-    const nextRow = layout.gridSize.height > 1
-      ? cells[layout.gridSize.width]?.getBoundingClientRect()
-      : null;
+    const gridEl = designAreaRef.current.querySelector('.gamepad-grid') as HTMLElement ?? designAreaRef.current;
 
-    if (firstCell && firstCell.width > 0 && firstCell.height > 0) {
-      const columnStep = nextColumn ? nextColumn.left - firstCell.left : firstCell.width;
-      const rowStep = nextRow ? nextRow.top - firstCell.top : firstCell.height;
-
-      if (columnStep > 0 && rowStep > 0) {
-        const previewWidth = firstCell.width + (itemWidth - 1) * columnStep;
-        const previewHeight = firstCell.height + (itemHeight - 1) * rowStep;
-        const x = Math.round((clientX - firstCell.left - previewWidth / 2) / columnStep);
-        const y = Math.round((clientY - firstCell.top - previewHeight / 2) / rowStep);
-
-        return { x, y, cellWidth: firstCell.width, cellHeight: firstCell.height };
-      }
+    const cells = measureGridCells(gridEl, layout.gridSize);
+    let metrics = cells;
+    if (!metrics) {
+      // The first frame, before the background cells have layout.
+      const gridRect = gridEl.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(gridEl);
+      const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+      const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+      const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+      const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+      const columnGap = parseFloat(computedStyle.columnGap) || 0;
+      const rowGap = parseFloat(computedStyle.rowGap) || 0;
+      const innerWidth = Math.max(1, gridRect.width - paddingLeft - paddingRight);
+      const innerHeight = Math.max(1, gridRect.height - paddingTop - paddingBottom);
+      const cellWidth = Math.max(1, (innerWidth - columnGap * (layout.gridSize.width - 1)) / layout.gridSize.width);
+      const cellHeight = Math.max(1, (innerHeight - rowGap * (layout.gridSize.height - 1)) / layout.gridSize.height);
+      metrics = {
+        left: gridRect.left + paddingLeft,
+        top: gridRect.top + paddingTop,
+        cellWidth,
+        cellHeight,
+        columnStep: cellWidth + columnGap,
+        rowStep: cellHeight + rowGap,
+      };
     }
 
-    // Fallback for the first frame before the background cells have layout.
-    const gridRect = gridEl.getBoundingClientRect();
-    const computedStyle = window.getComputedStyle(gridEl);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
-    const columnGap = parseFloat(computedStyle.columnGap) || 0;
-    const rowGap = parseFloat(computedStyle.rowGap) || 0;
-    const innerWidth = Math.max(1, gridRect.width - paddingLeft - paddingRight);
-    const innerHeight = Math.max(1, gridRect.height - paddingTop - paddingBottom);
-    const cellWidth = Math.max(1, (innerWidth - columnGap * (layout.gridSize.width - 1)) / layout.gridSize.width);
-    const cellHeight = Math.max(1, (innerHeight - rowGap * (layout.gridSize.height - 1)) / layout.gridSize.height);
-    const columnStep = cellWidth + columnGap;
-    const rowStep = cellHeight + rowGap;
+    const { left, top, cellWidth, cellHeight, columnStep, rowStep } = metrics;
     const previewWidth = cellWidth + (itemWidth - 1) * columnStep;
     const previewHeight = cellHeight + (itemHeight - 1) * rowStep;
-    const x = Math.round((clientX - gridRect.left - paddingLeft - previewWidth / 2) / columnStep);
-    const y = Math.round((clientY - gridRect.top - paddingTop - previewHeight / 2) / rowStep);
-    
-    return { x, y, cellWidth, cellHeight };
+    const point: GridPoint = { x: (clientX - left) / columnStep, y: (clientY - top) / rowStep };
+    return {
+      x: Math.round((clientX - left - previewWidth / 2) / columnStep),
+      y: Math.round((clientY - top - previewHeight / 2) / rowStep),
+      point,
+      cellWidth,
+      cellHeight,
+    };
   }, [layout.gridSize]);
 
-  // Check if a position is valid for placement (no overlaps)
-  const isPositionValid = useCallback((x: number, y: number, width: number, height: number, excludeId?: string) => {
-    if (x < 0 || y < 0 || x + width > layout.gridSize.width || y + height > layout.gridSize.height) {
-      return false;
-    }
-    
-    for (const comp of layout.components) {
-      if (excludeId && comp.id === excludeId) continue;
-      
-      const overlapsX = x < comp.position.x + comp.position.width && x + width > comp.position.x;
-      const overlapsY = y < comp.position.y + comp.position.height && y + height > comp.position.y;
-      
-      if (overlapsX && overlapsY) {
-        return false;
+  // Inside the grid and clear of every other component.
+  const isPositionValid = useCallback((x: number, y: number, width: number, height: number, excludeId?: string) =>
+    isAreaFree(
+      { x, y, width, height },
+      layout.gridSize,
+      layout.components.filter(c => c.id !== excludeId).map(c => c.position)
+    ), [layout.gridSize, layout.components]);
+
+  /**
+   * Where a drag or a tap would put a component. A new one takes the largest room there is under the pointer, up to
+   * its default size, so it never lands outside the grid or over another component; a moved one keeps its size.
+   */
+  const placementFor = useCallback((
+    clientX: number,
+    clientY: number,
+    dragState: NonNullable<EditorState['dragState']>
+  ): EditorState['dropPreview'] => {
+    const preferred = dragState.defaultSize || { width: 1, height: 1 };
+    const pos = getGridPositionFromEvent(clientX, clientY, preferred.width, preferred.height);
+    if (!pos) return null;
+
+    if (dragState.source === 'palette') {
+      const fitted = fitNewComponent(preferred, layout.gridSize, layout.components.map(c => c.position), pos.point);
+      if (fitted) {
+        return { ...fitted, isValid: true, isFitted: fitted.width !== preferred.width || fitted.height !== preferred.height };
       }
     }
-    
-    return true;
-  }, [layout.gridSize, layout.components]);
+
+    const width = Math.min(preferred.width, layout.gridSize.width);
+    const height = Math.min(preferred.height, layout.gridSize.height);
+    const x = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
+    const y = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
+    return {
+      x,
+      y,
+      width,
+      height,
+      isValid: dragState.source === 'grid' && width === preferred.width && height === preferred.height
+        && isPositionValid(x, y, width, height, dragState.componentId),
+    };
+  }, [getGridPositionFromEvent, isPositionValid, layout.gridSize, layout.components]);
+
+  /** Carries out a placement: adds the new component, or moves the dragged one. */
+  const commitPlacement = useCallback((dragState: NonNullable<EditorState['dragState']>, placement: EditorState['dropPreview']) => {
+    if (!placement?.isValid) return;
+    const rect = { x: placement.x, y: placement.y, width: placement.width, height: placement.height };
+    if (dragState.source === 'palette' && dragState.componentType) {
+      handleAddComponent(dragState.componentType, rect);
+    } else if (dragState.source === 'grid' && dragState.componentId) {
+      const component = layout.components.find(c => c.id === dragState.componentId);
+      if (component) handleComponentUpdate(dragState.componentId, { ...component, position: { ...component.position, x: rect.x, y: rect.y } });
+    }
+  }, [handleAddComponent, handleComponentUpdate, layout.components]);
+
+  // A component picked in the gallery is placed by tapping the grid; a tap on the empty grid otherwise just clears
+  // the selection.
+  const handleGridClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const pending = editorState.draggedComponent;
+    if (!pending) {
+      setEditorState(prev => (prev.selectedComponentId ? { ...prev, selectedComponentId: null } : prev));
+      return;
+    }
+    const dragState = { isDragging: false, source: 'palette' as const, componentType: pending.componentType, defaultSize: pending.defaultSize };
+    commitPlacement(dragState, placementFor(event.clientX, event.clientY, dragState));
+    setEditorState(prev => ({ ...prev, draggedComponent: null }));
+  }, [editorState.draggedComponent, placementFor, commitPlacement]);
 
   // Drag start from palette
   const handlePaletteDragStart = useCallback((componentType: string) => {
@@ -371,8 +389,10 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
     // Set ref immediately for synchronous access during drag events
     dragStateRef.current = newDragState;
     
+    // Placing a new component puts the selected one's tools away, so they do not cover the drop preview.
     setEditorState(prev => ({
       ...prev,
+      selectedComponentId: null,
       dragState: newDragState,
       draggedComponent: {
         componentType: componentType as GamepadComponentConfig['type'],
@@ -408,28 +428,9 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   // Update drop preview from position
   const updateDropPreview = useCallback((clientX: number, clientY: number, dragState: EditorState['dragState']) => {
     if (!dragState) return;
-    
-    const width = dragState.defaultSize?.width || 1;
-    const height = dragState.defaultSize?.height || 1;
-    const pos = getGridPositionFromEvent(clientX, clientY, width, height);
-    if (!pos) return;
-    
-    const clampedX = Math.max(0, Math.min(pos.x, layout.gridSize.width - width));
-    const clampedY = Math.max(0, Math.min(pos.y, layout.gridSize.height - height));
-    
-    const isValid = isPositionValid(clampedX, clampedY, width, height, dragState.componentId);
-    
-    setEditorState(prev => ({
-      ...prev,
-      dropPreview: {
-        x: clampedX,
-        y: clampedY,
-        width,
-        height,
-        isValid
-      }
-    }));
-  }, [getGridPositionFromEvent, isPositionValid, layout.gridSize]);
+    const dropPreview = placementFor(clientX, clientY, dragState);
+    if (dropPreview) setEditorState(prev => ({ ...prev, dropPreview }));
+  }, [placementFor]);
 
   // Handle drag over the design area
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -482,42 +483,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       }
     }
     
-    // Calculate drop position fresh from event coordinates (don't rely on stale preview state)
-    if (dragState) {
-      const width = dragState.defaultSize?.width || 1;
-      const height = dragState.defaultSize?.height || 1;
-      const pos = getGridPositionFromEvent(event.clientX, event.clientY, width, height);
-      
-      // Use calculated position or fallback to (0,0)
-      let dropX = pos ? pos.x : 0;
-      let dropY = pos ? pos.y : 0;
-      
-      // Clamp to valid range
-      dropX = Math.max(0, Math.min(dropX, layout.gridSize.width - width));
-      dropY = Math.max(0, Math.min(dropY, layout.gridSize.height - height));
-      
-      // Check if position is valid (no overlaps)
-      const isValid = isPositionValid(dropX, dropY, width, height, dragState.componentId);
-      
-      // Perform the drop action if valid
-      if (isValid) {
-        if (dragState.source === 'palette' && dragState.componentType) {
-          handleAddComponent(dragState.componentType, dropX, dropY);
-        } else if (dragState.source === 'grid' && dragState.componentId) {
-          const component = layout.components.find(c => c.id === dragState.componentId);
-          if (component) {
-            handleComponentUpdate(dragState.componentId, {
-              ...component,
-              position: {
-                ...component.position,
-                x: dropX,
-                y: dropY
-              }
-            });
-          }
-        }
-      }
-    }
+    // Placed fresh from the drop's own coordinates (the preview state may be a frame behind).
+    if (dragState) commitPlacement(dragState, placementFor(event.clientX, event.clientY, dragState));
     
     // Clear drag state (both ref and state)
     dragStateRef.current = null;
@@ -527,7 +494,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       dropPreview: null,
       draggedComponent: null
     }));
-  }, [editorState.dragState, handleAddComponent, handleComponentUpdate, layout.components, getGridPositionFromEvent, layout.gridSize, isPositionValid]);
+  }, [editorState.dragState, layout.components, placementFor, commitPlacement]);
 
   // Handle drag end (cancel)
   const handleDragEnd = useCallback(() => {
@@ -579,24 +546,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       
       e.preventDefault();
       
-      // If we have a valid drop position, add/move the component
-      if (dropPreview && dropPreview.isValid) {
-        if (dragState.source === 'palette' && dragState.componentType) {
-          handleAddComponent(dragState.componentType, dropPreview.x, dropPreview.y);
-        } else if (dragState.source === 'grid' && dragState.componentId) {
-          const component = layout.components.find(c => c.id === dragState.componentId);
-          if (component) {
-            handleComponentUpdate(dragState.componentId, {
-              ...component,
-              position: {
-                ...component.position,
-                x: dropPreview.x,
-                y: dropPreview.y
-              }
-            });
-          }
-        }
-      }
+      // The preview is where the finger left it.
+      commitPlacement(dragState, dropPreview);
       
       // Clear both ref and state
       dragStateRef.current = null;
@@ -619,7 +570,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
         document.removeEventListener('touchend', handleGlobalTouchEnd);
       };
     }
-  }, [isOpen, editorState.dragState, editorState.dropPreview, updateDropPreview, handleAddComponent, handleComponentUpdate, layout.components]);
+  }, [isOpen, editorState.dragState, editorState.dropPreview, updateDropPreview, commitPlacement]);
 
   if (!isOpen) return null;
 
@@ -693,6 +644,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
                       layoutDescription={layout.description || ''}
                       gridWidth={layout.gridSize.width}
                       gridHeight={layout.gridSize.height}
+                      minGridWidth={contentExtent.width}
+                      minGridHeight={contentExtent.height}
                       onNameChange={handleLayoutNameChange}
                       onDescriptionChange={handleLayoutDescriptionChange}
                       onGridSizeChange={handleGridSizeChange}

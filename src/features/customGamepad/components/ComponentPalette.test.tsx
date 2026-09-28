@@ -104,3 +104,28 @@ describe('ComponentPalette touch gestures', () => {
     expect(onDragStart).not.toHaveBeenCalled();
   });
 });
+
+describe('ComponentPalette mouse dragging', () => {
+  it('drags a component with a card in the app\'s style that shows its default size', () => {
+    const onComponentSelect = vi.fn();
+    const onDragStart = vi.fn();
+    const onDragEnd = vi.fn();
+    render(
+      <ComponentPalette contentOnly selectedComponent={null} onComponentSelect={onComponentSelect} onDragStart={onDragStart} onDragEnd={onDragEnd} />
+    );
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: '' };
+
+    const card = screen.getByTitle('Press and hold to drag Physical Gamepad');
+    fireEvent.dragStart(card, { dataTransfer });
+
+    const ghost = dataTransfer.setDragImage.mock.calls[0][0] as HTMLElement;
+    expect(ghost).toHaveClass('pad-drag-ghost');
+    expect(ghost).toHaveTextContent('Physical Gamepad6×4');
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'physical-gamepad');
+    expect(onDragStart).toHaveBeenCalledWith('physical-gamepad');
+    expect(onComponentSelect).toHaveBeenCalledWith('physical-gamepad');
+
+    fireEvent.dragEnd(card);
+    expect(onDragEnd).toHaveBeenCalled();
+  });
+});

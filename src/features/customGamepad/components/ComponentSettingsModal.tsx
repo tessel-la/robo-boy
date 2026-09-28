@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Ros } from 'roslib';
-import { FiCheck, FiSettings, FiX } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheck, FiSettings, FiX } from 'react-icons/fi';
 import {
   GamepadComponentConfig,
   PhysicalGamepadBinding,
@@ -1133,7 +1133,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               {errorMessage ? (
                 <div className="error-message-inline">
                   <div className="error-content-inline">
-                    <span className="error-icon">⚠️</span>
+                    <FiAlertTriangle className="error-icon" aria-hidden="true" />
                     <span className="error-text">{errorMessage}</span>
                   </div>
                 </div>
