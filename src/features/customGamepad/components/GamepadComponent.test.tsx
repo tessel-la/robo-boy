@@ -107,11 +107,17 @@ describe('GamepadComponent', () => {
 // jsdom has no PointerEvent; the resize handles only need its pointer id and coordinates.
 class TestPointerEvent extends MouseEvent {
   pointerId: number;
+  pointerType: string;
   constructor(type: string, init: PointerEventInit = {}) {
     super(type, init);
     this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? 'touch';
   }
 }
+
+const box = (left: number, top: number, width: number, height: number) => ({
+  left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}),
+});
 
 describe('GamepadComponent resizing', () => {
   const renderResizable = (occupied = [{ x: 3, y: 0, width: 1, height: 4 }]) => {
@@ -163,5 +169,60 @@ describe('GamepadComponent resizing', () => {
     const dragStart = new Event('dragstart', { bubbles: true, cancelable: true });
     container.querySelector('.gamepad-component')!.dispatchEvent(dragStart);
     expect(dragStart.defaultPrevented).toBe(true);
+  });
+});
+
+describe('GamepadComponent editing details', () => {
+  it('moves with a card in the app\'s style that shows its size', () => {
+    const onDragStart = vi.fn();
+    const { container } = render(
+      <GamepadComponent config={{ ...baseConfig, position: { x: 1, y: 1, width: 2, height: 1 } }} ros={{ isConnected: true } as any}
+        isEditing isSelected gridSize={{ width: 4, height: 4 }} onDragStart={onDragStart} />
+    );
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: '' };
+    fireEvent.dragStart(container.querySelector('.gamepad-component')!, { dataTransfer });
+
+    const ghost = dataTransfer.setDragImage.mock.calls[0][0] as HTMLElement;
+    expect(ghost).toHaveClass('pad-drag-ghost');
+    expect(ghost).toHaveTextContent('Button2×1');
+    expect(onDragStart).toHaveBeenCalledWith('button-1');
+  });
+
+  it('keeps only its corner handles when it is small', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(box(0, 0, 40, 40));
+    const { container } = render(
+      <GamepadComponent config={baseConfig} ros={{ isConnected: true } as any} isEditing isSelected gridSize={{ width: 4, height: 4 }} />
+    );
+    spy.mockRestore();
+    expect(container.querySelector('.component-resize-handles')).toHaveClass('is-compact');
+  });
+
+  it('resizes by the rendered grid\'s cells, and stops when the mouse was let go elsewhere', () => {
+    (window as any).PointerEvent = TestPointerEvent;
+    const onUpdate = vi.fn();
+    const { container } = render(
+      <div className="gamepad-grid">
+        <div className="grid-background">
+          {Array.from({ length: 16 }, (_, index) => <div className="grid-cell" key={index} data-index={index} />)}
+        </div>
+        <GamepadComponent config={baseConfig} ros={{ isConnected: true } as any} isEditing isSelected
+          gridSize={{ width: 4, height: 4 }} onUpdate={onUpdate} />
+      </div>
+    );
+    // 60px cells with 10px gaps.
+    container.querySelectorAll<HTMLElement>('.grid-cell').forEach(cell => {
+      const index = Number(cell.dataset.index);
+      vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue(box((index % 4) * 70, Math.floor(index / 4) * 70, 60, 60));
+    });
+    const edge = container.querySelector('.component-resize-handle.e')!;
+
+    fireEvent.pointerDown(edge, { pointerId: 2, pointerType: 'mouse', buttons: 1, clientX: 60, clientY: 30 });
+    fireEvent.pointerMove(edge, { pointerId: 2, pointerType: 'mouse', buttons: 1, clientX: 200, clientY: 30 });
+    expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ position: { x: 0, y: 0, width: 3, height: 1 } }));
+
+    onUpdate.mockClear();
+    fireEvent.pointerMove(edge, { pointerId: 2, pointerType: 'mouse', buttons: 0, clientX: 260, clientY: 30 });
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(container.querySelector('.gamepad-component')).not.toHaveClass('resizing');
   });
 });

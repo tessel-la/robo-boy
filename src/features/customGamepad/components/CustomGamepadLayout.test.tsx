@@ -158,3 +158,18 @@ describe('CustomGamepadLayout Twist aggregation', () => {
     expect(topic.unadvertise).toHaveBeenCalledOnce();
   });
 });
+
+describe('CustomGamepadLayout while editing', () => {
+  it('labels the drop preview with the size the component will land at', () => {
+    const { rerender, container } = render(
+      <CustomGamepadLayout layout={layout} ros={{} as any} isEditing dropPreview={{ x: 0, y: 2, width: 2, height: 2, isValid: true }} />
+    );
+    expect(container.querySelector('.drop-preview.valid')).toHaveTextContent('2×2');
+
+    rerender(<CustomGamepadLayout layout={layout} ros={{} as any} isEditing dropPreview={{ x: 2, y: 0, width: 2, height: 1, isValid: true, isFitted: true }} />);
+    expect(container.querySelector('.drop-preview.valid')).toHaveTextContent('Fits 2×1');
+
+    rerender(<CustomGamepadLayout layout={layout} ros={{} as any} isEditing dropPreview={{ x: 0, y: 0, width: 2, height: 2, isValid: false }} />);
+    expect(container.querySelector('.drop-preview.invalid')).toHaveTextContent('No room');
+  });
+});

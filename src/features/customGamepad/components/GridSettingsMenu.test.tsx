@@ -27,4 +27,17 @@ describe('GridSettingsMenu', () => {
     fireEvent.click(screen.getByTitle('Increase width'));
     expect(onGridSizeChange).toHaveBeenCalledWith(7, 4);
   });
+
+  it('says why the height cannot go lower, and still grows', () => {
+    const onGridSizeChange = vi.fn();
+    render(
+      <GridSettingsMenu contentOnly layoutName="Pad" layoutDescription="" gridWidth={4} gridHeight={3}
+        minGridWidth={2} minGridHeight={3} onNameChange={vi.fn()} onDescriptionChange={vi.fn()} onGridSizeChange={onGridSizeChange} />
+    );
+    expect(screen.getByTitle('A component uses the last row: move or shrink it first')).toBeDisabled();
+    fireEvent.click(screen.getByTitle('Decrease width'));
+    expect(onGridSizeChange).toHaveBeenCalledWith(3, 3);
+    fireEvent.click(screen.getByTitle('Increase height'));
+    expect(onGridSizeChange).toHaveBeenCalledWith(4, 4);
+  });
 });
