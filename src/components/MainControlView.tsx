@@ -5,7 +5,7 @@ import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { FiActivity, FiDisc, FiSettings, FiX } from 'react-icons/fi';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
-import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
+import { describeConnectionTarget, type ConnectionParams, type ConnectionStatus } from '../runtime/connections';
 import {
   getConnectionStorageKey,
   readConnectionStorage,
@@ -23,6 +23,7 @@ import './MainControlView.css';
 // Import placeholder components (we'll create these next)
 import CameraView from './CameraView'; // Import the new CameraView
 import FirstPanelFlight, { type FlightRect } from './FirstPanelFlight';
+import WorkspaceOpening, { WORKSPACE_OPENING_EXIT_MS, type WorkspaceOpeningStage } from './WorkspaceOpening';
 import VisualizationPanel from './VisualizationPanel'; // Import the new VisualizationPanel
 import CustomGamepadWrapper from './gamepads/custom/CustomGamepadWrapper'; // Import the custom gamepad wrapper
 import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
@@ -1050,6 +1051,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const persistentBtMonitor = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentBtSessionId = useRef<string | undefined>(undefined);
   const { ros, isConnected, connectionStatus, connectionGeneration, connect, disconnect } = useRos(); // Use the hook
+  // Until the robot first answers, the workspace opens behind a screen that shows the link being made
+  // (or failing, with what to do). Later drops only change the status in the top bar.
+  const [isOpening, setIsOpening] = useState(() => !connectionParams.offline && !isConnected);
+  // Before the first attempt has even started there is nothing to have failed yet.
+  const robotPending = connectionStatus === 'connecting' || (connectionStatus === 'disconnected' && connectionGeneration === 0);
+  const openingStage: WorkspaceOpeningStage = isConnected ? 'connected' : robotPending ? 'connecting' : 'failed';
+  const connectionLabel = useMemo(() => describeConnectionTarget(connectionParams).label, [connectionParams]);
+  useEffect(() => {
+    if (!isOpening || !isConnected) return;
+    const timer = window.setTimeout(() => setIsOpening(false), WORKSPACE_OPENING_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [isOpening, isConnected]);
   const [replaySession] = useState(() => new ReplaySession());
   const replaySource = useSyncExternalStore(replaySession.subscribeSource, replaySession.getSource);
   const visualizationRos = replaySource.ros ?? ros;
@@ -1624,6 +1637,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleReconnect = () => {
     if (!connectionParams.offline) connect(connectionParams);
   };
+
+  // What a panel that needs the robot says while it has none.
+  const waitingForRobot = robotPending ? 'Connecting to ROS...' : 'Not connected to the robot';
 
   const connectionStatusLabel = connectionParams.offline ? 'Local replay · no robot connection' : {
     connected: 'Status: Connected',
@@ -3043,7 +3059,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             </div>
           ))
         ) : (
-          <div>Connecting to ROS...</div>
+          <div>{waitingForRobot}</div>
         )}
       </div>
     </div>
@@ -3067,14 +3083,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
               ? availableCameraTopics.length > 0
                 ? 'Select a camera topic'
                 : 'No camera topics found'
-              : 'Connecting to ROS...'}
+              : waitingForRobot}
           </div>
         )
       ) : viewMode === '3d' ? (
         isConnected && ros ? (
           <VisualizationPanel ros={ros} key="visualization-panel" />
         ) : (
-          <div className="placeholder">Connecting to ROS...</div>
+          <div className="placeholder">{waitingForRobot}</div>
         )
       ) : null}
       {tfEverMounted && (
@@ -3386,7 +3402,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
     if ((!isConnected || !ros) && !(['3d', 'tfTree', 'camera'].includes(panel.type) && replaySource.ros)) {
       return <div className="placeholder">
-        {!connectionParams.offline ? 'Connecting to ROS...'
+        {!connectionParams.offline ? waitingForRobot
           : ['3d', 'tfTree', 'camera'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
             : 'This panel needs a live robot connection.'}
       </div>;
@@ -4291,6 +4307,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
       {/* Main Content Area - ensure it starts below the top bar */}
       <div className={`main-content-area ${isDesktopWorkspace ? 'workspace-mode' : 'stack-mode'}`}>
+        {isOpening && (
+          <WorkspaceOpening
+            stage={openingStage}
+            target={connectionLabel}
+            url={runtimeEndpoints.rosbridgeUrl}
+            attempt={connectionGeneration}
+            onRetry={handleReconnect}
+            onContinue={() => setIsOpening(false)}
+            onCancel={handleInternalDisconnect}
+          />
+        )}
         {isDesktopWorkspace ? (
           <div
             className={`desktop-workspace ${isWorkspaceDragActive ? 'is-drop-active' : ''} ${isWorkspaceResizing ? 'is-resizing' : ''}`}
