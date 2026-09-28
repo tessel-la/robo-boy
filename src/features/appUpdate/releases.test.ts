@@ -42,10 +42,14 @@ describe('versions and installers', () => {
       { name: 'Robo-Boy-linux-amd64-electron.deb', url: 'u', size: 1, sha256: DIGEST },
       { name: 'Robo-Boy-linux-arm64-electron.deb', url: 'u', size: 1, sha256: '' },
       { name: 'Robo-Boy-macos-universal.dmg', url: 'u', size: 1, sha256: DIGEST },
+      { name: 'Robo-Boy-macos-arm64-electron.dmg', url: 'u', size: 1, sha256: DIGEST },
     ] } as AppRelease;
     expect(installerFor(release, { shell: 'electron', os: 'linux', arch: 'x64', package: 'deb' })?.name).toBe('Robo-Boy-linux-amd64-electron.deb');
     expect(installerFor(release, { shell: 'electron', os: 'linux', arch: 'arm64', package: 'deb' })).toBeUndefined();
     expect(installerFor(release, { shell: 'tauri', os: 'macos', arch: 'arm64', package: 'dmg' })?.name).toBe('Robo-Boy-macos-universal.dmg');
+    // The Electron Mac app is Apple Silicon only; an Intel Mac running it is sent to the release page.
+    expect(installerFor(release, { shell: 'electron', os: 'macos', arch: 'arm64', package: 'dmg' })?.name).toBe('Robo-Boy-macos-arm64-electron.dmg');
+    expect(installerFor(release, { shell: 'electron', os: 'macos', arch: 'x64', package: 'dmg' })).toBeUndefined();
     expect(installerFor(release, { shell: 'tauri', os: 'windows', arch: 'x64', package: 'nsis' })).toBeUndefined();
   });
 });

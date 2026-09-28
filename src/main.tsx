@@ -9,7 +9,7 @@ const roboBoyWindow = window as typeof window & {
   __ROBOBOY_APP_STARTED?: boolean;
   __TAURI__?: unknown;
   __TAURI_INTERNALS__?: unknown;
-  roboBoyDesktop?: unknown;
+  roboBoyDesktop?: { nativeWindowControls?: boolean };
 };
 
 const isTauriShell =
@@ -21,6 +21,12 @@ if (isTauriShell || isElectronShell) {
   // marker for the many that only care that this is a packaged window rather than a browser tab.
   document.documentElement.setAttribute('data-runtime', isElectronShell ? 'electron' : 'tauri');
   document.documentElement.setAttribute('data-desktop', '');
+
+  // On a Mac the Electron shell keeps the system's window buttons, so the title bar makes room for
+  // them rather than drawing its own.
+  if (roboBoyWindow.roboBoyDesktop?.nativeWindowControls) {
+    document.documentElement.setAttribute('data-native-window-controls', '');
+  }
 
   // A desktop window is undecorated and leaves its chrome to the app; a phone draws its own bars
   // around the app instead. The stylesheet needs that apart before React mounts, so that the app

@@ -2,11 +2,11 @@ import { app, ipcMain, shell, type WebContents } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Updates for the packaged Linux shell.
+ * Updates for the packaged shell: the Linux .deb and the Apple Silicon Mac app.
  *
  * Everything that has to be trusted happens here rather than in the page. The page runs on
  * Chromium's network stack, which this shell starts with certificate errors ignored (robots serve
@@ -18,8 +18,8 @@ import path from 'node:path';
 
 const REPOSITORY = 'tessel-la/robo-boy';
 const TAG = /^robo-boy-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-/** What a Linux Electron install can update itself from: its own package, by architecture. */
-const INSTALLERS = new Set(['Robo-Boy-linux-amd64-electron.deb', 'Robo-Boy-linux-arm64-electron.deb']);
+/** What an Electron install can update itself from: its own package, by system and architecture. */
+const INSTALLERS = new Set(['Robo-Boy-linux-amd64-electron.deb', 'Robo-Boy-linux-arm64-electron.deb', 'Robo-Boy-macos-arm64-electron.dmg']);
 const DOWNLOAD_HOSTS = new Set(['github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com']);
 const MAX_SIZE = 1024 * 1024 * 1024;
 const HEADERS = { 'User-Agent': 'Robo-Boy-updater', Accept: 'application/vnd.github+json' };
@@ -28,14 +28,26 @@ let controller: AbortController | undefined;
 /** The installer this module downloaded and checked; the only file it will install. */
 let verified: string | undefined;
 
-const run = (command: string, args: string[]) =>
-  new Promise<boolean>(resolve => execFile(command, args, { timeout: 5000 }, error => resolve(!error)));
+const run = (command: string, args: string[], timeout = 5000) =>
+  new Promise<boolean>(resolve => execFile(command, args, { timeout }, error => resolve(!error)));
 
-/** Only a copy installed from its .deb can replace itself; a development or unpacked build cannot. */
+/** The .app bundle this copy runs from, or undefined when it is not running from one. */
+const macBundle = () => {
+  const end = process.execPath.indexOf('.app/Contents/MacOS/');
+  return end < 0 ? undefined : process.execPath.slice(0, end + '.app'.length);
+};
+
+/**
+ * Only a packaged copy can replace itself: on Linux one installed from its .deb, on a Mac one running
+ * from its app bundle. A development or unpacked build cannot.
+ */
 const target = async () => {
-  if (!app.isPackaged || process.platform !== 'linux') return null;
+  if (!app.isPackaged) return null;
+  const arch = process.arch === 'arm64' ? ('arm64' as const) : ('x64' as const);
+  if (process.platform === 'darwin') return macBundle() ? { shell: 'electron' as const, os: 'macos' as const, arch, package: 'dmg' as const } : null;
+  if (process.platform !== 'linux') return null;
   if (!(await run('dpkg-query', ['-S', process.execPath]))) return null;
-  return { shell: 'electron' as const, os: 'linux' as const, arch: process.arch === 'arm64' ? ('arm64' as const) : ('x64' as const), package: 'deb' as const };
+  return { shell: 'electron' as const, os: 'linux' as const, arch, package: 'deb' as const };
 };
 
 interface Asset { url: string; size: number; sha256: string }
@@ -96,10 +108,54 @@ async function download(sender: WebContents, tag: string, name: string) {
   verified = file;
 }
 
-/** Installs the checked package through the system's own password prompt, then restarts into it. */
+/**
+ * Replaces this app's bundle with the one in the checked disk image, keeping the old bundle until the
+ * new one is in place so a failure puts everything back, then opens the new one. As the Tauri app does.
+ */
+async function installMacBundle(file: string) {
+  const bundle = macBundle();
+  if (!bundle) throw new Error('Robo-Boy is not running from an app bundle. Open the installer instead.');
+  const mount = path.join(path.dirname(file), 'mount');
+  await mkdir(mount, { recursive: true });
+  if (!(await run('hdiutil', ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount, file], 60_000))) {
+    throw new Error('The disk image could not be opened. Open the installer instead.');
+  }
+  try {
+    const source = (await readdir(mount)).find(entry => entry.endsWith('.app'));
+    if (!source) throw new Error('The disk image holds no app.');
+    const staged = `${bundle}-update`;
+    const previous = `${bundle}-previous`;
+    await rm(staged, { recursive: true, force: true });
+    await rm(previous, { recursive: true, force: true });
+    if (!(await run('ditto', [path.join(mount, source), staged], 300_000))) {
+      await rm(staged, { recursive: true, force: true });
+      throw new Error('The new version could not be copied next to this one. Open the installer instead.');
+    }
+    try {
+      await rename(bundle, previous);
+    } catch {
+      await rm(staged, { recursive: true, force: true });
+      throw new Error('Robo-Boy could not replace itself here. Open the installer instead.');
+    }
+    try {
+      await rename(staged, bundle);
+    } catch {
+      await rename(previous, bundle).catch(() => undefined);
+      throw new Error('Robo-Boy could not replace itself here. Open the installer instead.');
+    }
+    await rm(previous, { recursive: true, force: true });
+  } finally {
+    await run('hdiutil', ['detach', '-quiet', mount], 30_000);
+  }
+  spawn('open', ['-n', bundle], { detached: true, stdio: 'ignore' }).unref();
+  app.exit(0);
+}
+
+/** Installs the checked package (through the system's own password prompt on Linux), then restarts into it. */
 async function install() {
   if (!verified) throw new Error('There is no checked installer to install.');
   const file = verified;
+  if (process.platform === 'darwin') return installMacBundle(file);
   const code = await new Promise<number | 'missing'>(resolve => {
     const child = spawn('pkexec', ['/usr/bin/apt-get', 'install', '-y', file], { stdio: 'ignore' });
     child.on('error', () => resolve('missing'));
