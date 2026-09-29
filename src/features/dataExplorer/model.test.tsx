@@ -224,3 +224,119 @@ describe('list filters', () => {
     expect(matchesFilters(resource('node', '/robot'), config, true, false)).toBe(true);
   });
 });
+
+describe('companion payload decoding', () => {
+  it('keeps valid counts, endpoints, QoS issues, schemas and constants, and drops malformed parts', () => {
+    const deep = (level: number): unknown =>
+      level === 0 ? [] : [{ name: `level${level}`, type: 'pkg/Nested', fields: deep(level - 1) }];
+    const [scan, ...rest] = decodeResources([
+      {
+        kind: 'topic',
+        name: '/scan',
+        types: ['sensor_msgs/msg/LaserScan'],
+        providers: ['/lidar'],
+        consumers: ['/nav'],
+        publishers: 1,
+        subscribers: -1,
+        instances: Number.NaN,
+        countKind: 'endpoints',
+        error: 'Type support missing',
+        endpoints: [
+          { id: 'e1', node: '/lidar', role: 'publisher', qos: { reliability: 'reliable' } },
+          { id: 'e2', node: '/nav', role: 'subscriber' },
+          null,
+        ],
+        compatibility: [
+          { publisher: '/lidar', subscriber: '/nav', level: 'error', reason: 'Reliability' },
+          { level: 'x' },
+        ],
+        schemas: {
+          Message: [
+            { name: 'ranges', type: 'float32[]' },
+            { name: 'header', type: 'std_msgs/Header', fields: deep(10) },
+            { name: 'broken', type: 3 },
+            { name: 'odd', type: 'pkg/Odd', unresolved: 'Unknown package' },
+          ],
+        },
+        constants: {
+          Message: [
+            { name: 'MAX', value: 5 },
+            { name: 'NAME', value: 'x' },
+            { name: 'BAD', value: { nested: true } },
+          ],
+          Other: 'not a list',
+        },
+      },
+      { kind: 'widget', name: '/nope' },
+      { kind: 'topic', name: 'relative' },
+      { kind: 'node', name: '/robot' },
+    ]);
+    expect(scan).toMatchObject({ publishers: 1, countKind: 'endpoints', error: 'Type support missing' });
+    expect(scan.subscribers).toBeUndefined();
+    expect(scan.instances).toBeUndefined();
+    expect(scan.endpoints?.map(endpoint => endpoint.id)).toEqual(['e1']);
+    expect(scan.compatibility).toHaveLength(1);
+    const message = scan.schemas!.Message;
+    expect(message.map(field => field.name)).toEqual(['ranges', 'header', 'odd']);
+    expect(message[2].unresolved).toBe('Unknown package');
+    // Nesting is cut at a fixed depth whatever the payload says.
+    let depth = 0;
+    for (let fields = message[1].fields; fields?.length; fields = fields[0].fields) depth += 1;
+    expect(depth).toBeLessThanOrEqual(7);
+    expect(scan.constants).toEqual({
+      Message: [
+        { name: 'MAX', value: 5 },
+        { name: 'NAME', value: 'x' },
+      ],
+      Other: [],
+    });
+    expect(rest.map(resource => resource.id)).toEqual(['node:/robot']);
+    expect(decodeResources('not a list')).toEqual([]);
+  });
+
+  it('bounds the total number of schema fields', () => {
+    const fields = Array.from({ length: 1000 }, (_, index) => ({ name: `f${index}`, type: 'int32' }));
+    const [resource] = decodeResources([{ kind: 'topic', name: '/wide', schemas: { Message: fields } }]);
+    expect(resource.schemas!.Message).toHaveLength(800);
+  });
+
+  it('shortens objects with very many fields', () => {
+    const wide = Object.fromEntries(Array.from({ length: 150 }, (_, index) => [`k${index}`, index]));
+    const result = boundedPreview(wide);
+    expect(result.truncated).toBe(true);
+    expect((result.value as Record<string, unknown>)['…']).toBe('More fields omitted');
+  });
+});
+
+describe('topic rule checks', () => {
+  const snapshot = (resource: Partial<Resource>, metric?: Record<string, unknown>) =>
+    ({
+      resources: [{ id: 'topic:/t', kind: 'topic', name: '/t', types: [], providers: [], consumers: [], ...resource }],
+      metrics: metric
+        ? { '/t': { count: 1, window: 10, source: 'host', rate: null, bytesPerSec: null, age: null, ...metric } }
+        : {},
+    }) as unknown as InspectionSnapshot;
+
+  it('checks required publishers and subscribers even without measurements', () => {
+    expect(
+      ruleIssues({ topic: '/t', minPublishers: 2, minSubscribers: 1 }, snapshot({ publishers: 1, subscribers: 0 }))
+    ).toEqual(['Publishers 1; expected at least 2', 'Subscribers 0; expected at least 1']);
+  });
+
+  it('reports silence since the last message or since watching began', () => {
+    expect(ruleIssues({ topic: '/t', silenceSec: 2 }, snapshot({}, { age: 3, rate: 0 }))).toEqual([
+      'No message for 3 s',
+    ]);
+    expect(ruleIssues({ topic: '/t', silenceSec: 2 }, snapshot({}, { count: 0, observed: 12 }))).toEqual([
+      'No message since watching began (12 s)',
+    ]);
+  });
+
+  it('checks the maximum rate unless the source cannot measure that high', () => {
+    expect(ruleIssues({ topic: '/t', maxHz: 5 }, snapshot({}, { rate: 9, age: 0 }))).toEqual([
+      'Rate 9 Hz; expected ≤ 5',
+    ]);
+    expect(ruleIssues({ topic: '/t', maxHz: 5 }, snapshot({}, { rate: 9.5, age: 0, ceiling: 10 }))).toEqual([]);
+    expect(ruleIssues({ topic: '/t', minHz: 50 }, snapshot({}, { rate: 9, age: 0, warming: true }))).toEqual([]);
+  });
+});

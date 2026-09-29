@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
+import { getVisualizationStateForKey, saveVisualizationStateForKey } from '../utils/visualizationState';
 
 const connect = vi.fn();
 const disconnect = vi.fn();
@@ -76,6 +77,54 @@ vi.mock('../panels/ExternalPanelHost', () => ({
 
 vi.mock('../features/timeSeries/TimeSeriesPanel', () => ({
   default: (props: any) => { nativeTimeSeriesProps(props); return <div data-testid="native-time-series" />; },
+}));
+
+const recordReplayProps = vi.fn();
+vi.mock('../features/recordReplay/RecordReplayPanel', () => ({
+  default: (props: any) => {
+    recordReplayProps(props);
+    return <div data-testid="record-replay-panel" />;
+  },
+}));
+
+// The Explorer's own behaviour is tested with the panel; here it only asks the workspace to open panels.
+vi.mock('../features/dataExplorer/DataExplorerPanel', () => ({
+  default: ({ onOpen }: any) => (
+    <div data-testid="data-explorer">
+      <button
+        onClick={() =>
+          onOpen({
+            panel: '3d',
+            topic: '/scan',
+            messageType: 'sensor_msgs/msg/LaserScan',
+            visualizationType: 'laserscan',
+          })
+        }
+      >
+        Explorer: show /scan in 3D
+      </button>
+      <button
+        onClick={() =>
+          onOpen({ panel: 'timeSeries', topic: '/speed', messageType: 'std_msgs/msg/Float64', fieldPath: 'data' })
+        }
+      >
+        Explorer: plot /speed
+      </button>
+      <button
+        onClick={() => onOpen({ panel: 'recordReplay', topic: '/scan', topics: ['/scan', '/speed'], messageType: '' })}
+      >
+        Explorer: record
+      </button>
+      <button
+        onClick={() => onOpen({ panel: 'camera', topic: '/camera/ros2_image', messageType: 'sensor_msgs/msg/Image' })}
+      >
+        Explorer: camera
+      </button>
+      <button onClick={() => onOpen({ panel: 'tfTree', topic: '/tf', messageType: 'tf2_msgs/msg/TFMessage' })}>
+        Explorer: TF tree
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('../panels/PanelManagerDialog', () => ({
@@ -1806,5 +1855,112 @@ describe('MainControlView desktop workspace', () => {
     await waitFor(() => {
       expect(screen.getByText('No camera topics found')).toBeInTheDocument();
     });
+  });
+});
+
+describe('MainControlView opening panels from the Data Explorer', () => {
+  const layers = () => {
+    const key = Object.keys(localStorage).find(name => name.startsWith('roboboy_3d_visualization_state_viz'));
+    return key ? getVisualizationStateForKey(key).visualizations.map(item => item.topic) : [];
+  };
+  const seed = (panels: ReturnType<typeof makePanel>[]) => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify(panels));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(panels.map(panel => panel.id)));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    rosConnection.isConnected = true;
+    rosConnection.connectionStatus = 'connected';
+    rosConnection.connectionGeneration = undefined;
+    loadGamepadLibrary.mockReturnValue([]);
+    useInstalledPanels.mockReturnValue({ panels: [], issues: [], isLoading: false });
+    getTopics.mockImplementation((success: any) =>
+      success({ topics: ['/camera/ros2_image'], types: ['sensor_msgs/msg/Image'] })
+    );
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query.includes('1024px'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  });
+
+  it('adds to an open 3D panel instead of replacing its layers', async () => {
+    seed([makePanel('explorer', 'dataExplorer', 'Data Explorer'), makePanel('viz', '3d', '3D')]);
+    renderMainControlView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Explorer: show /scan in 3D' }));
+    await waitFor(() => expect(layers()).toEqual(['/scan']));
+    const key = Object.keys(localStorage).find(name => name.startsWith('roboboy_3d_visualization_state_viz'))!;
+    const current = getVisualizationStateForKey(key);
+    saveVisualizationStateForKey(key, {
+      ...current,
+      visualizations: [...current.visualizations, { id: 'kept', type: 'pointcloud', topic: '/cloud' }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: show /scan in 3D' }));
+    await waitFor(() => expect(layers()).toEqual(['/scan', '/cloud']));
+    expect(screen.getAllByTestId('visualization-panel')).toHaveLength(1);
+  });
+
+  it('opens new Time Series, recording, camera and TF panels, then reuses them', async () => {
+    seed([makePanel('explorer', 'dataExplorer', 'Data Explorer')]);
+    renderMainControlView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Explorer: plot /speed' }));
+    await screen.findByTestId('native-time-series');
+    expect(nativeTimeSeriesProps.mock.lastCall?.[0].state.config.series).toEqual([
+      expect.objectContaining({ topic: '/speed', fieldPath: 'data' }),
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: plot /speed' }));
+    expect(screen.getAllByTestId('native-time-series')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: record' }));
+    await screen.findByTestId('record-replay-panel');
+    expect(recordReplayProps.mock.lastCall?.[0].state).toMatchObject({
+      initialTab: 'record',
+      options: { allTopics: false, topics: ['/scan', '/speed'] },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: TF tree' }));
+    await screen.findByTestId('tf-tree-panel');
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: TF tree' }));
+    expect(screen.getAllByTestId('tf-tree-panel')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer: camera' }));
+    expect(await screen.findByLabelText('Camera topic')).toHaveValue('/camera/ros2_image');
+  });
+
+  it('uses the other tile when a stacked workspace is full', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    seed([makePanel('explorer', 'dataExplorer', 'Data Explorer'), makePanel('panel-pad', 'pad', 'Pad controls')]);
+    renderMainControlView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Explorer: plot /speed' }));
+    await screen.findByTestId('native-time-series');
+    expect(screen.queryByLabelText('Pad controls')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')).toEqual([
+        expect.objectContaining({ id: 'explorer', type: 'dataExplorer' }),
+        expect.objectContaining({ id: 'panel-pad', type: 'timeSeries' }),
+      ])
+    );
   });
 });

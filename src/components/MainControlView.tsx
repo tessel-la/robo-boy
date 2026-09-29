@@ -1,8 +1,6 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
-import type { RoboBoyJsonObject } from '../panels/types';
-import { sanitizeConfig as sanitizeTimeSeriesConfig } from '../features/timeSeries/config';
-import { defaultRecordOptions } from '../features/recordReplay/types';
+import { recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
@@ -3341,60 +3339,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const kept = previous?.type === target.type ? previous : undefined;
     // Remount so the panel reads its new settings; an open TF tree has nothing new to read.
     if (!(kept && request.panel === 'tfTree')) target.openedAt = Date.now();
-    if (request.panel === 'timeSeries') {
-      const current = sanitizeTimeSeriesConfig(kept?.panelState?.values?.config);
-      const fieldPath = request.fieldPath ?? '';
-      const present = current.series.some(series => series.topic === request.topic && series.fieldPath === fieldPath);
-      target.panelState = {
-        schemaVersion: 1,
-        panelId: target.type,
-        values: {
-          config: sanitizeTimeSeriesConfig({
-            ...current,
-            series: present
-              ? current.series
-              : [...current.series, { topic: request.topic, messageType: request.messageType, fieldPath }],
-          }) as unknown as RoboBoyJsonObject,
-        },
-      };
-    }
-    if (request.panel === 'recordReplay') {
-      const options = kept?.panelState?.values?.options;
-      const current = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
-      const chosen =
-        Array.isArray(current.topics) && current.allTopics === false
-          ? current.topics.filter((topic): topic is string => typeof topic === 'string')
-          : [];
-      target.panelState = {
-        schemaVersion: 1,
-        panelId: target.type,
-        values: {
-          version: 1,
-          initialTab: 'record',
-          options: {
-            ...defaultRecordOptions(),
-            ...current,
-            allTopics: false,
-            topics: [...new Set([...chosen, ...(request.topics ?? [request.topic])])],
-          } as unknown as RoboBoyJsonObject,
-        },
-      };
-    }
-    if (request.panel === '3d' && request.visualizationType) {
+    if (request.panel === 'timeSeries')
+      target.panelState = { schemaVersion: 1, panelId: target.type, values: timeSeriesValuesFor(kept?.panelState?.values, request) };
+    if (request.panel === 'recordReplay')
+      target.panelState = { schemaVersion: 1, panelId: target.type, values: recordValuesFor(kept?.panelState?.values, request) };
+    if (request.panel === '3d') {
       const key = visualizationStorageKey(target.id, storageScope);
-      const current = kept ? getVisualizationStateForKey(key) : { ...DEFAULT_VISUALIZATION_STATE };
-      const present = current.visualizations.some(
-        item => item.type === request.visualizationType && item.topic === request.topic
-      );
-      saveVisualizationStateForKey(key, {
-        ...current,
-        visualizations: present
-          ? current.visualizations
-          : [
-              ...current.visualizations,
-              { id: generateUniqueId(), type: request.visualizationType, topic: request.topic },
-            ],
-      });
+      saveVisualizationStateForKey(key, visualizationStateFor(
+        kept ? getVisualizationStateForKey(key) : { ...DEFAULT_VISUALIZATION_STATE }, request, generateUniqueId));
     }
   };
 
@@ -3423,18 +3375,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: panel.type, values } } : candidate);
         setWorkspacePanels(update); setMobileWorkspacePanels(update);
       }}
-      onOpen={request => {
-        if (mobileWorkspacePanels.some(candidate => candidate.id === panel.id)) {
-          const target = mobileWorkspacePanels.find(candidate => candidate.id !== panel.id);
-          if (target) {
-            const replacement = explorerReplacement(target, request);
-            handleChangeMobileWorkspacePanel(target.id, request.panel);
-            setMobileWorkspacePanels(previous => previous.map(candidate => candidate.id === target.id ? replacement : candidate));
-            // The other slot is hidden unless split view is on; show both so the opened panel is visible.
-            setIsMobileSplitView(true);
-          }
-        } else handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id });
-      }} />;
+      onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })} />;
 
     if (panel.type === 'recordReplay') {
       return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession} ros={ros} connected={isConnected}

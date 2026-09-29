@@ -125,7 +125,7 @@ These add to what is already there instead of replacing it:
   is not added twice.
 - Otherwise a new panel opens. A camera always gets its own tile while there is room, so the view already on screen
   keeps its stream.
-- When the workspace is full, or on a phone, the other window is used. On a phone split view turns on.
+- When the workspace is full (a phone holds two stacked tiles), the other tile is used.
 
 Pose topics have no 3D shortcut for now, because their 3D arrow does not show the pose correctly yet.
 
