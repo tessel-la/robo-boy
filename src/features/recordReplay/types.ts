@@ -3,6 +3,8 @@ export interface BagTopic {
   type: string;
   count: number;
   error?: string;
+  /** Message definition text stored with the channel, bounded. */
+  definition?: string;
 }
 export interface BagInfo {
   name: string;

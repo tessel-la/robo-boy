@@ -73,6 +73,16 @@ export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
     icon: 'recordReplay',
     source: 'built-in',
   },
+  {
+    id: 'dataExplorer',
+    name: 'Data Explorer',
+    menuLabel: 'Data Explorer',
+    description: 'Inspect ROS topics, services, actions, nodes, traffic, and health.',
+    version: 'built-in',
+    capabilities: ['ros', 'storage'],
+    icon: 'dataExplorer',
+    source: 'built-in',
+  },
 ];
 
 const builtInPanelIds = new Set<string>(BUILT_IN_PANELS.map(panel => panel.id));

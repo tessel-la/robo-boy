@@ -40,7 +40,7 @@ interface Props {
 export default function RecordReplayPanel({ session, ros, connected, isActive, state, onStateChange }: Props) {
   const replay = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const recorder = useRecorder(ros, connected && isActive);
-  const [tab, setTab] = useState<'replay' | 'record'>('replay');
+  const [tab, setTab] = useState<'replay' | 'record'>(state?.initialTab === 'record' ? 'record' : 'replay');
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const input = useRef<HTMLInputElement>(null);

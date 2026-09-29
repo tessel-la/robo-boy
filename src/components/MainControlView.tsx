@@ -1,9 +1,13 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
+import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
+import type { RoboBoyJsonObject } from '../panels/types';
+import { sanitizeConfig as sanitizeTimeSeriesConfig } from '../features/timeSeries/config';
+import { defaultRecordOptions } from '../features/recordReplay/types';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
-import { FiActivity, FiDisc, FiSettings, FiX } from 'react-icons/fi';
+import { FiActivity, FiDisc, FiSearch, FiSettings, FiX } from 'react-icons/fi';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import { describeConnectionTarget, type ConnectionParams, type ConnectionStatus } from '../runtime/connections';
 import {
@@ -16,6 +20,7 @@ import { useRos } from '../hooks/useRos'; // Import the hook
 import {
   getVisualizationStateForKey,
   saveVisualizationStateForKey,
+  DEFAULT_VISUALIZATION_STATE,
   type VisualizationPanelState,
 } from '../utils/visualizationState';
 import { useResizablePanels } from '../hooks/useResizablePanels'; // Import the resizable panels hook
@@ -366,6 +371,7 @@ const getPanelCatalogIcon = (panel: PanelCatalogEntry) => {
   if (panel.id === 'tfTree') return icons.tf;
   if (panel.id === 'timeSeries') return <FiActivity />;
   if (panel.id === 'recordReplay') return <FiDisc />;
+  if (panel.id === 'dataExplorer') return <FiSearch />;
   return icons.grip;
 };
 
@@ -408,6 +414,9 @@ interface WorkspacePanel {
   layoutId?: string;
   panelState?: StoredPanelState;
   approvedRosTopics?: RoboBoyRosTopic[];
+  /** Set when the Data Explorer configures this tile, so a tile that already shows the same panel
+   * type remounts and reads its new configuration instead of keeping the old one. */
+  openedAt?: number;
 }
 
 type WorkspaceTile =
@@ -1860,7 +1869,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     type: WorkspacePanelType,
     insertIndex?: number,
     snapTemplate?: WorkspaceSnapTemplate,
-    options?: { cameraTopic?: string; layoutId?: string; title?: string }
+    options?: { cameraTopic?: string; layoutId?: string; title?: string; explorer?: ExplorerOpenRequest; originId?: string }
   ) => {
     setIsWorkspaceOpen(true);
     if (workspaceReplacementPanelId && !options) {
@@ -1871,7 +1880,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       setIsWorkspaceTemplateMenuOpen(false);
       return;
     }
-    if (isWorkspaceStacked && workspacePanels.length >= 2) {
+    const isWorkspaceFull = isWorkspaceStacked && workspacePanels.length >= 2;
+    // The Explorer reuses an open panel of the requested kind, adding to its settings. A camera
+    // gets its own new tile while there is room, so the view already on screen is not switched.
+    const explorerExisting = options?.explorer && explorerTargetIn(workspacePanels, type, options.originId);
+    if (options?.explorer && (isWorkspaceFull || (explorerExisting && type !== 'camera'))) {
+      const target = explorerExisting || workspacePanels.find(panel => panel.id !== options.originId);
+      if (target) {
+        const replacement = explorerReplacement(target, options.explorer);
+        setWorkspacePanels(previous => previous.map(panel => panel.id === target.id ? replacement : panel));
+      }
+      setIsWorkspaceAddMenuOpen(false);
+      setIsWorkspaceTemplateMenuOpen(false);
+      return;
+    }
+    if (isWorkspaceFull) {
       setIsWorkspaceAddMenuOpen(false);
       setIsWorkspaceTemplateMenuOpen(false);
       return;
@@ -1887,6 +1910,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         }
       );
       const nextPanels = [...prev];
+      if (options?.explorer) configureExplorerTarget(newPanel, options.explorer);
       nextPanels.push(newPanel);
       setWorkspaceTileOrder(prevOrder => {
         const nextOrder = normalizeWorkspaceTileOrder(
@@ -2046,7 +2070,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
     try {
       const draft = JSON.parse(payload) as WorkspaceDraft;
-      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries', 'recordReplay'].includes(draft.type)) return;
+      if (!['camera', '3d', 'pad', 'tfTree', 'behaviorTree', 'timeSeries', 'recordReplay', 'dataExplorer'].includes(draft.type)) return;
 
       addAfterFirstPanelFlight(() => {
         const snapTemplate = snapTarget ? getWorkspaceSnapTemplate(snapTarget.templateId) : null;
@@ -3308,11 +3332,112 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     );
   };
 
+  /**
+   * Points a panel at what the Data Explorer asked to show. When `previous` already is that kind of
+   * panel, the request is added to its settings (a 3D layer, a plotted field, a recorded topic), so
+   * opening a topic never wipes what the user set up there.
+   */
+  const configureExplorerTarget = (target: WorkspacePanel, request: ExplorerOpenRequest, previous?: WorkspacePanel) => {
+    const kept = previous?.type === target.type ? previous : undefined;
+    // Remount so the panel reads its new settings; an open TF tree has nothing new to read.
+    if (!(kept && request.panel === 'tfTree')) target.openedAt = Date.now();
+    if (request.panel === 'timeSeries') {
+      const current = sanitizeTimeSeriesConfig(kept?.panelState?.values?.config);
+      const fieldPath = request.fieldPath ?? '';
+      const present = current.series.some(series => series.topic === request.topic && series.fieldPath === fieldPath);
+      target.panelState = {
+        schemaVersion: 1,
+        panelId: target.type,
+        values: {
+          config: sanitizeTimeSeriesConfig({
+            ...current,
+            series: present
+              ? current.series
+              : [...current.series, { topic: request.topic, messageType: request.messageType, fieldPath }],
+          }) as unknown as RoboBoyJsonObject,
+        },
+      };
+    }
+    if (request.panel === 'recordReplay') {
+      const options = kept?.panelState?.values?.options;
+      const current = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+      const chosen =
+        Array.isArray(current.topics) && current.allTopics === false
+          ? current.topics.filter((topic): topic is string => typeof topic === 'string')
+          : [];
+      target.panelState = {
+        schemaVersion: 1,
+        panelId: target.type,
+        values: {
+          version: 1,
+          initialTab: 'record',
+          options: {
+            ...defaultRecordOptions(),
+            ...current,
+            allTopics: false,
+            topics: [...new Set([...chosen, ...(request.topics ?? [request.topic])])],
+          } as unknown as RoboBoyJsonObject,
+        },
+      };
+    }
+    if (request.panel === '3d' && request.visualizationType) {
+      const key = visualizationStorageKey(target.id, storageScope);
+      const current = kept ? getVisualizationStateForKey(key) : { ...DEFAULT_VISUALIZATION_STATE };
+      const present = current.visualizations.some(
+        item => item.type === request.visualizationType && item.topic === request.topic
+      );
+      saveVisualizationStateForKey(key, {
+        ...current,
+        visualizations: present
+          ? current.visualizations
+          : [
+              ...current.visualizations,
+              { id: generateUniqueId(), type: request.visualizationType, topic: request.topic },
+            ],
+      });
+    }
+  };
+
+  /** The panel an Explorer request goes to: an open panel of that kind other than the Explorer itself. */
+  const explorerTargetIn = (panels: WorkspacePanel[], type: WorkspacePanelType, originId?: string) =>
+    panels.find(panel => panel.id !== originId && panel.type === type);
+
+  /** Updates an open panel in place, or turns `target` into the requested kind, keeping its tile. */
+  const explorerReplacement = (target: WorkspacePanel, request: ExplorerOpenRequest) => {
+    const replacement =
+      target.type === request.panel
+        ? { ...target, cameraTopic: request.panel === 'camera' ? request.topic : target.cameraTopic }
+        : { ...createWorkspacePanel({ type: request.panel }, { cameraTopic: request.topic }), id: target.id };
+    configureExplorerTarget(replacement, request, target);
+    return replacement;
+  };
+
   const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
     const catalogEntry = panelCatalogById.get(panel.type);
 
+    if (panel.type === 'dataExplorer') return <DataExplorerPanel ros={ros} connected={isConnected}
+      generation={connectionGeneration} isActive={isPanelActive && isActive}
+      replaySession={replaySession} replayGeneration={replaySource.generation} state={panel.panelState?.values}
+      onStateChange={values => {
+        const update = (previous: WorkspacePanel[]) => previous.map(candidate => candidate.id === panel.id && candidate.type === panel.type
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: panel.type, values } } : candidate);
+        setWorkspacePanels(update); setMobileWorkspacePanels(update);
+      }}
+      onOpen={request => {
+        if (mobileWorkspacePanels.some(candidate => candidate.id === panel.id)) {
+          const target = mobileWorkspacePanels.find(candidate => candidate.id !== panel.id);
+          if (target) {
+            const replacement = explorerReplacement(target, request);
+            handleChangeMobileWorkspacePanel(target.id, request.panel);
+            setMobileWorkspacePanels(previous => previous.map(candidate => candidate.id === target.id ? replacement : candidate));
+            // The other slot is hidden unless split view is on; show both so the opened panel is visible.
+            setIsMobileSplitView(true);
+          }
+        } else handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id });
+      }} />;
+
     if (panel.type === 'recordReplay') {
-      return <RecordReplayPanel session={replaySession} ros={ros} connected={isConnected}
+      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession} ros={ros} connected={isConnected}
         isActive={isPanelActive && isActive} state={panel.panelState?.values}
         onStateChange={values => {
           const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
@@ -3326,7 +3451,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     if (panel.type === 'timeSeries') {
       return (
         <TimeSeriesPanel
-          key={`${panel.id}:${replaySource.generation}`}
+          key={`${panel.id}:${panel.openedAt ?? 0}:${replaySource.generation}`}
           ros={visualizationRos}
           connected={visualizationConnected}
           connectionGeneration={connectionGeneration + replaySource.generation}
@@ -3440,7 +3565,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     if (panel.type === '3d') {
       return (
         <VisualizationPanel
-          key={`${panel.id}:${replaySource.generation}`}
+          key={`${panel.id}:${panel.openedAt ?? 0}:${replaySource.generation}`}
           ros={visualizationRos!}
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
           panelId={panel.id}
@@ -3467,7 +3592,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel key={`${panel.id}:${replaySource.generation}`} ros={visualizationRos!} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
+      return <TfTreePanel key={`${panel.id}:${panel.openedAt ?? 0}:${replaySource.generation}`} ros={visualizationRos!} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
     }
 
     if (panel.type === 'pad') {

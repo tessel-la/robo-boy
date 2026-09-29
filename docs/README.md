@@ -21,6 +21,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
   the four kinds of panel, enable/disable, and what an update changes.
 - [Native Time Series](native-time-series.md): live telemetry, zoom, filters, derived signals, and migration.
 - [Record & Replay](record-replay.md): replay local MCAP files into Time Series, TF and 3D, and record ROS topics on the host.
+- [Data Explorer](data-explorer.md): inspect topics, services, actions and nodes, their traffic and health, and deploy the ROS inspection companion.
 - [External panels](external-panels.md): panel SDK, installed-registry discovery, lazy loading, capabilities, standalone authoring, and inventory registration.
 
 ## Source Map
