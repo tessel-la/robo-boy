@@ -44,6 +44,10 @@ import BehaviorNodeConfigEditor from './BehaviorNodeConfigEditor';
 import type { BehaviorTreeAssistantBridge } from '../../assistant/types';
 import { buildTreeDiff, summarizeTreeChanges } from './BehaviorTreeAgentPreview';
 import { BehaviorTreeExecutor } from '../engine/executor';
+import { ExecutionDetailsStore } from '../execution/executionStore';
+import { ExecutionDetailsContext, useExecutionRecord, type ExecutionDetailsContextValue } from '../execution/executionContext';
+import { executionKey, type ExecutionUpdate } from '../execution/executionModel';
+import ExecutionDetailsCard from './execution/ExecutionDetailsCard';
 import {
   loadPersistentExecutionPreference,
   PersistentBehaviorTreeExecutor,
@@ -583,6 +587,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const executorRef = useRef<BehaviorTreeExecutor | null>(null);
   const persistentExecutorRef = useRef<PersistentBehaviorTreeExecutor | null>(null);
   const persistentSessionIdRef = useRef<string | undefined>(undefined);
+  // The latest execution of each action and service node, and the node whose details are open.
+  const [executionStore] = useState(() => new ExecutionDetailsStore());
+  const [inspectedExecution, setInspectedExecution] = useState<{ nodeId: string; treePath: string[] } | null>(null);
+  const lastPersistentSessionRef = useRef<string | undefined>(undefined);
   const nodeIdCounter = useRef(0);
   const saveNoticeTimer = useRef<number | null>(null);
   const executionNodeLabels = useRef<Map<string, string>>(new Map());
@@ -896,6 +904,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   const loadRootTree = useCallback(
     (tree: BehaviorTree) => {
+      executionStore.clear();
+      setInspectedExecution(null);
       const hydrated: BehaviorTree = {
         ...tree,
         nodes: resetTransientNodeState(tree.nodes),
@@ -903,7 +913,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       };
       syncRootTreeAndEditor(hydrated, [], { center: true });
     },
-    [resetTransientEdgeState, resetTransientNodeState, syncRootTreeAndEditor]
+    [executionStore, resetTransientEdgeState, resetTransientNodeState, syncRootTreeAndEditor]
   );
 
   const addNodeAtPosition = useCallback(
@@ -1834,6 +1844,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }
       }
 
+      if (event.type === 'nodeExecution' && event.nodeId && event.data?.execution) {
+        const eventPath = Array.isArray(event.data.treePath) ? event.data.treePath : [];
+        executionStore.apply(event.nodeId, eventPath, event.data.execution as ExecutionUpdate);
+      }
+
       if (event.type === 'blackboardUpdated' && event.data?.blackboard) {
         setLiveBlackboard(event.data.blackboard as Record<string, unknown>);
       }
@@ -1902,7 +1917,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }, 2000);
       }
     },
-    [followExecutionNode, resetTransientEdgeState, resetTransientNodeState, updateDisplayedNodeStatus]
+    [executionStore, followExecutionNode, resetTransientEdgeState, resetTransientNodeState, updateDisplayedNodeStatus]
   );
 
   const handleExecute = useCallback(() => {
@@ -1921,6 +1936,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     };
     executionNodeLabels.current = collectExecutionNodeLabels(treeToExecute);
     executionStartedAt.current = Date.now();
+    // A new run: nothing of an earlier one belongs to it.
+    executionStore.clear();
     setLiveBlackboard(treeToExecute.blackboardDefaults || {});
     if (persistentExecution) {
       if (!persistentExecutorRef.current) {
@@ -1942,7 +1959,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       isPersistent: persistentExecution,
     });
     if (!persistentExecution) executorRef.current?.start();
-  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent, persistentExecution]);
+  }, [ros, isConnected, currentTree, nodes, edges, handleExecutionEvent, persistentExecution, executionStore]);
 
   const handlePause = useCallback(() => {
     if (persistentSessionIdRef.current) {
@@ -2006,6 +2023,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const isActiveSession = status.state === 'running' || status.state === 'paused';
 
     if (isActiveSession && status.sessionId) {
+      // Another session on the runner: what earlier runs reported is not about it.
+      if (lastPersistentSessionRef.current !== status.sessionId) executionStore.clear();
+      lastPersistentSessionRef.current = status.sessionId;
       persistentSessionIdRef.current = status.sessionId;
       if (status.tree) {
         executionNodeLabels.current = collectExecutionNodeLabels(status.tree);
@@ -2050,7 +2070,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (status.state === 'idle' && persistentSessionIdRef.current === status.sessionId) {
       persistentSessionIdRef.current = undefined;
     }
-  }, [handleExecutionEvent, loadRootTree]);
+  }, [executionStore, handleExecutionEvent, loadRootTree]);
 
   useEffect(() => {
     if (!ros || !isConnected || typeof (ros as any).callOnConnection !== 'function') return;
@@ -2064,6 +2084,42 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       // Deliberately do not send stop here: the ROS runner owns persistent sessions.
     };
   }, [handlePersistentStatus, isConnected, ros]);
+
+  // Losing ROS ends whatever was running; another connection (maybe another robot) starts with nothing recorded.
+  const executionRosRef = useRef(ros);
+  useEffect(() => {
+    if (executionRosRef.current !== ros) {
+      executionRosRef.current = ros;
+      executionStore.clear();
+    } else if (!isConnected) {
+      executionStore.interruptRunning('The connection to ROS was lost.');
+    }
+  }, [executionStore, isConnected, ros]);
+  useEffect(() => () => executionStore.dispose(), [executionStore]);
+
+  // The open details belong to a node of the subtree shown; another subtree, or the node gone, closes them.
+  useEffect(() => {
+    setInspectedExecution(open => (open && areTreePathsEqual(open.treePath, treePath) ? open : null));
+  }, [treePath]);
+  useEffect(() => {
+    setInspectedExecution(open => (open && !nodes.some(node => node.id === open.nodeId) ? null : open));
+  }, [nodes]);
+
+  const openExecutionDetails = useCallback((nodeId: string) => {
+    setInspectedExecution(open => (open?.nodeId === nodeId ? null : { nodeId, treePath: treePathRef.current }));
+  }, []);
+  const executionDetailsContext = useMemo<ExecutionDetailsContextValue>(() => ({
+    store: executionStore,
+    treePath,
+    open: openExecutionDetails,
+    openNodeId: inspectedExecution?.nodeId ?? null,
+  }), [executionStore, inspectedExecution?.nodeId, openExecutionDetails, treePath]);
+  const inspectedKey = inspectedExecution ? executionKey(inspectedExecution.nodeId, inspectedExecution.treePath) : null;
+  const inspectedRecord = useExecutionRecord(executionStore, inspectedKey);
+  const inspectedLabel = inspectedExecution
+    ? String(nodes.find(node => node.id === inspectedExecution.nodeId)?.data?.label ?? inspectedExecution.nodeId)
+    : '';
+  const closeExecutionDetails = useCallback(() => setInspectedExecution(null), []);
 
   const restoreRootTreeSnapshot = useCallback(
     (snapshot: HistorySnapshot) => {
@@ -3255,6 +3311,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           onPointerCancelCapture={handleCanvasPointerEndCapture}
           data-testid="bt-canvas"
         >
+          <ExecutionDetailsContext.Provider value={executionDetailsContext}>
           <ReactFlow
             nodes={canvasNodes}
             edges={canvasEdges}
@@ -3302,6 +3359,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }}
             />
           </ReactFlow>
+          </ExecutionDetailsContext.Provider>
+          {inspectedExecution && (
+            <ExecutionDetailsCard record={inspectedRecord} nodeLabel={inspectedLabel} onClose={closeExecutionDetails} />
+          )}
           {customBoxSelection && (
             <div
               className="bt-custom-selection"

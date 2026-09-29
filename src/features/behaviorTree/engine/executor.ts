@@ -18,6 +18,14 @@ import {
 import { ACTION_TEMPLATES } from '../actionTemplates';
 import { ActionFieldSchema, fetchActionGoalDetails } from '../services/rosDiscovery';
 import {
+  GOAL_STATUS,
+  extractDiagnostics,
+  goalStatusName,
+  phaseForGoalStatus,
+  type ExecutionError,
+  type ExecutionUpdate,
+} from '../execution/executionModel';
+import {
   Blackboard,
   applyInputBindings,
   applyOutputBindings,
@@ -32,10 +40,6 @@ interface ActiveAction {
   requestId: string;
 }
 
-// action_msgs/msg/GoalStatus values
-const GOAL_STATUS_SUCCEEDED = 4;
-const GOAL_STATUS_CANCELED = 5;
-const GOAL_STATUS_ABORTED = 6;
 
 const ROS_BOOL_TYPES = new Set(['bool', 'boolean']);
 const ROS_FLOAT_TYPES = new Set(['float32', 'float64', 'float', 'double']);
@@ -237,6 +241,25 @@ function normalizeActionGoalPayload(
   return normalized;
 }
 
+const CONNECTION_LOST: Omit<ExecutionUpdate, 'attemptId' | 'kind' | 'target'> = {
+  phase: 'transport',
+  error: { message: 'The connection to ROS was lost.', source: 'transport' },
+};
+
+const formatDuration = (ms: number) => (ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`);
+
+/** What ROS said went wrong: rosbridge sends a string, some servers a structured error. */
+function describeRosError(value: unknown, fallback: string): ExecutionError {
+  if (typeof value === 'string' && value.trim()) return { message: value.trim(), source: 'ros' };
+  const diagnostics = extractDiagnostics(value);
+  return {
+    message: diagnostics.message ?? fallback,
+    code: diagnostics.code,
+    source: 'ros',
+    details: value === undefined || typeof value === 'string' ? undefined : value,
+  };
+}
+
 /**
  * Behavior Tree Executor - Hybrid execution model
  * Browser orchestrates control flow, ROS executes individual actions
@@ -251,6 +274,7 @@ export class BehaviorTreeExecutor {
   private abortController: AbortController | null;
   private activeActions: Map<string, ActiveAction>;
   private readonly rootPath: string[];
+  private serviceAttempts = 0;
   private pausePromise: Promise<void> | null;
   private resolvePause: (() => void) | null;
   private blackboard: Blackboard;
@@ -503,10 +527,10 @@ export class BehaviorTreeExecutor {
           result = await this.executeSubtreeNode(node, treePath, signal);
           break;
         case BehaviorNodeType.Action:
-          result = await this.executeActionNode(node, signal);
+          result = await this.executeActionNode(node, treePath, signal);
           break;
         case BehaviorNodeType.Service:
-          result = await this.executeServiceNode(node, signal);
+          result = await this.executeServiceNode(node, treePath, signal);
           break;
         case BehaviorNodeType.Topic:
           result = await this.executeTopicNode(node, signal);
@@ -766,32 +790,45 @@ export class BehaviorTreeExecutor {
    * send goals with `send_action_goal` and listen for its `action_result`
    * websocket response.
    */
-  private async executeActionNode(node: BehaviorTreeNode, signal?: AbortSignal): Promise<ExecutionStatus> {
+  private async executeActionNode(
+    node: BehaviorTreeNode,
+    treePath: string[],
+    signal?: AbortSignal
+  ): Promise<ExecutionStatus> {
     const data = node.data as ROSActionNodeData;
+    const requestId = createActionRequestId(node.id);
+    const report = this.executionReporter(node.id, treePath, {
+      attemptId: requestId,
+      kind: 'action',
+      target: data.actionName,
+      rosType: data.actionType,
+    });
+    report({ phase: 'running', begin: true });
 
     return new Promise(resolve => {
       if (!data.actionType) {
-        console.error(
-          `[BT] Action node "${data.actionName}" has no actionType. ` +
-            `Re-run ROS discovery so the feedback topic type can be captured.`
-        );
+        const message = `Action "${data.actionName}" has no type. Re-run ROS discovery so its type can be captured.`;
+        console.error(`[BT] ${message}`);
+        report({ phase: 'failed', error: { message, source: 'client' } });
         resolve(ExecutionStatus.Failure);
         return;
       }
 
-      const requestId = createActionRequestId(node.id);
       let settled = false;
       let removeActionListener: (() => void) | null = null;
+      let removeCloseListener: () => void = () => {};
       let onAbort = () => {};
 
-      const settle = (status: ExecutionStatus) => {
+      const settle = (status: ExecutionStatus, update: Omit<ExecutionUpdate, 'attemptId' | 'kind' | 'target'>) => {
         if (settled) return;
         settled = true;
         this.activeActions.delete(node.id);
         clearTimeout(timeoutId);
         removeActionListener?.();
         removeActionListener = null;
+        removeCloseListener();
         signal?.removeEventListener('abort', onAbort);
+        report(update);
         resolve(status);
       };
 
@@ -800,17 +837,21 @@ export class BehaviorTreeExecutor {
       const timeoutId = setTimeout(() => {
         console.warn(`[BT] Action "${data.actionName}" timed out after ${timeout}ms`);
         this.cancelActionGoal(data.actionName, requestId);
-        settle(ExecutionStatus.Failure);
+        settle(ExecutionStatus.Failure, this.timeoutUpdate(`No result from ${data.actionName}`, timeout));
       }, timeout);
       onAbort = () => {
         this.cancelActionGoal(data.actionName, requestId);
-        settle(ExecutionStatus.Failure);
+        settle(ExecutionStatus.Failure, {
+          phase: 'cancelled',
+          error: { message: 'Cancelled because the tree stopped.', source: 'stopped' },
+        });
       };
       signal?.addEventListener('abort', onAbort, { once: true });
       if (signal?.aborted) {
         onAbort();
         return;
       }
+      removeCloseListener = this.onConnectionLost(() => settle(ExecutionStatus.Failure, CONNECTION_LOST));
 
       void (async () => {
         try {
@@ -835,40 +876,69 @@ export class BehaviorTreeExecutor {
 
           await this.waitWhilePaused();
           if (settled || !this.isRunning) {
-            settle(ExecutionStatus.Failure);
+            settle(ExecutionStatus.Failure, {
+              phase: 'cancelled',
+              error: { message: 'Cancelled because the tree stopped.', source: 'stopped' },
+            });
             return;
           }
 
           console.log(`[BT] send_action_goal payload for "${data.actionName}":`, JSON.stringify(goal));
 
           removeActionListener = addRosbridgeActionListener(this.ros, message => {
-            if (message.op !== 'action_result' || message.id !== requestId) return;
+            if (message.id !== requestId || settled) return;
+
+            if (message.op === 'action_feedback') {
+              report({ phase: 'running', feedback: message.values });
+              return;
+            }
+            if (message.op !== 'action_result') return;
 
             console.log(`[BT] action_result for "${data.actionName}":`, JSON.stringify(message));
             if (!this.isRunning) {
-              settle(ExecutionStatus.Failure);
+              settle(ExecutionStatus.Failure, {
+                phase: 'cancelled',
+                error: { message: 'Cancelled because the tree stopped.', source: 'stopped' },
+              });
               return;
             }
 
-            if (message.result === false) {
+            // rosbridge could not run the goal at all (no server, a bad goal…): its reason is in `values`.
+            if (message.result === false && message.status === undefined) {
               console.error(`[BT] send_action_goal failed for "${data.actionName}":`, message.values);
-              settle(ExecutionStatus.Failure);
+              settle(ExecutionStatus.Failure, {
+                phase: 'failed',
+                error: describeRosError(message.values, `${data.actionName} could not run the goal`),
+              });
               return;
             }
 
-            if (message.status === GOAL_STATUS_SUCCEEDED) {
+            const phase = phaseForGoalStatus(message.status);
+            if (phase === 'succeeded') {
               console.log(`[BT] Action "${data.actionName}" succeeded`);
               this.emitBlackboardUpdate(
                 applyOutputBindings(message.values, data.outputBindings, this.blackboard)
               );
-              settle(ExecutionStatus.Success);
-            } else if (message.status === GOAL_STATUS_CANCELED || message.status === GOAL_STATUS_ABORTED) {
-              console.warn(`[BT] Action "${data.actionName}" ended with status ${message.status}`);
-              settle(ExecutionStatus.Failure);
-            } else {
-              console.warn(`[BT] Action "${data.actionName}" returned unexpected status ${message.status}`);
-              settle(ExecutionStatus.Failure);
+              settle(ExecutionStatus.Success, { phase, goalStatus: message.status, result: message.values });
+              return;
             }
+
+            console.warn(`[BT] Action "${data.actionName}" ended with status ${message.status}`);
+            const diagnostics = extractDiagnostics(message.values);
+            const statusName = goalStatusName(message.status) ?? 'an unknown status';
+            settle(ExecutionStatus.Failure, {
+              phase,
+              goalStatus: message.status,
+              result: message.values,
+              error: {
+                message: diagnostics.message
+                  ?? (message.status === GOAL_STATUS.ABORTED || message.status === GOAL_STATUS.CANCELED
+                    ? `The goal was ${statusName.toLowerCase()}.`
+                    : `The goal ended with ${statusName.toLowerCase()}.`),
+                code: diagnostics.code ?? message.status,
+                source: 'ros',
+              },
+            });
           });
 
           this.activeActions.set(node.id, { actionName: data.actionName, requestId });
@@ -879,10 +949,14 @@ export class BehaviorTreeExecutor {
             action: data.actionName,
             action_type: data.actionType,
             args: goal,
+            feedback: true,
           });
         } catch (error) {
           console.error('[BT] Error executing action node:', error);
-          settle(ExecutionStatus.Failure);
+          settle(ExecutionStatus.Failure, {
+            phase: 'failed',
+            error: { message: error instanceof Error ? error.message : String(error), source: 'client' },
+          });
         }
       })();
     });
@@ -907,10 +981,39 @@ export class BehaviorTreeExecutor {
   /**
    * Execute ROS service node
    */
-  private async executeServiceNode(node: BehaviorTreeNode, signal?: AbortSignal): Promise<ExecutionStatus> {
+  private async executeServiceNode(
+    node: BehaviorTreeNode,
+    treePath: string[],
+    signal?: AbortSignal
+  ): Promise<ExecutionStatus> {
     const data = node.data as ROSServiceNodeData;
+    this.serviceAttempts += 1;
+    const report = this.executionReporter(node.id, treePath, {
+      attemptId: `bt-service-${node.id}-${this.serviceAttempts}`,
+      kind: 'service',
+      target: data.serviceName,
+      rosType: data.serviceType,
+    });
+    report({ phase: 'running', begin: true });
 
     return new Promise(resolve => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let removeCloseListener: () => void = () => {};
+      const onAbort = () => settle(ExecutionStatus.Failure, {
+        phase: 'cancelled',
+        error: { message: 'Cancelled because the tree stopped.', source: 'stopped' },
+      });
+      const settle = (status: ExecutionStatus, update: Omit<ExecutionUpdate, 'attemptId' | 'kind' | 'target'>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        removeCloseListener();
+        signal?.removeEventListener('abort', onAbort);
+        report(update);
+        resolve(status);
+      };
+
       try {
         const service = new ROSLIB.Service({
           ros: this.ros,
@@ -923,42 +1026,83 @@ export class BehaviorTreeExecutor {
         );
 
         const timeout = data.timeout || 10000; // Default 10 seconds
-        let settled = false;
-        const settle = (status: ExecutionStatus) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeoutId);
-          signal?.removeEventListener('abort', onAbort);
-          resolve(status);
-        };
-        const onAbort = () => settle(ExecutionStatus.Failure);
-        const timeoutId = setTimeout(() => {
-          settle(ExecutionStatus.Failure);
+        timeoutId = setTimeout(() => {
+          settle(ExecutionStatus.Failure, this.timeoutUpdate(`No response from ${data.serviceName}`, timeout));
         }, timeout);
         signal?.addEventListener('abort', onAbort, { once: true });
         if (signal?.aborted) {
-          settle(ExecutionStatus.Failure);
+          onAbort();
           return;
         }
+        removeCloseListener = this.onConnectionLost(() => settle(ExecutionStatus.Failure, CONNECTION_LOST));
 
         service.callService(
           request,
           result => {
+            if (settled) return;
             this.emitBlackboardUpdate(
               applyOutputBindings(result, data.outputBindings, this.blackboard)
             );
-            settle(ExecutionStatus.Success);
+            // A response that reports failure itself (`success: false`…) still completes the call: the node
+            // succeeds as it always has, and the details show what the service said.
+            settle(ExecutionStatus.Success, { phase: 'succeeded', result });
           },
           error => {
             console.error('Service call failed:', error);
-            settle(ExecutionStatus.Failure);
+            settle(ExecutionStatus.Failure, {
+              phase: 'failed',
+              error: describeRosError(error, `${data.serviceName} failed`),
+            });
           }
         );
       } catch (error) {
         console.error('Error executing service node:', error);
-        resolve(ExecutionStatus.Failure);
+        settle(ExecutionStatus.Failure, {
+          phase: 'failed',
+          error: { message: error instanceof Error ? error.message : String(error), source: 'client' },
+        });
       }
     });
+  }
+
+  /** Reports one execution of a node: its start, feedback and outcome, all tagged with the attempt. */
+  private executionReporter(
+    nodeId: string,
+    treePath: string[],
+    identity: Pick<ExecutionUpdate, 'attemptId' | 'kind' | 'target' | 'rosType'>
+  ): (update: Omit<ExecutionUpdate, 'attemptId' | 'kind' | 'target' | 'rosType'>) => void {
+    return update => {
+      this.emitEvent({
+        type: 'nodeExecution',
+        nodeId,
+        timestamp: Date.now(),
+        data: { treePath, execution: { ...identity, ...update, at: Date.now() } },
+      });
+    };
+  }
+
+  /** A call that ran out of time; when ROS itself was gone, that is the reason instead. */
+  private timeoutUpdate(message: string, timeoutMs: number): Omit<ExecutionUpdate, 'attemptId' | 'kind' | 'target'> {
+    if (this.ros.isConnected === false) return CONNECTION_LOST;
+    return {
+      phase: 'timeout',
+      error: { message: `${message} within ${formatDuration(timeoutMs)}.`, source: 'timeout' },
+    };
+  }
+
+  /** Calls back once if the ROS connection closes; returns how to stop listening. */
+  private onConnectionLost(callback: () => void): () => void {
+    const ros = this.ros as Ros & {
+      on?: (event: string, listener: () => void) => void;
+      off?: (event: string, listener: () => void) => void;
+      removeListener?: (event: string, listener: () => void) => void;
+    };
+    if (typeof ros.on !== 'function') return () => {};
+    ros.on('close', callback);
+    return () => {
+      if (ros.off) ros.off('close', callback);
+      else ros.removeListener?.('close', callback);
+    };
   }
 
   /**

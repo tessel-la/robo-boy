@@ -26,6 +26,8 @@ from rosidl_runtime_py.set_message import set_message_fields
 from rosidl_runtime_py.utilities import get_action, get_message, get_service
 from std_msgs.msg import String
 
+import bt_execution_details as details
+
 
 PROTOCOL_VERSION = 1
 COMMAND_TOPIC = '/robo_boy/behavior_tree/command'
@@ -147,6 +149,7 @@ class BehaviorTreeRunner(Node):
         self._statuses: dict[str, str] = {}
         self._blackboard: dict[str, Any] = {}
         self._stop = threading.Event()
+        self._attempts = 0
         self._active_goals: list[Any] = []
         self._last_error: Optional[str] = None
         self.get_logger().info('Persistent behavior-tree runner ready')
@@ -311,9 +314,9 @@ class BehaviorTreeRunner(Node):
             root = self._root(subtree)
             result = self._execute(root, subtree, path + [str(node.get('id'))]) if root else 'failure'
         elif node_type == 'action':
-            result = self._action(data)
+            result = self._action(node, path)
         elif node_type == 'service':
-            result = self._service(data)
+            result = self._service(node, path)
         elif node_type == 'topic':
             result = self._topic(data)
         elif node_type == 'subscriber':
@@ -382,41 +385,82 @@ class BehaviorTreeRunner(Node):
         try: return future.result()
         except Exception: return None
 
-    def _action(self, data: dict[str, Any]) -> str:
+    def _execution_reporter(self, node: dict[str, Any], path: list[str], kind: str, target: str, ros_type: str) -> Callable[..., None]:
+        """Reports one execution of an action or service node to the panel, every update tagged with its attempt."""
+        with self._lock:
+            self._attempts += 1
+            attempt_id = f'{self._session_id}-{node.get("id")}-{self._attempts}'
+        identity = {'attemptId': attempt_id, 'kind': kind, 'target': target, 'rosType': ros_type}
+
+        def report(**update: Any) -> None:
+            self._publish_event('nodeExecution', node_id=str(node.get('id')), data={
+                'treePath': path,
+                'execution': {**identity, **update, 'at': now_ms()},
+            })
+        return report
+
+    def _action(self, node: dict[str, Any], path: list[str]) -> str:
+        data = node.get('data') or {}
+        name = data.get('actionName', '')
+        report = self._execution_reporter(node, path, 'action', name, data.get('actionType', ''))
+        report(phase='running', begin=True)
         client: Any = None
         handle: Any = None
+        last_feedback = [0.0]
+
+        def on_feedback(message: Any) -> None:
+            # Feedback can come many times a second; the panel needs a few updates a second at most.
+            now = time.monotonic()
+            if now - last_feedback[0] < 0.2:
+                return
+            last_feedback[0] = now
+            report(**details.feedback_update(getattr(message, 'feedback', message)))
+
         try:
             action_type = get_action(data.get('actionType', ''))
-            client = ActionClient(self, action_type, data.get('actionName', ''), callback_group=self._group)
+            client = ActionClient(self, action_type, name, callback_group=self._group)
             timeout = timeout_seconds(data, 60000)
-            if not client.wait_for_server(timeout_sec=min(timeout, 5.0)): return 'failure'
+            if not client.wait_for_server(timeout_sec=min(timeout, 5.0)):
+                report(phase='failed', error=details.error(f'Action server {name} is not available.', 'ros'))
+                return 'failure'
             goal = action_type.Goal()
             payload = apply_inputs(data.get('parameters') or {}, data.get('inputBindings') or [], self._blackboard)
             set_message_fields(goal, normalize_message_fields(goal, payload))
-            handle = self._wait_future(client.send_goal_async(goal), timeout)
+            handle = self._wait_future(client.send_goal_async(goal, feedback_callback=on_feedback), timeout)
             if handle is None:
-                self.get_logger().error(f'Action {data.get("actionName", "")} did not accept a goal within {timeout:.3f}s')
+                self.get_logger().error(f'Action {name} did not accept a goal within {timeout:.3f}s')
+                if self._stop.is_set():
+                    report(phase='cancelled', error=details.error('Cancelled because the tree stopped.', 'stopped'))
+                else:
+                    report(phase='timeout', error=details.error(f'{name} did not accept the goal within {timeout:g} s.', 'timeout'))
                 return 'failure'
             if not handle.accepted:
-                self.get_logger().error(f'Action {data.get("actionName", "")} rejected the goal')
+                self.get_logger().error(f'Action {name} rejected the goal')
+                report(phase='failed', error=details.error(f'{name} rejected the goal.', 'ros'))
                 return 'failure'
             with self._lock: self._active_goals.append(handle)
             response = self._wait_future(handle.get_result_async(), timeout)
             if response is None:
                 handle.cancel_goal_async()
-                self.get_logger().error(f'Action {data.get("actionName", "")} timed out after {timeout:.3f}s')
+                if self._stop.is_set():
+                    report(phase='cancelled', error=details.error('Cancelled because the tree stopped.', 'stopped'))
+                else:
+                    self.get_logger().error(f'Action {name} timed out after {timeout:.3f}s')
+                    report(phase='timeout', error=details.error(f'No result from {name} within {timeout:g} s.', 'timeout'))
                 return 'failure'
+            report(**details.goal_outcome(response.status, response.result))
             if response.status == GoalStatus.STATUS_SUCCEEDED:
                 self._apply_outputs(response.result, data.get('outputBindings') or [])
                 return 'success'
             result_message = getattr(response.result, 'message', '')
             self.get_logger().error(
-                f'Action {data.get("actionName", "")} ended with status {response.status}'
+                f'Action {name} ended with status {response.status}'
                 + (f': {result_message}' if result_message else '')
             )
             return 'failure'
         except Exception as exc:
             self.get_logger().error(f'Action node failed: {exc}')
+            report(phase='failed', error=details.error(str(exc), 'client'))
             return 'failure'
         finally:
             with self._lock:
@@ -425,22 +469,35 @@ class BehaviorTreeRunner(Node):
             if client is not None:
                 client.destroy()
 
-    def _service(self, data: dict[str, Any]) -> str:
+    def _service(self, node: dict[str, Any], path: list[str]) -> str:
+        data = node.get('data') or {}
+        name = data.get('serviceName', '')
+        report = self._execution_reporter(node, path, 'service', name, data.get('serviceType', ''))
+        report(phase='running', begin=True)
         client: Any = None
         try:
             service_type = get_service(data.get('serviceType', ''))
-            client = self.create_client(service_type, data.get('serviceName', ''), callback_group=self._group)
+            client = self.create_client(service_type, name, callback_group=self._group)
             timeout = timeout_seconds(data, 10000)
-            if not client.wait_for_service(timeout_sec=min(timeout, 5.0)): return 'failure'
+            if not client.wait_for_service(timeout_sec=min(timeout, 5.0)):
+                report(phase='failed', error=details.error(f'Service {name} is not available.', 'ros'))
+                return 'failure'
             request = service_type.Request()
             payload = apply_inputs(data.get('request') or {}, data.get('inputBindings') or [], self._blackboard)
             set_message_fields(request, normalize_message_fields(request, payload))
             response = self._wait_future(client.call_async(request), timeout)
-            if response is None: return 'failure'
+            if response is None:
+                if self._stop.is_set():
+                    report(phase='cancelled', error=details.error('Cancelled because the tree stopped.', 'stopped'))
+                else:
+                    report(phase='timeout', error=details.error(f'No response from {name} within {timeout:g} s.', 'timeout'))
+                return 'failure'
+            report(**details.service_outcome(response))
             self._apply_outputs(response, data.get('outputBindings') or [])
             return 'success'
         except Exception as exc:
             self.get_logger().error(f'Service node failed: {exc}')
+            report(phase='failed', error=details.error(str(exc), 'client'))
             return 'failure'
         finally:
             if client is not None:
