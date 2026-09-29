@@ -5,6 +5,7 @@ import type { RoboBoyJsonObject } from '../../panels/types';
 import { getDesiredSources, sanitizeConfig, type TimeseriesConfig } from './config';
 import { TimeSeriesEngine } from './engine';
 import { SubscriptionController } from './subscriptions';
+import { registerTimeSeriesPresentation } from './presentation';
 import TimeSeriesPlot from './TimeSeriesPlot';
 import TimeSeriesSettings from './TimeSeriesSettings';
 import '../treePanel/components/TreePanelChrome.css';
@@ -22,6 +23,7 @@ interface Props {
   /** Sample timestamps in epoch milliseconds; replay passes the recording's clock. */
   clock?: () => number;
   panelId?: string;
+  storageScope?: string;
   onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 export default function TimeSeriesPanel({
@@ -33,12 +35,16 @@ export default function TimeSeriesPanel({
   onStateChange,
   clock = Date.now,
   panelId,
+  storageScope,
   onRegisterAssistantBridge,
 }: Props) {
   const [engine] = useState(() => new TimeSeriesEngine(sanitizeConfig(state?.config)));
   const [config, setConfig] = useState(engine.config);
   const [settings, setSettings] = useState(false);
   const [error, setError] = useState('');
+  const [presented, setPresented] = useState(false);
+  const presentationState = useRef({ ros, connected, error });
+  presentationState.current = { ros, connected, error };
   const rootRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -56,7 +62,7 @@ export default function TimeSeriesPanel({
   useEffect(() => {
     if (contentRef.current) contentRef.current.inert = settings;
   }, [settings]);
-  const active = isActive && visible && intersecting;
+  const active = presented || (isActive && visible && intersecting);
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined' || !rootRef.current) return;
     const observer = new IntersectionObserver(entries => setIntersecting(entries[0]?.isIntersecting ?? false));
@@ -77,6 +83,26 @@ export default function TimeSeriesPanel({
     },
     [engine]
   );
+  useEffect(() => {
+    if (!panelId) return;
+    let mounted = true;
+    const unregister = registerTimeSeriesPresentation(
+      panelId,
+      {
+        engine,
+        get ros() { return presentationState.current.ros; },
+        get connected() { return presentationState.current.connected; },
+        get error() { return presentationState.current.error; },
+        configure: next => { if (mounted) save(sanitizeConfig(next)); },
+        setPresented: value => { if (mounted) setPresented(value); },
+      },
+      storageScope
+    );
+    return () => {
+      mounted = false;
+      unregister();
+    };
+  }, [panelId, storageScope, engine, save]);
   useEffect(() => {
     // Applying a saved layout can replace settings without changing a tile's React key.
     if (!state?.config || state.config === (engine.config as unknown)) return;
@@ -193,7 +219,7 @@ export default function TimeSeriesPanel({
         <TimeSeriesPlot
           engine={engine}
           config={config}
-          active={active}
+          active={active && !presented}
           onOpenSettings={() => setSettings(true)}
           onToggle={id =>
             save({

@@ -91,10 +91,26 @@ export function drawPlot(
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  const b = plotBounds(width, height),
-    theme = getComputedStyle(canvas);
+  const theme = getComputedStyle(canvas);
   const text = theme.getPropertyValue('--text-color-secondary').trim() || theme.color;
   const grid = theme.getPropertyValue('--border-color').trim() || '#88888844';
+  drawPlotContent(ctx, width, height, data, config, view, { text, grid }, cursor, selection);
+}
+
+/** Plot geometry shared by desktop canvases and native spatial surfaces, in logical pixels. */
+export function drawPlotContent(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: Map<string, TimeseriesSample[]>,
+  config: TimeseriesConfig,
+  view: PlotView,
+  theme: { text: string; grid: string },
+  cursor: Point | null = null,
+  selection: [Point, Point] | null = null
+) {
+  const b = plotBounds(width, height);
+  const { text, grid } = theme;
   const x = (time: number) => b.left + ((time - view.start) / (view.end - view.start)) * b.width;
   const y = (value: number) => b.top + ((view.max - value) / (view.max - view.min)) * b.height;
   ctx.font = '11px system-ui';
@@ -113,7 +129,9 @@ export function drawPlot(
     ctx.stroke();
     ctx.fillStyle = text;
     ctx.textAlign = 'right';
-    ctx.fillText(Number((view.max - fraction * (view.max - view.min)).toPrecision(4)).toString(), b.left - 6, py);
+    const value = view.max - fraction * (view.max - view.min);
+    const label = Number(value.toPrecision(4)).toString();
+    ctx.fillText(label.length > 8 ? value.toExponential(1) : label, b.left - 6, py);
     ctx.textAlign = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
     // Leave room for readable time labels on narrow phone plots.
     if (width < 360 && i % 2 !== 0) continue;

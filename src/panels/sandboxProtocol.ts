@@ -6,6 +6,7 @@ import type {
   RoboBoyPanelThemeSnapshot,
   RoboBoyPanelViewportSnapshot,
 } from './types';
+import type { PanelSurfaceFrame, PanelSurfaceInput } from './surfaceProtocol';
 
 export interface PanelSandboxInitialization {
   panelId: string;
@@ -27,6 +28,7 @@ export interface PanelSandboxInitialization {
 }
 
 export type PanelSandboxToHostMessage =
+  | PanelSurfaceFrame
   | { type: 'ready' }
   | { type: 'error'; message: string }
   | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string; details: string[] }
@@ -35,6 +37,8 @@ export type PanelSandboxToHostMessage =
   | { type: 'cancel'; requestId: string };
 
 export type PanelHostToSandboxMessage =
+  | PanelSurfaceInput
+  | { type: 'surface-capture'; requestId: number }
   | { type: 'initialize'; value: PanelSandboxInitialization }
   | { type: 'connection'; value: RoboBoyPanelConnectionSnapshot }
   | { type: 'viewport'; value: RoboBoyPanelViewportSnapshot }

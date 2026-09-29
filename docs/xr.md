@@ -79,14 +79,28 @@ registerXrPanelRenderer({ panelType: 'pad', create: context => ({ object, dispos
 
 Nothing in `src/xr/` imports a panel. A panel opts in by registering; anything unclaimed falls back
 to `domSurfaceRenderer`, which mirrors the panel's live DOM onto an interactive quad using three's
-`HTMLMesh`. Adding a native XR renderer for a panel therefore requires no change to the XR core.
+`HTMLMesh`. External sandbox panels use `externalSurfaceRenderer` instead: the sandbox paints its own DOM
+onto a flat texture and receives controller input over its existing private MessagePort. Adding a
+native XR renderer for a panel therefore requires no change to the XR core.
 
-The 2D workspace is **not** modified to support this. The XR layer reads `WorkspacePanel[]` — already
+The 2D workspace layout is preserved during this. The XR layer reads `WorkspacePanel[]` — already
 a presentation-agnostic model — and locates DOM through the `data-workspace-card-id` attribute the
 workspace already puts on every tile.
 
 The 2D panels stay mounted during a session, because the mirror needs them to. Their 3D viewers are
 suspended instead, through `src/xr/xrPresentationBus.ts`.
+
+Time Series also has a native renderer. Its live plot reuses the desktop plot drawing code and
+the mounted tile's engine, including replay timestamps, filters and expressions. XR offers topic
+selection, signal visibility, detected fields, smoothing, plot settings, pause and zoom through the
+same spatial chrome as 3D. Settings update the desktop tile immediately; acquisition stays on its
+existing subscriptions and desktop canvas drawing pauses while XR presents the panel. Text editing
+(labels, custom paths and expressions) and CSV export remain available on desktop.
+
+TF tree is native as well, with a live frame graph, static/stale coloring, Fit and zoom, a paged
+frame browser, transform details, diagnostics and source-to-target calculations. It shares the
+mounted desktop tile's TF data, filters and replay source. The desktop graph pauses while XR is
+presenting it and catches up on exit. Text filtering remains a desktop control; XR can clear it.
 
 ### Interaction
 
@@ -101,7 +115,9 @@ mistaken for a robot command:
 | `control` | trigger over a control surface | live |
 
 Grip outranks trigger. A control fires only when select *ends* on the object it *began* on, having
-travelled less than 5 cm — so dragging a panel across a joystick cannot drive the robot.
+travelled less than 5 cm. External hold controls also receive balanced pointer-down and pointer-up/cancel
+events. A ray excursion, grip from either hand, tracking loss, panel disposal or session end cancels
+a hold. Sandbox input leases expire after 400 ms without updates; moving a panel cannot start a hold.
 
 Controller models are drawn as a ray and a cursor rather than loaded through
 `XRControllerModelFactory`, which fetches profile assets from a CDN at runtime. A control room that
@@ -183,10 +199,15 @@ is running.
 
 These are real and currently unsolved. None is hidden behind a silent failure.
 
-- **Video and iframes cannot be mirrored.** Three's rasteriser draws text, boxes, images, canvases
-  and form controls, but has no `<video>` or `<iframe>` path. The Camera panel and external panels
-  therefore show a labelled placeholder rather than a black quad. They need native XR renderers.
-- **Canvas content updates only on DOM mutation.** The mirror re-rasterises on a `MutationObserver`,
+- **Video and nested frames still need native renderers.** Ordinary external panel DOM now has an
+  immersive fallback, including Microduck. Camera/video and nested iframe content display an explicit
+  limitation. Arbitrary WebGL content is not guaranteed to be capturable.
+- **External fallback is a low-rate 2D surface.** Capture runs at most twice a second; controller input
+  runs independently. Pointer buttons, holds and scrolling work, but text entry, native select menus,
+  file/permission dialogs and arbitrary drag controls do not have full XR parity. Some CSS effects
+  (including shadows) are omitted. It is a backup for panels such as Microduck, not a full browser.
+- **Mirrored canvas content updates only on DOM mutation.** Native Time Series plots update directly.
+  The mirror re-rasterises on a `MutationObserver`,
   not per frame — deliberately, since rebuilding panel textures every frame would not hold a
   headset's refresh rate. A canvas whose pixels change without a DOM mutation appears frozen.
 - **`dom-overlay` is AR-only** and optional even there, so it can never be the general fallback. In
@@ -237,3 +258,24 @@ Next, roughly in order: native XR versions of the other panels on the same frame
 and viewer-attached placement; a native XR control pad rendering the existing grid-cell `CustomGamepadLayout` schema as a
 spatial desk; hand-tracking affordances; an SDK extension letting external panels ship their own XR
 renderer; AR `hit-test` placement of the robot on a real surface; and control-room presets.
+
+
+### External panel fallback
+
+The existing SDK, ROS broker and sandbox permissions remain unchanged. `ExternalPanelHost` registers a
+connection-scoped `ExternalPanelSurface`; while presented it keeps the panel active and gives its
+iframe a 720 × 500 CSS viewport. On exit the desktop dimensions and activity rules are restored.
+`createSandboxSurface` captures inside the opaque-origin document and transfers one bounded
+ImageBitmap plus control rectangles. Host validation rejects malformed frames; request IDs reject
+late/unsolicited frames, and every discarded bitmap is closed. XR reuses `PanelFrame`, including
+resize, grip movement, close and scroll buttons.
+
+`html2canvas` is pinned to 1.4.1. Its public cloning API cannot operate inside an opaque-origin iframe,
+so `capturePanelSurface` uses its internal parser and canvas renderer in the existing document.
+Temporary style changes are restored synchronously before yielding. Keep the sandbox browser test
+passing before updating this dependency; do not add `allow-same-origin` to work around capture.
+
+The self-contained `e2e/xr-sandbox-surface.spec.ts` covers capture, scroll, sandbox flags and desktop
+restoration. `e2e/xr-external-panel.spec.ts` uses the actual unmodified Microduck artifact, mocked ROS,
+and emulated controllers in VR and AR. Set `MICRODUCK_PANEL_DIR` to its built repository (defaults to
+the sibling `robo-boy-microduck-control-panel`); that integration test skips if it is unavailable.

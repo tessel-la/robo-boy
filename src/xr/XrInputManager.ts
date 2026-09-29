@@ -37,9 +37,12 @@ export interface XrInputManagerOptions {
   getInteractables: () => readonly THREE.Object3D[];
   /**
    * A completed activation: select began and ended on the same target without becoming a drag.
-   * This is the only path by which a control surface may reach the robot.
+   * Hold controls opt into the balanced onPressStart/onPressEnd lifecycle below.
    */
   onActivate?: (pointer: XrPointer, target: XrInputTarget) => void;
+  onPressStart?: (pointer: XrPointer, target: XrInputTarget) => void;
+  onPressEnd?: (pointer: XrPointer, cancelled: boolean) => void;
+  onPressMove?: (pointer: XrPointer, target: XrInputTarget) => void;
   onHoverChange?: (pointer: XrPointer, target: XrInputTarget | null) => void;
   onGrabStart?: (pointer: XrPointer, target: XrInputTarget) => void;
   onGrabEnd?: (pointer: XrPointer, object: THREE.Object3D) => void;
@@ -119,6 +122,7 @@ interface XrSourceEventTarget {
  *  - grip/squeeze enters `manipulate`, and while any pointer is squeezing no control can fire;
  *  - a control fires only when select ends on the object it began on, having travelled less than
  *    ACTIVATION_SLOP_METRES, so a drag never activates anything it passes over;
+ *  - hold controls start on select and cancel on any excursion, grip or tracking loss;
  *  - `navigate` is the resting state and reaches UI only.
  *
  * Controller models are drawn as a ray and a cursor rather than loaded through
@@ -311,11 +315,13 @@ export class XrInputManager {
 
   private beginSelect(state: PointerState): void {
     if (this.mode === 'manipulate' || !this.refreshRay(state)) return;
+    this.releaseSelect(state);
     state.selecting = true;
     const target = this.hitTest(state);
     state.selectOrigin = target?.object ?? null;
     state.selectOriginPoint = target ? target.point.clone() : null;
     state.activationTarget = target ? this.activationTarget(target) : null;
+    if (target && state.activationTarget != null) this.options.onPressStart?.(this.toPointer(state), target);
     this.recomputeMode();
   }
 
@@ -331,14 +337,15 @@ export class XrInputManager {
     const originPoint = state.selectOriginPoint;
     const activationTarget = state.activationTarget;
     const manipulating = this.mode === 'manipulate';
-    this.releaseSelect(state);
 
     if (!wasSelecting || !origin) {
+      this.releaseSelect(state);
       this.recomputeMode();
       return;
     }
     // A grab in progress consumes the gesture outright.
     if (manipulating || !this.refreshRay(state)) {
+      this.releaseSelect(state);
       this.recomputeMode();
       return;
     }
@@ -348,14 +355,17 @@ export class XrInputManager {
     const travelled =
       target && originPoint ? target.point.distanceTo(originPoint) : Number.POSITIVE_INFINITY;
 
-    if (sameTarget && target && activationTarget != null &&
-        this.activationTarget(target) === activationTarget && travelled <= ACTIVATION_SLOP_METRES) {
+    const accepted = Boolean(sameTarget && target && activationTarget != null &&
+        this.activationTarget(target) === activationTarget && travelled <= ACTIVATION_SLOP_METRES);
+    this.releaseSelect(state, !accepted);
+    if (accepted && target) {
       this.options.onActivate?.(this.toPointer(state), target);
     }
     this.recomputeMode();
   }
 
-  private releaseSelect(state: PointerState): void {
+  private releaseSelect(state: PointerState, cancelled = true): void {
+    if (state.selecting && state.activationTarget != null) this.options.onPressEnd?.(this.toPointer(state), cancelled);
     state.selecting = false;
     state.selectOrigin = null;
     state.selectOriginPoint = null;
@@ -364,6 +374,8 @@ export class XrInputManager {
 
   private beginSqueeze(state: PointerState): void {
     if (!this.refreshRay(state)) return;
+    // Release robot holds before moving the workspace.
+    for (const pointer of this.pointers.values()) this.releaseSelect(pointer);
     state.squeezing = true;
     const target = this.hitTest(state);
     const grabbable = target ? this.findGrabbable(target.object) : null;
@@ -371,8 +383,6 @@ export class XrInputManager {
       state.grabbed = grabbable;
       this.options.onGrabStart?.(this.toPointer(state), { ...target, object: grabbable });
     }
-    // Grip outranks trigger: any select in flight is abandoned so it cannot activate on release.
-    for (const pointer of this.pointers.values()) this.releaseSelect(pointer);
     this.recomputeMode();
   }
 
@@ -469,6 +479,7 @@ export class XrInputManager {
           this.activationTarget(target) !== state.activationTarget)) {
         this.releaseSelect(state);
       }
+      if (state.selecting && target) this.options.onPressMove?.(this.toPointer(state), target);
       const hovered = target?.object ?? null;
       if (hovered || hovered !== state.hovered) {
         state.hovered = hovered;
@@ -486,6 +497,7 @@ export class XrInputManager {
   }
 
   dispose(): void {
+    for (const state of this.pointers.values()) this.releaseSelect(state);
     for (const dispose of this.disposers.splice(0)) dispose();
     this.pointers.clear();
     this.mode = 'navigate';

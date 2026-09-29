@@ -6,9 +6,11 @@ import TimeSeriesPanel from './TimeSeriesPanel';
 import { sanitizeConfig } from './config';
 import type { TimeSeriesEngine } from './engine';
 import type { PanelSettingsBridge } from '../assistant/types';
+import { getTimeSeriesPresentation } from './presentation';
 const mocks = vi.hoisted(() => ({
   topics: [] as Array<{ name: string; listener?: (m: unknown) => void; unsubscribe: ReturnType<typeof vi.fn> }>,
   engine: null as TimeSeriesEngine | null,
+  plotActive: false,
 }));
 vi.mock('roslib', () => ({
   default: {
@@ -28,8 +30,9 @@ vi.mock('roslib', () => ({
   },
 }));
 vi.mock('./TimeSeriesPlot', () => ({
-  default: ({ engine, onToggle }: { engine: TimeSeriesEngine; onToggle: (id: string) => void }) => {
+  default: ({ engine, active, onToggle }: { engine: TimeSeriesEngine; active: boolean; onToggle: (id: string) => void }) => {
     mocks.engine = engine;
+    mocks.plotActive = active;
     return <button onClick={() => onToggle('a')}>Toggle signal</button>;
   },
 }));
@@ -48,6 +51,35 @@ const props = () => ({
   isActive: true,
   state: { config: cfg() } as unknown as RoboBoyJsonObject,
   onStateChange: vi.fn(),
+});
+
+it('shares history, replay timestamps and settings with XR without another subscription', async () => {
+  const p = props();
+  const { rerender, unmount } = render(<TimeSeriesPanel {...p} panelId="spatial" clock={() => 42000} />);
+  await act(async () => {});
+  const presentation = getTimeSeriesPresentation('spatial')!;
+  act(() => mocks.topics[0].listener?.({ x: 7, y: 8 }));
+  expect(presentation.engine.snapshot().get('a')).toEqual([{ time: 42000, value: 7 }]);
+  act(() => presentation.setPresented(true));
+  rerender(<TimeSeriesPanel {...p} panelId="spatial" isActive={false} clock={() => 43000} />);
+  expect(mocks.plotActive).toBe(false);
+  expect(mocks.topics).toHaveLength(1);
+  expect(mocks.topics[0].unsubscribe).not.toHaveBeenCalled();
+  act(() => {
+    presentation.configure({ ...presentation.engine.config, timeWindowSec: 60 });
+    mocks.topics[0].listener?.({ x: 9, y: 10 });
+  });
+  expect(p.onStateChange.mock.lastCall?.[0].config.timeWindowSec).toBe(60);
+  expect(presentation.engine.snapshot().get('a')?.slice(-1)).toEqual([{ time: 43000, value: 9 }]);
+  act(() => presentation.setPresented(false));
+  await act(async () => {});
+  expect(mocks.topics[0].unsubscribe).toHaveBeenCalledOnce();
+  rerender(<TimeSeriesPanel {...p} panelId="spatial" />);
+  expect(mocks.plotActive).toBe(true);
+  unmount();
+  expect(getTimeSeriesPresentation('spatial')).toBeNull();
+  // An old XR view can be disposed after the tile remounts or unmounts.
+  presentation.setPresented(false);
 });
 beforeEach(() => {
   mocks.topics.length = 0;

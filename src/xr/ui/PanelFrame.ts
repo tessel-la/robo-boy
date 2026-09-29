@@ -11,6 +11,8 @@ export interface PanelFrameOptions {
   panelId: string;
   title: string;
   isPassthrough: boolean;
+  /** Flat data panels share the chrome without a floor or a projecting toolbar. */
+  layout?: 'stage' | 'surface';
   onClose: () => void;
   /** Called after the frame changes its own placement (a size step), so it can be persisted. */
   onPlacementChange: () => void;
@@ -41,7 +43,7 @@ const SIZE_STEP = 1.18;
  */
 export class PanelFrame {
   readonly object = new THREE.Group();
-  /** Origin at the centre of the floor's top face. Content is parented here. */
+  /** Stage: floor centre. Surface: lower edge against the backdrop. Content is parented here. */
   readonly viewRoot = new THREE.Group();
   readonly stageRadius = STAGE_RADIUS;
   readonly stageHeight = STAGE_HEIGHT - FLOOR_MARGIN * 2;
@@ -74,9 +76,11 @@ export class PanelFrame {
       },
     } satisfies XrGrabbableData;
 
-    this.object.add(this.buildBackdrop(options.isPassthrough), this.buildFloor(floorY));
+    this.object.add(this.buildBackdrop(options.isPassthrough));
+    if (options.layout !== 'surface') this.object.add(this.buildFloor(floorY));
 
     this.viewRoot.position.set(0, floorY, 0);
+    if (options.layout === 'surface') this.viewRoot.position.z = -STAGE_RADIUS + 0.01;
     this.object.add(this.viewRoot);
 
     this.title = new SpatialSurface({
@@ -93,6 +97,10 @@ export class PanelFrame {
 
     this.toolbar.surface.mesh.position.set(0, floorY - 0.075, STAGE_RADIUS * 0.85);
     this.toolbar.surface.mesh.rotation.x = -0.5;
+    if (options.layout === 'surface') {
+      this.toolbar.surface.mesh.position.z = -STAGE_RADIUS + 0.01;
+      this.toolbar.surface.mesh.rotation.x = 0;
+    }
     this.object.add(this.toolbar.surface.mesh);
 
     this.menuDock.position.set(STAGE_WIDTH / 2 + 0.04, STAGE_HEIGHT / 2, -STAGE_RADIUS + 0.02);

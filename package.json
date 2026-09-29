@@ -61,6 +61,7 @@
     "@types/three": "^0.160.0",
     "animejs": "^3.2.1",
     "fzstd": "^0.1.1",
+    "html2canvas": "1.4.1",
     "lodash-es": "^4.17.21",
     "png-to-ico": "^2.1.8",
     "react": "^18.2.0",

@@ -6,6 +6,7 @@ const controllers = [new THREE.Group(), new THREE.Group()];
 const grips = [new THREE.Group(), new THREE.Group()];
 let manager: XrInputManager;
 let panel: THREE.Mesh;
+const pressStart = vi.fn(), pressEnd = vi.fn(), pressMove = vi.fn();
 let activate: ReturnType<typeof vi.fn<NonNullable<XrInputManagerOptions['onActivate']>>>;
 function event(index: number, type: string, data?: unknown) {
   controllers[index].dispatchEvent({ type, data } as never);
@@ -18,6 +19,7 @@ beforeEach(() => {
   panel.userData.xrGrabbable = true;
   scene.add(panel);
   activate = vi.fn();
+  pressStart.mockClear(); pressEnd.mockClear(); pressMove.mockClear();
   manager = new XrInputManager({
     renderer: {
       xr: {
@@ -28,6 +30,7 @@ beforeEach(() => {
     scene,
     getInteractables: () => [panel],
     onActivate: activate,
+    onPressStart: pressStart, onPressEnd: pressEnd, onPressMove: pressMove,
   });
   controllers.forEach((controller, index) => {
     controller.position.set(0, 0, 0);
@@ -161,5 +164,37 @@ describe('XR picking and wrist pose', () => {
     expect(onGrabStart.mock.calls[0][1].object).toBe(target);
     event(0, 'squeezeend');
     local.dispose();
+  });
+});
+
+
+describe('balanced continuous controls', () => {
+  it('starts immediately, renews while held, and releases before the click', () => {
+    event(0, 'selectstart');
+    expect(pressStart).toHaveBeenCalledOnce();
+    expect(activate).not.toHaveBeenCalled();
+    manager.update();
+    expect(pressMove).toHaveBeenCalledOnce();
+    event(0, 'selectend');
+    expect(pressEnd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'controller-0' }), false);
+    expect(pressEnd.mock.invocationCallOrder[0]).toBeLessThan(activate.mock.invocationCallOrder[0]);
+    manager.dispose();
+    expect(pressEnd).toHaveBeenCalledOnce();
+  });
+  it.each(['grip', 'tracking', 'excursion', 'disconnect', 'dispose'])('cancels exactly once on %s', reason => {
+    event(0, 'selectstart');
+    if (reason === 'grip') event(1, 'squeezestart');
+    if (reason === 'tracking') controllers[0].visible = false;
+    if (reason === 'excursion') controllers[0].position.x = 0.2;
+    if (reason === 'disconnect') event(0, 'disconnected');
+    if (reason === 'dispose') manager.dispose();
+    manager.update();
+    event(0, 'selectend');
+    expect(pressEnd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'controller-0' }), true);
+    expect(activate).not.toHaveBeenCalled();
+  });
+  it('cannot begin a hold while either hand grips', () => {
+    event(1, 'squeezestart'); event(0, 'selectstart');
+    expect(pressStart).not.toHaveBeenCalled();
   });
 });

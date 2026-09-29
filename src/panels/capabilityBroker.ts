@@ -1,6 +1,7 @@
 import ROSLIB from 'roslib';
 import type { Ros, Service, Topic } from 'roslib';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
+import { validSurfaceFrame } from './surfaceProtocol';
 import { isJsonObject, type ResolvedPanelManifest, type RoboBoyJsonObject, type RoboBoyPanelRuntime } from './types';
 
 const MAX_NETWORK_BYTES = 10 * 1024 * 1024;
@@ -21,7 +22,7 @@ const EXPOSED_RESPONSE_HEADERS = new Set([
   'link',
   'location',
 ]);
-const SANDBOX_MESSAGE_TYPES = new Set(['ready', 'error', 'log', 'storage', 'request', 'cancel']);
+const SANDBOX_MESSAGE_TYPES = new Set(['ready', 'error', 'log', 'storage', 'request', 'cancel', 'surface-frame']);
 
 interface CapabilityBrokerOptions {
   manifest: ResolvedPanelManifest;
@@ -491,6 +492,11 @@ export const connectPanelCapabilityBroker = (
       (typeof message.requestId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(message.requestId))
     ) {
       options.logger.warn('Rejected panel sandbox message with an invalid request ID.');
+      return;
+    }
+    if (message.type === 'surface-frame' && !validSurfaceFrame(message)) {
+      if (typeof ImageBitmap !== 'undefined' && message.image instanceof ImageBitmap) message.image.close();
+      options.logger.warn('Rejected invalid panel surface frame.');
       return;
     }
     if (message.type === 'request' && typeof message.method !== 'string') {

@@ -21,7 +21,9 @@ import {
   getTransformAgeMs,
   isTransformStale,
   quaternionToEulerRpy,
+  filterTfTree,
 } from '../tfTreeModel';
+import { registerTfTreePresentation } from '../presentation';
 import { layoutTfTree } from '../tfTreeLayout';
 import { useTfTree } from '../useTfTree';
 import TfCalculator from './TfCalculator';
@@ -38,6 +40,7 @@ interface TfTreePanelProps {
   isActive: boolean;
   /** Workspace panel id, used to register the assistant settings bridge. */
   panelId?: string;
+  storageScope?: string;
   onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 
@@ -58,8 +61,13 @@ const formatTimestamp = (timestampMs: number | null, fallbackMs: number) =>
 
 const formatVector = (values: number[], digits = 4) => values.map(value => value.toFixed(digits)).join(', ');
 
-const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, onRegisterAssistantBridge }) => {
-  const { state, refresh } = useTfTree(ros, isActive);
+const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, storageScope, onRegisterAssistantBridge }) => {
+  const [presented, setPresented] = useState(false);
+  const { state: liveState, refresh } = useTfTree(ros, isActive || presented);
+  // Retain the desktop viewport while XR consumes live data; avoid rebuilding an invisible graph.
+  const desktopState = useRef(liveState);
+  if (!presented) desktopState.current = liveState;
+  const state = desktopState.current;
   const { fitView, setCenter } = useReactFlow();
   const panelRef = useRef<HTMLElement>(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -81,11 +89,11 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
   const hasMeasuredPanel = panelWidth > 0;
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || presented) return;
     setNowMs(Date.now());
     const interval = window.setInterval(() => setNowMs(Date.now()), 1_000);
     return () => window.clearInterval(interval);
-  }, [isActive]);
+  }, [isActive, presented]);
 
   useEffect(() => {
     if (!isActive) setMenuOpen(false);
@@ -111,8 +119,28 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
   const diagnostics = useMemo(() => getTfGraphDiagnostics(state), [state]);
 
   // Assistant settings bridge: reads the latest state through a ref so it is registered once.
-  const assistantStateRef = useRef({ state, filterQuery, showStatic, highlightStale, refresh });
-  assistantStateRef.current = { state, filterQuery, showStatic, highlightStale, refresh };
+  const assistantStateRef = useRef({ state: liveState, filterQuery, showStatic, highlightStale, refresh });
+  assistantStateRef.current = { state: liveState, filterQuery, showStatic, highlightStale, refresh };
+  useEffect(() => {
+    if (!panelId) return;
+    let mounted = true;
+    const unregister = registerTfTreePresentation(panelId, {
+      get state() { return assistantStateRef.current.state; },
+      get settings() {
+        const { filterQuery: filter, showStatic, highlightStale } = assistantStateRef.current;
+        return { filter, showStatic, highlightStale };
+      },
+      configure: patch => {
+        if (!mounted) return;
+        if (patch.filter !== undefined) setFilterQuery(patch.filter);
+        if (patch.showStatic !== undefined) setShowStatic(patch.showStatic);
+        if (patch.highlightStale !== undefined) setHighlightStale(patch.highlightStale);
+      },
+      refresh: () => { if (mounted) assistantStateRef.current.refresh(); },
+      setPresented: value => { if (mounted) setPresented(value); },
+    }, storageScope);
+    return () => { mounted = false; unregister(); };
+  }, [panelId, storageScope]);
   useEffect(() => {
     if (!panelId || !onRegisterAssistantBridge) return;
     const bridge: PanelSettingsBridge = {
@@ -153,44 +181,12 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
     onRegisterAssistantBridge(panelId, bridge);
     return () => onRegisterAssistantBridge(panelId, null);
   }, [panelId, onRegisterAssistantBridge]);
-  const normalizedFilter = filterQuery.trim().toLowerCase();
-
-  const visibleTransforms = useMemo(() => {
-    const transforms = [...state.transformsByChild.values()].filter(
-      transform => showStatic || transform.source !== 'static'
-    );
-    if (!normalizedFilter) return transforms;
-    return transforms.filter(
-      transform =>
-        transform.parentFrame.toLowerCase().includes(normalizedFilter) ||
-        transform.childFrame.toLowerCase().includes(normalizedFilter)
-    );
-  }, [normalizedFilter, showStatic, state.transformsByChild]);
-
-  const visibleFrames = useMemo(() => {
-    const frames = new Set<string>();
-    if (showStatic && !normalizedFilter) {
-      state.knownFrames.forEach(frame => frames.add(frame));
-    } else if (normalizedFilter) {
-      state.knownFrames.forEach(frame => {
-        if (frame.toLowerCase().includes(normalizedFilter)) frames.add(frame);
-      });
-    }
-    visibleTransforms.forEach(transform => {
-      frames.add(transform.parentFrame);
-      frames.add(transform.childFrame);
-    });
-    return frames;
-  }, [normalizedFilter, showStatic, state.knownFrames, visibleTransforms]);
-
   const visibleState = useMemo(
-    () => ({
-      transformsByChild: new Map(visibleTransforms.map(transform => [transform.childFrame, transform])),
-      observedParentsByChild: new Map<string, Set<string>>(),
-      knownFrames: visibleFrames,
-    }),
-    [visibleFrames, visibleTransforms]
+    () => filterTfTree(state, filterQuery, showStatic),
+    [state, filterQuery, showStatic]
   );
+  const visibleFrames = visibleState.knownFrames;
+  const visibleTransforms = useMemo(() => [...visibleState.transformsByChild.values()], [visibleState]);
   const nodeWidth = isCompact ? 154 : 172;
   const nodeHeight = isCompact ? 44 : 48;
   const positions = useMemo(
@@ -256,7 +252,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
           target: transform.childFrame,
           label: transform.source === 'static' ? 'STATIC' : 'DYNAMIC',
           selected,
-          animated: transform.source === 'dynamic',
+          animated: transform.source === 'dynamic' && !presented,
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: edgeColor,
@@ -269,7 +265,7 @@ const TfTreePanelInner: React.FC<TfTreePanelProps> = ({ ros, isActive, panelId, 
           labelBgBorderRadius: 3,
         };
       }),
-    [highlightStale, nowMs, selection, visibleTransforms]
+    [highlightStale, nowMs, selection, visibleTransforms, presented]
   );
 
   useEffect(() => {

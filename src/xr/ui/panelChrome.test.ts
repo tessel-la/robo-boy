@@ -34,6 +34,19 @@ const surfaces = (root: THREE.Object3D): SpatialSurface[] => {
 
 const press = (surface: SpatialSurface, id: string) => new SurfaceInteraction().activate(hit(surface, id));
 
+it('keeps menu titles and empty messages inside their own rows after layout', () => {
+  const menu = new SpatialMenu();
+  menu.open(() => ({ title: 'Signals', rows: [], emptyText: 'Add a topic' }));
+  const fillText = vi.fn();
+  const ctx = { fillText, measureText: () => ({ width: 0 }) } as unknown as CanvasRenderingContext2D;
+  for (const id of ['header', 'empty']) {
+    const item = menu.surface.getItem(id)!;
+    item.draw(ctx, item, { hover: false });
+    expect(fillText.mock.lastCall?.[2]).toBe(item.y + item.h / 2);
+  }
+  menu.dispose();
+});
+
 describe('shouldShowWristMenu', () => {
   const head = new THREE.Vector3(0, 1.6, 0);
   const forward = new THREE.Vector3(0, 0, -1);

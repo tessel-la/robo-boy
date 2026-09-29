@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createExternalSurface } from './externalSurfaceRenderer';
 import { activateDomTarget, findDomTarget } from './domInteraction';
 import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 import type { XrGrabbableData } from '../types';
@@ -44,6 +45,7 @@ export const findUnrasterizableReason = (
   element: HTMLElement | null
 ): UnrasterizableReason | null => {
   if (!element) return 'empty';
+  if (element.querySelector('.external-panel-host')) return null;
   if (element.querySelector('iframe')) return 'iframe';
   if (element.querySelector('video')) return 'video';
   if (element.offsetWidth === 0 || element.offsetHeight === 0) return 'empty';
@@ -217,5 +219,6 @@ class DomSurfacePanel implements XrPanelInstance {
 
 export const domSurfaceRenderer: XrPanelRenderer = {
   panelType: '*',
-  create: context => new DomSurfacePanel(context),
+  create: context => context.domElement?.querySelector('.external-panel-host')
+    ? createExternalSurface(context) : new DomSurfacePanel(context),
 };

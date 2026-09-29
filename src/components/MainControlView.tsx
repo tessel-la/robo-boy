@@ -3340,6 +3340,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           connectionGeneration={connectionGeneration + replaySource.generation}
           clock={replaySource.ros ? replayClock : undefined}
           panelId={panel.id}
+          storageScope={storageScope}
           onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
           isActive={isPanelActive}
           state={panel.panelState?.values}
@@ -3362,6 +3363,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         <ExternalPanelHost
           manifest={catalogEntry.manifest}
           instanceId={panel.id}
+          storageScope={storageScope}
           ros={ros}
           connectionStatus={connectionStatus}
           connectionGeneration={connectionGeneration}
@@ -3475,7 +3477,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'tfTree') {
-      return <TfTreePanel key={`${panel.id}:${replaySource.generation}`} ros={visualizationRos!} isActive={isPanelActive} panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
+      return <TfTreePanel key={`${panel.id}:${replaySource.generation}`} ros={visualizationRos!} isActive={isPanelActive} panelId={panel.id} storageScope={storageScope} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} />;
     }
 
     if (panel.type === 'pad') {

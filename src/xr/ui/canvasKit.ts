@@ -31,10 +31,14 @@ export type IconName =
   | 'close'
   | 'chevronLeft'
   | 'chevronRight'
+  | 'chevronUp'
+  | 'chevronDown'
   | 'layers'
   | 'grow'
   | 'shrink'
   | 'cube'
+  | 'pause'
+  | 'play'
   | 'check';
 
 export const roundRectPath = (
@@ -140,6 +144,18 @@ export const drawIcon = (
   ctx.beginPath();
 
   switch (name) {
+    case 'pause':
+      ctx.moveTo(-s * 0.4, -s * 0.8);
+      ctx.lineTo(-s * 0.4, s * 0.8);
+      ctx.moveTo(s * 0.4, -s * 0.8);
+      ctx.lineTo(s * 0.4, s * 0.8);
+      break;
+    case 'play':
+      ctx.moveTo(-s * 0.55, -s * 0.8);
+      ctx.lineTo(s * 0.8, 0);
+      ctx.lineTo(-s * 0.55, s * 0.8);
+      ctx.closePath();
+      break;
     case 'gear': {
       const teeth = 8;
       for (let index = 0; index < teeth; index += 1) {
@@ -198,6 +214,16 @@ export const drawIcon = (
       ctx.moveTo(-s * 0.35, -s * 0.75);
       ctx.lineTo(s * 0.4, 0);
       ctx.lineTo(-s * 0.35, s * 0.75);
+      break;
+    case 'chevronUp':
+      ctx.moveTo(-s * 0.75, s * 0.35);
+      ctx.lineTo(0, -s * 0.4);
+      ctx.lineTo(s * 0.75, s * 0.35);
+      break;
+    case 'chevronDown':
+      ctx.moveTo(-s * 0.75, -s * 0.35);
+      ctx.lineTo(0, s * 0.4);
+      ctx.lineTo(s * 0.75, -s * 0.35);
       break;
     case 'layers':
       for (const offset of [-0.45, 0, 0.45]) {

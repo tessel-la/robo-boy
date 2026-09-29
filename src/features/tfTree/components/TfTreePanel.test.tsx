@@ -1,22 +1,24 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { consumeTfMessage, createEmptyTfTreeState, TfTreeState } from '../tfTreeModel';
 import TfTreePanel from './TfTreePanel';
+import { getTfTreePresentation } from '../presentation';
 
 const panelMock = vi.hoisted(() => ({
   state: null as TfTreeState | null,
   refresh: vi.fn(),
   fitView: vi.fn(),
   setCenter: vi.fn(),
+  active: false,
 }));
 
 vi.mock('../useTfTree', () => ({
-  useTfTree: () => ({
-    state: panelMock.state,
-    refresh: panelMock.refresh,
-  }),
+  useTfTree: (_ros: unknown, active: boolean) => {
+    panelMock.active = active;
+    return { state: panelMock.state, refresh: panelMock.refresh };
+  },
 }));
 
 vi.mock('reactflow', () => ({
@@ -96,6 +98,30 @@ describe('TfTreePanel', () => {
     panelMock.refresh.mockReset();
     panelMock.fitView.mockReset();
     panelMock.setCenter.mockReset();
+  });
+
+  it('shares live TF and filters with XR while freezing the desktop graph, scoped per robot', () => {
+    const { rerender, unmount } = render(<TfTreePanel ros={{} as never} isActive panelId="tf" storageScope="robot-a" />);
+    const p = getTfTreePresentation('tf', 'robot-a')!;
+    expect(p).not.toBeNull();
+    expect(getTfTreePresentation('tf', 'robot-b')).toBeNull();
+    act(() => p.setPresented(true));
+    panelMock.state = consumeTfMessage(panelMock.state!, { transforms: [transform('base', 'tool')] }, 'dynamic', Date.now());
+    rerender(<TfTreePanel ros={{} as never} isActive={false} panelId="tf" storageScope="robot-a" />);
+    expect(panelMock.active).toBe(true);
+    expect(p.state.knownFrames.has('tool')).toBe(true);
+    expect(screen.queryByTestId('tf-node-tool')).not.toBeInTheDocument();
+    act(() => p.configure({ showStatic: false, highlightStale: false }));
+    expect(p.settings).toMatchObject({ showStatic: false, highlightStale: false });
+    expect(screen.queryByTestId('tf-node-camera')).not.toBeInTheDocument();
+    act(() => p.refresh());
+    expect(panelMock.refresh).toHaveBeenCalledOnce();
+    act(() => p.setPresented(false));
+    expect(panelMock.active).toBe(false);
+    expect(screen.getByTestId('tf-node-tool')).toBeInTheDocument();
+    unmount();
+    expect(getTfTreePresentation('tf', 'robot-a')).toBeNull();
+    p.setPresented(true); // disposal of an old XR instance after a React unmount is inert
   });
 
   it('renders disconnected dynamic and static TF trees with summary metadata', () => {

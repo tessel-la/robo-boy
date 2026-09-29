@@ -4,7 +4,7 @@ This is the working guide for whoever continues the XR workspace. [`xr.md`](xr.m
 feature is and how to run it; this document explains how the spatial layer is built, why, and how to
 extend it. Read `xr.md` first for entry, session modes and the reuse table.
 
-State at handover: the **3D panel is native and complete**; every other panel type still uses the DOM
+Current state: the **3D, Time Series and TF tree panels are native**; other panel types still use the DOM
 mirror. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
 XR. The interaction model was designed to be reused, not to be specific to 3D.
 
@@ -19,8 +19,11 @@ src/xr/
   types.ts, xrWorkspaceStorage.ts   persisted placements (robo-boy-xr-workspace-v1)
   panels/
     registry.ts            panel type -> renderer; XrPanelContext / XrPanelInstance contracts
-    domSurfaceRenderer.ts  fallback: mirror the DOM panel onto a quad (HTMLMesh)
+    domSurfaceRenderer.ts  fallback: built-in DOM mirror (HTMLMesh), routes external panels below
+    externalSurfaceRenderer.ts  sandbox-rendered 2D texture and balanced controller holds
     threeD/                the native 3D panel (renderer + settings editor)
+    timeSeries/            native plot and settings, sharing the desktop tile's engine
+    tfTree/                native graph, frame details, diagnostics and transform calculator
   ui/                      reusable spatial UI kit (see section 4)
   world/
     fit.ts                 fit a model to a circular stage
@@ -92,6 +95,7 @@ interface XrPanelInstance {
   object: THREE.Object3D;    // add to the scene; make it xrGrabbable to move it
   update?(frame): void;      // per rendered frame
   getActivationTarget?, onActivate?, onHover?   // for panels that own surfaces
+  onPressStart?, onPressMove?, onPressEnd?       // balanced holds; release handles cancellation
   setActive?, dispose(): void;
 }
 ```
@@ -109,6 +113,9 @@ A renderer opts in with `registerXrPanelRenderer(...)` at module load (see the b
   non-null activation target as where it started. That is what stops a drag or a brush past a
   button from pressing it, and it is why surfaces report an *item identity*, not just a mesh
   (`SurfaceInteraction.getActivationTarget` returns `"<surfaceUid>:<itemId>"`, or null over a margin).
+- External controls opt into `onPressStart` / `onPressMove` / `onPressEnd`. Holds cancel before any
+  grip manipulation, on >5 cm travel, target change, tracking loss, disconnect or disposal. The
+  sandbox adds a 400 ms input lease so a stopped XR frame loop cannot leave a drive hold active.
 - Hit testing considers **meshes only**; it skips hidden objects, subtrees marked `userData.xrPickable === false`, and objects marked
   `userData.xrExcludeHandedness === '<hand>'` for that hand's pointer (the wrist menu excludes the
   hand it hangs from so that hand cannot press its own wrist).
@@ -159,7 +166,7 @@ All of these are panel-agnostic and independent of ROS.
 | `SurfaceInteraction` | Bridges ray hits to surface items: `getActivationTarget`, `activate`, `hover`. One instance per workspace. |
 | `SpatialToolbar` | A row of icon buttons on one surface (`id`, `icon`, `label`, `active`, `danger`, `disabled`). |
 | `SpatialMenu` | Paged, stack-navigated menu (`open`, `push`, `pop`, `close`, `refresh`). Row kinds: `header`, `button` (detail, trailing chevron/check, secondary target), `toggle`, `stepper`. Pages are **factories**, so a refresh always reads current state. Fixed size for a given `pageSize`; depth is hidden behind pages, never by growing. |
-| `PanelFrame` | Standard panel chrome: backdrop, floor, title bar with ×, toolbar (frame adds Smaller/Larger), menu dock, scale limits. A panel hands it buttons and a menu and gets movement, sizing and closing for free. |
+| `PanelFrame` | Standard panel chrome: backdrop, floor, title bar with ×, toolbar (frame adds Smaller/Larger), menu dock, scale limits. `layout: 'surface'` omits the floor and places content and toolbar against the backdrop for flat data panels. |
 | `WristMenu` | Catalogue + open-panels menu on the wrist. Owns no workspace state; takes callbacks. |
 | `HintBoard` | Non-interactive floating note. |
 | `DisplayHost` | Reconciles a `VisualizationPanelState` into live displays (layers by id + options signature; point layers rebuilt on fixed-frame change). Holds the single shared TF subscription. |
@@ -185,7 +192,8 @@ untouched.
 ## 5. Decisions and why
 
 - **Native panels instead of mirroring the DOM.** The mirror cannot rasterise WebGL, video or
-  iframes and only refreshes on DOM mutation. A native panel is the only way to get a real 3D scene.
+  nested iframes and only refreshes on DOM mutation. External sandbox DOM now has its own low-rate
+  capture path. A native panel is the way to get a real 3D scene.
 - **A dedicated scene manager, not the 2D viewer.** Covered in `xr.md`. Do not revisit.
 - **XR is a consumer of ROS.** No second connection stack; one `/tf` + `/tf_static` pair, shared.
 - **The robot is anchored to the panel, not the room.** Simpler than syncing a world pose, and it
@@ -203,7 +211,10 @@ untouched.
 
 ## 6. Current limitations
 
-- **Non-3D panels are still DOM mirrors.** Video, iframes and WebGL content show placeholders.
+- **Panels other than 3D, Time Series and TF tree use flat fallbacks.** External panel DOM now renders
+  inside its own sandbox; Microduck holds and actions work in immersive XR. Video/nested frames need
+  native rendering. Text entry, browser dialogs and arbitrary drag controls still lack XR parity.
+- **Time Series text editing stays on desktop.** Labels, custom field paths, expressions and CSV export remain desktop controls. Existing math, units and labels are preserved and used in XR.
 - **2D does not live-update from XR.** The 2D 3D panel reads its saved state only at mount, so a layer
   added in XR appears in 2D after that panel remounts.
 - **Settings dock to the right of the panel, not below it.** Below the panel puts a tall menu at knee
@@ -217,8 +228,8 @@ untouched.
 - **`pinned` / `attach: 'viewer'` are stored but not yet applied**; there is no head-locked mode.
 - **The desk pose (`desk`, `XR_DESK_PLACEMENT_ID`) is reserved** for the native control pad and unused.
 - **Each panel builds its own URDF scene graph**; several large robots cost proportionally more.
-- **Not verified on hardware.** Behaviour was verified through unit tests and reasoning about the
-  session; XR cannot be driven from an automated browser. First on-device pass should check comfort
+- **Not verified on hardware.** Unit tests and the WebXR emulator verify behaviour; the native
+  Time Series browser test covers settings, subscription reuse and return to 2D. First on-device pass should check comfort
   (panel distance and drop of 1.1 m / 0.25 m), wrist menu reach, and grab feel.
 - **The auto-fit window** (first 6 s after a model appears) can rescale a robot whose meshes stream
   in slowly; any manual grab or zoom cancels it.
@@ -243,7 +254,7 @@ panel needs in `PanelFrame`, `SpatialMenu` and `WristMenu`.
 ### Suggested next steps
 
 1. Headset pass on the 3D panel: comfort distances, wrist reach, grab feel, menu legibility.
-2. Native XR pad (uses `desk`), then Time Series and Log panels, on `PanelFrame` + `SpatialMenu`.
+2. Native XR pad (uses `desk`) and Camera panels, on `PanelFrame` + `SpatialMenu`. Time Series and TF tree are now native. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
 3. Apply `pinned` and `attach: 'viewer'` (a head-locked group, with a pin toggle in the toolbar).
 4. Make 2D panels observe visualization state changes so XR edits show in 2D live.
 5. Hand-tracking affordances (pinch-specific rays, poke buttons).
@@ -260,3 +271,69 @@ npm run profile:frontend   # perf contract: idle 3D panel, 0 draws outside XR
 ```
 
 Tests need `canvasStub.ts` (jsdom has no 2D canvas): call `stubCanvasContext()` in `beforeAll`.
+
+## Time Series continuation
+
+`timeSeriesRenderer.ts` uses the shared flat `PanelFrame`, a `SpatialSurface` plot and paged legend,
+and `XrTimeSeriesSettings`. The toolbar provides Signals, Pause/Resume, Live and zoom; the settings
+menu offers ROS topic discovery, signal visibility/removal, detected field selection, colors,
+smoothing, history clearing and plot/performance controls. Drawing reuses `drawPlotContent` from
+the desktop plot and only uploads a texture when data or controls change, capped by `renderFps`.
+
+The desktop tile remains the owner of acquisition. `features/timeSeries/presentation.ts` exposes
+its engine and settings callback, keyed by panel id **and connection storage scope**. XR attaches to
+that presentation, retaining history, assistant edits, replay clocks and the existing subscription
+controller. While attached, acquisition continues even if the desktop surface is hidden, and its
+canvas loop is suspended. Settings persist through the workspace's existing callback and appear in
+2D immediately. No second ROS subscription or new storage schema is introduced.
+
+The renderer follows late registration and replay remounts during its frame update; disposing it
+releases presentation ownership, discovery timeouts and GPU resources without clearing history.
+If the desktop tile is absent it displays a waiting state. Do not create a second engine to mask
+that lifecycle state. The connection scope must be passed by any new tile host.
+
+Targeted verification: `npm run test:run -- src/xr src/features/timeSeries` and
+`npx playwright test e2e/xr-time-series.spec.ts --config config/playwright.config.ts --project chromium`.
+Physical headset comfort and legibility still need an on-device pass.
+
+## TF tree continuation
+
+`tfTreeRenderer.ts` consumes the mounted desktop tile through `features/tfTree/presentation.ts`,
+using the same connection-scoped registry as Time Series. The tile retains ownership of the TF
+subscription and replay source. XR keeps acquisition active, suspends desktop edge animation and
+graph rebuilding, and releases that ownership on exit without resetting the shared stream.
+
+`TfTreeSurface` reuses `layoutTfTree` and the shared `filterTfTree` rules. Its flat frame has Fit,
+zoom and a paged frame browser; selecting a frame opens details in the dock. Large trees can be
+navigated through the browser and Focus in graph. Transform values, parent/children, static/dynamic
+source and age are available alongside cycle/multiple-parent diagnostics and the existing
+`calculateTfBetweenFrames` calculator. Refresh explicitly describes its connection-wide effect
+before invoking the desktop refresh action. Filter text is edited on desktop; XR can clear it.
+Settings are shared with the mounted tile, matching its existing session-only lifetime.
+
+State processing is capped at 10 Hz. Layout only changes with topology, and graph texture updates
+only follow changes in topology, transform source, stale status or user interaction. Stale status
+advances even when no new messages arrive. Frame hit regions are clipped with the drawing, so zoom
+cannot produce invisible targets over chrome. Menus use the shared non-interactive `value` row for
+readable telemetry and paged numeric results.
+
+Verification includes `npm run test:run -- src/features/tfTree src/xr src/features/timeSeries` and
+the VR/AR tests in `e2e/xr-tf-tree.spec.ts`; both modes verify one shared TF subscription pair,
+updates during XR, filter changes and restoration of the desktop graph.
+
+
+## External fallback continuation
+
+Microduck now uses its actual 2D UI and ROS logic inside VR/AR, in the shared flat `PanelFrame`.
+Capture stays within its opaque-origin sandbox. `src/panels/capturePanelSurface.ts` adapts pinned
+html2canvas internals because the public iframe-cloning API is blocked by that origin boundary.
+Do not weaken the sandbox. `sandboxSurface.ts` owns target validation, DOM input and the hold lease;
+`externalPanelSurface.ts` owns request correlation and bitmap lifetime. Captures run at 2 Hz, while
+input leases renew every 100 ms. Inactive/disposed surfaces cancel input and release their images.
+The host temporarily uses a 720 × 500 iframe viewport for readable controls, restored on exit.
+
+Checks: unit coverage for balanced holds, stale targets, watchdog expiry and protocol validation;
+self-contained Chromium capture/scroll/style-restoration regression; actual Microduck integration in
+VR/AR with emulated controllers and mocked ROS. Native TF and Time Series browser tests also pass.
+Hardware headset validation remains outstanding. See `docs/xr.md` for running the optional real
+Microduck integration and the fallback's browser-control/CSS limitations.

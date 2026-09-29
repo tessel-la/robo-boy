@@ -54,6 +54,10 @@ export interface XrPanelInstance {
   getActivationTarget?(target: XrInputTarget): unknown;
   /** A completed activation on this panel's surface. */
   onActivate?(target: XrInputTarget): void;
+  /** Continuous controls opt into balanced press/release; cancellation must stop every command. */
+  onPressStart?(pointerId: string, target: XrInputTarget): void;
+  onPressEnd?(pointerId: string, cancelled: boolean): void;
+  onPressMove?(pointerId: string, target: XrInputTarget): void;
   /** Pointer moved onto or off this panel's surface. `null` means the pointer left. */
   onHover?(target: XrInputTarget | null): void;
   dispose(): void;

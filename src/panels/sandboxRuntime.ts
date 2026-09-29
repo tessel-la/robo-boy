@@ -1,3 +1,5 @@
+import { createSandboxSurface } from './sandboxSurface';
+
 const PANEL_SANDBOX_BASE_CSS = `html,body,#panel-root{width:100%;height:100%;margin:0;min-width:0;min-height:0;overflow:hidden;color:var(--text-color,#212529);background:var(--background-color,#fff);font-family:var(--font-family-ui,system-ui,sans-serif);color-scheme:light dark}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 10px;color:var(--button-text-color,#fff);background:var(--primary-color,#32cd32);font-weight:600;cursor:pointer}button:hover{background:var(--primary-hover-color,var(--primary-color,#32cd32))}button:disabled{opacity:.48;cursor:default}input,select,textarea{border:1px solid var(--border-color,#dee2e6);border-radius:8px;padding:7px 9px;color:var(--text-color,#212529);background:var(--background-color,#fff)}:focus-visible{outline:2px solid var(--primary-color,#32cd32);outline-offset:2px}`;
 
 export const panelSandboxBootstrap = (parentOrigin: string) => {
@@ -36,6 +38,7 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
   let requestSequence = 0;
 
   const post = (message: unknown) => port?.postMessage(message);
+  const surface = createSandboxSurface((message, transfer) => port?.postMessage(message, transfer));
   const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
   const detailString = (detail: unknown) => {
     if (detail instanceof Error) return detail.stack || detail.message;
@@ -272,6 +275,7 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
   };
 
   const dispose = async () => {
+    surface.stop();
     try {
       await instance?.unmount();
     } finally {
@@ -297,10 +301,12 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
       try {
         if (message.type === 'initialize') await initialize(message.value);
         else if (message.type === 'connection') {
+          if (message.value.status !== 'connected' || message.value.generation !== connectionSnapshot.generation) surface.stop();
           connectionSnapshot = message.value;
           connectionListeners.forEach(listener => listener(connectionSnapshot));
         } else if (message.type === 'viewport') {
           viewportSnapshot = message.value;
+          if (!viewportSnapshot.isActive) surface.stop();
           viewportListeners.forEach(listener => listener(viewportSnapshot));
           await instance?.setActive?.(viewportSnapshot.isActive);
         } else if (message.type === 'theme') {
@@ -313,7 +319,9 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
           else request.resolve(message.value);
         } else if (message.type === 'ros-message') {
           rosListeners.get(message.subscriptionId)?.(message.value);
-        } else if (message.type === 'dispose') await dispose();
+        } else if (message.type === 'surface-capture') void surface.capture(message.requestId);
+        else if (['surface-input', 'surface-scroll', 'surface-stop'].includes(message.type)) surface.input(message);
+        else if (message.type === 'dispose') await dispose();
       } catch (error) {
         post({ type: 'error', message: errorMessage(error) });
       }

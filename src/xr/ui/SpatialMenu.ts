@@ -11,6 +11,7 @@ import {
 
 export type MenuRow =
   | { kind: 'header'; label: string }
+  | { kind: 'value'; label: string; value: string }
   | {
       kind: 'button';
       label: string;
@@ -168,9 +169,9 @@ export class SpatialMenu {
       y,
       w: innerWidth,
       h: HEADER_H,
-      draw: ctx => {
+      draw: (ctx, item) => {
         const left = PAD + (canGoBack ? HEADER_H + 12 : 8);
-        drawText(ctx, page.title, left, y + HEADER_H / 2, innerWidth - (left - PAD) - HEADER_H - 12, {
+        drawText(ctx, page.title, left, item.y + item.h / 2, innerWidth - (left - PAD) - HEADER_H - 12, {
           size: 38,
           weight: 700,
         });
@@ -235,8 +236,8 @@ export class SpatialMenu {
         y,
         w: innerWidth,
         h: ROW_H * 2,
-        draw: ctx =>
-          drawText(ctx, page.emptyText ?? '', PAD + innerWidth / 2, y + ROW_H, innerWidth - 32, {
+        draw: (ctx, item) =>
+          drawText(ctx, page.emptyText ?? '', PAD + innerWidth / 2, item.y + item.h / 2, innerWidth - 32, {
             size: 30,
             color: XR_THEME.textMuted,
             align: 'center',
@@ -335,6 +336,11 @@ export class SpatialMenu {
       drawText(ctx, text, x + 24, y + ROW_H / 2, maxWidth, { size: 32, color });
 
     switch (row.kind) {
+      case 'value':
+        return [{ id, x, y, w: width, h: ROW_H, draw: ctx => {
+          drawText(ctx, row.label, x + 24, y + 22, width - 48, { size: 23, color: XR_THEME.textMuted });
+          drawText(ctx, row.value, x + 24, y + 55, width - 48, { size: 30 });
+        } }];
       case 'header':
         return [
           {

@@ -66,6 +66,21 @@ export const createEmptyTfTreeState = (): TfTreeState => ({
   knownFrames: new Set(),
 });
 
+/** Desktop and spatial views use the same frame/edge filtering rules. */
+export const filterTfTree = (state: TfTreeState, filter: string, showStatic: boolean): TfTreeState => {
+  const query = filter.trim().toLowerCase();
+  const transforms = [...state.transformsByChild.values()].filter(transform =>
+    (showStatic || transform.source !== 'static') &&
+    (!query || transform.parentFrame.toLowerCase().includes(query) || transform.childFrame.toLowerCase().includes(query))
+  );
+  const knownFrames = new Set<string>();
+  state.knownFrames.forEach(frame => {
+    if ((showStatic && !query) || (query && frame.toLowerCase().includes(query))) knownFrames.add(frame);
+  });
+  transforms.forEach(transform => { knownFrames.add(transform.parentFrame); knownFrames.add(transform.childFrame); });
+  return { ...state, knownFrames, transformsByChild: new Map(transforms.map(transform => [transform.childFrame, transform])) };
+};
+
 export const normalizeFrameId = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().replace(/^\/+/, '');

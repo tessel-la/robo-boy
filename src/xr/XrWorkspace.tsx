@@ -15,6 +15,8 @@ import { SurfaceInteraction } from './ui/SurfaceInteraction';
 import { WristMenu, type WristMenuCatalogEntry } from './ui/WristMenu';
 import { HintBoard } from './ui/HintBoard';
 import { threeDPanelRenderer } from './panels/threeD/threeDRenderer';
+import { timeSeriesPanelRenderer } from './panels/timeSeries/timeSeriesRenderer';
+import { tfTreePanelRenderer } from './panels/tfTree/tfTreeRenderer';
 import {
   domSurfaceRenderer,
   findUnrasterizableReason,
@@ -62,6 +64,8 @@ export interface XrWorkspaceProps {
 // The generic renderer is installed once, at module load, so the registry never has to import it.
 setFallbackXrPanelRenderer(domSurfaceRenderer);
 registerXrPanelRenderer(threeDPanelRenderer);
+registerXrPanelRenderer(timeSeriesPanelRenderer);
+registerXrPanelRenderer(tfTreePanelRenderer);
 
 /**
  * Find the live DOM for a panel so it can be mirrored onto a surface.
@@ -363,6 +367,11 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         onActivate: (_pointer, target) => {
           if (interaction.activate(target)) return;
           findPanelForObject(target.object)?.instance.onActivate?.(target);
+        },
+        onPressStart: (pointer, target) => findPanelForObject(target.object)?.instance.onPressStart?.(pointer.id, target),
+        onPressMove: (pointer, target) => findPanelForObject(target.object)?.instance.onPressMove?.(pointer.id, target),
+        onPressEnd: (pointer, cancelled) => {
+          for (const entry of mountedPanelsRef.current) entry.instance.onPressEnd?.(pointer.id, cancelled);
         },
         onHoverChange: (pointer, target) => {
           interaction.hover(pointer.id, target);

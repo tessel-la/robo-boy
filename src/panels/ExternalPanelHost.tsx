@@ -4,6 +4,7 @@ import { connectPanelCapabilityBroker, getGrantedPanelEndpoints } from './capabi
 import { ROBOBOY_PANEL_API_VERSION } from './constants';
 import { loadExternalPanelSource } from './localPanels';
 import { getPanelSandboxUrl } from './panelSandboxUrl';
+import { ExternalPanelSurface, registerExternalPanelSurface } from './externalPanelSurface';
 import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
 import { readPanelTheme } from './theme';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
@@ -22,6 +23,7 @@ import './ExternalPanelHost.css';
 interface ExternalPanelHostProps {
   manifest: ResolvedPanelManifest;
   instanceId: string;
+  storageScope?: string;
   ros: Ros | null;
   connectionStatus: RoboBoyPanelConnectionSnapshot['status'];
   connectionGeneration: number;
@@ -80,6 +82,7 @@ const getIframeAllow = (capabilities: readonly string[]): string | undefined => 
 const ExternalPanelHost = ({
   manifest,
   instanceId,
+  storageScope,
   ros,
   connectionStatus,
   connectionGeneration,
@@ -104,6 +107,7 @@ const ExternalPanelHost = ({
     reject(error: Error): void;
   } | null>(null);
   const isActiveRef = useRef(isActive);
+  const presentedRef = useRef(false);
   const stateRef = useRef(state);
   const onStateChangeRef = useRef(onStateChange);
   const onApprovedRosTopicsChangeRef = useRef(onApprovedRosTopicsChange);
@@ -161,7 +165,8 @@ const ExternalPanelHost = ({
       const merged = { ...viewportRef.current, ...update };
       const next = {
         ...merged,
-        isActive: isActiveRef.current && merged.isIntersecting && merged.isDocumentVisible,
+        ...(presentedRef.current ? { width: 720, height: 500 } : {}),
+        isActive: presentedRef.current || (isActiveRef.current && merged.isIntersecting && merged.isDocumentVisible),
       };
       const previous = viewportRef.current;
       if (
@@ -281,6 +286,14 @@ const ExternalPanelHost = ({
     if (!iframe?.contentWindow || !host) return;
     themeRef.current = readPanelTheme(host);
     portRef.current = channel.port1;
+    const surface = new ExternalPanelSurface(post, active => {
+      presentedRef.current = active;
+      // A readable CSS viewport independent of the hidden desktop tile's size.
+      iframe.style.width = active ? '720px' : '';
+      iframe.style.height = active ? '500px' : '';
+      publishViewport({ width: host.clientWidth, height: host.clientHeight });
+    });
+    const unregisterSurface = registerExternalPanelSurface(instanceId, surface, storageScope);
 
     const settleStartup = () => {
       startupSettled = true;
@@ -288,7 +301,8 @@ const ExternalPanelHost = ({
       startupTimer = null;
     };
     const handleMessage = (message: PanelSandboxToHostMessage) => {
-      if (message.type === 'ready') {
+      if (message.type === 'surface-frame') surface.receive(message);
+      else if (message.type === 'ready') {
         if (startupSettled) return;
         settleStartup();
         setStatus({ phase: 'ready' });
@@ -376,6 +390,8 @@ const ExternalPanelHost = ({
 
     sandboxCleanupRef.current = () => {
       disposed = true;
+      surface.dispose();
+      unregisterSurface();
       settleStartup();
       channel.port1.postMessage({ type: 'dispose' } satisfies PanelHostToSandboxMessage);
       disconnectBroker?.();
@@ -387,9 +403,11 @@ const ExternalPanelHost = ({
     connectionGeneration,
     connectionStatus,
     instanceId,
+    storageScope,
     logger,
     manifest,
     post,
+    publishViewport,
     ros,
     runtime,
     requestRosTopicSelection,
