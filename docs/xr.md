@@ -52,8 +52,22 @@ Everything below the renderer, which is most of the value:
 `UrdfClient`'s optional `requestRender` is deliberately left unset: the session renders continuously,
 so the invalidation callback the 2D viewer needs has nothing to do here.
 
-ROS is Z-up and a WebXR reference space is Y-up. `RobotWorld` rotates one group by -90° about X
-rather than converting every transform, which keeps the ROS3D classes untouched.
+ROS is Z-up and a WebXR reference space is Y-up. Each 3D panel rotates one group by -90° about X
+(`rosFrame`) rather than converting every transform, which keeps the ROS3D classes untouched.
+
+### The 3D panel is a native spatial panel
+
+The 3D panel is not mirrored from the DOM. `src/xr/panels/threeD/threeDRenderer.ts` builds it as a
+small self-contained world: a floor, a backdrop, a title bar and a toolbar (`PanelFrame`), with the
+robot, TF frames and every other layer parented to a `view` group standing on that floor. Because
+the world is a child of the panel, moving, resizing or closing the panel carries all of it. Settings
+open as a `SpatialMenu` docked beside the panel. Layers and their options are the desktop panel's own
+`VisualizationPanelState`, saved under the same key, so both sides see the same configuration.
+
+New panels are added from a wrist menu (`WristMenu`): raise the left wrist into view, choose *Add
+panel*, and the panel appears in front of you. *Open* lists what is already there, with "bring to
+me" and remove. The full design, the reusable pieces and how to extend it are in the
+[XR handover](xr-handover.md).
 
 ### Panels
 
@@ -149,7 +163,9 @@ to an intact 2D workspace with its layout unchanged.
 npm run test:run -- src/xr
 ```
 
-Covers session lifecycle (`setAnimationLoop` starts once and stops on end, teardown is idempotent,
+Covers the spatial UI primitives (hit-testing, paging, wrist gesture hysteresis, panel sizing), the
+3D panel's lifecycle and settings editor, the display host's layer reconciliation, view fitting,
+session lifecycle (`setAnimationLoop` starts once and stops on end, teardown is idempotent,
 a session that cannot bind is ended rather than left blank), per-mode feature descriptors and
 reference-space fallback, the VR/AR probe, placement normalization and round-trip, the renderer
 registry's fallback behaviour, and the grab maths including two-hand scale.
@@ -180,8 +196,10 @@ These are real and currently unsolved. None is hidden behind a silent failure.
 - **Additive blend displays black as transparent** (HoloLens-class hardware), so dark affordances
   disappear. This phase targets `alpha-blend` passthrough.
 - **No WebXR in Tauri webviews**, so the desktop and mobile apps never show the entry point.
-- **The XR world builds its own URDF scene graph**, as each 3D panel already does. Several views of a
-  large robot cost proportionally more memory.
+- **Each XR 3D panel builds its own URDF scene graph**, as each 2D 3D panel already does. Several
+  views of a large robot cost proportionally more memory.
+- **XR settings reach 2D panels only on remount.** The 2D 3D panel reads its saved state once, at
+  mount, so a layer added in XR shows up in 2D the next time that panel mounts.
 - **Hand tracking is requested but not yet modelled.** A tracked hand currently reports through the
   controller slot and produces a ray; there is no pinch-specific affordance yet.
 
@@ -212,10 +230,10 @@ external panel SDK requires of `unmount`.
 
 ## Roadmap
 
-Phase 1, in this branch, is the vertical slice: detection, both session modes, the scene and input
-managers, one grabbable mirrored panel, the robot as true 3D geometry, and clean teardown.
+This branch delivers detection, both session modes, the scene and input managers, mirrored DOM panels
+with persisted placement, and a native 3D panel with a wrist menu for adding and removing panels.
 
-Next, roughly in order: multiple panels with full placement persistence; pinning and viewer-attached
-placement; a native XR control pad rendering the existing grid-cell `CustomGamepadLayout` schema as a
+Next, roughly in order: native XR versions of the other panels on the same frame and menu; pinning
+and viewer-attached placement; a native XR control pad rendering the existing grid-cell `CustomGamepadLayout` schema as a
 spatial desk; hand-tracking affordances; an SDK extension letting external panels ship their own XR
 renderer; AR `hit-test` placement of the robot on a real surface; and control-room presets.

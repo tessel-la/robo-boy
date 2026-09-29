@@ -4,15 +4,26 @@ import type { Ros } from 'roslib';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { XrSceneManager } from './XrSceneManager';
 import { XrInputManager } from './XrInputManager';
-import { XrGrabController, applyXrPose, defaultPanelPose, toXrPose } from './grabbable';
-import { RobotWorld } from './world/RobotWorld';
+import {
+  XrGrabController,
+  applyXrPose,
+  defaultPanelPose,
+  frontOfViewerPose,
+  toXrPose,
+} from './grabbable';
+import { SurfaceInteraction } from './ui/SurfaceInteraction';
+import { WristMenu, type WristMenuCatalogEntry } from './ui/WristMenu';
+import { HintBoard } from './ui/HintBoard';
+import { threeDPanelRenderer } from './panels/threeD/threeDRenderer';
 import {
   domSurfaceRenderer,
   findUnrasterizableReason,
 } from './panels/domSurfaceRenderer';
 import {
+  registerXrPanelRenderer,
   resolveXrPanelRenderer,
   setFallbackXrPanelRenderer,
+  type XrPanelContext,
   type XrPanelInstance,
 } from './panels/registry';
 import {
@@ -20,11 +31,10 @@ import {
   pruneXrWorkspaceState,
   saveXrWorkspaceState,
   withPanelPlacement,
-  withWorldPose,
 } from './xrWorkspaceStorage';
 import { setXrPresenting } from './xrPresentationBus';
 import { hasAnyXrSupport, useXrSupport } from './useXrSupport';
-import { XR_WORLD_PLACEMENT_ID, type XrSessionMode, type XrWorkspaceState } from './types';
+import type { XrGrabbableData, XrPose, XrSessionMode, XrWorkspaceState } from './types';
 import { getSessionModeDescriptor } from './sessionModes';
 import './XrWorkspace.css';
 
@@ -41,12 +51,17 @@ export interface XrWorkspaceProps {
   panels: readonly XrWorkspacePanel[];
   /** Per-connection storage scope, so an XR room belongs to one robot. */
   storageScope?: string;
-  /** Read at entry so local edits inside the 3D panel are reflected without shell rerenders. */
-  getRobotOptions?: () => { fixedFrame: string; robotDescriptionTopic?: string };
+  /** Panel types the wrist menu offers. */
+  panelCatalog?: readonly WristMenuCatalogEntry[];
+  /** Add a panel to the workspace; it appears in `panels` on the next render. */
+  onAddPanel?: (panelType: string) => void;
+  /** Remove a panel from the workspace. */
+  onRemovePanel?: (panelId: string) => void;
 }
 
 // The generic renderer is installed once, at module load, so the registry never has to import it.
 setFallbackXrPanelRenderer(domSurfaceRenderer);
+registerXrPanelRenderer(threeDPanelRenderer);
 
 /**
  * Find the live DOM for a panel so it can be mirrored onto a surface.
@@ -78,7 +93,9 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   isConnected,
   panels,
   storageScope,
-  getRobotOptions,
+  panelCatalog,
+  onAddPanel,
+  onRemovePanel,
 }) => {
   const support = useXrSupport();
   const { meshResourcesBaseUrl } = useRuntimeConfig();
@@ -92,11 +109,20 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   const sceneRef = useRef<XrSceneManager | null>(null);
   const inputRef = useRef<XrInputManager | null>(null);
   const grabRef = useRef<XrGrabController | null>(null);
-  const worldRef = useRef<RobotWorld | null>(null);
+  const interactionRef = useRef<SurfaceInteraction | null>(null);
+  const wristMenuRef = useRef<WristMenu | null>(null);
+  const hintRef = useRef<HintBoard | null>(null);
+  const panelsReadyRef = useRef(false);
   const mountedPanelsRef = useRef<MountedPanel[]>([]);
   const stateRef = useRef<XrWorkspaceState | null>(null);
   const panelsRef = useRef(panels);
   panelsRef.current = panels;
+  const catalogRef = useRef(panelCatalog);
+  catalogRef.current = panelCatalog;
+  const onAddPanelRef = useRef(onAddPanel);
+  onAddPanelRef.current = onAddPanel;
+  const onRemovePanelRef = useRef(onRemovePanel);
+  onRemovePanelRef.current = onRemovePanel;
 
   /** Preferred mode when a device offers both; VR is the control-room default. */
   const defaultMode: XrSessionMode = support.vr ? 'immersive-vr' : 'immersive-ar';
@@ -118,16 +144,23 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       const state = stateRef.current;
       if (!placementId || !state) return;
 
-      if (placementId === XR_WORLD_PLACEMENT_ID) {
-        stateRef.current = withWorldPose(state, toXrPose(object));
-      } else {
-        const existing = state.panels[placementId];
-        stateRef.current = withPanelPlacement(state, placementId, {
-          pose: toXrPose(object),
-          pinned: existing?.pinned ?? false,
-          attach: existing?.attach ?? 'world',
-        });
-      }
+      const existing = state.panels[placementId];
+      stateRef.current = withPanelPlacement(state, placementId, {
+        ...(existing ?? { pinned: false, attach: 'world' as const }),
+        pose: toXrPose(object),
+      });
+      persist();
+    },
+    [persist]
+  );
+
+  /** Record the pose of a panel's inner world, kept beside the panel's own placement. */
+  const captureView = useCallback(
+    (panelId: string, view: XrPose) => {
+      const state = stateRef.current;
+      const existing = state?.panels[panelId];
+      if (!state || !existing) return;
+      stateRef.current = withPanelPlacement(state, panelId, { ...existing, view });
       persist();
     },
     [persist]
@@ -144,9 +177,14 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       }
     }
     mountedPanelsRef.current = [];
+    panelsReadyRef.current = false;
 
-    worldRef.current?.dispose();
-    worldRef.current = null;
+    wristMenuRef.current?.dispose();
+    wristMenuRef.current = null;
+    hintRef.current?.dispose();
+    hintRef.current = null;
+    interactionRef.current?.dispose();
+    interactionRef.current = null;
     grabRef.current?.releaseAll();
     grabRef.current = null;
     inputRef.current?.dispose();
@@ -165,8 +203,146 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
     if (!isConnected) teardown();
   }, [isConnected, teardown]);
 
+  /** The camera whose pose is the user's head: the session's own while presenting. */
+  const headCamera = (scene: XrSceneManager): THREE.Camera =>
+    scene.renderer.xr.isPresenting ? scene.renderer.xr.getCamera() : scene.camera;
+
+  /** Put something where the user is looking, in the space the panels live in. */
+  const placeInFrontOfViewer = useCallback((scene: XrSceneManager, object: THREE.Object3D) => {
+    const camera = headCamera(scene);
+    const head = camera.getWorldPosition(new THREE.Vector3());
+    const forward = camera.getWorldDirection(new THREE.Vector3());
+    const pose = frontOfViewerPose(head, forward);
+    const local = scene.uiGroup.worldToLocal(new THREE.Vector3(...pose.position));
+    applyXrPose(object, {
+      ...pose,
+      position: [local.x, local.y, local.z],
+      scale: object.scale.x || 1,
+    });
+  }, []);
+
+  const findPanelForObject = (object: THREE.Object3D): MountedPanel | null => {
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      const match = mountedPanelsRef.current.find(entry => entry.instance.object === current);
+      if (match) return match;
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const refreshRoomChrome = useCallback(() => {
+    hintRef.current?.setVisible(mountedPanelsRef.current.length === 0);
+    wristMenuRef.current?.refresh();
+  }, []);
+
+  /**
+   * Create one panel's spatial instance and put it in the room.
+   *
+   * A panel with a saved placement returns to it; one without lands on the default arc when the room
+   * is first being filled (`arc`), or in front of the user when it is added while they are inside.
+   */
+  const mountPanel = useCallback(
+    (scene: XrSceneManager, panel: XrWorkspacePanel, arc?: { index: number; total: number }) => {
+      const renderer = resolveXrPanelRenderer(panel.type);
+      if (!renderer) return;
+
+      const stored = stateRef.current?.panels[panel.id];
+      const objectOf = () =>
+        mountedPanelsRef.current.find(entry => entry.panelId === panel.id)?.instance.object;
+      const context: XrPanelContext = {
+        panelId: panel.id,
+        panelType: panel.type,
+        title: panel.title,
+        domElement: findPanelElement(panel.id),
+        ros,
+        isPassthrough: scene.isPassthrough,
+        storageScope,
+        meshResourcesBaseUrl,
+        initialView: stored?.view,
+        requestClose: () => onRemovePanelRef.current?.(panel.id),
+        savePlacement: () => {
+          const object = objectOf();
+          if (object) capturePlacement(object);
+        },
+        saveView: view => captureView(panel.id, view),
+      };
+
+      let instance: XrPanelInstance;
+      try {
+        instance = renderer.create(context);
+      } catch (nativeError) {
+        // A native renderer that cannot start (no connection, a bad saved state) degrades to the
+        // mirrored panel rather than leaving a hole in the room.
+        console.warn(`[xr] ${panel.type} renderer failed, using the DOM surface`, nativeError);
+        if (renderer === domSurfaceRenderer) return;
+        try {
+          instance = domSurfaceRenderer.create(context);
+        } catch (fallbackError) {
+          console.error('[xr] panel could not be created', fallbackError);
+          return;
+        }
+      }
+
+      if (stored) applyXrPose(instance.object, stored.pose);
+      else if (arc) applyXrPose(instance.object, defaultPanelPose(arc.index, arc.total));
+      else placeInFrontOfViewer(scene, instance.object);
+
+      scene.uiGroup.add(instance.object);
+      mountedPanelsRef.current.push({ panelId: panel.id, instance });
+      // Recorded straight away so the panel has a placement for its inner state to hang off.
+      if (!stored) capturePlacement(instance.object);
+    },
+    [captureView, capturePlacement, meshResourcesBaseUrl, placeInFrontOfViewer, ros, storageScope]
+  );
+
+  const unmountPanel = useCallback((entry: MountedPanel) => {
+    try {
+      entry.instance.dispose();
+    } catch {
+      // A panel failing to clean up must not keep it in the room.
+    }
+    entry.instance.object.removeFromParent();
+  }, []);
+
+  const mountPanels = useCallback(
+    (scene: XrSceneManager) => {
+      const livePanels = panelsRef.current;
+      livePanels.forEach((panel, index) =>
+        mountPanel(scene, panel, { index, total: livePanels.length })
+      );
+      panelsReadyRef.current = true;
+      refreshRoomChrome();
+    },
+    [mountPanel, refreshRoomChrome]
+  );
+
+  // Panels added or removed while inside — from the wrist menu, a panel's own close button, or the
+  // 2D workspace — are reconciled here rather than by rebuilding the room.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !panelsReadyRef.current) return;
+    const wanted = new Set(panels.map(panel => panel.id));
+    mountedPanelsRef.current = mountedPanelsRef.current.filter(entry => {
+      if (wanted.has(entry.panelId)) return true;
+      unmountPanel(entry);
+      return false;
+    });
+    for (const panel of panels) {
+      if (!mountedPanelsRef.current.some(entry => entry.panelId === panel.id)) mountPanel(scene, panel);
+    }
+    refreshRoomChrome();
+  }, [panels, mountPanel, refreshRoomChrome, unmountPanel]);
+
+  useEffect(() => {
+    wristMenuRef.current?.refresh();
+  }, [panelCatalog]);
+
   const buildScene = useCallback(
-    (scene: XrSceneManager, activeRos: Ros) => {
+    (scene: XrSceneManager) => {
+      const interaction = new SurfaceInteraction();
+      interactionRef.current = interaction;
+
       const input = new XrInputManager({
         renderer: scene.renderer,
         scene: scene.scene,
@@ -174,24 +350,27 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           const objects: THREE.Object3D[] = mountedPanelsRef.current.map(
             entry => entry.instance.object
           );
-          if (worldRef.current) objects.push(worldRef.current.object);
+          if (wristMenuRef.current) objects.push(wristMenuRef.current.object);
           return objects;
         },
         getActivationTarget: target => {
+          // A ray on a spatial surface activates a control, never the surface itself; on an empty
+          // margin of a menu that is null, so pressing there does nothing.
+          if (interaction.isSurface(target)) return interaction.getActivationTarget(target);
           const instance = findPanelForObject(target.object)?.instance;
           return instance?.getActivationTarget ? instance.getActivationTarget(target) : target.object;
         },
         onActivate: (_pointer, target) => {
-          const owner = findPanelForObject(target.object);
-          owner?.instance.onActivate?.(target);
+          if (interaction.activate(target)) return;
+          findPanelForObject(target.object)?.instance.onActivate?.(target);
         },
-        onHoverChange: (_pointer, target) => {
+        onHoverChange: (pointer, target) => {
+          interaction.hover(pointer.id, target);
           // Clear the previous hover before setting the new one, so two pointers cannot leave a
           // panel stuck highlighted.
           for (const entry of mountedPanelsRef.current) entry.instance.onHover?.(null);
           if (!target) return;
-          const owner = findPanelForObject(target.object);
-          owner?.instance.onHover?.(target);
+          findPanelForObject(target.object)?.instance.onHover?.(target);
         },
         onGrabStart: (pointer, target) => {
           const pose = pointerPose(input, pointer.id);
@@ -201,7 +380,9 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           grabRef.current?.begin(target.object, pose, allowScale);
         },
         onGrabEnd: (pointer, object) => {
-          capturePlacement(object);
+          const own = (object.userData as Partial<XrGrabbableData>).onGrabEnd;
+          if (own) own(object);
+          else capturePlacement(object);
           const remaining = input.getGrabbingPointers().find(entry => entry.grabbed === object);
           grabRef.current?.release(
             object,
@@ -213,24 +394,28 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       inputRef.current = input;
       grabRef.current = new XrGrabController();
 
-      const world = new RobotWorld({
-        ros: activeRos,
-        parent: scene.worldGroup,
-        meshResourcesBaseUrl,
-        ...(getRobotOptions?.() ?? { fixedFrame: 'odom' }),
+      const wristMenu = new WristMenu({
+        input,
+        parent: scene.uiGroup,
+        getCatalog: () => catalogRef.current ?? [],
+        getPanels: () => panelsRef.current,
+        onAdd: type => onAddPanelRef.current?.(type),
+        onRemove: id => onRemovePanelRef.current?.(id),
+        onSummon: id => {
+          const object = mountedPanelsRef.current.find(entry => entry.panelId === id)?.instance.object;
+          if (!object) return;
+          placeInFrontOfViewer(scene, object);
+          capturePlacement(object);
+        },
       });
-      worldRef.current = world;
+      wristMenuRef.current = wristMenu;
 
-      const storedWorld = stateRef.current?.world;
-      if (storedWorld) applyXrPose(world.object, storedWorld);
-      else {
-        // A robot at true scale two metres away is the most useful first view: close enough to read
-        // and far enough not to be standing inside.
-        world.object.position.set(0, 0, -1.6);
-        world.object.scale.setScalar(1);
-      }
+      const hint = new HintBoard('No panels open', 'Raise your left wrist and choose a panel to add.');
+      hint.object.position.set(0, 1.3, -1.2);
+      scene.uiGroup.add(hint.object);
+      hintRef.current = hint;
 
-      scene.addFrameListener((_time, delta) => {
+      scene.addFrameListener((time, delta) => {
         input.update();
 
         const poses = new Map<string, { id: string; matrixWorld: THREE.Matrix4; origin: THREE.Vector3 }>();
@@ -239,10 +424,11 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           if (pose) poses.set(pointer.id, pose);
         }
         grabRef.current?.update(poses);
+        wristMenu.update(headCamera(scene), delta);
 
         const frameContext = {
           delta,
-          time: _time,
+          time,
           mode: scene.mode ?? 'immersive-vr',
           pointers: input.getPointers(),
           interaction: input.interactionMode,
@@ -250,44 +436,8 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         for (const entry of mountedPanelsRef.current) entry.instance.update?.(frameContext);
       });
     },
-    [capturePlacement, getRobotOptions, meshResourcesBaseUrl]
+    [capturePlacement, placeInFrontOfViewer]
   );
-
-  const mountPanels = useCallback((scene: XrSceneManager) => {
-    const livePanels = panelsRef.current;
-    const total = livePanels.length;
-
-    livePanels.forEach((panel, index) => {
-      const renderer = resolveXrPanelRenderer(panel.type);
-      if (!renderer) return;
-
-      const domElement = findPanelElement(panel.id);
-      const instance = renderer.create({
-        panelId: panel.id,
-        panelType: panel.type,
-        title: panel.title,
-        domElement,
-        ros,
-        isPassthrough: scene.isPassthrough,
-      });
-
-      const stored = stateRef.current?.panels[panel.id];
-      applyXrPose(instance.object, stored?.pose ?? defaultPanelPose(index, total));
-
-      scene.uiGroup.add(instance.object);
-      mountedPanelsRef.current.push({ panelId: panel.id, instance });
-    });
-  }, [ros]);
-
-  const findPanelForObject = (object: THREE.Object3D): MountedPanel | null => {
-    let current: THREE.Object3D | null = object;
-    while (current) {
-      const match = mountedPanelsRef.current.find(entry => entry.instance.object === current);
-      if (match) return match;
-      current = current.parent;
-    }
-    return null;
-  };
 
   const handleEnter = useCallback(async () => {
     if (sceneRef.current || isStarting) return;
@@ -319,7 +469,6 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       onSessionEnd: () => {
         // Persist before tearing down: the objects holding the placements are about to be disposed.
         for (const entry of mountedPanelsRef.current) capturePlacement(entry.instance.object);
-        if (worldRef.current) capturePlacement(worldRef.current.object);
         teardown();
       },
       onError: frameError => {
@@ -328,7 +477,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
     });
     sceneRef.current = scene;
 
-      buildScene(scene, activeRos);
+      buildScene(scene);
       await scene.start(selectedMode);
       if (sceneRef.current !== scene) return;
       mountPanels(scene);

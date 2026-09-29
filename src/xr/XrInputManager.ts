@@ -22,6 +22,13 @@ export interface XrInputTarget {
   uv: THREE.Vector2 | null;
 }
 
+/** Pose of a hand's wrist-mounted anchor, in world space. */
+export interface XrWristPose {
+  matrix: THREE.Matrix4;
+  /** False when the pose is a stale fallback rather than a live tracked one. */
+  tracked: boolean;
+}
+
 export interface XrInputManagerOptions {
   renderer: THREE.WebGLRenderer;
   /** Controller and hand objects are parented here. */
@@ -57,10 +64,40 @@ interface PointerState {
   selectOriginPoint: THREE.Vector3 | null;
   grabbed: THREE.Object3D | null;
   rayLine: THREE.Line | null;
+  grip: THREE.Object3D;
 }
 
 /** Beyond this much travel, a select is a drag and must not activate anything. */
 const ACTIVATION_SLOP_METRES = 0.05;
+
+const hasHiddenAncestor = (object: THREE.Object3D): boolean => {
+  for (let parent = object.parent; parent; parent = parent.parent) {
+    if (!parent.visible) return true;
+  }
+  return false;
+};
+
+/**
+ * Gather the meshes a ray may hit under one root.
+ *
+ * Done by hand rather than with `intersectObjects(roots, true)` because that tests every triangle of
+ * everything below, including a 200k-point cloud or a full URDF mesh set that nothing is meant to
+ * grab. Subtrees marked `userData.xrPickable === false` are skipped whole, so a heavy visualization
+ * costs nothing per ray, and `xrExcludeHandedness` keeps a hand from pointing at UI mounted on
+ * itself.
+ */
+const collectPickable = (
+  object: THREE.Object3D,
+  handedness: XRHandedness,
+  out: THREE.Mesh[]
+): void => {
+  if (!object.visible) return;
+  const data = object.userData as { xrPickable?: boolean; xrExcludeHandedness?: XRHandedness };
+  if (data.xrPickable === false) return;
+  if (data.xrExcludeHandedness && data.xrExcludeHandedness === handedness) return;
+  if ((object as THREE.Mesh).isMesh) out.push(object as THREE.Mesh);
+  for (const child of object.children) collectPickable(child, handedness, out);
+};
 
 /** The input-source lifecycle events three does not include in XRTargetRaySpace's event map. */
 type XrSourceEvent = { data?: XRInputSource };
@@ -93,6 +130,7 @@ export class XrInputManager {
   private readonly pointers = new Map<string, PointerState>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly tempMatrix = new THREE.Matrix4();
+  private readonly pickable: THREE.Mesh[] = [];
   private readonly disposers: Array<() => void> = [];
   private mode: XrInteractionMode = 'navigate';
 
@@ -151,6 +189,24 @@ export class XrInputManager {
     };
   }
 
+  /**
+   * Where a hand's wrist is, for mounting UI on it.
+   *
+   * Returns the controller grip when the runtime reports one and the target ray space otherwise —
+   * a tracked hand has no grip, but its ray space still moves with the hand. Null when that hand
+   * is not connected.
+   */
+  getWristPose(handedness: XRHandedness): XrWristPose | null {
+    for (const state of this.pointers.values()) {
+      if (!state.connected || state.handedness !== handedness || !state.object) continue;
+      const source = state.grip.visible ? state.grip : state.object;
+      if (!source.visible) return null;
+      source.updateWorldMatrix(true, false);
+      return { matrix: source.matrixWorld.clone(), tracked: true };
+    }
+    return null;
+  }
+
   private refreshRay(state: PointerState): boolean {
     if (!state.connected || !state.object?.visible) return false;
     state.object.updateWorldMatrix(true, false);
@@ -165,8 +221,11 @@ export class XrInputManager {
     // Robo-Boy realistically runs on.
     for (let index = 0; index < 2; index += 1) {
       const controller = this.options.renderer.xr.getController(index);
+      // The grip space is where the hand physically is; the target ray space can be offset from it
+      // (and is all a tracked hand has), so both are added and the wrist pose picks between them.
+      const grip = this.options.renderer.xr.getControllerGrip(index);
       const id = `controller-${index}`;
-      this.options.scene.add(controller);
+      this.options.scene.add(controller, grip);
 
       const rayLine = this.createRayLine();
       controller.add(rayLine);
@@ -186,6 +245,7 @@ export class XrInputManager {
         selectOriginPoint: null,
         grabbed: null,
         rayLine,
+        grip,
       };
       this.pointers.set(id, state);
 
@@ -232,7 +292,7 @@ export class XrInputManager {
         controller.remove(rayLine);
         rayLine.geometry.dispose();
         (rayLine.material as THREE.Material).dispose();
-        this.options.scene.remove(controller);
+        this.options.scene.remove(controller, grip);
       });
     }
   }
@@ -324,10 +384,16 @@ export class XrInputManager {
     this.recomputeMode();
   }
 
-  /** Walk up to the nearest ancestor marked grabbable, so hitting any child mesh grabs the whole. */
+  /**
+   * Walk up to the nearest ancestor marked grabbable, so hitting any child mesh grabs the whole.
+   * An object can instead forward the grab elsewhere with `userData.xrGrabTarget` — a hit proxy that
+   * must not itself move or scale with the thing it stands for.
+   */
   private findGrabbable(object: THREE.Object3D): THREE.Object3D | null {
     let current: THREE.Object3D | null = object;
     while (current) {
+      const forward = current.userData?.xrGrabTarget as THREE.Object3D | undefined;
+      if (forward && isXrGrabbable(forward)) return forward;
       if (isXrGrabbable(current)) return current;
       current = current.parent;
     }
@@ -361,15 +427,17 @@ export class XrInputManager {
     const interactables = this.options.getInteractables();
     if (interactables.length === 0) return null;
 
-    for (const object of interactables) object.updateWorldMatrix(true, true);
+    const candidates = this.pickable;
+    candidates.length = 0;
+    for (const object of interactables) {
+      if (hasHiddenAncestor(object)) continue;
+      object.updateWorldMatrix(true, true);
+      collectPickable(object, state.handedness, candidates);
+    }
+    if (candidates.length === 0) return null;
+
     this.raycaster.set(state.ray.origin, state.ray.direction);
-    const intersections = this.raycaster.intersectObjects(interactables as THREE.Object3D[], true);
-    const hit = intersections.find(entry => {
-      for (let object: THREE.Object3D | null = entry.object; object; object = object.parent) {
-        if (!object.visible) return false;
-      }
-      return true;
-    });
+    const hit = this.raycaster.intersectObjects(candidates, false)[0];
     if (!hit) return null;
     return {
       object: hit.object,

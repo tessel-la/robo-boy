@@ -79,14 +79,25 @@ describe('workspace state normalization', () => {
     expect(state.panels.a.pinned).toBe(false);
   });
 
-  it('carries world and desk poses only when they parse', () => {
+  it('keeps a panel view pose only when it parses', () => {
+    const state = normalizeXrWorkspaceState({
+      version: 1,
+      panels: {
+        withView: { pose: pose(), view: pose({ scale: 2 }) },
+        badView: { pose: pose(), view: { position: [1] } },
+      },
+    });
+    expect(state.panels.withView.view?.scale).toBe(2);
+    expect(state.panels.badView.view).toBeUndefined();
+    expect('view' in state.panels.badView).toBe(false);
+  });
+
+  it('carries the desk pose only when it parses', () => {
     const state = normalizeXrWorkspaceState({
       version: 1,
       panels: {},
-      world: pose({ position: [0, 0, -2] }),
       desk: { position: 'no' },
     });
-    expect(state.world).toEqual(pose({ position: [0, 0, -2] }));
     expect(state.desk).toBeUndefined();
   });
 });
@@ -133,12 +144,9 @@ describe('pruning', () => {
     const state = normalizeXrWorkspaceState({
       version: 1,
       panels: { live: { pose: pose() }, gone: { pose: pose() } },
-      world: pose(),
     });
 
     const pruned = pruneXrWorkspaceState(state, ['live']);
     expect(Object.keys(pruned.panels)).toEqual(['live']);
-    // The world transform is not tied to any panel and must survive.
-    expect(pruned.world).toEqual(pose());
   });
 });

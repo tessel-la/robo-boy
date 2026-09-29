@@ -51,14 +51,17 @@ export interface XrPanelPlacement {
   /** Pinned placements are excluded from automatic re-layout. */
   pinned: boolean;
   attach: XrAttachMode;
+  /**
+   * Pose of a panel's inner content (the 3D scene) relative to the panel frame. Only panels that
+   * host a manipulable world of their own carry one.
+   */
+  view?: XrPose;
 }
 
 export interface XrWorkspaceState {
   version: 1;
   /** Keyed by WorkspacePanel.id, so a panel removed in 2D simply stops being referenced. */
   panels: Record<string, XrPanelPlacement>;
-  /** Transform of the robot/world visualization. */
-  world?: XrPose;
   /** Transform of the control desk, once native pads land. */
   desk?: XrPose;
 }
@@ -118,10 +121,13 @@ export interface XrGrabbableData {
   /** Storage key: a WorkspacePanel id, or one of the reserved names below. */
   readonly placementId: string;
   readonly allowScale: boolean;
+  /** Called after every grab update so a grabbable can restrict its own degrees of freedom. */
+  readonly constrain?: (object: THREE.Object3D) => void;
+  /** Replaces the default "persist this object's placement" behaviour when a grab is released. */
+  readonly onGrabEnd?: (object: THREE.Object3D) => void;
 }
 
-/** Reserved placement ids for things that are not panels. */
-export const XR_WORLD_PLACEMENT_ID = '__world__';
+/** Reserved placement id for things that are not panels. */
 export const XR_DESK_PLACEMENT_ID = '__desk__';
 
 export const isXrGrabbable = (object: THREE.Object3D): boolean =>

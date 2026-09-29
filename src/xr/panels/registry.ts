@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { Ros } from 'roslib';
-import type { XrFrameContext } from '../types';
+import type { XrFrameContext, XrPose } from '../types';
 import type { XrInputTarget } from '../XrInputManager';
 
 /**
@@ -25,6 +25,17 @@ export interface XrPanelContext {
   readonly ros: Ros | null;
   /** True when compositing over the real world, so a renderer can drop opaque backing. */
   readonly isPassthrough: boolean;
+  /** Per-connection storage scope, for panels that persist their own state next to the desktop's. */
+  readonly storageScope?: string;
+  readonly meshResourcesBaseUrl: string;
+  /** Saved pose of the panel's inner world, for panels that host one. */
+  readonly initialView?: XrPose;
+  /** Ask the workspace to remove this panel. The workspace disposes the instance in response. */
+  requestClose(): void;
+  /** Persist the panel object's current pose, after the panel moved or resized itself. */
+  savePlacement(): void;
+  /** Persist the pose of the panel's inner world. */
+  saveView(view: XrPose): void;
 }
 
 /**

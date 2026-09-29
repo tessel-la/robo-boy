@@ -4,6 +4,7 @@ import {
   XrGrabController,
   applyXrPose,
   defaultPanelPose,
+  frontOfViewerPose,
   toXrPose,
   type GrabPointerPose,
 } from './grabbable';
@@ -194,4 +195,55 @@ it('carries correctly below a translated parent without aliasing the world matri
   controller.begin(object, pointerAt('a', 0, 0, 0), true);
   controller.update(new Map([['a', pointerAt('a', 1, 0, 0)]]));
   expect(object.position.toArray()).toEqual([1, 0, 0]);
+});
+
+describe('constrain hook', () => {
+  it('runs after a single-hand carry and its result is what stays', () => {
+    const parent = new THREE.Group();
+    parent.position.set(0, 0.5, 0);
+    const object = new THREE.Object3D();
+    parent.add(object);
+    parent.updateMatrixWorld(true);
+    object.userData.constrain = (target: THREE.Object3D) => {
+      target.position.y = 0;
+    };
+    const controller = new XrGrabController();
+    controller.begin(object, pointerAt('a', 0, 0.5, 0), false);
+    controller.update(new Map([['a', pointerAt('a', 0.4, 1.5, -0.2)]]));
+    expect(object.position.x).toBeCloseTo(0.4);
+    expect(object.position.y).toBe(0);
+    expect(object.position.z).toBeCloseTo(-0.2);
+  });
+
+  it('runs after a two-hand gesture, so a scale limit holds', () => {
+    const object = new THREE.Object3D();
+    object.userData.constrain = (target: THREE.Object3D) => target.scale.setScalar(Math.min(target.scale.x, 2));
+    const controller = new XrGrabController();
+    controller.begin(object, pointerAt('a', -0.1, 0, 0), true);
+    controller.begin(object, pointerAt('b', 0.1, 0, 0), true);
+    controller.update(new Map([['a', pointerAt('a', -0.1, 0, 0)], ['b', pointerAt('b', 0.1, 0, 0)]]));
+    controller.update(new Map([['a', pointerAt('a', -1, 0, 0)], ['b', pointerAt('b', 1, 0, 0)]]));
+    expect(object.scale.x).toBe(2);
+  });
+});
+
+describe('frontOfViewerPose', () => {
+  it('places the object ahead of the head heading, below eye level, facing back at the head', () => {
+    const head = new THREE.Vector3(1, 1.6, 2);
+    const pose = frontOfViewerPose(head, new THREE.Vector3(0, 0.5, -1), 1, 0.25);
+    expect(pose.position[0]).toBeCloseTo(1);
+    expect(pose.position[1]).toBeCloseTo(1.35);
+    expect(pose.position[2]).toBeCloseTo(1);
+    const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...pose.quaternion));
+    expect(facing.z).toBeCloseTo(1);
+  });
+
+  it('ignores pitch, and falls back to forward when looking straight up', () => {
+    const head = new THREE.Vector3(0, 1.6, 0);
+    const up = frontOfViewerPose(head, new THREE.Vector3(0, 1, 0), 1);
+    expect(up.position[2]).toBeCloseTo(-1);
+    const pitched = frontOfViewerPose(head, new THREE.Vector3(0, -0.7, -0.7), 1);
+    expect(pitched.position[1]).toBeCloseTo(1.35);
+    expect(pitched.position[2]).toBeCloseTo(-1);
+  });
 });

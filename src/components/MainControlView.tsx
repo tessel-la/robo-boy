@@ -4516,18 +4516,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             isConnected={isConnected}
             panels={workspacePanels}
             storageScope={storageScope}
-            getRobotOptions={() => {
-              const panel = workspacePanels.find(entry => entry.type === '3d');
-              if (!panel) return { fixedFrame: 'odom' };
-              const state = getVisualizationStateForKey(
-                getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)
-              );
-              const urdf = state.visualizations.find(entry => entry.type === 'urdf');
-              return {
-                fixedFrame: state.fixedFrame,
-                robotDescriptionTopic: urdf?.options?.robotDescriptionTopic || urdf?.topic,
-              };
-            }}
+            panelCatalog={panelCatalog}
+            onAddPanel={type => handleAddWorkspacePanel(type as WorkspacePanelType)}
+            onRemovePanel={handleRemoveWorkspacePanel}
           />
         </React.Suspense>
       )}

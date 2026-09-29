@@ -47,9 +47,7 @@ export class XrSceneManager {
    */
   readonly camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
 
-  /** Robot and world visualization. Grabbable as a whole. */
-  readonly worldGroup = new THREE.Group();
-  /** Spatial panels. */
+  /** Spatial panels, and everything hanging off them. */
   readonly uiGroup = new THREE.Group();
   /** Everything that moves with the reference space's floor offset. */
   private readonly rootGroup = new THREE.Group();
@@ -87,7 +85,7 @@ export class XrSceneManager {
 
     options.container.appendChild(this.renderer.domElement);
 
-    this.rootGroup.add(this.worldGroup, this.uiGroup);
+    this.rootGroup.add(this.uiGroup);
     this.scene.add(this.rootGroup);
     this.addLighting();
   }

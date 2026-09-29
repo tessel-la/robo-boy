@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { XrPose } from './types';
+import type { XrGrabbableData, XrPose } from './types';
 
 /** Bounds on how far a grabbed object may be scaled, so a slip cannot lose it entirely. */
 const MIN_SCALE = 0.05;
@@ -137,13 +137,22 @@ export class XrGrabController {
         const pose = poses.get(grab.pointerId);
         if (!pose) continue;
         this.applySingle(object, grab, pose);
+        this.constrain(object);
       } else {
         const first = poses.get(grab.pointerIds[0]);
         const second = poses.get(grab.pointerIds[1]);
         if (!first || !second) continue;
         this.applyDual(object, grab, first, second);
+        this.constrain(object);
       }
     }
+  }
+
+  private constrain(object: THREE.Object3D): void {
+    const data = object.userData as Partial<XrGrabbableData>;
+    if (!data.constrain) return;
+    data.constrain(object);
+    object.updateWorldMatrix(true, false);
   }
 
   private applySingle(object: THREE.Object3D, grab: SingleGrab, pose: GrabPointerPose): void {
@@ -266,6 +275,32 @@ export const defaultPanelPose = (index: number, total: number): XrPose => {
   const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -angle, 0));
   return {
     position,
+    quaternion: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+    scale: 1,
+  };
+};
+
+/**
+ * A pose for something placed where the user is looking: in front of the head, turned to face it.
+ *
+ * `drop` lowers it below eye level, which is where a panel with a toolbar under it reads best. Only
+ * the head's heading is used, so looking up or down when the panel is added does not tilt it.
+ */
+export const frontOfViewerPose = (
+  head: THREE.Vector3,
+  forward: THREE.Vector3,
+  distance = 1.1,
+  drop = 0.25
+): XrPose => {
+  const flat = new THREE.Vector3(forward.x, 0, forward.z);
+  if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1);
+  flat.normalize();
+  const position = new THREE.Vector3().copy(head).addScaledVector(flat, distance);
+  position.y = head.y - drop;
+  const yaw = Math.atan2(head.x - position.x, head.z - position.z);
+  const quaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  return {
+    position: [position.x, position.y, position.z],
     quaternion: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
     scale: 1,
   };

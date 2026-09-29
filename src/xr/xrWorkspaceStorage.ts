@@ -66,11 +66,14 @@ const normalizePlacement = (value: unknown): XrPanelPlacement | null => {
   const candidate = value as Partial<XrPanelPlacement>;
   const pose = normalizeXrPose(candidate.pose);
   if (!pose) return null;
-  return {
+  const placement: XrPanelPlacement = {
     pose,
     pinned: candidate.pinned === true,
     attach: normalizeAttach(candidate.attach),
   };
+  const view = normalizeXrPose(candidate.view);
+  if (view) placement.view = view;
+  return placement;
 };
 
 /**
@@ -96,8 +99,6 @@ export const normalizeXrWorkspaceState = (value: unknown): XrWorkspaceState => {
   }
 
   const state: XrWorkspaceState = { version: 1, panels };
-  const world = normalizeXrPose(candidate.world);
-  if (world) state.world = world;
   const desk = normalizeXrPose(candidate.desk);
   if (desk) state.desk = desk;
   return state;
@@ -135,11 +136,6 @@ export const withPanelPlacement = (
 ): XrWorkspaceState => ({
   ...state,
   panels: { ...state.panels, [panelId]: placement },
-});
-
-export const withWorldPose = (state: XrWorkspaceState, pose: XrPose): XrWorkspaceState => ({
-  ...state,
-  world: pose,
 });
 
 /**
