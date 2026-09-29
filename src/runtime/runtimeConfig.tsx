@@ -24,6 +24,12 @@ export interface RuntimeEndpoints {
    * since a browser has WebRTC and never needs the fallback.
    */
   webrtcHlsBaseUrl: string;
+  /**
+   * The robot's own Robo-Boy proxy, which publishes its loopback ports at `/<port>/` for panels
+   * that frame them. Empty in a browser: the page is served by that proxy, so the same-origin path
+   * already reaches it. See `embedTarget.ts` for how the desktop shell uses it.
+   */
+  embedBaseUrl: string;
   mode: 'web' | 'desktop';
   host: string;
 }
@@ -37,6 +43,7 @@ export interface RuntimePortConfig {
   webrtcPort: string;
   webrtcDiscoveryPort: string;
   webrtcHlsPort: string;
+  embedProxyPort: string;
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
@@ -69,6 +76,8 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   webrtcPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_PORT, '8889'),
   webrtcDiscoveryPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_DISCOVERY_PORT, '9997'),
   webrtcHlsPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_HLS_PORT, '8888'),
+  // The robot's Robo-Boy deployment, whose HTTPS listener carries the embed route.
+  embedProxyPort: normalizeRuntimePort(import.meta.env.VITE_EMBED_PROXY_PORT, '443'),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
 });
 
@@ -160,6 +169,11 @@ const resolveDirectEndpoints = (
     webrtcWhepBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcPort}/`,
     webrtcDiscoveryUrl: `${httpScheme}://${urlHost}:${ports.webrtcDiscoveryPort}/v3/paths/list`,
     webrtcHlsBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcHlsPort}/`,
+    // A browser frames the embed route beside its own page, whichever backend it talks to.
+    embedBaseUrl:
+      mode === 'desktop'
+        ? `https://${urlHost}${ports.embedProxyPort === '443' ? '' : `:${ports.embedProxyPort}`}`
+        : '',
     mode,
     host,
   };
@@ -203,6 +217,7 @@ export function resolveRuntimeEndpoints(
       // No proxy route: the fallback exists for webviews without WebRTC, and every browser that
       // reaches this branch has it. Nothing is published that nothing would use.
       webrtcHlsBaseUrl: '',
+      embedBaseUrl: '',
       mode: 'web',
       host: location.hostname,
     };

@@ -129,6 +129,9 @@ jobs:
       - name: Verify native robot assets and web proxy parity
         run: npm run test:robot-resources
 
+      - name: Verify panel frames reach the robot's embed route
+        run: npm run test:embed-proxy
+
       - name: Build the renderer and the shell
         run: npm run build:electron
 

@@ -89,6 +89,12 @@ const desktopBridge = {
     ipcRenderer.invoke('roboboy:panel-fetch', url, init) as Promise<PanelFetchReply>,
 
   /**
+   * Names the robot proxy behind a connection's embed host, so the shell can forward that host's
+   * `/<port>/` frames to it. Only a proxy the app itself registers is ever reached.
+   */
+  registerEmbedTarget: (baseUrl: string): void => ipcRenderer.send('roboboy:embed-register', baseUrl),
+
+  /**
    * Updates. The page names a release and an installer; the main process looks them up, downloads
    * and checks them itself, and installs only the file it checked.
    */

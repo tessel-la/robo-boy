@@ -66,6 +66,21 @@ ROBOBOY_TEST_MESH_BASE=http://10.8.0.1:8000 npm run test:robot-resources
 Use the target connection's actual ports. The check subscribes to `/robot_description` and reads
 assets; it does not publish robot commands. On headless Linux, run it under `xvfb-run -a`.
 
+Panels that frame a robot page, such as a web viewer on the robot's port 8089, use the same-origin
+path `/<port>/` beside their sandbox. In a browser the robot's Robo-Boy proxy serves that path and
+publishes only the ports in `ROBOBOY_EMBED_PORTS`. The packaged app serves itself, so Electron gives
+each connection's panel sandbox its own host, `app://embed-<id>/`, and forwards that host's
+`/<port>/` requests to the connection's robot proxy at `https://<host>` (`VITE_EMBED_PROXY_PORT`,
+default 443). The robot's allowlist still decides which ports are reachable, cookies are not
+forwarded, and hosts the app did not register reach nothing. Tauri keeps the sandbox beside the app.
+
+`npm run test:embed-proxy` checks the route against a local fixture. An optional read-only live
+check frames a robot page and waits for Sunrise Fabrics to report `Connected`:
+
+```bash
+ROBOBOY_TEST_EMBED_BASE=https://robot.local ROBOBOY_TEST_EMBED_PATH=/8089/ npm run test:embed-proxy
+```
+
 ## Development
 
 Install the standard Tauri v2 prerequisites for the host operating system, including Rust and the platform webview development packages. Then run:
