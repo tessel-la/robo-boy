@@ -1,6 +1,31 @@
 import type { Page } from '@playwright/test';
 
+/** One scripted goal: feedback messages, then a result (or nothing, for a goal that never ends). */
+export type ScriptedActionGoal = {
+  feedback?: unknown[];
+  feedbackIntervalMs?: number;
+  /** When the result comes, after the feedback. */
+  delayMs?: number;
+  status?: number;
+  /** false: rosbridge could not run the goal (values is its reason). */
+  result?: boolean;
+  values?: unknown;
+  hang?: boolean;
+};
+
+/** One scripted service call's answer. */
+export type ScriptedServiceCall = {
+  delayMs?: number;
+  /** false: the call failed (values is the error). */
+  result?: boolean;
+  values?: unknown;
+};
+
 type MockRosResources = {
+  /** Answers per action name, one per goal in turn; the last one repeats. */
+  actionGoals?: Record<string, ScriptedActionGoal[]>;
+  /** Answers per service name, one per call in turn; the last one repeats. */
+  serviceCalls?: Record<string, ScriptedServiceCall[]>;
   topics?: Array<{ name: string; type: string }>;
   services?: Array<{ name: string; type: string }>;
   actionServers?: Array<{ name: string; type: string }>;
@@ -23,6 +48,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     actionServers: resources.actionServers ?? defaultResources.actionServers,
     nodes: resources.nodes ?? defaultResources.nodes,
     parameters: resources.parameters ?? defaultResources.parameters,
+    actionGoals: resources.actionGoals ?? {},
+    serviceCalls: resources.serviceCalls ?? {},
   };
 
   await page.addInitScript(initResources => {
@@ -36,6 +63,17 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       static instances = new Set<MockWebSocket>();
       static subscriptionCounts = new Map<string, number>();
       static published = new Map<string, unknown[]>();
+      static scriptedUses = new Map<string, number>();
+
+      /** The next scripted answer for a name, the last one repeating. */
+      static nextScripted<T>(kind: string, name: string, scripts: Record<string, T[]>): T | undefined {
+        const list = scripts[name];
+        if (!list?.length) return undefined;
+        const key = `${kind}:${name}`;
+        const used = MockWebSocket.scriptedUses.get(key) ?? 0;
+        MockWebSocket.scriptedUses.set(key, used + 1);
+        return list[Math.min(used, list.length - 1)];
+      }
 
       url: string;
       readyState = MockWebSocket.CONNECTING;
@@ -100,7 +138,45 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           }
           return;
         }
+        if (message.op === 'send_action_goal') {
+          const goal = MockWebSocket.nextScripted('action', message.action, initResources.actionGoals);
+          if (!goal) return;
+          const reply = (payload: Record<string, unknown>, delay: number) => setTimeout(() => {
+            if (this.readyState === MockWebSocket.OPEN) {
+              this.emit('message', { data: JSON.stringify({ id: message.id, action: message.action, ...payload }) });
+            }
+          }, delay);
+          const interval = goal.feedbackIntervalMs ?? 50;
+          (goal.feedback ?? []).forEach((values, index) => reply({ op: 'action_feedback', values }, interval * (index + 1)));
+          if (goal.hang) return;
+          reply(
+            {
+              op: 'action_result',
+              values: goal.values ?? {},
+              result: goal.result ?? true,
+              ...(goal.result === false ? {} : { status: goal.status ?? 4 }),
+            },
+            interval * (goal.feedback?.length ?? 0) + (goal.delayMs ?? 20)
+          );
+          return;
+        }
         if (message.op !== 'call_service') return;
+
+        const scripted = MockWebSocket.nextScripted('service', message.service, initResources.serviceCalls);
+        if (scripted) {
+          setTimeout(() => {
+            this.emit('message', {
+              data: JSON.stringify({
+                op: 'service_response',
+                service: message.service,
+                id: message.id,
+                result: scripted.result ?? true,
+                values: scripted.values ?? {},
+              }),
+            });
+          }, scripted.delayMs ?? 20);
+          return;
+        }
 
         const values = this.getServiceValues(message.service, message.args ?? {});
         const response = {

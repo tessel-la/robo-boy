@@ -3,8 +3,9 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { ROSServiceNodeData, ExecutionStatus } from '../../types';
 import './NodeStyles.css';
 import DataFlowSummary from './DataFlowSummary';
+import ExecutionChip from '../execution/ExecutionChip';
 
-const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }) => {
+const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ id, data, selected }) => {
   const statusClass = data.status || ExecutionStatus.Idle;
 
   return (
@@ -18,6 +19,7 @@ const ServiceNode: React.FC<NodeProps<ROSServiceNodeData>> = ({ data, selected }
       <div className="bt-node-header">
         <span className="bt-node-icon">🔧</span>
         <span className="bt-node-type">Service</span>
+        <ExecutionChip nodeId={id} nodeLabel={data.label} />
       </div>
 
       <div className="bt-node-content">

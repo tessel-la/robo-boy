@@ -46,6 +46,7 @@ WORKDIR /ros_ws
 
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
+COPY infra/ros/bt_execution_details.py /ros_ws/bt_execution_details.py
 COPY infra/ros/recording_runner.py /ros_ws/recording_runner.py
 RUN chmod +x /ros_ws/entrypoint.sh
 

@@ -1,0 +1,606 @@
+/* Execution details: the chip on a node, the card it opens, and the value tree inside it. */
+
+.bt-exec-chip,
+.bt-exec-card {
+  --exec-running: #ffc107;
+  --exec-success: var(--success-color, #4caf50);
+  --exec-warning: var(--warning-color, #f59f00);
+  --exec-error: var(--error-color, #f44336);
+  --exec-neutral: var(--text-color-secondary, #6c757d);
+  --exec-tone: var(--exec-neutral);
+}
+
+.tone-running { --exec-tone: var(--exec-running); }
+.tone-success { --exec-tone: var(--exec-success); }
+.tone-warning { --exec-tone: var(--exec-warning); }
+.tone-error { --exec-tone: var(--exec-error); }
+
+/* The chip sits at the end of the node's header: small, tinted by the outcome, never wider than an icon. */
+.bt-exec-chip {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--exec-tone) 55%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--exec-tone) 14%, var(--card-bg, #ffffff));
+  color: var(--exec-tone);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bt-exec-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.bt-exec-chip:hover,
+.bt-exec-chip.is-open {
+  background: color-mix(in srgb, var(--exec-tone) 26%, var(--card-bg, #ffffff));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--exec-tone) 22%, transparent);
+}
+
+.bt-exec-chip:focus-visible {
+  outline: 2px solid var(--primary-color, #4285f4);
+  outline-offset: 1px;
+}
+
+.bt-exec-chip.tone-running svg {
+  animation: bt-exec-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes bt-exec-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* The card: docked on the canvas's right, under the toolbar and node search (which end 114px down); a bottom sheet
+   in a narrow panel, where the execution controls stack down the right side. */
+.bt-exec-card {
+  position: absolute;
+  top: 124px;
+  right: 12px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  width: min(390px, calc(100% - 24px));
+  max-height: calc(100% - 136px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-top: 3px solid var(--exec-tone);
+  border-radius: 8px;
+  background: var(--card-bg, #ffffff);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  color: var(--text-color, #333333);
+  animation: bt-exec-card-in 0.16s ease-out;
+}
+
+@keyframes bt-exec-card-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.bt-exec-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.bt-exec-card-heading {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bt-exec-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--exec-tone);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bt-exec-card-kicker i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--exec-tone);
+}
+
+.bt-exec-card.tone-running .bt-exec-card-kicker i {
+  animation: bt-exec-breathe 1.4s ease-in-out infinite;
+}
+
+.bt-exec-card-heading h4 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-exec-card-target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+  color: var(--text-color-secondary, #666666);
+  font-family: var(--font-family-ui);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.bt-exec-card-target small {
+  opacity: 0.8;
+}
+
+.bt-exec-card-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color-secondary, #666666);
+}
+
+.bt-exec-card-close:hover {
+  border-color: var(--border-color, #e0e0e0);
+  color: var(--text-color, #333333);
+}
+
+.bt-exec-card-body {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bt-exec-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.bt-exec-meta div {
+  display: grid;
+}
+
+.bt-exec-meta dt {
+  color: var(--text-color-secondary, #666666);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bt-exec-meta dd {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-exec-section {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #e0e0e0) 85%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--background-secondary, #f8f9fa) 55%, transparent);
+}
+
+.bt-exec-section.problem {
+  border-color: color-mix(in srgb, var(--exec-error) 45%, transparent);
+  background: color-mix(in srgb, var(--exec-error) 7%, transparent);
+}
+
+.bt-exec-section.warning {
+  border-color: color-mix(in srgb, var(--exec-warning) 50%, transparent);
+  background: color-mix(in srgb, var(--exec-warning) 8%, transparent);
+}
+
+.bt-exec-section h5 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.bt-exec-section h5 small {
+  color: var(--text-color-secondary, #666666);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bt-exec-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bt-exec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.bt-exec-chips span {
+  padding: 2px 7px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 999px;
+  color: var(--text-color-secondary, #666666);
+  font-family: var(--font-family-ui);
+  font-size: 10px;
+}
+
+.bt-exec-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 7em) minmax(0, 1fr) 3em;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.bt-exec-progress span {
+  overflow: hidden;
+  color: var(--text-color-secondary, #666666);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-exec-progress div {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-color, #333333) 12%, transparent);
+}
+
+.bt-exec-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color, #4285f4);
+  transition: width 0.2s ease;
+}
+
+.bt-exec-progress b {
+  font-family: var(--font-family-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.bt-exec-empty {
+  margin: 0;
+  color: var(--text-color-secondary, #666666);
+  font-size: 12px;
+}
+
+/* Its button sits on the left: the app's assistant button floats over the bottom-right corner. */
+.bt-exec-card-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.bt-exec-card-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 7px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #333333);
+  font-size: 11px;
+}
+
+.bt-exec-card-footer button:hover {
+  border-color: var(--primary-color, #4285f4);
+}
+
+/* The value tree. */
+.bt-value-tree,
+.bt-value-children {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-family-ui);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.bt-value-children {
+  margin-left: 6px;
+  padding-left: 9px;
+  border-left: 1px dashed color-mix(in srgb, var(--border-color, #e0e0e0) 90%, transparent);
+}
+
+.bt-value-tree > .bt-value-children {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.bt-value-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.bt-value-row.container,
+.bt-value-row.rich {
+  display: block;
+}
+
+.bt-value-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.bt-value-key {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-color-secondary, #666666);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-value-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bt-value-toggle:hover .bt-value-key {
+  color: var(--text-color, #333333);
+}
+
+.bt-value-caret {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--text-color-secondary, #666666);
+  transform: translateY(-1px);
+  transition: transform 0.12s ease;
+}
+
+.bt-value-row.open > .bt-value-toggle .bt-value-caret {
+  transform: translateY(-1px) rotate(90deg);
+}
+
+.bt-value-summary,
+.bt-value-null,
+.bt-value-binary {
+  color: var(--text-color-secondary, #666666);
+  font-style: italic;
+}
+
+.bt-value-string {
+  min-width: 0;
+  color: var(--text-color, #333333);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bt-value-number {
+  color: #3b7dd8;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+[data-theme='dark'] .bt-value-number {
+  color: #7fb4ff;
+}
+
+.bt-value-bool.true {
+  color: var(--exec-success, #2e9e4f);
+}
+
+.bt-value-bool.false {
+  color: var(--exec-error, #d64545);
+}
+
+.bt-value-more {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color, #4285f4);
+  font: inherit;
+  font-size: 10.5px;
+  font-style: normal;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bt-value-empty {
+  color: var(--text-color-secondary, #666666);
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+/* Images: a thumbnail in the tree, a lightbox when enlarged. */
+.bt-image-preview {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin: 4px 0 2px;
+}
+
+.bt-image-thumb {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text-color, #333) 8%, transparent) 0% 25%, transparent 0% 50%) 50% / 12px 12px;
+  cursor: zoom-in;
+}
+
+.bt-image-thumb img {
+  display: block;
+  max-width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.bt-image-thumb:hover {
+  border-color: var(--primary-color, #4285f4);
+}
+
+.bt-image-preview figcaption,
+.bt-image-error span {
+  color: var(--text-color-secondary, #666666);
+  font-family: var(--font-family-ui);
+  font-size: 10.5px;
+}
+
+.bt-image-error {
+  padding: 6px 8px;
+  border: 1px dashed var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+.bt-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: max(16px, var(--safe-area-top, 0px)) 16px max(16px, var(--safe-area-bottom, 0px));
+  background: rgba(0, 0, 0, 0.72);
+  animation: bt-exec-card-in 0.14s ease-out;
+}
+
+.bt-image-lightbox-frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-width: min(1200px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--card-bg, #1e1e1e);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.bt-image-lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  color: var(--text-color, #e0e0e0);
+  font-family: var(--font-family-ui);
+  font-size: 12px;
+}
+
+.bt-image-lightbox-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-image-lightbox-bar a,
+.bt-image-lightbox-bar button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-color, #444444);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+}
+
+/* The larger preview fills most of the screen, however small the image. */
+.bt-image-lightbox-frame > img {
+  display: block;
+  width: min(1100px, calc(100vw - 32px));
+  height: auto;
+  max-height: calc(100vh - 90px);
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.bt-image-lightbox-frame > img.is-small {
+  image-rendering: pixelated;
+}
+
+@container (max-width: 600px) {
+  .bt-exec-card {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    /* Clear of the stacked execution controls at the top right. */
+    max-height: max(240px, min(70%, calc(100% - 300px)));
+  }
+}
+
+@media (pointer: coarse) {
+  .bt-exec-chip {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-exec-card,
+  .bt-image-lightbox,
+  .bt-exec-chip.tone-running svg,
+  .bt-exec-card.tone-running .bt-exec-card-kicker i {
+    animation: none;
+  }
+}

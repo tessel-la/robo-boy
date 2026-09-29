@@ -212,6 +212,8 @@ export type ExecutionEventType =
   | 'nodeFailure'
   | 'nodeRunning'
   | 'blackboardUpdated'
+  /** An action or service node's execution changed: see `ExecutionUpdate` in `data.execution`. */
+  | 'nodeExecution'
   | 'completed'
   | 'stopped'
   | 'error';
