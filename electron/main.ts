@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerUpdater } from './updater';
 import { registerRobotResources, robotResourceScheme } from './robotResources';
+import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
 
 /**
  * The Electron desktop shell.
@@ -66,31 +67,50 @@ const CONTENT_TYPES = new Map(
 );
 
 /**
- * Serves the built renderer over {@link RENDERER_SCHEME}.
+ * Reads one file of the built renderer.
  *
  * Files are read rather than fetched off disk because a packaged app keeps them inside app.asar,
  * which Node's filesystem understands and the network stack does not.
  */
-const serveRenderer = (rendererRoot: string): void => {
+const readRendererFile = async (rendererRoot: string, pathname: string): Promise<Response> => {
+  const relativePath = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  const target = path.join(rendererRoot, relativePath);
+
+  // A request is only ever for something inside the built renderer. Anything that climbs out of
+  // it -- through .. segments, or an absolute path -- is refused rather than resolved.
+  if (target !== rendererRoot && !target.startsWith(rendererRoot + path.sep)) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  try {
+    const body = await readFile(target);
+    return new Response(body, {
+      headers: { 'content-type': CONTENT_TYPES.get(path.extname(target).toLowerCase()) ?? 'application/octet-stream' },
+    });
+  } catch {
+    return new Response('Not found', { status: 404 });
+  }
+};
+
+/**
+ * Serves {@link RENDERER_SCHEME}: the built renderer on {@link RENDERER_HOST}, and on each
+ * connection's embed host its panel sandbox and the robot's `/<port>/` frames (see embedProxy.ts).
+ *
+ * Under the dev server the renderer comes from Vite, so only the embed hosts are answered here and
+ * their sandbox document is fetched from Vite as well.
+ */
+const serveRenderer = (rendererRoot: string | null): void => {
   protocol.handle(RENDERER_SCHEME, async request => {
-    const { pathname } = new URL(request.url);
-    const relativePath = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
-    const target = path.join(rendererRoot, relativePath);
-
-    // A request is only ever for something inside the built renderer. Anything that climbs out of
-    // it -- through .. segments, or an absolute path -- is refused rather than resolved.
-    if (target !== rendererRoot && !target.startsWith(rendererRoot + path.sep)) {
-      return new Response('Not found', { status: 404 });
+    const { hostname, pathname } = new URL(request.url);
+    if (isEmbedHost(hostname)) {
+      return fetchEmbed(request, () =>
+        rendererRoot
+          ? readRendererFile(rendererRoot, '/panel-sandbox.html')
+          : net.fetch(new URL('panel-sandbox.html', devServerUrl).href)
+      );
     }
-
-    try {
-      const body = await readFile(target);
-      return new Response(body, {
-        headers: { 'content-type': CONTENT_TYPES.get(path.extname(target).toLowerCase()) ?? 'application/octet-stream' },
-      });
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
+    if (!rendererRoot) return new Response('Not found', { status: 404 });
+    return readRendererFile(rendererRoot, pathname);
   });
 };
 
@@ -261,8 +281,9 @@ if (!app.requestSingleInstanceLock()) {
   ]);
 
   void app.whenReady().then(async () => {
-    if (!devServerUrl) serveRenderer(path.join(currentDir, '../renderer'));
+    serveRenderer(devServerUrl ? null : path.join(currentDir, '../renderer'));
     configurePermissions();
+    registerEmbedProxy();
     registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
     registerWindowControls();

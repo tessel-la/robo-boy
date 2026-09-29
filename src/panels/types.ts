@@ -120,6 +120,8 @@ export interface PanelHostRuntime {
     webrtcDiscovery: string;
     webrtcHls: string;
   };
+  /** Where the sandbox's `/<port>/` frames go in the desktop shell; never handed to a panel. */
+  embedBaseUrl?: string;
 }
 
 export interface StoredPanelState {

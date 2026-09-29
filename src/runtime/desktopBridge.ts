@@ -28,6 +28,11 @@ export interface RoboBoyDesktopBridge {
   nativeWindowControls?: boolean;
   window: DesktopWindow;
   fetchPanelAsset(url: string, init?: { method?: string }): Promise<PanelFetchReply>;
+  /**
+   * Names the robot proxy a connection's panel frames reach; see `embedTarget.ts`. Absent in
+   * older shells, which keep the sandbox beside the app.
+   */
+  registerEmbedTarget?(baseUrl: string): void;
   /** Absent in shells built before updates existed. */
   updater?: DesktopUpdater;
 }

@@ -965,6 +965,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         webrtcDiscovery: runtimeEndpoints.webrtcDiscoveryUrl,
         webrtcHls: runtimeEndpoints.webrtcHlsBaseUrl,
       },
+      embedBaseUrl: runtimeEndpoints.embedBaseUrl,
     }),
     [runtimeEndpoints]
   );
