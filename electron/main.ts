@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerUpdater } from './updater';
+import { registerRobotResources, robotResourceScheme } from './robotResources';
 
 /**
  * The Electron desktop shell.
@@ -252,6 +253,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // Has to be declared before the app is ready, while the schemes are still being decided.
   protocol.registerSchemesAsPrivileged([
+    robotResourceScheme,
     {
       scheme: RENDERER_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
@@ -261,6 +263,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(async () => {
     if (!devServerUrl) serveRenderer(path.join(currentDir, '../renderer'));
     configurePermissions();
+    registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
     registerWindowControls();
     registerUpdater();

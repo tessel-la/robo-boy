@@ -1,4 +1,5 @@
 mod updater;
+mod robot_resources;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -7,6 +8,17 @@ pub fn run() {
   let debug_page_load = std::env::var_os("ROBOBOY_DESKTOP_DEBUG").is_some();
 
   tauri::Builder::default()
+    .register_asynchronous_uri_scheme_protocol("robot-resource", |ctx, request, responder| {
+      use tauri::Manager;
+      let origin = ctx.app_handle().get_webview_window(ctx.webview_label())
+        .and_then(|webview| webview.url().ok())
+        .map(|url| if url.scheme() == "tauri" {
+          format!("tauri://{}", url.host_str().unwrap_or("localhost"))
+        } else { url.origin().ascii_serialization() });
+      tauri::async_runtime::spawn(async move {
+        responder.respond(robot_resources::fetch(request, origin.as_deref()).await);
+      });
+    })
     // Panel installation runs in the app, but the official inventory serves manifests and
     // bundles as GitHub release assets, which send no CORS headers and are therefore
     // unreachable from the webview. This client performs those requests natively instead.

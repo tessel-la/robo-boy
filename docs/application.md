@@ -39,7 +39,32 @@ frontend is needed, so no certificate has to be created:
 docker compose up -d --build ros-stack
 ```
 
-The optional mesh server must allow cross-origin requests when the desktop app loads URDF meshes directly from port 8000.
+URDF descriptions arrive over rosbridge; their mesh files, materials, and textures come from the
+selected mesh server. Electron and Tauri (including mobile) fetch these assets through a dedicated
+native `robot-resource` transport, so the mesh server does not need CORS headers. Mesh markers use
+the same transport. Set the mesh port in the connection's service-port fields; `8000` is only the
+default. Localhost, remote hosts, VPN addresses, IPv6, and custom ports follow the same path.
+
+The transport only performs HTTP(S) GETs within the selected resource-server origin and path,
+checks redirects against that scope, and sends no cookies or authorization headers. Assets on an
+unrelated absolute URL keep using normal browser fetching and need that server's CORS support.
+The web app continues to use `/mesh_resources` through Caddy, or ordinary CORS when configured to
+connect directly. Other services such as Ollama retain their existing origin requirements.
+
+If TF frames appear but the robot mesh does not, check asset requests as well as `/robot_description`:
+a valid URDF can arrive while every OBJ/STL/DAE request fails. In older desktop builds, a missing
+`Access-Control-Allow-Origin` response header causes exactly this symptom.
+
+Validate the desktop asset path against a local fixture with no CORS headers (OBJ, MTL, textures,
+STL, plus web-proxy parity) using `npm run test:robot-resources`. An optional read-only live check is:
+
+```bash
+ROBOBOY_TEST_ROSBRIDGE=ws://10.8.0.1:9090 \
+ROBOBOY_TEST_MESH_BASE=http://10.8.0.1:8000 npm run test:robot-resources
+```
+
+Use the target connection's actual ports. The check subscribes to `/robot_description` and reads
+assets; it does not publish robot commands. On headless Linux, run it under `xvfb-run -a`.
 
 ## Development
 
