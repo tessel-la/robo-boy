@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Ros } from 'roslib';
 import { FiAlertTriangle, FiCheck, FiSettings, FiX } from 'react-icons/fi';
 import {
@@ -17,13 +17,17 @@ import ValueControl from './ValueControl';
 import { getDynamicRangeStep, roundToStepPrecision } from '../rangeUtils';
 import {
   CAMERA_MESSAGE_TYPES,
-  fetchNumericFields,
   filterCameraTopics,
   filterOdometryTopics,
   isPoseStampedMessageType,
-  NumericFieldOption,
   ODOMETRY_MESSAGE_TYPES,
 } from '../rosMessageUtils';
+import { componentLibrary } from '../defaultLayouts';
+import { DATA_BINDINGS, isDataComponentType, validateDataComponent, type ConfigIssue } from '../dataComponents';
+import { fieldForNewType, useMessageFields } from '../useMessageFields';
+import { stdScalarType } from '../padValues';
+import { FieldPicker, MessageTypeInput, TopicPicker } from './RosSourceFields';
+import ValueSettings, { VALUE_CONFIG_KEYS, valueConfigFor, type ValueConfig } from './ValueSettings';
 import './ComponentSettingsModal.css';
 
 interface ComponentSettingsModalProps {
@@ -139,6 +143,9 @@ const getCanonicalMessageType = (type: string): string => {
   return match?.[0] || type;
 };
 
+/** The same message type, in the ROS 1 (`pkg/Type`) or the ROS 2 (`pkg/msg/Type`) spelling. */
+const sameMessageType = (a: string, b: string) => a.replace('/msg/', '/') === b.replace('/msg/', '/');
+
 const getMessageTypeConfig = (type: string) => {
   return MESSAGE_TYPES[getCanonicalMessageType(type) as keyof typeof MESSAGE_TYPES];
 };
@@ -204,6 +211,24 @@ const parsePositiveIntegerOrUndefined = (value: string): number | undefined => {
 const getDefaultCameraStreamType = (messageType: string): string =>
   messageType.includes('CompressedImage') ? 'ros_compressed' : 'mjpeg';
 
+/** What stops a configuration from working (errors) or might (warnings), where it is set. */
+const ConfigIssues: React.FC<{ issues: ConfigIssue[] }> = ({ issues }) => (issues.length === 0 ? null : (
+  <div className="setting-group config-issues" role="status">
+    {issues.map(issue => (
+      issue.level === 'error' ? (
+        <div className="error-message-inline" key={issue.message}>
+          <div className="error-content-inline">
+            <FiAlertTriangle className="error-icon" aria-hidden="true" />
+            <span className="error-text">{issue.message}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="topic-warning" key={issue.message}>{issue.message}</div>
+      )
+    ))}
+  </div>
+));
+
 const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   isOpen,
   component,
@@ -266,8 +291,6 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
   // Plot-specific settings
   const [plotFieldPaths, setPlotFieldPaths] = useState<string[]>(['data']);
-  const [plotFieldOptions, setPlotFieldOptions] = useState<NumericFieldOption[]>([]);
-  const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [timeWindowSec, setTimeWindowSec] = useState(10);
   const [autoScale, setAutoScale] = useState(true);
   const [minY, setMinY] = useState(-1);
@@ -277,6 +300,28 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   const [heartbeatMode, setHeartbeatMode] = useState<'boolean' | 'pulse'>('boolean');
   const [heartbeatTimeoutMs, setHeartbeatTimeoutMs] = useState(2000);
   const [heartbeatFieldPath, setHeartbeatFieldPath] = useState('data');
+
+  // Set once the operator picks a message type (or a topic of one) in these settings.
+  const typeChosenRef = useRef(false);
+  const chooseMessageType = (next: string) => {
+    typeChosenRef.current = true;
+    setMessageType(next);
+  };
+
+  // Value component (gauge, level, readout, state, setpoint, text) settings; the field is `field`.
+  const [valueConfig, setValueConfig] = useState<ValueConfig>({});
+  const valueComponent = isDataComponentType(component?.type) ? component.type : undefined;
+  const dataBinding = valueComponent ? DATA_BINDINGS[valueComponent] : undefined;
+  // Components that read any message type pick fields from what the type is known to have.
+  const readsAnyMessageType = component?.type === 'heartbeat' || component?.type === 'plot' || Boolean(valueComponent);
+  const messageFields = useMessageFields(ros, messageType, isOpen && (component?.type === 'plot' || Boolean(valueComponent)));
+  // Fields are trusted only once they are the current type's: a type just picked is still being looked up.
+  const fieldsAreCurrent = !messageFields.isLoading && messageFields.messageType === messageType.trim();
+  const knownFields = useMemo(() => (fieldsAreCurrent ? messageFields.fields : []), [fieldsAreCurrent, messageFields.fields]);
+  const plotFieldOptions = useMemo(() => messageFields.fields.filter(option => option.kind === 'number'), [messageFields.fields]);
+  const isLoadingFields = messageFields.isLoading;
+  const selectedField = knownFields.find(option => option.path === field.trim());
+  const isReadingFields = Boolean(valueComponent) && messageType.trim() !== '' && !fieldsAreCurrent;
 
   // Loading state
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
@@ -304,7 +349,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         : [messageType];
 
       // Check if the existing topic type matches any acceptable format
-      if (!acceptableTypes.includes(existingTopic.type)) {
+      if (!acceptableTypes.some(type => sameMessageType(type, existingTopic.type))) {
         setErrorMessage(`Topic name "${topic}" is already in use by an existing topic with message type "${existingTopic.type}". Please choose a different topic name or select the correct message type.`);
       }
     }
@@ -339,61 +384,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     if (component) {
       setLabel(component.label || '');
       setEventOperations(component.eventOperations || {});
+      typeChosenRef.current = false;
 
       const action = component.action as ROSTopicConfig;
 
-      // Set defaults for new components first
-      let defaultTopic = `/${component.type}`;
-      let defaultMessageType = 'sensor_msgs/Joy';
-      let defaultField = 'axes';
-
-      switch (component.type) {
-        case 'dpad':
-          defaultTopic = '/dpad';
-          defaultMessageType = 'sensor_msgs/Joy';
-          defaultField = 'buttons';
-          break;
-        case 'slider':
-          defaultTopic = '/slider';
-          defaultMessageType = 'std_msgs/Float32';
-          defaultField = 'data';
-          break;
-        case 'button':
-          defaultTopic = '/button';
-          defaultMessageType = 'std_msgs/Bool';
-          defaultField = 'data';
-          break;
-        case 'toggle':
-          defaultTopic = '/toggle';
-          defaultMessageType = 'std_msgs/Bool';
-          defaultField = 'data';
-          break;
-        case 'joystick':
-          defaultTopic = '/joystick';
-          defaultMessageType = 'sensor_msgs/Joy';
-          defaultField = 'axes';
-          break;
-        case 'physical-gamepad':
-          defaultTopic = '/joy';
-          defaultMessageType = 'sensor_msgs/msg/Joy';
-          defaultField = 'axes';
-          break;
-        case 'camera':
-          defaultTopic = '/camera/image_raw/compressed';
-          defaultMessageType = 'sensor_msgs/CompressedImage';
-          defaultField = '';
-          break;
-        case 'plot':
-          defaultTopic = '/plot';
-          defaultMessageType = 'std_msgs/Float32';
-          defaultField = 'data';
-          break;
-        case 'heartbeat':
-          defaultTopic = '/heartbeat';
-          defaultMessageType = 'std_msgs/Bool';
-          defaultField = 'data';
-          break;
-      }
+      // A component saved without a topic starts from its type's defaults.
+      const library = componentLibrary.find(item => item.type === component.type);
+      const defaultTopic = library?.defaultAction.topic ?? `/${component.type}`;
+      const defaultMessageType = library?.defaultAction.messageType ?? 'sensor_msgs/Joy';
+      const defaultField = library?.defaultAction.field ?? '';
 
       // Set topic, message type, and field from action if it exists, otherwise use defaults
       setTopic((action?.topic && action.topic.trim() !== '') ? action.topic : defaultTopic);
@@ -446,6 +445,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       setHeartbeatMode('boolean');
       setHeartbeatTimeoutMs(2000);
       setHeartbeatFieldPath(action?.field || 'data');
+      const valueSource = component.config ?? library?.defaultConfig ?? {};
+      setValueConfig(Object.fromEntries(VALUE_CONFIG_KEYS.map(key => [key, valueSource[key]])) as ValueConfig);
 
       // Initialize component-specific settings
       if (component.config) {
@@ -576,27 +577,24 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     }
   }, [component]);
 
+  // When the operator picks another message type (or a topic of one), fields the new type does not have give way to
+  // its first usable one. A component's saved fields are never replaced just by opening its settings.
   useEffect(() => {
-    if (!isOpen || component?.type !== 'plot' || !ros || !ros.isConnected || !messageType) {
-      setPlotFieldOptions([]);
-      return;
+    if (!component || !typeChosenRef.current || messageFields.isLoading || messageFields.messageType !== messageType) return;
+    if (component.type === 'plot') {
+      setPlotFieldPaths(paths => (plotFieldOptions.length === 0 || paths.some(path => plotFieldOptions.some(option => option.path === path))
+        ? paths
+        : [plotFieldOptions[0].path]));
+    } else if (dataBinding) {
+      setField(current => fieldForNewType(messageFields.fields, current, dataBinding.fieldKinds));
     }
+  }, [component, dataBinding, messageFields, messageType, plotFieldOptions]);
 
-    let cancelled = false;
-    setIsLoadingFields(true);
-    fetchNumericFields(ros, messageType).then(fields => {
-      if (cancelled) return;
-      setPlotFieldOptions(fields);
-      if (fields.length > 0 && plotFieldPaths.every(path => !fields.some(option => option.path === path))) {
-        setPlotFieldPaths([fields[0].path]);
-      }
-      setIsLoadingFields(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [component?.type, isOpen, messageType, plotFieldPaths, ros]);
+  const dataIssues = useMemo<ConfigIssue[]>(
+    () => (valueComponent ? validateDataComponent(valueComponent, { topic, messageType, field }, valueConfig, knownFields) : []),
+    [valueComponent, field, knownFields, messageType, topic, valueConfig]
+  );
+  const hasDataErrors = dataIssues.some(issue => issue.level === 'error');
 
   const inferredDataType = useMemo(() => getInferredDataType(messageType, field), [messageType, field]);
   const rangeStep = useMemo(
@@ -610,7 +608,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return filterCameraTopics(availableTopics);
     }
 
-    if (component?.type === 'plot' || component?.type === 'heartbeat') {
+    if (readsAnyMessageType) {
       return availableTopics.filter(topicInfo =>
         topicInfo.type && !topicInfo.name.includes('/_action/') && !topicInfo.name.includes('/parameter_events')
       );
@@ -630,7 +628,7 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     );
 
     return filtered;
-  }, [availableTopics, component?.type, messageType]);
+  }, [availableTopics, component?.type, messageType, readsAnyMessageType]);
 
   const odometryTopics = useMemo(() => filterOdometryTopics(availableTopics), [availableTopics]);
 
@@ -646,16 +644,16 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
   // Get allowed message types for the current component type
   const allowedMessageTypes = useMemo(() => {
     if (!component) return [];
-    if (component.type === 'heartbeat') {
+    if (readsAnyMessageType) {
+      const suggested = dataBinding?.suggestedTypes
+        ?? (component.type === 'heartbeat' ? ['std_msgs/Bool', 'std_msgs/Int32', 'std_msgs/String'] : COMPONENT_MESSAGE_TYPES.plot);
       return Array.from(new Set([
-        'std_msgs/Bool',
-        'std_msgs/Int32',
-        'std_msgs/String',
+        ...suggested,
         ...availableTopics.map(topicInfo => getCanonicalMessageType(topicInfo.type)).filter(Boolean),
       ]));
     }
     return COMPONENT_MESSAGE_TYPES[component.type] || [];
-  }, [availableTopics, component?.type]);
+  }, [availableTopics, component, dataBinding, readsAnyMessageType]);
 
   const handleSave = () => {
     if (!component) return;
@@ -731,6 +729,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
       return;
     }
 
+    if (hasDataErrors || isReadingFields) return;
+
     const dataType = getInferredDataType(messageType, field);
     const saveRangeStep = getDynamicRangeStep(sliderMin, sliderMax, dataType === 'int');
 
@@ -742,6 +742,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         ? selectedPlotFields[0]
         : component.type === 'heartbeat' && heartbeatMode === 'boolean'
           ? heartbeatFieldPath.trim()
+        : valueComponent
+          ? field.trim() || undefined
         : ((component.type === 'joystick' || component.type === 'dpad')
           && isPoseStampedMessageType(messageType) ? 'pose' : (field || undefined))
     };
@@ -874,6 +876,15 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
         minY,
         maxY
       };
+    } else if (valueComponent) {
+      const previous = component.action as ROSTopicConfig | undefined;
+      const unchanged = previous?.messageType === messageType && previous?.field === field.trim();
+      updatedConfig = {
+        ...updatedConfig,
+        ...valueConfigFor(valueComponent, valueConfig),
+        // The field's primitive type decides how a setpoint's value is sent (rounded for integers, true/false…).
+        fieldType: selectedField?.rosType ?? (unchanged ? component.config?.fieldType : undefined) ?? stdScalarType(messageType),
+      };
     } else if (component.type === 'heartbeat') {
       updatedConfig = {
         ...updatedConfig,
@@ -893,6 +904,27 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
     onSave(updatedComponent);
     onClose();
+  };
+
+  // Picking a topic ROS reports also takes its message type, for the components that read any type.
+  const handleTopicSelect = (nextTopic: string) => {
+    setTopic(nextTopic);
+    if (!component || !(component.type === 'camera' || readsAnyMessageType)) return;
+    const selectedTopic = availableTopics.find(item => item.name === nextTopic);
+    if (!selectedTopic?.type) return;
+    if (valueComponent) {
+      chooseMessageType(selectedTopic.type);
+      return;
+    }
+    const canonicalType = getCanonicalMessageType(selectedTopic.type);
+    chooseMessageType(canonicalType);
+    if (component.type === 'camera') {
+      setStreamType(getDefaultCameraStreamType(canonicalType));
+    } else if (component.type === 'heartbeat') {
+      const isBooleanType = canonicalType.endsWith('/Bool') || canonicalType.endsWith('/msg/Bool');
+      setHeartbeatMode(isBooleanType ? 'boolean' : 'pulse');
+      if (isBooleanType) setHeartbeatFieldPath('data');
+    }
   };
 
   const handleCancel = () => {
@@ -929,7 +961,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
           <div className="modal-heading">
             <span className="modal-kicker"><FiSettings /> Component setup</span>
             <h3 id="component-settings-title">
-              Configure {component.type.charAt(0).toUpperCase() + component.type.slice(1)}
+              Configure {componentLibrary.find(item => item.type === component.type)?.name
+                ?? component.type.charAt(0).toUpperCase() + component.type.slice(1)}
             </h3>
             <p>Set how this component looks, connects, and responds.</p>
           </div>
@@ -990,170 +1023,113 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
 
           {/* Topic Configuration */}
           <div className="settings-section">
-            <h4>ROS connection</h4>
+            <h4>
+              ROS connection
+              {dataBinding && (
+                <span className={`direction-chip ${dataBinding.direction}`}>
+                  {dataBinding.direction === 'publish' ? 'Publishes' : 'Subscribes'}
+                </span>
+              )}
+            </h4>
 
-            <div className="setting-group">
-              <label htmlFor="message-type">Message type</label>
-              {component.type === 'heartbeat' ? (
-                <>
-                  <input
-                    id="message-type"
-                    type="text"
-                    list="heartbeat-message-types"
-                    value={messageType}
-                    onChange={(e) => setMessageType(e.target.value)}
-                    placeholder="e.g. std_msgs/msg/Bool"
-                    className="setting-input"
-                  />
-                  <datalist id="heartbeat-message-types">
-                    {allowedMessageTypes.map(type => <option key={type} value={type} />)}
-                  </datalist>
-                  <small className="axis-help-text">
-                    Heartbeats accept any ROS message type. Selecting an existing topic fills this automatically.
-                  </small>
-                </>
-              ) : (
-                <select
-                id="message-type"
+            {readsAnyMessageType ? (
+              <MessageTypeInput
                 value={messageType}
-                onChange={(e) => {
-                  const newMessageType = e.target.value;
-                  setMessageType(newMessageType);
-                  if (component?.type === 'camera') {
-                    setStreamType(getDefaultCameraStreamType(newMessageType));
-                  }
-                  // Auto-set field for restricted components
-                  if (component?.type === 'toggle' && newMessageType.includes('Bool')) {
-                    setField('data');
-                  } else if (component?.type === 'dpad' && newMessageType.includes('Joy')) {
-                    setField('buttons');
-                  } else if ((component?.type === 'joystick' || component?.type === 'dpad')
-                    && isPoseStampedMessageType(newMessageType)) {
-                    setField('pose');
-                    setPoseStampedAxes(['position.x', 'position.y']);
-                  }
-                }}
-                className="setting-select"
-                disabled={component.type === 'toggle'}
-              >
-                <option value="">Select message type...</option>
-                {component.type === 'dpad' ? (
-                  allowedMessageTypes.map(type => (
-                    <option key={type} value={type}>
-                      {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
-                    </option>
-                  ))
-                ) : component.type === 'toggle' ? (
-                  // Only show Boolean message types for Toggle
-                  allowedMessageTypes.filter(type => type.includes('Bool')).map(type => (
-                    <option key={type} value={type}>
-                      {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
-                    </option>
-                  ))
-                ) : (
-                  // Show allowed message types for other components
-                  allowedMessageTypes.map(type => (
-                    <option key={type} value={type}>
-                      {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
-                    </option>
-                  ))
-                )}
+                suggestions={allowedMessageTypes}
+                onChange={chooseMessageType}
+                help={component.type === 'heartbeat'
+                  ? 'Heartbeats accept any ROS message type. Selecting an existing topic fills this automatically.'
+                  : dataBinding?.direction === 'publish'
+                    ? 'The type published. Selecting an existing topic uses its type.'
+                    : 'Any message type with a usable field. Selecting an existing topic fills this automatically.'}
+              />
+            ) : (
+              <div className="setting-group">
+                <label htmlFor="message-type">Message type</label>
+                <select
+                  id="message-type"
+                  value={messageType}
+                  onChange={(e) => {
+                    const newMessageType = e.target.value;
+                    setMessageType(newMessageType);
+                    if (component?.type === 'camera') {
+                      setStreamType(getDefaultCameraStreamType(newMessageType));
+                    }
+                    // Auto-set field for restricted components
+                    if (component?.type === 'toggle' && newMessageType.includes('Bool')) {
+                      setField('data');
+                    } else if (component?.type === 'dpad' && newMessageType.includes('Joy')) {
+                      setField('buttons');
+                    } else if ((component?.type === 'joystick' || component?.type === 'dpad')
+                      && isPoseStampedMessageType(newMessageType)) {
+                      setField('pose');
+                      setPoseStampedAxes(['position.x', 'position.y']);
+                    }
+                  }}
+                  className="setting-select"
+                  disabled={component.type === 'toggle'}
+                >
+                  <option value="">Select message type...</option>
+                  {component.type === 'dpad' ? (
+                    allowedMessageTypes.map(type => (
+                      <option key={type} value={type}>
+                        {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
+                      </option>
+                    ))
+                  ) : component.type === 'toggle' ? (
+                    // Only show Boolean message types for Toggle
+                    allowedMessageTypes.filter(type => type.includes('Bool')).map(type => (
+                      <option key={type} value={type}>
+                        {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
+                      </option>
+                    ))
+                  ) : (
+                    // Show allowed message types for other components
+                    allowedMessageTypes.map(type => (
+                      <option key={type} value={type}>
+                        {MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES]?.label} ({type})
+                      </option>
+                    ))
+                  )}
                 </select>
-              )}
-              {component.type === 'dpad' && (
-                <small className="axis-help-text">
-                  D-Pads can publish Joy buttons or directional PoseStamped offsets.
-                </small>
-              )}
-              {component.type === 'toggle' && (
-                <small className="axis-help-text">
-                  Toggle components only support Boolean message types (std_msgs/Bool) for true/false state control.
-                </small>
-              )}
-            </div>
-
-            <div className="setting-group">
-              <label htmlFor="topic-select">Topic</label>
-              <div className="topic-input-group">
-                <div className="topic-input-option">
-                  <span className="topic-input-label">Available topics</span>
-                  <select
-                    id="topic-select"
-                    value={topic}
-                    onChange={(e) => {
-                      const nextTopic = e.target.value;
-                      setTopic(nextTopic);
-                      if (component.type === 'camera' || component.type === 'plot' || component.type === 'heartbeat') {
-                        const selectedTopic = availableTopics.find(item => item.name === nextTopic);
-                        if (selectedTopic?.type) {
-                          const canonicalType = getCanonicalMessageType(selectedTopic.type);
-                          setMessageType(canonicalType);
-                          if (component.type === 'camera') {
-                            setStreamType(getDefaultCameraStreamType(canonicalType));
-                          } else if (component.type === 'heartbeat') {
-                            const isBooleanType = canonicalType.endsWith('/Bool') || canonicalType.endsWith('/msg/Bool');
-                            setHeartbeatMode(isBooleanType ? 'boolean' : 'pulse');
-                            if (isBooleanType) setHeartbeatFieldPath('data');
-                          }
-                        }
-                      }
-                    }}
-                    className="setting-select topic-select"
-                    disabled={isLoadingTopics}
-                  >
-                    <option value="">
-                      {isLoadingTopics ? 'Loading topics...' : 'Select existing topic...'}
-                    </option>
-                    {filteredTopics.length > 0 ? (
-                      filteredTopics.map((topicInfo) => (
-                        <option key={topicInfo.name} value={topicInfo.name}>
-                          {topicInfo.name} ({topicInfo.type})
-                        </option>
-                      ))
-                    ) : messageType ? (
-                      <option disabled>No {messageType} topics found</option>
-                    ) : (
-                      <option disabled>Select message type first</option>
-                    )}
-                  </select>
-                </div>
-                <span className="topic-input-separator">or</span>
-                <div className="topic-input-option">
-                  <label className="topic-input-label" htmlFor="topic-custom">Custom topic</label>
-                  <input
-                    id="topic-custom"
-                    type="text"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="/robot/control"
-                    className="setting-input topic-input"
-                  />
-                </div>
+                {component.type === 'dpad' && (
+                  <small className="axis-help-text">
+                    D-Pads can publish Joy buttons or directional PoseStamped offsets.
+                  </small>
+                )}
+                {component.type === 'toggle' && (
+                  <small className="axis-help-text">
+                    Toggle components only support Boolean message types (std_msgs/Bool) for true/false state control.
+                  </small>
+                )}
               </div>
-              {errorMessage ? (
-                <div className="error-message-inline">
-                  <div className="error-content-inline">
-                    <FiAlertTriangle className="error-icon" aria-hidden="true" />
-                    <span className="error-text">{errorMessage}</span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {messageType && filteredTopics.length === 0 && availableTopics.length > 0 && !isLoadingTopics && (
-                    <div className="topic-warning">
-                      No existing topics found for {messageType}. Please enter a custom topic name below.
-                    </div>
-                  )}
-                  {messageType && availableTopics.length === 0 && !isLoadingTopics && (
-                    <div className="topic-warning">
-                      No topics available from ROS. Make sure ROS is connected and topics are being published.
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            )}
 
-            {messageType && component.type !== 'plot' && component.type !== 'camera' && component.type !== 'heartbeat' && Object.keys(availableFields).length > 0 && (
+            <TopicPicker
+              topic={topic}
+              topics={filteredTopics}
+              messageType={messageType}
+              isLoading={isLoadingTopics}
+              hasRosTopics={availableTopics.length > 0}
+              errorMessage={errorMessage}
+              onSelect={handleTopicSelect}
+              onCustomChange={setTopic}
+            />
+
+            {valueComponent && dataBinding && (
+              <FieldPicker
+                value={field}
+                fields={knownFields}
+                kinds={dataBinding.fieldKinds}
+                messageType={messageType}
+                isLoading={isReadingFields}
+                direction={dataBinding.direction}
+                onChange={setField}
+              />
+            )}
+            <ConfigIssues issues={dataIssues.filter(issue => issue.scope === 'source')} />
+
+            {messageType && !readsAnyMessageType && component.type !== 'camera' && Object.keys(availableFields).length > 0 && (
               <div className="setting-group">
                 <label htmlFor="field-select">Message Field:</label>
                 <select
@@ -1195,6 +1171,23 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {valueComponent && (
+            <>
+              <ValueSettings
+                type={valueComponent}
+                value={valueConfig}
+                onChange={patch => setValueConfig(previous => ({ ...previous, ...patch }))}
+                fieldType={selectedField?.rosType}
+                fieldKind={selectedField?.kind}
+              />
+              {dataIssues.some(issue => issue.scope === 'settings') && (
+                <div className="settings-section">
+                  <ConfigIssues issues={dataIssues.filter(issue => issue.scope === 'settings')} />
+                </div>
+              )}
+            </>
+          )}
 
           {/* Component-specific Settings */}
           {component.type === 'camera' && (
@@ -2000,7 +1993,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
             type="button"
             className="save-btn"
             onClick={handleSave}
-            disabled={!topic || !messageType || !!errorMessage}
+            disabled={!topic || !messageType || !!errorMessage || hasDataErrors || isReadingFields}
+            title={isReadingFields ? 'Reading the message type\'s fields…' : dataIssues.find(issue => issue.level === 'error')?.message}
           >
             <FiCheck /> Save configuration
           </button>

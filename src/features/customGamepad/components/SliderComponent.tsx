@@ -3,6 +3,7 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { buildFieldMessage, stdScalarType } from '../padValues';
 
 interface SliderComponentProps {
   config: GamepadComponentConfig;
@@ -23,17 +24,12 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     const action = config.action as ROSTopicConfig;
     if (!action || !action.topic) return;
 
-    let message: any;
+    let message: InstanceType<typeof ROSLIB.Message> | undefined;
 
-    if (action.messageType === 'std_msgs/Float32') {
-      message = new ROSLIB.Message({
-        data: sliderValue
-      });
-    } else if (action.messageType === 'std_msgs/Int32') {
-      message = new ROSLIB.Message({
-        data: Math.round(sliderValue)
-      });
-    } else if (action.messageType === 'sensor_msgs/JointState') {
+    // Any std_msgs scalar, in either the ROS 1 or the ROS 2 spelling, typed for its field.
+    if (stdScalarType(action.messageType)) {
+      message = new ROSLIB.Message(buildFieldMessage(action.messageType, 'data', sliderValue));
+    } else if (action.messageType === 'sensor_msgs/JointState' || action.messageType === 'sensor_msgs/msg/JointState') {
       message = new ROSLIB.Message({
         header: {
           stamp: { secs: 0, nsecs: 0 },

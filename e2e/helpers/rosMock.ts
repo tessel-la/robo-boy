@@ -35,6 +35,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       static CLOSED = 3;
       static instances = new Set<MockWebSocket>();
       static subscriptionCounts = new Map<string, number>();
+      static published = new Map<string, unknown[]>();
 
       url: string;
       readyState = MockWebSocket.CONNECTING;
@@ -83,6 +84,11 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
               }
             }, 0);
           }
+          return;
+        }
+        // What the app publishes, so a test can check the messages a control sent.
+        if (message.op === 'publish' && typeof message.topic === 'string') {
+          MockWebSocket.published.set(message.topic, [...(MockWebSocket.published.get(message.topic) ?? []), message.msg]);
           return;
         }
         if (message.op === 'unsubscribe') {
@@ -200,11 +206,13 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       __getActiveRosSubscriptionCount: (topic: string) => number;
       __hasRosSubscription: (topic: string) => boolean;
       __publishRosTopic: (topic: string, message: unknown) => void;
+      __getPublishedRosMessages: (topic: string) => unknown[];
     };
     mockWindow.__getRosSubscriptionCount = topic => MockWebSocket.subscriptionCounts.get(topic) ?? 0;
     mockWindow.__getActiveRosSubscriptionCount = topic => MockWebSocket.activeSubscriptionCount(topic);
     mockWindow.__hasRosSubscription = topic => MockWebSocket.hasSubscription(topic);
     mockWindow.__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
+    mockWindow.__getPublishedRosMessages = topic => MockWebSocket.published.get(topic) ?? [];
   }, mockResources);
 }
 
@@ -242,5 +250,20 @@ export async function waitForRosSubscription(page: Page, topic: string, previous
       return mockWindow.__hasRosSubscription(topicName) && mockWindow.__getRosSubscriptionCount(topicName) > count;
     },
     { topicName: topic, count: previousCount }
+  );
+}
+
+export async function publishRosMessage(page: Page, topic: string, message: unknown): Promise<void> {
+  await page.evaluate(
+    ({ topic, message }) => (window as unknown as { __publishRosTopic: (t: string, m: unknown) => void }).__publishRosTopic(topic, message),
+    { topic, message }
+  );
+}
+
+/** The messages the app has published to a topic, oldest first. */
+export async function getPublishedRosMessages(page: Page, topic: string): Promise<unknown[]> {
+  return page.evaluate(
+    name => (window as unknown as { __getPublishedRosMessages: (t: string) => unknown[] }).__getPublishedRosMessages(name),
+    topic
   );
 }

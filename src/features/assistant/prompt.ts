@@ -25,7 +25,7 @@ Layout shape:
 {"id":"kebab-id","name":"Pad name","description":"short purpose","gridSize":{"width":8,"height":4},"cellSize":80,"components":[...],"rosConfig":{"defaultTopic":"/joy","defaultMessageType":"sensor_msgs/msg/Joy"},"metadata":{"created":"<ISO>","modified":"<ISO>","version":"1.0.0"}}
 
 Component shape (these are Robo-Boy's real persisted fields):
-{"id":"unique-id","type":"joystick|physical-gamepad|button|dpad|toggle|slider|camera|plot|heartbeat","position":{"x":0,"y":0,"width":3,"height":3},"label":"Visible label","action":{...},"eventOperations":{...},"config":{...}}
+{"id":"unique-id","type":"joystick|physical-gamepad|button|dpad|toggle|slider|setpoint|camera|gauge|level|readout|state|plot|text|heartbeat","position":{"x":0,"y":0,"width":3,"height":3},"label":"Visible label","action":{...},"eventOperations":{...},"config":{...}}
 - "position" is in grid cells and must fit inside gridSize; components must not overlap.
 - "action" is the component's primary topic binding: {"topic":"/name","messageType":"pkg/msg/Type","field":"axes"}. The key is "topic", never "topicName".
 - Service calls and action goals belong in "eventOperations" on a button, toggle, or physical-gamepad binding; primary component rendering expects a topic.
@@ -42,6 +42,10 @@ Message types and fields that each component type supports (use these exact stri
 - camera: sensor_msgs/Image or sensor_msgs/CompressedImage. config: {"cameraTransport":"proxy"}.
 - plot: numeric topics. config: {"fieldPaths":["linear.x"],"timeWindowSec":10}.
 - heartbeat: any status topic. config: {"heartbeatMode":"boolean"|"pulse","heartbeatTimeoutMs":1500,"heartbeatFieldPath":"data"}.
+- gauge (dial), level (bar), readout (large number): show one numeric field of any message type; "action.field" is its path, e.g. "percentage" of sensor_msgs/msg/BatteryState or "twist.twist.linear.x" of nav_msgs/msg/Odometry. config: {"min":0,"max":100,"unit":"%","decimals":1,"scale":100,"offset":0,"warnAt":20,"alarmAt":10,"alertBelow":true,"staleAfterMs":3000}; shown value = field × scale + offset, and min/max/thresholds are in shown units. level also takes "orientation"; readout has no min/max.
+- state: names a string, number or bool field. config: {"stateMappings":[{"value":"IDLE","label":"Idle","tone":"neutral"},{"value":"ERROR","label":"Fault","tone":"error"}]}; tone is ok|info|warning|error|neutral.
+- setpoint: publishes one numeric field (e.g. std_msgs/msg/Float64 "data", or "linear.x" of a Twist) when the operator presses Send. config: {"min":0,"max":2,"step":0.1,"unit":"m/s","sendOnChange":false}.
+- text: shows a string field, e.g. rcl_interfaces/msg/Log "msg" on /rosout or std_msgs/msg/String "data". config: {"historyLength":5}.
 
 Rules:
 - Use ONLY topic/service/action names and message types that appear in the ROS context supplied above. Never invent a

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { componentLibrary } from '../defaultLayouts';
-import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
-import { GamepadComponentConfig } from '../types';
+import { componentLibrary, createComponent } from '../defaultLayouts';
+import type { GamepadComponentConfig, PadComponentType } from '../types';
 import ButtonComponent from './ButtonComponent';
 import JoystickComponent from './JoystickComponent';
 import DPadComponent from './DPadComponent';
@@ -11,6 +10,12 @@ import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
 import HeartbeatComponent from './HeartbeatComponent';
 import PhysicalGamepadComponent from './PhysicalGamepadComponent';
+import GaugeComponent from './GaugeComponent';
+import LevelComponent from './LevelComponent';
+import ReadoutComponent from './ReadoutComponent';
+import StateComponent from './StateComponent';
+import SetpointComponent from './SetpointComponent';
+import TextComponent from './TextComponent';
 import './ComponentPalette.css';
 
 interface ComponentPaletteProps {
@@ -63,32 +68,19 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     }
   }, [selectedComponent]);
 
-  const renderComponentPreview = (componentType: string, size: 'small' | 'medium' = 'small') => {
+  const renderComponentPreview = (componentType: PadComponentType, size: 'small' | 'medium' = 'small') => {
+    const created = createComponent(componentType, { x: 0, y: 0, width: 1, height: 1 }, `preview-${componentType}`);
+    if (!created) return null;
+    // A thumbnail shows each component at its most recognisable: a D-pad without its label, a button that springs
+    // back, a gamepad drawn as a known controller.
     const mockConfig: GamepadComponentConfig = {
-      id: `preview-${componentType}`,
-      type: componentType as any,
-      position: { x: 0, y: 0, width: 1, height: 1 },
-      label: componentType === 'dpad' ? '' : componentLibrary.find(c => c.type === componentType)?.name || '',
-      action: {
-        topic: '/preview',
-        messageType: componentType === 'camera' ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Joy',
-        field: componentType === 'plot' || componentType === 'heartbeat' ? 'data' : undefined
-      },
+      ...created,
+      label: componentType === 'dpad' ? '' : created.label,
       config: componentType === 'button'
         ? { momentary: true }
-        : componentType === 'camera'
-          ? { cameraTransport: 'proxy' as const }
-          : componentType === 'plot'
-            ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true }
-            : componentType === 'heartbeat'
-              ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
-              : componentType === 'physical-gamepad'
-                ? {
-                  physicalGamepadProfile: 'xbox' as const,
-                  physicalGamepadDeadzone: 0.08,
-                  physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
-                }
-                : {}
+        : componentType === 'physical-gamepad'
+          ? { ...created.config, physicalGamepadProfile: 'xbox' }
+          : created.config,
     };
 
     const previewStyle: React.CSSProperties = {
@@ -127,6 +119,12 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         {componentType === 'camera' && <CameraComponent {...componentProps} />}
         {componentType === 'plot' && <PlotComponent {...componentProps} />}
         {componentType === 'heartbeat' && <HeartbeatComponent {...componentProps} />}
+        {componentType === 'gauge' && <GaugeComponent {...componentProps} />}
+        {componentType === 'level' && <LevelComponent {...componentProps} />}
+        {componentType === 'readout' && <ReadoutComponent {...componentProps} />}
+        {componentType === 'state' && <StateComponent {...componentProps} />}
+        {componentType === 'setpoint' && <SetpointComponent {...componentProps} />}
+        {componentType === 'text' && <TextComponent {...componentProps} />}
       </div>
     );
   };

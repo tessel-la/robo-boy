@@ -1,9 +1,10 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Ros } from 'roslib';
 
 import type { GamepadComponentConfig } from '../types';
+import { createComponent } from '../defaultLayouts';
 import ComponentSettingsModal from './ComponentSettingsModal';
 
 const slider: GamepadComponentConfig = {
@@ -187,5 +188,124 @@ describe('ComponentSettingsModal', () => {
         poseStampedOdometryMessageType: 'nav_msgs/msg/Odometry',
       }),
     }));
+  });
+
+  describe('value components', () => {
+    const at = { x: 0, y: 0, width: 2, height: 2 };
+    const offline = { isConnected: false } as unknown as Ros;
+
+    it('configures a gauge from a topic ROS reports: its type, a numeric field and how it reads', async () => {
+      const onSave = vi.fn();
+      const ros = createConnectedRos(['/battery', '/mode'], ['sensor_msgs/msg/BatteryState', 'std_msgs/msg/String']);
+      render(<ComponentSettingsModal isOpen component={createComponent('gauge', at, 'gauge-1')} onClose={vi.fn()} onSave={onSave} ros={ros} />);
+
+      expect(screen.getByRole('dialog', { name: 'Configure Gauge' })).toBeInTheDocument();
+      expect(screen.getByText('Subscribes')).toBeInTheDocument();
+      await screen.findByRole('option', { name: '/battery (sensor_msgs/msg/BatteryState)' });
+      fireEvent.change(screen.getByLabelText('Topic'), { target: { value: '/battery' } });
+      expect(screen.getByLabelText('Message type')).toHaveValue('sensor_msgs/msg/BatteryState');
+
+      // The old field is not a BatteryState field: the first numeric one takes its place. Only numbers are offered.
+      await waitFor(() => expect(screen.getByLabelText('Field path')).toHaveValue('voltage'), { timeout: 2000 });
+      expect(screen.getByRole('option', { name: 'percentage (float32)' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'present (bool)' })).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Field to show'), { target: { value: 'percentage' } });
+
+      fireEvent.change(screen.getByLabelText('Display label'), { target: { value: 'Battery' } });
+      fireEvent.change(screen.getByLabelText('Unit'), { target: { value: '%' } });
+      fireEvent.change(screen.getByLabelText('Scale'), { target: { value: '100' } });
+      fireEvent.change(screen.getByLabelText('Warning at'), { target: { value: '30' } });
+      fireEvent.change(screen.getByLabelText('Alarm at'), { target: { value: '15' } });
+      fireEvent.change(screen.getByLabelText('Alert on'), { target: { value: 'below' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        label: 'Battery',
+        action: { topic: '/battery', messageType: 'sensor_msgs/msg/BatteryState', field: 'percentage' },
+        config: expect.objectContaining({
+          min: 0, max: 100, unit: '%', scale: 100, warnAt: 30, alarmAt: 15, alertBelow: true, fieldType: 'float32',
+        }),
+      }));
+    });
+
+    it('will not save a field the component cannot show', () => {
+      const gauge = createComponent('gauge', at, 'gauge-1')!;
+      gauge.action = { topic: '/mode', messageType: 'std_msgs/msg/String', field: 'data' };
+      render(<ComponentSettingsModal isOpen component={gauge} onClose={vi.fn()} onSave={vi.fn()} ros={offline} />);
+
+      expect(screen.getByText('“data” is text; this component needs a number.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save configuration' })).toBeDisabled();
+    });
+
+    it('will not save a range that runs backwards', () => {
+      render(<ComponentSettingsModal isOpen component={createComponent('level', at, 'level-1')} onClose={vi.fn()} onSave={vi.fn()} ros={offline} />);
+      const minimum = screen.getByRole('spinbutton', { name: 'Minimum value' });
+      fireEvent.change(minimum, { target: { value: '100' } });
+      fireEvent.blur(minimum);
+      expect(screen.getByText('The minimum must be lower than the maximum.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save configuration' })).toBeDisabled();
+    });
+
+    it('keeps a saved field path it does not know when the settings are only opened', () => {
+      const onSave = vi.fn();
+      const readout = createComponent('readout', at, 'readout-1')!;
+      readout.action = { topic: '/odom', messageType: 'geometry_msgs/msg/Twist', field: 'twist.linear.x' };
+      render(<ComponentSettingsModal isOpen component={readout} onClose={vi.fn()} onSave={onSave} ros={offline} />);
+
+      expect(screen.getByText(/has no field “twist.linear.x” that Robo-Boy knows of/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        action: { topic: '/odom', messageType: 'geometry_msgs/msg/Twist', field: 'twist.linear.x' },
+      }));
+    });
+
+    it('edits the states a state component names', () => {
+      const onSave = vi.fn();
+      const state = createComponent('state', at, 'state-1')!;
+      state.action = { topic: '/estop', messageType: 'std_msgs/msg/Bool', field: 'data' };
+      render(<ComponentSettingsModal isOpen component={state} onClose={vi.fn()} onSave={onSave} ros={offline} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use true / false' }));
+      fireEvent.change(screen.getByLabelText('State 1 name'), { target: { value: 'Stopped' } });
+      fireEvent.change(screen.getByLabelText('State 1 colour'), { target: { value: 'error' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add state' }));
+      expect(screen.getByText('Every state needs the value it matches.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove state 3' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        config: expect.objectContaining({
+          fieldType: 'bool',
+          stateMappings: [{ value: 'true', label: 'Stopped', tone: 'error' }, { value: 'false', label: 'Off', tone: 'neutral' }],
+        }),
+      }));
+    });
+
+    it('saves how a setpoint sends: its step, its field type and whether each change is sent', () => {
+      const onSave = vi.fn();
+      const setpoint = createComponent('setpoint', at, 'setpoint-1')!;
+      setpoint.action = { topic: '/gear', messageType: 'std_msgs/msg/Int32', field: 'data' };
+      render(<ComponentSettingsModal isOpen component={setpoint} onClose={vi.fn()} onSave={onSave} ros={offline} />);
+
+      expect(screen.getByText('Publishes')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('Send on every change'));
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        config: expect.objectContaining({ min: 0, max: 100, step: 1, sendOnChange: true, fieldType: 'int32' }),
+      }));
+      // Display-only settings are not kept on a setpoint.
+      expect(onSave.mock.calls[0][0].config).not.toHaveProperty('warnAt', expect.anything());
+    });
+
+    it('offers a plot the fields of its type even while ROS is disconnected', () => {
+      const plot = createComponent('plot', at, 'plot-1')!;
+      plot.action = { topic: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist', field: 'linear.x' };
+      plot.config = { ...plot.config, fieldPath: 'linear.x', fieldPaths: ['linear.x'] };
+      render(<ComponentSettingsModal isOpen component={plot} onClose={vi.fn()} onSave={vi.fn()} ros={offline} />);
+
+      expect(screen.getByLabelText('Message type')).toHaveValue('geometry_msgs/msg/Twist');
+      expect(screen.getByRole('checkbox', { name: 'linear.x (float64)' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'angular.z (float64)' })).not.toBeChecked();
+    });
   });
 });

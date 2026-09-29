@@ -211,3 +211,608 @@
   border-radius: 2px;
   flex: 0 0 auto;
 }
+
+/* Value components: gauge, level bar, readout, state, setpoint and text. Each frame is a size container, so what is
+   inside it scales with the room the grid gives it, from a palette thumbnail to a full pad. */
+.pad-value {
+  --value-tone: var(--primary-color, #32cd32);
+  --value-warning: var(--warning-color, #f59f00);
+  --value-alarm: var(--error-color, #dc3545);
+  --value-muted: var(--text-color-secondary, #9aa3ad);
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-family-ui);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.pad-value.level-warning {
+  --value-tone: var(--value-warning);
+}
+
+.pad-value.level-alarm {
+  --value-tone: var(--value-alarm);
+  border-color: color-mix(in srgb, var(--value-alarm) 65%, var(--border-color, #444));
+}
+
+.pad-value-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px 0;
+  font-size: 11px;
+  font-size: clamp(9px, 14cqh, 13px);
+  line-height: 1.15;
+}
+
+.pad-value-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--value-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pad-value-aside {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+  color: var(--value-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pad-value-aside svg {
+  align-self: center;
+  color: var(--primary-color, #32cd32);
+}
+
+.pad-value-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px 6px;
+  transition: opacity 0.2s ease;
+}
+
+.pad-value.is-stale .pad-value-body {
+  opacity: 0.45;
+}
+
+.pad-value-stale {
+  align-self: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--value-warning) 20%, var(--background-secondary, #2c2c2c));
+  color: var(--value-warning);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pad-value-notice {
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  font-size: 11px;
+  font-size: clamp(9px, 11cqh, 12px);
+}
+
+@container (max-height: 52px) {
+  .pad-value-label {
+    display: none;
+  }
+
+  .pad-value-body {
+    padding: 2px 4px;
+  }
+}
+
+/* Gauge: a 240° dial drawn in its own coordinates (font sizes below are in those units). */
+.pad-gauge .pad-value-body {
+  padding: 0 4px 4px;
+}
+
+.pad-gauge-dial {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pad-gauge-track,
+.pad-gauge-fill,
+.pad-gauge-zone {
+  fill: none;
+}
+
+.pad-gauge-track {
+  stroke: color-mix(in srgb, var(--text-color, #e0e0e0) 13%, transparent);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.pad-gauge-fill {
+  stroke: var(--value-tone);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke 0.2s ease;
+}
+
+.pad-gauge-zone {
+  stroke-width: 3;
+}
+
+.pad-gauge-zone.warning,
+.pad-level-zone.warning {
+  stroke: var(--value-warning);
+  background: var(--value-warning);
+}
+
+.pad-gauge-zone.alarm,
+.pad-level-zone.alarm {
+  stroke: var(--value-alarm);
+  background: var(--value-alarm);
+}
+
+.pad-gauge-knob {
+  fill: var(--card-bg, #ffffff);
+  stroke: var(--value-tone);
+  stroke-width: 2.5;
+}
+
+.pad-gauge-value,
+.pad-gauge-unit,
+.pad-gauge-bound {
+  font-family: var(--font-family-ui);
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+}
+
+.pad-gauge-value {
+  fill: var(--text-color, #e0e0e0);
+  font-weight: 700;
+  dominant-baseline: middle;
+}
+
+.pad-value:not(.level-normal) .pad-gauge-value,
+.pad-value:not(.level-normal) .pad-readout-value strong,
+.pad-value:not(.level-normal) .pad-level-reading strong {
+  fill: var(--value-tone);
+  color: var(--value-tone);
+}
+
+.pad-gauge-unit {
+  fill: var(--value-muted);
+  font-size: 9px;
+}
+
+.pad-gauge-bound {
+  fill: var(--value-muted);
+  font-size: 8px;
+}
+
+/* Level: a bar along the component's longer side, with its warning and alarm bands behind the fill. */
+.pad-level .pad-value-body {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.pad-level-reading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pad-level-reading strong {
+  color: var(--text-color, #e0e0e0);
+  font-size: 14px;
+  font-size: clamp(11px, 20cqh, 20px);
+}
+
+.pad-level-reading small {
+  color: var(--value-muted);
+}
+
+.pad-level-track {
+  position: relative;
+  flex: 0 0 auto;
+  height: 12px;
+  height: clamp(8px, 20cqh, 22px);
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text-color, #e0e0e0) 10%, transparent);
+}
+
+.pad-level-zone,
+.pad-level-fill,
+.pad-level-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.pad-level-zone {
+  opacity: 0.3;
+}
+
+.pad-level-fill {
+  left: 0;
+  border-radius: inherit;
+  background: var(--value-tone);
+  transition: width 0.15s ease-out, height 0.15s ease-out, background-color 0.2s ease;
+}
+
+.pad-level-mark {
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text-color, #e0e0e0);
+  opacity: 0.5;
+}
+
+.pad-level-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--value-muted);
+  font-size: 10px;
+  font-size: clamp(8px, 11cqh, 11px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.pad-level.vertical .pad-value-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 6px;
+}
+
+.pad-level.vertical .pad-level-reading {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.pad-level.vertical .pad-level-track {
+  justify-self: end;
+  width: clamp(10px, 22cqw, 28px);
+  height: auto;
+}
+
+.pad-level.vertical .pad-level-zone,
+.pad-level.vertical .pad-level-fill,
+.pad-level.vertical .pad-level-mark {
+  top: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+.pad-level.vertical .pad-level-fill {
+  bottom: 0;
+}
+
+.pad-level.vertical .pad-level-mark {
+  height: 2px;
+  margin: 0 0 -1px;
+}
+
+.pad-level.vertical .pad-level-scale {
+  flex-direction: column-reverse;
+  align-items: flex-start;
+}
+
+@container (max-height: 60px) {
+  .pad-level.horizontal .pad-level-scale {
+    display: none;
+  }
+}
+
+/* Readout: one number as large as the room allows. */
+.pad-readout-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--text-color, #e0e0e0);
+  line-height: 1;
+}
+
+.pad-readout-value strong {
+  overflow: hidden;
+  font-size: 22px;
+  font-size: clamp(8px, min(46cqh, 18cqw), 72px);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pad-readout-value small {
+  flex: none;
+  color: var(--value-muted);
+  font-size: 12px;
+  font-size: clamp(8px, min(16cqh, 8cqw), 22px);
+}
+
+/* Taller than wide: the unit goes under the value, which can then take the whole width. */
+@container (max-aspect-ratio: 1 / 1) {
+  .pad-readout-value {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2em;
+  }
+
+  .pad-readout-value strong {
+    font-size: clamp(8px, min(30cqh, 24cqw), 72px);
+  }
+
+  .pad-readout-value small {
+    font-size: clamp(8px, 11cqw, 22px);
+  }
+}
+
+/* State: the component takes the colour of what the value means. */
+.pad-state {
+  --state-tone: var(--secondary-color, #6c757d);
+  border-color: color-mix(in srgb, var(--state-tone) 55%, var(--border-color, #444));
+  background: color-mix(in srgb, var(--state-tone) 11%, var(--background-secondary, #2c2c2c));
+}
+
+.pad-state.tone-ok { --state-tone: var(--success-color, #28a745); }
+.pad-state.tone-info { --state-tone: #339af0; }
+.pad-state.tone-warning { --state-tone: var(--warning-color, #f59f00); }
+.pad-state.tone-error { --state-tone: var(--error-color, #dc3545); }
+
+.pad-state-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--text-color, #e0e0e0);
+  font-size: 16px;
+  font-size: clamp(11px, min(32cqh, 12cqw), 40px);
+}
+
+.pad-state-value i {
+  flex: none;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: var(--state-tone);
+  box-shadow: 0 0 0 0.18em color-mix(in srgb, var(--state-tone) 24%, transparent);
+}
+
+.pad-state-value strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Setpoint: steppers either side of the value, and the send button. */
+.pad-setpoint-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  height: 34px;
+  height: clamp(24px, 52cqh, 44px);
+}
+
+.pad-setpoint-step,
+.pad-setpoint-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  font-family: var(--font-family-ui);
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.pad-setpoint-step {
+  aspect-ratio: 1;
+  min-width: 26px;
+  background: var(--card-bg, #1e1e1e);
+  color: var(--text-color, #e0e0e0);
+  font-size: 1.2em;
+}
+
+.pad-setpoint-step:hover:not(:disabled),
+.pad-setpoint-send:hover:not(:disabled) {
+  border-color: var(--primary-color, #32cd32);
+}
+
+.pad-setpoint-field {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  background: var(--background-color, #121212);
+}
+
+.pad-setpoint-field:focus-within {
+  border-color: var(--primary-color, #32cd32);
+  box-shadow: 0 0 0 2px var(--primary-color-glow, rgba(50, 205, 50, 0.5));
+}
+
+.pad-setpoint-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-color, #e0e0e0);
+  font-family: inherit;
+  font-size: 16px;
+  font-size: clamp(12px, 26cqh, 22px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.pad-setpoint-field input::-webkit-inner-spin-button,
+.pad-setpoint-field input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.pad-setpoint-field small {
+  flex: none;
+  color: var(--value-muted);
+}
+
+.pad-setpoint-send {
+  gap: 5px;
+  padding: 0 10px;
+  border-color: var(--primary-color, #32cd32);
+  background: transparent;
+  color: var(--primary-color, #32cd32);
+}
+
+.pad-setpoint.is-pending .pad-setpoint-send {
+  background: var(--primary-color, #32cd32);
+  color: var(--button-text-color, #121212);
+}
+
+.pad-setpoint-step:disabled,
+.pad-setpoint-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@container (max-width: 210px) {
+  .pad-setpoint-send {
+    aspect-ratio: 1;
+    padding: 0;
+  }
+
+  .pad-setpoint-send span {
+    display: none;
+  }
+}
+
+/* Too narrow for one row: the value on top, the buttons shared out below it. */
+@container (max-width: 150px) {
+  .pad-setpoint-controls {
+    flex-wrap: wrap;
+    align-content: center;
+    height: auto;
+  }
+
+  .pad-setpoint-field {
+    flex-basis: 100%;
+    order: -1;
+    height: 32px;
+  }
+
+  .pad-setpoint-step,
+  .pad-setpoint-send {
+    flex: 1 1 0;
+    aspect-ratio: auto;
+    min-width: 0;
+    height: 32px;
+  }
+}
+
+/* Text: the latest message, or a short log with the newest line last. */
+.pad-text .pad-value-body {
+  align-items: stretch;
+}
+
+.pad-text-lines {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  color: var(--value-muted);
+  font-size: 12px;
+  font-size: clamp(10px, 9cqh, 13px);
+  line-height: 1.35;
+}
+
+.pad-text.log .pad-text-lines li {
+  display: flex;
+  gap: 6px;
+  padding: 1px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #444) 55%, transparent);
+}
+
+.pad-text.log .pad-text-lines li:last-child {
+  border-bottom: 0;
+  color: var(--text-color, #e0e0e0);
+}
+
+.pad-text-lines time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.pad-text-lines span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pad-text.single .pad-text-lines {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-color, #e0e0e0);
+  font-size: 14px;
+  font-size: clamp(11px, min(22cqh, 9cqw), 22px);
+  text-align: center;
+}
+
+.pad-text.single .pad-text-lines span {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+@container (max-width: 190px) {
+  .pad-text-lines time {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pad-value,
+  .pad-value-body,
+  .pad-gauge-fill,
+  .pad-level-fill {
+    transition: none;
+  }
+}

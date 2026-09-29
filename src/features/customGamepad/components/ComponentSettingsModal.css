@@ -165,8 +165,10 @@
     .axis-config,
     .axis-config-disabled,
     .ros-event-operations,
-    .plot-field-options
+    .plot-field-options,
+    .state-mapping-list
   ),
+.enhanced-component-settings-modal .settings-section > .config-issues,
 .enhanced-component-settings-modal .settings-section > .range-controls,
 .enhanced-component-settings-modal .settings-section > .axis-help-text {
   grid-column: 1 / -1;
@@ -779,6 +781,94 @@
   height: 14px;
 }
 
+/* Which way a value component's data flows. */
+.enhanced-component-settings-modal .direction-chip {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #32cd32) 45%, transparent);
+  border-radius: 999px;
+  color: var(--text-color-secondary, #6c757d);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.enhanced-component-settings-modal .direction-chip.publish {
+  border-color: color-mix(in srgb, var(--warning-color, #f59f00) 55%, transparent);
+}
+
+.enhanced-component-settings-modal .config-issues {
+  display: grid;
+  gap: 6px;
+}
+
+.enhanced-component-settings-modal .config-issues > * {
+  margin-top: 0;
+}
+
+/* A state component's list of values, each with the name and colour it is shown in. */
+.enhanced-component-settings-modal .state-mapping-list {
+  display: grid;
+  gap: 6px;
+}
+
+.enhanced-component-settings-modal .state-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.1fr) 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.enhanced-component-settings-modal .state-tone-select {
+  border-left-width: 4px;
+}
+
+.enhanced-component-settings-modal .state-tone-select.tone-ok { border-left-color: var(--success-color, #28a745); }
+.enhanced-component-settings-modal .state-tone-select.tone-info { border-left-color: #339af0; }
+.enhanced-component-settings-modal .state-tone-select.tone-warning { border-left-color: var(--warning-color, #f59f00); }
+.enhanced-component-settings-modal .state-tone-select.tone-error { border-left-color: var(--error-color, #dc3545); }
+.enhanced-component-settings-modal .state-tone-select.tone-neutral { border-left-color: var(--secondary-color, #6c757d); }
+
+.enhanced-component-settings-modal .state-mapping-remove,
+.enhanced-component-settings-modal .state-mapping-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 7px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
+  font-size: 11px;
+}
+
+.enhanced-component-settings-modal .state-mapping-remove {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--text-color-secondary, #6c757d);
+}
+
+.enhanced-component-settings-modal .state-mapping-remove:hover {
+  border-color: var(--error-color, #dc3545);
+  color: var(--error-color, #dc3545);
+}
+
+.enhanced-component-settings-modal .state-mapping-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.enhanced-component-settings-modal .state-mapping-add {
+  padding: 7px 11px;
+}
+
+.enhanced-component-settings-modal .state-mapping-add:hover {
+  border-color: var(--primary-color, #32cd32);
+}
+
 @media (max-width: 700px) {
   .component-settings-modal-overlay {
     align-items: stretch;
@@ -838,6 +928,15 @@
 }
 
 @media (max-width: 480px) {
+  .enhanced-component-settings-modal .state-mapping-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+  }
+
+  .enhanced-component-settings-modal .state-tone-select {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
   .enhanced-component-settings-modal .range-controls,
   .enhanced-component-settings-modal .settings-row,
   .enhanced-component-settings-modal .physical-gamepad-settings,
