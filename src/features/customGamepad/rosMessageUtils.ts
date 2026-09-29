@@ -15,6 +15,13 @@ export interface NumericFieldOption {
   rosType: string;
 }
 
+/** What a field holds, for matching fields to the components that can show or send them. */
+export type FieldKind = 'number' | 'bool' | 'string';
+
+export interface MessageFieldOption extends NumericFieldOption {
+  kind: FieldKind;
+}
+
 interface FieldTypedef {
   type: string;
   fieldnames?: string[];
@@ -357,28 +364,37 @@ function isNumericRosType(type: string): boolean {
   return NUMERIC_TYPES.has(type.replace(/\[\]$/, ''));
 }
 
+/** The kind of a primitive ROS field type, or undefined for a nested message. */
+export function fieldKindOf(type: string): FieldKind | undefined {
+  const base = type.replace(/\[\]$/, '').replace(/<=?\d+$/, '');
+  if (isNumericRosType(base)) return 'number';
+  if (base === 'bool' || base === 'boolean') return 'bool';
+  if (base === 'string' || base === 'wstring') return 'string';
+  return undefined;
+}
+
 function findTypedef(typedefs: FieldTypedef[], type: string): FieldTypedef | undefined {
   const lastPart = type.split('/').pop();
   return typedefs.find(item => item.type === type || item.type.split('/').pop() === lastPart);
 }
 
-function appendIndexedFields(fields: NumericFieldOption[], prefix: string, fieldType: string, arrayLen: number) {
+function appendIndexedFields(fields: MessageFieldOption[], prefix: string, fieldType: string, arrayLen: number, kind: FieldKind) {
   const length = arrayLen > 0 ? arrayLen : DYNAMIC_ARRAY_PREVIEW_LENGTH;
   for (let index = 0; index < length; index += 1) {
     const path = `${prefix}[${index}]`;
-    fields.push({ path, label: path, rosType: fieldType });
+    fields.push({ path, label: path, rosType: fieldType, kind });
   }
 }
 
-function flattenNumericFieldsFromTypedef(
+function flattenFieldsFromTypedef(
   typedef: FieldTypedef,
   typedefs: FieldTypedef[],
   prefix = '',
   depth = 0
-): NumericFieldOption[] {
+): MessageFieldOption[] {
   if (depth > 4) return [];
 
-  const fields: NumericFieldOption[] = [];
+  const fields: MessageFieldOption[] = [];
   const names = typedef.fieldnames ?? [];
   const types = typedef.fieldtypes ?? [];
   const arrayLens = typedef.fieldarraylen ?? [];
@@ -387,12 +403,13 @@ function flattenNumericFieldsFromTypedef(
     const fieldType = types[index] ?? '';
     const arrayLen = arrayLens[index] ?? -1;
     const path = prefix ? `${prefix}.${name}` : name;
+    const kind = fieldKindOf(fieldType);
 
-    if (isNumericRosType(fieldType)) {
+    if (kind) {
       if (arrayLen >= 0) {
-        appendIndexedFields(fields, path, fieldType, arrayLen);
+        appendIndexedFields(fields, path, fieldType, arrayLen, kind);
       } else {
-        fields.push({ path, label: path, rosType: fieldType });
+        fields.push({ path, label: path, rosType: fieldType, kind });
       }
       return;
     }
@@ -401,22 +418,70 @@ function flattenNumericFieldsFromTypedef(
 
     const nested = findTypedef(typedefs, fieldType);
     if (nested) {
-      fields.push(...flattenNumericFieldsFromTypedef(nested, typedefs, path, depth + 1));
+      fields.push(...flattenFieldsFromTypedef(nested, typedefs, path, depth + 1));
     }
   });
 
   return fields;
 }
 
-export function flattenNumericFields(typedefs: FieldTypedef[], messageType: string): NumericFieldOption[] {
-  const root = findTypedef(typedefs, messageType) ?? typedefs.find(item => item.fieldnames?.length);
-  if (!root) return COMMON_NUMERIC_FIELDS[messageType] ?? [];
+/** Fields of common message types, for when rosapi cannot describe them (or ROS is not connected). */
+export const commonFields = (messageType: string): MessageFieldOption[] =>
+  (COMMON_NUMERIC_FIELDS[messageType] ?? []).map((field): MessageFieldOption => ({ ...field, kind: 'number' }))
+    .concat(COMMON_OTHER_FIELDS[messageType] ?? []);
 
-  const fields = flattenNumericFieldsFromTypedef(root, typedefs);
-  return fields.length > 0 ? fields : (COMMON_NUMERIC_FIELDS[messageType] ?? []);
+const COMMON_OTHER_FIELDS: Record<string, MessageFieldOption[]> = Object.fromEntries(
+  ([
+    ['std_msgs/Bool', [{ path: 'data', label: 'data', rosType: 'bool', kind: 'bool' }]],
+    ['std_msgs/String', [{ path: 'data', label: 'data', rosType: 'string', kind: 'string' }]],
+    ['rcl_interfaces/Log', [
+      { path: 'msg', label: 'msg', rosType: 'string', kind: 'string' },
+      { path: 'name', label: 'name', rosType: 'string', kind: 'string' },
+      { path: 'level', label: 'level', rosType: 'uint8', kind: 'number' },
+    ]],
+    ...(['Int8', 'Int16', 'UInt8', 'UInt16', 'UInt32', 'UInt64'] as const).map((name): [string, MessageFieldOption[]] => (
+      [`std_msgs/${name}`, [{ path: 'data', label: 'data', rosType: name.toLowerCase(), kind: 'number' }]]
+    )),
+    ['sensor_msgs/BatteryState', [
+      ...['voltage', 'temperature', 'current', 'charge', 'capacity', 'design_capacity', 'percentage'].map(name => (
+        { path: name, label: name, rosType: 'float32', kind: 'number' as const }
+      )),
+      { path: 'power_supply_status', label: 'power_supply_status', rosType: 'uint8', kind: 'number' },
+      { path: 'power_supply_health', label: 'power_supply_health', rosType: 'uint8', kind: 'number' },
+      { path: 'present', label: 'present', rosType: 'bool', kind: 'bool' },
+    ]],
+    ['sensor_msgs/Temperature', [{ path: 'temperature', label: 'temperature', rosType: 'float64', kind: 'number' }]],
+    ['sensor_msgs/Range', [
+      { path: 'range', label: 'range', rosType: 'float32', kind: 'number' },
+      { path: 'min_range', label: 'min_range', rosType: 'float32', kind: 'number' },
+      { path: 'max_range', label: 'max_range', rosType: 'float32', kind: 'number' },
+    ]],
+    ['sensor_msgs/FluidPressure', [{ path: 'fluid_pressure', label: 'fluid_pressure', rosType: 'float64', kind: 'number' }]],
+    ['sensor_msgs/RelativeHumidity', [{ path: 'relative_humidity', label: 'relative_humidity', rosType: 'float64', kind: 'number' }]],
+    ['diagnostic_msgs/KeyValue', [
+      { path: 'key', label: 'key', rosType: 'string', kind: 'string' },
+      { path: 'value', label: 'value', rosType: 'string', kind: 'string' },
+    ]],
+  ] as Array<[string, MessageFieldOption[]]>).flatMap(([type, fields]) => [[type, fields], [type.replace('/', '/msg/'), fields]])
+);
+
+/** Every primitive field of a message (numbers, booleans, strings), array elements by index. */
+export function flattenMessageFields(typedefs: FieldTypedef[], messageType: string): MessageFieldOption[] {
+  const root = findTypedef(typedefs, messageType) ?? typedefs.find(item => item.fieldnames?.length);
+  if (!root) return commonFields(messageType);
+
+  const fields = flattenFieldsFromTypedef(root, typedefs);
+  return fields.length > 0 ? fields : commonFields(messageType);
 }
 
-export async function fetchNumericFields(ros: Ros, messageType: string): Promise<NumericFieldOption[]> {
+export function flattenNumericFields(typedefs: FieldTypedef[], messageType: string): NumericFieldOption[] {
+  return flattenMessageFields(typedefs, messageType)
+    .filter(field => field.kind === 'number')
+    .map(({ path, label, rosType }) => ({ path, label, rosType }));
+}
+
+/** The primitive fields of a message type, asked of rosapi; the common ones when it cannot answer. */
+export async function fetchMessageFields(ros: Ros, messageType: string): Promise<MessageFieldOption[]> {
   if (!messageType) return [];
 
   return runSerializedRosapi(ros, () => new Promise(resolve => {
@@ -430,14 +495,19 @@ export async function fetchNumericFields(ros: Ros, messageType: string): Promise
       service.callService(
         { type: messageType },
         (response: { typedefs?: FieldTypedef[] }) => {
-          resolve(flattenNumericFields(response.typedefs ?? [], messageType));
+          resolve(flattenMessageFields(response.typedefs ?? [], messageType));
         },
-        () => resolve(COMMON_NUMERIC_FIELDS[messageType] ?? [])
+        () => resolve(commonFields(messageType))
       );
     } catch {
-      resolve(COMMON_NUMERIC_FIELDS[messageType] ?? []);
+      resolve(commonFields(messageType));
     }
   }));
+}
+
+export async function fetchNumericFields(ros: Ros, messageType: string): Promise<NumericFieldOption[]> {
+  const fields = await fetchMessageFields(ros, messageType);
+  return fields.filter(field => field.kind === 'number').map(({ path, label, rosType }) => ({ path, label, rosType }));
 }
 
 function readPathSegment(value: unknown, segment: string): unknown {

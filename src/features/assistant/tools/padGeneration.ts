@@ -5,6 +5,7 @@ import type {
   GamepadComponentConfig,
 } from '../../customGamepad/types';
 import type { RosOperation } from '../../../utils/rosOperations';
+import { componentLibrary } from '../../customGamepad/defaultLayouts';
 import type { AssistantCapability } from '../capabilities';
 
 /**
@@ -22,17 +23,8 @@ export const PAD_CAPABILITY: AssistantCapability = {
   responseKind: 'padProposal',
 };
 
-const COMPONENT_TYPES = new Set<GamepadComponentConfig['type']>([
-  'joystick',
-  'physical-gamepad',
-  'button',
-  'dpad',
-  'toggle',
-  'slider',
-  'camera',
-  'plot',
-  'heartbeat',
-]);
+// Every type the Pad editor offers.
+const COMPONENT_TYPES = new Set<GamepadComponentConfig['type']>(componentLibrary.map(item => item.type));
 
 const DEFAULT_GRID = { width: 8, height: 4 };
 const DEFAULT_CELL_SIZE = 80;

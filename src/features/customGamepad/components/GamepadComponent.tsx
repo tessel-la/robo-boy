@@ -12,6 +12,13 @@ import CameraComponent from './CameraComponent';
 import PlotComponent from './PlotComponent';
 import HeartbeatComponent from './HeartbeatComponent';
 import PhysicalGamepadComponent from './PhysicalGamepadComponent';
+import GaugeComponent from './GaugeComponent';
+import LevelComponent from './LevelComponent';
+import ReadoutComponent from './ReadoutComponent';
+import StateComponent from './StateComponent';
+import SetpointComponent from './SetpointComponent';
+import TextComponent from './TextComponent';
+import { isDataComponentType } from '../dataComponents';
 import './GamepadComponent.css';
 
 interface GamepadComponentProps {
@@ -289,6 +296,18 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
         return <PlotComponent {...commonProps} />;
       case 'heartbeat':
         return <HeartbeatComponent {...commonProps} />;
+      case 'gauge':
+        return <GaugeComponent {...commonProps} />;
+      case 'level':
+        return <LevelComponent {...commonProps} />;
+      case 'readout':
+        return <ReadoutComponent {...commonProps} />;
+      case 'state':
+        return <StateComponent {...commonProps} />;
+      case 'setpoint':
+        return <SetpointComponent {...commonProps} />;
+      case 'text':
+        return <TextComponent {...commonProps} />;
       default:
         return <div className="unknown-component">Unknown component type</div>;
     }
@@ -346,7 +365,7 @@ const GamepadComponent: React.FC<GamepadComponentProps> = ({
       {renderComponent()}
       
       {/* Label */}
-      {config.label && config.type !== 'heartbeat' && (
+      {config.label && config.type !== 'heartbeat' && !isDataComponentType(config.type) && (
         <div className="component-label" style={{ fontSize: `${0.7 * scaleFactor}em` }}>
           {config.label}
         </div>
