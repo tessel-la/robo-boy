@@ -83,6 +83,8 @@ rosapi provides topic, service, action, and message-schema discovery. Robot-spec
 
 The editor owns graph state; an executor consumes a complete tree snapshot and emits execution events. Local runs use the browser executor. Opt-in persistent runs are sent to `infra/ros/behavior_tree_runner.py`, which owns ROS clients independently of the browser and exposes reconnectable status over standard `std_msgs/String` topics. Keep graph editing independent from either execution transport so both remain testable.
 
+The Data Explorer keeps one inspection session per ROS connection (`src/features/dataExplorer/InspectionSession.ts`), shared by every Explorer tile and released when the last one closes. Graph discovery, endpoint counts, QoS and traffic measurement run on the ROS host in `infra/ros/inspection_runner.py`, which serves leased, expiring probes over `std_msgs/String` topics and never calls robot services. Without it the session falls back to the serialized rosapi queue and labels browser-side rates as such; see [Data Explorer](data-explorer.md).
+
 ### 3D Visualization
 
 The 3D stack has three layers:

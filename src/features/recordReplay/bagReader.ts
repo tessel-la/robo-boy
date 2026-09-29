@@ -68,9 +68,11 @@ export class BagReader {
     this.decoders.clear();
     for (const channel of this.reader.channelsById.values()) {
       const schema = this.reader.schemasById.get(channel.schemaId);
-      const topic = { name: channel.topic, type: schema?.name ?? channel.messageEncoding, count: Number(this.reader.statistics?.channelMessageCounts.get(channel.id) ?? 0n), error: undefined as string | undefined };
+      const topic = { name: channel.topic, type: schema?.name ?? channel.messageEncoding, count: Number(this.reader.statistics?.channelMessageCounts.get(channel.id) ?? 0n), error: undefined as string | undefined, definition: undefined as string | undefined };
       try {
         const definition = schema && new TextDecoder().decode(schema.data);
+        // Kept for the Data Explorer's schema view; bounded so a huge definition does not travel in full.
+        if (definition && (schema?.encoding === 'ros2msg' || schema?.encoding === 'ros1msg')) topic.definition = definition.slice(0, 16000);
         if (channel.messageEncoding === 'json') {
           this.decoders.set(channel.id, bytes => JSON.parse(new TextDecoder().decode(bytes)));
         } else if (schema?.encoding === 'ros2msg' && channel.messageEncoding === 'cdr') {

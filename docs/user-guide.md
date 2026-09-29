@@ -37,6 +37,10 @@ The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `od
 
 Navigation: drag to orbit, scroll to zoom, and pan with a middle- or right-button drag or by holding `Ctrl`, `Shift`, or `⌘` while dragging (the cursor turns into a hand). On touch screens, one finger orbits and two fingers pan and pinch-zoom.
 
+### Data Explorer
+
+The Data Explorer lists the robot's topics, services, actions and nodes with their publisher, subscriber, client and server counts, measures the traffic of topics you watch, shows message contents and interface schemas, draws who talks to whom, and collects diagnostics, logs and your own topic health rules. From a topic you can open Time Series, 3D, Camera, TF tree or recording settings. Endpoint counts, delivery settings and host-side rates need the ROS inspection companion, which the Docker stack starts; see [Data Explorer](data-explorer.md) for what each measurement means and how to deploy the companion.
+
 ### Behavior Trees
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.

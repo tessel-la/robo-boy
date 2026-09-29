@@ -92,6 +92,13 @@ fi
 
 echo "--- Launching ROS Components ---"
 
+# Read-only discovery and expiring, on-demand traffic probes.
+(while true; do
+    python3 /ros_ws/inspection_runner.py
+    echo "[inspection_runner] exited, restarting in 2s..."
+    sleep 2
+done) &
+
 # Recording survives browser/panel lifetimes. A process restart never restarts a bag.
 (while true; do
     python3 /ros_ws/recording_runner.py
