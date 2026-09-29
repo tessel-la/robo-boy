@@ -5,6 +5,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { CustomTFProvider } from './tfUtils';
+import { createRobotResourceManager } from '../runtime/robotResources';
 
 type Marker = {
   ns: string; id: number; action: number; type: number;
@@ -17,23 +18,23 @@ type Marker = {
 };
 type Entry = { group: THREE.Group; frame: string; callback: (tf: any) => void; signature: string; timer?: ReturnType<typeof setTimeout> };
 
-async function loadMesh(url: string): Promise<THREE.Object3D> {
+async function loadMesh(url: string, manager?: THREE.LoadingManager): Promise<THREE.Object3D> {
   if (/\.obj(?:$|[?#])/i.test(url)) {
-    const loader = new OBJLoader();
+    const loader = new OBJLoader(manager);
     if (/\/visual\//.test(url)) {
-      const mtl = await new MTLLoader().loadAsync(url.replace(/\.obj(?=$|[?#])/i, '.mtl'));
+      const mtl = await new MTLLoader(manager).loadAsync(url.replace(/\.obj(?=$|[?#])/i, '.mtl'));
       mtl.preload();
       loader.setMaterials(mtl);
     }
     return loader.loadAsync(url);
   }
   if (/\.dae(?:$|[?#])/i.test(url)) {
-    const model = (await new ColladaLoader().loadAsync(url)).scene;
+    const model = (await new ColladaLoader(manager).loadAsync(url)).scene;
     model.rotateX(Math.PI / 2);
     return model;
   }
   if (/\.stl(?:$|[?#])/i.test(url))
-    return new THREE.Mesh(await new STLLoader().loadAsync(url), new THREE.MeshLambertMaterial());
+    return new THREE.Mesh(await new STLLoader(manager).loadAsync(url), new THREE.MeshLambertMaterial());
   throw new Error(`Unsupported marker mesh: ${url}`);
 }
 
@@ -50,11 +51,13 @@ export class MarkerArrayClient {
   private topic: Topic;
   private models = new Map<string, Promise<THREE.Object3D>>();
   private disposed = false;
+  private resourceManager: THREE.LoadingManager;
 
   constructor(private options: {
     ros: Ros; topic: string; tfClient: CustomTFProvider; rootObject: THREE.Object3D;
     path: string; requestRender: () => void; loadMesh?: typeof loadMesh;
   }) {
+    this.resourceManager = createRobotResourceManager(options.path);
     this.topic = new ROSLIB.Topic({ ros: options.ros, name: options.topic,
       messageType: 'visualization_msgs/MarkerArray', compression: 'cbor', throttle_rate: 0, queue_length: 0 });
     this.topic.subscribe(this.receive);
@@ -121,7 +124,9 @@ export class MarkerArrayClient {
     const url = marker.mesh_resource.startsWith('package://')
       ? `${this.options.path.replace(/\/$/, '')}/${marker.mesh_resource.slice('package://'.length)}`
       : marker.mesh_resource;
-    if (!this.models.has(url)) this.models.set(url, (this.options.loadMesh ?? loadMesh)(url));
+    if (!this.models.has(url)) this.models.set(url, this.options.loadMesh
+      ? this.options.loadMesh(url)
+      : loadMesh(url, this.resourceManager));
     this.models.get(url)!.then(template => {
       if (this.disposed || this.entries.get(key) !== entry) return;
       const model = template.clone(true);

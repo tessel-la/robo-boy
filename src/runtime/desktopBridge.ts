@@ -22,6 +22,8 @@ export interface PanelFetchReply {
 
 export interface RoboBoyDesktopBridge {
   shell: 'electron';
+  /** Native mesh/material/texture transport; absent in older shells. */
+  robotResourceProtocol?: boolean;
   /** True on a Mac, where the system draws the window buttons. Absent in older shells. */
   nativeWindowControls?: boolean;
   window: DesktopWindow;

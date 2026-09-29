@@ -44,6 +44,7 @@ const nativeWindowControls = process.platform === 'darwin';
 
 const desktopBridge = {
   shell: 'electron' as const,
+  robotResourceProtocol: true,
   nativeWindowControls,
 
   window: {
