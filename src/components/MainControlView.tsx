@@ -40,6 +40,7 @@ import {
   importGamepadFile,
   importGamepadLayouts,
   loadGamepadLibrary,
+  saveCustomGamepad,
 } from '../features/customGamepad/gamepadStorage';
 import { filterCameraTopics } from '../features/customGamepad/rosMessageUtils';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
@@ -3301,7 +3302,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         />
         <div className="workspace-pad-body">
           {isConnected && ros && selectedLayoutId ? (
-            <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} panelId={panel.id} storageScope={storageScope} layouts={gamepadLibrary} onSelectLayout={id => handleWorkspacePadLayoutChange(panel.id, id)} />
+            <CustomGamepadWrapper
+              ros={ros}
+              layoutId={selectedLayoutId}
+              panelId={panel.id}
+              storageScope={storageScope}
+              layouts={gamepadLibrary}
+              onSelectLayout={id => handleWorkspacePadLayoutChange(panel.id, id)}
+              onSaveLayout={layout => {
+                if (!saveCustomGamepad(layout)) return false;
+                setCustomGamepadRefreshKey(value => value + 1);
+                handleWorkspacePadLayoutChange(panel.id, layout.id);
+                return true;
+              }}
+            />
           ) : (
             <div className="pad-empty-state">
               <div className="pad-empty-state-content">

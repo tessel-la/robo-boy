@@ -3,35 +3,43 @@ import { installRosMock, getPublishedRosMessages } from './helpers/rosMock';
 import { installXrEmulator, observeXrScene, pressXrControl, saveXrPanelPreview } from './helpers/xrEmulator';
 
 async function aim(page: Page, selector: string, x = 0.5, y = 0.5, hand: 'left' | 'right' = 'right') {
-  const uv = await page.locator(selector).evaluate(
+  const hit = await page.locator(selector).evaluate(
     (el, { x, y }) => {
-      const r = el.getBoundingClientRect(),
-        root = el.closest('.custom-gamepad-layout')!.getBoundingClientRect();
-      const aspect = root.width / root.height,
-        surfaceAspect = 1200 / 840;
-      const w = Math.min(1, aspect / surfaceAspect),
-        h = Math.min(1, surfaceAspect / aspect);
-      return {
-        x: (1 - w) / 2 + ((r.left + r.width * x - root.left) / root.width) * w,
-        y: 1 - ((1 - h) / 2 + ((r.top + r.height * y - root.top) / root.height) * h),
-      };
+      const block = el.closest<HTMLElement>('[data-component-id]')!;
+      const component = block.dataset.componentId!;
+      if (el.closest('.dpad-component')) {
+        const index = [...block.querySelectorAll('button')].indexOf(el as HTMLButtonElement);
+        return { component, part: ['up', 'left', 'right', 'down'][index], x: 0.5, y: 0.5 };
+      }
+      if (el.closest('.pad-setpoint')) {
+        const rect = el.getBoundingClientRect(),
+          parent = block.getBoundingClientRect();
+        return {
+          component,
+          part: '',
+          x: (rect.left + rect.width * x - parent.left) / parent.width,
+          y: (rect.top + rect.height * y - parent.top) / parent.height,
+        };
+      }
+      return { component, part: '', x, y };
     },
     { x, y }
   );
   await page.evaluate(
-    async ({ uv, hand }) => {
+    async ({ hit, hand }) => {
       const path = '/node_modules/.vite/deps/three.js';
       const THREE = await import(/* @vite-ignore */ path);
       const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
-      const mesh = panel.getObjectByName('xr-pad-surface')!;
-      const point = mesh.localToWorld(new THREE.Vector3((uv.x - 0.5) * 0.86, (uv.y - 0.5) * 0.6, 0));
+      const mesh = panel.getObjectByName(`xr-pad-hit:${hit.component}${hit.part ? ':' + hit.part : ''}`)!;
+      const size = (mesh as any).geometry.parameters;
+      const point = mesh.localToWorld(new THREE.Vector3((hit.x - 0.5) * size.width, (0.5 - hit.y) * size.height, 0));
       const rotation = mesh.getWorldQuaternion(new THREE.Quaternion());
       const origin = point.clone().add(new THREE.Vector3(0, 0, 0.5).applyQuaternion(rotation));
       const controller = window.__xrDevice.controllers[hand]!;
       controller.position.set(origin.x, origin.y, origin.z);
       controller.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
     },
-    { uv, hand }
+    { hit, hand }
   );
   await page.waitForTimeout(100);
 }
@@ -192,17 +200,97 @@ for (const mode of ['VR', 'AR'] as const) {
     await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBeGreaterThan(0.5);
     await page.evaluate(() => window.__xrSession.end());
     await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBe(0);
+    // The immersive designer owns a draft and disables commands before any object manipulation.
+    await trigger(page, 0);
+    await page.getByRole('button', { name: /Enter XR Workspace/ }).click();
+    await page.waitForTimeout(500);
+    await aim(page, '.joystick-component', 0.8);
+    await trigger(page, 1);
+    await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBeGreaterThan(0.5);
+    await pressXrControl(page, 'xr-pad', 'pad-editor');
+    await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBe(0);
+    await trigger(page, 0);
+    await expect(page.locator('.gamepad-component.editing')).toHaveCount(6);
+    const before = await page.evaluate(() => {
+      const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+      return panel.getObjectByName('xr-pad-control:button')!.position.toArray();
+    });
+    await aim(page, '.button-component');
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => {
+      const hand = window.__xrDevice.controllers.right!;
+      hand.position.x += 0.12;
+      hand.position.y += 0.05;
+      hand.position.z += 0.08;
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
+    const moved = await page.evaluate(() => {
+      const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+      return panel.getObjectByName('xr-pad-control:button')!.position.toArray();
+    });
+    expect(moved[0]).toBeCloseTo(before[0] + 0.12, 2);
+    expect(moved[2]).toBeCloseTo(before[2] + 0.08, 2);
+    await aim(page, '.button-component');
+    await trigger(page, 1);
+    await trigger(page, 0);
+    await pressXrControl(page, 'xr-pad', 'row-0'); // Label, in the selected object's settings.
+    await pressXrControl(page, 'xr-pad', 'clear');
+    for (const key of ['h', 'o', 'l', 'd', 'space', 'x', 'r'])
+      await pressXrControl(page, 'xr-pad', key === 'space' ? 'space' : `key-${key}`);
+    await pressXrControl(page, 'xr-pad', 'apply-input');
+    await saveXrPanelPreview(page, 'xr-pad', `/tmp/robo-boy-xr-pad-designer-${mode.toLowerCase()}.png`);
+    await pressXrControl(page, 'xr-pad', 'pad-save');
+    await expect(page.locator('.gamepad-component.editing')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'hold xr', exact: true })).toHaveCount(1);
+    const saved = await page.evaluate(() => {
+      const key = Object.keys(localStorage).find(key => key.startsWith('robo-boy-xr-pad-v1:xr-test'))!;
+      const layout = JSON.parse(localStorage.getItem('robo-boy-custom-gamepads')!).customLayouts.find(
+        (item: any) => item.id === 'xr-test'
+      ).layout;
+      return { poses: JSON.parse(localStorage.getItem(key)!), layout };
+    });
+    expect(saved.poses.button.position[0]).toBeCloseTo(moved[0], 3);
+    expect(saved.layout.components.find((c: any) => c.id === 'button').position).toEqual({
+      x: 2,
+      y: 0,
+      width: 1,
+      height: 1,
+    });
+    // Cancelling a second edit restores the saved objects; desktop control handlers are available again.
+    await pressXrControl(page, 'xr-pad', 'pad-editor');
+    await aim(page, '.button-component');
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => {
+      window.__xrDevice.controllers.right!.position.x += 0.1;
+    });
+    await page.waitForTimeout(100);
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
+    await pressXrControl(page, 'xr-pad', 'pad-cancel');
+    expect(
+      await page.evaluate(() => {
+        const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+        return panel.getObjectByName('xr-pad-control:button')!.position.x;
+      })
+    ).toBeCloseTo(moved[0], 3);
+    await page.evaluate(() => window.__xrSession.end());
+    await page.getByRole('button', { name: 'hold xr', exact: true }).dispatchEvent('pointerdown');
+    await expect.poll(() => last(page, '/hold')).toEqual({ data: true });
+    await page.getByRole('button', { name: 'hold xr', exact: true }).dispatchEvent('pointerup');
+    await expect.poll(() => last(page, '/hold')).toEqual({ data: false });
     // Selecting a different layout inside XR releases commands before replacing controls.
     await trigger(page, 0);
     await page.getByRole('button', { name: /Enter XR Workspace/ }).click();
     await page.waitForTimeout(1000);
     await aim(page, '.joystick-component', 0.8);
     await trigger(page, 1);
-    await expect.poll(async () => (await last(page, '/cmd_vel') as any)?.linear.x).toBeGreaterThan(0.5);
+    await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBeGreaterThan(0.5);
     await pressXrControl(page, 'xr-pad', 'pad-layouts');
     await pressXrControl(page, 'xr-pad', 'row-0');
-    await expect.poll(async () => (await last(page, '/cmd_vel') as any)?.linear.x).toBe(0);
-    await expect(page.getByRole('button', { name: 'Hold', exact: true })).toHaveCount(0);
+    await expect.poll(async () => ((await last(page, '/cmd_vel')) as any)?.linear.x).toBe(0);
+    await expect(page.getByRole('button', { name: 'hold xr', exact: true })).toHaveCount(0);
     await trigger(page, 0);
     await page.evaluate(() => window.__xrSession.end());
     expect(errors).toEqual([]);

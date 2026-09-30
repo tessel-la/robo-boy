@@ -111,14 +111,21 @@ shown inside XR, and exiting restores desktop camera behavior.
 
 ### Pad controls, Behavior Tree, and Record & Replay
 
-Pad controls keep the configured desktop grid and live data displays on a captured 2D surface inside
-`PanelFrame`. Capture is bounded to 5 Hz and 1280 pixels; controller input runs independently.
-Joysticks, D-pad directions, momentary buttons, toggles, sliders, and setpoint step/send buttons call
-handlers owned by the mounted controls. No ROS publisher or physical-gamepad polling loop is added.
-The Layouts menu selects existing templates/custom pads through the workspace's normal state update.
-Only joysticks and sliders may drag beyond the click slop, and only within the original control.
-Release, grip manipulation, tracking loss, control replacement, deactivation and XR exit stop holds.
-Pad layout authoring, text entry and camera transport setup remain desktop operations.
+Pad controls are independent 3D objects: raised buttons, a tilting joystick, directional caps, a
+switch, slider and sculpted physical-gamepad body. Live readouts, plots and setpoints retain captured
+faces within movable blocks; capture stays bounded to 5 Hz and 1280 pixels. Inputs call the mounted
+controls' handlers, so XR adds no publisher or hardware polling loop. Holds still release on grip,
+tracking loss, replacement, deactivation and XR exit.
+
+Use **Edit** for the immersive Pad designer, or **New** for an empty pad. Select an object for its
+label, ROS source/command, control settings, event operations or physical-gamepad bindings. A local
+XR keyboard handles text and structured message payloads. Add controls through the component palette;
+**grip** carries and rotates an object, and two grips resize it. Save commits the draft to the Pad
+library; Cancel restores the previous layout. Editing disables commands, including hardware input.
+Built-in templates save as custom copies. XR object poses are connection-scoped and separate from
+the desktop grid; moving or scaling an object cannot rearrange the 2D version. Adding/removing controls
+and explicit configuration/grid edits apply to the shared pad when saved. See
+[`xr-pad.md`](xr-pad.md) for ownership, persistence and validation details.
 
 Behavior Tree has a native fitted graph with execution colors, node details, subtree/parent navigation,
 a saved-tree picker, blackboard values, execution-mode selection and Run/Pause/Resume/Stop. It shares

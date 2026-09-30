@@ -4,8 +4,7 @@ This is the working guide for whoever continues the XR workspace. [`xr.md`](xr.m
 feature is and how to run it; this document explains how the spatial layer is built, why, and how to
 extend it. Read `xr.md` first for entry, session modes and the reuse table.
 
-Current state: **all built-in panel types have dedicated XR presentations**. Pad preserves its
-configured grid with native control handlers; external panels use captured surfaces. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
+Current state: **all built-in panel types have dedicated XR presentations**. Pad uses tangible controls and an immersive draft editor; external panels use captured surfaces. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
 XR. The interaction model was designed to be reused, not to be specific to 3D.
 
 ## 1. What exists
@@ -25,7 +24,7 @@ src/xr/
     timeSeries/            native plot and settings, sharing the desktop tile's engine
     tfTree/                native graph, frame details, diagnostics and transform calculator
     camera/                live and recorded frames from the mounted camera tile
-    pad/                   captured configured grid + shared mounted control handlers
+    pad/                   3D controls + immersive draft editor + shared mounted control handlers
     behaviorTree/          fitted graph + shared editor executor and saved-tree menu
     recordReplay/          native transport, recorder controls and remote file browser
   ui/                      reusable spatial UI kit (see section 4)
@@ -258,7 +257,7 @@ panel needs in `PanelFrame`, `SpatialMenu` and `WristMenu`.
 ### Suggested next steps
 
 1. Headset pass on the 3D panel: comfort distances, wrist reach, grab feel, menu legibility.
-2. Headset comfort/legibility pass on Pad, Behavior Tree and Record & Replay. Pad currently uses a flat `PanelFrame` with its existing grid; a spatial desk remains optional. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
+2. Headset comfort/legibility pass on Pad, Behavior Tree and Record & Replay. Pad uses movable 3D controls and an immersive editor; verify grip, two-hand sizing and keyboard reach. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
 3. Apply `pinned` and `attach: 'viewer'` (a head-locked group, with a pin toggle in the toolbar).
 4. Make 2D panels observe visualization state changes so XR edits show in 2D live.
 5. Hand-tracking affordances (pinch-specific rays, poke buttons).
@@ -373,8 +372,8 @@ panel still needs a separate video renderer; this native implementation covers t
 
 ## Missing-panel continuation (2026-09-30)
 
-- Pad: `src/xr/panels/pad/padRenderer.ts` captures the mounted configured grid with the pinned existing
-  html2canvas parser/renderer, preserving readouts, plots and physical-pad visuals. The capture helper
+- Pad (superseded by the spatial designer below): the first renderer captured the configured grid
+  with the pinned html2canvas parser/renderer, preserving readouts, plots and physical-pad visuals. The capture helper
   now accounts for the subtree's document offset, also retaining external sandbox capture behavior.
   The `spatialControl` WeakMap registers existing control callbacks on their own elements. XR chooses
   targets within that subtree even when an XR DOM overlay covers it. One pointer owns each hold;
@@ -390,9 +389,9 @@ panel still needs a separate video renderer; this native implementation covers t
 - Record & Replay: native dashboard with a balanced timeline drag, shared desktop seek debounce,
   speed/loop/topics, ROS-host file browsing and the existing recorder hook. No worker, subscription,
   publisher or recording session is duplicated. Pending acknowledgements disable recorder controls.
-- Text entry, tree/Pad authoring and native file/save dialogs remain desktop workflows. Pad video or
-  nested-frame content still needs a dedicated renderer. Pad is a flat captured presentation, not a
-  three-dimensional reconstruction of the grid or the reserved `desk` placement.
+- Tree authoring and native file/save dialogs remain desktop workflows. Pad video or nested-frame
+  content still needs a dedicated renderer. Pad authoring and text entry now have the immersive
+  designer described below. The reserved `desk` placement remains unused.
 
 Verification uses emulated VR and AR with mock ROS, real indexed MCAP replay, and the unmodified
 Microduck bundle. Unit checks include control replacement/unmount releases and drag target isolation.
@@ -401,3 +400,28 @@ Physical headset comfort, capture cost, readout legibility and hand tracking rem
 Checks passed: 727 unit tests across the affected features and XR, TypeScript, ESLint, and the
 production build. Eight VR/AR browser scenarios cover Pad, Behavior Tree, Record & Replay, and
 Microduck; the sandbox is rebuilt before its regression check.
+
+
+## Spatial Pad designer (2026-09-30)
+
+`pad/padRenderer.ts` now composes native `PadControl` meshes and `XrPadEditor`; the implementation
+stays entirely in the XR Pad folder. It uses the shared frame and spatial menu, plus a Pad-local
+keyboard. `padSpatialLayout.ts` validates and scopes poses separately from the desktop grid.
+
+The existing Pad presentation exposes its active layout and two callbacks: `setEditing` disables
+mounted publishers during authoring, and `saveLayout` uses the workspace's existing storage/library
+refresh path. XR holds continue to call `spatialControl` handlers, with one pointer per control and
+balanced cancellation. Data blocks keep cropped faces from the existing capture helper.
+
+Edits are drafts. Grips move/turn objects; two grips scale, clamped to 0.4–2. Objects stay within
+1.5 m of their parent origin. Save persists poses and the configured layout, cloning templates;
+Cancel/XR teardown restores play mode without saving. A failed save retains the draft and restores
+previous poses. A changed source layout blocks saving rather than overwriting another edit.
+
+Desktop editor code and component command semantics are unchanged. The small presentation bridge
+and workspace save callback let saved labels/configuration appear in 2D immediately. Spatial poses
+are not included in desktop Pad JSON export. Physical gamepad objects still represent hardware
+input, matching the desktop component; trigger interaction does not synthesize hardware buttons.
+
+See [`xr-pad.md`](xr-pad.md) and the renderer unit / VR–AR browser tests. Physical headset grab feel,
+small-control legibility and keyboard comfort still need on-device validation.
