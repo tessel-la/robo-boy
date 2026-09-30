@@ -39,7 +39,8 @@ handler. Each held command has one XR pointer owner.
 
 A Save failure leaves the draft open, reports the error and restores previous XR storage. If the
 source layout changes elsewhere, the draft remains open but cannot overwrite that change; cancel
-and reopen it. Malformed or out-of-range stored poses are ignored. Data faces report unavailable
+and reopen it. New/template-copy IDs are checked again on Save so another designer's newly saved
+Pad cannot be overwritten. Malformed or out-of-range stored poses are ignored. Data faces report unavailable
 capture and reject input until a valid image matches the mounted dimensions.
 
 ## Validation
@@ -54,3 +55,4 @@ verified on hardware.
 Verified in this implementation: 411 targeted unit tests passed (8 existing tests skipped), four
 unchanged desktop-editor browser scenarios passed, and both VR/AR scenarios passed with the new
 object-grab/edit/save/cancel flow. TypeScript, ESLint and the production build passed.
+The additional simultaneous-template-save regression test also passed (11 Pad XR tests total).

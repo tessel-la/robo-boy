@@ -13,7 +13,7 @@ import {
   getPhysicalGamepadControlLabel,
 } from '../../../features/customGamepad/physicalGamepad';
 import { componentLibrary, createComponent } from '../../../features/customGamepad/defaultLayouts';
-import { generateGamepadId } from '../../../features/customGamepad/gamepadStorage';
+import { generateGamepadId, getGamepadLayout } from '../../../features/customGamepad/gamepadStorage';
 import { fitNewComponent, occupiedExtent, resizeWithin } from '../../../features/customGamepad/padGeometry';
 import { SpatialMenu, type MenuPage, type MenuRow } from '../../ui/SpatialMenu';
 import { SpatialSurface, type SurfaceItem } from '../../ui/SpatialSurface';
@@ -74,6 +74,7 @@ export class XrPadEditor {
   selected: string | null = null;
   private source: PadPresentation | null = null;
   private sourceSignature = '';
+  private createsLayout = false;
   private input: { label: string; text: string; commit: (text: string) => void } | null = null;
   private symbols = false;
   private shift = false;
@@ -108,6 +109,7 @@ export class XrPadEditor {
     if (!source?.layout || !source.saveLayout) return;
     this.source = source;
     this.sourceSignature = JSON.stringify(source.layout);
+    this.createsLayout = fresh || Boolean(source.isDefault);
     const now = new Date().toISOString();
     this.layout = fresh
       ? {
@@ -164,7 +166,12 @@ export class XrPadEditor {
       return;
     }
     this.poses = this.snapshot();
-    const layout = { ...this.layout, metadata: { ...this.layout.metadata, modified: new Date().toISOString() } };
+    const layout = {
+      ...this.layout,
+      // Another open designer may have saved a copy with this id while our draft was open.
+      id: this.createsLayout && getGamepadLayout(this.layout.id) ? generateGamepadId(this.layout.name) : this.layout.id,
+      metadata: { ...this.layout.metadata, modified: new Date().toISOString() },
+    };
     const key = padPoseKey(layout.id, this.scope);
     let previous: string | null = null;
     try {

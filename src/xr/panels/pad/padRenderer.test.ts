@@ -11,6 +11,7 @@ import type { XrInputTarget } from '../../XrInputManager';
 import { XrGrabController } from '../../grabbable';
 import { padPanelRenderer } from './padRenderer';
 import { padPoseKey, readPadPoses } from './padSpatialLayout';
+import { getGamepadLayout, saveCustomGamepad } from '../../../features/customGamepad/gamepadStorage';
 
 const { handlers, capture } = vi.hoisted(() => ({
   handlers: new WeakMap<HTMLElement, PadSpatialControl>(),
@@ -267,6 +268,18 @@ describe('spatial Pad and immersive editor', () => {
     expect(JSON.stringify(p.layout)).toBe(original);
     expect(readPadPoses('test-layout', 'robot')).toEqual({});
     expect(Object.keys(readPadPoses(saved.id, 'robot'))).toHaveLength(3);
+    close();
+  });
+
+  it('does not overwrite a new layout saved by another designer while a template draft is open', () => {
+    const { panel, p, close } = setup(true);
+    press(panel, 'pad-editor');
+    const other = { ...layout(), id: 'custom-drive-copy', name: 'Another copy' };
+    expect(saveCustomGamepad(other)).toBe(true);
+    press(panel, 'pad-save');
+    const saved = vi.mocked(p.saveLayout!).mock.calls[0][0];
+    expect(saved.id).toBe('custom-drive-copy-1');
+    expect(getGamepadLayout(other.id)?.name).toBe('Another copy');
     close();
   });
 
