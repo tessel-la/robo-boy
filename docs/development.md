@@ -49,6 +49,18 @@ Changes under `src/` should hot reload. Rebuild after changing files under `infr
 docker compose up -d --build --force-recreate
 ```
 
+After pulling changes to `package.json` or `package-lock.json`, also refresh the running frontend's
+dependencies. Compose keeps `/app/node_modules` in an anonymous volume, so hot reload and rebuilding
+the image can leave it using an older dependency set:
+
+```bash
+docker compose exec app npm ci
+docker compose restart app
+```
+
+This also resolves Vite errors such as `Failed to resolve import "html2canvas/dist/lib/core/context"`
+from `capturePanelSurface.ts` when the updated source is mounted over an older app container.
+
 The default ports are defined in the copied `.env` file. The main knobs are:
 
 | Variable                        | Default                  | Used by                                                    |

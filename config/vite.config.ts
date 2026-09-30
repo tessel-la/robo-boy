@@ -93,6 +93,13 @@ export default defineConfig(({ mode }) => ({
       '@foxglove/rosmsg-serialization',
       '@foxglove/rosmsg2-serialization',
       'fzstd',
+      // Capture is first reached through the lazy XR workspace. Prebundle these CommonJS
+      // internals together so entering XR cannot trigger an optimizer reload mid-session.
+      'html2canvas/dist/lib/core/context',
+      'html2canvas/dist/lib/core/cache-storage',
+      'html2canvas/dist/lib/css/layout/bounds',
+      'html2canvas/dist/lib/dom/node-parser',
+      'html2canvas/dist/lib/render/canvas/canvas-renderer',
     ],
   },
   server: {
