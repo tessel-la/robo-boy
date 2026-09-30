@@ -142,7 +142,7 @@ scene" coexist without a mode switch.
 | Turn / slide / scale the scene inside a panel | Squeeze the robot area; one hand slides + yaws, two hands scale |
 | Fit, reset, zoom the scene | Toolbar buttons |
 | Open settings | Toolbar gear; the menu docks beside the panel (toggle closes it) |
-| Add a panel | Raise the left wrist into view, *Add panel* tab, pick a type |
+| Add a panel | Left controller X, or wrist **Panels** button; *Add panel* tab, pick a type |
 | Find / bring back / remove a panel | Wrist menu *Open (N)*: "Bring to me", or ×  |
 | Close a panel | Title bar × |
 
@@ -150,14 +150,19 @@ The scene view is constrained to **yaw only, standing on the floor, within 1.6 �
 (`constrainView`). Tilting a robot off its floor makes it look broken and is never what someone
 wants.
 
-### Wrist gesture
+### Wrist launcher and controller button
 
-`shouldShowWristMenu` shows the menu when the wrist is 0.15–0.75 m from the head and within 42° of
-the gaze direction, and keeps it visible out to 62° (hysteresis, so a hand reaching for a button on
-the menu does not flicker it away). It uses only wrist *position* against head *gaze*, not palm
-orientation, because controller grips and tracked-hand grips disagree about "palm up"; a gesture that
-works only on one of them is worse than one that works on both. The menu hovers 0.17 m above the wrist
-and yaws to face the head.
+The full menu opens only through **left X** or the small wrist **Panels** button. X toggles once
+per press; the menu's × also closes it. `XrInputManager` reads the left `xr-standard` controller's
+first face button (index 4), ignoring touch, holds, right-controller buttons and unknown mappings.
+Buttons held at connection or pressed while tracking is lost require a fresh press. Toggling
+releases robot holds on both controllers first. The headset's reserved system-menu button is not used.
+
+`shouldShowWristLauncher` shows only the launcher when the wrist is 0.15–0.75 m from the head and
+within 42° of gaze, retaining it out to 62° to avoid flicker. It uses wrist position rather than
+palm orientation, so the clickable launcher also works for tracked hands and controllers without
+an X button. The open menu follows the wrist regardless of this gaze gate, 0.17 m above it and
+yawing to face the head. Tracking loss closes it; returning tracking does not reopen it.
 
 ## 4. Reusable components
 
@@ -223,8 +228,8 @@ untouched.
 - **Settings dock to the right of the panel, not below it.** Below the panel puts a tall menu at knee
   height; the toolbar is below, the menu beside. Revisit if user testing prefers otherwise
   (`PanelFrame`: the `menuDock` group's position and rotation).
-- **The wrist gesture is gaze-based**, so the wrist must be raised into view; it cannot be opened
-  with the arm resting at the side.
+- **The launcher is gaze-based; the full menu opens explicitly.** Left X can toggle it with the
+  arm at the side, but the menu still follows the wrist.
 - **`hitTest` calls `updateWorldMatrix(true, true)` per pointer per frame.** Fine at a handful of
   panels; if panel counts grow, cache and invalidate.
 - **Placement conversion assumes `rootGroup` is translation-only.**

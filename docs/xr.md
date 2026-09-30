@@ -64,8 +64,10 @@ the world is a child of the panel, moving, resizing or closing the panel carries
 open as a `SpatialMenu` docked beside the panel. Layers and their options are the desktop panel's own
 `VisualizationPanelState`, saved under the same key, so both sides see the same configuration.
 
-New panels are added from a wrist menu (`WristMenu`): raise the left wrist into view, choose *Add
-panel*, and the panel appears in front of you. *Open* lists what is already there, with "bring to
+New panels are added from a wrist menu (`WristMenu`): press **X on the left headset controller** to
+toggle it, or raise the left wrist and press its small **Panels** button with the other hand.
+Raising or turning the hand never opens the full menu. Choose *Add panel*, and the panel appears
+in front of you. *Open* lists what is already there, with "bring to
 me" and remove. The full design, the reusable pieces and how to extend it are in the
 [XR handover](xr-handover.md).
 
@@ -218,7 +220,7 @@ to an intact 2D workspace with its layout unchanged.
 npm run test:run -- src/xr
 ```
 
-Covers the spatial UI primitives (hit-testing, paging, wrist gesture hysteresis, panel sizing), the
+Covers the spatial UI primitives (hit-testing, paging, wrist launcher hysteresis, explicit menu toggles, panel sizing), the
 3D panel's lifecycle and settings editor, the display host's layer reconciliation, view fitting,
 session lifecycle (`setAnimationLoop` starts once and stops on end, teardown is idempotent,
 a session that cannot bind is ended rather than left blank), per-mode feature descriptors and

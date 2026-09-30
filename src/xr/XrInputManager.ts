@@ -46,6 +46,8 @@ export interface XrInputManagerOptions {
   onHoverChange?: (pointer: XrPointer, target: XrInputTarget | null) => void;
   onGrabStart?: (pointer: XrPointer, target: XrInputTarget) => void;
   onGrabEnd?: (pointer: XrPointer, object: THREE.Object3D) => void;
+  /** Explicit workspace-menu toggle from the left controller's primary face button (X). */
+  onMenuToggle?: () => void;
   /** Identity of the actual control within a surface, not just its shared mesh. */
   getActivationTarget?: (target: XrInputTarget) => unknown;
   /** Continuous controls may move within the SAME control, never onto another target. */
@@ -71,6 +73,8 @@ interface PointerState {
   grabbed: THREE.Object3D | null;
   rayLine: THREE.Line | null;
   grip: THREE.Object3D;
+  inputSource: XRInputSource | null;
+  menuButtonPressed: boolean;
 }
 
 /** Beyond this much travel, a select is a drag and must not activate anything. */
@@ -247,6 +251,8 @@ export class XrInputManager {
         grabbed: null,
         rayLine,
         grip,
+        inputSource: null,
+        menuButtonPressed: false,
       };
       this.pointers.set(id, state);
 
@@ -256,11 +262,16 @@ export class XrInputManager {
         // A tracked hand reports through the same controller slot; recording it lets panels present
         // different affordances without the interaction layer branching.
         state.source = event.data?.hand ? 'hand' : 'controller';
+        state.inputSource = event.data ?? null;
+        // A button already held on connection must be released before it can toggle anything.
+        state.menuButtonPressed = Boolean(event.data?.gamepad?.buttons[4]?.pressed);
       };
       const onDisconnected = () => {
         state.connected = false;
         state.handedness = 'none';
         state.source = 'controller';
+        state.inputSource = null;
+        state.menuButtonPressed = false;
         this.releaseSelect(state);
         this.releaseSqueeze(state);
         state.hovered = null;
@@ -466,6 +477,20 @@ export class XrInputManager {
    */
   update(): void {
     for (const state of this.pointers.values()) {
+      const gamepad = state.inputSource?.gamepad;
+      const menuPressed =
+        state.connected &&
+        state.source === 'controller' &&
+        state.handedness === 'left' &&
+        gamepad?.mapping === 'xr-standard' &&
+        Boolean(gamepad.buttons[4]?.pressed);
+      const toggle = menuPressed && !state.menuButtonPressed;
+      state.menuButtonPressed = menuPressed;
+      if (toggle && state.object?.visible && this.options.onMenuToggle) {
+        // Opening navigation must release robot holds, including ones on the other controller.
+        for (const pointer of this.pointers.values()) this.releaseSelect(pointer);
+        this.options.onMenuToggle();
+      }
       if (!this.refreshRay(state)) {
         this.releaseSelect(state);
         this.releaseSqueeze(state);

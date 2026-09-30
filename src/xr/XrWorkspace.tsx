@@ -404,6 +404,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           if (!target) return;
           findPanelForObject(target.object)?.instance.onHover?.(target);
         },
+        onMenuToggle: () => wristMenuRef.current?.toggle(),
         onGrabStart: (pointer, target) => {
           const pose = pointerPose(input, pointer.id);
           if (!pose) return;
@@ -445,7 +446,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       });
       wristMenuRef.current = wristMenu;
 
-      const hint = new HintBoard('No panels open', 'Raise your left wrist and choose a panel to add.');
+      const hint = new HintBoard('No panels open', 'Press left X or the wrist Panels button to add a panel.');
       hint.object.position.set(0, 1.3, -1.2);
       scene.uiGroup.add(hint.object);
       hintRef.current = hint;

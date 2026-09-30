@@ -7,7 +7,10 @@ const grips = [new THREE.Group(), new THREE.Group()];
 let manager: XrInputManager;
 let drag = false;
 let panel: THREE.Mesh;
-const pressStart = vi.fn(), pressEnd = vi.fn(), pressMove = vi.fn();
+const pressStart = vi.fn(),
+  pressEnd = vi.fn(),
+  pressMove = vi.fn();
+const menuToggle = vi.fn();
 let activate: ReturnType<typeof vi.fn<NonNullable<XrInputManagerOptions['onActivate']>>>;
 function event(index: number, type: string, data?: unknown) {
   controllers[index].dispatchEvent({ type, data } as never);
@@ -21,7 +24,10 @@ beforeEach(() => {
   scene.add(panel);
   activate = vi.fn();
   drag = false;
-  pressStart.mockClear(); pressEnd.mockClear(); pressMove.mockClear();
+  pressStart.mockClear();
+  pressEnd.mockClear();
+  pressMove.mockClear();
+  menuToggle.mockClear();
   manager = new XrInputManager({
     renderer: {
       xr: {
@@ -33,8 +39,11 @@ beforeEach(() => {
     getInteractables: () => [panel],
     onActivate: activate,
     allowsPressDrag: () => drag,
-    getActivationTarget: target => target.point.x < 0.5 ? 'first' : 'second',
-    onPressStart: pressStart, onPressEnd: pressEnd, onPressMove: pressMove,
+    getActivationTarget: target => (target.point.x < 0.5 ? 'first' : 'second'),
+    onPressStart: pressStart,
+    onPressEnd: pressEnd,
+    onPressMove: pressMove,
+    onMenuToggle: menuToggle,
   });
   controllers.forEach((controller, index) => {
     controller.position.set(0, 0, 0);
@@ -45,6 +54,79 @@ beforeEach(() => {
     event(index, 'connected');
   });
   manager.update();
+});
+
+describe('explicit controller menu toggle', () => {
+  const connect = (pressed = false, handedness = 'left', mapping = 'xr-standard') => {
+    const buttons = Array.from({ length: 6 }, () => ({ pressed: false, value: 0, touched: false }));
+    buttons[4].pressed = pressed;
+    event(0, 'connected', { handedness, gamepad: { mapping, buttons } });
+    return buttons;
+  };
+
+  it('toggles once per left X press, ignoring touch, holds and other buttons', () => {
+    const buttons = connect();
+    buttons[4].touched = true;
+    buttons[0].pressed = true;
+    manager.update();
+    expect(menuToggle).not.toHaveBeenCalled();
+    buttons[4].pressed = true;
+    manager.update();
+    manager.update();
+    expect(menuToggle).toHaveBeenCalledOnce();
+    buttons[4].pressed = false;
+    manager.update();
+    buttons[4].pressed = true;
+    manager.update();
+    expect(menuToggle).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires release after connecting with X already pressed', () => {
+    const buttons = connect(true);
+    manager.update();
+    expect(menuToggle).not.toHaveBeenCalled();
+    buttons[4].pressed = false;
+    manager.update();
+    buttons[4].pressed = true;
+    manager.update();
+    expect(menuToggle).toHaveBeenCalledOnce();
+  });
+
+  it('ignores right-hand and nonstandard gamepad buttons', () => {
+    let buttons = connect(false, 'right');
+    buttons[4].pressed = true;
+    manager.update();
+    buttons = connect(false, 'left', '');
+    buttons[4].pressed = true;
+    manager.update();
+    expect(menuToggle).not.toHaveBeenCalled();
+  });
+
+  it('ignores presses while tracking is lost and requires a fresh press after reconnection', () => {
+    const buttons = connect();
+    controllers[0].visible = false;
+    buttons[4].pressed = true;
+    manager.update();
+    controllers[0].visible = true;
+    manager.update();
+    expect(menuToggle).not.toHaveBeenCalled();
+    event(0, 'disconnected');
+    connect(true);
+    manager.update();
+    expect(menuToggle).not.toHaveBeenCalled();
+  });
+
+  it('releases a robot hold on the other controller before toggling the menu', () => {
+    const buttons = connect();
+    event(1, 'selectstart');
+    expect(pressStart).toHaveBeenCalledOnce();
+    buttons[4].pressed = true;
+    manager.update();
+    expect(pressEnd).toHaveBeenCalledExactlyOnceWith(expect.anything(), true);
+    expect(menuToggle).toHaveBeenCalledOnce();
+    event(1, 'selectend');
+    expect(activate).not.toHaveBeenCalled();
+  });
 });
 describe('XR command isolation', () => {
   it('activates a stationary click', () => {
@@ -171,7 +253,6 @@ describe('XR picking and wrist pose', () => {
   });
 });
 
-
 describe('balanced continuous controls', () => {
   it('starts immediately, renews while held, and releases before the click', () => {
     event(0, 'selectstart');
@@ -198,7 +279,8 @@ describe('balanced continuous controls', () => {
     expect(activate).not.toHaveBeenCalled();
   });
   it('cannot begin a hold while either hand grips', () => {
-    event(1, 'squeezestart'); event(0, 'selectstart');
+    event(1, 'squeezestart');
+    event(0, 'selectstart');
     expect(pressStart).not.toHaveBeenCalled();
   });
 });

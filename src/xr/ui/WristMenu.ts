@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { XrInputManager } from '../XrInputManager';
 import { SpatialMenu, type MenuPage } from './SpatialMenu';
+import { SpatialToolbar } from './SpatialToolbar';
 
 export interface WristMenuCatalogEntry {
   id: string;
@@ -39,15 +40,15 @@ const FOLLOW_RATE = 14;
 const toHead = new THREE.Vector3();
 
 /**
- * Whether the wrist menu should be showing: the wrist is raised into view, like glancing at a watch.
+ * Whether the small menu launcher should be showing: the wrist is raised into view.
  *
  * This deliberately uses only where the wrist is relative to where the head is looking rather than
  * the wrist's own orientation. Controller grips and tracked-hand grips disagree about which way is
  * "palm up", and a gesture that only works on one of them is worse than one that works on both.
  * Separate show and hide angles give hysteresis, so a menu on the edge of the gesture does not flicker
- * while someone is reaching for a button on it.
+ * while someone is reaching for the launcher. This never opens the full menu.
  */
-export const shouldShowWristMenu = (
+export const shouldShowWristLauncher = (
   head: THREE.Vector3,
   headForward: THREE.Vector3,
   wrist: THREE.Vector3,
@@ -73,9 +74,11 @@ type WristTab = 'add' | 'open';
 export class WristMenu {
   readonly object = new THREE.Group();
   private readonly menu: SpatialMenu;
+  private readonly launcher = new SpatialToolbar(0.3);
   private readonly options: WristMenuOptions;
   private tab: WristTab = 'add';
-  private visible = false;
+  private opened = false;
+  private launcherVisible = false;
   private snap = true;
   private readonly target = new THREE.Vector3();
   private readonly head = new THREE.Vector3();
@@ -84,9 +87,22 @@ export class WristMenu {
 
   constructor(options: WristMenuOptions) {
     this.options = options;
-    this.menu = new SpatialMenu({ width: 0.56, pageSize: 5, tabs: true });
-    this.menu.open(() => this.page());
-    this.object.add(this.menu.object);
+    this.menu = new SpatialMenu({
+      width: 0.56,
+      pageSize: 5,
+      tabs: true,
+      onClose: () => {
+        this.opened = false;
+        this.snap = true;
+      },
+    });
+    this.launcher.setButtons([
+      { id: 'wrist-menu-toggle', icon: 'layers', label: 'Panels', onPress: () => this.toggle() },
+    ]);
+    this.object.name = 'xr-wrist-menu';
+    this.menu.surface.mesh.name = 'xr-wrist-menu-content';
+    this.launcher.surface.mesh.name = 'xr-wrist-menu-launcher';
+    this.object.add(this.menu.object, this.launcher.surface.mesh);
     this.object.scale.setScalar(MENU_SCALE);
     this.object.visible = false;
     // The hand the menu hangs from must not point at it, or it would be selecting its own wrist.
@@ -95,7 +111,17 @@ export class WristMenu {
   }
 
   get isVisible(): boolean {
-    return this.visible;
+    return this.opened && this.object.visible;
+  }
+
+  /** Only an explicit launcher press or controller button changes the open state. */
+  toggle(): void {
+    if (this.opened) this.menu.close();
+    else {
+      this.opened = true;
+      this.snap = true;
+      this.menu.open(() => this.page());
+    }
   }
 
   /** Re-read the catalogue and open panels, e.g. after one was added or removed. */
@@ -107,17 +133,19 @@ export class WristMenu {
     const pose = this.options.input.getWristPose(this.options.handedness ?? 'left');
     camera.getWorldPosition(this.head);
     camera.getWorldDirection(this.forward);
-    if (pose) this.wrist.setFromMatrixPosition(pose.matrix);
-
-    const show = pose ? shouldShowWristMenu(this.head, this.forward, this.wrist, this.visible) : false;
-    if (show !== this.visible) {
-      this.visible = show;
-      this.object.visible = show;
-      if (show) {
-        this.snap = true;
-        this.refresh();
-      }
+    if (!pose?.tracked) {
+      if (this.opened) this.menu.close();
+      this.launcherVisible = false;
+      this.object.visible = false;
+      return;
     }
+    this.wrist.setFromMatrixPosition(pose.matrix);
+    this.launcherVisible =
+      !this.opened && shouldShowWristLauncher(this.head, this.forward, this.wrist, this.launcherVisible);
+    this.launcher.surface.mesh.visible = this.launcherVisible;
+    const show = this.opened || this.launcherVisible;
+    if (show && !this.object.visible) this.snap = true;
+    this.object.visible = show;
     if (!show) return;
 
     this.target.copy(this.wrist);
@@ -137,6 +165,7 @@ export class WristMenu {
 
   dispose(): void {
     this.menu.dispose();
+    this.launcher.dispose();
     this.object.removeFromParent();
   }
 

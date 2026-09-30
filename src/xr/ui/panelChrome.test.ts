@@ -7,7 +7,7 @@ import { FRAME_SCALE_LIMITS, PanelFrame } from './PanelFrame';
 import { SpatialMenu } from './SpatialMenu';
 import { getSurfaceOf, type SpatialSurface } from './SpatialSurface';
 import { SurfaceInteraction } from './SurfaceInteraction';
-import { WristMenu, shouldShowWristMenu } from './WristMenu';
+import { WristMenu, shouldShowWristLauncher } from './WristMenu';
 
 beforeAll(stubCanvasContext);
 
@@ -16,10 +16,7 @@ const hit = (surface: SpatialSurface, id: string): XrInputTarget => {
   if (!item) throw new Error(`no item ${id}`);
   return {
     object: surface.mesh,
-    uv: new THREE.Vector2(
-      (item.x + item.w / 2) / surface.pixelWidth,
-      1 - (item.y + item.h / 2) / surface.pixelHeight
-    ),
+    uv: new THREE.Vector2((item.x + item.w / 2) / surface.pixelWidth, 1 - (item.y + item.h / 2) / surface.pixelHeight),
   } as unknown as XrInputTarget;
 };
 
@@ -47,25 +44,29 @@ it('keeps menu titles and empty messages inside their own rows after layout', ()
   menu.dispose();
 });
 
-describe('shouldShowWristMenu', () => {
+describe('shouldShowWristLauncher', () => {
   const head = new THREE.Vector3(0, 1.6, 0);
   const forward = new THREE.Vector3(0, 0, -1);
 
   it('shows when the wrist is raised into view at arm reach', () => {
-    expect(shouldShowWristMenu(head, forward, new THREE.Vector3(0, 1.5, -0.4), false)).toBe(true);
+    expect(shouldShowWristLauncher(head, forward, new THREE.Vector3(0, 1.5, -0.4), false)).toBe(true);
   });
 
   it('stays hidden with the arm down, behind, too close or too far', () => {
-    expect(shouldShowWristMenu(head, forward, new THREE.Vector3(0, 0.9, -0.1), false)).toBe(false);
-    expect(shouldShowWristMenu(head, forward, new THREE.Vector3(0, 1.6, 0.4), false)).toBe(false);
-    expect(shouldShowWristMenu(head, forward, new THREE.Vector3(0, 1.6, -0.05), false)).toBe(false);
-    expect(shouldShowWristMenu(head, forward, new THREE.Vector3(0, 1.6, -1.2), false)).toBe(false);
+    expect(shouldShowWristLauncher(head, forward, new THREE.Vector3(0, 0.9, -0.1), false)).toBe(false);
+    expect(shouldShowWristLauncher(head, forward, new THREE.Vector3(0, 1.6, 0.4), false)).toBe(false);
+    expect(shouldShowWristLauncher(head, forward, new THREE.Vector3(0, 1.6, -0.05), false)).toBe(false);
+    expect(shouldShowWristLauncher(head, forward, new THREE.Vector3(0, 1.6, -1.2), false)).toBe(false);
   });
 
   it('keeps showing a little past the angle that would show it', () => {
-    const wrist = new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(52)) * 0.4, 1.6, -Math.cos(THREE.MathUtils.degToRad(52)) * 0.4);
-    expect(shouldShowWristMenu(head, forward, wrist, false)).toBe(false);
-    expect(shouldShowWristMenu(head, forward, wrist, true)).toBe(true);
+    const wrist = new THREE.Vector3(
+      Math.sin(THREE.MathUtils.degToRad(52)) * 0.4,
+      1.6,
+      -Math.cos(THREE.MathUtils.degToRad(52)) * 0.4
+    );
+    expect(shouldShowWristLauncher(head, forward, wrist, false)).toBe(false);
+    expect(shouldShowWristLauncher(head, forward, wrist, true)).toBe(true);
   });
 });
 
@@ -97,14 +98,32 @@ describe('WristMenu', () => {
     expect(menu.object.userData.xrExcludeHandedness).toBe('left');
   });
 
-  it('appears above the raised wrist, and hides again when the hand drops', () => {
+  it('shows only a launcher when the wrist rises, and opens only on an explicit press', () => {
     const { menu, options, camera } = build();
     menu.update(camera, 0.016);
-    expect(menu.isVisible).toBe(true);
+    expect(menu.isVisible).toBe(false);
     expect(menu.object.position.y).toBeCloseTo(1.4 + 0.17);
-    options.input.getWristPose.mockReturnValue({ matrix: new THREE.Matrix4().makeTranslation(0, 0.5, 0), tracked: true });
+    const launcher = surfaces(menu.object).find(s => s.mesh.name === 'xr-wrist-menu-launcher')!;
+    expect(launcher.mesh.visible).toBe(true);
+    press(launcher, 'wrist-menu-toggle');
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(true);
+    expect(launcher.mesh.visible).toBe(false);
+    options.input.getWristPose.mockReturnValue({
+      matrix: new THREE.Matrix4().makeTranslation(0, 0.5, 0),
+      tracked: true,
+    });
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(true); // The open menu is latched, independent of wrist gestures.
+    menu.toggle();
     menu.update(camera, 0.016);
     expect(menu.isVisible).toBe(false);
+    options.input.getWristPose.mockReturnValue({
+      matrix: new THREE.Matrix4().makeTranslation(0, 1.4, -0.4),
+      tracked: true,
+    });
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(false); // Raising the hand again cannot reopen it.
   });
 
   it('stays hidden when the hand is not tracked', () => {
@@ -113,8 +132,28 @@ describe('WristMenu', () => {
     expect(menu.isVisible).toBe(false);
   });
 
+  it('closes on tracking loss and stays closed when tracking returns', () => {
+    const { menu, options, camera } = build();
+    menu.toggle();
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(true);
+    const pose = options.input.getWristPose()!;
+    options.input.getWristPose.mockReturnValue({ ...pose, tracked: false });
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(false);
+    options.input.getWristPose.mockReturnValue(pose);
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(false);
+    menu.toggle();
+    menu.update(camera, 0.016);
+    press(surfaces(menu.object)[0], 'close');
+    menu.update(camera, 0.016);
+    expect(menu.isVisible).toBe(false);
+  });
+
   it('adds catalogue panels, and switches to open panels to summon or remove them', () => {
     const { menu, options } = build();
+    menu.toggle();
     const surface = surfaces(menu.object)[0];
     press(surface, 'row-1');
     expect(options.onAdd).toHaveBeenCalledWith('log');
@@ -153,7 +192,8 @@ describe('PanelFrame', () => {
     frame.setToolbar([{ id: 'custom', icon: 'fit', label: 'Fit', onPress: vi.fn() }]);
     return { frame, onClose, onPlacementChange };
   };
-  const toolbarSurface = (frame: PanelFrame) => surfaces(frame.object).find(surface => surface.getItem('frame-larger'))!;
+  const toolbarSurface = (frame: PanelFrame) =>
+    surfaces(frame.object).find(surface => surface.getItem('frame-larger'))!;
   const titleSurface = (frame: PanelFrame) => surfaces(frame.object).find(surface => surface.getItem('close'))!;
 
   it('is a grabbable, scalable panel keyed by its id', () => {
