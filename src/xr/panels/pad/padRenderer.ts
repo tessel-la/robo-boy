@@ -5,13 +5,21 @@ import { getPadPresentation } from '../../../features/customGamepad/presentation
 import type { CustomGamepadLayout, PadComponentType } from '../../../features/customGamepad/types';
 import { PanelFrame } from '../../ui/PanelFrame';
 import { SpatialMenu } from '../../ui/SpatialMenu';
+import { XR_THEME } from '../../ui/canvasKit';
 import { applyXrPose, toXrPose } from '../../grabbable';
 import type { XrGrabbableData } from '../../types';
 import type { XrInputTarget } from '../../XrInputManager';
 import type { XrPanelRenderer } from '../registry';
 import { PadControl } from './PadControl';
 import { XrPadEditor } from './XrPadEditor';
-import { defaultControlPose, padDimensions, readPadPoses, type PadPoses } from './padSpatialLayout';
+import {
+  normalizePadPoses,
+  padDimensions,
+  padGridDestination,
+  readPadPoses,
+  snapPadPose,
+  type PadPoses,
+} from './padSpatialLayout';
 
 const CONTROL_SELECTORS: Partial<Record<PadComponentType, string>> = {
   joystick: '.joystick-component',
@@ -38,6 +46,15 @@ export const padPanelRenderer: XrPanelRenderer = {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     const controls = new Map<string, PadControl>();
+    let grid: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> | undefined;
+    const destination = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ color: XR_THEME.success, transparent: true, opacity: 0.3, depthWrite: false })
+    );
+    destination.name = 'xr-pad-grid-destination';
+    destination.userData.xrPickable = false;
+    destination.visible = false;
+    frame.viewRoot.add(destination);
     const elements = new Map<string, HTMLElement>();
     const holds = new Map<
       string,
@@ -56,7 +73,9 @@ export const padPanelRenderer: XrPanelRenderer = {
       capturedHeight = 0;
     const presentation = () => getPadPresentation(ctx.panelId, ctx.storageScope);
     const snapshot = (): PadPoses =>
-      Object.fromEntries([...controls].map(([id, block]) => [id, toXrPose(block.object)]));
+      Object.fromEntries(
+        [...controls].map(([id, block]) => [id, editor.editing ? editor.poses[id] : toXrPose(block.object)])
+      );
     const editor = new XrPadEditor(menu, ctx.storageScope, presentation, snapshot, rebuild);
 
     function release(pointer: string) {
@@ -141,13 +160,42 @@ export const padPanelRenderer: XrPanelRenderer = {
       lastCapture = -Infinity;
       for (const block of controls.values()) block.dispose();
       controls.clear();
+      grid?.removeFromParent();
+      grid?.geometry.dispose();
+      grid?.material.dispose();
+      grid = undefined;
+      destination.visible = false;
       const state = presentation(),
         layout = editor.layout ?? state?.layout;
       signature = JSON.stringify(state?.layout ?? null);
       lastLayout = state?.layout;
       if (layout) {
-        const { cell } = padDimensions(layout);
-        const poses = editor.editing ? editor.poses : readPadPoses(layout.id, ctx.storageScope);
+        const { cell, width, height } = padDimensions(layout);
+        const points: number[] = [];
+        for (let x = 0; x <= layout.gridSize.width; x++) {
+          const px = -width / 2 + x * cell;
+          points.push(px, 0.3 - height / 2, 0.008, px, 0.3 + height / 2, 0.008);
+        }
+        for (let y = 0; y <= layout.gridSize.height; y++) {
+          const py = 0.3 + height / 2 - y * cell;
+          points.push(-width / 2, py, 0.008, width / 2, py, 0.008);
+        }
+        grid = new THREE.LineSegments(
+          new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(points, 3)),
+          new THREE.LineBasicMaterial({
+            color: XR_THEME.accent,
+            transparent: true,
+            opacity: editor.editing ? 0.55 : 0.22,
+          })
+        );
+        grid.name = 'xr-pad-grid';
+        grid.userData.xrPickable = false;
+        frame.viewRoot.add(grid);
+        const poses = normalizePadPoses(
+          layout,
+          editor.editing ? editor.poses : readPadPoses(layout.id, ctx.storageScope)
+        );
+        if (editor.editing) editor.poses = poses;
         for (const config of layout.components) {
           const block = new PadControl(
             config,
@@ -156,7 +204,7 @@ export const padPanelRenderer: XrPanelRenderer = {
             texture
           );
           if (editor.editing) block.setStatus('Configure');
-          applyXrPose(block.object, poses[config.id] ?? defaultControlPose(layout, config.position));
+          applyXrPose(block.object, poses[config.id]);
           if (editor.editing)
             block.object.userData = {
               componentId: config.id,
@@ -164,12 +212,22 @@ export const padPanelRenderer: XrPanelRenderer = {
               placementId: ctx.panelId,
               allowScale: true,
               constrain: object => {
-                object.scale.setScalar(THREE.MathUtils.clamp(object.scale.x, 0.4, 2));
-                if (object.position.length() > 1.5) object.position.setLength(1.5);
+                if (disposed || !editor.editing || controls.get(config.id) !== block) return;
+                const desired = padGridDestination(layout, config, toXrPose(object));
+                object.scale.setScalar(desired.pose.scale);
+                destination.position.set(desired.pose.position[0], desired.pose.position[1], 0.012);
+                destination.scale.set(desired.rect.width * cell, desired.rect.height * cell, 1);
+                destination.material.color.set(
+                  snapPadPose(layout, config, desired.pose, editor.poses) ? XR_THEME.success : XR_THEME.danger
+                );
+                destination.visible = true;
               },
               onGrabEnd: object => {
-                if (!disposed && editor.editing && controls.get(config.id) === block)
-                  editor.poses[config.id] = toXrPose(object);
+                if (disposed || !editor.editing || controls.get(config.id) !== block) return;
+                const snapped = snapPadPose(layout, config, toXrPose(object), editor.poses);
+                applyXrPose(object, snapped ?? editor.poses[config.id]);
+                if (snapped) editor.poses[config.id] = snapped;
+                destination.visible = false;
               },
             } satisfies XrGrabbableData & { componentId: string };
           controls.set(config.id, block);
@@ -350,6 +408,10 @@ export const padPanelRenderer: XrPanelRenderer = {
         editor.dispose();
         for (const block of controls.values()) block.dispose();
         controls.clear();
+        grid?.geometry.dispose();
+        grid?.material.dispose();
+        destination.geometry.dispose();
+        destination.material.dispose();
         texture.dispose();
         frame.dispose();
       },

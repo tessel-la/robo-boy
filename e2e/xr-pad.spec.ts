@@ -108,7 +108,7 @@ for (const mode of ['VR', 'AR'] as const) {
       const layout = {
         id: 'xr-test',
         name: 'XR test',
-        gridSize: { width: 4, height: 3 },
+        gridSize: { width: 4, height: 4 },
         cellSize: 100,
         components,
         rosConfig: { defaultTopic: '/joy', defaultMessageType: 'sensor_msgs/Joy' },
@@ -221,7 +221,7 @@ for (const mode of ['VR', 'AR'] as const) {
     await page.evaluate(() => {
       const hand = window.__xrDevice.controllers.right!;
       hand.position.x += 0.12;
-      hand.position.y += 0.05;
+      hand.position.y -= 0.39;
       hand.position.z += 0.08;
     });
     await page.waitForTimeout(150);
@@ -230,8 +230,61 @@ for (const mode of ['VR', 'AR'] as const) {
       const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
       return panel.getObjectByName('xr-pad-control:button')!.position.toArray();
     });
-    expect(moved[0]).toBeCloseTo(before[0] + 0.12, 2);
-    expect(moved[2]).toBeCloseTo(before[2] + 0.08, 2);
+    expect(moved[0]).toBeCloseTo(before[0] + 0.13, 3);
+    expect(moved[1]).toBeCloseTo(before[1] - 0.39, 3);
+    expect(moved[2]).toBeCloseTo(0.025, 3);
+    // A drop over the occupied original row is rejected, with a visible red destination.
+    await aim(page, '.button-component');
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => {
+      window.__xrDevice.controllers.right!.position.y += 0.39;
+    });
+    await page.waitForTimeout(150);
+    expect(
+      await page.evaluate(() => {
+        const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+        const preview = panel.getObjectByName('xr-pad-grid-destination') as any;
+        return { visible: preview.visible, color: preview.material.color.getHexString() };
+      })
+    ).toEqual({ visible: true, color: 'e5675b' });
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+          return panel.getObjectByName('xr-pad-control:button')!.position.toArray();
+        })
+      )
+      .toEqual(moved);
+    // Releasing one of two grips still carries the object; the final release snaps it.
+    await aim(page, '.button-component', 0.25);
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
+    await aim(page, '.button-component', 0.75, 0.5, 'left');
+    await page.evaluate(() => window.__xrDevice.controllers.left!.updateButtonValue('squeeze', 1));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => {
+      window.__xrDevice.controllers.left!.position.z += 0.08;
+      window.__xrDevice.controllers.right!.position.z += 0.08;
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => window.__xrDevice.controllers.left!.updateButtonValue('squeeze', 0));
+    await page.waitForTimeout(100);
+    expect(
+      await page.evaluate(() => {
+        const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+        return panel.getObjectByName('xr-pad-control:button')!.position.z;
+      })
+    ).toBeCloseTo(0.105, 3);
+    await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+          return panel.getObjectByName('xr-pad-control:button')!.position.z;
+        })
+      )
+      .toBeCloseTo(0.025, 3);
     await aim(page, '.button-component');
     await trigger(page, 1);
     await trigger(page, 0);
@@ -264,7 +317,7 @@ for (const mode of ['VR', 'AR'] as const) {
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
     await page.waitForTimeout(100);
     await page.evaluate(() => {
-      window.__xrDevice.controllers.right!.position.x += 0.1;
+      window.__xrDevice.controllers.right!.position.x -= 0.13;
     });
     await page.waitForTimeout(100);
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));

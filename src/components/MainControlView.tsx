@@ -4530,6 +4530,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         <React.Suspense fallback={null}>
           <XrWorkspace
             ros={ros}
+            visualizationRos={visualizationRos}
             isConnected={isConnected}
             panels={workspacePanels}
             storageScope={storageScope}

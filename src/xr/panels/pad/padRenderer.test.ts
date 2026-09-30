@@ -10,7 +10,7 @@ import type { XrPanelContext } from '../registry';
 import type { XrInputTarget } from '../../XrInputManager';
 import { XrGrabController } from '../../grabbable';
 import { padPanelRenderer } from './padRenderer';
-import { padPoseKey, readPadPoses } from './padSpatialLayout';
+import { defaultControlPose, padPoseKey, readPadPoses } from './padSpatialLayout';
 import { getGamepadLayout, saveCustomGamepad } from '../../../features/customGamepad/gamepadStorage';
 
 const { handlers, capture } = vi.hoisted(() => ({
@@ -233,10 +233,13 @@ describe('spatial Pad and immersive editor', () => {
     const start = { id: 'right', matrixWorld: new THREE.Matrix4(), origin: new THREE.Vector3() };
     grabs.begin(object, start, true);
     const matrixWorld = new THREE.Matrix4().makeRotationY(0.3);
-    matrixWorld.setPosition(0.1, 0, 0.2);
+    matrixWorld.setPosition(0.1, -0.21, 0.2);
     grabs.update(new Map([['right', { ...start, matrixWorld }]]));
     object.scale.setScalar(1.3);
     object.userData.onGrabEnd(object);
+    expect(object.position.z).toBe(0.025);
+    expect(object.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+    expect(object.scale.x).toBe(1.3);
     const pose = {
       position: object.position.toArray(),
       quaternion: object.quaternion.toArray(),
@@ -252,6 +255,37 @@ describe('spatial Pad and immersive editor', () => {
     const reopened = setup();
     expect(reopened.panel.object.getObjectByName('xr-pad-control:button')!.position.toArray()).toEqual(pose.position);
     reopened.close();
+  });
+
+  it('shows a non-pickable grid and drop preview, and restores blocked drops', () => {
+    const { panel, close } = setup();
+    const grid = panel.object.getObjectByName('xr-pad-grid') as THREE.LineSegments;
+    expect(grid.userData.xrPickable).toBe(false);
+    const disposeGrid = vi.spyOn(grid.geometry, 'dispose');
+    press(panel, 'pad-editor');
+    expect(disposeGrid).toHaveBeenCalledOnce();
+    const object = panel.object.getObjectByName('xr-pad-control:button')!;
+    const before = object.position.clone();
+    const destination = panel.object.getObjectByName('xr-pad-grid-destination') as THREE.Mesh<
+      THREE.PlaneGeometry,
+      THREE.MeshBasicMaterial
+    >;
+    const disposePreview = vi.spyOn(destination.geometry, 'dispose');
+    object.position.copy(panel.object.getObjectByName('xr-pad-control:stick')!.position);
+    object.userData.constrain(object);
+    expect(destination.visible).toBe(true);
+    expect(destination.userData.xrPickable).toBe(false);
+    expect(destination.material.color.getHexString()).toBe('e5675b');
+    object.userData.onGrabEnd(object);
+    expect(object.position).toEqual(before);
+    expect(destination.visible).toBe(false);
+    object.position.y -= 0.21;
+    object.userData.constrain(object);
+    expect(destination.material.color.getHexString()).toBe('5fbf7a');
+    object.userData.onGrabEnd(object);
+    expect(object.position.y).toBeCloseTo(before.y - 0.205);
+    close();
+    expect(disposePreview).toHaveBeenCalledOnce();
   });
 
   it('edits labels with the immersive keyboard and clones templates on save', () => {
@@ -301,6 +335,28 @@ describe('spatial Pad and immersive editor', () => {
     expect(readPadPoses('test-layout', 'robot')).toEqual(previous);
     press(panel, 'pad-cancel');
     expect(p.setEditing).toHaveBeenLastCalledWith(false);
+    close();
+  });
+
+  it('adds into a free XR cell without moving existing controls, and saves only completed drops', () => {
+    const { panel, p, close } = setup();
+    press(panel, 'pad-editor');
+    const object = panel.object.getObjectByName('xr-pad-control:button')!;
+    object.position.fromArray(defaultControlPose(p.layout!, { x: 5, y: 0, width: 1, height: 1 }).position);
+    object.userData.onGrabEnd(object);
+    const moved = object.position.toArray();
+    press(panel, 'row-2'); // Add component
+    press(panel, 'row-2'); // Button
+    expect(panel.object.getObjectByName('xr-pad-control:button')!.position.toArray()).toEqual(moved);
+    const held = panel.object.getObjectByName('xr-pad-control:button')!;
+    held.position.z += 0.2; // Save while a control is still held must keep its last completed drop.
+    press(panel, 'pad-save');
+    const saved = vi.mocked(p.saveLayout!).mock.calls[0][0];
+    const added = saved.components.find(c => c.id.startsWith('button-'))!;
+    const poses = readPadPoses(saved.id, 'robot');
+    expect(poses.button.position).toEqual(moved);
+    expect(poses[added.id].position).not.toEqual(moved);
+    expect(added.position).toEqual({ x: 5, y: 0, width: 1, height: 1 });
     close();
   });
 

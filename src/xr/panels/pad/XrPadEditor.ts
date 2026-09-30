@@ -18,7 +18,14 @@ import { fitNewComponent, occupiedExtent, resizeWithin } from '../../../features
 import { SpatialMenu, type MenuPage, type MenuRow } from '../../ui/SpatialMenu';
 import { SpatialSurface, type SurfaceItem } from '../../ui/SpatialSurface';
 import { XR_THEME, drawText, fillRoundRect } from '../../ui/canvasKit';
-import { defaultControlPose, padPoseKey, readPadPoses, type PadPoses } from './padSpatialLayout';
+import {
+  defaultControlPose,
+  padGridDestination,
+  padPoseKey,
+  readPadPoses,
+  snapPadPose,
+  type PadPoses,
+} from './padSpatialLayout';
 import type { RosOperation } from '../../../utils/rosOperations';
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -359,7 +366,7 @@ export class XrPadEditor {
         {
           kind: 'value',
           label: 'Editing · commands disabled',
-          value: this.error || 'Grip objects to move / turn / resize',
+          value: this.error || 'Grip to move / resize · drop on green grid cells',
         },
         {
           kind: 'button',
@@ -418,9 +425,32 @@ export class XrPadEditor {
             this.menu.open(() => this.home());
             return;
           }
-          const component = createComponent(item.type, position, `${item.type}-${crypto.randomUUID()}`)!;
-          this.mutate(l => ({ ...l, components: [...l.components, component] }));
-          this.poses[component.id] = defaultControlPose(this.layout!, position);
+          const poses = this.snapshot();
+          const spatialPosition = fitNewComponent(
+            position,
+            layout.gridSize,
+            layout.components.map(
+              c => padGridDestination(layout, c, poses[c.id] ?? defaultControlPose(layout, c.position)).rect
+            )
+          );
+          if (!spatialPosition) {
+            this.error = 'XR grid has no room. Move a control or increase the grid size.';
+            this.menu.open(() => this.home());
+            return;
+          }
+          const component = createComponent(
+            item.type,
+            {
+              ...position,
+              width: spatialPosition.width,
+              height: spatialPosition.height,
+            },
+            `${item.type}-${crypto.randomUUID()}`
+          )!;
+          this.mutate(l => {
+            this.poses[component.id] = defaultControlPose(l, spatialPosition);
+            return { ...l, components: [...l.components, component] };
+          });
           this.select(component.id);
         },
       })),
@@ -428,7 +458,20 @@ export class XrPadEditor {
   }
 
   private updateComponent(update: (component: GamepadComponentConfig) => GamepadComponentConfig) {
-    this.mutate(l => ({ ...l, components: l.components.map(c => (c.id === this.selected ? update(c) : c)) }));
+    const layout = this.layout!;
+    const component = update(layout.components.find(c => c.id === this.selected)!);
+    const next = { ...layout, components: layout.components.map(c => (c.id === component.id ? component : c)) };
+    const poses = this.snapshot();
+    const pose = snapPadPose(next, component, poses[component.id], poses);
+    if (!pose) {
+      this.error = 'No room for that size in the XR grid. Move a control first.';
+      this.menu.open(() => this.home());
+      return;
+    }
+    this.mutate(() => {
+      this.poses[component.id] = pose;
+      return next;
+    });
   }
 
   private componentPage(): MenuPage {
@@ -510,7 +553,13 @@ export class XrPadEditor {
           label: 'Reset spatial placement',
           onPress: () => {
             this.poses = this.snapshot();
-            this.poses[c.id] = defaultControlPose(this.layout!, c.position);
+            const reset = snapPadPose(this.layout!, c, defaultControlPose(this.layout!, c.position), this.poses);
+            if (!reset) {
+              this.error = 'Original grid position is occupied. Move that control first.';
+              this.menu.open(() => this.home());
+              return;
+            }
+            this.poses[c.id] = reset;
             this.changed();
           },
         },

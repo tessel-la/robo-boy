@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installRosMock, getActiveRosSubscriptionCount } from './helpers/rosMock';
-import { installXrEmulator, observeXrScene } from './helpers/xrEmulator';
+import { aimXrControl, installXrEmulator, observeXrScene, pressXrControl } from './helpers/xrEmulator';
 
 for (const mode of ['VR', 'AR'] as const) {
   test(`emulates ${mode}: renders real geometry, carries panels and restores the workspace`, async ({ page }) => {
@@ -14,39 +14,79 @@ for (const mode of ['VR', 'AR'] as const) {
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
     await expect(page.getByLabel('Desktop workspace')).toBeVisible();
     await page.getByLabel('Add workspace panel').first().click();
-    await page.getByRole('button', { name: 'TF tree', exact: true }).click();
+    await page.getByRole('button', { name: '3D panel', exact: true }).click();
     await observeXrScene(page);
     await page.getByRole('radio', { name: mode, exact: true }).click();
     await page.getByRole('button', { name: /Enter XR Workspace/ }).click();
     await expect.poll(() => page.evaluate(() => window.__xrScene?.renderer.xr.isPresenting)).toBe(true);
-    await expect.poll(() => page.evaluate(() => window.__xrScene.uiGroup.children.length)).toBe(1);
+    await expect
+      .poll(() => page.evaluate(() => window.__xrScene.uiGroup.children.filter(o => o.userData.placementId).length))
+      .toBe(1);
+    const panelId = await page.locator('[data-workspace-card-id]').first().getAttribute('data-workspace-card-id');
+    await pressXrControl(page, panelId!, 'settings');
+    await pressXrControl(page, panelId!, 'row-1');
+    await pressXrControl(page, panelId!, 'row-0');
+    await pressXrControl(page, panelId!, 'row-2');
+    await page.waitForTimeout(150);
+    await pressXrControl(page, panelId!, 'row-0');
+    await expect.poll(() => getActiveRosSubscriptionCount(page, '/robot_description')).toBeGreaterThan(0);
     await page.evaluate(() => {
-      window.__publishRosTopic?.('/robot_description', { data: '<robot name="xr-test"><link name="base_link"><visual><geometry><box size="0.4 0.3 0.2"/></geometry></visual></link></robot>' });
-      window.__publishRosTopic?.('/tf', { transforms: [{ header: { frame_id: 'odom' }, child_frame_id: 'base_link', transform: { translation: { x: 0.2, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } } }] });
+      window.__publishRosTopic?.('/robot_description', {
+        data: '<robot name="xr-test"><link name="base_link"><visual><geometry><box size="0.4 0.3 0.2"/></geometry></visual></link></robot>',
+      });
+      window.__publishRosTopic?.('/tf', {
+        transforms: [
+          {
+            header: { frame_id: 'odom' },
+            child_frame_id: 'base_link',
+            transform: { translation: { x: 0.2, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+          },
+        ],
+      });
     });
-    await expect.poll(() => page.evaluate(() => {
-      let meshes = 0;
-      window.__xrScene.worldGroup.traverse(object => { if (object.type === 'Mesh') meshes++; });
-      return meshes;
-    })).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          let meshes = 0;
+          window.__xrScene.uiGroup.traverse(object => {
+            if (object.type === 'Mesh') meshes++;
+          });
+          return meshes;
+        })
+      )
+      .toBeGreaterThan(0);
     expect(await page.evaluate(() => window.__xrScene.scene.background === null)).toBe(mode === 'AR');
-    await expect.poll(() => page.evaluate(() => window.__xrScene.worldGroup.getObjectByName('base_link')?.position.x)).toBeCloseTo(0.2);
-    await page.evaluate(() => window.__publishRosTopic?.('/tf', { transforms: [{ header: { frame_id: 'odom' }, child_frame_id: 'base_link', transform: { translation: { x: 0.6, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } } }] }));
-    await expect.poll(() => page.evaluate(() => window.__xrScene.worldGroup.getObjectByName('base_link')?.position.x)).toBeCloseTo(0.6);
+    await expect
+      .poll(() => page.evaluate(() => window.__xrScene.uiGroup.getObjectByName('base_link')?.position.x))
+      .toBeCloseTo(0.2);
+    await page.evaluate(() =>
+      window.__publishRosTopic?.('/tf', {
+        transforms: [
+          {
+            header: { frame_id: 'odom' },
+            child_frame_id: 'base_link',
+            transform: { translation: { x: 0.6, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+          },
+        ],
+      })
+    );
+    await expect
+      .poll(() => page.evaluate(() => window.__xrScene.uiGroup.getObjectByName('base_link')?.position.x))
+      .toBeCloseTo(0.6);
     expect(await getActiveRosSubscriptionCount(page, '/tf')).toBe(1);
     expect(await getActiveRosSubscriptionCount(page, '/tf_static')).toBe(1);
 
     // A real emulated squeeze gesture moves the panel via WebXR -> Three -> input/grab managers.
-    await page.evaluate(() => {
-      const hand = window.__xrDevice.controllers.right!;
-      hand.position.set(0, 1.4, -0.3);
-      hand.quaternion.set(0, 0, 0, 1);
-    });
+    await aimXrControl(page, panelId!, 'title');
     await page.waitForTimeout(100);
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 1));
     await page.waitForTimeout(100);
-    await page.evaluate(() => { window.__xrDevice.controllers.right!.position.x += 0.3; });
-    await expect.poll(() => page.evaluate(() => window.__xrScene.uiGroup.children[0].position.x)).toBeCloseTo(0.3, 1);
+    await page.evaluate(() => {
+      window.__xrDevice.controllers.right!.position.x += 0.3;
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.__xrScene.uiGroup.children.find(o => o.userData.placementId)!.position.x))
+      .toBeCloseTo(0.3, 1);
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
     await page.waitForTimeout(100);
     await page.evaluate(() => window.__xrSession.end());
@@ -55,7 +95,9 @@ for (const mode of ['VR', 'AR'] as const) {
     await expect(page.locator('.workspace-card')).toHaveCount(1);
     // Re-entry restores the placement and does not accumulate TF subscriptions.
     await page.getByRole('button', { name: /Enter XR Workspace/ }).click();
-    await expect.poll(() => page.evaluate(() => window.__xrScene.uiGroup.children[0]?.position.x)).toBeCloseTo(0.3, 1);
+    await expect
+      .poll(() => page.evaluate(() => window.__xrScene.uiGroup.children.find(o => o.userData.placementId)!?.position.x))
+      .toBeCloseTo(0.3, 1);
     expect(await getActiveRosSubscriptionCount(page, '/tf')).toBe(1);
     await page.evaluate(() => window.__xrSession.end());
     await expect(page.locator('.xr-canvas-host canvas')).toHaveCount(0);

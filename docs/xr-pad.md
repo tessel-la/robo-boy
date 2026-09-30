@@ -12,9 +12,12 @@ connected hardware. Readouts, plots and setpoints keep their existing display on
    its label, ROS topic/type/field, settings, colors, event operations or gamepad button bindings.
    Text fields open an immersive keyboard. Apply commits the field to the draft; Cancel closes it.
    Arrays/mappings and message payloads use JSON; parsing errors keep the input open.
-3. Grip an object to carry and rotate it. Two grips scale it. Objects can float ahead of the panel;
-   they are kept within 1.5 m of its content origin, with a scale of 0.4–2. Grip the frame to move
-   the entire Pad. **Reset spatial placement** puts the selected object back at its grid position.
+3. Grip an object to carry it. The visible board grid highlights its destination: green is free,
+   red is occupied. Release snaps the object to the board and aligns it; an occupied drop returns
+   it to its previous position. Two grips scale it (0.4–2, bounded by the board); larger controls
+   reserve more cells. Grip the frame to move the entire Pad. **Reset spatial placement** returns
+   the selected object to its original grid position when free. Older free placements are aligned
+   on load; conflicting placements return to their original grid positions.
 4. **Save** updates the Pad library and saves XR positions. Built-in templates become custom copies.
    **Cancel** discards the draft. Leaving XR also discards an unsaved draft.
 

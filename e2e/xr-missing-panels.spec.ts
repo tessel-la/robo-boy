@@ -124,7 +124,18 @@ for (const mode of ['VR', 'AR'] as const) {
       messageEncoding: 'json',
       metadata: new Map(),
     });
-    for (let i = 0; i <= 30; i++)
+    const schemaId = await writer.registerSchema({
+      name: 'std_msgs/msg/String',
+      encoding: 'jsonschema',
+      data: new TextEncoder().encode('{}'),
+    });
+    const robotChannel = await writer.registerChannel({
+      topic: '/recorded/robot_description',
+      schemaId,
+      messageEncoding: 'json',
+      metadata: new Map(),
+    });
+    for (let i = 0; i <= 30; i++) {
       await writer.addMessage({
         channelId,
         sequence: i,
@@ -132,6 +143,18 @@ for (const mode of ['VR', 'AR'] as const) {
         publishTime: BigInt(i) * 1000000000n,
         data: new TextEncoder().encode(JSON.stringify({ data: i })),
       });
+      await writer.addMessage({
+        channelId: robotChannel,
+        sequence: i,
+        logTime: BigInt(i) * 1000000000n,
+        publishTime: BigInt(i) * 1000000000n,
+        data: new TextEncoder().encode(
+          JSON.stringify({
+            data: '<robot name="recorded"><link name="recorded_link"><visual><geometry><box size="0.4 0.3 0.2"/></geometry></visual></link></robot>',
+          })
+        ),
+      });
+    }
     await writer.end();
     const bytes = buffer.get();
     await context.route('**/recordings/**', async route => {
@@ -165,13 +188,21 @@ for (const mode of ['VR', 'AR'] as const) {
     page.on('pageerror', error => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await installXrEmulator(page);
-    await installRosMock(page, { topics: [{ name: '/value', type: 'std_msgs/msg/Float64' }] });
+    await installRosMock(page, {
+      topics: [
+        { name: '/value', type: 'std_msgs/msg/Float64' },
+        { name: '/live/robot_description', type: 'std_msgs/msg/String' },
+      ],
+    });
     await page.addInitScript(() => {
       localStorage.setItem(
         'robo-boy-desktop-workspace-panels-v1',
-        JSON.stringify([{ id: 'xr-rr', type: 'recordReplay', title: 'Record & Replay' }])
+        JSON.stringify([
+          { id: 'xr-rr', type: 'recordReplay', title: 'Record & Replay' },
+          { id: 'xr-3d', type: '3d', title: '3D replay' },
+        ])
       );
-      localStorage.setItem('robo-boy-desktop-workspace-tile-order-v1', JSON.stringify(['xr-rr']));
+      localStorage.setItem('robo-boy-desktop-workspace-tile-order-v1', JSON.stringify(['xr-rr', 'xr-3d']));
       const publish = (message: unknown) =>
         (window as unknown as { __publishRosTopic: (topic: string, message: unknown) => void }).__publishRosTopic(
           '/roboboy/recorder/status',
@@ -214,18 +245,64 @@ for (const mode of ['VR', 'AR'] as const) {
     await connect(page);
     const before = await getRosSubscriptionCount(page, '/roboboy/recorder/status');
     await enter(page, mode);
+    const placement = await page.evaluate(() => {
+      const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-3d')!;
+      panel.position.x += 0.19;
+      return { uuid: panel.uuid, position: panel.position.toArray() };
+    });
     expect(await getRosSubscriptionCount(page, '/roboboy/recorder/status')).toBe(before);
     await pressXrControl(page, 'xr-rr', 'rr-files');
     await page.waitForTimeout(300);
     await pressXrControl(page, 'xr-rr', 'row-2');
     await expect(page.locator('.rr-file-card').getByText('xr.mcap', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-3d')?.uuid)
+      )
+      .not.toBe(placement.uuid);
+    expect(
+      await page.evaluate(() =>
+        window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-3d')!.position.toArray()
+      )
+    ).toEqual(placement.position);
+    // The recording-only topic must be discovered by the native XR 3D settings.
+    await pressXrControl(page, 'xr-3d', 'settings');
+    await pressXrControl(page, 'xr-3d', 'row-1'); // Layers
+    await pressXrControl(page, 'xr-3d', 'row-0'); // Add layer
+    await pressXrControl(page, 'xr-3d', 'row-2'); // URDF
+    await page.waitForTimeout(150);
+    await pressXrControl(page, 'xr-3d', 'row-0'); // Recorded robot_description, absent from live ROS
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const key = Object.keys(localStorage).find(k => k.startsWith('roboboy_3d_visualization_state_xr-3d:'))!;
+          return JSON.parse(localStorage.getItem(key)!).visualizations.map((v: any) => v.topic);
+        })
+      )
+      .toContain('/recorded/robot_description');
     await page.waitForTimeout(150);
     await pressXrControl(page, 'xr-rr', 'rr-forward');
     await expect.poll(async () => page.locator('.rr-time output').textContent()).toBe('00:10');
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Boolean(
+            window.__xrScene.uiGroup.children
+              .find(o => o.userData.placementId === 'xr-3d')!
+              .getObjectByName('recorded_link')
+          )
+        )
+      )
+      .toBe(true);
     await aimXrControl(page, 'xr-rr', 'rr-timeline', 0.2);
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('trigger', 1));
     await expect.poll(() => page.locator('.rr-time output').textContent()).toBe('00:06');
+    expect(
+      await page.evaluate(() =>
+        window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-3d')!.position.toArray()
+      )
+    ).toEqual(placement.position);
     await aimXrControl(page, 'xr-rr', 'rr-timeline', 0.7);
     await expect.poll(() => page.locator('.rr-time output').textContent()).toBe('00:21');
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('trigger', 0));
@@ -263,6 +340,30 @@ for (const mode of ['VR', 'AR'] as const) {
       message => JSON.parse(message.data).action
     );
     expect(commands).toEqual(['start', 'pause', 'resume', 'split', 'stop']);
+    // Returning to live data switches the 3D source again without leaving immersive mode.
+    await pressXrControl(page, 'xr-rr', 'rr-replay');
+    await pressXrControl(page, 'xr-rr', 'rr-settings');
+    await pressXrControl(page, 'xr-rr', 'row-3');
+    await expect(page.getByRole('button', { name: 'Play recording', exact: true })).toHaveCount(0);
+    await pressXrControl(page, 'xr-3d', 'settings');
+    await pressXrControl(page, 'xr-3d', 'row-1');
+    await pressXrControl(page, 'xr-3d', 'row-0');
+    await pressXrControl(page, 'xr-3d', 'row-2');
+    await page.waitForTimeout(150);
+    await pressXrControl(page, 'xr-3d', 'row-0');
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const key = Object.keys(localStorage).find(k => k.startsWith('roboboy_3d_visualization_state_xr-3d:'))!;
+          return JSON.parse(localStorage.getItem(key)!).visualizations.at(-1).topic;
+        })
+      )
+      .toBe('/live/robot_description');
+    expect(
+      await page.evaluate(() =>
+        window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-3d')!.position.toArray()
+      )
+    ).toEqual(placement.position);
     await page.evaluate(() => window.__xrSession.end());
     expect(errors).toEqual([]);
   });

@@ -54,6 +54,8 @@ export interface XrWorkspacePanel {
 
 export interface XrWorkspaceProps {
   ros: Ros | null;
+  /** The desktop's current live/replay source. Command panels always keep `ros`. */
+  visualizationRos?: Ros | null;
   isConnected: boolean;
   panels: readonly XrWorkspacePanel[];
   /** Per-connection storage scope, so an XR room belongs to one robot. */
@@ -90,6 +92,7 @@ const findPanelElement = (panelId: string): HTMLElement | null =>
 
 interface MountedPanel {
   panelId: string;
+  ros: Ros | null;
   instance: XrPanelInstance;
 }
 
@@ -103,6 +106,7 @@ interface MountedPanel {
  */
 const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   ros,
+  visualizationRos = ros,
   isConnected,
   panels,
   storageScope,
@@ -249,6 +253,12 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
     wristMenuRef.current?.refresh();
   }, []);
 
+  const panelRos = useCallback(
+    (panel: XrWorkspacePanel) =>
+      ['3d', 'tfTree', 'timeSeries', 'camera'].includes(panel.type) ? visualizationRos : ros,
+    [ros, visualizationRos]
+  );
+
   /**
    * Create one panel's spatial instance and put it in the room.
    *
@@ -268,7 +278,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         panelType: panel.type,
         title: panel.title,
         domElement: findPanelElement(panel.id),
-        ros,
+        ros: panelRos(panel),
         isPassthrough: scene.isPassthrough,
         storageScope,
         meshResourcesBaseUrl,
@@ -302,11 +312,11 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       else placeInFrontOfViewer(scene, instance.object);
 
       scene.uiGroup.add(instance.object);
-      mountedPanelsRef.current.push({ panelId: panel.id, instance });
+      mountedPanelsRef.current.push({ panelId: panel.id, ros: context.ros, instance });
       // Recorded straight away so the panel has a placement for its inner state to hang off.
       if (!stored) capturePlacement(instance.object);
     },
-    [captureView, capturePlacement, meshResourcesBaseUrl, placeInFrontOfViewer, ros, storageScope]
+    [captureView, capturePlacement, meshResourcesBaseUrl, placeInFrontOfViewer, panelRos, storageScope]
   );
 
   const unmountPanel = useCallback((entry: MountedPanel) => {
@@ -335,9 +345,12 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !panelsReadyRef.current) return;
-    const wanted = new Set(panels.map(panel => panel.id));
+    const wanted = new Map(panels.map(panel => [panel.id, panel]));
     mountedPanelsRef.current = mountedPanelsRef.current.filter(entry => {
-      if (wanted.has(entry.panelId)) return true;
+      const panel = wanted.get(entry.panelId);
+      if (panel && entry.ros === panelRos(panel)) return true;
+      // Preserve spatial placement when a recording opens, seeks backwards, or returns to live.
+      if (panel) capturePlacement(entry.instance.object);
       unmountPanel(entry);
       return false;
     });
@@ -345,7 +358,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       if (!mountedPanelsRef.current.some(entry => entry.panelId === panel.id)) mountPanel(scene, panel);
     }
     refreshRoomChrome();
-  }, [panels, mountPanel, refreshRoomChrome, unmountPanel]);
+  }, [panels, panelRos, capturePlacement, mountPanel, refreshRoomChrome, unmountPanel]);
 
   useEffect(() => {
     wristMenuRef.current?.refresh();
@@ -399,10 +412,13 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           grabRef.current?.begin(target.object, pose, allowScale);
         },
         onGrabEnd: (pointer, object) => {
-          const own = (object.userData as Partial<XrGrabbableData>).onGrabEnd;
-          if (own) own(object);
-          else capturePlacement(object);
           const remaining = input.getGrabbingPointers().find(entry => entry.grabbed === object);
+          // Releasing one of two grips keeps carrying the object; only the final release is a drop.
+          if (!remaining) {
+            const own = (object.userData as Partial<XrGrabbableData>).onGrabEnd;
+            if (own) own(object);
+            else capturePlacement(object);
+          }
           grabRef.current?.release(
             object,
             pointer.id,

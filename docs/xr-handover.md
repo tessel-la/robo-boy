@@ -413,8 +413,9 @@ mounted publishers during authoring, and `saveLayout` uses the workspace's exist
 refresh path. XR holds continue to call `spatialControl` handlers, with one pointer per control and
 balanced cancellation. Data blocks keep cropped faces from the existing capture helper.
 
-Edits are drafts. Grips move/turn objects; two grips scale, clamped to 0.4–2. Objects stay within
-1.5 m of their parent origin. Save persists poses and the configured layout, cloning templates;
+Edits are drafts. Grips carry objects; two grips scale, clamped to 0.4–2 and the board dimensions.
+Drops snap to the visible Pad grid and reset depth/rotation. A green/red footprint previews free/
+occupied cells; occupied drops return to the last completed placement. Save persists poses and the configured layout, cloning templates;
 Cancel/XR teardown restores play mode without saving. A failed save retains the draft and restores
 previous poses. A changed source layout blocks saving rather than overwriting another edit.
 
@@ -425,3 +426,25 @@ input, matching the desktop component; trigger interaction does not synthesize h
 
 See [`xr-pad.md`](xr-pad.md) and the renderer unit / VR–AR browser tests. Physical headset grab feel,
 small-control legibility and keyboard comfort still need on-device validation.
+
+## Replay sources and Pad grid (2026-09-30)
+
+`MainControlView` passes its existing live/replay visualization source to `XrWorkspace`. Native
+3D, TF tree, Camera and Time Series use that source. Opening a recording, backward seeking or
+returning to live data recreates affected visual instances while retaining their panel placements.
+Pad, recorder and other command panels keep the live ROS connection. The immersive session stays open.
+
+Pad XR poses stay separate from desktop positions. Stored free placements are aligned on load;
+conflicts fall back to original positions. New controls fit both grids, and resizing/reset reject
+occupied destinations. Saving during a grab uses the last completed drop; only the final hand
+release snaps a two-handed grab. Grid and preview meshes are non-pickable and disposed with the Pad.
+
+Browser replay fixtures include a recording-only robot-description topic, verify native discovery
+and actual geometry, backward seeking, return to live topics, and live recorder commands in VR/AR.
+Pad browser tests cover grid alignment, occupied-drop rollback, two-handed release and unchanged
+desktop positions. Physical headset feedback still needs verification.
+
+Validation: 496 tests passed in the broad affected unit suite (8 existing skips), followed by
+16 passing Pad unit tests after the final authoring safeguards. Eight VR/AR browser scenarios,
+TypeScript, ESLint and the production build passed. The real-simulator scenario is opt-in and
+was skipped without its stack flag.
