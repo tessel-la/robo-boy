@@ -7,6 +7,24 @@ extend it. Read `xr.md` first for entry, session modes and the reuse table.
 Current state: **all built-in panel types have dedicated XR presentations**. Pad uses tangible controls and an immersive draft editor; external panels use captured surfaces. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
 XR. The interaction model was designed to be reused, not to be specific to 3D.
 
+## Resume point (2026-09-30)
+
+XR work is parked on `feat/webxr-immersive-workspace`. Implementation commit `9ca22b1` includes
+Data Explorer and the merge of dev at `7746e99`; both are pushed. There are no unfinished code
+changes to recover. Resume by checking out that branch and reading the Data Explorer section below.
+
+The next step is physical-headset validation, especially controller/hand cancellation during robot
+holds, Pad grab/grid placement, left-X menu toggling, voice permissions, replay topic discovery,
+and Explorer text legibility and capture cost. Browser emulation verifies these supported flows
+but cannot establish headset comfort or frame timing. Explorer captures are capped at 4 Hz;
+do not add another inspection session or per-frame DOM capture to improve responsiveness.
+
+The local ROS image was rebuilt and the ROS stack/frontend restarted. The inspector, TF relay,
+recorder, rosbridge, rosapi, behavior-tree runner and video server were verified running. Keep the
+existing panel/simulator Compose overlays and recording volumes when restarting; the setup is
+documented in the repository's Compose files and the owning sibling projects. Desktop clipping
+work will proceed separately from this XR branch.
+
 ## 1. What exists
 
 ```
@@ -27,6 +45,8 @@ src/xr/
     pad/                   3D controls + immersive draft editor + shared mounted control handlers
     behaviorTree/          fitted graph + shared editor executor and saved-tree menu
     recordReplay/          native transport, recorder controls and remote file browser
+    dataExplorerRenderer.ts  captured desktop Explorer, native forms/scroll, shared inspection lease
+  assistant/               animated agent, shared conversation/voice/settings bridge
   ui/                      reusable spatial UI kit (see section 4)
   world/
     fit.ts                 fit a model to a circular stage
