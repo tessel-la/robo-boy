@@ -1,3 +1,10 @@
+import AssistantSpeechTextarea, {
+  type AssistantSpeechHandle,
+  type AssistantVoiceState,
+} from './AssistantSpeechTextarea';
+import { useAssistantPresentation } from '../presentation';
+import { matchContextOptions } from '../context/automaticTags';
+import { isXrPresenting, subscribeToXrPresentation } from '../../../xr/xrPresentationBus';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Ros } from 'roslib';
 import { v4 as uuidv4 } from 'uuid';
@@ -57,6 +64,8 @@ export interface GlobalAssistantProps {
   isConnected: boolean;
   connectionGeneration: number;
   workspace: WorkspaceSnapshot;
+  storageScope?: string;
+  getSpatialWorkspace?: () => WorkspaceSnapshot['spatial'];
   onReviewPadProposal?: (layout: CustomGamepadLayout) => void;
   /** Opens a tagged resource in the view that owns it. Returns false when it has no such view. */
   onOpenResource?: (resourceId: string) => boolean;
@@ -147,7 +156,7 @@ const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTur
     // offering it whenever a panel, layout or window is mentioned.
     workspace:
       chips.some(chip => chip.source === 'workspace') ||
-      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower) ||
+      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b|\barrange\b|\bmove\b|\brearrange\b|\bcloser\b|\bfarther\b/.test(lower) ||
       // Time Series requests rarely say "panel": "plot the speed squared", "smooth that signal".
       /\bplot|\bgraph|\bchart|\bsignals?\b|\btime ?series\b|\bcurves?\b|\baxis\b|\bsmooth|\bfilter|\bderivative\b|\bintegra|\bsquared?\b|\bexpression\b|\bscale\b|\boffset\b|\bnormali[sz]e/.test(lower),
   };
@@ -248,10 +257,24 @@ const formatTfDistanceAnswer = (lookup: TfLookupResult): string => {
 };
 
 const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
-  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
+  ({ ros, isConnected, connectionGeneration, workspace, storageScope, getSpatialWorkspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const compact = useCompactAssistant();
+    const [immersive, setImmersive] = useState(isXrPresenting);
+    const voiceRef = useRef<AssistantSpeechHandle>(null);
+    const [voice, setVoice] = useState<AssistantVoiceState>({
+      listening: false,
+      pending: false,
+      transcribing: false,
+      error: '',
+    });
+    const generatingRef = useRef(false);
+    const draftRef = useRef('');
+    const setDraft = (text: string) => {
+      draftRef.current = text;
+      setPrompt(draftRef.current);
+    };
     const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
     const [messages, setMessages] = useState<AssistantMessage[]>(() => loadAssistantConversation().map(stored => ({
       id: uuidv4(), role: stored.role, content: stored.content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: stored.createdAt,
@@ -298,16 +321,26 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     }, []);
 
     const closeAssistant = useCallback(() => {
+      voiceRef.current?.cancel();
+      setVoice({ listening: false, pending: false, transcribing: false, error: '' });
       abortRef.current?.abort();
       abortContextWork();
       setIsOpen(false);
       setProgress([]);
     }, [abortContextWork]);
 
+    useEffect(
+      () =>
+        subscribeToXrPresentation(value => {
+          setImmersive(value);
+          if (!value) closeAssistant();
+        }),
+      [closeAssistant]
+    );
     useLayoutEffect(() => {
-      document.documentElement.classList.toggle('assistant-is-open', isOpen);
+      document.documentElement.classList.toggle('assistant-is-open', isOpen && !immersive);
       return () => document.documentElement.classList.remove('assistant-is-open');
-    }, [isOpen]);
+    }, [isOpen, immersive]);
     useEffect(() => () => {
       abortRef.current?.abort();
       abortContextWork();
@@ -315,10 +348,11 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     useEffect(() => {
       abortRef.current?.abort();
       abortContextWork();
+      voiceRef.current?.cancel();
       rosGraphCacheRef.current.clear();
       setRosGraph(null);
       setCatalog({ nodes: [], parameters: [], generation: -1 });
-      updatePinnedChips(previous => previous.map(chip => chip.generation === undefined ? chip : { ...chip, stale: true }));
+      updatePinnedChips(previous => previous.map(chip => (chip.generation === undefined ? chip : { ...chip, stale: true })));
       setProgress([]);
     }, [connectionGeneration, ros]);
     useEffect(() => {
@@ -368,6 +402,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
      * time so the model sees what the panel shows now, not what it showed at the last render. */
     const workspaceWithPanelSettings = (): WorkspaceSnapshot => ({
       ...workspace,
+      spatial: getSpatialWorkspace?.(),
       openPanels: workspace.openPanels.map(panel => {
         const bridge = panelBridgesRef.current.get(panel.id.replace(/^mobile:/, ''));
         return bridge ? { ...panel, settings: bridge.describe(), settingsHelp: bridge.settingsHelp } : panel;
@@ -665,7 +700,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     const pushMessage = (message: AssistantMessage) => setMessages(previous => [...previous, message]);
     const updateMessage = (id: string, patch: Partial<AssistantMessage>) =>
-      setMessages(previous => previous.map(message => message.id === id ? { ...message, ...patch } : message));
+      setMessages(previous => previous.map(message => (message.id === id ? { ...message, ...patch } : message)));
 
     const fetchTurnSchemas = async (
       discovery: ROSDiscoveryResult,
@@ -706,44 +741,53 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     ) => {
       const userText = rawPrompt.trim();
       const turnAttachmentsRequested = attachmentsOverride ?? attachments;
-      if ((!userText && turnAttachmentsRequested.length === 0) || isGenerating) return;
+      if ((!userText && turnAttachmentsRequested.length === 0) || generatingRef.current) return;
       if (!resolvedSettings.baseUrl.trim() || !resolvedSettings.model.trim()) { setError('Set both a base URL and model in Assistant settings before sending.'); return; }
       if (settings.provider !== 'openai-compatible' && settings.provider !== 'ollama' && !settings.apiKey.trim()) { setError(`Add an API key for ${settings.provider} in Assistant settings before sending.`); return; }
 
-      // A resource tagged a moment ago may still be retrieving; sending now would silently drop the
-      // context the prompt names.
-      if (contextResultsRef.current.size) await Promise.all([...contextResultsRef.current]);
-      // Context is what the user put there: a row chosen in the browser, or a resource written as an
-      // `@mention`. Both add; only the browser takes away.
-      const turnPinnedChips = pinnedChipsRef.current;
-
-      const history = historyOverride ?? messages;
-      const bridge = getActiveBridge();
-      const checkpoint = checkpointOverride !== undefined ? checkpointOverride : bridge?.captureCheckpoint() ?? null;
-      const turnAttachments = turnAttachmentsRequested;
-      const userMessage: AssistantMessage = {
-        id: uuidv4(), role: 'user', content: userText, attachments: turnAttachments,
-        contextChipIds: turnPinnedChips.map(chip => chip.id),
-        contextTags: turnPinnedChips.map(chip => ({ id: chip.id, label: chip.label, mention: chip.mention, source: chip.source })),
-        checkpoint, createdAt: Date.now(),
-      };
-      const nextHistory = [...history, userMessage];
-      setMessages(nextHistory);
-      setPrompt('');
-      // Context outlives the prompt: it stays until the user removes it in the browser, so a
-      // follow-up question keeps looking at the same resources.
-      setAttachments([]);
-      setAttachmentError('');
-      setClarificationSuggestions(undefined);
-      abortRef.current?.abort();
+      // Claim the turn before awaiting retrievals; two pointers cannot send concurrently.
+      generatingRef.current = true;
+      setIsGenerating(true);
       const controller = new AbortController();
       abortRef.current = controller;
       const generationAtSend = connectionGeneration;
-      setError('');
-      setProgress(['Gathering context…']);
-      setIsGenerating(true);
-
       try {
+        if (immersive) {
+          for (const option of matchContextOptions(
+            userText,
+            contextPickerSections.flatMap(section => section.options)
+          )) {
+            if (!option.selected) option.onSelect();
+          }
+        }
+        if (contextResultsRef.current.size) await Promise.all([...contextResultsRef.current]);
+        if (controller.signal.aborted || currentGenerationRef.current !== generationAtSend) return;
+        // Context is what the user put there: a row chosen in the browser, or a resource written as an
+        // `@mention`. Both add; only the browser takes away.
+        const turnPinnedChips = pinnedChipsRef.current;
+
+        const history = historyOverride ?? messages;
+        const bridge = getActiveBridge();
+        const checkpoint = checkpointOverride !== undefined ? checkpointOverride : (bridge?.captureCheckpoint() ?? null);
+        const turnAttachments = turnAttachmentsRequested;
+        const userMessage: AssistantMessage = {
+          id: uuidv4(), role: 'user', content: userText, attachments: turnAttachments,
+          contextChipIds: turnPinnedChips.map(chip => chip.id),
+          contextTags: turnPinnedChips.map(chip => ({ id: chip.id, label: chip.label, mention: chip.mention, source: chip.source })),
+          checkpoint, createdAt: Date.now(),
+        };
+        const nextHistory = [...history, userMessage];
+        setMessages(nextHistory);
+        setDraft('');
+        // Context outlives the prompt: it stays until the user removes it in the browser, so a
+        // follow-up question keeps looking at the same resources.
+        setAttachments([]);
+        setAttachmentError('');
+        setClarificationSuggestions(undefined);
+        setError('');
+        setProgress(['Gathering context…']);
+        setIsGenerating(true);
+
         let discovery = rosGraphAt(generationAtSend)?.resources ?? null;
         if (ros && isConnected) discovery = await refreshRosContext(false, generationAtSend);
         if (controller.signal.aborted || currentGenerationRef.current !== generationAtSend) throw abortError();
@@ -870,6 +914,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null;
+          generatingRef.current = false;
           setIsGenerating(false);
         }
       }
@@ -885,7 +930,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setClarificationSuggestions(undefined);
       setProgress([]);
       setError('');
-      setPrompt('');
+      setDraft('');
       setAttachments([]);
       setAttachmentError('');
       saveAssistantConversation([]);
@@ -947,12 +992,78 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       updateMessage(messageId, { resolution: 'saved' });
     };
 
+    useAssistantPresentation(storageScope, {
+      read: () => ({
+        open: isOpen,
+        draft: prompt,
+        messages,
+        busy: isGenerating,
+        progress,
+        error,
+        tags: pinnedChips.map(chip => chip.label),
+        voice,
+        settings: {
+          provider: settings.provider,
+          model: settings.model,
+          baseUrl: resolvedSettings.baseUrl,
+          voiceLanguage: settings.voiceLanguage,
+          hasApiKey: Boolean(settings.apiKey),
+        },
+      }),
+      open: () => setIsOpen(true),
+      close: closeAssistant,
+      setDraft,
+      send: () => {
+        if (!voice.listening && !voice.pending && !voice.transcribing) void generateFromPrompt(draftRef.current);
+      },
+      stop: () => abortRef.current?.abort(),
+      newConversation: handleNewConversation,
+      clearContext: () => updatePinnedChips(() => []),
+      startVoice: () => {
+        if (!generatingRef.current && isOpen) voiceRef.current?.start();
+      },
+      stopVoice: () => voiceRef.current?.stop(),
+      cancelVoice: () => voiceRef.current?.cancel(),
+      configure: patch =>
+        updateSettings(
+          patch.provider
+            ? {
+                provider: patch.provider,
+                apiKey: '',
+                ...getProviderDefaults(patch.provider),
+                ollamaUseBackendHost: patch.provider === 'ollama',
+              }
+            : { ...patch, ...(patch.baseUrl !== undefined ? { ollamaUseBackendHost: false } : {}) }
+        ),
+    });
+
     return (
+      <>
+        {immersive && isOpen && (
+          <div hidden>
+            <AssistantSpeechTextarea
+              key={connectionGeneration}
+              ref={voiceRef}
+              id="xr-assistant-voice"
+              label="XR assistant"
+              value={prompt}
+              onChange={setDraft}
+              rows={1}
+              language={settings.voiceLanguage}
+              onVoiceState={setVoice}
+              onTranscribeAudio={audio => transcribeAssistantAudio(audio, resolvedSettings)}
+              onTranscriptComplete={text => {
+                if (isXrPresenting() && isOpen) void generateFromPrompt(text, undefined, undefined, []);
+              }}
+            />
+          </div>
+        )}
+        {!immersive && (
       <>
       <button
         type="button"
         className={`assistant-launcher${compact ? ' is-compact' : ''}${isOpen ? ' is-open' : ''}`}
-        onClick={() => isOpen ? closeAssistant() : setIsOpen(true)}
+        onClick={() => (isOpen ? closeAssistant() : setIsOpen(true))}
         aria-label={`${isOpen ? 'Close' : 'Open'} Robo-Boy assistant`}
         aria-controls="robo-boy-assistant-panel"
         aria-expanded={isOpen}
@@ -971,9 +1082,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         progressMessages={progress}
         error={error}
         clarificationSuggestions={clarificationSuggestions}
-        onSelectSuggestion={setPrompt}
+        onSelectSuggestion={setDraft}
         prompt={prompt}
-        onPromptChange={setPrompt}
+        onPromptChange={setDraft}
         onSubmit={() => void generateFromPrompt(prompt)}
         onStop={() => abortRef.current?.abort()}
         onNewConversation={handleNewConversation}
@@ -1000,6 +1111,8 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onSaveBehaviorTreeProposal={handleSaveTree}
         hasActiveBehaviorTreeBridge={Boolean(activeBridge)}
       />
+      </>
+    )}
       </>
     );
   }

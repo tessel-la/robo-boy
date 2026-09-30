@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 
 // Relocated near-verbatim from the former behaviorTree/components/AgentSpeechTextarea.tsx — this
@@ -39,7 +39,21 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
 };
 
+export interface AssistantSpeechHandle {
+  start(): void;
+  stop(): void;
+  cancel(): void;
+}
+export interface AssistantVoiceState {
+  listening: boolean;
+  pending: boolean;
+  transcribing: boolean;
+  error: string;
+}
 interface AssistantSpeechTextareaProps {
+  /** One utterance, sent only after successful completion. Desktop dictation stays continuous. */
+  onTranscriptComplete?: (text: string) => void;
+  onVoiceState?: (state: AssistantVoiceState) => void;
   id: string;
   label: string;
   value: string;
@@ -93,7 +107,7 @@ const speechErrorMessage = (code?: string) => {
   return 'Voice recognition stopped unexpectedly.';
 };
 
-const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
+const AssistantSpeechTextarea = forwardRef<AssistantSpeechHandle, AssistantSpeechTextareaProps>(({
   id,
   label,
   value,
@@ -112,7 +126,13 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   holdToRecord,
   language,
   voiceButtonSlot = 'start',
-}) => {
+  onTranscriptComplete,
+  onVoiceState,
+}, ref) => {
+  const attemptRef = useRef(0);
+  const activeRef = useRef(false);
+  const completeRef = useRef(onTranscriptComplete);
+  completeRef.current = onTranscriptComplete;
   const textareaNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const wantsRecordingRef = useRef(false);
@@ -121,18 +141,14 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const valueRef = useRef(value);
+  valueRef.current = value;
   const [isListening, setIsListening] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [speechError, setSpeechError] = useState('');
   const speechWindow = typeof window === 'undefined' ? null : (window as SpeechWindow);
   const SpeechRecognition = speechWindow?.SpeechRecognition ?? speechWindow?.webkitSpeechRecognition;
-
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
 
   useEffect(() => {
     const node = textareaNodeRef.current;
@@ -143,6 +159,8 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
 
   useEffect(
     () => () => {
+      attemptRef.current += 1;
+      discardRef.current = true;
       recognitionRef.current?.abort();
       if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
       streamRef.current?.getTracks().forEach(track => track.stop());
@@ -155,30 +173,54 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     const next = current ? `${current} ${transcript}` : transcript;
     valueRef.current = next;
     onChange(next);
+    return next;
   };
 
   const transcribeRecording = async (audio: Blob) => {
     if (!onTranscribeAudio) return;
+    const attempt = attemptRef.current;
+    activeRef.current = true;
     setIsTranscribing(true);
     try {
       const transcript = (await onTranscribeAudio(audio)).trim();
+      if (attempt !== attemptRef.current) return;
       if (!transcript) throw new Error('The speech model returned an empty transcript.');
-      appendTranscript(transcript);
+      const next = appendTranscript(transcript);
+      completeRef.current?.(next);
     } catch (cause) {
+      if (attempt !== attemptRef.current) return;
       setSpeechError(cause instanceof Error ? cause.message : 'Audio transcription failed.');
     } finally {
-      setIsTranscribing(false);
+      if (attempt === attemptRef.current) {
+        activeRef.current = false;
+        setIsTranscribing(false);
+      }
     }
   };
 
   /** Ends the attempt and throws away whatever it captured. */
   const cancelListening = () => {
+    attemptRef.current += 1;
+    activeRef.current = false;
     discardRef.current = true;
-    recognitionRef.current?.abort();
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    setIsListening(false);
+    setIsRequestingPermission(false);
+    setIsTranscribing(false);
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    const recognition = recognitionRef.current,
+      recorder = recorderRef.current;
+    recognitionRef.current = null;
+    recorderRef.current = null;
+    streamRef.current = null;
+    recognition?.abort();
+    if (recorder?.state === 'recording') recorder.stop();
   };
 
   const stopListening = () => {
+    if (!recognitionRef.current && !recorderRef.current) {
+      cancelListening();
+      return;
+    }
     if (recorderRef.current?.state === 'recording') {
       recorderRef.current.stop();
     } else {
@@ -191,17 +233,31 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     setSpeechError('');
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    const attempt = attemptRef.current;
+    let received = false;
+    let failed = false;
+    recognition.continuous = !completeRef.current;
     recognition.interimResults = false;
     // The browser recogniser is told which language to expect and hears everything as that language,
     // so speaking English into a recogniser set to the phone's Italian locale transcribes badly.
     recognition.lang = language || navigator.language || 'en-US';
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      if (attempt === attemptRef.current) setIsListening(true);
+    };
     recognition.onend = () => {
+      if (attempt !== attemptRef.current) return;
+      activeRef.current = false;
+      const completed = received && !failed;
+      received = false;
+      failed = true;
+      if (completed) completeRef.current?.(valueRef.current);
       setIsListening(false);
       recognitionRef.current = null;
     };
     recognition.onerror = event => {
+      if (attempt !== attemptRef.current) return;
+      failed = true;
+      activeRef.current = false;
       setIsListening(false);
       recognitionRef.current = null;
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -211,6 +267,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       }
     };
     recognition.onresult = event => {
+      if (attempt !== attemptRef.current || failed) return;
       const transcripts: string[] = [];
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
@@ -218,6 +275,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
         if (transcript && result.isFinal !== false) transcripts.push(transcript);
       }
       if (transcripts.length === 0) return;
+      received = true;
       appendTranscript(transcripts.join(' '));
     };
     recognitionRef.current = recognition;
@@ -227,6 +285,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
     } catch {
       recognitionRef.current = null;
       setIsListening(false);
+      activeRef.current = false;
       setSpeechError('Voice recognition is already active.');
       return false;
     }
@@ -235,17 +294,20 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
 
   const startRecording = (stream: MediaStream) => {
     if (typeof MediaRecorder === 'undefined' || (!onTranscribeAudio && !onRecordAudio)) return false;
+    const attempt = attemptRef.current;
     const startedAt = Date.now();
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
     streamRef.current = stream;
-    audioChunksRef.current = [];
+    const chunks: Blob[] = [];
     recorder.ondataavailable = event => {
-      if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      if (event.data.size > 0) chunks.push(event.data);
     };
     recorder.onstop = () => {
-      const audio = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
       stream.getTracks().forEach(track => track.stop());
+      if (attempt !== attemptRef.current) return;
+      activeRef.current = false;
+      const audio = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
       recorderRef.current = null;
       streamRef.current = null;
       setIsListening(false);
@@ -269,18 +331,28 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
   };
 
   const startListening = async () => {
+    if (activeRef.current) return;
+    activeRef.current = true;
+    discardRef.current = false;
+    const attempt = ++attemptRef.current;
     setSpeechError('');
     if (!navigator.mediaDevices?.getUserMedia) {
+      activeRef.current = false;
       setSpeechError('Microphone access requires HTTPS or localhost in this browser.');
       return;
     }
     setIsRequestingPermission(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (attempt !== attemptRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       // The permission prompt can outlast the press. Anything started now would have no one holding
       // it, and on a phone that means a microphone nothing can switch off again.
       if (holdToRecord && !wantsRecordingRef.current) {
         stream.getTracks().forEach(track => track.stop());
+        activeRef.current = false;
         return;
       }
       if (SpeechRecognition) {
@@ -289,9 +361,12 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
         if (holdToRecord && !wantsRecordingRef.current) cancelListening();
       } else if (!startRecording(stream)) {
         stream.getTracks().forEach(track => track.stop());
+        activeRef.current = false;
         setSpeechError('This browser cannot record or recognize speech.');
       }
     } catch (cause) {
+      if (attempt !== attemptRef.current) return;
+      activeRef.current = false;
       const error = cause as DOMException;
       setSpeechError(
         error?.name === 'NotAllowedError'
@@ -301,9 +376,25 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
             : 'Could not access the microphone.'
       );
     } finally {
-      setIsRequestingPermission(false);
+      if (attempt === attemptRef.current) setIsRequestingPermission(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    start: () => {
+      void startListening();
+    },
+    stop: stopListening,
+    cancel: cancelListening,
+  }));
+  useEffect(() => {
+    onVoiceState?.({
+      listening: isListening,
+      pending: isRequestingPermission,
+      transcribing: isTranscribing,
+      error: speechError,
+    });
+  }, [onVoiceState, isListening, isRequestingPermission, isTranscribing, speechError]);
 
   const handleVoiceClick = () => {
     if (isListening) {
@@ -457,6 +548,7 @@ const AssistantSpeechTextarea: React.FC<AssistantSpeechTextareaProps> = ({
       )}
     </div>
   );
-};
+});
+AssistantSpeechTextarea.displayName = 'AssistantSpeechTextarea';
 
 export default AssistantSpeechTextarea;

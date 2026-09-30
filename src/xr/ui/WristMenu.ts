@@ -26,6 +26,7 @@ export interface WristMenuOptions {
   onRemove: (panelId: string) => void;
   /** Bring an open panel to where the user is looking. */
   onSummon: (panelId: string) => void;
+  onAssistant?: () => void;
 }
 
 const SHOW_ANGLE = THREE.MathUtils.degToRad(42);
@@ -180,6 +181,7 @@ export class WristMenu {
         onPress: () => this.setTab('open'),
       },
     ];
+    if (this.options.onAssistant) tabs.push({ id: 'ai', label: 'AI agent', active: false, onPress: () => { this.options.onAssistant?.(); this.menu.close(); } });
 
     if (this.tab === 'add') {
       return {

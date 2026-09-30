@@ -16,8 +16,9 @@ import { componentLibrary, createComponent } from '../../../features/customGamep
 import { generateGamepadId, getGamepadLayout } from '../../../features/customGamepad/gamepadStorage';
 import { fitNewComponent, occupiedExtent, resizeWithin } from '../../../features/customGamepad/padGeometry';
 import { SpatialMenu, type MenuPage, type MenuRow } from '../../ui/SpatialMenu';
-import { SpatialSurface, type SurfaceItem } from '../../ui/SpatialSurface';
-import { XR_THEME, drawText, fillRoundRect } from '../../ui/canvasKit';
+import type { SpatialSurface } from '../../ui/SpatialSurface';
+import { SpatialKeyboard } from '../../ui/SpatialKeyboard';
+import { XR_THEME } from '../../ui/canvasKit';
 import {
   defaultControlPose,
   padGridDestination,
@@ -82,9 +83,7 @@ export class XrPadEditor {
   private source: PadPresentation | null = null;
   private sourceSignature = '';
   private createsLayout = false;
-  private input: { label: string; text: string; commit: (text: string) => void } | null = null;
-  private symbols = false;
-  private shift = false;
+  private readonly textInput: SpatialKeyboard;
   private error = '';
   private disposed = false;
 
@@ -95,12 +94,8 @@ export class XrPadEditor {
     private readonly snapshot: () => PadPoses,
     private readonly changed: () => void
   ) {
-    this.keyboard = new SpatialSurface({
-      width: 0.56,
-      height: 0.3,
-      pixelsPerMetre: 1600,
-      drawBackground: (ctx, w, h) => fillRoundRect(ctx, 0, 0, w, h, 24, XR_THEME.surface),
-    });
+    this.textInput = new SpatialKeyboard(() => this.menu.refresh());
+    this.keyboard = this.textInput.surface;
     this.keyboard.mesh.name = 'xr-pad-keyboard';
     this.keyboard.mesh.position.set(0, -menu.height / 2 - 0.18, 0.02);
     this.keyboard.mesh.visible = false;
@@ -143,7 +138,7 @@ export class XrPadEditor {
   }
 
   cancel() {
-    this.input = null;
+    this.textInput.close();
     this.keyboard.mesh.visible = false;
     this.layout = null;
     this.selected = null;
@@ -156,17 +151,7 @@ export class XrPadEditor {
 
   save() {
     if (!this.layout || !this.source) return;
-    if (this.input) {
-      try {
-        this.input.commit(this.input.text);
-        this.input = null;
-        this.keyboard.mesh.visible = false;
-      } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Invalid value';
-        this.drawKeyboard();
-        return;
-      }
-    }
+    if (!this.textInput.apply()) return;
     if (this.presentation() !== this.source || JSON.stringify(this.source.layout) !== this.sourceSignature) {
       this.error = 'Layout changed. Cancel and reopen the editor.';
       this.menu.open(() => this.home());
@@ -214,129 +199,15 @@ export class XrPadEditor {
   }
 
   select(id: string) {
-    if (!this.layout || this.input) return;
+    if (!this.layout || this.textInput.isOpen) return;
     this.selected = id;
     this.menu.open(() => this.componentPage());
   }
 
   private text(label: string, value: string, commit: (text: string) => void) {
-    this.input = { label, text: value, commit };
-    this.error = '';
-    this.drawKeyboard();
+    this.textInput.open(label, value, commit);
   }
 
-  private drawKeyboard() {
-    const input = this.input;
-    this.keyboard.mesh.visible = Boolean(input);
-    if (!input) return;
-    const w = this.keyboard.pixelWidth,
-      h = this.keyboard.pixelHeight;
-    const items: SurfaceItem[] = [
-      {
-        id: 'input',
-        x: 12,
-        y: 10,
-        w: w - 24,
-        h: 90,
-        draw: ctx => {
-          drawText(ctx, input.label, 16, 30, w - 32, { size: 24, color: XR_THEME.textMuted });
-          drawText(ctx, this.error || input.text.slice(-70) || ' ', 16, 67, w - 32, {
-            size: 26,
-            color: this.error ? XR_THEME.danger : XR_THEME.text,
-          });
-        },
-      },
-    ];
-    const rows = this.symbols ? ['1234567890', '[]{}:/._-,', '"=+!?@()%\\'] : ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
-    const button = (id: string, label: string, x: number, y: number, width: number, action: () => void) => {
-      items.push({
-        id,
-        x,
-        y,
-        w: width - 6,
-        h: 72,
-        draw: (ctx, item, state) => {
-          fillRoundRect(ctx, item.x, item.y, item.w, item.h, 9, state.hover ? XR_THEME.itemHover : XR_THEME.item);
-          drawText(ctx, label, item.x + item.w / 2, item.y + item.h / 2, item.w - 6, { size: 27, align: 'center' });
-        },
-        onPress: () => {
-          action();
-          this.drawKeyboard();
-        },
-      });
-    };
-    rows.forEach((row, r) =>
-      [...row].forEach((char, col) => {
-        const shown = this.shift ? char.toUpperCase() : char;
-        button(`key-${char}`, shown, 12 + (col * (w - 24)) / row.length, 112 + r * 79, (w - 24) / row.length, () => {
-          if (input.text.length < 8192) input.text += shown;
-          this.error = '';
-        });
-      })
-    );
-    const actions: [string, string, () => void][] = [
-      [
-        'symbols',
-        this.symbols ? 'ABC' : '123',
-        () => {
-          this.symbols = !this.symbols;
-        },
-      ],
-      [
-        'shift',
-        'Shift',
-        () => {
-          this.shift = !this.shift;
-        },
-      ],
-      [
-        'space',
-        'Space',
-        () => {
-          input.text += ' ';
-        },
-      ],
-      [
-        'backspace',
-        '⌫',
-        () => {
-          input.text = input.text.slice(0, -1);
-        },
-      ],
-      [
-        'clear',
-        'Clear',
-        () => {
-          input.text = '';
-        },
-      ],
-      [
-        'cancel-input',
-        'Cancel',
-        () => {
-          this.input = null;
-        },
-      ],
-      [
-        'apply-input',
-        'Apply',
-        () => {
-          try {
-            input.commit(input.text);
-            this.input = null;
-            this.error = '';
-            this.menu.refresh();
-          } catch (error) {
-            this.error = error instanceof Error ? error.message : 'Invalid value';
-          }
-        },
-      ],
-    ];
-    actions.forEach(([id, label, action], index) =>
-      button(id, label, 12 + (index * (w - 24)) / actions.length, h - 84, (w - 24) / actions.length, action)
-    );
-    this.keyboard.setItems(items);
-  }
 
   designerPage(): MenuPage {
     return this.home();
@@ -791,6 +662,6 @@ export class XrPadEditor {
     this.disposed = true;
     this.source?.setEditing?.(false);
     this.layout = null;
-    this.keyboard.dispose();
+    this.textInput.dispose();
   }
 }

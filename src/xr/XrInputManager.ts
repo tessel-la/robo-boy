@@ -527,6 +527,13 @@ export class XrInputManager {
     this.recomputeMode();
   }
 
+  /** Release robot holds and grip ownership before an agent moves the room. */
+  cancelInteractions(): void {
+    for (const state of this.pointers.values()) this.releaseSelect(state);
+    for (const state of this.pointers.values()) this.releaseSqueeze(state);
+    this.recomputeMode();
+  }
+
   dispose(): void {
     for (const state of this.pointers.values()) this.releaseSelect(state);
     for (const dispose of this.disposers.splice(0)) dispose();

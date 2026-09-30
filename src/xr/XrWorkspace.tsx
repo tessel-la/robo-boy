@@ -1,4 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { XrAssistant } from './assistant/XrAssistant';
+import { applySpatialWorkspaceOperation, spatialWorkspaceSnapshot } from './assistantSpatialActions';
+import type { SpatialWorkspaceSnapshot } from '../features/assistant/types';
+import type { SpatialWorkspaceOperation, WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { Ros } from 'roslib';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
@@ -52,6 +56,10 @@ export interface XrWorkspacePanel {
   title: string;
 }
 
+export interface XrWorkspaceHandle {
+  snapshot(): SpatialWorkspaceSnapshot | undefined;
+  apply(operation: SpatialWorkspaceOperation): WorkspaceEditResult;
+}
 export interface XrWorkspaceProps {
   ros: Ros | null;
   /** The desktop's current live/replay source. Command panels always keep `ros`. */
@@ -104,7 +112,7 @@ interface MountedPanel {
  * and the session's ROS connection and owns nothing the 2D interface depends on, so with no session
  * running it renders one button and costs nothing else.
  */
-const XrWorkspace: React.FC<XrWorkspaceProps> = ({
+const XrWorkspace = forwardRef<XrWorkspaceHandle, XrWorkspaceProps>(({
   ros,
   visualizationRos = ros,
   isConnected,
@@ -113,7 +121,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   panelCatalog,
   onAddPanel,
   onRemovePanel,
-}) => {
+}, ref) => {
   const support = useXrSupport();
   const { meshResourcesBaseUrl } = useRuntimeConfig();
 
@@ -127,6 +135,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
   const inputRef = useRef<XrInputManager | null>(null);
   const grabRef = useRef<XrGrabController | null>(null);
   const interactionRef = useRef<SurfaceInteraction | null>(null);
+  const assistantRef = useRef<XrAssistant | null>(null);
   const wristMenuRef = useRef<WristMenu | null>(null);
   const hintRef = useRef<HintBoard | null>(null);
   const panelsReadyRef = useRef(false);
@@ -196,6 +205,8 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
     mountedPanelsRef.current = [];
     panelsReadyRef.current = false;
 
+    assistantRef.current?.dispose();
+    assistantRef.current = null;
     wristMenuRef.current?.dispose();
     wristMenuRef.current = null;
     hintRef.current?.dispose();
@@ -237,6 +248,23 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       scale: object.scale.x || 1,
     });
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    snapshot: () => {
+      const scene = sceneRef.current;
+      if (!scene?.renderer.xr.isPresenting) return undefined;
+      return spatialWorkspaceSnapshot(headCamera(scene), mountedPanelsRef.current.map(entry => ({
+        id: entry.panelId, title: panelsRef.current.find(panel => panel.id === entry.panelId)?.title ?? entry.panelId, object: entry.instance.object,
+      })));
+    },
+    apply: operation => {
+      const scene = sceneRef.current;
+      if (!scene?.renderer.xr.isPresenting) return { operation, ok: false, message: 'Spatial placement requires an active XR session.' };
+      return applySpatialWorkspaceOperation(operation, headCamera(scene), mountedPanelsRef.current.map(entry => ({
+        id: entry.panelId, title: panelsRef.current.find(panel => panel.id === entry.panelId)?.title ?? entry.panelId, object: entry.instance.object,
+      })), () => { inputRef.current?.cancelInteractions(); grabRef.current?.releaseAll(); }, capturePlacement);
+    },
+  }), [capturePlacement]);
 
   const findPanelForObject = (object: THREE.Object3D): MountedPanel | null => {
     let current: THREE.Object3D | null = object;
@@ -376,6 +404,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           const objects: THREE.Object3D[] = mountedPanelsRef.current.map(
             entry => entry.instance.object
           );
+          if (assistantRef.current) objects.push(assistantRef.current.object);
           if (wristMenuRef.current) objects.push(wristMenuRef.current.object);
           return objects;
         },
@@ -430,7 +459,21 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       inputRef.current = input;
       grabRef.current = new XrGrabController();
 
+      const assistant = new XrAssistant(storageScope, object => {
+        placeInFrontOfViewer(scene, object);
+        const camera = headCamera(scene);
+        const forward = camera.getWorldDirection(new THREE.Vector3()); forward.y = 0; forward.normalize();
+        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+        const world = object.getWorldPosition(new THREE.Vector3()).addScaledVector(right, 0.95);
+        object.position.copy(scene.uiGroup.worldToLocal(world));
+        const head = camera.getWorldPosition(new THREE.Vector3());
+        head.y = object.getWorldPosition(new THREE.Vector3()).y;
+        object.lookAt(head);
+      });
+      assistantRef.current = assistant;
+      scene.uiGroup.add(assistant.object);
       const wristMenu = new WristMenu({
+        onAssistant: () => assistant.open(),
         input,
         parent: scene.uiGroup,
         getCatalog: () => catalogRef.current ?? [],
@@ -461,6 +504,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         }
         grabRef.current?.update(poses);
         wristMenu.update(headCamera(scene), delta);
+        assistant.update(time, delta);
 
         const frameContext = {
           delta,
@@ -472,7 +516,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
         for (const entry of mountedPanelsRef.current) entry.instance.update?.(frameContext);
       });
     },
-    [capturePlacement, placeInFrontOfViewer]
+    [capturePlacement, placeInFrontOfViewer, storageScope]
   );
 
   const handleEnter = useCallback(async () => {
@@ -608,7 +652,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
       </div>
     </>
   );
-};
+});
 
 /** Read a pointer's current world pose for the grab maths. */
 const pointerPose = (
@@ -618,4 +662,5 @@ const pointerPose = (
   return input.getPointerPose(pointerId);
 };
 
+XrWorkspace.displayName = 'XrWorkspace';
 export default XrWorkspace;

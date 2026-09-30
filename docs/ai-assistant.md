@@ -127,3 +127,22 @@ The assistant has no dependency edge to or from `src/panels/` — it cannot be r
 ## Future: External-Agent (MCP) Integration
 
 Not built, deliberately: read/write access to Pads and Behavior Trees from an external agent (Claude Desktop, Codex, ChatGPT) over the Model Context Protocol is a real, credible next step, but Robo-Boy has no backend process to host an MCP server and its state lives in browser `localStorage`. The smallest credible increment is extending the existing manual Pad/BT export/import JSON round-trip into an automatic, watched two-way file sync, with a standard filesystem-flavored MCP server pointed at that directory — reusing `padValidator.ts` and the BT parser as the same validation gate, never a parallel one. See the architecture plan history for the full comparison of that option against a live local bridge.
+
+## XR presentation
+
+The wrist menu's **AI agent** opens a native animated view of this same assistant. Voice uses
+`AssistantSpeechTextarea` in completed-utterance mode (recognition or the existing provider transcription
+fallback); typing uses the same immersive keyboard as the Pad editor. No second provider, conversation,
+ROS connection or robot command executor is created. The desktop surface stands down during XR.
+
+Explicit speech and typed prompts resolve exact, unambiguous resource names through the existing
+context picker options before sending. Tags remain visible and can be cleared; workspace/graph/library
+auto-context stays enabled. `presentation.ts` exposes state and callbacks scoped to the connection,
+returning configured-key status rather than credentials.
+
+While XR is active, a live viewer-relative spatial snapshot enables validated `movePanel` and
+`arrangePanels` workspace operations. The shell delegates geometry and placement persistence to XR;
+desktop tile positions stay unchanged. Normal add/remove/configuration operations use their existing
+handlers. Add-then-move uses `followUp` so the model receives the mounted panel id. Closing/reconnecting
+cancels in-flight voice and provider work, and late results cannot mutate the room. ROS actions still
+remain review-only proposals. See [XR controls and limits](xr.md#immersive-ai-agent).

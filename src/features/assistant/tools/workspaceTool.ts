@@ -6,7 +6,12 @@ import type { WorkspaceSnapshot } from '../types';
  * the robot: panels, layouts and the Pad a panel shows are all local UI state that the user can
  * undo by hand, so the shell applies them straight away instead of asking for a second click.
  */
+export type SpatialWorkspaceOperation =
+  | { op: 'movePanel'; panelId: string; direction: 'left' | 'right' | 'up' | 'down' | 'closer' | 'farther' | 'front' }
+  | { op: 'arrangePanels'; layout: 'arc' | 'grid' };
+
 export type WorkspaceEditOperation =
+  | SpatialWorkspaceOperation
   | { op: 'addPanel'; panelType: string; title?: string; cameraTopic?: string; padId?: string }
   | { op: 'removePanel'; panelId: string }
   | { op: 'setCameraTopic'; panelId: string; cameraTopic: string }
@@ -76,6 +81,16 @@ export const parseWorkspaceEditOperations = (raw: unknown): { operations: Worksp
         });
         return;
       }
+      case 'movePanel': {
+        const direction = asString(item.direction);
+        if (!panelId || !direction || !['left', 'right', 'up', 'down', 'closer', 'farther', 'front'].includes(direction)) {
+          return rejected.push(`Operation ${index + 1}: movePanel needs a panelId and a valid direction.`);
+        }
+        return operations.push({ op: 'movePanel', panelId, direction: direction as Extract<SpatialWorkspaceOperation, { op: 'movePanel' }>['direction'] });
+      }
+      case 'arrangePanels':
+        if (item.layout !== 'arc' && item.layout !== 'grid') return rejected.push(`Operation ${index + 1}: arrangePanels needs arc or grid.`);
+        return operations.push({ op: 'arrangePanels', layout: item.layout });
       case 'removePanel':
         if (!panelId) return rejected.push(`Operation ${index + 1}: removePanel needs a panelId.`);
         return operations.push({ op: 'removePanel', panelId });
@@ -132,3 +147,9 @@ export const describeWorkspaceEditResults = (results: WorkspaceEditResult[]): st
   if (results.length === 0) return 'Nothing to change.';
   return results.map(result => `${result.ok ? '✓' : '✗'} ${result.message}`).join('\n');
 };
+
+export const SPATIAL_WORKSPACE_PROMPT_FRAGMENT = `## Immersive XR workspace
+The user is inside XR. Spatial edits apply only to the immersive placements, preserving the desktop layout.
+- {"op":"movePanel","panelId":"<mounted id from workspace.spatial.panels>","direction":"left|right|up|down|closer|farther|front"} — one small step relative to the viewer. front summons the panel into view.
+- {"op":"arrangePanels","layout":"arc|grid"} — arrange all mounted panels around the viewer.
+Use these in workspaceEdit operations for rearranging panels. Only mounted panels may move. To open then position a new panel, addPanel first and put the placement request in followUp so its mounted id is available. Report failed outcomes honestly. Robot operations remain review-only.`;

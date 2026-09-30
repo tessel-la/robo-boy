@@ -2,7 +2,7 @@ import { BEHAVIOR_TREE_CAPABILITY, BEHAVIOR_TREE_PROMPT_FRAGMENT } from './tools
 import { PAD_CAPABILITY } from './tools/padGeneration';
 import { ROS_OPERATION_CAPABILITY } from './tools/rosActionValidator';
 import { TF_CAPABILITY } from './context/tfContext';
-import { WORKSPACE_CAPABILITY, WORKSPACE_PROMPT_FRAGMENT } from './tools/workspaceTool';
+import { WORKSPACE_CAPABILITY, WORKSPACE_PROMPT_FRAGMENT, SPATIAL_WORKSPACE_PROMPT_FRAGMENT } from './tools/workspaceTool';
 import { describeCapabilities, type AssistantCapability } from './capabilities';
 import type { AssistantAutoContext, AssistantContextChip, AssistantSettings } from './types';
 
@@ -148,6 +148,7 @@ export const composeAssistantSystemPrompt = ({
     describeCapabilities(ASSISTANT_CAPABILITIES),
     RESPONSE_CONTRACT,
     ...domainFragments(needs),
+    ...(autoContext.workspace.spatial ? [SPATIAL_WORKSPACE_PROMPT_FRAGMENT] : []),
     settings.systemContext.trim() && `Additional assistant instructions:\n${settings.systemContext.trim()}`,
     settings.robotContext.trim() && `Robot and mission context:\n${settings.robotContext.trim()}`,
     `## Automatically gathered context\n${describeAutoContext(autoContext)}`,

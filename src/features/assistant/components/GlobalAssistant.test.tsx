@@ -1,6 +1,8 @@
+import { getAssistantPresentation } from '../presentation';
+import { resetXrPresentation, setXrPresenting } from '../../../xr/xrPresentationBus';
 import React, { createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendAssistantChatMock = vi.hoisted(() => vi.fn());
 vi.mock('../providers/index', async importOriginal => {
@@ -34,7 +36,9 @@ const workspace: WorkspaceSnapshot = {
 };
 
 describe('GlobalAssistant', () => {
+  afterEach(() => resetXrPresentation());
   beforeEach(() => {
+    resetXrPresentation();
     localStorage.clear();
     sendAssistantChatMock.mockReset();
   });
@@ -469,4 +473,40 @@ describe('GlobalAssistant', () => {
     expect([...document.querySelectorAll('.assistant-inline-tag')].map(node => node.textContent))
       .toEqual(['@Camera', '@Field setup']);
   });
+  it('uses one conversation in XR, pins named context, reads current placement, and prevents duplicate sends', async () => {
+    let reply!: (text: string) => void;
+    sendAssistantChatMock.mockImplementation(() => new Promise<string>(resolve => { reply = resolve; }));
+    const spatial = vi.fn(() => ({ panels: [{ id: 'p1', right: 0, up: 0, forward: 1.4, scale: 1 }] }));
+    renderOpenAssistant({ storageScope: 'xr-test', getSpatialWorkspace: spatial });
+    act(() => setXrPresenting(true));
+    expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument();
+    const presentation = getAssistantPresentation('xr-test')!;
+    act(() => { presentation.setDraft('Move Camera left'); presentation.send(); presentation.send(); });
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    expect(presentation.read().tags).toContain('Panel: Camera');
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"forward":1.4');
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"op":"movePanel"');
+    expect(spatial).toHaveBeenCalled();
+    await act(async () => reply(JSON.stringify({ kind: 'explanation', message: 'Here is your room.' })));
+    expect(presentation.read().messages.filter(m => m.role === 'user')).toHaveLength(1);
+    act(() => setXrPresenting(false));
+    act(() => presentation.open());
+    expect(screen.getByText('Here is your room.')).toBeVisible();
+    expect(getAssistantPresentation('other-robot')).toBeNull();
+  });
+
+  it('does not apply a delayed XR workspace response after the agent closes', async () => {
+    let reply!: (text: string) => void;
+    sendAssistantChatMock.mockImplementation(() => new Promise<string>(resolve => { reply = resolve; }));
+    const apply = vi.fn();
+    renderOpenAssistant({ onApplyWorkspaceEdit: apply });
+    act(() => setXrPresenting(true));
+    const presentation = getAssistantPresentation()!;
+    act(() => { presentation.setDraft('Close Camera'); presentation.send(); });
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    act(() => presentation.close());
+    await act(async () => reply(JSON.stringify({ kind: 'workspaceEdit', summary: 'Closed', operations: [{ op: 'removePanel', panelId: 'p1' }] })));
+    expect(apply).not.toHaveBeenCalled(); expect(presentation.read().busy).toBe(false);
+  });
+
 });

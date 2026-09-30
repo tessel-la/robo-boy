@@ -117,7 +117,12 @@ export interface WorkspaceLayoutContext {
 /** Bounded, serializable "what's open right now" snapshot computed by MainControlView — the
  * assistant never reaches into workspace state directly (see docs/architecture.md's dependency
  * direction: feature modules don't import application-shell state). */
+export interface SpatialWorkspaceSnapshot {
+  /** Metres relative to the viewer at send time; positive right/up/forward. XR placements only. */
+  panels: Array<{ id: string; right: number; up: number; forward: number; scale: number }>;
+}
 export interface WorkspaceSnapshot {
+  spatial?: SpatialWorkspaceSnapshot;
   connectionStatus: 'disconnected' | 'connecting' | 'connected';
   openPanels: WorkspaceSnapshotPanel[];
   viewMode?: string;

@@ -453,3 +453,26 @@ Validation: 496 tests passed in the broad affected unit suite (8 existing skips)
 16 passing Pad unit tests after the final authoring safeguards. Eight VR/AR browser scenarios,
 TypeScript, ESLint and the production build passed. The real-simulator scenario is opt-in and
 was skipped without its stack flag.
+
+## Immersive assistant
+
+`assistant/XrAssistant.ts` owns only the animated core/rings, canvas controls, paged transcript and
+keyboard. It reads `features/assistant/presentation.ts`, a connection-scoped view of the single
+`GlobalAssistant`. The wrist **AI agent** action opens it; it is not a duplicate workspace tile.
+Credential values are not returned by this bridge. Native key entry is masked and invokes the existing
+settings update path. Canvas content redraws on state changes; only the core/rings animate per frame.
+Conversation attachments are never serialized for frame-change detection.
+
+`AssistantSpeechTextarea` remains the single voice owner for desktop and XR. Its optional imperative
+handle and completed-utterance callback enable the hidden XR input; the desktop retains continuous
+recognition and audio attachments. Attempt counters discard late permission/recognition/transcription
+callbacks. The controlled draft is mirrored on every render, including auto-send batches where its
+value begins and ends empty. `GlobalAssistant` claims each turn before awaiting context retrievals and
+checks cancellation/generation before applying any response.
+
+`SpatialKeyboard` is shared with the Pad draft editor; keep the Pad mesh name and key ids stable.
+`assistantSpatialActions.ts` owns semantic viewer-relative move/arc/grid geometry. `XrWorkspace` exposes
+a narrow snapshot/apply handle to the shell, releases controls/grips and persists successful changes.
+The workspace tool validates directions/layouts; the spatial prompt fragment is supplied only while
+an immersive snapshot exists. Panel additions/removals must finish mounting before a spatial follow-up.
+Do not expose arbitrary model-supplied matrices or bypass the existing robot proposal review boundary.

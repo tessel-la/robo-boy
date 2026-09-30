@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { createRef, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import AssistantSpeechTextarea from './AssistantSpeechTextarea';
+import AssistantSpeechTextarea, { type AssistantSpeechHandle } from './AssistantSpeechTextarea';
 
 class MockSpeechRecognition {
   static instance: MockSpeechRecognition | null = null;
@@ -220,4 +220,74 @@ describe('AssistantSpeechTextarea', () => {
     expect(MockSpeechRecognition.instance).toBeNull();
     expect(transcribe).not.toHaveBeenCalled();
   });
+  it('completes one XR utterance once while preserving desktop continuous dictation', async () => {
+    const complete = vi.fn(), changed = vi.fn();
+    const ref = createRef<AssistantSpeechHandle>();
+    render(<AssistantSpeechTextarea ref={ref} id="xr" label="XR" value="" onChange={changed} rows={1} onTranscriptComplete={complete} />);
+    act(() => ref.current?.start());
+    await waitFor(() => expect(MockSpeechRecognition.instance).not.toBeNull());
+    const recognition = MockSpeechRecognition.instance!;
+    expect(recognition.continuous).toBe(false);
+    act(() => recognition.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: 'Open Camera' } }] }));
+    expect(complete).not.toHaveBeenCalled();
+    act(() => { recognition.onend?.(); recognition.onend?.(); });
+    expect(complete).toHaveBeenCalledExactlyOnceWith('Open Camera');
+  });
+
+  it('discards late permission and recognition callbacks after cancel/unmount', async () => {
+    const complete = vi.fn(), changed = vi.fn();
+    const ref = createRef<AssistantSpeechHandle>();
+    let resolvePermission!: (stream: MediaStream) => void;
+    getUserMedia.mockImplementationOnce(() => new Promise(resolve => { resolvePermission = resolve; }));
+    const view = render(<AssistantSpeechTextarea ref={ref} id="xr" label="XR" value="" onChange={changed} rows={1} onTranscriptComplete={complete} />);
+    act(() => { ref.current?.start(); ref.current?.cancel(); });
+    await act(async () => resolvePermission({ getTracks: () => [{ stop: trackStop }] } as unknown as MediaStream));
+    expect(MockSpeechRecognition.instance).toBeNull(); expect(trackStop).toHaveBeenCalledOnce();
+    act(() => ref.current?.start());
+    await waitFor(() => expect(MockSpeechRecognition.instance).not.toBeNull());
+    const recognition = MockSpeechRecognition.instance!;
+    view.unmount();
+    act(() => { recognition.onresult?.({ resultIndex: 0, results: [{ 0: { transcript: 'Close all panels' } }] }); recognition.onend?.(); });
+    expect(changed).not.toHaveBeenCalled(); expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('discards a provider transcription that arrives after cancellation', async () => {
+    Reflect.deleteProperty(window, 'SpeechRecognition');
+    class Recorder {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['audio']) }); this.onstop?.(); }
+    }
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: Recorder });
+    let resolveTranscript!: (text: string) => void;
+    const transcribe = vi.fn(() => new Promise<string>(resolve => { resolveTranscript = resolve; }));
+    const complete = vi.fn(), changed = vi.fn(), ref = createRef<AssistantSpeechHandle>();
+    render(<AssistantSpeechTextarea ref={ref} id="xr" label="XR" value="" onChange={changed} rows={1} onTranscriptComplete={complete} onTranscribeAudio={transcribe} />);
+    act(() => ref.current?.start());
+    await screen.findByRole('button', { name: 'Stop voice input for XR' });
+    act(() => ref.current?.stop());
+    expect(transcribe).toHaveBeenCalledOnce();
+    act(() => ref.current?.cancel());
+    await act(async () => resolveTranscript('Close the camera'));
+    expect(changed).not.toHaveBeenCalled(); expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('does not append a previous auto-sent utterance when the controlled draft stays empty', async () => {
+    const complete = vi.fn(), ref = createRef<AssistantSpeechHandle>();
+    const Harness = () => {
+      const [value, setValue] = useState('');
+      return <AssistantSpeechTextarea ref={ref} id="xr" label="XR" value={value} onChange={setValue} rows={1}
+        onTranscriptComplete={text => { complete(text); setValue(''); }} />;
+    };
+    render(<Harness />);
+    for (const transcript of ['arrange panels in a grid', 'close camera']) {
+      act(() => ref.current?.start());
+      await screen.findByRole('button', { name: 'Stop voice input for XR' });
+      act(() => { MockSpeechRecognition.instance!.onresult?.({ resultIndex: 0, results: [{ 0: { transcript } }] }); MockSpeechRecognition.instance!.onend?.(); });
+    }
+    expect(complete.mock.calls.map(call => call[0])).toEqual(['arrange panels in a grid', 'close camera']);
+  });
+
 });

@@ -1,3 +1,4 @@
+import type { XrWorkspaceHandle } from '../xr/XrWorkspace';
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
@@ -1085,6 +1086,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, [isActive, replaySession]);
+  const xrWorkspaceRef = useRef<XrWorkspaceHandle>(null);
   const assistantRef = useRef<GlobalAssistantHandle>(null);
   const handleOpenAssistant = useCallback((context: { panelId: string }) => {
     assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
@@ -2604,6 +2606,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
     for (const [operationIndex, operation] of operations.entries()) {
       switch (operation.op) {
+        case 'movePanel':
+        case 'arrangePanels':
+          if (panelsChanged) {
+            results.push({ operation, ok: false, message: 'Wait for the panel changes to mount, then retry the spatial edit in followUp.' });
+            break;
+          }
+          results.push(xrWorkspaceRef.current?.apply(operation) ?? { operation, ok: false, message: 'Spatial placement requires an active XR session.' });
+          break;
         case 'addPanel': {
           const type = resolvePanelType(operation.panelType, panelCatalog);
           if (!type) {
@@ -4452,6 +4462,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onOpenResource={handleOpenAssistantResource}
         canOpenResource={canOpenAssistantResource}
         onApplyWorkspaceEdit={handleAssistantWorkspaceEdit}
+        storageScope={storageScope}
+        getSpatialWorkspace={() => xrWorkspaceRef.current?.snapshot()}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [
@@ -4529,6 +4541,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       {HAS_XR_API && (
         <React.Suspense fallback={null}>
           <XrWorkspace
+            ref={xrWorkspaceRef}
             ros={ros}
             visualizationRos={visualizationRos}
             isConnected={isConnected}

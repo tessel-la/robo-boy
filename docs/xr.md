@@ -320,3 +320,34 @@ The self-contained `e2e/xr-sandbox-surface.spec.ts` covers capture, scroll, sand
 restoration. `e2e/xr-external-panel.spec.ts` uses the actual unmodified Microduck artifact, mocked ROS,
 and emulated controllers in VR and AR. Set `MICRODUCK_PANEL_DIR` to its built repository (defaults to
 the sibling `robo-boy-microduck-control-panel`); that integration test skips if it is unavailable.
+
+### Immersive AI agent
+
+Open the wrist menu with left **X** or **Panels**, then choose **AI agent**. An animated, grabbable
+agent opens beside the workspace. Its core pulses green while listening, spins faster while thinking,
+and turns red on errors. Chat, context tags, action outcomes, provider settings and a shared immersive
+keyboard are available without leaving XR.
+
+Press **Speak** explicitly; the microphone never starts on entry or a hand gesture. Browser speech
+recognition sends one utterance when it finishes. Where recognition is unavailable, **Finish voice**
+stops a recording and the configured provider transcribes it before sending. **Cancel voice** discards
+capture or a pending transcription. Microphone permission requires HTTPS/localhost; recording fallback
+requires a provider supported by the existing transcription transport. Typing uses **Type a message**,
+**Apply**, then **Send**. Settings include model, endpoint, voice language and masked API-key replacement.
+
+Try “open a camera panel”, “bring Camera in front”, “move Camera left”, “bring the Pad closer”,
+“arrange the panels in an arc”, or “close Camera”. Clearly named, unambiguous resources are tagged
+through the existing context picker retrievals (up to eight per turn). **Clear tags** removes pins;
+**Settings → New conversation** resets the shared chat. Ambiguous names are left for the model to
+resolve from the current workspace context.
+
+The agent uses the desktop assistant's conversation, provider and action validators. Opening/closing
+panels changes the shared workspace. Moving and arranging changes only persisted XR placements;
+desktop tile positions are preserved. Add-then-position requests use a follow-up turn after the panel
+mounts. Spatial edits release held robot controls and grips first. Robot-affecting operations remain
+review-only proposals; the chat does not execute them. Closing the agent, ending XR or reconnecting
+cancels capture and ignores late responses. The agent itself is summoned afresh when reopened.
+
+`e2e/xr-agent.spec.ts` exercises the native interface, sequential mocked speech, the immersive keyboard,
+shared conversation, spawn/move/arrange/close and cancellation in VR and AR. These emulator checks do
+not replace physical-headset microphone, permissions and readability validation.
