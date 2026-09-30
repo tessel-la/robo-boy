@@ -2,7 +2,57 @@ import * as ROSLIB from 'roslib';
 import type { Ros } from 'roslib';
 import * as THREE from 'three';
 
+import { runSerializedRosapi } from './rosapiQueue';
 import { normalizeFrameId, type TransformStore } from './tfUtils';
+
+/** Robo-Boy's ROS stack republishes /tf here, coalesced to one message per display frame
+ * (infra/ros/tf_relay.py). A robot's /tf can run at kHz; forwarded one-for-one it saturates
+ * rosbridge and, on a remote link, fills the write queue that then drops service responses. */
+export const TF_RELAY_TOPIC = '/roboboy/tf';
+const TF_RELAY_PROBE_TIMEOUT_MS = 3000;
+
+type TopicsForType = (type: string, callback: (topics: string[]) => void, failed?: (error: unknown) => void) => void;
+
+type TfSource = { name: string; /** rosapi answered; a timeout or failure is worth asking again. */ known: boolean };
+
+/** The relay when this robot runs one, else plain /tf. Any failure or delay falls back to /tf;
+ * a client that cannot ask rosapi gets /tf at once. */
+function dynamicTfTopic(ros: Ros): TfSource | Promise<TfSource> {
+  const getTopicsForType = (ros as Ros & { getTopicsForType?: TopicsForType }).getTopicsForType;
+  if (typeof getTopicsForType !== 'function') return { name: '/tf', known: true };
+  return findTfRelay(ros, getTopicsForType.bind(ros));
+}
+
+async function findTfRelay(ros: Ros, getTopicsForType: TopicsForType): Promise<TfSource> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), TF_RELAY_PROBE_TIMEOUT_MS);
+  try {
+    const topics = await runSerializedRosapi(
+      ros,
+      () =>
+        new Promise<string[]>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('timed out')), TF_RELAY_PROBE_TIMEOUT_MS);
+          getTopicsForType(
+            'tf2_msgs/msg/TFMessage',
+            result => {
+              clearTimeout(timeout);
+              resolve(Array.isArray(result) ? result : []);
+            },
+            error => {
+              clearTimeout(timeout);
+              reject(error);
+            }
+          );
+        }),
+      abort.signal
+    );
+    return { name: topics.includes(TF_RELAY_TOPIC) ? TF_RELAY_TOPIC : '/tf', known: true };
+  } catch {
+    return { name: '/tf', known: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface TfStreamUpdate {
   transforms: TransformStore;
@@ -123,6 +173,10 @@ class SharedTfStream {
   private dynamicTopic: ROSLIB.Topic | null = null;
   private staticTopic: ROSLIB.Topic | null = null;
   private running = false;
+  /** Invalidates a dynamic-topic lookup that finishes after stop() or a restart. */
+  private generation = 0;
+  /** The dynamic topic once rosapi has answered, so reset() resubscribes without asking again. */
+  private knownSource: TfSource | null = null;
 
   constructor(private readonly ros: Ros) {}
 
@@ -185,18 +239,28 @@ class SharedTfStream {
   private start(): void {
     if (this.dynamicTopic || this.staticTopic) return;
     this.running = true;
+    const generation = ++this.generation;
+    const subscribeDynamic = (source: TfSource) => {
+      if (source.known) this.knownSource = source;
+      if (generation !== this.generation || !this.running) return;
+      const { name } = source;
+      this.dynamicTopic = new ROSLIB.Topic({
+        ros: this.ros,
+        name,
+        messageType: 'tf2_msgs/TFMessage',
+        // TFMessages carry disjoint frame subsets from independent publishers.
+        // Topic-wide throttling or replacement queues drop other arms. Merge
+        // every message; the viewer already coalesces renders with rAF. The relay
+        // coalesces per child frame on the robot, where nothing is lost.
+        throttle_rate: 0,
+        queue_length: 0,
+        compression: 'cbor',
+      });
+      this.dynamicTopic.subscribe(this.handleDynamicMessage);
+    };
 
-    this.dynamicTopic = new ROSLIB.Topic({
-      ros: this.ros,
-      name: '/tf',
-      messageType: 'tf2_msgs/TFMessage',
-      // TFMessages carry disjoint frame subsets from independent publishers.
-      // Topic-wide throttling or replacement queues drop other arms. Merge
-      // every message; the viewer already coalesces renders with rAF.
-      throttle_rate: 0,
-      queue_length: 0,
-      compression: 'cbor',
-    });
+    const dynamic = this.knownSource ?? dynamicTfTopic(this.ros);
+    if (!(dynamic instanceof Promise)) subscribeDynamic(dynamic);
     this.staticTopic = new ROSLIB.Topic({
       ros: this.ros,
       name: '/tf_static',
@@ -205,13 +269,13 @@ class SharedTfStream {
       queue_length: 0,
       compression: 'cbor',
     });
-
-    this.dynamicTopic.subscribe(this.handleDynamicMessage);
     this.staticTopic.subscribe(this.handleStaticMessage);
+    if (dynamic instanceof Promise) void dynamic.then(subscribeDynamic);
   }
 
   private stop(): void {
     this.running = false;
+    this.generation += 1;
     this.dynamicTopic?.unsubscribe();
     this.staticTopic?.unsubscribe();
     this.dynamicTopic = null;

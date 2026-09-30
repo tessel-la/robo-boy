@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.16.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.15.0-alpha...robo-boy-v0.16.0-alpha) (2026-09-30)
+
+
+### Features
+
+* add gauge, level, readout, state, setpoint and text pad components ([#200](https://github.com/tessel-la/robo-boy/issues/200)) ([44e22ba](https://github.com/tessel-la/robo-boy/commit/44e22bac9cdda6fe237a795cc66ff85a207600ac))
+* add the Data Explorer panel ([#204](https://github.com/tessel-la/robo-boy/issues/204)) ([b28856d](https://github.com/tessel-la/robo-boy/commit/b28856d82d889dc2fb372b9253c6f551b72c8be3))
+* build the Electron app for Apple Silicon Macs ([#199](https://github.com/tessel-la/robo-boy/issues/199)) ([25cfbad](https://github.com/tessel-la/robo-boy/commit/25cfbad9d5c5513093557d4725717cc90b8337f7))
+* data Explorer panel, richer behavior tree inspection, new pad components and faster rosbridge ([b4b0d94](https://github.com/tessel-la/robo-boy/commit/b4b0d948e8f749c4c4af263808a5ea61ae95b006))
+* inspect behavior tree action and service results, feedback, images and failures ([#201](https://github.com/tessel-la/robo-boy/issues/201)) ([9143dc3](https://github.com/tessel-la/robo-boy/commit/9143dc3d468ca7326193e7360f26a371f36846b1))
+
+
+### Bug Fixes
+
+* default the 3D panel's frame label size to 0.05 m ([#198](https://github.com/tessel-la/robo-boy/issues/198)) ([1341c6f](https://github.com/tessel-la/robo-boy/commit/1341c6fc56b7bd2c6c72637d20a7201585d44f07))
+* load remote robot assets through native desktop transport ([#202](https://github.com/tessel-la/robo-boy/issues/202)) ([f1937fe](https://github.com/tessel-la/robo-boy/commit/f1937fea7c718baebe1af46354c857d3b4931744))
+* route panel /&lt;port&gt;/ frames to the robot in the Electron shell ([#203](https://github.com/tessel-la/robo-boy/issues/203)) ([80250fc](https://github.com/tessel-la/robo-boy/commit/80250fc4a7792b04d8852e1a97d4f0fea74b1f27))
+
+
+### Performance Improvements
+
+* keep rosbridge responsive on busy cells and remote links ([#205](https://github.com/tessel-la/robo-boy/issues/205)) ([ec44e16](https://github.com/tessel-la/robo-boy/commit/ec44e16f304f65bee33be997a52d2062092d81ea))
+
 ## [0.15.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.14.0-alpha...robo-boy-v0.15.0-alpha) (2026-09-28)
 
 

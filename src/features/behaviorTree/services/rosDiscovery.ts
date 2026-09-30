@@ -2,6 +2,34 @@ import type { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { ROSDiscoveryResult, ROSActionInfo, ROSServiceInfo, ROSTopicInfo } from '../types';
 import { runSerializedRosapi } from '../../../utils/rosapiQueue';
+import { getInspectionSession } from '../../dataExplorer/InspectionSession';
+import type { Resource } from '../../dataExplorer/types';
+
+/** A rosapi reply rosbridge dropped (its write queue overflows under load) never arrives;
+ * without a bound, one lost reply would stall discovery forever. */
+const CALL_TIMEOUT_MS = 10_000;
+/** How long to wait for the ROS stack's inspector before discovering call by call. */
+const GRAPH_TIMEOUT_MS = 6_000;
+/** Published by infra/ros/inspection_runner.py; its absence from the topic list means no inspector. */
+const INSPECTOR_GRAPH_TOPIC = '/roboboy/inspection/graph';
+
+/** Resolves once with the first value: the callback's, or `fallback` after `ms`. */
+const settleWithin = <T>(ms: number, fallback: T, run: (resolve: (value: T) => void) => void): Promise<T> =>
+  new Promise<T>(resolve => {
+    let settled = false;
+    const settle = (value: T) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => settle(fallback), ms);
+    try {
+      run(settle);
+    } catch {
+      settle(fallback);
+    }
+  });
 
 /**
  * Discover available ROS actions.
@@ -25,55 +53,47 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
     // sequentially, never with Promise.all, to avoid concurrent rosbridge
     // service client creation crashing the WebSocket connection.
     const probeActionType = (candidate: string) =>
-      new Promise<void>(done => {
-        try {
-          const srv = new (ROSLIB as any).Service({
-            ros,
-            name: '/rosapi/action_type',
-            serviceType: 'rosapi_msgs/srv/ActionType',
-          });
-          srv.callService(
-            { action: candidate },
-            (res: any) => {
-              const t: string = res?.type || '';
-              if (t) {
-                actionTypes.set(candidate, t);
-                console.log(`[BT] Found action server: ${candidate} (${t})`);
-              }
-              done();
-            },
-            () => done() // not an action server — ignore silently
-          );
-        } catch {
-          done();
-        }
+      settleWithin<void>(CALL_TIMEOUT_MS, undefined, done => {
+        const srv = new (ROSLIB as any).Service({
+          ros,
+          name: '/rosapi/action_type',
+          serviceType: 'rosapi_msgs/srv/ActionType',
+        });
+        srv.callService(
+          { action: candidate },
+          (res: any) => {
+            const t: string = res?.type || '';
+            if (t) {
+              actionTypes.set(candidate, t);
+              console.log(`[BT] Found action server: ${candidate} (${t})`);
+            }
+            done();
+          },
+          () => done() // not an action server — ignore silently
+        );
       });
 
     // Fetch action server names from /rosapi/action_servers (single call,
     // uses hidden topics internally — reliable on ROS 2 Humble).
     const fetchActionServers = (): Promise<string[]> =>
-      new Promise<string[]>(done => {
-        try {
-          const srv = new (ROSLIB as any).Service({
-            ros,
-            name: '/rosapi/action_servers',
-            serviceType: 'rosapi_msgs/srv/GetActionServers',
-          });
-          srv.callService(
-            {},
-            (res: any) => {
-              const servers: string[] = res?.action_servers || [];
-              console.log(`[BT] /rosapi/action_servers returned ${servers.length} server(s):`, servers);
-              done(servers);
-            },
-            () => {
-              console.warn('[BT] /rosapi/action_servers failed, skipping Phase 2');
-              done([]);
-            }
-          );
-        } catch {
-          done([]);
-        }
+      settleWithin<string[]>(CALL_TIMEOUT_MS, [], done => {
+        const srv = new (ROSLIB as any).Service({
+          ros,
+          name: '/rosapi/action_servers',
+          serviceType: 'rosapi_msgs/srv/GetActionServers',
+        });
+        srv.callService(
+          {},
+          (res: any) => {
+            const servers: string[] = res?.action_servers || [];
+            console.log(`[BT] /rosapi/action_servers returned ${servers.length} server(s):`, servers);
+            done(servers);
+          },
+          () => {
+            console.warn('[BT] /rosapi/action_servers failed, skipping Phase 2');
+            done([]);
+          }
+        );
       });
 
     // Collects bases found via /_action/ infix scan (non-hidden setups).
@@ -117,50 +137,77 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
       resolve(actions);
     };
 
-    rosApi.getServices(
-      (services: string[]) => {
-        console.log('[BT] Discovering actions from services:', services.length);
-        services.forEach(service => {
-          const idx = service.indexOf('/_action');
-          if (idx > 0) {
-            actionBases.add(service.substring(0, idx));
-          }
-        });
-        finish();
-      },
-      (error: any) => {
-        console.error('[BT] Failed to get service list:', error);
-        finish();
-      }
-    );
-
-    rosApi.getTopics(
-      (result: any) => {
-        const topics: string[] = result?.topics || [];
-        const types: string[] = result?.types || [];
-        console.log('[BT] Discovering actions from topics:', topics.length);
-        topics.forEach((topic: string, idx: number) => {
-          const actionIdx = topic.indexOf('/_action');
-          if (actionIdx > 0) {
-            actionBases.add(topic.substring(0, actionIdx));
-            // Derive the interface type from the feedback topic message type.
-            const fbSuffix = '/_action/feedback';
-            if (topic.endsWith(fbSuffix) && types[idx]) {
-              const base = topic.substring(0, topic.length - fbSuffix.length);
-              const interfaceType = stripFeedbackSuffix(types[idx]);
-              if (interfaceType) actionTypes.set(base, interfaceType);
+    void settleWithin<void>(CALL_TIMEOUT_MS, undefined, done =>
+      rosApi.getServices(
+        (services: string[]) => {
+          console.log('[BT] Discovering actions from services:', services.length);
+          services.forEach(service => {
+            const idx = service.indexOf('/_action');
+            if (idx > 0) {
+              actionBases.add(service.substring(0, idx));
             }
-          }
-        });
-        finish();
-      },
-      (error: any) => {
-        console.error('[BT] Failed to get topic list:', error);
-        finish();
-      }
-    );
+          });
+          done();
+        },
+        (error: any) => {
+          console.error('[BT] Failed to get service list:', error);
+          done();
+        }
+      )
+    ).then(finish);
+
+    void settleWithin<void>(CALL_TIMEOUT_MS, undefined, done =>
+      rosApi.getTopics(
+        (result: any) => {
+          const topics: string[] = result?.topics || [];
+          const types: string[] = result?.types || [];
+          console.log('[BT] Discovering actions from topics:', topics.length);
+          topics.forEach((topic: string, idx: number) => {
+            const actionIdx = topic.indexOf('/_action');
+            if (actionIdx > 0) {
+              actionBases.add(topic.substring(0, actionIdx));
+              // Derive the interface type from the feedback topic message type.
+              const fbSuffix = '/_action/feedback';
+              if (topic.endsWith(fbSuffix) && types[idx]) {
+                const base = topic.substring(0, topic.length - fbSuffix.length);
+                const interfaceType = stripFeedbackSuffix(types[idx]);
+                if (interfaceType) actionTypes.set(base, interfaceType);
+              }
+            }
+          });
+          done();
+        },
+        (error: any) => {
+          console.error('[BT] Failed to get topic list:', error);
+          done();
+        }
+      )
+    ).then(finish);
   });
 };
+
+/** Services a tree may call: not rosapi, action internals, or the per-node logger and parameter services. */
+const isUserService = (service: string): boolean =>
+  !service.startsWith('/rosout') &&
+  !service.startsWith('/_') &&
+  !service.startsWith('/rosapi/') &&
+  !service.includes('/_action/') &&
+  !service.includes('/get_loggers') &&
+  !service.includes('/set_logger_level') &&
+  !service.includes('/describe_parameters') &&
+  !service.includes('/get_parameter') &&
+  !service.includes('/set_parameter') &&
+  !service.includes('/get_parameters') &&
+  !service.includes('/set_parameters') &&
+  !service.includes('/list_parameters');
+
+/** Topics a tree may publish to: typed, and not ROS system or action-internal topics. */
+const isUserTopic = (topic: ROSTopicInfo): boolean =>
+  !topic.name.startsWith('/rosout') &&
+  !topic.name.includes('/_action/') &&
+  !topic.name.startsWith('/_') &&
+  !topic.name.includes('/parameter_events') &&
+  topic.type !== '';
 
 /**
  * Discover available ROS services.
@@ -171,7 +218,7 @@ export const discoverROSActions = async (ros: Ros): Promise<ROSActionInfo[]> => 
 export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> => {
   const rosApi = ros as any;
 
-  const allServices: string[] = await new Promise(resolve => {
+  const allServices: string[] = await settleWithin<string[]>(CALL_TIMEOUT_MS, [], resolve => {
     rosApi.getServices(
       (services: string[]) => resolve(services),
       (error: any) => {
@@ -181,22 +228,7 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
     );
   });
 
-  const filtered = allServices.filter(
-    service =>
-      !service.startsWith('/rosout') &&
-      !service.startsWith('/_') &&
-      !service.startsWith('/rosapi/') &&
-      !service.includes('/_action/') &&
-      !service.includes('/get_loggers') &&
-      !service.includes('/set_logger_level') &&
-      !service.includes('/describe_parameters') &&
-      !service.includes('/get_parameter') &&
-      !service.includes('/set_parameter') &&
-      !service.includes('/get_parameters') &&
-      !service.includes('/set_parameters') &&
-      !service.includes('/list_parameters')
-  );
-
+  const filtered = allServices.filter(isUserService);
   console.log(`[BT] Resolving types for ${filtered.length} service(s) sequentially…`);
   const serviceInfos: ROSServiceInfo[] = [];
   for (const service of filtered) {
@@ -210,31 +242,15 @@ export const discoverROSServices = async (ros: Ros): Promise<ROSServiceInfo[]> =
  * Discover available ROS topics suitable for publishing
  */
 export const discoverROSTopics = async (ros: Ros): Promise<ROSTopicInfo[]> => {
-  return new Promise(resolve => {
+  return settleWithin<ROSTopicInfo[]>(CALL_TIMEOUT_MS, [], resolve => {
     const rosApi = ros as any;
     rosApi.getTopics(
       (result: any) => {
-        // Filter out system topics and action-related topics
-        const filteredTopics = result.topics
-          .map((topic: string, index: number) => ({
-            name: topic,
-            type: result.types[index],
-          }))
-          .filter(
-            (topic: { name: string; type: string }) =>
-              !topic.name.startsWith('/rosout') &&
-              !topic.name.includes('/_action/') &&
-              !topic.name.startsWith('/_') &&
-              !topic.name.includes('/parameter_events') &&
-              topic.type !== '' // Filter out topics without type info
-          );
-
-        const topicInfos: ROSTopicInfo[] = filteredTopics.map((topic: { name: string; type: string }) => ({
-          name: topic.name,
-          type: topic.type,
+        const topics: ROSTopicInfo[] = (result?.topics ?? []).map((topic: string, index: number) => ({
+          name: topic,
+          type: result.types?.[index] ?? '',
         }));
-
-        resolve(topicInfos);
+        resolve(topics.filter(isUserTopic));
       },
       (error: any) => {
         console.error('Failed to discover ROS topics:', error);
@@ -271,14 +287,92 @@ const discoverAllROSResourcesUnserialized = async (ros: Ros): Promise<ROSDiscove
   }
 };
 
-export const discoverAllROSResources = (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult> =>
-  runSerializedRosapi(ros, () => discoverAllROSResourcesUnserialized(ros), signal);
+/** Maps the inspector's graph resources to what the behavior-tree palette offers. */
+export const resourcesToDiscovery = (resources: readonly Resource[]): ROSDiscoveryResult => {
+  const typed = (kind: Resource['kind']) =>
+    resources.filter(resource => resource.kind === kind && resource.name.startsWith('/'));
+  return {
+    actions: typed('action')
+      .filter(resource => resource.types.length > 0)
+      .map(resource => {
+        const parts = resource.name.split('/').filter(Boolean);
+        return { name: resource.name, type: resource.types[0], namespace: parts.slice(0, -1).join('/') || '/' };
+      }),
+    services: typed('service')
+      .filter(resource => isUserService(resource.name))
+      .map(resource => ({ name: resource.name, type: resource.types[0] ?? 'unknown' })),
+    topics: typed('topic')
+      .map(resource => ({ name: resource.name, type: resource.types.length === 1 ? resource.types[0] : '' }))
+      .filter(isUserTopic),
+  };
+};
+
+/**
+ * One graph snapshot from the ROS stack's inspector (infra/ros/inspection_runner.py), the Data
+ * Explorer's source. It carries every action, service and topic with its types, where discovering
+ * call by call takes one rosapi round trip per service: minutes over a VPN on a large cell, and
+ * the calls queue behind all other rosbridge traffic. Null when the robot has no inspector (the
+ * session's first topic listing lacks its graph topic) or it does not answer in time.
+ */
+const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult | null> =>
+  new Promise(resolve => {
+    const client = ros as Ros & { on?: unknown; callOnConnection?: unknown };
+    if (typeof client.on !== 'function' || typeof client.callOnConnection !== 'function') {
+      resolve(null);
+      return;
+    }
+    const session = getInspectionSession(ros);
+    const release = session.acquire(`behavior-tree-discovery-${Math.random().toString(36).slice(2)}`, {
+      watch: [],
+      selected: '',
+      health: false,
+      diagnosticTopic: '',
+    });
+    let unsubscribe: () => void = () => undefined;
+    const finish = (result: ROSDiscoveryResult | null) => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      unsubscribe();
+      release();
+      resolve(result);
+    };
+    const onAbort = () => finish(null);
+    const check = () => {
+      const snapshot = session.getSnapshot();
+      if (snapshot.mode === 'host' && snapshot.online) {
+        if (snapshot.truncated) console.warn('[BT] The ROS graph exceeds the inspector budget; some resources are missing.');
+        finish(resourcesToDiscovery(snapshot.resources));
+      } else if (
+        !snapshot.loading &&
+        !snapshot.resources.some(item => item.kind === 'topic' && item.name === INSPECTOR_GRAPH_TOPIC)
+      ) {
+        finish(null);
+      }
+    };
+    const timer = setTimeout(() => finish(null), GRAPH_TIMEOUT_MS);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    unsubscribe = session.subscribe(check);
+    check();
+  });
+
+export const discoverAllROSResources = async (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult> => {
+  const graph = await discoverFromInspectionGraph(ros, signal);
+  if (graph) {
+    console.log(
+      `[BT] Discovered ${graph.actions.length} action(s), ${graph.services.length} service(s) and ` +
+        `${graph.topics.length} topic(s) from the inspector graph`
+    );
+    return graph;
+  }
+  if (signal?.aborted) throw new DOMException('ROS context request cancelled.', 'AbortError');
+  return runSerializedRosapi(ros, () => discoverAllROSResourcesUnserialized(ros), signal);
+};
 
 /**
  * Get service type for a specific service
  */
 export const getServiceType = async (ros: Ros, serviceName: string): Promise<string | null> => {
-  return new Promise(resolve => {
+  return settleWithin<string | null>(CALL_TIMEOUT_MS, null, resolve => {
     const rosApi = ros as any;
     rosApi.getServiceType(
       serviceName,

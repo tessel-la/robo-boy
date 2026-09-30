@@ -70,6 +70,9 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `HTTPS_PORT`                    | `443`                    | Caddy HTTPS and HTTP/3 listener                            |
 | `BACKEND_HOST`                  | `host.docker.internal`   | Caddy upstream host for ROS services                       |
 | `ROSBRIDGE_PORT`                | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
+| `ROSBRIDGE_USE_EVENTS_EXECUTOR` | `true`                   | rosbridge on rclpy's events executor (less CPU)            |
+| `ROSBRIDGE_USE_COMPRESSION`     | `true`                   | permessage-deflate for clients that offer it               |
+| `ROBOBOY_TF_RELAY_HZ`           | `60`                     | `/tf` coalesced into `/roboboy/tf`; `0` disables it        |
 | `VIDEO_STREAM_PORT`             | `8080`                   | `web_video_server` and Caddy `/video_stream` upstream      |
 | `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
 | `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
