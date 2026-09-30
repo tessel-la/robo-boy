@@ -2,13 +2,19 @@ import React from 'react';
 import { GamepadProps } from '../GamepadInterface';
 import CustomGamepadLayout from '../../../features/customGamepad/components/CustomGamepadLayout';
 import { getGamepadLayout } from '../../../features/customGamepad/gamepadStorage';
+import { usePadPresentation } from '../../../features/customGamepad/presentation';
 
 interface CustomGamepadWrapperProps extends GamepadProps {
   layoutId: string;
+  panelId?: string;
+  storageScope?: string;
+  layouts?: readonly { id: string; name: string }[];
+  onSelectLayout?: (id: string) => void;
 }
 
-const CustomGamepadWrapper: React.FC<CustomGamepadWrapperProps> = ({ ros, layoutId }) => {
+const CustomGamepadWrapper: React.FC<CustomGamepadWrapperProps> = ({ ros, layoutId, panelId, storageScope, layouts = [], onSelectLayout }) => {
   const gamepadItem = getGamepadLayout(layoutId);
+  usePadPresentation(panelId, storageScope, { layoutId, layouts, selectLayout: id => onSelectLayout?.(id) });
 
   if (!gamepadItem) {
     return (
@@ -37,4 +43,4 @@ const CustomGamepadWrapper: React.FC<CustomGamepadWrapperProps> = ({ ros, layout
   );
 };
 
-export default CustomGamepadWrapper; 
+export default CustomGamepadWrapper;

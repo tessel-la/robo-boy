@@ -90,3 +90,32 @@ export async function saveXrPanelPreview(page: Page, panelId: string, path: stri
   }, panelId);
   await writeFile(path, Buffer.from(image, 'base64'));
 }
+
+/** Aim a real emulated controller at a point within one native surface item. */
+export async function aimXrControl(page: Page, panelId: string, id: string, fraction = 0.5) {
+  await page.evaluate(
+    async ({ panelId, id, fraction }) => {
+      const path = '/node_modules/.vite/deps/three.js';
+      const THREE = await import(/* @vite-ignore */ path);
+      const panel = window.__xrScene.uiGroup.children.find(object => object.userData.placementId === panelId);
+      let aimed = false;
+      panel?.traverse(object => {
+        const surface = object.userData.xrSurface;
+        const item = surface?.getItem(id);
+        if (!item || aimed) return;
+        const u = (item.x + item.w * fraction) / surface.pixelWidth;
+        const v = 1 - (item.y + item.h / 2) / surface.pixelHeight;
+        const point = object.localToWorld(new THREE.Vector3((u - 0.5) * surface.width, (v - 0.5) * surface.height, 0));
+        const rotation = object.getWorldQuaternion(new THREE.Quaternion());
+        const origin = point.clone().add(new THREE.Vector3(0, 0, 0.5).applyQuaternion(rotation));
+        const hand = window.__xrDevice.controllers.right!;
+        hand.position.set(origin.x, origin.y, origin.z);
+        hand.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        aimed = true;
+      });
+      if (!aimed) throw new Error(`Missing XR control: ${id}`);
+    },
+    { panelId, id, fraction }
+  );
+  await page.waitForTimeout(100);
+}

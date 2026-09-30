@@ -3301,7 +3301,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         />
         <div className="workspace-pad-body">
           {isConnected && ros && selectedLayoutId ? (
-            <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} />
+            <CustomGamepadWrapper ros={ros} layoutId={selectedLayoutId} panelId={panel.id} storageScope={storageScope} layouts={gamepadLibrary} onSelectLayout={id => handleWorkspacePadLayoutChange(panel.id, id)} />
           ) : (
             <div className="pad-empty-state">
               <div className="pad-empty-state-content">
@@ -3320,7 +3320,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const catalogEntry = panelCatalogById.get(panel.type);
 
     if (panel.type === 'recordReplay') {
-      return <RecordReplayPanel session={replaySession} ros={ros} connected={isConnected}
+      return <RecordReplayPanel panelId={panel.id} storageScope={storageScope} session={replaySession} ros={ros} connected={isConnected}
         isActive={isPanelActive && isActive} state={panel.panelState?.values}
         onStateChange={values => {
           const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
@@ -3465,6 +3465,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           ros={ros}
           isConnected={isConnected}
           isActive={isPanelActive}
+          storageScope={storageScope}
           onExecutionChange={setBtExecution}
           onExecutionControlsChange={controls => {
             btExecutionControls.current = controls;

@@ -12,40 +12,50 @@ interface SliderComponentProps {
   scaleFactor?: number;
 }
 
+import { usePadSpatialControl } from '../spatialControl';
+import { clampToStep } from '../padValues';
+
 const THROTTLE_INTERVAL = 100;
 
 const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
+  const spatialRef = useRef<HTMLInputElement>(null);
   const topicRef = useRef<Topic | null>(null);
   const [value, setValue] = useState(0);
 
-  const publishMessage = useCallback((sliderValue: number) => {
-    if (!topicRef.current || isEditing) return;
+  const publishMessage = useCallback(
+    (sliderValue: number) => {
+      if (!topicRef.current || isEditing) return;
 
-    const action = config.action as ROSTopicConfig;
-    if (!action || !action.topic) return;
+      const action = config.action as ROSTopicConfig;
+      if (!action || !action.topic) return;
 
-    let message: InstanceType<typeof ROSLIB.Message> | undefined;
+      let message: InstanceType<typeof ROSLIB.Message> | undefined;
 
-    // Any std_msgs scalar, in either the ROS 1 or the ROS 2 spelling, typed for its field.
-    if (stdScalarType(action.messageType)) {
-      message = new ROSLIB.Message(buildFieldMessage(action.messageType, 'data', sliderValue));
-    } else if (action.messageType === 'sensor_msgs/JointState' || action.messageType === 'sensor_msgs/msg/JointState') {
-      message = new ROSLIB.Message({
-        header: {
-          stamp: { secs: 0, nsecs: 0 },
-          frame_id: ''
-        },
-        name: [],
-        position: [sliderValue],
-        velocity: [],
-        effort: []
-      });
-    }
+      // Any std_msgs scalar, in either the ROS 1 or the ROS 2 spelling, typed for its field.
+      if (stdScalarType(action.messageType)) {
+        message = new ROSLIB.Message(buildFieldMessage(action.messageType, 'data', sliderValue));
+      } else if (
+        action.messageType === 'sensor_msgs/JointState' ||
+        action.messageType === 'sensor_msgs/msg/JointState'
+      ) {
+        message = new ROSLIB.Message({
+          header: {
+            stamp: { secs: 0, nsecs: 0 },
+            frame_id: '',
+          },
+          name: [],
+          position: [sliderValue],
+          velocity: [],
+          effort: [],
+        });
+      }
 
-    if (message) {
-      topicRef.current.publish(message);
-    }
-  }, [config, isEditing]);
+      if (message) {
+        topicRef.current.publish(message);
+      }
+    },
+    [config, isEditing]
+  );
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -72,18 +82,40 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     };
   }, [ros, config.action, isEditing, publishThrottled]);
 
-  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditing) return;
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (isEditing) return;
 
-    const newValue = parseFloat(event.target.value);
-    setValue(newValue);
-    publishThrottled(newValue);
-  }, [publishThrottled, isEditing]);
+      const newValue = parseFloat(event.target.value);
+      setValue(newValue);
+      publishThrottled(newValue);
+    },
+    [publishThrottled, isEditing]
+  );
 
   const min = config.config?.min ?? -1;
   const max = config.config?.max ?? 1;
   const step = config.config?.step ?? 0.1;
   const orientation = config.config?.orientation || 'horizontal';
+
+  const spatialMove = (x: number, y: number) => {
+    const next = clampToStep(min + (orientation === 'vertical' ? 1 - y : x) * (max - min), { min, max }, step);
+    setValue(next);
+    publishThrottled(next);
+  };
+  usePadSpatialControl(
+    spatialRef,
+    {
+      drag: true,
+      start: spatialMove,
+      move: spatialMove,
+      end: () => {
+        publishThrottled.flush();
+      },
+    },
+    Boolean(isEditing),
+    config
+  );
 
   const containerStyle: React.CSSProperties = {
     width: '100%',
@@ -94,7 +126,7 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     justifyContent: 'center',
     gap: `${Math.max(4, 8 * scaleFactor)}px`,
     padding: `${Math.max(4, 8 * scaleFactor)}px`,
-    opacity: isEditing ? 0.7 : 1
+    opacity: isEditing ? 0.7 : 1,
   };
 
   const sliderStyle: React.CSSProperties = {
@@ -107,30 +139,27 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
     cursor: isEditing ? 'default' : 'pointer',
     writingMode: orientation === 'vertical' ? 'vertical-rl' : undefined,
     transform: orientation === 'vertical' ? 'rotate(-90deg)' : undefined,
-    pointerEvents: isEditing ? 'none' : 'auto'
+    pointerEvents: isEditing ? 'none' : 'auto',
   };
 
   const labelStyle: React.CSSProperties = {
     fontSize: `${0.9 * scaleFactor}em`,
     fontWeight: 'bold',
     color: 'var(--text-color)',
-    textAlign: 'center'
+    textAlign: 'center',
   };
 
   const valueStyle: React.CSSProperties = {
     fontSize: `${0.8 * scaleFactor}em`,
     color: 'var(--text-color-secondary)',
-    fontFamily: 'var(--font-family-ui)'
+    fontFamily: 'var(--font-family-ui)',
   };
 
   return (
     <div className="slider-component" style={containerStyle}>
-      {config.label && (
-        <div style={labelStyle}>
-          {config.label}
-        </div>
-      )}
+      {config.label && <div style={labelStyle}>{config.label}</div>}
       <input
+        ref={spatialRef}
         type="range"
         min={min}
         max={max}
@@ -140,11 +169,9 @@ const SliderComponent: React.FC<SliderComponentProps> = ({ config, ros, isEditin
         style={sliderStyle}
         disabled={isEditing}
       />
-      <div style={valueStyle}>
-        {value.toFixed(2)}
-      </div>
+      <div style={valueStyle}>{value.toFixed(2)}</div>
     </div>
   );
 };
 
-export default SliderComponent; 
+export default SliderComponent;

@@ -48,6 +48,8 @@ export interface XrInputManagerOptions {
   onGrabEnd?: (pointer: XrPointer, object: THREE.Object3D) => void;
   /** Identity of the actual control within a surface, not just its shared mesh. */
   getActivationTarget?: (target: XrInputTarget) => unknown;
+  /** Continuous controls may move within the SAME control, never onto another target. */
+  allowsPressDrag?: (target: XrInputTarget) => boolean;
 }
 
 interface PointerState {
@@ -59,6 +61,7 @@ interface PointerState {
   selecting: boolean;
   connected: boolean;
   activationTarget: unknown;
+  pressDragging: boolean;
   squeezing: boolean;
   hovered: THREE.Object3D | null;
   /** What select began on, so an activation can require it to end on the same thing. */
@@ -89,11 +92,7 @@ const hasHiddenAncestor = (object: THREE.Object3D): boolean => {
  * costs nothing per ray, and `xrExcludeHandedness` keeps a hand from pointing at UI mounted on
  * itself.
  */
-const collectPickable = (
-  object: THREE.Object3D,
-  handedness: XRHandedness,
-  out: THREE.Mesh[]
-): void => {
+const collectPickable = (object: THREE.Object3D, handedness: XRHandedness, out: THREE.Mesh[]): void => {
   if (!object.visible) return;
   const data = object.userData as { xrPickable?: boolean; xrExcludeHandedness?: XRHandedness };
   if (data.xrPickable === false) return;
@@ -106,10 +105,7 @@ const collectPickable = (
 type XrSourceEvent = { data?: XRInputSource };
 interface XrSourceEventTarget {
   addEventListener(type: 'connected' | 'disconnected', listener: (event: XrSourceEvent) => void): void;
-  removeEventListener(
-    type: 'connected' | 'disconnected',
-    listener: (event: XrSourceEvent) => void
-  ): void;
+  removeEventListener(type: 'connected' | 'disconnected', listener: (event: XrSourceEvent) => void): void;
 }
 
 /**
@@ -243,6 +239,7 @@ export class XrInputManager {
         selecting: false,
         connected: false,
         activationTarget: null,
+        pressDragging: false,
         squeezing: false,
         hovered: null,
         selectOrigin: null,
@@ -321,14 +318,13 @@ export class XrInputManager {
     state.selectOrigin = target?.object ?? null;
     state.selectOriginPoint = target ? target.point.clone() : null;
     state.activationTarget = target ? this.activationTarget(target) : null;
+    state.pressDragging = Boolean(target && this.options.allowsPressDrag?.(target));
     if (target && state.activationTarget != null) this.options.onPressStart?.(this.toPointer(state), target);
     this.recomputeMode();
   }
 
   private activationTarget(target: XrInputTarget): unknown {
-    return this.options.getActivationTarget
-      ? this.options.getActivationTarget(target)
-      : target.object;
+    return this.options.getActivationTarget ? this.options.getActivationTarget(target) : target.object;
   }
 
   private endSelect(state: PointerState): void {
@@ -352,11 +348,15 @@ export class XrInputManager {
 
     const target = this.hitTest(state);
     const sameTarget = target?.object === origin;
-    const travelled =
-      target && originPoint ? target.point.distanceTo(originPoint) : Number.POSITIVE_INFINITY;
+    const travelled = target && originPoint ? target.point.distanceTo(originPoint) : Number.POSITIVE_INFINITY;
 
-    const accepted = Boolean(sameTarget && target && activationTarget != null &&
-        this.activationTarget(target) === activationTarget && travelled <= ACTIVATION_SLOP_METRES);
+    const accepted = Boolean(
+      sameTarget &&
+      target &&
+      activationTarget != null &&
+      this.activationTarget(target) === activationTarget &&
+      (state.pressDragging || travelled <= ACTIVATION_SLOP_METRES)
+    );
     this.releaseSelect(state, !accepted);
     if (accepted && target) {
       this.options.onActivate?.(this.toPointer(state), target);
@@ -370,6 +370,7 @@ export class XrInputManager {
     state.selectOrigin = null;
     state.selectOriginPoint = null;
     state.activationTarget = null;
+    state.pressDragging = false;
   }
 
   private beginSqueeze(state: PointerState): void {
@@ -474,9 +475,14 @@ export class XrInputManager {
       }
       const target = state.grabbed ? null : this.hitTest(state);
       // Remember excursions even when the ray returns to the original button before release.
-      if (state.selecting && (!target || target.object !== state.selectOrigin ||
-          !state.selectOriginPoint || target.point.distanceTo(state.selectOriginPoint) > ACTIVATION_SLOP_METRES ||
-          this.activationTarget(target) !== state.activationTarget)) {
+      if (
+        state.selecting &&
+        (!target ||
+          target.object !== state.selectOrigin ||
+          !state.selectOriginPoint ||
+          (!state.pressDragging && target.point.distanceTo(state.selectOriginPoint) > ACTIVATION_SLOP_METRES) ||
+          this.activationTarget(target) !== state.activationTarget)
+      ) {
         this.releaseSelect(state);
       }
       if (state.selecting && target) this.options.onPressMove?.(this.toPointer(state), target);

@@ -3,12 +3,7 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { Joystick } from 'react-joystick-component';
 import { throttle } from 'lodash-es';
-import {
-  GamepadComponentConfig,
-  JoyAxesPublisher,
-  ROSTopicConfig,
-  TwistAxesPublisher,
-} from '../types';
+import { GamepadComponentConfig, JoyAxesPublisher, ROSTopicConfig, TwistAxesPublisher } from '../types';
 import {
   buildPoseStampedPayload,
   buildTwistPayload,
@@ -16,6 +11,8 @@ import {
   isTwistMessageType,
 } from '../rosMessageUtils';
 import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
+
+import { usePadSpatialControl } from '../spatialControl';
 
 // Define the joystick update event interface locally since it's not exported from the library
 interface IJoystickUpdateEvent {
@@ -54,11 +51,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
   const joystickSizeRef = useRef(100); // Use ref to hold joystick size
   const [baseColor, setBaseColor] = useState<string>('#6c757d');
   const [stickColor, setStickColor] = useState<string>('#32CD32');
-  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(
-    ros,
-    config,
-    isEditing
-  );
+  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(ros, config, isEditing);
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -99,8 +92,8 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     updateJoystickColors();
 
     // Watch for theme changes by observing data-theme attribute changes
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
         if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
           updateJoystickColors();
         }
@@ -109,7 +102,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
 
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme']
+      attributeFilter: ['data-theme'],
     });
 
     return () => observer.disconnect();
@@ -145,109 +138,113 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
 
   const { size: joystickSize, stickSize } = calculateJoystickSize();
 
-  const publishMessage = useCallback((values: number[]) => {
-    if (isEditing) return;
+  const publishMessage = useCallback(
+    (values: number[]) => {
+      if (isEditing) return;
 
-    const action = config.action as ROSTopicConfig;
-    if (!action || !action.topic) return;
+      const action = config.action as ROSTopicConfig;
+      if (!action || !action.topic) return;
 
-    // Get range settings - use default joystick range if not configured
-    const minValue = config.config?.min;
-    const maxValue = config.config?.max ?? config.config?.maxValue;
+      // Get range settings - use default joystick range if not configured
+      const minValue = config.config?.min;
+      const maxValue = config.config?.max ?? config.config?.maxValue;
 
-    // Only apply range mapping if custom range is explicitly set
-    const rangeMappedValues = (minValue !== undefined && maxValue !== undefined) ?
-      values.map(value => {
-        // Clamp to [-1, 1] first (joystick natural range)
-        const clampedValue = Math.max(-1, Math.min(1, value));
-        // Map to configured range. Rounding is now handled based on the message type,
-        // not the range configuration, allowing for float outputs.
-        return ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
-      }) :
-      values; // Use raw joystick values [-1, 1] when no custom range is set
+      // Only apply range mapping if custom range is explicitly set
+      const rangeMappedValues =
+        minValue !== undefined && maxValue !== undefined
+          ? values.map(value => {
+              // Clamp to [-1, 1] first (joystick natural range)
+              const clampedValue = Math.max(-1, Math.min(1, value));
+              // Map to configured range. Rounding is now handled based on the message type,
+              // not the range configuration, allowing for float outputs.
+              return ((clampedValue + 1) / 2) * (maxValue - minValue) + minValue;
+            })
+          : values; // Use raw joystick values [-1, 1] when no custom range is set
 
-    const mappedValues = rangeMappedValues.map((value, index) =>
-      value * (config.config?.axisScales?.[index] ?? 1)
-    );
+      const mappedValues = rangeMappedValues.map((value, index) => value * (config.config?.axisScales?.[index] ?? 1));
 
-    const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
-    if (isJoyMessage && onJoyAxesChange) {
-      if (onJoyAxesChange(config, mappedValues)) {
-        lastSentValues.current = [...values];
-      }
-      return;
-    }
-
-    if (isTwistMessageType(action.messageType) && onTwistAxesChange) {
-      if (onTwistAxesChange(config, mappedValues)) {
-        lastSentValues.current = [...values];
-      }
-      return;
-    }
-
-    if (!topicRef.current) return;
-
-    let message: any;
-
-    if (isJoyMessage) {
-      // For Joy messages, update the specific axes
-      const axesConfig = config.config?.axes || ['0', '1'];
-      const maxAxisIndex = Math.max(...axesConfig.map(a => parseInt(a)).filter(n => !isNaN(n)));
-      const axesCount = Math.max(4, maxAxisIndex + 1); // Ensure enough axes
-      const axes = Array(axesCount).fill(0.0);
-
-      axesConfig.forEach((axisStr, index) => {
-        const axisIndex = parseInt(axisStr);
-        if (!isNaN(axisIndex) && index < mappedValues.length && axisIndex < axes.length) {
-          axes[axisIndex] = mappedValues[index];
+      const isJoyMessage = action.messageType === 'sensor_msgs/Joy' || action.messageType === 'sensor_msgs/msg/Joy';
+      if (isJoyMessage && onJoyAxesChange) {
+        if (onJoyAxesChange(config, mappedValues)) {
+          lastSentValues.current = [...values];
         }
-      });
+        return;
+      }
 
-      message = new ROSLIB.Message({
-        header: {
-          stamp: { secs: 0, nsecs: 0 },
-          frame_id: ''
-        },
-        axes: axes,
-        buttons: []
-      });
-    } else if (isTwistMessageType(action.messageType)) {
-      const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
-      message = new ROSLIB.Message(buildTwistPayload({
-        messageType: action.messageType,
-        axes: axesConfig,
-        values: mappedValues,
-        frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
-      }));
-    } else if (isPoseStampedMessageType(action.messageType)) {
-      if (config.config?.poseStampedReferenceMode === 'tf'
-        && !latestTransformRef.current) return;
-      if (config.config?.poseStampedReferenceMode === 'odometry'
-        && !latestOdometryRef.current) return;
-      message = new ROSLIB.Message(buildPoseStampedPayload({
-        messageType: action.messageType,
-        config,
-        values: mappedValues,
-        latestOdometry: latestOdometryRef.current,
-        latestReferenceTransform: latestTransformRef.current,
-      }));
-    } else if (action.messageType.includes('Float32') || action.messageType.includes('Float64')) {
-      // For float messages
-      message = new ROSLIB.Message({
-        data: mappedValues[0] || 0
-      });
-    } else if (action.messageType.includes('Int32')) {
-      // For integer messages
-      message = new ROSLIB.Message({
-        data: Math.round(mappedValues[0] || 0)
-      });
-    }
+      if (isTwistMessageType(action.messageType) && onTwistAxesChange) {
+        if (onTwistAxesChange(config, mappedValues)) {
+          lastSentValues.current = [...values];
+        }
+        return;
+      }
 
-    if (message) {
-      topicRef.current.publish(message);
-      lastSentValues.current = [...values];
-    }
-  }, [config, isEditing, onJoyAxesChange, onTwistAxesChange]);
+      if (!topicRef.current) return;
+
+      let message: any;
+
+      if (isJoyMessage) {
+        // For Joy messages, update the specific axes
+        const axesConfig = config.config?.axes || ['0', '1'];
+        const maxAxisIndex = Math.max(...axesConfig.map(a => parseInt(a)).filter(n => !isNaN(n)));
+        const axesCount = Math.max(4, maxAxisIndex + 1); // Ensure enough axes
+        const axes = Array(axesCount).fill(0.0);
+
+        axesConfig.forEach((axisStr, index) => {
+          const axisIndex = parseInt(axisStr);
+          if (!isNaN(axisIndex) && index < mappedValues.length && axisIndex < axes.length) {
+            axes[axisIndex] = mappedValues[index];
+          }
+        });
+
+        message = new ROSLIB.Message({
+          header: {
+            stamp: { secs: 0, nsecs: 0 },
+            frame_id: '',
+          },
+          axes: axes,
+          buttons: [],
+        });
+      } else if (isTwistMessageType(action.messageType)) {
+        const axesConfig = config.config?.axes || ['linear.x', 'linear.y'];
+        message = new ROSLIB.Message(
+          buildTwistPayload({
+            messageType: action.messageType,
+            axes: axesConfig,
+            values: mappedValues,
+            frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0',
+          })
+        );
+      } else if (isPoseStampedMessageType(action.messageType)) {
+        if (config.config?.poseStampedReferenceMode === 'tf' && !latestTransformRef.current) return;
+        if (config.config?.poseStampedReferenceMode === 'odometry' && !latestOdometryRef.current) return;
+        message = new ROSLIB.Message(
+          buildPoseStampedPayload({
+            messageType: action.messageType,
+            config,
+            values: mappedValues,
+            latestOdometry: latestOdometryRef.current,
+            latestReferenceTransform: latestTransformRef.current,
+          })
+        );
+      } else if (action.messageType.includes('Float32') || action.messageType.includes('Float64')) {
+        // For float messages
+        message = new ROSLIB.Message({
+          data: mappedValues[0] || 0,
+        });
+      } else if (action.messageType.includes('Int32')) {
+        // For integer messages
+        message = new ROSLIB.Message({
+          data: Math.round(mappedValues[0] || 0),
+        });
+      }
+
+      if (message) {
+        topicRef.current.publish(message);
+        lastSentValues.current = [...values];
+      }
+    },
+    [config, isEditing, onJoyAxesChange, onTwistAxesChange]
+  );
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -262,13 +259,16 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     }
   }, []);
 
-  const publishWhileHeld = useCallback((values: number[]) => {
-    heldValuesRef.current = values;
-    if (holdTimerRef.current !== null) return;
-    holdTimerRef.current = window.setInterval(() => {
-      if (heldValuesRef.current) publishMessage(heldValuesRef.current);
-    }, THROTTLE_INTERVAL);
-  }, [publishMessage]);
+  const publishWhileHeld = useCallback(
+    (values: number[]) => {
+      heldValuesRef.current = values;
+      if (holdTimerRef.current !== null) return;
+      holdTimerRef.current = window.setInterval(() => {
+        if (heldValuesRef.current) publishMessage(heldValuesRef.current);
+      }, THROTTLE_INTERVAL);
+    },
+    [publishMessage]
+  );
 
   useEffect(() => {
     if (!config.action || isEditing) return;
@@ -307,30 +307,33 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     stopHeldPublishing,
   ]);
 
-  const handleMove = useCallback((event: IJoystickUpdateEvent) => {
-    if (event.x === null || event.y === null || event.distance === null || isEditing) return;
+  const handleMove = useCallback(
+    (event: IJoystickUpdateEvent) => {
+      if (event.x === null || event.y === null || event.distance === null || isEditing) return;
 
-    // Use distance (0-100) from the event to ensure correct scaling.
-    const magnitude = event.distance / 100; // Normalize distance to 0-1.
+      // Use distance (0-100) from the event to ensure correct scaling.
+      const magnitude = event.distance / 100; // Normalize distance to 0-1.
 
-    if (magnitude === 0) {
-      stopHeldPublishing();
-      publishThrottled([0, 0]);
-      return;
-    }
+      if (magnitude === 0) {
+        stopHeldPublishing();
+        publishThrottled([0, 0]);
+        return;
+      }
 
-    // atan2 gets the angle from the raw x/y pixel values. 
-    // Y is not inverted here, so that moving the joystick up results in a positive Y value.
-    const angleRad = Math.atan2(event.y, event.x);
+      // atan2 gets the angle from the raw x/y pixel values.
+      // Y is not inverted here, so that moving the joystick up results in a positive Y value.
+      const angleRad = Math.atan2(event.y, event.x);
 
-    // Reconstruct the normalized x and y from the magnitude and angle.
-    const x = magnitude * Math.cos(angleRad);
-    const y = magnitude * Math.sin(angleRad);
+      // Reconstruct the normalized x and y from the magnitude and angle.
+      const x = magnitude * Math.cos(angleRad);
+      const y = magnitude * Math.sin(angleRad);
 
-    const values = [x, y];
-    publishThrottled(values);
-    publishWhileHeld(values);
-  }, [publishThrottled, publishWhileHeld, stopHeldPublishing, isEditing]);
+      const values = [x, y];
+      publishThrottled(values);
+      publishWhileHeld(values);
+    },
+    [publishThrottled, publishWhileHeld, stopHeldPublishing, isEditing]
+  );
 
   const handleStop = useCallback(() => {
     if (isEditing) return;
@@ -338,6 +341,23 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     publishThrottled.cancel();
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, stopHeldPublishing, isEditing]);
+
+  const spatialMove = (x: number, y: number) => {
+    const dx = (x - 0.5) * 2,
+      dy = (0.5 - y) * 2;
+    handleMove({ type: 'move', x: dx, y: dy, distance: Math.min(1, Math.hypot(dx, dy)) * 100, direction: null });
+  };
+  usePadSpatialControl(
+    containerRef,
+    {
+      drag: true,
+      start: spatialMove,
+      move: spatialMove,
+      end: handleStop,
+    },
+    Boolean(isEditing),
+    config
+  );
 
   // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {
@@ -348,7 +368,7 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     justifyContent: 'center',
     position: 'relative',
     overflow: 'visible', // Allow joystick movement outside bounds
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   };
 
   return (
@@ -367,4 +387,4 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
   );
 };
 
-export default JoystickComponent; 
+export default JoystickComponent;

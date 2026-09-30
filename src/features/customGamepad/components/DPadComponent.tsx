@@ -3,11 +3,7 @@ import type { Topic, Ros } from 'roslib';
 import ROSLIB from 'roslib';
 import { throttle } from 'lodash-es';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
-import {
-  buildPoseStampedPayload,
-  isJoyMessageType,
-  isPoseStampedMessageType,
-} from '../rosMessageUtils';
+import { buildPoseStampedPayload, isJoyMessageType, isPoseStampedMessageType } from '../rosMessageUtils';
 import { usePoseStampedReferenceTransform } from './usePoseStampedReferenceTransform';
 import './DPadComponent.css';
 
@@ -18,18 +14,21 @@ interface DPadComponentProps {
   scaleFactor?: number;
 }
 
+import { usePadSpatialControl } from '../spatialControl';
+
 const THROTTLE_INTERVAL = 100;
 
 const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
+  const upRef = useRef<HTMLButtonElement>(null);
+  const downRef = useRef<HTMLButtonElement>(null);
+  const leftRef = useRef<HTMLButtonElement>(null);
+  const rightRef = useRef<HTMLButtonElement>(null);
   const topicRef = useRef<Topic | null>(null);
+  const directionsRef = useRef<Set<string>>(new Set());
   const [pressedDirections, setPressedDirections] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(
-    ros,
-    config,
-    isEditing
-  );
+  const { latestTransformRef, latestOdometryRef } = usePoseStampedReferenceTransform(ros, config, isEditing);
 
   // Monitor container size for proper scaling
   useEffect(() => {
@@ -41,7 +40,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     };
 
     updateSize();
-    
+
     const resizeObserver = new ResizeObserver(updateSize);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
@@ -52,59 +51,67 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     };
   }, []);
 
-  const publishMessage = useCallback((directions: Set<string>) => {
-    if (!topicRef.current || isEditing) return;
+  const publishMessage = useCallback(
+    (directions: Set<string>) => {
+      if (!topicRef.current || isEditing) return;
 
-    const action = config.action as ROSTopicConfig;
-    if (!action || !action.topic) return;
+      const action = config.action as ROSTopicConfig;
+      if (!action || !action.topic) return;
 
-    if (isJoyMessageType(action.messageType)) {
-      const buttonMapping = config.config?.buttonMapping || {
-        up: 0, right: 1, down: 2, left: 3
-      };
-      const highestMappedButton = Math.max(3, ...Object.values(buttonMapping));
-      const buttons = Array(Math.max(8, highestMappedButton + 1)).fill(0);
+      if (isJoyMessageType(action.messageType)) {
+        const buttonMapping = config.config?.buttonMapping || {
+          up: 0,
+          right: 1,
+          down: 2,
+          left: 3,
+        };
+        const highestMappedButton = Math.max(3, ...Object.values(buttonMapping));
+        const buttons = Array(Math.max(8, highestMappedButton + 1)).fill(0);
 
-      directions.forEach(direction => {
-        const buttonIndex = buttonMapping[direction];
-        if (typeof buttonIndex === 'number' && buttonIndex < buttons.length) {
-          buttons[buttonIndex] = 1;
-        }
-      });
+        directions.forEach(direction => {
+          const buttonIndex = buttonMapping[direction];
+          if (typeof buttonIndex === 'number' && buttonIndex < buttons.length) {
+            buttons[buttonIndex] = 1;
+          }
+        });
 
-      const message = new ROSLIB.Message({
-        header: {
-          stamp: { secs: 0, nsecs: 0 },
-          frame_id: ''
-        },
-        axes: [],
-        buttons: buttons
-      });
+        const message = new ROSLIB.Message({
+          header: {
+            stamp: { secs: 0, nsecs: 0 },
+            frame_id: '',
+          },
+          axes: [],
+          buttons: buttons,
+        });
 
-      topicRef.current.publish(message);
-    } else if (isPoseStampedMessageType(action.messageType)) {
-      if (config.config?.poseStampedReferenceMode === 'tf'
-        && !latestTransformRef.current) return;
-      if (config.config?.poseStampedReferenceMode === 'odometry'
-        && !latestOdometryRef.current) return;
+        topicRef.current.publish(message);
+      } else if (isPoseStampedMessageType(action.messageType)) {
+        if (config.config?.poseStampedReferenceMode === 'tf' && !latestTransformRef.current) return;
+        if (config.config?.poseStampedReferenceMode === 'odometry' && !latestOdometryRef.current) return;
 
-      const values = [
-        Number(directions.has('right')) - Number(directions.has('left')),
-        Number(directions.has('up')) - Number(directions.has('down')),
-      ].map(value => {
-        if (value > 0) return config.config?.max ?? config.config?.maxValue ?? 1;
-        if (value < 0) return config.config?.min ?? -1;
-        return 0;
-      });
-      topicRef.current.publish(new ROSLIB.Message(buildPoseStampedPayload({
-        messageType: action.messageType,
-        config,
-        values,
-        latestOdometry: latestOdometryRef.current,
-        latestReferenceTransform: latestTransformRef.current,
-      })));
-    }
-  }, [config, isEditing]);
+        const values = [
+          Number(directions.has('right')) - Number(directions.has('left')),
+          Number(directions.has('up')) - Number(directions.has('down')),
+        ].map(value => {
+          if (value > 0) return config.config?.max ?? config.config?.maxValue ?? 1;
+          if (value < 0) return config.config?.min ?? -1;
+          return 0;
+        });
+        topicRef.current.publish(
+          new ROSLIB.Message(
+            buildPoseStampedPayload({
+              messageType: action.messageType,
+              config,
+              values,
+              latestOdometry: latestOdometryRef.current,
+              latestReferenceTransform: latestTransformRef.current,
+            })
+          )
+        );
+      }
+    },
+    [config, isEditing]
+  );
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -131,20 +138,48 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     };
   }, [ros, config.action, isEditing, publishThrottled]);
 
-  const handleDirectionPress = useCallback((direction: string, pressed: boolean) => {
-    if (isEditing) return;
+  const handleDirectionPress = useCallback(
+    (direction: string, pressed: boolean) => {
+      if (isEditing) return;
 
-    setPressedDirections(prev => {
-      const newSet = new Set(prev);
-      if (pressed) {
-        newSet.add(direction);
-      } else {
-        newSet.delete(direction);
+      const newSet = new Set(directionsRef.current);
+      if (pressed) newSet.add(direction);
+      else newSet.delete(direction);
+      directionsRef.current = newSet;
+      setPressedDirections(newSet);
+      if (pressed) publishThrottled(newSet);
+      else {
+        publishThrottled.cancel();
+        publishMessage(newSet);
       }
-      publishThrottled(newSet);
-      return newSet;
-    });
-  }, [publishThrottled, isEditing]);
+    },
+    [publishThrottled, publishMessage, isEditing]
+  );
+
+  usePadSpatialControl(
+    upRef,
+    { start: () => handleDirectionPress('up', true), end: () => handleDirectionPress('up', false) },
+    Boolean(isEditing),
+    config
+  );
+  usePadSpatialControl(
+    downRef,
+    { start: () => handleDirectionPress('down', true), end: () => handleDirectionPress('down', false) },
+    Boolean(isEditing),
+    config
+  );
+  usePadSpatialControl(
+    leftRef,
+    { start: () => handleDirectionPress('left', true), end: () => handleDirectionPress('left', false) },
+    Boolean(isEditing),
+    config
+  );
+  usePadSpatialControl(
+    rightRef,
+    { start: () => handleDirectionPress('right', true), end: () => handleDirectionPress('right', false) },
+    Boolean(isEditing),
+    config
+  );
 
   // Calculate optimal D-pad size that maintains square proportions while fitting in allocated space
   const calculateOptimalDPadSize = () => {
@@ -155,19 +190,19 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     // The container represents the exact grid space allocated to the D-pad
     const containerWidth = containerSize.width;
     const containerHeight = containerSize.height;
-    
+
     // Always maintain square proportions by using the smaller dimension
     // This prevents the D-pad from stretching and distorting
     const availableSize = Math.min(containerWidth, containerHeight);
-    
+
     // Reserve small amount of space for padding, but maximize the D-pad size
     const padding = Math.max(4, availableSize * 0.05); // Minimal padding
     const dpadSize = Math.max(30, availableSize - padding); // Minimum 30px for usability
-    
+
     return {
       width: dpadSize,
       height: dpadSize, // Always square
-      maxSize: dpadSize
+      maxSize: dpadSize,
     };
   };
 
@@ -183,7 +218,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    opacity: isEditing ? 0.7 : 1
+    opacity: isEditing ? 0.7 : 1,
   };
 
   // D-pad style with calculated optimal dimensions - always square
@@ -197,20 +232,20 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     gridTemplateColumns: '1fr 1fr 1fr',
     gridTemplateRows: '1fr 1fr 1fr',
     gap: '2px', // Fixed gap in pixels for consistency
-    padding: '2px' // Fixed padding in pixels for consistency
+    padding: '2px', // Fixed padding in pixels for consistency
   };
 
   const buttonStyle = (direction: string): React.CSSProperties => {
     // Use the calculated optimal size for font scaling
     const effectiveSize = optimalSize.maxSize;
-    
+
     // Calculate font size based on the optimal D-pad size
     let baseFontSize: number;
-    
+
     if (effectiveSize < 60) {
       baseFontSize = Math.max(8, effectiveSize * 0.25);
     } else if (effectiveSize < 80) {
-      baseFontSize = Math.max(10, effectiveSize * 0.20);
+      baseFontSize = Math.max(10, effectiveSize * 0.2);
     } else if (effectiveSize < 120) {
       baseFontSize = Math.max(12, effectiveSize * 0.18);
     } else if (effectiveSize < 160) {
@@ -218,7 +253,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     } else {
       baseFontSize = Math.max(16, Math.min(36, effectiveSize * 0.14));
     }
-    
+
     const scaledFontSize = Math.max(12, Math.floor(baseFontSize * scaleFactor)); // Ensure minimum 12px font
 
     // Border radius based on effective size
@@ -226,12 +261,12 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
 
     // Base button style for grid items - ensure they fill their cells
     const baseStyle: React.CSSProperties = {
-      backgroundColor: pressedDirections.has(direction) 
-        ? (config.style?.color || 'var(--primary-color)') 
+      backgroundColor: pressedDirections.has(direction)
+        ? config.style?.color || 'var(--primary-color)'
         : 'var(--background-secondary)',
-      border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${pressedDirections.has(direction) 
-        ? (config.style?.color || 'var(--primary-color)') 
-        : 'var(--border-color)'}`,
+      border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${
+        pressedDirections.has(direction) ? config.style?.color || 'var(--primary-color)' : 'var(--border-color)'
+      }`,
       borderRadius: `${borderRadius}px`,
       cursor: isEditing ? 'default' : 'pointer',
       userSelect: 'none',
@@ -246,9 +281,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       fontFamily: 'var(--font-family-ui)',
       lineHeight: 1,
       textAlign: 'center' as const,
-      boxShadow: pressedDirections.has(direction) 
-        ? 'inset 0 2px 4px rgba(0,0,0,0.2)' 
-        : '0 2px 4px rgba(0,0,0,0.1)',
+      boxShadow: pressedDirections.has(direction) ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : '0 2px 4px rgba(0,0,0,0.1)',
       transform: pressedDirections.has(direction) ? 'scale(0.95)' : 'scale(1)',
       zIndex: 2,
       // Ensure buttons fill their grid cells completely
@@ -262,7 +295,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       padding: 0,
       margin: 0,
       // In editing mode, don't consume pointer events so parent can handle clicks
-      pointerEvents: isEditing ? 'none' : 'auto'
+      pointerEvents: isEditing ? 'none' : 'auto',
     };
 
     // Grid positioning for each button
@@ -271,25 +304,25 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         return {
           ...baseStyle,
           gridColumn: '2 / 3',
-          gridRow: '1 / 2'
+          gridRow: '1 / 2',
         };
       case 'down':
         return {
           ...baseStyle,
           gridColumn: '2 / 3',
-          gridRow: '3 / 4'
+          gridRow: '3 / 4',
         };
       case 'left':
         return {
           ...baseStyle,
           gridColumn: '1 / 2',
-          gridRow: '2 / 3'
+          gridRow: '2 / 3',
         };
       case 'right':
         return {
           ...baseStyle,
           gridColumn: '3 / 4',
-          gridRow: '2 / 3'
+          gridRow: '2 / 3',
         };
       default:
         return baseStyle;
@@ -312,7 +345,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
     maxHeight: '100%',
     boxSizing: 'border-box',
     padding: 0,
-    margin: 0
+    margin: 0,
   };
 
   return (
@@ -320,6 +353,7 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
       <div style={dpadStyle}>
         {/* Up button - top center */}
         <button
+          ref={upRef}
           style={buttonStyle('up')}
           onPointerDown={() => handleDirectionPress('up', true)}
           onPointerUp={() => handleDirectionPress('up', false)}
@@ -328,9 +362,10 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         >
           ↑
         </button>
-        
+
         {/* Left button - middle left */}
         <button
+          ref={leftRef}
           style={buttonStyle('left')}
           onPointerDown={() => handleDirectionPress('left', true)}
           onPointerUp={() => handleDirectionPress('left', false)}
@@ -339,12 +374,13 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         >
           ←
         </button>
-        
+
         {/* Center circle - middle center */}
         <div style={centerStyle} />
-        
+
         {/* Right button - middle right */}
         <button
+          ref={rightRef}
           style={buttonStyle('right')}
           onPointerDown={() => handleDirectionPress('right', true)}
           onPointerUp={() => handleDirectionPress('right', false)}
@@ -353,9 +389,10 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
         >
           →
         </button>
-        
+
         {/* Down button - bottom center */}
         <button
+          ref={downRef}
           style={buttonStyle('down')}
           onPointerDown={() => handleDirectionPress('down', true)}
           onPointerUp={() => handleDirectionPress('down', false)}
@@ -369,4 +406,4 @@ const DPadComponent: React.FC<DPadComponentProps> = ({ config, ros, isEditing, s
   );
 };
 
-export default DPadComponent; 
+export default DPadComponent;

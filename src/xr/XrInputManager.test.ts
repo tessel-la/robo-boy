@@ -5,6 +5,7 @@ import { XrInputManager, type XrInputManagerOptions } from './XrInputManager';
 const controllers = [new THREE.Group(), new THREE.Group()];
 const grips = [new THREE.Group(), new THREE.Group()];
 let manager: XrInputManager;
+let drag = false;
 let panel: THREE.Mesh;
 const pressStart = vi.fn(), pressEnd = vi.fn(), pressMove = vi.fn();
 let activate: ReturnType<typeof vi.fn<NonNullable<XrInputManagerOptions['onActivate']>>>;
@@ -19,6 +20,7 @@ beforeEach(() => {
   panel.userData.xrGrabbable = true;
   scene.add(panel);
   activate = vi.fn();
+  drag = false;
   pressStart.mockClear(); pressEnd.mockClear(); pressMove.mockClear();
   manager = new XrInputManager({
     renderer: {
@@ -30,6 +32,8 @@ beforeEach(() => {
     scene,
     getInteractables: () => [panel],
     onActivate: activate,
+    allowsPressDrag: () => drag,
+    getActivationTarget: target => target.point.x < 0.5 ? 'first' : 'second',
     onPressStart: pressStart, onPressEnd: pressEnd, onPressMove: pressMove,
   });
   controllers.forEach((controller, index) => {
@@ -196,5 +200,29 @@ describe('balanced continuous controls', () => {
   it('cannot begin a hold while either hand grips', () => {
     event(1, 'squeezestart'); event(0, 'selectstart');
     expect(pressStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('continuous drag boundary', () => {
+  it('allows a large drag within the original control and releases normally', () => {
+    drag = true;
+    event(0, 'selectstart');
+    controllers[0].position.x = 0.3;
+    manager.update();
+    expect(pressEnd).not.toHaveBeenCalled();
+    expect(pressMove).toHaveBeenCalledOnce();
+    event(0, 'selectend');
+    expect(pressEnd).toHaveBeenCalledExactlyOnceWith(expect.anything(), false);
+  });
+  it('cancels a drag crossing controls on the same mesh, even if it returns', () => {
+    drag = true;
+    event(0, 'selectstart');
+    controllers[0].position.x = 0.6;
+    manager.update();
+    controllers[0].position.x = 0;
+    manager.update();
+    event(0, 'selectend');
+    expect(pressEnd).toHaveBeenCalledExactlyOnceWith(expect.anything(), true);
+    expect(activate).not.toHaveBeenCalled();
   });
 });

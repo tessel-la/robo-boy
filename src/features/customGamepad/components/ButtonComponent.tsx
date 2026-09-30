@@ -13,87 +13,99 @@ interface ButtonComponentProps {
   scaleFactor?: number;
 }
 
+import { usePadSpatialControl } from '../spatialControl';
+
 const THROTTLE_INTERVAL = 100;
 
 const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditing, scaleFactor = 1 }) => {
+  const spatialRef = useRef<HTMLButtonElement>(null);
   const topicRef = useRef<Topic | null>(null);
   const [isPressed, setIsPressed] = useState(false);
   const [toggleState, setToggleState] = useState(false);
   const [operationStatus, setOperationStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const operationControllers = useRef(new Map<'press' | 'release', AbortController>());
 
-  const runOperation = useCallback(async (event: 'press' | 'release') => {
-    const operation = config.eventOperations?.[event];
-    if (!operation || isEditing || operationControllers.current.has(event)) return;
-    const controller = new AbortController();
-    operationControllers.current.set(event, controller);
-    setOperationStatus('pending');
-    try {
-      await executeRosOperation(ros, operation, controller.signal);
-      setOperationStatus('success');
-    } catch {
-      if (!controller.signal.aborted) setOperationStatus('error');
-    } finally {
-      operationControllers.current.delete(event);
-    }
-  }, [config.eventOperations, isEditing, ros]);
+  const runOperation = useCallback(
+    async (event: 'press' | 'release') => {
+      const operation = config.eventOperations?.[event];
+      if (!operation || isEditing || operationControllers.current.has(event)) return;
+      const controller = new AbortController();
+      operationControllers.current.set(event, controller);
+      setOperationStatus('pending');
+      try {
+        await executeRosOperation(ros, operation, controller.signal);
+        setOperationStatus('success');
+      } catch {
+        if (!controller.signal.aborted) setOperationStatus('error');
+      } finally {
+        operationControllers.current.delete(event);
+      }
+    },
+    [config.eventOperations, isEditing, ros]
+  );
 
-  useEffect(() => () => {
-    operationControllers.current.forEach(controller => controller.abort());
-    operationControllers.current.clear();
-  }, []);
+  useEffect(
+    () => () => {
+      operationControllers.current.forEach(controller => controller.abort());
+      operationControllers.current.clear();
+    },
+    []
+  );
 
-  const publishMessage = useCallback((pressed: boolean) => {
-    if (!topicRef.current || isEditing) return;
+  const publishMessage = useCallback(
+    (pressed: boolean) => {
+      if (!topicRef.current || isEditing) return;
 
-    const action = config.action as ROSTopicConfig;
-    if (!action || !action.topic) return;
+      const action = config.action as ROSTopicConfig;
+      if (!action || !action.topic) return;
 
-    let message: any;
+      let message: any;
 
-    if (action.messageType === 'sensor_msgs/Joy') {
-      const buttons = Array(8).fill(0);
-      const buttonIndex = config.config?.buttonIndex || 0;
-      buttons[buttonIndex] = pressed ? 1 : 0;
+      if (action.messageType === 'sensor_msgs/Joy') {
+        const buttons = Array(8).fill(0);
+        const buttonIndex = config.config?.buttonIndex || 0;
+        buttons[buttonIndex] = pressed ? 1 : 0;
 
-      message = new ROSLIB.Message({
-        header: {
-          stamp: { secs: 0, nsecs: 0 },
-          frame_id: ''
-        },
-        axes: [],
-        buttons: buttons
-      });
-    } else if (action.messageType === 'std_msgs/Bool') {
-      message = new ROSLIB.Message({
-        data: pressed
-      });
-    } else if (action.messageType === 'std_msgs/Int32' || action.messageType === 'std_msgs/msg/Int32') {
-      message = new ROSLIB.Message({
-        data: pressed ? 1 : 0
-      });
-    } else if (
-      action.messageType === 'geometry_msgs/Twist' ||
-      action.messageType === 'geometry_msgs/msg/Twist' ||
-      action.messageType === 'geometry_msgs/TwistStamped' ||
-      action.messageType === 'geometry_msgs/msg/TwistStamped'
-    ) {
-      const path = config.config?.messagePath || 'linear.z';
-      const value = pressed
-        ? config.config?.pressedValue ?? 1
-        : config.config?.releasedValue ?? 0;
-      message = new ROSLIB.Message(buildTwistPayload({
-        messageType: action.messageType,
-        axes: [path],
-        values: [value],
-        frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0'
-      }));
-    }
+        message = new ROSLIB.Message({
+          header: {
+            stamp: { secs: 0, nsecs: 0 },
+            frame_id: '',
+          },
+          axes: [],
+          buttons: buttons,
+        });
+      } else if (action.messageType === 'std_msgs/Bool') {
+        message = new ROSLIB.Message({
+          data: pressed,
+        });
+      } else if (action.messageType === 'std_msgs/Int32' || action.messageType === 'std_msgs/msg/Int32') {
+        message = new ROSLIB.Message({
+          data: pressed ? 1 : 0,
+        });
+      } else if (
+        action.messageType === 'geometry_msgs/Twist' ||
+        action.messageType === 'geometry_msgs/msg/Twist' ||
+        action.messageType === 'geometry_msgs/TwistStamped' ||
+        action.messageType === 'geometry_msgs/msg/TwistStamped'
+      ) {
+        const path = config.config?.messagePath || 'linear.z';
+        const value = pressed ? (config.config?.pressedValue ?? 1) : (config.config?.releasedValue ?? 0);
+        message = new ROSLIB.Message(
+          buildTwistPayload({
+            messageType: action.messageType,
+            axes: [path],
+            values: [value],
+            frameId: config.config?.twistStampedFrameId?.trim() || 'panda_link0',
+          })
+        );
+      }
 
-    if (message) {
-      topicRef.current.publish(message);
-    }
-  }, [config, isEditing]);
+      if (message) {
+        topicRef.current.publish(message);
+      }
+    },
+    [config, isEditing]
+  );
 
   const publishThrottled = useMemo(
     () => throttle(publishMessage, THROTTLE_INTERVAL, { leading: true, trailing: true }),
@@ -124,7 +136,7 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     if (isEditing) return;
 
     const isMomentary = config.config?.momentary !== false;
-    
+
     if (isMomentary) {
       setIsPressed(true);
       if (config.eventOperations) void runOperation('press');
@@ -136,32 +148,63 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
       if (config.eventOperations) void runOperation(newState ? 'press' : 'release');
       else publishThrottled(newState);
     }
-  }, [config.config?.momentary, config.eventOperations, toggleState, publishThrottled, runOperation, isEditing]);
+  }, [
+    config.config?.momentary,
+    config.eventOperations,
+    toggleState,
+    publishThrottled,
+    publishMessage,
+    runOperation,
+    isEditing,
+  ]);
 
   const handlePointerUp = useCallback(() => {
     if (isEditing) return;
 
     const isMomentary = config.config?.momentary !== false;
-    
+
     if (isMomentary) {
       setIsPressed(false);
       if (config.eventOperations) void runOperation('release');
-      else publishThrottled(false);
+      else {
+        publishThrottled.cancel();
+        publishMessage(false);
+      }
     }
     // For toggle buttons, we don't do anything on pointer up
-  }, [config.config?.momentary, config.eventOperations, publishThrottled, runOperation, isEditing]);
+  }, [config.config?.momentary, config.eventOperations, publishThrottled, publishMessage, runOperation, isEditing]);
 
   const handlePointerLeave = useCallback(() => {
     if (isEditing) return;
 
     const isMomentary = config.config?.momentary !== false;
-    
+
     if (isMomentary && isPressed) {
       setIsPressed(false);
       if (config.eventOperations) void runOperation('release');
-      else publishThrottled(false);
+      else {
+        publishThrottled.cancel();
+        publishMessage(false);
+      }
     }
-  }, [config.config?.momentary, config.eventOperations, isPressed, publishThrottled, runOperation, isEditing]);
+  }, [
+    config.config?.momentary,
+    config.eventOperations,
+    isPressed,
+    publishThrottled,
+    publishMessage,
+    runOperation,
+    isEditing,
+  ]);
+
+  usePadSpatialControl(
+    spatialRef,
+    config.config?.momentary !== false
+      ? { start: handlePointerDown, end: handlePointerUp }
+      : { activate: handlePointerDown },
+    Boolean(isEditing),
+    config
+  );
 
   const isMomentary = config.config?.momentary !== false;
   const isActive = isMomentary ? isPressed : toggleState;
@@ -170,11 +213,11 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
 
   const baseFontSize = size === 'small' ? 0.8 : size === 'large' ? 1.2 : 1;
   const basePadding = size === 'small' ? 4 : size === 'large' ? 12 : 8;
-  
+
   const buttonStyle: React.CSSProperties = {
-    backgroundColor: isActive ? (color || 'var(--primary-color)') : 'var(--background-secondary)',
+    backgroundColor: isActive ? color || 'var(--primary-color)' : 'var(--background-secondary)',
     color: isActive ? 'var(--button-text-color)' : 'var(--text-color)',
-    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${isActive ? (color || 'var(--primary-color)') : 'var(--border-color)'}`,
+    border: `${Math.max(1, Math.floor(2 * scaleFactor))}px solid ${isActive ? color || 'var(--primary-color)' : 'var(--border-color)'}`,
     borderRadius: `${Math.floor(8 * scaleFactor)}px`,
     padding: `${Math.floor(basePadding * scaleFactor)}px ${Math.floor(basePadding * 2 * scaleFactor)}px`,
     fontSize: `${baseFontSize * scaleFactor}em`,
@@ -188,11 +231,12 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
     alignItems: 'center',
     justifyContent: 'center',
     opacity: isEditing ? 0.7 : 1,
-    pointerEvents: isEditing ? 'none' : 'auto'
+    pointerEvents: isEditing ? 'none' : 'auto',
   };
 
   return (
     <button
+      ref={spatialRef}
       className={`button-component ${isMomentary ? 'momentary' : 'toggle'} ${isActive ? 'active' : ''} operation-${operationStatus}`}
       style={buttonStyle}
       onPointerDown={handlePointerDown}
@@ -208,4 +252,4 @@ const ButtonComponent: React.FC<ButtonComponentProps> = ({ config, ros, isEditin
   );
 };
 
-export default ButtonComponent; 
+export default ButtonComponent;

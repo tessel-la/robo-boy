@@ -12,6 +12,7 @@ import { CanvasRenderer } from 'html2canvas/dist/lib/render/canvas/canvas-render
 export async function capturePanelSurface(element: HTMLElement, width: number, height: number) {
   if (element.querySelector('video, iframe')) throw new Error('Video and embedded frames need a native XR renderer.');
   CacheStorage.setContext(window);
+  const bounds = element.getBoundingClientRect();
   const context = new Context(
     { logging: false, allowTaint: false, useCORS: false, imageTimeout: 1500 },
     new Bounds(window.scrollX, window.scrollY, window.innerWidth, window.innerHeight)
@@ -32,8 +33,8 @@ export async function capturePanelSurface(element: HTMLElement, width: number, h
   }
   return new CanvasRenderer(context, {
     backgroundColor: null,
-    x: 0,
-    y: 0,
+    x: bounds.left + window.scrollX,
+    y: bounds.top + window.scrollY,
     width,
     height,
     scale: Math.min(1, 1280 / width, 1280 / height),

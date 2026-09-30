@@ -1,3 +1,4 @@
+import { useBehaviorTreePresentation } from '../presentation';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -117,6 +118,7 @@ interface BehaviorTreePanelProps {
    * workspace, so the assistant bridge registry is keyed by this. Defaults to 'primary' for the
    * single-instance mobile/legacy render site. */
   panelId?: string;
+  storageScope?: string;
   /** Opens the global assistant (a singleton conversation) with this panel's BT context pinned —
    * replaces the old embedded BehaviorTreeAgentPanel entirely; see docs/ai-assistant.md. */
   onOpenAssistant?: (context: { panelId: string }) => void;
@@ -536,6 +538,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   onExecutionChange,
   onExecutionControlsChange,
   panelId = 'primary',
+  storageScope,
   onOpenAssistant,
   onRegisterAssistantBridge,
 }) => {
@@ -549,6 +552,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     blackboardDefaults: currentTree?.blackboardDefaults,
   }), [nodes, currentTree?.blackboardDefaults]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const executingRef = useRef(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [agentPreviewTree, setAgentPreviewTree] = useState<BehaviorTree | null>(null);
@@ -1879,6 +1883,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }));
       } else if (event.type === 'completed' || event.type === 'stopped' || event.type === 'error') {
         const status = event.type;
+        executingRef.current = false;
         setIsExecuting(false);
         setIsPaused(false);
         setExecutionSnapshot((prev) => ({
@@ -1921,6 +1926,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 
   const handleExecute = useCallback(() => {
+    if (executingRef.current) return;
     if (!ros || !isConnected) {
       alert('Please connect to ROS first');
       return;
@@ -1947,6 +1953,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     } else {
       executorRef.current = new BehaviorTreeExecutor(treeToExecute, ros, handleExecutionEvent);
     }
+    executingRef.current = true;
     setIsExecuting(true);
     setIsPaused(false);
     setExecutionSnapshot({
@@ -1984,6 +1991,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     } else if (executorRef.current) {
       executorRef.current.stop();
     }
+    executingRef.current = false;
     setIsExecuting(false);
     setIsPaused(false);
     setRootTree((previousRootTree) => {
@@ -2034,6 +2042,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }
       }
       executionStartedAt.current = status.startedAt;
+      executingRef.current = true;
       setIsExecuting(true);
       setIsPaused(status.state === 'paused');
       setLiveBlackboard(status.blackboard || status.tree?.blackboardDefaults || {});
@@ -2120,6 +2129,26 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     ? String(nodes.find(node => node.id === inspectedExecution.nodeId)?.data?.label ?? inspectedExecution.nodeId)
     : '';
   const closeExecutionDetails = useCallback(() => setInspectedExecution(null), []);
+
+  useBehaviorTreePresentation(panelId, storageScope, {
+    tree: currentTree, nodes, edges, execution: executionSnapshot,
+    connected: isConnected, executing: isExecuting, paused: isPaused,
+    persistent: persistentExecution,
+    path: treePath,
+    enterSubtree: openSubtreeNode,
+    up: () => handleNavigateUp(),
+    blackboard: isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {}),
+    execute: () => { if (!isExecuting && isConnected && currentTree && nodes.length) handleExecute(); },
+    pause: () => { if (isExecuting && !isPaused) handlePause(); },
+    resume: () => { if (isExecuting && isPaused) handleResume(); },
+    stop: handleStop,
+    load: tree => { if (!isExecuting) handleLoad(tree); },
+    setPersistent: enabled => {
+      if (isExecuting) return;
+      setPersistentExecution(enabled);
+      savePersistentExecutionPreference(enabled);
+    },
+  });
 
   const restoreRootTreeSnapshot = useCallback(
     (snapshot: HistorySnapshot) => {

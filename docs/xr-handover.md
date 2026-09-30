@@ -4,8 +4,8 @@ This is the working guide for whoever continues the XR workspace. [`xr.md`](xr.m
 feature is and how to run it; this document explains how the spatial layer is built, why, and how to
 extend it. Read `xr.md` first for entry, session modes and the reuse table.
 
-Current state: the **3D, Time Series, TF tree and Camera panels are native**; other panel types still use the DOM
-mirror. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
+Current state: **all built-in panel types have dedicated XR presentations**. Pad preserves its
+configured grid with native control handlers; external panels use captured surfaces. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
 XR. The interaction model was designed to be reused, not to be specific to 3D.
 
 ## 1. What exists
@@ -25,6 +25,9 @@ src/xr/
     timeSeries/            native plot and settings, sharing the desktop tile's engine
     tfTree/                native graph, frame details, diagnostics and transform calculator
     camera/                live and recorded frames from the mounted camera tile
+    pad/                   captured configured grid + shared mounted control handlers
+    behaviorTree/          fitted graph + shared editor executor and saved-tree menu
+    recordReplay/          native transport, recorder controls and remote file browser
   ui/                      reusable spatial UI kit (see section 4)
   world/
     fit.ts                 fit a model to a circular stage
@@ -212,7 +215,7 @@ untouched.
 
 ## 6. Current limitations
 
-- **Panels other than 3D, Time Series, TF tree and Camera use flat fallbacks.** External panel DOM now renders
+- **External panels use flat fallbacks.** All built-ins now have dedicated presentations. External panel DOM renders
   inside its own sandbox; Microduck holds and actions work in immersive XR. Video/nested frames need
   native rendering. Text entry, browser dialogs and arbitrary drag controls still lack XR parity.
 - **Time Series text editing stays on desktop.** Labels, custom field paths, expressions and CSV export remain desktop controls. Existing math, units and labels are preserved and used in XR.
@@ -255,7 +258,7 @@ panel needs in `PanelFrame`, `SpatialMenu` and `WristMenu`.
 ### Suggested next steps
 
 1. Headset pass on the 3D panel: comfort distances, wrist reach, grab feel, menu legibility.
-2. Native XR pad (uses `desk`), on `PanelFrame` + `SpatialMenu`. Time Series, TF tree and Camera are now native. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
+2. Headset comfort/legibility pass on Pad, Behavior Tree and Record & Replay. Pad currently uses a flat `PanelFrame` with its existing grid; a spatial desk remains optional. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
 3. Apply `pinned` and `attach: 'viewer'` (a head-locked group, with a pin toggle in the toolbar).
 4. Make 2D panels observe visualization state changes so XR edits show in 2D live.
 5. Hand-tracking affordances (pinch-specific rays, poke buttons).
@@ -366,3 +369,35 @@ changing multipart MJPEG in VR/AR with one stream, topic switching, retry and re
 real ROS 2 CDR images through the MCAP replay worker and verifies paused seek and topic changes.
 Screenshots were reviewed. Physical headset validation remains outstanding. The external WebRTC
 panel still needs a separate video renderer; this native implementation covers the built-in Camera.
+
+
+## Missing-panel continuation (2026-09-30)
+
+- Pad: `src/xr/panels/pad/padRenderer.ts` captures the mounted configured grid with the pinned existing
+  html2canvas parser/renderer, preserving readouts, plots and physical-pad visuals. The capture helper
+  now accounts for the subtree's document offset, also retaining external sandbox capture behavior.
+  The `spatialControl` WeakMap registers existing control callbacks on their own elements. XR chooses
+  targets within that subtree even when an XR DOM overlay covers it. One pointer owns each hold;
+  configuration replacement releases through the original handler before unregistering it.
+- `XrInputManager.allowsPressDrag` permits motion only inside the original joystick, slider or replay
+  timeline. It never permits crossing controls on a shared mesh. Ordinary clicks and Microduck holds
+  retain their existing excursion cancellation. Momentary button and D-pad release now cancel pending
+  throttled messages and publish the release immediately.
+- Behavior Tree: native canvas graph/status, paged node details, subtree/parent navigation, saved trees,
+  execution controls and blackboard inspection. The connection-scoped presentation uses the mounted
+  editor's handlers and executor. A synchronous execution guard rejects a second Run before React
+  renders the executing state. Local/persistent execution lifetimes remain owned by the editor/ROS.
+- Record & Replay: native dashboard with a balanced timeline drag, shared desktop seek debounce,
+  speed/loop/topics, ROS-host file browsing and the existing recorder hook. No worker, subscription,
+  publisher or recording session is duplicated. Pending acknowledgements disable recorder controls.
+- Text entry, tree/Pad authoring and native file/save dialogs remain desktop workflows. Pad video or
+  nested-frame content still needs a dedicated renderer. Pad is a flat captured presentation, not a
+  three-dimensional reconstruction of the grid or the reserved `desk` placement.
+
+Verification uses emulated VR and AR with mock ROS, real indexed MCAP replay, and the unmodified
+Microduck bundle. Unit checks include control replacement/unmount releases and drag target isolation.
+Physical headset comfort, capture cost, readout legibility and hand tracking remain unverified.
+
+Checks passed: 727 unit tests across the affected features and XR, TypeScript, ESLint, and the
+production build. Eight VR/AR browser scenarios cover Pad, Behavior Tree, Record & Replay, and
+Microduck; the sandbox is rebuilt before its regression check.

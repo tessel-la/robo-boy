@@ -52,6 +52,7 @@ export interface XrPanelInstance {
   update?(frame: XrFrameContext): void;
   /** Optional identity for a control within a shared surface; null rejects activation. */
   getActivationTarget?(target: XrInputTarget): unknown;
+  allowsPressDrag?(target: XrInputTarget): boolean;
   /** A completed activation on this panel's surface. */
   onActivate?(target: XrInputTarget): void;
   /** Continuous controls opt into balanced press/release; cancellation must stop every command. */

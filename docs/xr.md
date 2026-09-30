@@ -47,7 +47,7 @@ Everything below the renderer, which is most of the value:
 | TF | `src/utils/tfStream.ts` | `subscribeToTfStream` is ref-counted per `Ros`, so XR joins the existing `/tf` + `/tf_static` pair rather than adding one |
 | TF lookup | `src/utils/tfUtils.ts` | its own `CustomTFProvider`, fed from that shared stream |
 | Robot geometry | `ROS3D.UrdfClient` | takes a `rootObject`, so URDF parsing, `package://` resolution, mesh loading and TF-driven link poses all run unchanged against the XR scene |
-| ROS publishing | `src/utils/rosOperations.ts`, `src/features/customGamepad/rosMessageUtils.ts` | for native control surfaces, from phase 2 |
+| ROS publishing | `src/utils/rosOperations.ts`, `src/features/customGamepad/rosMessageUtils.ts` | XR Pad invokes the mounted controls’ existing handlers; no extra publishers |
 
 `UrdfClient`'s optional `requestRender` is deliberately left unset: the session renders continuously,
 so the invalidation callback the 2D viewer needs has nothing to do here.
@@ -108,6 +108,31 @@ uploads at most 30 frames per second. Paused replay textures change only when de
 Topic selection updates the existing tile; XR opens no extra stream, ROS subscription or decoder.
 Cross-origin camera servers must allow CORS, or use the same-origin video proxy. Frame errors are
 shown inside XR, and exiting restores desktop camera behavior.
+
+### Pad controls, Behavior Tree, and Record & Replay
+
+Pad controls keep the configured desktop grid and live data displays on a captured 2D surface inside
+`PanelFrame`. Capture is bounded to 5 Hz and 1280 pixels; controller input runs independently.
+Joysticks, D-pad directions, momentary buttons, toggles, sliders, and setpoint step/send buttons call
+handlers owned by the mounted controls. No ROS publisher or physical-gamepad polling loop is added.
+The Layouts menu selects existing templates/custom pads through the workspace's normal state update.
+Only joysticks and sliders may drag beyond the click slop, and only within the original control.
+Release, grip manipulation, tracking loss, control replacement, deactivation and XR exit stop holds.
+Pad layout authoring, text entry and camera transport setup remain desktop operations.
+
+Behavior Tree has a native fitted graph with execution colors, node details, subtree/parent navigation,
+a saved-tree picker, blackboard values, execution-mode selection and Run/Pause/Resume/Stop. It shares
+the mounted editor's executor, including its existing persistent ROS-host execution behavior; leaving
+XR does not introduce an extra stop. Loading and execution-mode changes are locked while executing.
+Tree authoring and editing node parameters remain desktop operations.
+
+Record & Replay has a native dashboard, controller timeline scrubber, play/pause, 10-second skips,
+speed and loop controls, topic inspection and a ROS-host recording browser. Its Record view shares
+the mounted recorder's command/acknowledgement lifecycle for Start, Pause, Resume, Split and Stop &
+save. Topic selection and numeric recording options use paged menus; the configured name, destination
+and expressions are preserved. Local file selection and editing these text settings stay on desktop;
+a file loaded before entering XR remains usable there. ROS-host recordings can be opened inside XR.
+Closing or leaving XR preserves the desktop's playback and ROS-host recording lifetime.
 
 ### Interaction
 
@@ -259,11 +284,11 @@ external panel SDK requires of `unmount`.
 ## Roadmap
 
 This branch delivers detection, both session modes, the scene and input managers, mirrored DOM panels
-with persisted placement, and a native 3D panel with a wrist menu for adding and removing panels.
+with persisted placement, dedicated presentations for all built-ins, and a wrist menu for adding and
+removing panels.
 
-Next, roughly in order: native XR versions of the other panels on the same frame and menu; pinning
-and viewer-attached placement; a native XR control pad rendering the existing grid-cell `CustomGamepadLayout` schema as a
-spatial desk; hand-tracking affordances; an SDK extension letting external panels ship their own XR
+All built-in panel types now have dedicated XR presentations. Next: physical headset validation;
+pinning and viewer-attached placement; an optional spatial desk layout for the Pad; hand-tracking affordances; an SDK extension letting external panels ship their own XR
 renderer; AR `hit-test` placement of the robot on a real surface; and control-room presets.
 
 

@@ -17,6 +17,9 @@ import { HintBoard } from './ui/HintBoard';
 import { threeDPanelRenderer } from './panels/threeD/threeDRenderer';
 import { timeSeriesPanelRenderer } from './panels/timeSeries/timeSeriesRenderer';
 import { cameraPanelRenderer } from './panels/camera/cameraRenderer';
+import { behaviorTreePanelRenderer } from './panels/behaviorTree/behaviorTreeRenderer';
+import { recordReplayPanelRenderer } from './panels/recordReplay/recordReplayRenderer';
+import { padPanelRenderer } from './panels/pad/padRenderer';
 import { tfTreePanelRenderer } from './panels/tfTree/tfTreeRenderer';
 import {
   domSurfaceRenderer,
@@ -68,6 +71,9 @@ setFallbackXrPanelRenderer(domSurfaceRenderer);
 registerXrPanelRenderer(threeDPanelRenderer);
 registerXrPanelRenderer(timeSeriesPanelRenderer);
 registerXrPanelRenderer(tfTreePanelRenderer);
+registerXrPanelRenderer(padPanelRenderer);
+registerXrPanelRenderer(behaviorTreePanelRenderer);
+registerXrPanelRenderer(recordReplayPanelRenderer);
 registerXrPanelRenderer(cameraPanelRenderer);
 
 /**
@@ -371,6 +377,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
           if (interaction.activate(target)) return;
           findPanelForObject(target.object)?.instance.onActivate?.(target);
         },
+        allowsPressDrag: target => findPanelForObject(target.object)?.instance.allowsPressDrag?.(target) ?? false,
         onPressStart: (pointer, target) => findPanelForObject(target.object)?.instance.onPressStart?.(pointer.id, target),
         onPressMove: (pointer, target) => findPanelForObject(target.object)?.instance.onPressMove?.(pointer.id, target),
         onPressEnd: (pointer, cancelled) => {

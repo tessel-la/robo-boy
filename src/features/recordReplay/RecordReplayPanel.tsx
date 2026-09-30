@@ -1,3 +1,4 @@
+import { useRecordReplayPresentation } from './presentation';
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { FiArrowLeft, FiCircle, FiDisc, FiFile, FiFolder, FiPause, FiPlay, FiRefreshCw, FiRepeat, FiRotateCcw, FiRotateCw, FiScissors, FiServer, FiSquare, FiUpload, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
@@ -30,6 +31,8 @@ function restoreOptions(state?: RoboBoyJsonObject): RecordOptions {
 }
 
 interface Props {
+  panelId?: string;
+  storageScope?: string;
   session: ReplaySession;
   ros: Ros | null;
   connected: boolean;
@@ -37,7 +40,7 @@ interface Props {
   state?: RoboBoyJsonObject;
   onStateChange: (state: RoboBoyJsonObject) => void;
 }
-export default function RecordReplayPanel({ session, ros, connected, isActive, state, onStateChange }: Props) {
+export default function RecordReplayPanel({ session, ros, connected, isActive, state, onStateChange, panelId, storageScope }: Props) {
   const replay = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const recorder = useRecorder(ros, connected && isActive);
   const [tab, setTab] = useState<'replay' | 'record'>('replay');
@@ -115,6 +118,16 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
   const folderPath = recorder.folders?.directory === '.' ? '' : recorder.folders?.directory ?? '';
   // Where the last recording landed, relative to the root the file service lists.
   const savedPath = recorder.status?.path && recorder.status.path.startsWith(`${recorder.status.root}/`) ? recorder.status.path.slice(recorder.status.root.length + 1) : undefined;
+
+  useRecordReplayPresentation(panelId, storageScope, {
+    tab, replay, position, seek, session, recorder, options, topics, remote: remote.state, remotePath,
+    setTab, changeOptions: patch => { if (!busy && !recorder.pending) change(patch); },
+    browse: setRemotePath, refresh: remote.refresh,
+    open: file => load(remoteBag(recordingsBaseUrl, file)),
+    start: () => {
+      if (!busy && recorder.online && !recorder.pending && options.name.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(options.name)) recorder.command('start', options);
+    },
+  });
 
   return <section className={`record-replay-panel${dragging ? ' is-dragging' : ''}`} aria-label="Record & Replay"
     onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth.current++; setDragging(true); } }}
