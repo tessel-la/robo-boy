@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Real Electron check of the panel embed route (`/<port>/` frames). Optional live, read-only check
- * against a robot's Robo-Boy proxy serving Sunrise Fabrics or any page on an allowed port:
+ * against a robot's Robo-Boy proxy serving a page on an allowed port:
  * ROBOBOY_TEST_EMBED_BASE=https://robot.local ROBOBOY_TEST_EMBED_PATH=/8089/ npm run test:embed-proxy
+ * ROBOBOY_TEST_EMBED_SELECTOR (default `body`) names the element that shows the page has rendered.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -170,10 +171,16 @@ try {
   if (process.env.ROBOBOY_TEST_EMBED_BASE) {
     const live = await frameInSandbox(process.env.ROBOBOY_TEST_EMBED_BASE, process.env.ROBOBOY_TEST_EMBED_PATH || '/8089/');
     const frame = await waitForFrame(url => url.startsWith(`app://${live.embedHost}/`) && !url.includes('panel-sandbox'));
-    // Sunrise Fabrics reports "Connected" once its model and first state arrived through the route.
-    await frame.waitForFunction(() => document.querySelector('#status')?.textContent === 'Connected', undefined, { timeout: 120000 });
-    const canvas = await frame.evaluate(() => Boolean(document.querySelector('canvas')));
-    assert.ok(canvas, 'live page must render its viewport');
+    // The page rendered through the route once the chosen element exists and has content.
+    const selector = process.env.ROBOBOY_TEST_EMBED_SELECTOR || 'body';
+    await frame.waitForFunction(
+      target => {
+        const element = document.querySelector(target);
+        return Boolean(element && (element.textContent?.trim() || element.children.length));
+      },
+      selector,
+      { timeout: 120000 }
+    );
     if (process.env.ROBOBOY_TEST_EMBED_SCREENSHOT) await page.screenshot({ path: process.env.ROBOBOY_TEST_EMBED_SCREENSHOT });
     console.log('PASS live robot page through the embed route', frame.url());
   }
