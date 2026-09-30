@@ -54,6 +54,7 @@ import ResourceList, { BulkBar, type ListColumns } from './ResourceList';
 import ResourceGraph, { isInfrastructureNode } from './ResourceGraph';
 import HealthView, { downloadJson, type HealthSection } from './HealthView';
 import './DataExplorerPanel.css';
+import { useDataExplorerPresentation } from './presentation';
 
 export interface ExplorerOpenRequest {
   panel: 'timeSeries' | 'camera' | '3d' | 'tfTree' | 'recordReplay';
@@ -65,6 +66,8 @@ export interface ExplorerOpenRequest {
   visualizationType?: string;
 }
 interface Props {
+  panelId?: string;
+  storageScope?: string;
   ros: Ros | null;
   connected: boolean;
   generation: number;
@@ -144,6 +147,8 @@ function Sparkline({ points, label }: { points: number[]; label: string }) {
 }
 
 export default function DataExplorerPanel({
+  panelId,
+  storageScope,
   ros,
   connected,
   generation,
@@ -173,7 +178,8 @@ export default function DataExplorerPanel({
   const sourceRos = replay?.source.ros ?? (connected ? ros : null);
   const session = useMemo(() => (sourceRos ? getInspectionSession(sourceRos) : undefined), [sourceRos]);
   const snapshot = useSyncExternalStore(session?.subscribe ?? emptySubscribe, session?.getSnapshot ?? emptySnapshot);
-  const active = isActive && visible && intersecting;
+  const presented = useDataExplorerPresentation(panelId, storageScope);
+  const active = presented || (isActive && visible && intersecting);
   const demand = useMemo(
     () => ({
       watch: [...new Set([...config.watched, ...config.rules.map(rule => rule.topic)])],
@@ -985,6 +991,7 @@ export default function DataExplorerPanel({
     <section
       ref={root}
       className="data-explorer-panel"
+      data-xr-presented={presented || undefined}
       data-short={short}
       aria-label="Data Explorer"
       data-selected={Boolean(selected)}

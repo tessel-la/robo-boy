@@ -76,6 +76,7 @@ vi.mock('reactflow', async () => {
 
 import DataExplorerPanel, { type ExplorerOpenRequest } from './DataExplorerPanel';
 import { emptySnapshot } from './InspectionSession';
+import { getDataExplorerPresentation } from './presentation';
 
 const NOW = 1_700_000_000_000;
 const topic = (name: string, type: string, patch: Partial<Resource> = {}): Resource => ({
@@ -317,6 +318,26 @@ afterEach(() => {
 });
 
 describe('Data Explorer resource list', () => {
+  it('keeps one inspection lease while presented in XR and releases it when an inactive tile returns to desktop', () => {
+    const release = vi.fn();
+    fake.acquire.mockReturnValueOnce(release);
+    const rendered = render(<DataExplorerPanel panelId="immersive" storageScope="cell" ros={ros} connected
+      generation={1} isActive={false} replaySession={noReplay} replayGeneration={0}
+      onStateChange={saved} onOpen={onOpen} />);
+    expect(fake.acquire).not.toHaveBeenCalled();
+    expect(getDataExplorerPresentation('immersive', 'other')).toBeNull();
+    const present = getDataExplorerPresentation('immersive', 'cell')!;
+    act(() => present(true));
+    expect(fake.acquire).toHaveBeenCalledTimes(1);
+    expect(panel()).toHaveAttribute('data-xr-presented', 'true');
+    act(() => present(true));
+    expect(fake.acquire).toHaveBeenCalledTimes(1);
+    act(() => present(false));
+    expect(release).toHaveBeenCalledOnce();
+    expect(panel()).not.toHaveAttribute('data-xr-presented');
+    rendered.unmount();
+    expect(getDataExplorerPresentation('immersive', 'cell')).toBeNull();
+  });
   it('lists topics with a column per count, measured rates and row actions', () => {
     render(<Harness />);
     expect(screen.getByText('ROS host')).toBeInTheDocument();

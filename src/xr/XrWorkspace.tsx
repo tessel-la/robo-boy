@@ -1,3 +1,4 @@
+import { dataExplorerPanelRenderer } from './panels/dataExplorerRenderer';
 import { XrAssistant } from './assistant/XrAssistant';
 import { applySpatialWorkspaceOperation, spatialWorkspaceSnapshot } from './assistantSpatialActions';
 import type { SpatialWorkspaceSnapshot } from '../features/assistant/types';
@@ -85,6 +86,7 @@ registerXrPanelRenderer(padPanelRenderer);
 registerXrPanelRenderer(behaviorTreePanelRenderer);
 registerXrPanelRenderer(recordReplayPanelRenderer);
 registerXrPanelRenderer(cameraPanelRenderer);
+registerXrPanelRenderer(dataExplorerPanelRenderer);
 
 /**
  * Find the live DOM for a panel so it can be mirrored onto a surface.

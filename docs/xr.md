@@ -156,6 +156,24 @@ and expressions are preserved. Local file selection and editing these text setti
 a file loaded before entering XR remains usable there. ROS-host recordings can be opened inside XR.
 Closing or leaving XR preserves the desktop's playback and ROS-host recording lifetime.
 
+### Data Explorer and diagnostics
+
+Data Explorer presents its existing Resources, Graph and Health views on a captured surface inside
+the shared spatial frame. Search, message fields and rule inputs use the immersive keyboard;
+dropdowns use native menus. Trigger selects controls and drags graph nodes or pans the graph.
+The frame offers Scroll up/down and Refresh, and the inspector separator opens column-width controls.
+Topic watches, diagnostics, logs, rules, replay and opening other panels use the mounted desktop
+Explorer's existing inspection session and callbacks, with no additional discovery or watch owner.
+
+While presented, the desktop Explorer stays active with a 900 × 650 CSS viewport. Captures run at
+most four times a second; moving or resizing the spatial frame changes its physical presentation.
+Leaving XR restores normal desktop sizing and activity. The capture helper converts modern CSS
+colors to sRGB and inlines SVG paint/fonts for graph rendering, restoring every inline style
+synchronously before yielding. Overflowing graph SVGs use bounded viewport snapshots so links stay
+visible while panning/zooming; the original DOM nodes and SVG dimensions are restored immediately.
+VR/AR browser checks cover typing, watches, graph dragging,
+diagnostic source selection, panel opening and desktop restoration.
+
 ### Interaction
 
 `src/xr/XrInputManager.ts` reduces controllers and tracked hands to one stream of rays. The part

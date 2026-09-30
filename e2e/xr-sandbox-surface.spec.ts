@@ -6,7 +6,7 @@ import { installXrEmulator, observeXrScene, pressXrControl } from './helpers/xrE
 // Always runs in CI, including when no external panel repositories are checked out.
 const source = `export default {
   apiVersion: '2.0.0', id: 'test.xr.surface', activate() {
-    return { mount(root) { root.innerHTML = '<div style="height:100%;overflow:auto"><div style="height:900px;background:#123456;color:white;padding:20px"><button style="transform:translateX(2px);box-shadow:0 0 2px color-mix(in srgb, red 50%, blue)">Snapshot fixture</button></div></div>'; }, unmount() {} };
+    return { mount(root) { root.innerHTML = '<div style="height:100%;overflow:auto"><div style="height:900px;background:color-mix(in srgb, #123456 80%, blue);color:white;padding:20px"><button style="transform:translateX(2px);box-shadow:0 0 2px color-mix(in srgb, red 50%, blue)">Snapshot fixture</button></div></div>'; }, unmount() {} };
   }
 };`;
 test('opaque sandbox captures, scrolls, restores styles and returns to desktop dimensions', async ({ page }) => {

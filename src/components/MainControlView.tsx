@@ -3399,7 +3399,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const renderWorkspacePanelContent = (panel: WorkspacePanel, isPanelActive = isDesktopWorkspace) => {
     const catalogEntry = panelCatalogById.get(panel.type);
 
-    if (panel.type === 'dataExplorer') return <DataExplorerPanel ros={ros} connected={isConnected}
+    if (panel.type === 'dataExplorer') return <DataExplorerPanel panelId={panel.id} storageScope={storageScope} ros={ros} connected={isConnected}
       generation={connectionGeneration} isActive={isPanelActive && isActive}
       replaySession={replaySession} replayGeneration={replaySource.generation} state={panel.panelState?.values}
       onStateChange={values => {

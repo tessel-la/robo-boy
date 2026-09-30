@@ -494,3 +494,35 @@ The assistant dot/ping obeys reduced motion. AR never gains a background or room
 Regression coverage includes desktop theme parity through dark/light/solarized/custom themes in VR
 and AR, unchanged panel identity and pose, custom stylesheet updates, observer/subscriber disposal,
 and changing a Pad theme during a controller hold.
+
+## Dev synchronization and Data Explorer (2026-09-30)
+
+Merged dev at `7746e99`, retaining the recorder/TF remount keys alongside XR presentation IDs and
+connection scopes. The ROS image includes the new inspector and TF relay; the local ROS stack was
+rebuilt/recreated and the frontend restarted with the existing panel and simulator overlays.
+
+`panels/dataExplorerRenderer.ts` captures the mounted Explorer rather than duplicating its inspection
+session. `features/dataExplorer/presentation.ts` keeps an inactive desktop tile's existing lease active
+while XR presents it; deactivation and disposal restore desktop attention. The root's scoped
+`data-xr-presented` CSS supplies a 900 × 650 viewport, independent of saved desktop dimensions.
+
+Captures are single-flight and bounded to 4 Hz. Generation checks discard late results after root
+replacement, attention loss or disposal. Hit regions are clipped to scroll viewports and checked
+against the live DOM before activation. Native keyboard/select menus invoke the existing form
+handlers; Scroll uses the focused pane, and graph drags use balanced mouse events through the
+existing ReactFlow/d3 owner. Grip, tracking loss and exit still cancel through the shared input layer.
+
+`capturePanelSurface` now converts browser-computed CSS Color 4 values to RGBA with a cached 1px
+canvas and inlines SVG paint/fonts before parsing. All temporary inline styles are restored
+synchronously, including on parse failures. Positioned SVGs with visible overflow use a bounded
+snapshot of their clipped viewport, preserving graph links outside the original SVG dimensions.
+Temporary images are replaced by the original SVG nodes before yielding; SVG dimensions and styles
+are restored. The pixel capture test checks CSS Color 4, an overflowing edge under pan/zoom and
+unchanged DOM identity. Keep the opaque-origin sandbox and Pad browser checks
+passing when changing this shared helper. Explorer tests cover the same desktop owner, XR typing,
+topic watches, graph dragging, diagnostics, source menus and opening Record & Replay in VR and AR.
+
+Validation: 315 affected unit tests passed (8 existing skips), 9 ROS Python tests passed, and the
+17 affected browser scenarios passed across desktop Explorer, XR Explorer/Pad/TF, opaque sandbox
+and pixel capture checks. TypeScript, targeted ESLint and the production build passed. Physical
+headset performance and legibility still need on-device validation.

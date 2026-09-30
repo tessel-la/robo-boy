@@ -14,6 +14,13 @@
   font-size: 12px;
   --de-muted: var(--text-color-secondary, var(--text-secondary, #999));
 }
+/* A readable canvas aspect in immersive mode; desktop sizing returns when the presentation ends. */
+.data-explorer-panel[data-xr-presented='true'] {
+  width: 900px;
+  height: 650px;
+  flex: none;
+  font-size: 16px;
+}
 .data-explorer-panel *,
 .data-explorer-panel *::before {
   box-sizing: border-box;
