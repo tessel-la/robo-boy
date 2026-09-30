@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getCameraPresentation } from '../camera/presentation';
 import RecordedCameraView, { pickRecordedCameraTopic } from './RecordedCameraView';
 import { ReplaySession } from './ReplaySession';
 import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
@@ -104,4 +105,21 @@ describe('RecordedCameraView', () => {
     render(<RecordedCameraView ros={openRecording(CAMERA_TOPICS.slice(2))} preferredTopic="/cam/image_raw" />);
     expect(screen.getByText('This recording has no camera topics.')).toBeInTheDocument();
   });
+  it('exposes the same replay canvas and new-frame revision without another decoder', async () => {
+    const ros = openRecording(CAMERA_TOPICS.slice(0, 1));
+    const { unmount } = render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" panelId="replay-camera" storageScope="robot" />);
+    const presentation = getCameraPresentation('replay-camera', 'robot')!;
+    await deliver([{ topic: '/cam/image_raw', time: START, message: { width: 1, height: 1, encoding: 'rgb8', step: 3, data: Uint8Array.from([255, 0, 0]) } }]);
+    const snapshot = presentation.snapshot();
+    expect(snapshot.source).toBe(screen.getByRole('img'));
+    expect(snapshot.recorded).toBe(true);
+    act(() => presentation.setPresented(true));
+    expect(context.putImageData).toHaveBeenCalledTimes(1);
+    await deliver([{ topic: '/cam/image_raw', time: START, message: { width: 1, height: 1, encoding: 'rgb8', step: 3, data: Uint8Array.from([0, 255, 0]) } }]);
+    expect(presentation.snapshot().source).toBe(snapshot.source);
+    expect(presentation.snapshot().revision).toBeGreaterThan(snapshot.revision!);
+    expect(context.putImageData).toHaveBeenCalledTimes(2);
+    unmount(); expect(getCameraPresentation('replay-camera', 'robot')).toBeNull();
+  });
+
 });

@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Ros } from 'roslib';
 import './CameraView.css'; // We'll create this CSS file next
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { buildCameraStreamUrl } from '../utils/cameraStreamUrl';
 import SafeCameraImage from './SafeCameraImage';
+import { useCameraPresentation } from '../features/camera/presentation';
 
 // Remove hardcoded URL
 // const DEFAULT_ROSBRIDGE_URL = 'ws://localhost:9090';
 
 interface CameraViewProps {
+  panelId?: string;
+  storageScope?: string;
   ros: Ros;
   cameraTopic: string; // e.g., /camera/image_raw
   // webVideoServerPort?: number; // Default 8080
@@ -23,6 +26,8 @@ interface CameraViewProps {
 
 const CameraView: React.FC<CameraViewProps> = ({
   ros,
+  panelId,
+  storageScope,
   cameraTopic,
   // webVideoServerPort = 8080, // Port is now handled by proxy
   streamType = 'mjpeg',
@@ -36,6 +41,27 @@ const CameraView: React.FC<CameraViewProps> = ({
   const { videoStreamBaseUrl } = useRuntimeConfig();
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [presented, setPresented] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const container = useRef<HTMLDivElement>(null);
+  const needsCors = Boolean(
+    presented && streamUrl && new URL(streamUrl, document.baseURI).origin !== window.location.origin
+  );
+  useCameraPresentation(panelId, storageScope, {
+    snapshot: () => ({
+      topic: cameraTopic,
+      topics: availableTopics,
+      source: error ? null : (container.current?.querySelector('img') ?? null),
+      revision: null,
+      message: error ?? '',
+      recorded: false,
+    }),
+    selectTopic: topic => {
+      if (availableTopics.includes(topic)) onTopicChange(topic);
+    },
+    retry: () => setRetryKey(key => key + 1),
+    setPresented,
+  });
 
   useEffect(() => {
     console.log('[CameraView useEffect] Checking dependencies:', {
@@ -68,7 +94,7 @@ const CameraView: React.FC<CameraViewProps> = ({
       }
     } else {
       setStreamUrl(null);
-      if (!cameraTopic) setError('No camera topic selected.');
+      if (!cameraTopic) setError(availableTopics.length ? 'No camera topic selected.' : 'No camera topics found');
       else if (!ros?.isConnected) setError('Connecting...');
       else setError('Camera topic is not being published.');
     }
@@ -82,10 +108,12 @@ const CameraView: React.FC<CameraViewProps> = ({
     streamWidth,
     streamHeight,
     videoStreamBaseUrl,
+    presented,
+    retryKey,
   ]);
 
   return (
-    <div className="camera-view">
+    <div className="camera-view" ref={container}>
       {/* Container now needs position relative for absolute positioning of dropdown */}
       <div className="camera-stream-container">
         {/* Add the dropdown selector inside the container */}
@@ -111,6 +139,8 @@ const CameraView: React.FC<CameraViewProps> = ({
           <div className="error-message">{error}</div>
         ) : streamUrl ? (
           <SafeCameraImage
+            key={`${retryKey}:${needsCors}`}
+            crossOrigin={needsCors ? 'anonymous' : undefined}
             src={streamUrl}
             allowedStreamBaseUrl={videoStreamBaseUrl}
             alt={`Stream for ${cameraTopic}`}
@@ -118,7 +148,9 @@ const CameraView: React.FC<CameraViewProps> = ({
               console.error('Error loading video stream:', e);
               setError(
                 // Update error message to reflect proxy
-                `Failed to load stream via proxy (${streamUrl}). Check Caddyfile, web_video_server, topic (${cameraTopic}), and type (${streamType}).`
+                needsCors
+                  ? 'Camera server must allow CORS for XR. Use the same-origin video proxy or enable CORS on the camera server.'
+                  : `Failed to load stream via proxy (${streamUrl}). Check Caddyfile, web_video_server, topic (${cameraTopic}), and type (${streamType}).`
               );
             }}
           />

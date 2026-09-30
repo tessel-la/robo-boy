@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import CameraView from './CameraView';
+import { getCameraPresentation } from '../features/camera/presentation';
 
 // Mock ROSLIB.Ros
 const createMockRos = (isConnected: boolean = true) => ({
@@ -174,4 +175,26 @@ describe('CameraView', () => {
       expect(img).toHaveAttribute('alt', 'Stream for /camera/image_raw');
     });
   });
+  it('shares the live image and topic callback with XR, retries errors, and unregisters on unmount', () => {
+    const { unmount } = render(<CameraView {...defaultProps} panelId="camera-xr" storageScope="robot" />);
+    const presentation = getCameraPresentation('camera-xr', 'robot')!;
+    const image = screen.getByRole('img');
+    expect(presentation.snapshot().source).toBe(image);
+    expect(getCameraPresentation('camera-xr', 'other')).toBeNull();
+    act(() => presentation.setPresented(true));
+    expect(screen.getByRole('img')).toBe(image); // No replacement stream for the same-origin proxy.
+    presentation.selectTopic('/camera/depth');
+    expect(defaultProps.onTopicChange).toHaveBeenCalledWith('/camera/depth');
+    presentation.selectTopic('/unavailable');
+    expect(defaultProps.onTopicChange).toHaveBeenCalledTimes(1);
+    fireEvent.error(image);
+    expect(presentation.snapshot().source).toBeNull();
+    expect(presentation.snapshot().message).toContain('Failed to load stream');
+    act(() => presentation.retry());
+    expect(presentation.snapshot().source).toBe(screen.getByRole('img'));
+    expect(presentation.snapshot().message).toBe('');
+    unmount();
+    expect(getCameraPresentation('camera-xr', 'robot')).toBeNull();
+  });
+
 });

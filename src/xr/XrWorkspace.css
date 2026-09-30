@@ -15,7 +15,8 @@
 .xr-entry {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  /* Keep entry controls above the assistant launcher and mobile view controls. */
+  bottom: max(76px, calc(var(--floating-action-bottom, 16px) + var(--floating-action-size, 50px) + 12px));
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -103,12 +104,4 @@
 
 .xr-entry-note {
   color: var(--text-muted, #94a3b0);
-}
-
-@media (max-width: 767px) {
-  /* The entry point would sit on top of the mobile view controls; XR on a phone is AR-only anyway
-     and is reached from a stationary pose, so it moves up out of the way. */
-  .xr-entry {
-    bottom: 76px;
-  }
 }

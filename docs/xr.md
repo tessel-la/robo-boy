@@ -102,6 +102,13 @@ frame browser, transform details, diagnostics and source-to-target calculations.
 mounted desktop tile's TF data, filters and replay source. The desktop graph pauses while XR is
 presenting it and catches up on exit. Text filtering remains a desktop control; XR can clear it.
 
+The built-in Camera also has a native renderer. It uses the mounted live MJPEG image or recorded
+camera canvas, with Topics and Retry in the shared frame. XR preserves the image's aspect ratio and
+uploads at most 30 frames per second. Paused replay textures change only when decoded frames change.
+Topic selection updates the existing tile; XR opens no extra stream, ROS subscription or decoder.
+Cross-origin camera servers must allow CORS, or use the same-origin video proxy. Frame errors are
+shown inside XR, and exiting restores desktop camera behavior.
+
 ### Interaction
 
 `src/xr/XrInputManager.ts` reduces controllers and tracked hands to one stream of rays. The part
@@ -200,7 +207,7 @@ is running.
 These are real and currently unsolved. None is hidden behind a silent failure.
 
 - **Video and nested frames still need native renderers.** Ordinary external panel DOM now has an
-  immersive fallback, including Microduck. Camera/video and nested iframe content display an explicit
+  immersive fallback, including Microduck. External video and nested iframe content display an explicit
   limitation. Arbitrary WebGL content is not guaranteed to be capturable.
 - **External fallback is a low-rate 2D surface.** Capture runs at most twice a second; controller input
   runs independently. Pointer buttons, holds and scrolling work, but text entry, native select menus,

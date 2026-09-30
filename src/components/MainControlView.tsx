@@ -3426,24 +3426,24 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           <RecordedCameraView
             key={`${panel.id}:${replaySource.generation}`}
             ros={replaySource.ros}
+            panelId={panel.id}
+            storageScope={storageScope}
             preferredTopic={panel.cameraTopic || selectedCameraTopic || ''}
             selectId={`camera-topic-select-${panel.id}`}
           />
         );
       }
       const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
-      return cameraTopic ? (
+      return (
         <CameraView
+          panelId={panel.id}
+          storageScope={storageScope}
           ros={ros!}
           cameraTopic={cameraTopic}
           availableTopics={availableCameraTopics}
           onTopicChange={newTopic => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
           selectId={`camera-topic-select-${panel.id}`}
         />
-      ) : (
-        <div className="placeholder">
-          {availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found'}
-        </div>
       );
     }
 

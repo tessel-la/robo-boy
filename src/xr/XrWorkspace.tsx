@@ -16,6 +16,7 @@ import { WristMenu, type WristMenuCatalogEntry } from './ui/WristMenu';
 import { HintBoard } from './ui/HintBoard';
 import { threeDPanelRenderer } from './panels/threeD/threeDRenderer';
 import { timeSeriesPanelRenderer } from './panels/timeSeries/timeSeriesRenderer';
+import { cameraPanelRenderer } from './panels/camera/cameraRenderer';
 import { tfTreePanelRenderer } from './panels/tfTree/tfTreeRenderer';
 import {
   domSurfaceRenderer,
@@ -23,6 +24,7 @@ import {
 } from './panels/domSurfaceRenderer';
 import {
   registerXrPanelRenderer,
+  hasNativeXrPanelRenderer,
   resolveXrPanelRenderer,
   setFallbackXrPanelRenderer,
   type XrPanelContext,
@@ -66,6 +68,7 @@ setFallbackXrPanelRenderer(domSurfaceRenderer);
 registerXrPanelRenderer(threeDPanelRenderer);
 registerXrPanelRenderer(timeSeriesPanelRenderer);
 registerXrPanelRenderer(tfTreePanelRenderer);
+registerXrPanelRenderer(cameraPanelRenderer);
 
 /**
  * Find the live DOM for a panel so it can be mirrored onto a surface.
@@ -517,7 +520,7 @@ const XrWorkspace: React.FC<XrWorkspaceProps> = ({
 
   const unrasterizableCount = useMemo(
     () =>
-      panels.filter(panel => findUnrasterizableReason(findPanelElement(panel.id)) !== null).length,
+      panels.filter(panel => !hasNativeXrPanelRenderer(panel.type) && findUnrasterizableReason(findPanelElement(panel.id)) !== null).length,
     [panels]
   );
 

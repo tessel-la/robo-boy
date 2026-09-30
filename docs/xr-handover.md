@@ -4,7 +4,7 @@ This is the working guide for whoever continues the XR workspace. [`xr.md`](xr.m
 feature is and how to run it; this document explains how the spatial layer is built, why, and how to
 extend it. Read `xr.md` first for entry, session modes and the reuse table.
 
-Current state: the **3D, Time Series and TF tree panels are native**; other panel types still use the DOM
+Current state: the **3D, Time Series, TF tree and Camera panels are native**; other panel types still use the DOM
 mirror. Panels can be added, positioned, resized, configured, moved, summoned and removed entirely in
 XR. The interaction model was designed to be reused, not to be specific to 3D.
 
@@ -24,6 +24,7 @@ src/xr/
     threeD/                the native 3D panel (renderer + settings editor)
     timeSeries/            native plot and settings, sharing the desktop tile's engine
     tfTree/                native graph, frame details, diagnostics and transform calculator
+    camera/                live and recorded frames from the mounted camera tile
   ui/                      reusable spatial UI kit (see section 4)
   world/
     fit.ts                 fit a model to a circular stage
@@ -211,7 +212,7 @@ untouched.
 
 ## 6. Current limitations
 
-- **Panels other than 3D, Time Series and TF tree use flat fallbacks.** External panel DOM now renders
+- **Panels other than 3D, Time Series, TF tree and Camera use flat fallbacks.** External panel DOM now renders
   inside its own sandbox; Microduck holds and actions work in immersive XR. Video/nested frames need
   native rendering. Text entry, browser dialogs and arbitrary drag controls still lack XR parity.
 - **Time Series text editing stays on desktop.** Labels, custom field paths, expressions and CSV export remain desktop controls. Existing math, units and labels are preserved and used in XR.
@@ -254,7 +255,7 @@ panel needs in `PanelFrame`, `SpatialMenu` and `WristMenu`.
 ### Suggested next steps
 
 1. Headset pass on the 3D panel: comfort distances, wrist reach, grab feel, menu legibility.
-2. Native XR pad (uses `desk`) and Camera panels, on `PanelFrame` + `SpatialMenu`. Time Series and TF tree are now native. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
+2. Native XR pad (uses `desk`), on `PanelFrame` + `SpatialMenu`. Time Series, TF tree and Camera are now native. The earlier Log suggestion does not correspond to a built-in panel in this checkout.
 3. Apply `pinned` and `attach: 'viewer'` (a head-locked group, with a pin toggle in the toolbar).
 4. Make 2D panels observe visualization state changes so XR edits show in 2D live.
 5. Hand-tracking affordances (pinch-specific rays, poke buttons).
@@ -337,3 +338,31 @@ self-contained Chromium capture/scroll/style-restoration regression; actual Micr
 VR/AR with emulated controllers and mocked ROS. Native TF and Time Series browser tests also pass.
 Hardware headset validation remains outstanding. See `docs/xr.md` for running the optional real
 Microduck integration and the fallback's browser-control/CSS limitations.
+
+
+## Camera continuation
+
+`src/xr/panels/camera/cameraRenderer.ts` presents the built-in Camera on the shared flat `PanelFrame`
+with a paged Topics menu and Retry. Live and recorded tiles register through
+`features/camera/presentation.ts`, keyed by panel id and connection scope. The renderer reads the
+same image/canvas and topic selection callbacks as the mounted tile; it creates no stream,
+subscription, decoder or independent settings state. Missing camera topics now still mount a tile
+presentation, so XR can show its availability status and follow late discovery.
+
+Live MJPEG pixels change without DOM mutations. XR copies them at most 30 times per second to a
+bounded canvas texture, preserving aspect ratio with letterboxing. Recorded frames expose a
+revision counter; a paused recording uploads nothing until its frame or status changes. Topic
+changes and live/replay remounts replace the source, and disposal releases XR textures and tile
+presentation ownership. Desktop source cleanup remains responsible for closing the MJPEG response.
+
+Cross-origin image servers must allow CORS for WebGL texture use. The tile requests anonymous CORS
+only while XR presents an absolute cross-origin stream, restoring its desktop behavior on exit.
+The same-origin video proxy needs no reload on XR entry. A tainted canvas is cleared before error
+text is uploaded; it cannot reach WebGL. Retry uses the tile's existing stream/replay pipeline.
+
+Verification: camera renderer and tile tests cover shared frames, scope isolation, throttling,
+paused replay, aspect ratio, taint rejection and cleanup. `e2e/xr-camera.spec.ts` exercises real
+changing multipart MJPEG in VR/AR with one stream, topic switching, retry and removal; it also runs
+real ROS 2 CDR images through the MCAP replay worker and verifies paused seek and topic changes.
+Screenshots were reviewed. Physical headset validation remains outstanding. The external WebRTC
+panel still needs a separate video renderer; this native implementation covers the built-in Camera.

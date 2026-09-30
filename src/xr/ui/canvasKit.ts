@@ -37,6 +37,7 @@ export type IconName =
   | 'grow'
   | 'shrink'
   | 'cube'
+  | 'camera'
   | 'pause'
   | 'play'
   | 'check';
@@ -270,6 +271,19 @@ export const drawIcon = (
       ctx.lineTo(s * 0.87, -s * 0.5);
       ctx.moveTo(0, 0);
       ctx.lineTo(-s * 0.87, -s * 0.5);
+      break;
+    case 'camera':
+      ctx.moveTo(-s * 0.9, -s * 0.5);
+      ctx.lineTo(-s * 0.4, -s * 0.5);
+      ctx.lineTo(-s * 0.2, -s * 0.8);
+      ctx.lineTo(s * 0.4, -s * 0.8);
+      ctx.lineTo(s * 0.6, -s * 0.5);
+      ctx.lineTo(s * 0.9, -s * 0.5);
+      ctx.lineTo(s * 0.9, s * 0.65);
+      ctx.lineTo(-s * 0.9, s * 0.65);
+      ctx.closePath();
+      ctx.moveTo(s * 0.38, s * 0.05);
+      ctx.arc(0, s * 0.05, s * 0.38, 0, Math.PI * 2);
       break;
     case 'check':
       ctx.moveTo(-s * 0.8, 0);
