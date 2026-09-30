@@ -1,9 +1,9 @@
 name: Electron Build
 
-# Builds the Linux packages for the Electron desktop shell. Linux only, and deliberately so: the
-# shell exists because several distributions compile WebRTC out of WebKitGTK, which is what the
-# Tauri build draws in, so the video panels there fall back to HLS. The Windows and macOS web
-# views have WebRTC, so those platforms gain nothing from a second, much larger package.
+# Builds the Electron desktop shell's packages: Linux .debs for x64 and ARM64, where the shell exists
+# because several distributions compile WebRTC out of WebKitGTK (what the Tauri build draws in), and
+# a native Apple Silicon disk image for Macs, the same Chromium shell beside the Tauri app. Windows
+# is left to Tauri: its web view has WebRTC and a second, much larger installer would add nothing.
 #
 # It publishes nothing. Release Please owns releases and calls this workflow for the packages it
 # then attaches, exactly as it does for the Tauri installers. The pull-request trigger only checks
@@ -21,6 +21,7 @@ on:
     branches: [main]
     paths:
       - 'electron/**'
+      - 'e2e/fixtures/robotResourceRenderer.ts'
       - 'src/**'
       - 'panel-sdk/**'
       - 'public/**'
@@ -95,3 +96,72 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: release/*.deb
+
+  macos:
+    name: macOS ${{ matrix.arch }} app (dmg)
+    if: >-
+      github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'dev'
+    # Apple Silicon runners, so the build signs and checks the app on the architecture it is for.
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64]
+
+    steps:
+      - name: Check out the revision to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check the Electron shell
+        run: npm run typecheck:electron
+
+      - name: Verify native robot assets and web proxy parity
+        run: npm run test:robot-resources
+
+      - name: Verify panel frames reach the robot's embed route
+        run: npm run test:embed-proxy
+
+      - name: Build the renderer and the shell
+        run: npm run build:electron
+
+      - name: Verify the build bundles no panels
+        env:
+          ROBOBOY_DIST_DIR: dist-electron/renderer
+        run: npm run check:release-panels
+
+      # The signature is ad-hoc (config/electron-builder.yml): no certificate or secret is involved,
+      # so the pull-request build signs exactly as the release build does. electron-builder skips
+      # signing on pull requests unless told otherwise, and an unsigned bundle would not run.
+      - name: Package the macOS app
+        env:
+          CSC_FOR_PULL_REQUEST: 'true'
+        run: npx electron-builder --config config/electron-builder.yml --mac dmg --${{ matrix.arch }} --publish never
+
+      - name: Check the app is signed and built for ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          app="release/mac-${{ matrix.arch }}/Robo-Boy.app"
+          codesign --verify --deep --strict --verbose=2 "${app}"
+          codesign --display --verbose=2 "${app}" 2>&1 | grep -q 'Signature=adhoc'
+          archs=$(lipo -archs "${app}/Contents/MacOS/Robo-Boy")
+          echo "Executable architectures: ${archs}"
+          [ "${archs}" = "${{ matrix.arch }}" ]
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: release/*.dmg

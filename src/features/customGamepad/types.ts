@@ -1,6 +1,7 @@
 // Types for the custom gamepad system
 
 import type { RosOperation } from '../../utils/rosOperations';
+import type { StateMapping } from './padValues';
 
 export type PhysicalGamepadProfile = 'auto' | 'xbox' | 'playstation' | 'logitech';
 
@@ -59,9 +60,13 @@ export enum ComponentInteractionMode {
   Settings = 'settings'
 }
 
+export type PadComponentType =
+  | 'joystick' | 'physical-gamepad' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot' | 'heartbeat'
+  | 'gauge' | 'level' | 'readout' | 'state' | 'setpoint' | 'text';
+
 export interface GamepadComponentConfig {
   id: string;
-  type: 'joystick' | 'physical-gamepad' | 'button' | 'dpad' | 'toggle' | 'slider' | 'camera' | 'plot' | 'heartbeat';
+  type: PadComponentType;
   position: GridPosition;
   label?: string;
   action?: ComponentAction;
@@ -133,6 +138,29 @@ export interface GamepadComponentConfig {
     heartbeatMode?: 'boolean' | 'pulse';
     heartbeatTimeoutMs?: number;
     heartbeatFieldPath?: string;
+
+    // Values shown or sent (gauge, level, readout, state, setpoint, text). The field is `action.field`; the range
+    // is `min`/`max`, with `step` for a setpoint and `orientation` for a level bar.
+    /** Primitive type of the field (`float64`, `int32`, `bool`…), when it was picked from the message's fields. */
+    fieldType?: string;
+    unit?: string;
+    decimals?: number;
+    /** Shown value = field value × scale + offset (e.g. 0–1 battery fraction × 100 → percent). */
+    scale?: number;
+    offset?: number;
+    /** Thresholds, in shown units: at or past them the value turns amber, then red. */
+    warnAt?: number;
+    alarmAt?: number;
+    /** The thresholds count downward: low values are the concern (battery, pressure). */
+    alertBelow?: boolean;
+    /** No message for this long marks the value stale; 0 or unset never does. */
+    staleAfterMs?: number;
+    /** State indicator: what each value is called and how it is coloured. */
+    stateMappings?: StateMapping[];
+    /** Text display: how many recent messages stay on screen. */
+    historyLength?: number;
+    /** Setpoint: publish on every change instead of waiting for Send. */
+    sendOnChange?: boolean;
   };
 }
 

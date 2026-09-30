@@ -4,11 +4,11 @@ import type { Ros } from 'roslib';
 import { 
   CustomGamepadLayout, 
   GamepadComponentConfig, 
-  EditorState
+  EditorState,
+  PadComponentType
 } from '../types';
-import { componentLibrary } from '../defaultLayouts';
+import { componentLibrary, createComponent } from '../defaultLayouts';
 import { fitNewComponent, isAreaFree, measureGridCells, occupiedExtent, type GridPoint, type GridRect } from '../padGeometry';
-import { DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ } from '../physicalGamepad';
 import { generateGamepadId, saveCustomGamepad } from '../gamepadStorage';
 import LayoutRenderer from './CustomGamepadLayout';
 import ComponentPalette from './ComponentPalette';
@@ -103,73 +103,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
 
   // Adds a component where it was placed, at the size that fitted there (see placementFor).
   const handleAddComponent = useCallback((componentType: string, placement: GridRect) => {
-    const componentDef = componentLibrary.find(c => c.type === componentType);
-    if (!componentDef) return;
-
-    let action: { topic: string; messageType: string; field?: string } = {
-      topic: `/${componentType}`,
-      messageType: 'sensor_msgs/Joy',
-    };
-
-    switch (componentType) {
-      case 'joystick':
-        action = { topic: '/joystick', messageType: 'sensor_msgs/Joy', field: 'axes' };
-        break;
-      case 'physical-gamepad':
-        action = { topic: '/joy', messageType: 'sensor_msgs/msg/Joy', field: 'axes' };
-        break;
-      case 'dpad':
-        action = { topic: '/dpad', messageType: 'sensor_msgs/Joy', field: 'buttons' };
-        break;
-      case 'button':
-        action = { topic: '/button', messageType: 'std_msgs/Bool', field: 'data' };
-        break;
-      case 'toggle':
-        action = { topic: '/toggle', messageType: 'std_msgs/Bool', field: 'data' };
-        break;
-      case 'slider':
-        action = { topic: '/slider', messageType: 'std_msgs/Float32', field: 'data' };
-        break;
-      case 'camera':
-        action = { topic: '/camera/image_raw', messageType: 'sensor_msgs/Image' };
-        break;
-      case 'plot':
-        action = { topic: '/plot', messageType: 'std_msgs/Float32', field: 'data' };
-        break;
-      case 'heartbeat':
-        action = { topic: '/heartbeat', messageType: 'std_msgs/Bool', field: 'data' };
-        break;
-      default:
-        action = { topic: `/${componentType}`, messageType: layout.rosConfig.defaultMessageType };
-    }
-
-    const defaultConfig =
-      componentType === 'camera'
-        ? { cameraTransport: 'proxy' as const }
-        : componentType === 'plot'
-          ? { fieldPath: 'data', fieldPaths: ['data'], timeWindowSec: 10, autoScale: true, minY: -1, maxY: 1 }
-          : componentType === 'heartbeat'
-            ? { heartbeatMode: 'boolean' as const, heartbeatTimeoutMs: 2000, heartbeatFieldPath: 'data' }
-            : componentType === 'physical-gamepad'
-              ? {
-                physicalGamepadProfile: 'auto' as const,
-                physicalGamepadDeadzone: 0.08,
-                physicalGamepadPublishHz: DEFAULT_PHYSICAL_GAMEPAD_PUBLISH_HZ,
-              }
-              : componentType === 'dpad'
-                ? { buttonMapping: { up: 0, right: 1, down: 2, left: 3 } }
-                : componentType === 'joystick'
-                  ? { min: -1, max: 1, sliderMin: -1, sliderMax: 1, axes: ['0', '1'] }
-                  : undefined;
-
-    const newComponent: GamepadComponentConfig = {
-      id: `${componentType}-${Date.now()}`,
-      type: componentType as any,
-      position: { ...placement },
-      label: componentDef.name,
-      action: action,
-      config: defaultConfig
-    };
+    const newComponent = createComponent(componentType as PadComponentType, placement);
+    if (!newComponent) return;
 
     setLayout(prev => ({
       ...prev,
@@ -180,7 +115,7 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
       ...prev,
       selectedComponentId: newComponent.id
     }));
-  }, [layout.rosConfig]);
+  }, []);
 
   const handleComponentSelect = useCallback((id: string) => {
     setEditorState(prev => {

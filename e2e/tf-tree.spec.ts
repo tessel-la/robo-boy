@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { installRosMock } from './helpers/rosMock';
+import { getActiveRosSubscriptionCount, installRosMock } from './helpers/rosMock';
 
 const transform = (parent: string, child: string, sec: number) => ({
   header: { frame_id: parent, stamp: { sec, nanosec: 0 } },
@@ -12,6 +12,8 @@ const transform = (parent: string, child: string, sec: number) => ({
 });
 
 async function publishTf(page: Page, topic: '/tf' | '/tf_static', transforms: unknown[]) {
+  // The dynamic topic subscribes once rosapi says whether the robot has a TF relay.
+  await expect.poll(() => getActiveRosSubscriptionCount(page, topic)).toBeGreaterThan(0);
   await page.evaluate(
     ({ topicName, payload }) => {
       (

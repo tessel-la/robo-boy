@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { Ros, Topic } from 'roslib';
-import ROSLIB from 'roslib';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { Ros } from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
 import { getValueAtPath } from '../rosMessageUtils';
+import { useTopicSubscription } from '../useTopicSubscription';
 import './DataDisplayComponents.css';
 
 interface HeartbeatComponentProps {
@@ -29,7 +29,6 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
   isEditing = false,
   scaleFactor = 1,
 }) => {
-  const topicRef = useRef<Topic | null>(null);
   const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<HeartbeatStatus>(isEditing ? 'healthy' : 'waiting');
   const action = config.action as ROSTopicConfig | undefined;
@@ -37,63 +36,44 @@ const HeartbeatComponent: React.FC<HeartbeatComponentProps> = ({
   const timeoutMs = Math.max(100, config.config?.heartbeatTimeoutMs ?? 2000);
   const fieldPath = config.config?.heartbeatFieldPath || action?.field || 'data';
 
-  useEffect(() => {
-    const clearStaleTimer = () => {
-      if (staleTimerRef.current) {
-        clearTimeout(staleTimerRef.current);
-        staleTimerRef.current = null;
-      }
-    };
-    const scheduleStaleTimer = () => {
-      clearStaleTimer();
-      staleTimerRef.current = setTimeout(() => {
-        staleTimerRef.current = null;
-        setStatus('unhealthy');
-      }, timeoutMs);
-    };
-
+  const clearStaleTimer = useCallback(() => {
+    if (staleTimerRef.current) clearTimeout(staleTimerRef.current);
+    staleTimerRef.current = null;
+  }, []);
+  // A recurring heartbeat is healthy only while messages keep coming.
+  const scheduleStaleTimer = useCallback(() => {
     clearStaleTimer();
-
-    if (isEditing) {
-      setStatus('healthy');
-      return;
-    }
-
-    if (!action?.topic || !action.messageType) {
+    staleTimerRef.current = setTimeout(() => {
+      staleTimerRef.current = null;
       setStatus('unhealthy');
+    }, timeoutMs);
+  }, [clearStaleTimer, timeoutMs]);
+
+  const onMessage = useCallback((message: unknown) => {
+    if (mode === 'boolean') {
+      setStatus(isHeartbeatValueActive(getValueAtPath(message, fieldPath)) ? 'healthy' : 'unhealthy');
       return;
     }
+    setStatus('healthy');
+    scheduleStaleTimer();
+  }, [fieldPath, mode, scheduleStaleTimer]);
 
-    if (!ros?.isConnected) {
-      setStatus('disconnected');
-      return;
+  const topicStatus = useTopicSubscription({ ros, topic: action?.topic, messageType: action?.messageType, isEditing, onMessage });
+
+  // Until messages decide it, the heartbeat follows the subscription.
+  useEffect(() => {
+    if (topicStatus === 'live') return;
+    clearStaleTimer();
+    if (topicStatus === 'preview') setStatus('healthy');
+    else if (topicStatus === 'unconfigured') setStatus('unhealthy');
+    else if (topicStatus === 'disconnected') setStatus('disconnected');
+    else {
+      setStatus('waiting');
+      if (mode === 'pulse') scheduleStaleTimer();
     }
+  }, [clearStaleTimer, mode, scheduleStaleTimer, topicStatus]);
 
-    const topic = new ROSLIB.Topic({
-      ros,
-      name: action.topic,
-      messageType: action.messageType,
-    });
-
-    setStatus('waiting');
-    topic.subscribe((message: unknown) => {
-      if (mode === 'boolean') {
-        setStatus(isHeartbeatValueActive(getValueAtPath(message, fieldPath)) ? 'healthy' : 'unhealthy');
-        return;
-      }
-
-      setStatus('healthy');
-      scheduleStaleTimer();
-    });
-    topicRef.current = topic;
-    if (mode === 'pulse') scheduleStaleTimer();
-
-    return () => {
-      clearStaleTimer();
-      topic.unsubscribe();
-      topicRef.current = null;
-    };
-  }, [action?.messageType, action?.topic, fieldPath, isEditing, mode, ros, ros?.isConnected, timeoutMs]);
+  useEffect(() => clearStaleTimer, [clearStaleTimer]);
 
   const description = status === 'healthy'
     ? 'Heartbeat healthy'

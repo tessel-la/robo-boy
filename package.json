@@ -37,6 +37,8 @@
     "preview": "vite preview --config config/vite.config.ts --host",
     "test": "vitest --config config/vitest.config.ts",
     "test:panel-installer": "node --test scripts/install-panels.test.mjs",
+    "test:robot-resources": "node scripts/test-robot-resources.mjs",
+    "test:embed-proxy": "node scripts/test-embed-proxy.mjs",
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",
     "e2e": "playwright test --config config/playwright.config.ts",
@@ -72,7 +74,9 @@
     "uuid": "^14.0.0"
   },
   "overrides": {
-    "@xmldom/xmldom": "^0.9.12",
+    "roslib": {
+      "@xmldom/xmldom": "^0.9.12"
+    },
     "@rollup/plugin-terser": "^1.0.0"
   },
   "devDependencies": {

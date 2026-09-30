@@ -21,6 +21,7 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-image-transport \
       ros-${ROS_DISTRO}-cv-bridge \
       ros-${ROS_DISTRO}-control-msgs \
+      ros-${ROS_DISTRO}-diagnostic-msgs \
       ros-${ROS_DISTRO}-tf2-msgs \
       ros-${ROS_DISTRO}-web-video-server \
       ros-${ROS_DISTRO}-geographic-msgs \
@@ -46,7 +47,11 @@ WORKDIR /ros_ws
 
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
+COPY infra/ros/bt_execution_details.py /ros_ws/bt_execution_details.py
 COPY infra/ros/recording_runner.py /ros_ws/recording_runner.py
+COPY infra/ros/inspection_runner.py /ros_ws/inspection_runner.py
+COPY infra/ros/tf_relay.py /ros_ws/tf_relay.py
+COPY infra/ros/rosbridge_launch.xml /ros_ws/rosbridge_launch.xml
 RUN chmod +x /ros_ws/entrypoint.sh
 
 ENTRYPOINT ["/ros_ws/entrypoint.sh"]

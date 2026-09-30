@@ -48,6 +48,7 @@ describe('resolveRuntimeEndpoints', () => {
       webrtcWhepBaseUrl: '/webrtc/',
       webrtcHlsBaseUrl: '',
       webrtcDiscoveryUrl: '/webrtc/_discovery/paths',
+      embedBaseUrl: '',
       mode: 'web',
       host: 'robot.local',
     });
@@ -69,6 +70,7 @@ describe('resolveRuntimeEndpoints', () => {
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
       webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
       webrtcDiscoveryUrl: 'http://192.168.1.20:9997/v3/paths/list',
+      embedBaseUrl: '',
       mode: 'web',
       host: '192.168.1.20',
     });
@@ -103,6 +105,7 @@ describe('resolveRuntimeEndpoints', () => {
       webrtcWhepBaseUrl: 'http://robot.tailnet.ts.net:8889/',
       webrtcHlsBaseUrl: 'http://robot.tailnet.ts.net:8888/',
       webrtcDiscoveryUrl: 'http://robot.tailnet.ts.net:9997/v3/paths/list',
+      embedBaseUrl: '',
       mode: 'web',
       host: 'robot.tailnet.ts.net',
     });
@@ -126,6 +129,7 @@ describe('resolveRuntimeEndpoints', () => {
         webrtcPort: '8889',
         webrtcDiscoveryPort: '9997',
   webrtcHlsPort: '8888',
+        embedProxyPort: '443',
         webBackendMode: 'proxy',
       }
     );
@@ -148,6 +152,7 @@ describe('resolveRuntimeEndpoints', () => {
       webrtcWhepBaseUrl: 'http://192.168.1.20:8889/',
       webrtcHlsBaseUrl: 'http://192.168.1.20:8888/',
       webrtcDiscoveryUrl: 'http://192.168.1.20:9997/v3/paths/list',
+      embedBaseUrl: 'https://192.168.1.20',
       mode: 'desktop',
       host: '192.168.1.20',
     });
@@ -166,6 +171,7 @@ describe('resolveRuntimeEndpoints', () => {
   it('wraps IPv6 hosts when constructing service URLs', () => {
     const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '[::1]' }, true);
     expect(endpoints.rosbridgeUrl).toBe('ws://[::1]:9090');
+    expect(endpoints.embedBaseUrl).toBe('https://[::1]');
   });
 
   it('allows desktop direct-connect ports to be overridden', () => {
@@ -176,7 +182,7 @@ describe('resolveRuntimeEndpoints', () => {
       recordingsPort: '19091',
       ollamaPort: '11435',
       webrtcPort: '8889', webrtcDiscoveryPort: '9997',
-  webrtcHlsPort: '8888', webBackendMode: 'auto',
+  webrtcHlsPort: '8888', embedProxyPort: '8443', webBackendMode: 'auto',
     });
 
     expect(endpoints.rosbridgeUrl).toBe('ws://robot.local:19090');
@@ -184,6 +190,7 @@ describe('resolveRuntimeEndpoints', () => {
     expect(endpoints.meshResourcesBaseUrl).toBe('http://robot.local:18000');
     expect(endpoints.ollamaBaseUrl).toBe('http://robot.local:11435');
     expect(endpoints.recordingsBaseUrl).toBe('http://robot.local:19091');
+    expect(endpoints.embedBaseUrl).toBe('https://robot.local:8443');
   });
 
   it('allows the landing page connection to override service ports', () => {

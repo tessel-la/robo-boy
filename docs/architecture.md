@@ -16,6 +16,7 @@ Browser or Tauri webview
         v
 ROS stack
   rosapi + rosbridge + web_video_server
+  TF relay, inspector, recorder, behavior-tree runner
         |
         | ROS 2 DDS on the host network
         v
@@ -64,6 +65,13 @@ The connection object is passed to feature components. Code that creates a `ROSL
 
 rosapi provides topic, service, action, and message-schema discovery. Robot-specific interface packages are supplied through workspace overlays described in [Robot workspace overlays](robot-overlays.md).
 
+rosbridge is a single Python process that serializes every outgoing message and has a bounded per-client write queue. When a client falls behind, it drops outgoing messages of any kind, service responses included. Two ROS-stack helpers keep high-rate or high-count traffic off that path:
+
+- `infra/ros/tf_relay.py` coalesces `/tf` into `/roboboy/tf`, sending the newest transform per frame at a fixed rate. `src/utils/tfStream.ts` uses it when the robot has it.
+- `infra/ros/inspection_runner.py` publishes the whole graph as one snapshot. Behavior-tree discovery reads that snapshot instead of making one rosapi call per service.
+
+`infra/ros/rosbridge_launch.xml` enables the events executor and permessage-deflate. See [Performance: rosbridge load](performance.md#rosbridge-load).
+
 ## Feature Modules
 
 ### Custom Gamepads
@@ -75,13 +83,15 @@ rosapi provides topic, service, action, and message-schema discovery. Robot-spec
 `src/features/behaviorTree/` is split into:
 
 - `components/`: React Flow editor, toolbar, palette, node renderers, and parameter editors.
-- `services/rosDiscovery.ts`: ROS resource and schema discovery through rosapi.
+- `services/rosDiscovery.ts`: ROS resource discovery, from one inspector graph snapshot when the ROS stack has one, else through rosapi with a timeout on every call; schema discovery through rosapi.
 - `engine/executor.ts`: sequence, selector, parallel, action, service, and topic execution.
 - `engine/persistentExecutor.ts`: the versioned command/status transport for ROS-owned executions.
 - `storage/treeStorage.ts`: versioned browser persistence and JSON import/export.
 - Root helpers and types: node creation, ordering, layout, search, and templates.
 
 The editor owns graph state; an executor consumes a complete tree snapshot and emits execution events. Local runs use the browser executor. Opt-in persistent runs are sent to `infra/ros/behavior_tree_runner.py`, which owns ROS clients independently of the browser and exposes reconnectable status over standard `std_msgs/String` topics. Keep graph editing independent from either execution transport so both remain testable.
+
+The Data Explorer keeps one inspection session per ROS connection (`src/features/dataExplorer/InspectionSession.ts`), shared by every Explorer tile and released when the last one closes. Graph discovery, endpoint counts, QoS and traffic measurement run on the ROS host in `infra/ros/inspection_runner.py`, which serves leased, expiring probes over `std_msgs/String` topics and never calls robot services. Without it the session falls back to the serialized rosapi queue and labels browser-side rates as such; see [Data Explorer](data-explorer.md).
 
 ### 3D Visualization
 

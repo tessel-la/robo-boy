@@ -45,10 +45,10 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
 
-  # Linux only: the Electron shell exists for the distributions whose WebKitGTK has no WebRTC, and
-  # the Windows and macOS web views do have it.
+  # Linux .debs, for the distributions whose WebKitGTK has no WebRTC, and an Apple Silicon disk image
+  # for Macs. Windows is left to Tauri, whose web view has WebRTC.
   electron:
-    name: Build the Electron Linux packages
+    name: Build the Electron packages
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     permissions:
@@ -107,7 +107,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: electron
-          pattern: electron-linux-*
+          pattern: electron-*
 
       - name: Download the built iPhone app
         uses: actions/download-artifact@v4
@@ -164,7 +164,8 @@ jobs:
           find installers stable iphone -type f
 
       # Keep each architecture's artifact directory separate so every expected architecture must
-      # supply a Debian package. Preserve the existing x64 download name alongside the ARM64 one.
+      # supply a Debian package. Preserve the existing x64 download name alongside the ARM64 one, and
+      # give the Apple Silicon disk image its own.
       - name: Name a stable copy of the Electron packages
         run: |
           set -euo pipefail
@@ -184,6 +185,14 @@ jobs:
             if [ "${arch}" = x64 ]; then platform_arch=amd64; fi
             cp "${built[0]}" "stable/Robo-Boy-linux-${platform_arch}-electron.deb"
           done
+          # Apple Silicon only: the Tauri disk image is universal and still serves Intel Macs.
+          artifact_dir=electron/electron-macos-arm64
+          mapfile -t built < <(find "${artifact_dir}" -type f -name '*.dmg' 2>/dev/null)
+          if [ "${#built[@]}" -ne 1 ]; then
+            echo "::error::expected one Electron Apple Silicon .dmg, found ${#built[@]}"
+            exit 1
+          fi
+          cp "${built[0]}" stable/Robo-Boy-macos-arm64-electron.dmg
           find electron stable -type f
 
       - name: Name the Android APK

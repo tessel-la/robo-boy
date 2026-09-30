@@ -39,7 +39,48 @@ frontend is needed, so no certificate has to be created:
 docker compose up -d --build ros-stack
 ```
 
-The optional mesh server must allow cross-origin requests when the desktop app loads URDF meshes directly from port 8000.
+URDF descriptions arrive over rosbridge; their mesh files, materials, and textures come from the
+selected mesh server. Electron and Tauri (including mobile) fetch these assets through a dedicated
+native `robot-resource` transport, so the mesh server does not need CORS headers. Mesh markers use
+the same transport. Set the mesh port in the connection's service-port fields; `8000` is only the
+default. Localhost, remote hosts, VPN addresses, IPv6, and custom ports follow the same path.
+
+The transport only performs HTTP(S) GETs within the selected resource-server origin and path,
+checks redirects against that scope, and sends no cookies or authorization headers. Assets on an
+unrelated absolute URL keep using normal browser fetching and need that server's CORS support.
+The web app continues to use `/mesh_resources` through Caddy, or ordinary CORS when configured to
+connect directly. Other services such as Ollama retain their existing origin requirements.
+
+If TF frames appear but the robot mesh does not, check asset requests as well as `/robot_description`:
+a valid URDF can arrive while every OBJ/STL/DAE request fails. In older desktop builds, a missing
+`Access-Control-Allow-Origin` response header causes exactly this symptom.
+
+Validate the desktop asset path against a local fixture with no CORS headers (OBJ, MTL, textures,
+STL, plus web-proxy parity) using `npm run test:robot-resources`. An optional read-only live check is:
+
+```bash
+ROBOBOY_TEST_ROSBRIDGE=ws://10.8.0.1:9090 \
+ROBOBOY_TEST_MESH_BASE=http://10.8.0.1:8000 npm run test:robot-resources
+```
+
+Use the target connection's actual ports. The check subscribes to `/robot_description` and reads
+assets; it does not publish robot commands. On headless Linux, run it under `xvfb-run -a`.
+
+Panels that frame a robot page, such as a web viewer on the robot's port 8089, use the same-origin
+path `/<port>/` beside their sandbox. In a browser the robot's Robo-Boy proxy serves that path and
+publishes only the ports in `ROBOBOY_EMBED_PORTS`. The packaged app serves itself, so Electron gives
+each connection's panel sandbox its own host, `app://embed-<id>/`, and forwards that host's
+`/<port>/` requests to the connection's robot proxy at `https://<host>` (`VITE_EMBED_PROXY_PORT`,
+default 443). The robot's allowlist still decides which ports are reachable, cookies are not
+forwarded, and hosts the app did not register reach nothing. Tauri keeps the sandbox beside the app.
+
+`npm run test:embed-proxy` checks the route against a local fixture. An optional read-only live
+check frames a page on one of the robot's allowed ports and waits until `ROBOBOY_TEST_EMBED_SELECTOR`
+(default `body`) renders content:
+
+```bash
+ROBOBOY_TEST_EMBED_BASE=https://robot.local ROBOBOY_TEST_EMBED_PATH=/8089/ npm run test:embed-proxy
+```
 
 ## Development
 
@@ -154,17 +195,24 @@ npm run package:electron
 Installers are written to `release/`. Linux produces a `.deb`, Windows an NSIS
 installer, macOS a `.dmg`; as with Tauri, each operating system builds and signs its own.
 
-Local packaging defaults to the host architecture. Official Linux CI builds both **x86_64 (AMD64)**
-and **ARM64**, each as a `.deb`: two distinct Electron packages. Release Please
-also publishes a stable copy of each package for permanent download links:
+Local packaging defaults to the host architecture. Official CI builds three Electron packages: a
+`.deb` for **x86_64 (AMD64)** and for **ARM64** Linux, and a `.dmg` for **Apple Silicon** Macs (M1
+and later). Release Please also publishes a stable copy of each for permanent download links:
 
-| Architecture | Debian package |
+| System | Package |
 | --- | --- |
-| x86_64 / AMD64 | `Robo-Boy-linux-amd64-electron.deb` |
-| ARM64 | `Robo-Boy-linux-arm64-electron.deb` |
+| Linux x86_64 / AMD64 | `Robo-Boy-linux-amd64-electron.deb` |
+| Linux ARM64 | `Robo-Boy-linux-arm64-electron.deb` |
+| macOS, Apple Silicon | `Robo-Boy-macos-arm64-electron.dmg` |
 
 The versioned files and stable copies contain the same packages. AMD64 and x86_64 name the same
-64-bit architecture; neither is a 32-bit x86 build. Tauri installers are published separately.
+64-bit architecture; neither is a 32-bit x86 build. Intel Macs use the universal Tauri disk image;
+Tauri installers are published separately.
+
+The Mac app is ad-hoc signed, not notarized: signing with a Developer ID needs an Apple account. The
+first time it is opened from a download, macOS says it cannot check it; open it from **System
+Settings → Privacy & Security → Open Anyway** (or Control-click it and choose **Open**). Updates
+installed from inside the app do not ask again.
 
 `npm run build:electron` stops after producing the unpackaged app under `dist-electron/`, which is
 what `dev:electron` and the smoke checks use.
@@ -227,6 +275,7 @@ until a newer one appears.
 | Linux, Tauri `.deb` / `.rpm` | `Robo-Boy-linux-amd64.deb`, `Robo-Boy-linux-x86_64.rpm` | `pkexec apt-get install` / `pkexec dnf install` |
 | Windows                      | `Robo-Boy-windows-x64-setup.exe`     | The NSIS installer in passive mode, which reopens the app         |
 | macOS                        | `Robo-Boy-macos-universal.dmg`       | The app bundle is replaced from the disk image, then reopened     |
+| macOS, Electron (Apple Silicon) | `Robo-Boy-macos-arm64-electron.dmg` | The app bundle is replaced from the disk image, then reopened  |
 
 Everything that has to be trusted happens in the desktop shell, never in the page: the shell looks
 the release up on GitHub over its own certificate-checked connection (the Electron page runs with

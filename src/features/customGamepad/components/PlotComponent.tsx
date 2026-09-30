@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Ros, Topic } from 'roslib';
-import ROSLIB from 'roslib';
+import type { Ros } from 'roslib';
 import { GamepadComponentConfig, ROSTopicConfig } from '../types';
+import { useTopicSubscription } from '../useTopicSubscription';
 import {
   getNumericValueAtPath,
   getPlotRange,
@@ -18,7 +18,6 @@ interface PlotComponentProps {
 }
 
 const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = false, scaleFactor = 1 }) => {
-  const topicRef = useRef<Topic | null>(null);
   const action = config.action as ROSTopicConfig | undefined;
   const fieldPaths = useMemo(() => {
     const configuredPaths = config.config?.fieldPaths?.filter(Boolean);
@@ -33,15 +32,9 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
   const maxY = config.config?.maxY ?? 1;
   const seriesSamplesRef = useRef<Record<string, PlotSample[]>>({});
   const animationFrameRef = useRef<number | null>(null);
-  const statusRef = useRef('No plot topic selected');
   const [seriesSamples, setSeriesSamples] = useState<Record<string, PlotSample[]>>({});
-  const [status, setStatus] = useState('No plot topic selected');
-
-  const setStatusIfChanged = useCallback((nextStatus: string) => {
-    if (statusRef.current === nextStatus) return;
-    statusRef.current = nextStatus;
-    setStatus(nextStatus);
-  }, []);
+  // Set when a message arrived without a number at any plotted field.
+  const [fieldError, setFieldError] = useState('');
 
   const flushSamples = useCallback(() => {
     animationFrameRef.current = null;
@@ -70,76 +63,57 @@ const PlotComponent: React.FC<PlotComponentProps> = ({ config, ros, isEditing = 
     }
   }, [flushSamples]);
 
+  // A different topic, field set or window starts an empty plot.
   useEffect(() => {
     cancelPendingFlush();
     seriesSamplesRef.current = {};
     setSeriesSamples({});
+    setFieldError('');
+  }, [action?.messageType, action?.topic, cancelPendingFlush, fieldPathsKey, isEditing, sampleLimit, timeWindowSec]);
 
-    if (isEditing) {
-      setStatusIfChanged('Plot preview');
+  useEffect(() => cancelPendingFlush, [cancelPendingFlush]);
+
+  const onMessage = useCallback((message: unknown) => {
+    const now = Date.now();
+    const nextValues = fieldPaths
+      .map(path => ({ path, value: getNumericValueAtPath(message, path) }))
+      .filter((item): item is { path: string; value: number } => item.value !== null);
+
+    if (nextValues.length === 0) {
+      setFieldError(`No numeric data at ${fieldPaths.join(', ')}`);
       return;
     }
 
-    if (!action?.topic || !action.messageType || fieldPaths.length === 0) {
-      setStatusIfChanged('No plot topic selected');
-      return;
-    }
-
-    if (!ros?.isConnected) {
-      setStatusIfChanged('Connecting...');
-      return;
-    }
-
-    const topic = new ROSLIB.Topic({
-      ros,
-      name: action.topic,
-      messageType: action.messageType,
+    nextValues.forEach(({ path, value }) => {
+      seriesSamplesRef.current[path] = trimPlotSamples(
+        [...(seriesSamplesRef.current[path] ?? []), { time: now, value }],
+        now,
+        timeWindowSec,
+        sampleLimit
+      );
     });
+    scheduleFlush();
+    setFieldError('');
+    // fieldPathsKey stands for fieldPaths, whose array identity changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldPathsKey, sampleLimit, scheduleFlush, timeWindowSec]);
 
-    topic.subscribe((message: unknown) => {
-      const now = Date.now();
-      const nextValues = fieldPaths
-        .map(path => ({ path, value: getNumericValueAtPath(message, path) }))
-        .filter((item): item is { path: string; value: number } => item.value !== null);
-
-      if (nextValues.length === 0) {
-        setStatusIfChanged(`No numeric data at ${fieldPaths.join(', ')}`);
-        return;
-      }
-
-      nextValues.forEach(({ path, value }) => {
-        seriesSamplesRef.current[path] = trimPlotSamples(
-          [...(seriesSamplesRef.current[path] ?? []), { time: now, value }],
-          now,
-          timeWindowSec,
-          sampleLimit
-        );
-      });
-      scheduleFlush();
-      setStatusIfChanged('');
-    });
-
-    topicRef.current = topic;
-    setStatusIfChanged('Waiting for data...');
-
-    return () => {
-      topic.unsubscribe();
-      cancelPendingFlush();
-      topicRef.current = null;
-    };
-  }, [
-    action?.messageType,
-    action?.topic,
-    fieldPathsKey,
-    isEditing,
+  const topicStatus = useTopicSubscription({
     ros,
-    ros?.isConnected,
-    sampleLimit,
-    cancelPendingFlush,
-    scheduleFlush,
-    setStatusIfChanged,
-    timeWindowSec,
-  ]);
+    topic: fieldPaths.length > 0 ? action?.topic : undefined,
+    messageType: action?.messageType,
+    isEditing,
+    onMessage,
+  });
+  const status = topicStatus === 'preview'
+    ? 'Plot preview'
+    : topicStatus === 'unconfigured'
+      ? 'No plot topic selected'
+      : topicStatus === 'disconnected'
+        ? 'Connecting...'
+        : topicStatus === 'waiting'
+          ? 'Waiting for data...'
+          : fieldError;
 
   const plot = useMemo(() => {
     const width = 320;

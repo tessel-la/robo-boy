@@ -38,7 +38,7 @@ export type {
   RoboBoyRosTopicSelectionOptions,
 } from '../../panel-sdk';
 
-export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad' | 'timeSeries' | 'recordReplay';
+export type BuiltInPanelId = 'camera' | '3d' | 'behaviorTree' | 'tfTree' | 'pad' | 'timeSeries' | 'recordReplay' | 'dataExplorer';
 
 export interface BuiltInPanelCatalogEntry {
   id: BuiltInPanelId;
@@ -120,6 +120,8 @@ export interface PanelHostRuntime {
     webrtcDiscovery: string;
     webrtcHls: string;
   };
+  /** Where the sandbox's `/<port>/` frames go in the desktop shell; never handed to a panel. */
+  embedBaseUrl?: string;
 }
 
 export interface StoredPanelState {

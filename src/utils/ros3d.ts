@@ -8,6 +8,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
+import { createRobotResourceManager } from '../runtime/robotResources';
 
 // Robot descriptions are immutable for the normal lifetime of a ROS connection. Cache only the
 // source string, scoped to the Ros object identity; scene graphs remain independently owned by
@@ -1425,6 +1426,7 @@ class UrdfClient extends THREE.Object3D {
   private onComplete?: (model: THREE.Object3D) => void;
   private linkNameMap: Map<string, THREE.Object3D> = new Map();
   private colladaLoader: ColladaLoader;
+  private resourceManager: THREE.LoadingManager;
   private objLoader: OBJLoader;
   private stlLoader: STLLoader;
   private requestRender: () => void;
@@ -1452,9 +1454,10 @@ class UrdfClient extends THREE.Object3D {
     this.onComplete = options.onComplete;
     this.requestRender = options.requestRender || (() => {});
 
-    this.colladaLoader = new ColladaLoader();
-    this.objLoader = new OBJLoader();
-    this.stlLoader = new STLLoader();
+    this.resourceManager = createRobotResourceManager(this.path);
+    this.colladaLoader = new ColladaLoader(this.resourceManager);
+    this.objLoader = new OBJLoader(this.resourceManager);
+    this.stlLoader = new STLLoader(this.resourceManager);
     this.rootObject.add(this);
 
     const descriptionTopicName = options.robotDescriptionTopic || '/robot_description';
@@ -1731,14 +1734,14 @@ class UrdfClient extends THREE.Object3D {
           if (hasCompanionMaterial) {
             const materialPath = fullPath.replace(/\.obj(?=$|[?#])/i, '.mtl');
             const resourcePath = fullPath.slice(0, fullPath.lastIndexOf('/') + 1);
-            const materialLoader = new MTLLoader();
+            const materialLoader = new MTLLoader(this.resourceManager);
             materialLoader.setResourcePath(resourcePath);
             materialLoader.load(
               materialPath,
               (materials) => {
                 if (this.disposed) return;
                 materials.preload();
-                const materialAwareLoader = new OBJLoader();
+                const materialAwareLoader = new OBJLoader(this.resourceManager);
                 materialAwareLoader.setMaterials(materials);
                 loadObj(materialAwareLoader);
               },

@@ -18,6 +18,7 @@ describe('panel catalog', () => {
       'pad',
       'timeSeries',
       'recordReplay',
+      'dataExplorer',
     ]);
   });
 

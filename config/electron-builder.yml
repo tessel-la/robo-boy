@@ -49,6 +49,15 @@ mac:
     - dmg
   icon: src-tauri/icons/icon.icns
   category: public.app-category.utilities
+  # Ad-hoc signed. Apple Silicon refuses to run an app bundle with no signature at all, and a
+  # Developer ID needs an Apple account this project does not use, so nothing is notarized either:
+  # the first open from a download goes through Gatekeeper's Open Anyway, as for the Tauri app.
+  identity: '-'
+  # The hardened runtime is for notarized builds; under an ad-hoc signature its library validation
+  # would refuse Electron's own frameworks and the app would not start.
+  hardenedRuntime: false
+  # Named apart from the Tauri disk image a release publishes beside it.
+  artifactName: robo-boy-electron_${version}_${arch}.${ext}
 
 deb:
   # Otherwise the package is named after the npm package, which is not what the app is called

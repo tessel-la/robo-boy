@@ -22,8 +22,17 @@ export interface PanelFetchReply {
 
 export interface RoboBoyDesktopBridge {
   shell: 'electron';
+  /** Native mesh/material/texture transport; absent in older shells. */
+  robotResourceProtocol?: boolean;
+  /** True on a Mac, where the system draws the window buttons. Absent in older shells. */
+  nativeWindowControls?: boolean;
   window: DesktopWindow;
   fetchPanelAsset(url: string, init?: { method?: string }): Promise<PanelFetchReply>;
+  /**
+   * Names the robot proxy a connection's panel frames reach; see `embedTarget.ts`. Absent in
+   * older shells, which keep the sandbox beside the app.
+   */
+  registerEmbedTarget?(baseUrl: string): void;
   /** Absent in shells built before updates existed. */
   updater?: DesktopUpdater;
 }
