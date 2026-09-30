@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic ROS graph shaped like a busy robotic cell, for rosbridge load tests.
 
-Defaults mirror r021-bg-008 (2026-09-30): /tf at ~1500 Hz from four publishers
+Defaults mirror a busy two-arm cell measured on 2026-09-30: /tf at ~1500 Hz from four publishers
 (two 250 Hz arm drivers, two 500 Hz aggregators), ~50 nodes, ~330 topics,
 ~540 services and 10 action servers.
 

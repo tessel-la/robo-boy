@@ -4,7 +4,7 @@ Reproduces a busy cell against one rosbridge configuration and reports what a re
 client experiences. Results and the chosen defaults are in
 [docs/performance.md](../../docs/performance.md#rosbridge-load).
 
-- `graph.py` publishes a synthetic graph shaped like r021-bg-008:
+- `graph.py` publishes a synthetic graph shaped like a busy two-arm cell:
   - `/tf` at about 1500 Hz from four publishers;
   - about 300 topics, 540 services and 10 action servers;
   - optionally, a point cloud.
@@ -30,8 +30,8 @@ docker run -d --name rbbench-graph --network rbbench --ip 10.77.0.2 -e ROS_DOMAI
   -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 -v "$PWD/scripts/rosbridge-bench:/bench:ro" \
   --entrypoint bash rbbench-ros:dev -c 'source /opt/ros/jazzy/setup.bash; g=/bench/graph.py
     python3 $g graph 50 & python3 $g static &
-    python3 $g tf robot_big_egm 250 6 & python3 $g tf robot_small_egm 250 6 &
-    python3 $g tf joint_tf 500 2 & python3 $g tf belief_world 500 1 & wait'
+    python3 $g tf arm_a_driver 250 6 & python3 $g tf arm_b_driver 250 6 &
+    python3 $g tf joint_aggregator 500 2 & python3 $g tf world_model 500 1 & wait'
 
 # Today's defaults against direct /tf over a 6 Mbit/s, 60 ms link:
 scripts/rosbridge-bench/run.sh before "use_events_executor:=false use_compression:=false" \

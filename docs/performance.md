@@ -89,7 +89,7 @@ The discarded service responses are why the behavior-tree palette could hang on 
 panel discovered call by call, one rosapi request per service, and a dropped reply was never
 retried.
 
-The typical cause is a kHz `/tf`. On r021-bg-008 (2026-09-30):
+The typical cause is a kHz `/tf`. On a production two-arm cell (measured 2026-09-30):
 - **`/tf`:** about 1500 Hz from four publishers.
 - **Graph size:** about 330 topics, 540 services and 10 actions.
 - **rosbridge CPU:** close to a full core with one browser connected.
