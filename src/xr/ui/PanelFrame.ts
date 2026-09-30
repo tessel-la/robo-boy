@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { subscribeXrTheme } from './xrTheme';
 import type { XrGrabbableData } from '../types';
 import { SpatialMenu } from './SpatialMenu';
 import { SpatialSurface, type SurfaceItem } from './SpatialSurface';
@@ -58,9 +59,14 @@ export class PanelFrame {
   private panelButtons: readonly ToolbarButton[] = [];
   private sizeLimitState = '';
   private subtitleText = '';
+  private readonly stopTheme: () => void;
+  private readonly themeMaterials: Array<{ material: THREE.Material & { color: THREE.Color }; role: 'surface' | 'surfaceBorder' | 'raised' | 'border' }> = [];
 
   constructor(options: PanelFrameOptions) {
     this.options = options;
+    this.stopTheme = subscribeXrTheme(() => {
+      for (const { material, role } of this.themeMaterials) material.color.set(XR_THEME[role]);
+    });
     this.titleText = options.title;
     const floorY = -STAGE_HEIGHT / 2 + FLOOR_MARGIN;
 
@@ -207,25 +213,30 @@ export class PanelFrame {
     return resource;
   }
 
+  private themed<T extends THREE.Material & { color: THREE.Color }>(material: T, role: 'surface' | 'surfaceBorder' | 'raised' | 'border'): T {
+    this.themeMaterials.push({ material, role });
+    return this.track(material);
+  }
+
   private buildBackdrop(passthrough: boolean): THREE.Object3D {
     const group = new THREE.Group();
     const geometry = this.track(new THREE.PlaneGeometry(STAGE_WIDTH, STAGE_HEIGHT));
     const plate = new THREE.Mesh(
       geometry,
-      this.track(
+      this.themed(
         new THREE.MeshBasicMaterial({
-          color: 0x0e131a,
+          color: XR_THEME.surface,
           transparent: true,
           // Over the real room a solid slab hides what the user is standing in.
-          opacity: passthrough ? 0.4 : 0.88,
+          opacity: passthrough ? 0.7 : 1,
           depthWrite: false,
           side: THREE.DoubleSide,
-        })
+        }), 'surface'
       )
     );
     const outline = new THREE.LineSegments(
       this.track(new THREE.EdgesGeometry(geometry)),
-      this.track(new THREE.LineBasicMaterial({ color: 0x33404e }))
+      this.themed(new THREE.LineBasicMaterial({ color: XR_THEME.surfaceBorder }), 'surfaceBorder')
     );
     group.add(plate, outline);
     group.position.z = -STAGE_RADIUS;
@@ -236,12 +247,12 @@ export class PanelFrame {
     const group = new THREE.Group();
     const disc = new THREE.Mesh(
       this.track(new THREE.CylinderGeometry(STAGE_RADIUS, STAGE_RADIUS, 0.012, 64)),
-      this.track(new THREE.MeshBasicMaterial({ color: 0x18202a, transparent: true, opacity: 0.92 }))
+      this.themed(new THREE.MeshBasicMaterial({ color: XR_THEME.raised, transparent: true, opacity: 0.96 }), 'raised')
     );
     disc.position.y = floorY - 0.006;
     group.add(disc);
 
-    const ringMaterial = this.track(new THREE.LineBasicMaterial({ color: 0x3a4658 }));
+    const ringMaterial = this.themed(new THREE.LineBasicMaterial({ color: XR_THEME.border }), 'border');
     for (const fraction of [1 / 3, 2 / 3, 1]) {
       const points: THREE.Vector3[] = [];
       for (let step = 0; step < 64; step += 1) {
@@ -258,6 +269,7 @@ export class PanelFrame {
   }
 
   dispose(): void {
+    this.stopTheme();
     this.menu?.dispose();
     this.title.dispose();
     this.toolbar.dispose();

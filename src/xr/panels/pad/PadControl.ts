@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { subscribeXrTheme } from '../../ui/xrTheme';
 import type { GamepadComponentConfig } from '../../../features/customGamepad/types';
 import { SpatialSurface } from '../../ui/SpatialSurface';
 import { XR_THEME, drawText } from '../../ui/canvasKit';
@@ -18,6 +19,7 @@ export class PadControl {
   private readonly accent: THREE.MeshStandardMaterial;
   private hardwareStatus = '';
   private disposed = false;
+  private readonly stopTheme: () => void;
 
   constructor(
     readonly config: GamepadComponentConfig,
@@ -29,12 +31,19 @@ export class PadControl {
     this.object.name = `xr-pad-control:${config.id}`;
     this.object.userData.componentId = config.id;
     this.accent = this.material(XR_THEME.accent);
-    if (config.style?.color && /^(#[\da-f]{3}|#[\da-f]{6})$/i.test(config.style.color))
-      this.accent.color.set(config.style.color);
-    this.box(width, height, 0.022, this.material('#18202a'), 0, 0, 0);
+    const customAccent = config.style?.color && /^(#[\da-f]{3}|#[\da-f]{6})$/i.test(config.style.color)
+      ? config.style.color : null;
+    if (customAccent) this.accent.color.set(customAccent);
+    const base = this.material(XR_THEME.surface);
+    this.box(width, height, 0.022, base, 0, 0, 0);
     const areaHeight = height * 0.72;
     const size = Math.min(width * 0.76, areaHeight);
-    const dark = this.material('#33404e');
+    const dark = this.material(XR_THEME.raised);
+    this.stopTheme = subscribeXrTheme(() => {
+      base.color.set(XR_THEME.surface);
+      dark.color.set(XR_THEME.raised);
+      if (!customAccent) this.accent.color.set(XR_THEME.accent);
+    });
     this.face = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
       new THREE.MeshBasicMaterial({
@@ -319,6 +328,7 @@ export class PadControl {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.stopTheme();
     this.label.dispose();
     for (const resource of this.owned) resource.dispose();
     this.object.removeFromParent();

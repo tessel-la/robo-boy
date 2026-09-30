@@ -7,6 +7,19 @@ changes and nothing extra is downloaded.
 
 This document covers the architecture, how to run and test it, and what it cannot do yet.
 
+## Visual identity
+
+XR inherits Robo-Boy's active desktop theme and UI font, including light, dark, solarized and custom
+themes. Shared cards, neutral outlines, accent actions and Courier typography follow the Robo-Boy
+desktop and Tessella web/dashboard conventions. The AI presence uses Tessella's tangerine dot with
+a subtle ping; reduced-motion preferences stop its animation. Listening and error states use the
+desktop's status colors.
+
+`src/xr/ui/xrTheme.ts` resolves the existing panel theme snapshot. One scene-owned observer updates
+canvas textures, frame materials, Pad bases and the VR environment when desktop tokens change.
+Controls, command holds and saved poses are retained. AR keeps its transparent background. Camera
+pixels, ROS visualization colors and explicit Pad control colors retain their existing ownership.
+
 ## Entering
 
 An "Enter XR Workspace" control appears at the bottom right of a connected session when the device

@@ -476,3 +476,21 @@ a narrow snapshot/apply handle to the shell, releases controls/grips and persist
 The workspace tool validates directions/layouts; the spatial prompt fragment is supplied only while
 an immersive snapshot exists. Panel additions/removals must finish mounting before a spatial follow-up.
 Do not expose arbitrary model-supplied matrices or bypass the existing robot proposal review boundary.
+
+## Design alignment (2026-09-30)
+
+XR now derives its UI palette and font from `panels/theme.ts`, matching the selected desktop theme.
+Reference styles were checked against the local Tessella web and dashboard tokens: neutral rounded
+cards, thin outlines, Courier control typography, pill primary actions and the animated tangerine dot.
+Desktop CSS and the reference projects are unchanged.
+
+`ui/xrTheme.ts` owns the theme snapshot, revision and scene-lifetime observer. `SpatialSurface`
+repaints existing canvas controls; `PanelFrame` and `PadControl` update their existing materials.
+Do not rebuild Pad controls for a theme change: their mounted desktop counterparts own active robot
+commands. Explicit Pad colors and visualization layer colors remain authoritative. Cached assistant
+text, camera placeholders and external-panel errors include theme changes in their redraw decisions.
+The assistant dot/ping obeys reduced motion. AR never gains a background or room grid.
+
+Regression coverage includes desktop theme parity through dark/light/solarized/custom themes in VR
+and AR, unchanged panel identity and pose, custom stylesheet updates, observer/subscriber disposal,
+and changing a Pad theme during a controller hold.

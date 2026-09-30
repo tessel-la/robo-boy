@@ -6,21 +6,8 @@
  * toolbar, the settings menu and the wrist menu read as one interface.
  */
 
-export const XR_THEME = {
-  surface: 'rgba(17, 22, 29, 0.92)',
-  surfaceBorder: '#33404e',
-  item: 'rgba(255, 255, 255, 0.07)',
-  itemHover: 'rgba(79, 168, 230, 0.34)',
-  itemActive: 'rgba(79, 168, 230, 0.55)',
-  itemDisabled: 'rgba(255, 255, 255, 0.03)',
-  text: '#e5ebf1',
-  textMuted: '#8a97a6',
-  textDisabled: '#4d5966',
-  accent: '#4fa8e6',
-  danger: '#e5675b',
-  success: '#5fbf7a',
-  font: 'system-ui, "Segoe UI", Roboto, sans-serif',
-} as const;
+import { XR_THEME } from './xrTheme';
+export { XR_THEME } from './xrTheme';
 
 export type IconName =
   | 'gear'

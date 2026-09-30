@@ -193,7 +193,7 @@ export class TfTreeSurface {
             width,
             height,
             Math.min(18, height / 4),
-            this.selected === frame ? XR_THEME.itemActive : hover.hover ? XR_THEME.itemHover : '#1c2631'
+            this.selected === frame ? XR_THEME.itemActive : hover.hover ? XR_THEME.itemHover : XR_THEME.item
           );
           strokeRoundRect(ctx, p.x + 1, p.y + 1, width - 2, height - 2, Math.min(18, height / 4), color(frame), 2);
           drawText(ctx, frame, p.x + width / 2, p.y + height / 2, Math.max(1, width - 18), {

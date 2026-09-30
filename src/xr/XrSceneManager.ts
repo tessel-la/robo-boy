@@ -1,3 +1,4 @@
+import { XR_THEME, startXrTheme, subscribeXrTheme } from './ui/xrTheme';
 import * as THREE from 'three';
 import {
   buildSessionInit,
@@ -69,13 +70,13 @@ export class XrSceneManager {
 
   constructor(options: XrSceneManagerOptions) {
     this.options = options;
-
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
       stencil: false,
     });
+    this.disposables.push(startXrTheme());
     // A session controls its own framebuffer scale; a device pixel ratio above 1 only costs memory
     // for the canvas that is never composited to the page during an immersive session.
     this.renderer.setPixelRatio(1);
@@ -88,6 +89,9 @@ export class XrSceneManager {
     this.rootGroup.add(this.uiGroup);
     this.scene.add(this.rootGroup);
     this.addLighting();
+    this.disposables.push(subscribeXrTheme(() => {
+      if (this.session) this.applyEnvironment();
+    }));
   }
 
   get mode(): XrSessionMode | null {
@@ -146,8 +150,8 @@ export class XrSceneManager {
       return;
     }
 
-    this.scene.background = new THREE.Color(0x11161d);
-    const grid = new THREE.GridHelper(20, 40, 0x3a4658, 0x222b36);
+    this.scene.background = new THREE.Color(XR_THEME.background);
+    const grid = new THREE.GridHelper(20, 40, XR_THEME.grid, XR_THEME.surfaceBorder);
     // The ROS3D viewer is Z-up, but a WebXR reference space is Y-up. The grid is authored in the
     // XR convention here; the robot world below is rotated into it as a whole instead.
     grid.position.y = 0;

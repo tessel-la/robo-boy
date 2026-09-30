@@ -5,6 +5,7 @@ import type { CustomGamepadLayout } from '../../../features/customGamepad/types'
 import type { PadSpatialControl } from '../../../features/customGamepad/spatialControl';
 import { stubCanvasContext } from '../../ui/canvasStub';
 import { getSurfaceOf, type SpatialSurface } from '../../ui/SpatialSurface';
+import { XR_THEME } from '../../ui/xrTheme';
 import { SurfaceInteraction } from '../../ui/SurfaceInteraction';
 import type { XrPanelContext } from '../registry';
 import type { XrInputTarget } from '../../XrInputManager';
@@ -275,13 +276,13 @@ describe('spatial Pad and immersive editor', () => {
     object.userData.constrain(object);
     expect(destination.visible).toBe(true);
     expect(destination.userData.xrPickable).toBe(false);
-    expect(destination.material.color.getHexString()).toBe('e5675b');
+    expect(destination.material.color.getHexString()).toBe(new THREE.Color(XR_THEME.danger).getHexString());
     object.userData.onGrabEnd(object);
     expect(object.position).toEqual(before);
     expect(destination.visible).toBe(false);
     object.position.y -= 0.21;
     object.userData.constrain(object);
-    expect(destination.material.color.getHexString()).toBe('5fbf7a');
+    expect(destination.material.color.getHexString()).toBe(new THREE.Color(XR_THEME.success).getHexString());
     object.userData.onGrabEnd(object);
     expect(object.position.y).toBeCloseTo(before.y - 0.205);
     close();

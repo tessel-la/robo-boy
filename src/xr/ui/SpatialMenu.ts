@@ -439,10 +439,10 @@ export class SpatialMenu {
               const switchH = 44;
               const switchX = item.x + item.w - switchW - 24;
               const switchY = item.y + (item.h - switchH) / 2;
-              fillRoundRect(ctx, switchX, switchY, switchW, switchH, switchH / 2, row.value ? XR_THEME.accent : '#3a4552');
+              fillRoundRect(ctx, switchX, switchY, switchW, switchH, switchH / 2, row.value ? XR_THEME.accent : XR_THEME.border);
               ctx.beginPath();
               ctx.arc(row.value ? switchX + switchW - switchH / 2 : switchX + switchH / 2, switchY + switchH / 2, 17, 0, Math.PI * 2);
-              ctx.fillStyle = '#ffffff';
+              ctx.fillStyle = row.value ? XR_THEME.accentText : XR_THEME.text;
               ctx.fill();
             },
           },

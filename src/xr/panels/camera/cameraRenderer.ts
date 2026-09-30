@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { getCameraPresentation, type CameraPresentation } from '../../../features/camera/presentation';
 import { PanelFrame } from '../../ui/PanelFrame';
 import { SpatialMenu } from '../../ui/SpatialMenu';
+import { getXrThemeRevision } from '../../ui/xrTheme';
 import { XR_THEME } from '../../ui/canvasKit';
 import type { XrPanelRenderer } from '../registry';
 
@@ -85,8 +86,10 @@ export const cameraPanelRenderer: XrPanelRenderer = {
         },
       ]);
     }
+    let messageTheme = -1;
     function message(text: string) {
-      if (status === text || !draw) return;
+      if ((status === text && messageTheme === getXrThemeRevision()) || !draw) return;
+      messageTheme = getXrThemeRevision();
       status = text;
       // Resizing clears origin taint after a rejected cross-origin source.
       canvas.width = 1200;
@@ -160,7 +163,10 @@ export const cameraPanelRenderer: XrPanelRenderer = {
           message(state.message);
           return;
         }
-        if (blocked) return;
+        if (blocked) {
+          if (status) message(status);
+          return;
+        }
         const width = image instanceof HTMLImageElement ? image.naturalWidth : (image?.width ?? 0);
         const height = image instanceof HTMLImageElement ? image.naturalHeight : (image?.height ?? 0);
         if (!image || !width || !height) {

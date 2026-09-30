@@ -185,7 +185,7 @@ export class WristMenu {
 
     if (this.tab === 'add') {
       return {
-        title: 'Robo Boy',
+        title: 'Robo-Boy',
         tabs,
         emptyText: 'No panels available',
         rows: getCatalog().map(entry => ({
@@ -198,7 +198,7 @@ export class WristMenu {
       };
     }
     return {
-      title: 'Robo Boy',
+      title: 'Robo-Boy',
       tabs,
       emptyText: 'Nothing open yet',
       rows: getPanels().map(panel => ({

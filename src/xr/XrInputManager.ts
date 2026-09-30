@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { XR_THEME, subscribeXrTheme } from './ui/xrTheme';
 import type { XrInteractionMode, XrPointer, XrPointerSource } from './types';
 import { isXrGrabbable } from './types';
 import type { GrabPointerPose } from './grabbable';
@@ -142,6 +143,11 @@ export class XrInputManager {
     this.options = options;
     this.raycaster.far = RAY_LENGTH;
     this.attachControllers();
+    this.disposers.push(subscribeXrTheme(() => {
+      for (const state of this.pointers.values()) {
+        if (state.rayLine) (state.rayLine.material as THREE.LineBasicMaterial).color.set(XR_THEME.text);
+      }
+    }));
   }
 
   get interactionMode(): XrInteractionMode {
@@ -314,7 +320,7 @@ export class XrInputManager {
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, -1),
     ]);
-    const material = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.6 });
+    const material = new THREE.LineBasicMaterial({ color: XR_THEME.text, transparent: true, opacity: 0.6 });
     const line = new THREE.Line(geometry, material);
     line.name = 'xr-pointer-ray';
     line.scale.z = RAY_LENGTH;

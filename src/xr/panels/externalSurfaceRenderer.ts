@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getExternalPanelSurface, type ExternalPanelSurface } from '../../panels/externalPanelSurface';
 import type { PanelSurfaceFrame, PanelSurfaceInput } from '../../panels/surfaceProtocol';
+import { XR_THEME, getXrThemeRevision } from '../ui/xrTheme';
 import { PanelFrame } from '../ui/PanelFrame';
 import type { XrInputTarget } from '../XrInputManager';
 import type { XrPanelContext, XrPanelInstance } from './registry';
@@ -31,6 +32,7 @@ export function createExternalSurface(ctx: XrPanelContext): XrPanelInstance {
   let active = true,
     lastCapture = -Infinity,
     failure = '';
+  let failureTheme = -1;
   const held = new Map<string, { message: Extract<PanelSurfaceInput, { type: 'surface-input' }>; moved: number }>();
   const cancel = () => {
     for (const [pointerId, entry] of held) bridge?.input({ ...entry.message, pointerId, action: 'cancel' });
@@ -84,17 +86,18 @@ export function createExternalSurface(ctx: XrPanelContext): XrPanelInstance {
       }
       if (bridge.error) {
         cancel();
-        if (failure !== bridge.error) {
+        if (failure !== bridge.error || failureTheme !== getXrThemeRevision()) {
+          failureTheme = getXrThemeRevision();
           failure = bridge.error;
           frame.setTitle(ctx.title, 'Preview unavailable');
           canvas.width = 720;
           canvas.height = 500;
           const draw = canvas.getContext('2d');
           if (draw) {
-            draw.fillStyle = '#0e131a';
+            draw.fillStyle = XR_THEME.surface;
             draw.fillRect(0, 0, 720, 500);
-            draw.fillStyle = '#cbd5e1';
-            draw.font = '24px system-ui';
+            draw.fillStyle = XR_THEME.textMuted;
+            draw.font = `24px ${XR_THEME.font}`;
             let line = '',
               y = 180;
             for (const word of failure.slice(0, 220).split(' ')) {

@@ -46,7 +46,7 @@ export class SpatialToolbar {
               ? XR_THEME.itemActive
               : XR_THEME.item;
         fillRoundRect(ctx, item.x, item.y, item.w, item.h, 18, fill);
-        if (button.active) strokeRoundRect(ctx, item.x, item.y, item.w, item.h, 18, XR_THEME.accent, 3);
+        strokeRoundRect(ctx, item.x + 1, item.y + 1, item.w - 2, item.h - 2, 17, button.active ? XR_THEME.accent : XR_THEME.border, 2);
         const color = button.disabled
           ? XR_THEME.textDisabled
           : button.danger

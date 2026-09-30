@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TESSELLA_BRAND, getXrThemeRevision } from '../ui/xrTheme';
 import { getAssistantPresentation, type AssistantPresentation } from '../../features/assistant/presentation';
 import type { AssistantProviderId } from '../../features/assistant/types';
 import { SpatialKeyboard } from '../ui/SpatialKeyboard';
@@ -21,21 +22,21 @@ export class XrAssistant {
     },
   });
   readonly keyboard = new SpatialKeyboard(() => this.refresh());
-  private readonly coreMaterial = new THREE.MeshBasicMaterial({ color: XR_THEME.accent, wireframe: true });
+  private readonly coreMaterial = new THREE.MeshBasicMaterial({ color: TESSELLA_BRAND.dot });
   private readonly ringMaterial = new THREE.MeshBasicMaterial({
-    color: XR_THEME.accent,
+    color: TESSELLA_BRAND.dot,
     transparent: true,
     opacity: 0.6,
   });
-  private readonly core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075, 2), this.coreMaterial);
-  private readonly rings = [0, 1].map(
-    index => new THREE.Mesh(new THREE.TorusGeometry(0.12 + index * 0.025, 0.0025, 8, 64), this.ringMaterial)
-  );
+  private readonly core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 16), this.coreMaterial);
+  private readonly ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.0025, 8, 64), this.ringMaterial);
   private readonly orb = new THREE.Group();
+  private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private signature = '';
   private lastMessages: AgentState['messages'] | null = null;
   private settingsPage = false;
   private transcriptPage: number | null = null;
+  private transcriptFont = '';
   private transcriptText: string | null = null;
   private transcriptLines: string[] = [];
   private wasOpen = false;
@@ -56,8 +57,10 @@ export class XrAssistant {
     this.surface.mesh.name = 'xr-assistant-content';
     this.keyboard.surface.mesh.name = 'xr-assistant-keyboard';
     this.keyboard.surface.mesh.position.set(0, -0.49, 0.08);
+    this.core.name = 'xr-assistant-dot';
+    this.ring.name = 'xr-assistant-ping';
     this.orb.position.set(0, 0.46, 0.04);
-    this.orb.add(this.core, ...this.rings);
+    this.orb.add(this.core, this.ring);
     this.orb.traverse(object => {
       object.raycast = () => {};
     });
@@ -72,7 +75,7 @@ export class XrAssistant {
     this.signature = '';
   }
 
-  update(time: number, delta: number) {
+  update(time: number, _delta: number) {
     const state = getAssistantPresentation(this.scope)?.read();
     if (!state) {
       this.object.visible = false;
@@ -89,18 +92,20 @@ export class XrAssistant {
       this.wasOpen = true;
     }
     const listening = state.voice.listening;
-    const colour = state.error || state.voice.error ? XR_THEME.danger : listening ? XR_THEME.success : XR_THEME.accent;
+    const colour = state.error || state.voice.error ? XR_THEME.danger : listening ? XR_THEME.success : TESSELLA_BRAND.dot;
     this.coreMaterial.color.set(colour);
     this.ringMaterial.color.set(colour);
     const seconds = time / 1000;
-    this.core.rotation.y += delta * (state.busy ? 1.8 : 0.25);
-    this.core.rotation.z = Math.sin(seconds * 0.6) * 0.16;
-    this.orb.scale.setScalar(1 + Math.sin(seconds * (listening ? 7 : 1.8)) * (listening ? 0.09 : 0.025));
-    this.rings[0].rotation.set(seconds * 0.35, 0.4, 0);
-    this.rings[1].rotation.set(0.5, seconds * -0.3, 0.4);
+    const motion = this.reducedMotion.matches ? 0 : 1;
+    this.orb.scale.setScalar(1 + motion * Math.sin(seconds * (listening ? 7 : 1.8)) * (listening ? 0.09 : 0.025));
+    const pulse = (seconds * (state.busy || listening ? 1.1 : 0.35)) % 1;
+    this.ring.scale.setScalar(motion ? 0.8 + pulse * 0.75 : 1);
+    this.ringMaterial.opacity = motion ? (1 - pulse) * 0.4 : 0.2;
+    this.core.position.y = motion * Math.sin(seconds * (state.busy ? 4 : 1.8)) * 0.008;
     if (state.messages.length !== this.lastMessages?.length) this.transcriptPage = null;
     // Draw only when conversation/state changes, not for each animation frame.
     const signature = JSON.stringify([
+      getXrThemeRevision(),
       state.open,
       state.draft,
       state.busy,
@@ -149,7 +154,8 @@ export class XrAssistant {
       y: number,
       width: number,
       action: () => void,
-      disabled = false
+      disabled = false,
+      primary = false
     ) => {
       items.push({
         id,
@@ -165,13 +171,18 @@ export class XrAssistant {
             item.y,
             item.w,
             item.h,
-            12,
-            disabled ? XR_THEME.itemDisabled : hover.hover ? XR_THEME.itemHover : XR_THEME.item
+            primary ? 29 : 12,
+            disabled
+              ? XR_THEME.itemDisabled
+              : primary
+                ? hover.hover ? XR_THEME.accentHover : XR_THEME.accent
+                : hover.hover ? XR_THEME.itemHover : XR_THEME.item
           );
+          strokeRoundRect(ctx, item.x + 1, item.y + 1, item.w - 2, item.h - 2, primary ? 28 : 11, XR_THEME.border, 2);
           drawText(ctx, text, x + width / 2, y + 29, width - 12, {
             size: 25,
             align: 'center',
-            color: disabled ? XR_THEME.textDisabled : XR_THEME.text,
+            color: disabled ? XR_THEME.textDisabled : primary ? XR_THEME.accentText : XR_THEME.text,
           });
         },
         onPress: () => {
@@ -190,7 +201,7 @@ export class XrAssistant {
           : state.busy
             ? state.progress[state.progress.length - 1] || 'Thinking…'
             : 'Speak or type · I can manage your workspace';
-    label('heading', 'Robo Boy · AI', 28, 15, w - 345, XR_THEME.text, 34);
+    label('heading', 'Robo-Boy · AI', 28, 15, w - 345, XR_THEME.text, 34);
     button('settings', this.settingsPage ? 'Chat' : 'Settings', w - 292, 12, 170, () => {
       this.settingsPage = !this.settingsPage;
       this.keyboard.close();
@@ -263,7 +274,7 @@ export class XrAssistant {
       const text =
         state.messages
           .flatMap(message => {
-            const lines = [`${message.role === 'user' ? 'You' : 'Robo Boy'}: ${message.content}`];
+            const lines = [`${message.role === 'user' ? 'You' : 'Robo-Boy'}: ${message.content}`];
             if (message.contextTags?.length)
               lines.push(`Tags: ${message.contextTags.map(tag => tag.label).join(' · ')}`);
             if (message.response?.kind === 'workspaceEdit') {
@@ -287,7 +298,7 @@ export class XrAssistant {
         draw: ctx => {
           ctx.font = `25px ${XR_THEME.font}`;
           // Hover redraws reuse the measured transcript instead of wrapping the whole chat again.
-          if (text !== this.transcriptText) {
+          if (text !== this.transcriptText || this.transcriptFont !== XR_THEME.font) {
             const lines: string[] = [];
             for (const paragraph of text.split('\n')) {
               let line = '';
@@ -301,6 +312,7 @@ export class XrAssistant {
               }
               lines.push(line);
             }
+            this.transcriptFont = XR_THEME.font;
             this.transcriptText = text;
             this.transcriptLines = lines;
           }
@@ -366,7 +378,8 @@ export class XrAssistant {
         if (state.voice.listening) bridge()?.stopVoice();
         else bridge()?.startVoice();
       },
-      state.busy || voiceBusy || this.keyboard.isOpen
+      state.busy || voiceBusy || this.keyboard.isOpen,
+      true
     );
     button(
       'cancel-voice',
@@ -390,7 +403,8 @@ export class XrAssistant {
           bridge()?.send();
         }
       },
-      !state.busy && (!state.draft.trim() || state.voice.listening || voiceBusy || this.keyboard.isOpen)
+      !state.busy && (!state.draft.trim() || state.voice.listening || voiceBusy || this.keyboard.isOpen),
+      true
     );
     this.surface.setItems(items);
   }
@@ -403,7 +417,7 @@ export class XrAssistant {
     this.core.geometry.dispose();
     this.coreMaterial.dispose();
     this.ringMaterial.dispose();
-    this.rings.forEach(ring => ring.geometry.dispose());
+    this.ring.geometry.dispose();
     this.object.removeFromParent();
   }
 }

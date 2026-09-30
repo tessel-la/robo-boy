@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { subscribeXrTheme } from './xrTheme';
 
 export interface SurfaceItemState {
   hover: boolean;
@@ -49,6 +50,7 @@ export class SpatialSurface {
   private readonly context: CanvasRenderingContext2D | null;
   private readonly texture: THREE.CanvasTexture;
   private readonly drawBackground?: SpatialSurfaceOptions['drawBackground'];
+  private readonly stopTheme: () => void;
   private items: SurfaceItem[] = [];
   private readonly hoverByPointer = new Map<string, string>();
 
@@ -81,6 +83,7 @@ export class SpatialSurface {
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(options.width, options.height), material);
     this.mesh.userData.xrSurface = this;
     this.mesh.renderOrder = 5;
+    this.stopTheme = subscribeXrTheme(() => this.redraw());
     this.redraw();
   }
 
@@ -138,6 +141,7 @@ export class SpatialSurface {
   }
 
   dispose(): void {
+    this.stopTheme();
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.MeshBasicMaterial).dispose();

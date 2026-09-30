@@ -6,6 +6,7 @@ import type { CustomGamepadLayout, PadComponentType } from '../../../features/cu
 import { PanelFrame } from '../../ui/PanelFrame';
 import { SpatialMenu } from '../../ui/SpatialMenu';
 import { XR_THEME } from '../../ui/canvasKit';
+import { subscribeXrTheme } from '../../ui/xrTheme';
 import { applyXrPose, toXrPose } from '../../grabbable';
 import type { XrGrabbableData } from '../../types';
 import type { XrInputTarget } from '../../XrInputManager';
@@ -47,10 +48,15 @@ export const padPanelRenderer: XrPanelRenderer = {
     texture.colorSpace = THREE.SRGBColorSpace;
     const controls = new Map<string, PadControl>();
     let grid: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> | undefined;
+    let destinationStatus: 'success' | 'danger' = 'success';
     const destination = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({ color: XR_THEME.success, transparent: true, opacity: 0.3, depthWrite: false })
     );
+    const stopTheme = subscribeXrTheme(() => {
+      grid?.material.color.set(XR_THEME.accent);
+      destination.material.color.set(XR_THEME[destinationStatus]);
+    });
     destination.name = 'xr-pad-grid-destination';
     destination.userData.xrPickable = false;
     destination.visible = false;
@@ -217,9 +223,8 @@ export const padPanelRenderer: XrPanelRenderer = {
                 object.scale.setScalar(desired.pose.scale);
                 destination.position.set(desired.pose.position[0], desired.pose.position[1], 0.012);
                 destination.scale.set(desired.rect.width * cell, desired.rect.height * cell, 1);
-                destination.material.color.set(
-                  snapPadPose(layout, config, desired.pose, editor.poses) ? XR_THEME.success : XR_THEME.danger
-                );
+                destinationStatus = snapPadPose(layout, config, desired.pose, editor.poses) ? 'success' : 'danger';
+                destination.material.color.set(XR_THEME[destinationStatus]);
                 destination.visible = true;
               },
               onGrabEnd: object => {
@@ -403,6 +408,7 @@ export const padPanelRenderer: XrPanelRenderer = {
       dispose() {
         if (disposed) return;
         disposed = true;
+        stopTheme();
         generation++;
         releaseAll();
         editor.dispose();

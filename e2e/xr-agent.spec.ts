@@ -185,6 +185,16 @@ for (const mode of ['VR', 'AR'] as const) {
     expect(JSON.stringify(requests[1])).toContain('movePanel');
     await speak(page, 'arrange panels in a grid');
     await expect.poll(async () => (await position())[2]).toBeLessThan(-1.5);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const dotState = () => page.evaluate(() => {
+      const dot = window.__xrScene.uiGroup.getObjectByName('xr-assistant-dot')!;
+      const ping = window.__xrScene.uiGroup.getObjectByName('xr-assistant-ping')!;
+      return { bob: dot.position.y, scale: dot.parent!.scale.x, ping: ping.scale.x };
+    });
+    await expect.poll(dotState).toEqual({ bob: 0, scale: 1, ping: 1 });
+    await page.waitForTimeout(200);
+    expect(await dotState()).toEqual({ bob: 0, scale: 1, ping: 1 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     if (mode === 'VR') await saveXrPanelPreview(page, 'global-assistant', '/tmp/robo-boy-xr-agent.png');
     await speak(page, 'close camera');
     await expect.poll(() => requests.length).toBe(4);

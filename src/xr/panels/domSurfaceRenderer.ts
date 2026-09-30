@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { SpatialSurface } from '../ui/SpatialSurface';
+import { XR_THEME, subscribeXrTheme } from '../ui/xrTheme';
 import { createExternalSurface } from './externalSurfaceRenderer';
 import { activateDomTarget, findDomTarget } from './domInteraction';
 import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
@@ -70,54 +72,38 @@ const disposeObject = (object: THREE.Object3D): void => {
 };
 
 /** Draw a labelled placeholder so a panel that cannot be mirrored still reads as itself. */
-const createPlaceholder = (title: string, message: string, passthrough: boolean): THREE.Mesh => {
-  const width = 768;
-  const height = Math.round(width / PLACEHOLDER_ASPECT);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-
-  if (context) {
-    // In passthrough the surface sits over the real room, so it is kept translucent rather than
-    // painting a slab over whatever is behind it.
-    context.fillStyle = passthrough ? 'rgba(14, 19, 26, 0.72)' : '#0e131a';
-    context.fillRect(0, 0, width, height);
-    context.strokeStyle = '#3a4658';
-    context.lineWidth = 4;
-    context.strokeRect(2, 2, width - 4, height - 4);
-
-    context.fillStyle = '#e5ebf1';
-    context.font = '600 34px system-ui, sans-serif';
-    context.fillText(title, 40, 72);
-
-    context.fillStyle = '#94a3b0';
-    context.font = '24px system-ui, sans-serif';
-    const words = message.split(' ');
-    let line = '';
-    let y = 140;
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (context.measureText(candidate).width > width - 80) {
-        context.fillText(line, 40, y);
-        line = word;
-        y += 34;
-      } else {
-        line = candidate;
+const createPlaceholder = (title: string, message: string, passthrough: boolean): SpatialSurface =>
+  new SpatialSurface({
+    width: TARGET_WIDTH_METRES,
+    height: TARGET_WIDTH_METRES / PLACEHOLDER_ASPECT,
+    pixelsPerMetre: 768 / TARGET_WIDTH_METRES,
+    drawBackground: (context, width, height) => {
+      context.save();
+      context.globalAlpha = passthrough ? 0.72 : 1;
+      context.fillStyle = XR_THEME.surface;
+      context.fillRect(0, 0, width, height);
+      context.restore();
+      context.strokeStyle = XR_THEME.surfaceBorder;
+      context.lineWidth = 4;
+      context.strokeRect(2, 2, width - 4, height - 4);
+      context.fillStyle = XR_THEME.text;
+      context.font = `600 34px ${XR_THEME.font}`;
+      context.fillText(title, 40, 72);
+      context.fillStyle = XR_THEME.textMuted;
+      context.font = `24px ${XR_THEME.font}`;
+      let line = '';
+      let y = 140;
+      for (const word of message.split(' ')) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (context.measureText(candidate).width > width - 80) {
+          context.fillText(line, 40, y);
+          line = word;
+          y += 34;
+        } else line = candidate;
       }
-    }
-    if (line) context.fillText(line, 40, y);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const geometry = new THREE.PlaneGeometry(
-    TARGET_WIDTH_METRES,
-    TARGET_WIDTH_METRES / PLACEHOLDER_ASPECT
-  );
-  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false });
-  return new THREE.Mesh(geometry, material);
-};
+      if (line) context.fillText(line, 40, y);
+    },
+  });
 
 /**
  * The generic spatial representation for any panel with no XR renderer of its own.
@@ -131,6 +117,8 @@ const createPlaceholder = (title: string, message: string, passthrough: boolean)
 class DomSurfacePanel implements XrPanelInstance {
   readonly object = new THREE.Group();
   private readonly surface: THREE.Mesh;
+  private readonly placeholder?: SpatialSurface;
+  private readonly stopTheme: () => void;
   private readonly isMirror: boolean;
   private readonly highlight: THREE.Mesh;
   private readonly domElement: HTMLElement | null;
@@ -140,7 +128,8 @@ class DomSurfacePanel implements XrPanelInstance {
     const reason = findUnrasterizableReason(context.domElement);
 
     if (reason || !context.domElement) {
-      this.surface = createPlaceholder(context.title, describeReason(reason ?? 'empty'), context.isPassthrough);
+      this.placeholder = createPlaceholder(context.title, describeReason(reason ?? 'empty'), context.isPassthrough);
+      this.surface = this.placeholder.mesh;
       this.isMirror = false;
     } else {
       const mesh = new HTMLMesh(context.domElement);
@@ -162,6 +151,7 @@ class DomSurfacePanel implements XrPanelInstance {
     // hover feedback without tinting the content.
     this.highlight = this.createHighlight();
     this.object.add(this.highlight);
+    this.stopTheme = subscribeXrTheme(() => (this.highlight.material as THREE.MeshBasicMaterial).color.set(XR_THEME.accent));
 
     const grabbable: XrGrabbableData = {
       xrGrabbable: true,
@@ -179,7 +169,7 @@ class DomSurfacePanel implements XrPanelInstance {
       Math.max(size.y, 0.1) * 1.06
     );
     const material = new THREE.MeshBasicMaterial({
-      color: 0x4fa8e6,
+      color: XR_THEME.accent,
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
@@ -207,10 +197,12 @@ class DomSurfacePanel implements XrPanelInstance {
   }
 
   dispose(): void {
+    this.stopTheme();
     const disposable = this.surface as THREE.Mesh & { dispose?: () => void };
     // HTMLMesh installs its own dispose, which also disconnects the MutationObserver feeding the
     // texture. Leaving that observer attached would keep rasterising a panel nobody is looking at.
-    if (typeof disposable.dispose === 'function') disposable.dispose();
+    if (this.placeholder) this.placeholder.dispose();
+    else if (typeof disposable.dispose === 'function') disposable.dispose();
     else disposeObject(this.surface);
     disposeObject(this.highlight);
     this.object.clear();

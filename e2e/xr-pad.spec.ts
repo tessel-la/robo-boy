@@ -141,8 +141,28 @@ for (const mode of ['VR', 'AR'] as const) {
     await aim(page, '.button-component');
     await trigger(page, 1);
     await expect.poll(() => last(page, '/hold')).toEqual({ data: true });
+    const heldControl = await page.evaluate(async () => {
+      const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+      const path = '/src/features/theme/themeUtils.ts';
+      const { applyThemeToDocument } = await import(/* @vite-ignore */ path);
+      applyThemeToDocument('light', []);
+      return panel.getObjectByName('xr-pad-control:button')!.uuid;
+    });
+    await expect.poll(() => page.evaluate(() => {
+      const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
+      // Base materials repaint in place while the mounted desktop control still owns the hold.
+      const block = panel.getObjectByName('xr-pad-control:button')!;
+      const base = (block.children[0] as any).material;
+      return { uuid: block.uuid, color: base.color.getHexString() };
+    })).toEqual({ uuid: heldControl, color: 'ffffff' });
+    expect(await last(page, '/hold')).toEqual({ data: true });
     await trigger(page, 0);
     await expect.poll(() => last(page, '/hold')).toEqual({ data: false });
+    await page.evaluate(async () => {
+      const path = '/src/features/theme/themeUtils.ts';
+      const { applyThemeToDocument } = await import(/* @vite-ignore */ path);
+      applyThemeToDocument('dark', []);
+    });
     await aim(page, '.toggle-switch');
     await trigger(page, 1);
     await trigger(page, 0);
@@ -245,9 +265,9 @@ for (const mode of ['VR', 'AR'] as const) {
       await page.evaluate(() => {
         const panel = window.__xrScene.uiGroup.children.find(o => o.userData.placementId === 'xr-pad')!;
         const preview = panel.getObjectByName('xr-pad-grid-destination') as any;
-        return { visible: preview.visible, color: preview.material.color.getHexString() };
+        return { visible: preview.visible, error: `#${preview.material.color.getHexString()}` === getComputedStyle(document.documentElement).getPropertyValue('--error-color').trim() };
       })
-    ).toEqual({ visible: true, color: 'e5675b' });
+    ).toEqual({ visible: true, error: true });
     await page.evaluate(() => window.__xrDevice.controllers.right!.updateButtonValue('squeeze', 0));
     await expect
       .poll(() =>
