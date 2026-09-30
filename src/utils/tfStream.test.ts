@@ -81,12 +81,12 @@ describe('shared TF stream', () => {
     );
     const dynamic = topicMock.instances.find(topic => topic.name === '/tf')!;
     for (let i = 0; i < 60; i++) {
-      dynamic.callback?.(transformMessage('robot_small_link_1', i));
-      dynamic.callback?.(transformMessage('robot_big_link_1', i + 10));
+      dynamic.callback?.(transformMessage('arm_b_link_1', i));
+      dynamic.callback?.(transformMessage('arm_a_link_1', i + 10));
     }
     const last = listener.mock.calls[listener.mock.calls.length - 1][0].transforms;
-    expect(last.robot_small_link_1.transform.translation.x).toBe(59);
-    expect(last.robot_big_link_1.transform.translation.x).toBe(69);
+    expect(last.arm_b_link_1.transform.translation.x).toBe(59);
+    expect(last.arm_a_link_1.transform.translation.x).toBe(69);
     stop();
   });
 

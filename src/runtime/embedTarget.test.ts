@@ -12,7 +12,7 @@ describe('embed targets', () => {
   });
 
   it('gives each robot a stable, valid host label of its own', () => {
-    const long = `https://${'a'.repeat(60)}.sunrising.io`;
+    const long = `https://${'a'.repeat(60)}.example.com`;
     const hosts = ['https://robot-a.local', 'https://robot-b.local', 'https://robot-a.local:8443', long].map(embedHostFor);
     expect(new Set(hosts).size).toBe(hosts.length);
     expect(embedHostFor('https://robot-a.local')).toBe(hosts[0]);

@@ -75,7 +75,8 @@ default 443). The robot's allowlist still decides which ports are reachable, coo
 forwarded, and hosts the app did not register reach nothing. Tauri keeps the sandbox beside the app.
 
 `npm run test:embed-proxy` checks the route against a local fixture. An optional read-only live
-check frames a robot page and waits for Sunrise Fabrics to report `Connected`:
+check frames a page on one of the robot's allowed ports and waits until `ROBOBOY_TEST_EMBED_SELECTOR`
+(default `body`) renders content:
 
 ```bash
 ROBOBOY_TEST_EMBED_BASE=https://robot.local ROBOBOY_TEST_EMBED_PATH=/8089/ npm run test:embed-proxy
