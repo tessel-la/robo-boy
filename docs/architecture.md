@@ -16,6 +16,7 @@ Browser or Tauri webview
         v
 ROS stack
   rosapi + rosbridge + web_video_server
+  TF relay, inspector, recorder, behavior-tree runner
         |
         | ROS 2 DDS on the host network
         v
@@ -64,6 +65,13 @@ The connection object is passed to feature components. Code that creates a `ROSL
 
 rosapi provides topic, service, action, and message-schema discovery. Robot-specific interface packages are supplied through workspace overlays described in [Robot workspace overlays](robot-overlays.md).
 
+rosbridge is a single Python process that serializes every outgoing message and has a bounded per-client write queue. When a client falls behind, it drops outgoing messages of any kind, service responses included. Two ROS-stack helpers keep high-rate or high-count traffic off that path:
+
+- `infra/ros/tf_relay.py` coalesces `/tf` into `/roboboy/tf`, sending the newest transform per frame at a fixed rate. `src/utils/tfStream.ts` uses it when the robot has it.
+- `infra/ros/inspection_runner.py` publishes the whole graph as one snapshot. Behavior-tree discovery reads that snapshot instead of making one rosapi call per service.
+
+`infra/ros/rosbridge_launch.xml` enables the events executor and permessage-deflate. See [Performance: rosbridge load](performance.md#rosbridge-load).
+
 ## Feature Modules
 
 ### Custom Gamepads
@@ -75,7 +83,7 @@ rosapi provides topic, service, action, and message-schema discovery. Robot-spec
 `src/features/behaviorTree/` is split into:
 
 - `components/`: React Flow editor, toolbar, palette, node renderers, and parameter editors.
-- `services/rosDiscovery.ts`: ROS resource and schema discovery through rosapi.
+- `services/rosDiscovery.ts`: ROS resource discovery, from one inspector graph snapshot when the ROS stack has one, else through rosapi with a timeout on every call; schema discovery through rosapi.
 - `engine/executor.ts`: sequence, selector, parallel, action, service, and topic execution.
 - `engine/persistentExecutor.ts`: the versioned command/status transport for ROS-owned executions.
 - `storage/treeStorage.ts`: versioned browser persistence and JSON import/export.

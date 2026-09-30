@@ -90,6 +90,79 @@ describe('shared TF stream', () => {
     stop();
   });
 
+  it('uses the ROS stack\'s coalesced TF relay when the robot runs one', async () => {
+    const { subscribeToTfStream, TF_RELAY_TOPIC } = await import('./tfStream');
+    const getTopicsForType = vi.fn((_type: string, callback: (topics: string[]) => void) =>
+      callback(['/tf', TF_RELAY_TOPIC])
+    );
+    const listener = vi.fn();
+    const stop = subscribeToTfStream({ getTopicsForType } as any, listener);
+
+    expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf_static']);
+    await vi.waitFor(() => expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf_static', TF_RELAY_TOPIC]));
+    expect(getTopicsForType).toHaveBeenCalledWith('tf2_msgs/msg/TFMessage', expect.any(Function), expect.any(Function));
+    topicMock.instances[1].callback?.(transformMessage('base_link', 3));
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ changedFrames: new Set(['base_link']) }));
+    stop();
+  });
+
+  it('resubscribes to the known relay at once after a reset', async () => {
+    const { resetTfStream, subscribeToTfStream, TF_RELAY_TOPIC } = await import('./tfStream');
+    const getTopicsForType = vi.fn((_type: string, callback: (topics: string[]) => void) => callback([TF_RELAY_TOPIC]));
+    const ros = { getTopicsForType } as any;
+    const stop = subscribeToTfStream(ros, vi.fn());
+    await vi.waitFor(() => expect(topicMock.instances.map(topic => topic.name)).toContain(TF_RELAY_TOPIC));
+
+    resetTfStream(ros);
+    expect(topicMock.instances.slice(2).map(topic => topic.name)).toEqual([TF_RELAY_TOPIC, '/tf_static']);
+    expect(getTopicsForType).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('falls back to /tf when the relay is absent or the lookup fails', async () => {
+    const { subscribeToTfStream } = await import('./tfStream');
+    const absent = { getTopicsForType: (_type: string, callback: (topics: string[]) => void) => callback(['/tf']) };
+    const failing = {
+      getTopicsForType: (_type: string, _callback: unknown, failed: (error: unknown) => void) => failed('no rosapi'),
+    };
+    const stopAbsent = subscribeToTfStream(absent as any, vi.fn());
+    const stopFailing = subscribeToTfStream(failing as any, vi.fn());
+
+    await vi.waitFor(() =>
+      expect(topicMock.instances.map(topic => topic.name).sort()).toEqual(['/tf', '/tf', '/tf_static', '/tf_static'])
+    );
+    stopAbsent();
+    stopFailing();
+  });
+
+  it('falls back to /tf when rosapi never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const { subscribeToTfStream } = await import('./tfStream');
+      const stop = subscribeToTfStream({ getTopicsForType: vi.fn() } as any, vi.fn());
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf_static', '/tf']);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not subscribe when the last consumer leaves before the relay lookup returns', async () => {
+    const { subscribeToTfStream, TF_RELAY_TOPIC } = await import('./tfStream');
+    let answer: (topics: string[]) => void = () => undefined;
+    const getTopicsForType = vi.fn((_type: string, callback: (topics: string[]) => void) => {
+      answer = callback;
+    });
+    const stop = subscribeToTfStream({ getTopicsForType } as any, vi.fn());
+    await vi.waitFor(() => expect(getTopicsForType).toHaveBeenCalled());
+    stop();
+    answer([TF_RELAY_TOPIC]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(topicMock.instances.map(topic => topic.name)).toEqual(['/tf_static']);
+  });
+
   it('replays current data to a panel joining an active connection', async () => {
     const { subscribeToTfStream } = await import('./tfStream');
     const ros = {} as any;

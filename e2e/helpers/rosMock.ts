@@ -255,6 +255,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
             return { type: serviceInfo?.type ?? '' };
           case '/rosapi/topic_type':
             return { type: topicInfo?.type ?? '' };
+          case '/rosapi/topics_for_type':
+            return { topics: initResources.topics.filter(item => item.type === args.type).map(item => item.name) };
           case '/rosapi/message_details':
           case '/rosapi/service_request_details':
             return { typedefs: [] };

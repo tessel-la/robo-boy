@@ -6,6 +6,9 @@ RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 ROS_AUTOMATIC_DISCOVERY_RANGE="${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
 ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-}"
 ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
+ROSBRIDGE_USE_EVENTS_EXECUTOR="${ROSBRIDGE_USE_EVENTS_EXECUTOR:-true}"
+ROSBRIDGE_USE_COMPRESSION="${ROSBRIDGE_USE_COMPRESSION:-true}"
+export ROBOBOY_TF_RELAY_HZ="${ROBOBOY_TF_RELAY_HZ:-60}"
 VIDEO_STREAM_PORT="${VIDEO_STREAM_PORT:-8080}"
 
 export RMW_IMPLEMENTATION
@@ -25,6 +28,7 @@ source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 echo "--- DDS middleware: ${RMW_IMPLEMENTATION} ---"
 echo "--- ROS service ports: rosbridge=${ROSBRIDGE_PORT}; web_video_server=${VIDEO_STREAM_PORT} ---"
+echo "--- rosbridge: events executor=${ROSBRIDGE_USE_EVENTS_EXECUTOR}; compression=${ROSBRIDGE_USE_COMPRESSION}; TF relay=${ROBOBOY_TF_RELAY_HZ} Hz ---"
 echo "--- ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}; ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-<unset>}; ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE} ---"
 if [ -n "${ROS_STATIC_PEERS}" ]; then
     echo "--- ROS_STATIC_PEERS: ${ROS_STATIC_PEERS} ---"
@@ -115,24 +119,24 @@ done) &
     sleep 2
 done) &
 
-# Launch rosbridge WebSocket server together with the single rosapi node the launch
-# file provides. respawn=true brings either node back if it dies: rosapi's typedef walker
-# asserts on some nested message types (moveit_msgs/msg/RobotState, for one), and a crash
-# there must not take the WebSocket down or leave the graph without /rosapi services.
-# A second, hand-started rosapi used to sit beside the launch file's own; two nodes with
-# the same name answered the same services, and rosbridge intermittently reported them as
-# missing.
-# call_services_in_new_thread=true prevents service calls from blocking
-# rosbridge's WebSocket event loop (which would freeze the connection).
-# send_action_goals_in_new_thread=true does the same for action goals.
-# default_call_service_timeout=5.0 ensures calls never block indefinitely.
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
-    address:=0.0.0.0 \
+# Coalesces /tf into /roboboy/tf at ROBOBOY_TF_RELAY_HZ for browsers (0 disables it).
+# A kHz /tf forwarded message-for-message saturates rosbridge and, on a remote link,
+# fills its write queue, which then drops outgoing messages, service responses included.
+# Not started at all when disabled: `wait -n` below would treat its exit as a failure.
+if [ "${ROBOBOY_TF_RELAY_HZ}" != "0" ]; then
+    (while true; do
+        python3 /ros_ws/tf_relay.py
+        echo "[tf_relay] exited, restarting in 2s..."
+        sleep 2
+    done) &
+fi
+
+# rosbridge WebSocket server with the single rosapi node; see rosbridge_launch.xml for why
+# each option is set and why no other rosapi may run.
+ros2 launch /ros_ws/rosbridge_launch.xml \
     port:="${ROSBRIDGE_PORT}" \
-    call_services_in_new_thread:=true \
-    send_action_goals_in_new_thread:=true \
-    default_call_service_timeout:=5.0 \
-    respawn:=true &
+    use_events_executor:="${ROSBRIDGE_USE_EVENTS_EXECUTOR}" \
+    use_compression:="${ROSBRIDGE_USE_COMPRESSION}" &
 
 # Launch web_video_server
 ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &

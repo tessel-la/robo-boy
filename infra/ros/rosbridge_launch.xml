@@ -1,0 +1,42 @@
+<!--
+  rosbridge and its single rosapi node, as rosbridge_server's rosbridge_websocket_launch.xml
+  starts them, plus the two server options that launch file does not expose. Defaults come
+  from scripts/rosbridge-bench (docs/performance.md, "rosbridge load"):
+
+  use_events_executor  rclpy's C++ events executor: about 40% less rosbridge CPU for the
+                       same traffic. Ignored by distros whose rosbridge predates it.
+  use_compression      permessage-deflate, negotiated only with clients that offer it
+                       (browsers do): 5-7x less TF/JSON traffic for about 1% CPU.
+
+  respawn brings either node back if it dies: rosapi's typedef walker asserts on some nested
+  message types (moveit_msgs/msg/RobotState, for one), and a crash there must not take the
+  WebSocket down. Only this rosapi may run: two nodes with the same name answer the same
+  services, and rosbridge intermittently reports them as missing.
+-->
+<launch>
+  <arg name="port" default="9090" />
+  <arg name="address" default="0.0.0.0" />
+  <arg name="use_events_executor" default="true" />
+  <arg name="use_compression" default="true" />
+  <arg name="write_queue_size" default="1000" />
+  <arg name="max_message_size" default="10000000" />
+  <!-- Service calls and action goals run off rosbridge's event loop, and never block forever. -->
+  <arg name="call_services_in_new_thread" default="true" />
+  <arg name="send_action_goals_in_new_thread" default="true" />
+  <arg name="default_call_service_timeout" default="5.0" />
+  <arg name="respawn" default="true" />
+
+  <node name="rosbridge_websocket" pkg="rosbridge_server" exec="rosbridge_websocket" output="screen" respawn="$(var respawn)">
+    <param name="port" value="$(var port)" />
+    <param name="address" value="$(var address)" />
+    <param name="use_events_executor" value="$(var use_events_executor)" />
+    <param name="use_compression" value="$(var use_compression)" />
+    <param name="write_queue_size" value="$(var write_queue_size)" />
+    <param name="max_message_size" value="$(var max_message_size)" />
+    <param name="call_services_in_new_thread" value="$(var call_services_in_new_thread)" />
+    <param name="send_action_goals_in_new_thread" value="$(var send_action_goals_in_new_thread)" />
+    <param name="default_call_service_timeout" value="$(var default_call_service_timeout)" />
+  </node>
+
+  <node name="rosapi" pkg="rosapi" exec="rosapi_node" respawn="$(var respawn)" />
+</launch>
