@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_MESH_RESOURCES_PORT?: string;
   readonly VITE_RECORDINGS_PORT?: string;
   readonly VITE_WEB_BACKEND_MODE?: string;
+  readonly VITE_EMBED_DIRECT_PORTS?: string;
   // more env variables...
 }
 

@@ -90,9 +90,11 @@ const desktopBridge = {
 
   /**
    * Names the robot proxy behind a connection's embed host, so the shell can forward that host's
-   * `/<port>/` frames to it. Only a proxy the app itself registers is ever reached.
+   * `/<port>/` frames to it, or straight to the robot for `directPorts`. Only a robot the app
+   * itself registers is ever reached.
    */
-  registerEmbedTarget: (baseUrl: string): void => ipcRenderer.send('roboboy:embed-register', baseUrl),
+  registerEmbedTarget: (baseUrl: string, directPorts: number[] = []): void =>
+    ipcRenderer.send('roboboy:embed-register', baseUrl, directPorts),
 
   /**
    * Updates. The page names a release and an installer; the main process looks them up, downloads

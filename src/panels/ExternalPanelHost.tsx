@@ -4,6 +4,7 @@ import { connectPanelCapabilityBroker, getGrantedPanelEndpoints } from './capabi
 import { ROBOBOY_PANEL_API_VERSION } from './constants';
 import { loadExternalPanelSource } from './localPanels';
 import { getPanelSandboxUrl } from './panelSandboxUrl';
+import { parseEmbedPorts } from '../runtime/embedTarget';
 import { PANEL_STORAGE_QUOTA_BYTES, PANEL_STORAGE_SCHEMA_VERSION, validatePanelState } from './storage';
 import { readPanelTheme } from './theme';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
@@ -115,7 +116,11 @@ const ExternalPanelHost = ({
   const logger = useMemo(() => createLogger(manifest.id, instanceId), [instanceId, manifest.id]);
   // Served from its own URL, so the sandbox carries its own CSP instead of inheriting the host's.
   const embedBaseUrl = runtime.embedBaseUrl ?? '';
-  const sandboxUrl = useMemo(() => getPanelSandboxUrl(embedBaseUrl), [embedBaseUrl]);
+  const embedDirectPorts = (runtime.embedDirectPorts ?? []).join(',');
+  const sandboxUrl = useMemo(
+    () => getPanelSandboxUrl(embedBaseUrl, parseEmbedPorts(embedDirectPorts)),
+    [embedBaseUrl, embedDirectPorts]
+  );
   const filteredTopicOptions = useMemo(() => {
     if (!topicPicker) return [];
     const query = topicPicker.query.trim().toLowerCase();

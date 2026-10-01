@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
+import { parseEmbedPorts } from './embedTarget';
 import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
 
@@ -30,6 +31,11 @@ export interface RuntimeEndpoints {
    * already reaches it. See `embedTarget.ts` for how the desktop shell uses it.
    */
   embedBaseUrl: string;
+  /**
+   * Desktop only: ports whose `/<port>/` frames go straight to `http://<robot>:<port>/` instead of
+   * through the robot's proxy, for robots that run no proxy. Every other port is then refused.
+   */
+  embedDirectPorts?: number[];
   mode: 'web' | 'desktop';
   host: string;
 }
@@ -44,6 +50,7 @@ export interface RuntimePortConfig {
   webrtcDiscoveryPort: string;
   webrtcHlsPort: string;
   embedProxyPort: string;
+  embedDirectPorts?: number[];
   webBackendMode: 'auto' | 'proxy' | 'direct';
 }
 
@@ -78,6 +85,8 @@ export const getRuntimePortConfig = (): RuntimePortConfig => ({
   webrtcHlsPort: normalizeRuntimePort(import.meta.env.VITE_WEBRTC_HLS_PORT, '8888'),
   // The robot's Robo-Boy deployment, whose HTTPS listener carries the embed route.
   embedProxyPort: normalizeRuntimePort(import.meta.env.VITE_EMBED_PROXY_PORT, '443'),
+  // Robots without that deployment: these ports are framed from the robot directly.
+  embedDirectPorts: parseEmbedPorts(import.meta.env.VITE_EMBED_DIRECT_PORTS),
   webBackendMode: readWebBackendMode(import.meta.env.VITE_WEB_BACKEND_MODE),
 });
 
@@ -174,6 +183,7 @@ const resolveDirectEndpoints = (
       mode === 'desktop'
         ? `https://${urlHost}${ports.embedProxyPort === '443' ? '' : `:${ports.embedProxyPort}`}`
         : '',
+    embedDirectPorts: mode === 'desktop' ? (ports.embedDirectPorts ?? []) : [],
     mode,
     host,
   };
@@ -218,6 +228,7 @@ export function resolveRuntimeEndpoints(
       // reaches this branch has it. Nothing is published that nothing would use.
       webrtcHlsBaseUrl: '',
       embedBaseUrl: '',
+      embedDirectPorts: [],
       mode: 'web',
       host: location.hostname,
     };

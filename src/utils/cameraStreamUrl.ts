@@ -61,6 +61,14 @@ function appendPositiveNumber(params: URLSearchParams, key: string, value?: numb
   params.set(key, String(Math.floor(value)));
 }
 
+/** web_video_server's JPEG quality, 1–100. */
+function appendJpegQuality(params: URLSearchParams, value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return;
+  params.set('quality', String(Math.min(100, Math.max(1, Math.round(value)))));
+}
+
+const isJpegQuality = (value: string) => /^[1-9][0-9]?$|^100$/.test(value);
+
 function getCurrentOrigin(): string {
   if (typeof window === 'undefined') return RELATIVE_URL_ORIGIN;
   return window.location.origin;
@@ -97,7 +105,7 @@ export function getSafeCameraStreamUrl(
       return null;
     }
 
-    const allowedParams = new Set(['topic', 'type', 'width', 'height']);
+    const allowedParams = new Set(['topic', 'type', 'width', 'height', 'quality']);
     for (const key of url.searchParams.keys()) {
       if (!allowedParams.has(key)) return null;
     }
@@ -112,6 +120,8 @@ export function getSafeCameraStreamUrl(
       const value = url.searchParams.get(dimension);
       if (value && !/^[1-9][0-9]*$/.test(value)) return null;
     }
+    const quality = url.searchParams.get('quality');
+    if (quality && !isJpegQuality(quality)) return null;
 
     const topicParams: string[] = [];
     appendTopicParam(topicParams, topic);
@@ -122,6 +132,7 @@ export function getSafeCameraStreamUrl(
       const value = url.searchParams.get(dimension);
       if (value) params.set(dimension, value);
     }
+    if (quality) params.set('quality', quality);
 
     const encodedParams = params.toString();
     const query = encodedParams ? `${topicParams.join('&')}&${encodedParams}` : topicParams.join('&');
@@ -138,12 +149,15 @@ export function buildCameraStreamUrl({
   streamType = 'mjpeg',
   width,
   height,
+  quality,
   baseUrl = DEFAULT_VIDEO_STREAM_BASE_URL,
 }: {
   topic: string;
   streamType?: string;
   width?: number;
   height?: number;
+  /** JPEG quality, 1–100; omitted keeps web_video_server's default. */
+  quality?: number;
   baseUrl?: string;
 }): string {
   const params = new URLSearchParams();
@@ -152,9 +166,29 @@ export function buildCameraStreamUrl({
   if (streamType) appendStreamType(params, streamType);
   appendPositiveNumber(params, 'width', width);
   appendPositiveNumber(params, 'height', height);
+  appendJpegQuality(params, quality);
 
   const encodedParams = params.toString();
   const query = encodedParams ? `${topicParams.join('&')}&${encodedParams}` : topicParams.join('&');
 
   return `${normalizeVideoStreamBaseUrl(baseUrl)}/stream?${query}`;
+}
+
+/** One JPEG of the topic's current frame, from web_video_server's `/snapshot`. */
+export function buildCameraSnapshotUrl({
+  topic,
+  quality,
+  baseUrl = DEFAULT_VIDEO_STREAM_BASE_URL,
+}: {
+  topic: string;
+  quality?: number;
+  baseUrl?: string;
+}): string {
+  const params = new URLSearchParams();
+  const topicParams: string[] = [];
+  appendTopicParam(topicParams, topic);
+  appendJpegQuality(params, quality);
+  const encodedParams = params.toString();
+  const query = encodedParams ? `${topicParams.join('&')}&${encodedParams}` : topicParams.join('&');
+  return `${normalizeVideoStreamBaseUrl(baseUrl)}/snapshot?${query}`;
 }

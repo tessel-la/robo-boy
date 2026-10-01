@@ -122,6 +122,8 @@ export interface PanelHostRuntime {
   };
   /** Where the sandbox's `/<port>/` frames go in the desktop shell; never handed to a panel. */
   embedBaseUrl?: string;
+  /** Ports the desktop shell frames from the robot directly; see `RuntimeEndpoints`. */
+  embedDirectPorts?: number[];
 }
 
 export interface StoredPanelState {
