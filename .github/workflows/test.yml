@@ -71,6 +71,7 @@ jobs:
             - 'examples/behavior_trees/**'
             - 'scripts/test-native-bt-genesis.sh'
             - 'e2e/native-bt-genesis.spec.ts'
+            - 'e2e/external-bt-genesis.spec.ts'
             - 'e2e/behavior-tree*.spec.ts'
             - '.github/workflows/test.yml'
           ros:
@@ -438,16 +439,18 @@ jobs:
       env:
         PLAYWRIGHT_SKIP_WEB_SERVER: '1'
         ROBOBOY_BT_E2E_URL: ws://localhost:9095
+        ROBOBOY_BT_E2E_CONTAINER: robo-boy-genesis-bt-browser
       run: |
         docker run -d --rm -p 127.0.0.1:9095:9090 --name robo-boy-genesis-bt-browser robo-boy-genesis-bt:test sleep infinity
         npm run preview -- --port 5173 --strictPort > /tmp/bt-preview.log 2>&1 &
         BT_PREVIEW_PID=$!
         trap 'kill "$BT_PREVIEW_PID" 2>/dev/null || true; docker rm -f robo-boy-genesis-bt-browser' EXIT
-        for attempt in {1..30}; do
+        for _ in {1..30}; do
           if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
           sleep 1
         done
-        npm run e2e -- e2e/native-bt-genesis.spec.ts e2e/behavior-tree-repository.spec.ts --project=chromium --workers=1
+        curl --fail --silent http://127.0.0.1:5173/ > /dev/null
+        npm run e2e -- e2e/native-bt-genesis.spec.ts e2e/external-bt-genesis.spec.ts e2e/behavior-tree-repository.spec.ts --project=chromium --workers=1
     - name: Upload native runtime browser results
       if: always()
       uses: actions/upload-artifact@v4
