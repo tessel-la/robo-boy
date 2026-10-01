@@ -3,7 +3,7 @@ import type { BehaviorTree } from '../types';
 import type { BehaviorTreeExecutionControls, BehaviorTreeExecutionSnapshot } from '../components/BehaviorTreePanel';
 import type { useRemoteTreeRuntime } from './useRemoteTreeRuntime';
 import { inspectXml, nativeTreeFromXml, validateDocument } from './xml';
-import type { NativeEditorState, NativeTreeDocument, TreeRuntimeId } from './types';
+import type { NativeEditorState, NativeTreeDocument, TreeRuntimeId, RuntimeObservation } from './types';
 import {
   addEditorNode,
   childrenOf,
@@ -21,7 +21,7 @@ import {
   executableXml,
 } from './authoring';
 
-import { projectXml, bindRuntimeProjection, liveSourceNode } from './projection';
+import { projectXml, bindRuntimeProjection, liveSourceNode, projectObservation } from './projection';
 
 export function useNativeTreeController(
   tree: BehaviorTree | null,
@@ -29,7 +29,8 @@ export function useNativeTreeController(
   engine: 'json' | TreeRuntimeId | null,
   onChange: (tree: BehaviorTree) => void,
   onExecutionChange?: (snapshot: BehaviorTreeExecutionSnapshot) => void,
-  onExecutionControlsChange?: (controls: BehaviorTreeExecutionControls | null) => void
+  onExecutionControlsChange?: (controls: BehaviorTreeExecutionControls | null) => void,
+  observed?: RuntimeObservation | null
 ) {
   const { client, state } = runtime;
   const storedDocument = tree?.nativeDocument;
@@ -63,16 +64,27 @@ export function useNativeTreeController(
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [viewPath, setViewPath] = useState<string | undefined>();
+  const [observationPath, setObservationPath] = useState<string | undefined>();
   const [definitionId, setDefinitionId] = useState<string | undefined>();
   const [sourceOpen, setSourceOpen] = useState(false);
   useEffect(() => {
     setViewPath(undefined);
     setDefinitionId(undefined);
-    setHistory([]);
-    setFuture([]);
     setError(null);
     setNotice(null);
     setSourceOpen(false);
+  }, [tree?.id]);
+  useEffect(() => {
+    setObservationPath(undefined);
+    setSourceOpen(false);
+  }, [observed?.id]);
+  useEffect(() => {
+    if (observed && observationPath && !observed.nodes.some(node => node.id === observationPath))
+      setObservationPath(undefined);
+  }, [observed, observationPath]);
+  useEffect(() => {
+    setHistory([]);
+    setFuture([]);
   }, [tree?.id]);
   const projection = useMemo(() => {
     if (!document) return { value: null, error: null };
@@ -115,7 +127,7 @@ export function useNativeTreeController(
     state.session?.xml === document.xml &&
     state.session.runtime === document.runtime &&
     (state.session.mainTreeId || '') === (document.mainTreeId || preview.mainTreeId || '');
-  const session = matching ? state.session : null;
+  const session = !observed && matching ? state.session : null;
   const live = useMemo(
     () =>
       projection.value
@@ -125,15 +137,19 @@ export function useNativeTreeController(
   );
   const nodes = useMemo(
     () =>
-      preview.nodes.map(node =>
-        liveSourceNode(node, prefix.startsWith('definition:') ? undefined : live.bindings.get(node.id))
-      ),
-    [preview.nodes, live, prefix]
+      observed
+        ? projectObservation(observed.nodes, observationPath)
+        : preview.nodes.map(node =>
+            liveSourceNode(node, prefix.startsWith('definition:') ? undefined : live.bindings.get(node.id))
+          ),
+    [preview.nodes, live, prefix, observed, observationPath]
   );
-  const running = state.session?.state === 'running';
+  const running = observed
+    ? observed.connected && state.connected && observed.state === 'running'
+    : state.session?.state === 'running';
   const descriptor = state.runtimes.find(item => item.id === engine);
   const compatible = !!document && engine === document.runtime;
-  const ready = compatible && state.connected && descriptor?.available && descriptor.enabled !== false;
+  const ready = !observed && compatible && state.connected && descriptor?.available && descriptor.enabled !== false;
   const perform = async (action: () => Promise<unknown>, message?: string) => {
     setBusy(true);
     setError(null);
@@ -148,7 +164,7 @@ export function useNativeTreeController(
     }
   };
   const publish = (next: NativeTreeDocument, remember = true) => {
-    if (!tree || !storedDocument || busy || running) return;
+    if (observed || !tree || !storedDocument || busy || running) return;
     setError(null);
     setNotice(null);
     if (remember) {
@@ -162,7 +178,7 @@ export function useNativeTreeController(
     publish({ ...storedDocument, ...patch, ...(patch.xml !== undefined ? { editor: undefined } : {}) });
   };
   const edit = (action: (editor: NativeEditorState) => NativeEditorState) => {
-    if (!storedDocument || !model.editor || busy || running) return;
+    if (observed || !storedDocument || !model.editor || busy || running) return;
     try {
       const editor = action(model.editor);
       if (editor === model.editor || JSON.stringify(editor) === JSON.stringify(model.editor)) return;
@@ -199,13 +215,15 @@ export function useNativeTreeController(
     });
   };
   const importLibrary = (source: BehaviorTree, libraryPrefix = '') => {
-    if (!storedDocument || !model.editor || busy || running) throw new Error('Stop execution before editing the tree.');
+    if (observed || !storedDocument || !model.editor || busy || running)
+      throw new Error('Stop execution before editing the tree.');
     if (!source.nativeDocument)
       throw new Error('Select an XML library for this engine. JSON trees use the Robo Boy editor.');
     const next = importSubtreeLibrary(storedDocument, model.editor, source.nativeDocument, libraryPrefix.trim());
     publish(next);
   };
   const run = () =>
+    !observed &&
     client &&
     document &&
     void perform(async () => {
@@ -215,27 +233,38 @@ export function useNativeTreeController(
       else if (session.state !== 'loaded') await client.reset();
       await client.start();
     });
-  const stop = () => client && void perform(() => client.stop());
+  const stop = () => !observed && client && void perform(() => client.stop());
   useEffect(() => {
-    if (!tree) return;
-    const active = session?.nodes.find(node => node.status === 'running');
+    if (!tree && !observed) return;
+    const execution = observed || session;
+    const active = execution?.nodes.find(node => node.status === 'running');
     onExecutionChange?.({
       isExecuting: !!running,
       isPersistent: true,
-      treeName: tree.name,
+      isReadOnly: !!observed,
+      treeName: observed?.name || tree!.name,
       activeNodeId: active?.id,
       activeNodeLabel: active?.label,
-      startedAt: session?.startedAt,
-      status: running
-        ? undefined
-        : session?.state === 'error'
+      startedAt: execution?.startedAt,
+      status:
+        observed && (!observed.connected || !state.connected)
           ? 'error'
-          : session?.state === 'completed'
-            ? 'completed'
-            : 'stopped',
+          : running
+            ? undefined
+            : execution?.state === 'error'
+              ? 'error'
+              : execution?.state === 'completed'
+                ? 'completed'
+                : observed
+                  ? undefined
+                  : 'stopped',
     });
-  }, [tree, running, session, onExecutionChange]);
+  }, [tree, observed, running, session, state.connected, onExecutionChange]);
   useEffect(() => {
+    if (observed) {
+      onExecutionControlsChange?.(null);
+      return;
+    }
     if (!tree) return;
     onExecutionControlsChange?.({
       stop: () => {
@@ -243,24 +272,28 @@ export function useNativeTreeController(
       },
     });
     return () => onExecutionControlsChange?.(null);
-  }, [!!tree, client, onExecutionControlsChange]);
+  }, [!!tree, !!observed, client, onExecutionControlsChange]);
   return {
     tree,
-    document,
+    observed,
+    sourceXml: observed ? observed.xml : document?.xml,
+    document: observed ? undefined : document,
     preview,
     session,
     running,
     busy,
-    locked: busy || !!running,
+    locked: !!observed || busy || !!running,
     descriptor,
     compatible,
     ready,
-    error: error || preview.error || state.error || session?.error || live.error,
+    error: observed
+      ? observed.error || (!state.connected ? 'ROS telemetry disconnected. The robot may still be running.' : null)
+      : error || preview.error || state.error || session?.error || live.error,
     notice,
     reportError: (message: string) => setError(message),
     sourceOpen,
     setSourceOpen,
-    viewTreeId: viewPath || definitionId ? displayedTreeId : undefined,
+    viewTreeId: observed ? observationPath : viewPath || definitionId ? displayedTreeId : undefined,
     selectTree: (id?: string) => {
       const instance =
         id && id !== preview.mainTreeId
@@ -270,6 +303,10 @@ export function useNativeTreeController(
       setDefinitionId(id && id !== preview.mainTreeId ? id : undefined);
     },
     openSubtree: (path: string) => {
+      if (observed) {
+        setObservationPath(path);
+        return;
+      }
       const referenced = model.editor?.nodes.find(node => path.endsWith(`/${node.id}`));
       const id = referenced ? parseNode(referenced.template).getAttribute('ID') : null;
       if (!id || !base?.trees.some(tree => tree.getAttribute('ID') === id)) {
@@ -280,6 +317,13 @@ export function useNativeTreeController(
       setDefinitionId(id);
     },
     parentView: () => {
+      if (observed) {
+        const byId = new Map(observed.nodes.map(node => [node.id, node]));
+        let parent = byId.get(observationPath || '')?.parentId;
+        while (parent && !byId.get(parent)?.subtree) parent = byId.get(parent)?.parentId;
+        setObservationPath(parent || undefined);
+        return;
+      }
       const parent =
         view?.parent || (viewPath?.includes('/') ? viewPath.slice(0, viewPath.lastIndexOf('/')) : undefined);
       setViewPath(parent === 'main' ? undefined : parent);
@@ -293,14 +337,14 @@ export function useNativeTreeController(
         : projection.value?.views.get(parent || '')?.treeId;
       setDefinitionId(parent && parent !== 'main' ? parentDefinition : undefined);
     },
-    viewKey: `${tree?.id}:${prefix}`,
-    editable: !!model.editor && compatible && !busy && !running,
+    viewKey: observed ? `${observed.id}:${observationPath || 'main'}` : `${tree?.id}:${prefix}`,
+    editable: !observed && !!model.editor && compatible && !busy && !running,
     editor: model.editor,
     storedDocument,
     addNode,
     importLibrary,
     addSaved: (source: BehaviorTree, position?: { x: number; y: number }) => {
-      if (!storedDocument || !model.editor || busy || running) return;
+      if (observed || !storedDocument || !model.editor || busy || running) return;
       try {
         if (!source.nativeDocument) throw new Error('Choose an XML subtree for this engine.');
         const next = importSubtreeLibrary(storedDocument, model.editor, source.nativeDocument);
@@ -349,21 +393,21 @@ export function useNativeTreeController(
     canUndo: history.length > 0,
     canRedo: future.length > 0,
     undo: () => {
-      if (!storedDocument || !history.length || running || busy) return;
+      if (observed || !storedDocument || !history.length || running || busy) return;
       const previous = history[history.length - 1];
       setHistory(history.slice(0, -1));
       setFuture([...future, storedDocument]);
       publish(previous, false);
     },
     redo: () => {
-      if (!storedDocument || !future.length || running || busy) return;
+      if (observed || !storedDocument || !future.length || running || busy) return;
       const next = future[future.length - 1];
       setFuture(future.slice(0, -1));
       setHistory([...history, storedDocument]);
       publish(next, false);
     },
     exportTree: () => {
-      if (!tree || !storedDocument) return null;
+      if (observed || !tree || !storedDocument) return null;
       try {
         return { ...tree, nativeDocument: validateDocument(storedDocument) };
       } catch (err) {
@@ -385,15 +429,20 @@ export function useNativeTreeController(
     run,
     stop,
     nodes,
-    cancel: () => client && void perform(() => client.cancel()),
-    reset: () => client && void perform(() => client.reset(), 'Tree reset.'),
+    cancel: () => !observed && client && void perform(() => client.cancel()),
+    reset: () => !observed && client && void perform(() => client.reset(), 'Tree reset.'),
     validate: () =>
+      !observed &&
       client &&
       document &&
       void perform(() => client.validate(validateDocument(document)), 'Tree check passed. Run when you are ready.'),
     load: () =>
-      client && document && void perform(() => client.load(validateDocument(document)), 'Tree loaded on ROS host.'),
+      !observed &&
+      client &&
+      document &&
+      void perform(() => client.load(validateDocument(document)), 'Tree loaded on ROS host.'),
     showHost: () =>
+      !observed &&
       state.session &&
       onChange(nativeTreeFromXml(state.session.xml, state.session.runtime, 'Host tree', state.session.mainTreeId)),
     differentHostTree: !!state.session && !matching,

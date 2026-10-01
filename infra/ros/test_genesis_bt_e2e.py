@@ -19,7 +19,7 @@ except ImportError:
 
 @unittest.skipUnless(rclpy is not None and os.environ.get('GENESIS_BT_E2E') == '1',
                      'Run in the isolated Genesis integration image')
-class GenesisRuntimeE2E(unittest.TestCase):
+class RosRuntimeHarness(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         rclpy.init()
@@ -69,6 +69,9 @@ class GenesisRuntimeE2E(unittest.TestCase):
         if not response.get('ok'): raise AssertionError(response.get('error'))
         return response
 
+
+
+class GenesisRuntimeE2E(RosRuntimeHarness):
     def source(self, runtime, goal=None):
         source = Path('/examples/behavior_trees/genesis_' + ('btcpp' if runtime == 'btcpp' else 'py_trees') + '.xml').read_text()
         if goal is not None:

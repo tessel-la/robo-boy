@@ -38,6 +38,8 @@ export interface RuntimeNode {
   ports?: Record<string, string>;
   lastResult?: 'success' | 'failure';
   lastNativeResult?: string;
+  /** A native telemetry boundary, not an inferred XML definition. */
+  subtree?: boolean;
 }
 
 export interface RuntimeDescriptor {
@@ -82,19 +84,30 @@ export interface RuntimeLog {
   success?: boolean;
 }
 
+/** An independent executor, observed without acquiring lifecycle ownership. */
+export interface RuntimeObservation extends Omit<RuntimeSession, 'xml'> {
+  name: string;
+  source: string;
+  connected: boolean;
+  updatedAt: number;
+  /** Optional runtime instance XML. Never load it as an editable definition. */
+  xml?: string;
+}
+
 export interface RuntimeState {
   connected: boolean;
   runtimes: RuntimeDescriptor[];
   session: RuntimeSession | null;
   logs: RuntimeLog[];
   error: string | null;
+  observations: RuntimeObservation[];
 }
 
 export interface RuntimeEvent {
   protocolVersion: 2;
   hostId: string;
   sequence: number;
-  type: 'response' | 'snapshot' | 'log';
+  type: 'response' | 'snapshot' | 'log' | 'observation';
   requestId?: string;
   ok?: boolean;
   error?: string;
@@ -102,6 +115,8 @@ export interface RuntimeEvent {
   session?: Omit<RuntimeSession, 'xml'> & { xml?: string };
   nodes?: RuntimeNode[];
   log?: RuntimeLog;
+  observations?: RuntimeObservation[];
+  observation?: RuntimeObservation;
 }
 
 export interface TreeFormatAdapter {

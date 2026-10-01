@@ -10,6 +10,7 @@ import uuid
 from collections import OrderedDict
 
 from .adapters import BehaviorTreeCppAdapter, PyTreesAdapter
+from .observations import validate_graph, MAX_BYTES
 
 ACTIVE = ('running',)
 
@@ -31,12 +32,57 @@ class RuntimeManager:
         self.last_heartbeat = 0.0
         self.node_feedback = {}
         self.node_results = {}
+        self.observations = {}
+
+    def observe(self, record):
+        if not isinstance(record, dict) or record.get('runtime') not in self.adapters:
+            raise ValueError('Unknown observation runtime')
+        if not self.enabled[record['runtime']]:
+            # An independent executor is never halted by the engine switch.
+            if record.get('id') not in self.observations:
+                return
+            record = {**self.observations[record['id']], 'connected': False, 'error': 'Engine monitoring is disabled'}
+        for field in ('id', 'source', 'name'):
+            if not isinstance(record.get(field), str) or not 1 <= len(record[field]) <= 4096:
+                raise ValueError('Invalid observation identity/source')
+        if not isinstance(record.get('connected'), bool) or record.get('state') not in ('loaded', 'running', 'completed'):
+            raise ValueError('Invalid observation state')
+        if record.get('xml') is not None and (not isinstance(record['xml'], str) or len(record['xml'].encode()) > MAX_BYTES):
+            raise ValueError('Excessive observation XML')
+        if record.get('result') not in (None, 'success', 'failure') or (record.get('error') is not None and (not isinstance(record['error'], str) or len(record['error']) > 4096)):
+            raise ValueError('Invalid observation outcome')
+        if not isinstance(record.get('updatedAt'), int) or record['updatedAt'] < 0:
+            raise ValueError('Invalid observation timestamp')
+        validate_graph(record['nodes'])
+        # Retain outcomes reported before native parents invalidate/reset descendants.
+        previous = self.observations.get(record['id'])
+        old_nodes = {node['id']: node for node in previous['nodes']} if previous else {}
+        record = copy.deepcopy(record)
+        for node in record['nodes']:
+            if node['status'] == 'idle' and 'lastResult' not in node and node['id'] in old_nodes:
+                for field in ('lastResult', 'lastNativeResult'):
+                    if field in old_nodes[node['id']]: node[field] = old_nodes[node['id']][field]
+        # A publisher restart replaces its old identity, not the managed session.
+        candidate = {id: item for id, item in self.observations.items()
+                     if item['source'] != record['source'] or id == record['id']}
+        candidate[record['id']] = record
+        def excessive():
+            return len(candidate) > 16 or len(json.dumps(list(candidate.values())).encode()) > 3 * 1024 * 1024
+        for stale in sorted((item for item in candidate.values() if not item['connected'] and item['id'] != record['id']), key=lambda item: item['updatedAt']):
+            if not excessive(): break
+            del candidate[stale['id']]
+        if excessive(): raise ValueError('External monitoring capacity exceeded')
+        evicted = any(id not in candidate for id in self.observations)
+        self.observations = candidate
+        update = copy.deepcopy(record)
+        if previous and previous.get('xml') == record.get('xml'): update.pop('xml', None)
+        self.emit('observation', observation=update, **({'observations': list(candidate.values())} if evicted else {}))
 
     def emit(self, type='snapshot', **fields):
         self.sequence += 1
         event = {'protocolVersion': 2, 'hostId': self.host_id, 'sequence': self.sequence,
                  'type': type, **fields}
-        if self.session:
+        if self.session and type != 'observation':
             event['session'] = copy.deepcopy(self.session)
             if type != 'response':
                 event['session'].pop('xml', None)  # Source travels once, not at tick rate.
@@ -66,9 +112,9 @@ class RuntimeManager:
         if name == 'discover':
             self.runtimes = [a.discover() for a in self.adapters.values()]
             self.update_enabled()
-            return {'runtimes': self.runtimes}
+            return {'runtimes': self.runtimes, 'observations': list(self.observations.values())}
         if name == 'status':
-            return {'runtimes': self.runtimes}
+            return {'runtimes': self.runtimes, 'observations': list(self.observations.values())}
         if name == 'set_enabled':
             runtime, enabled = request.get('runtime'), request.get('enabled')
             if runtime not in self.adapters or not isinstance(enabled, bool):
@@ -82,6 +128,9 @@ class RuntimeManager:
                     raise
                 self.close_worker()
             self.enabled[runtime] = enabled
+            if not enabled:
+                for record in list(self.observations.values()):
+                    if record['runtime'] == runtime: self.observe(record)
             self.update_enabled()
             return {'runtimes': self.runtimes}
         if name in ('load', 'validate'):

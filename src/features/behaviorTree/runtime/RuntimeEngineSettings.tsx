@@ -19,7 +19,7 @@ export default function RuntimeEngineSettings({ runtime }: { runtime: ReturnType
                 role="switch"
                 aria-label={`Enable ${format.label}`}
                 checked={!!descriptor && descriptor.enabled !== false}
-                disabled={busy || !state.connected || !descriptor?.available}
+                disabled={busy || !state.connected || (!descriptor?.available && !state.observations?.some(item => item.runtime === format.id))}
                 onChange={async event => {
                   setBusy(true);
                   setError(null);
@@ -37,20 +37,22 @@ export default function RuntimeEngineSettings({ runtime }: { runtime: ReturnType
               </span>
               <span>{format.label}</span>
             </label>
-            <small>
+            <small title={descriptor?.reason}>
               {!state.connected
                 ? client
                   ? 'Host executor unavailable'
                   : 'Connect to ROS to configure'
                 : descriptor?.available
                   ? `${descriptor.version || ''} · ${descriptor.enabled === false ? 'Disabled' : 'Enabled'}`
-                  : descriptor?.reason || 'Unavailable on host'}
+                  : state.observations.some(item => item.runtime === format.id)
+                    ? `${descriptor?.enabled === false ? 'Monitoring off' : 'Monitoring enabled'} · Execution unavailable`
+                    : descriptor?.reason || 'Unavailable on host'}
             </small>
           </div>
         );
       })}
       <p className="bt-menu-hint">
-        Disabled engines are hidden from the toolbar. Turning one off stops its active tree and keeps the open document.
+        Disabled engines are hidden from the toolbar. Turning one off stops trees run by Robo Boy and pauses external monitoring. Independently running robot trees keep executing.
         Settings apply to this host until its executor restarts.
       </p>
       <button

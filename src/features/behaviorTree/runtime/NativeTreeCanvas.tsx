@@ -271,7 +271,7 @@ function NativeCanvasContent({
   }, [controller.nodes, controller.viewKey, edges, setNodes]);
   const selected = controller.nodes.find(node => node.id === inspectedId);
   const attributes = selected && ((selected as SourceNode).attributes || selected.ports || {});
-  const nodeLogs = selected?.runtimeId ? state.logs.filter(log => log.id === selected.runtimeId) : [];
+  const nodeLogs = !controller.observed && selected?.runtimeId ? state.logs.filter(log => log.id === selected.runtimeId) : [];
   return (
     <div
       ref={canvasRef}
@@ -413,13 +413,13 @@ function NativeCanvasContent({
             {controller.sourceOpen ? (
               <>
                 <p className="bt-menu-hint">
-                  Editing XML replaces the visual draft. Save first to keep disconnected nodes and their layout.
+                  {controller.observed ? "Runtime instance XML from the robot, available for read-only inspection." : "Editing XML replaces the visual draft. Save first to keep disconnected nodes and their layout."}
                 </p>
                 <textarea
                   aria-label="Tree XML"
                   spellCheck={false}
-                  value={controller.document!.xml}
-                  disabled={controller.locked}
+                  value={controller.sourceXml || ''}
+                  readOnly={controller.locked}
                   onChange={event => controller.changeDocument({ xml: event.target.value, mainTreeId: undefined })}
                 />
               </>
@@ -492,9 +492,9 @@ function NativeCanvasContent({
                     ))}
                   </details>
                 )}
-                <button className="bt-menu-action-btn" onClick={() => controller.setSourceOpen(true)}>
-                  Edit XML source
-                </button>
+                {controller.sourceXml && <button className="bt-menu-action-btn" onClick={() => controller.setSourceOpen(true)}>
+                  {controller.observed ? "View XML source" : "Edit XML source"}
+                </button>}
               </>
             )}
           </div>

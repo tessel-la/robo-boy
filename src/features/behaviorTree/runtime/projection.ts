@@ -23,7 +23,12 @@ interface TreeView {
 }
 
 /** Project definitions once; each SubTree occurrence owns a separate navigable view. */
-export function projectXml(xml: string, runtime: TreeRuntimeId | null, treeId?: string, addresses?: Map<string, string>) {
+export function projectXml(
+  xml: string,
+  runtime: TreeRuntimeId | null,
+  treeId?: string,
+  addresses?: Map<string, string>
+) {
   const inspected = inspectXml(xml, runtime, treeId);
   const definitions = new Map(inspected.trees.map(tree => [tree.getAttribute('ID')!, tree.children[0]]));
   const views = new Map<string, TreeView>();
@@ -113,4 +118,26 @@ export function liveSourceNode(source: SourceNode, native?: RuntimeNode): Source
     lastResult: native.lastResult,
     lastNativeResult: native.lastNativeResult,
   };
+}
+
+/** Native telemetry owns its topology; no executable definition is inferred. */
+export function projectObservation(nodes: RuntimeNode[], boundary?: string): SourceNode[] {
+  const children = new Map<string | null, RuntimeNode[]>();
+  nodes.forEach(node => children.set(node.parentId, [...(children.get(node.parentId) || []), node]));
+  const result: SourceNode[] = [];
+  const walk = (node: RuntimeNode, parentId: string | null, expand = false) => {
+    result.push({
+      ...node,
+      parentId,
+      attributes: node.ports || {},
+      runtimeId: node.id,
+      ...(node.subtree && !expand ? { subtreeId: node.label, subtreeView: node.id } : {}),
+    });
+    if (!node.subtree || expand) (children.get(node.id) || []).forEach(child => walk(child, node.id));
+  };
+  const root = boundary ? nodes.find(node => node.id === boundary) : children.get(null)?.[0];
+  if (root && boundary && ['SubTree', 'SubTreePlus'].includes(root.type))
+    (children.get(root.id) || []).forEach(child => walk(child, null, true));
+  else if (root) walk(root, null, true);
+  return result;
 }

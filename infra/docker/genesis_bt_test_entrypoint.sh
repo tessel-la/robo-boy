@@ -33,5 +33,5 @@ if [ "$#" -gt 0 ]; then
     "$@"
 else
     cd /ros_ws
-    GENESIS_BT_E2E=1 REQUIRE_BT_RUNTIMES=1 python3 -m unittest test_native_bt_runtime test_bt_ros_bridge test_genesis_bt_e2e -v
+    GENESIS_BT_E2E=1 REQUIRE_BT_RUNTIMES=1 python3 -m unittest test_native_bt_runtime test_bt_ros_bridge test_genesis_bt_e2e test_external_bt -v
 fi

@@ -3,7 +3,7 @@ import { Ros } from 'roslib';
 import { RemoteTreeRuntime } from './RemoteTreeRuntime';
 import { RuntimeState } from './types';
 
-const empty: RuntimeState = { connected: false, runtimes: [], session: null, logs: [], error: null };
+const empty: RuntimeState = { connected: false, runtimes: [], session: null, logs: [], error: null, observations: [] };
 export function useRemoteTreeRuntime(ros: Ros | null, isConnected: boolean) {
   const [client, setClient] = useState<RemoteTreeRuntime | null>(null);
   const [state, setState] = useState<RuntimeState>(empty);

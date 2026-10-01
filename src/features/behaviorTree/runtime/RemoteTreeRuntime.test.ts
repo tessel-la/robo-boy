@@ -210,3 +210,29 @@ describe('common ROS runtime client', () => {
     expect(fake.topics[1].unsubscribe).toHaveBeenCalled();
   });
 });
+
+describe('independent robot observations', () => {
+  const external = { ...session, id: 'external', name: 'Robot mission', source: 'tcp://robot:1667', connected: true, updatedAt: 123 };
+  it('discovers and merges native telemetry without acquiring session ownership', () => {
+    event({ observations: [external] });
+    expect(client.getState().session).toBeNull();
+    event({ type: 'observation', observation: { ...external, xml: undefined, nodes: [{ ...node, feedback: 'Arrived' }] } });
+    expect(client.getState().observations?.[0]).toMatchObject({ xml: session.xml, nodes: [{ feedback: 'Arrived' }] });
+    expect(fake.topics[0].publish).not.toHaveBeenCalled();
+    event({ type: 'observation', observation: { ...external, id: 'restarted', connected: false } });
+    expect(client.getState().observations).toHaveLength(1);
+    expect(client.getState().observations?.[0].id).toBe('restarted');
+  });
+  it('retains the last graph on ROS loss, and discards old host observations after restart', () => {
+    event({ observations: [external] });
+    fake.listeners.get('close')!();
+    expect(client.getState().connected).toBe(false);
+    expect(client.getState().observations?.[0]).toEqual(external);
+    event({ hostId: 'new-host', observations: [] });
+    expect(client.getState().observations).toEqual([]);
+  });
+  it.each([null, [{ ...node, parentId: 'missing' }], [node, node], [{ ...node, parentId: 'node' }]])('rejects malformed native telemetry topology %j', nodes => {
+    event({ observation: { ...external, nodes } });
+    expect(client.getState().observations).toEqual([]);
+  });
+});

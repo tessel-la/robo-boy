@@ -3044,6 +3044,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   };
 
   const handleStopBehaviorTree = () => {
+    if (btExecution.isReadOnly) return;
     if (btExecutionControls.current) {
       btExecutionControls.current.stop();
     } else if (persistentBtSessionId.current) {
@@ -4246,14 +4247,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                     </span>
                   </span>
                 </button>
-                <button
+                {!btExecution.isReadOnly && <button
                   className="bt-execution-stop"
                   onClick={handleStopBehaviorTree}
                   title="Stop behavior tree"
                   aria-label="Stop behavior tree"
                 >
                   {icons.stop}
-                </button>
+                </button>}
               </div>
             ) : (
               <button
@@ -4301,14 +4302,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                   <span className="bt-execution-node">{btExecution.activeNodeLabel || 'Running'}</span>
                 </span>
               </button>
-              <button
+              {!btExecution.isReadOnly && <button
                 className="bt-execution-stop"
                 onClick={handleStopBehaviorTree}
                 title="Stop behavior tree"
                 aria-label="Stop behavior tree"
               >
                 {icons.stop}
-              </button>
+              </button>}
             </div>
           )}
           {!isDesktopWorkspace && (

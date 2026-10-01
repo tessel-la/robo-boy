@@ -6,3 +6,7 @@ find_package(nlohmann_json REQUIRED)
 add_executable(robo-boy-btcpp worker.cpp)
 target_link_libraries(robo-boy-btcpp PRIVATE behaviortree_cpp::behaviortree_cpp nlohmann_json::nlohmann_json)
 install(TARGETS robo-boy-btcpp DESTINATION bin)
+
+add_executable(robo-boy-external-btcpp external_tree.cpp)
+target_link_libraries(robo-boy-external-btcpp PRIVATE behaviortree_cpp::behaviortree_cpp)
+install(TARGETS robo-boy-external-btcpp DESTINATION bin)

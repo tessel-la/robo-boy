@@ -232,3 +232,58 @@ describe('native controller in the common editor', () => {
     expect(result.current.nodes).toEqual([]);
   });
 });
+
+it.each(['btcpp', 'py_trees'] as const)('watches %s native identities and subtrees without changing a draft or controlling the robot', runtimeId => {
+  const draft = nativeTreeFromXml(treeFormats[0].template);
+  const change = vi.fn();
+  const controls = vi.fn();
+  const base = { type: 'Wait', nativeStatus: 'RUNNING', feedback: 'Robot feedback', ports: { seconds: '1.2' } };
+  const observed = { id: 'robot', runtime: runtimeId, name: 'Robot mission', source: '/robot/snapshots', connected: true, updatedAt: 1, state: 'running' as const, result: null, error: null, nodes: [
+    { ...base, id: 'root', parentId: null, label: 'Mission', status: 'running' as const },
+    { ...base, id: 'phase', parentId: 'root', label: 'Phase', status: 'running' as const, subtree: true },
+    { ...base, id: 'leaf', parentId: 'phase', label: 'Operation', status: 'running' as const },
+  ] };
+  const { result, rerender } = renderHook(({ observation }) => useNativeTreeController(draft, runtime, runtimeId, change, undefined, controls, observation), { initialProps: { observation: observed as typeof observed | null } });
+  expect(result.current.nodes.map(node => node.id)).toEqual(['root', 'phase']);
+  expect(result.current.editable).toBe(false);
+  expect(result.current.locked).toBe(true);
+  expect(controls).toHaveBeenLastCalledWith(null);
+  act(() => result.current.openSubtree('phase'));
+  expect(result.current.nodes.map(node => node.id)).toEqual(['phase', 'leaf']);
+  act(() => result.current.parentView());
+  expect(result.current.nodes.map(node => node.id)).toEqual(['root', 'phase']);
+  act(() => { result.current.run(); result.current.stop(); result.current.cancel(); result.current.reset(); result.current.showHost(); });
+  expect(change).not.toHaveBeenCalled();
+  Object.values(client).forEach(fn => expect(fn).not.toHaveBeenCalled());
+  rerender({ observation: null });
+  expect(result.current.document?.xml).toBe(draft.nativeDocument!.xml);
+});
+
+it('preserves the editor subtree and history while watching, and recovers a removed observation boundary', () => {
+  const draft = nativeTreeFromXml('<root BTCPP_format="4" main_tree_to_execute="Main"><BehaviorTree ID="Main"><Sequence><SubTree ID="Child"/></Sequence></BehaviorTree><BehaviorTree ID="Child"><Wait/></BehaviorTree></root>');
+  const change = vi.fn();
+  const base = { type: 'Sequence', nativeStatus: 'RUNNING', status: 'running' as const, feedback: '' };
+  const observed = { id: 'robot', runtime: 'btcpp' as const, name: 'Robot', source: 'groot', connected: true, updatedAt: 1, state: 'running' as const, result: null, error: null, nodes: [
+    { ...base, id: 'root', parentId: null, label: 'Root' },
+    { ...base, id: 'child', parentId: 'root', label: 'Child', subtree: true },
+  ] };
+  const { result, rerender } = renderHook(({ observation }) => useNativeTreeController(draft, runtime, 'btcpp', change, undefined, undefined, observation), { initialProps: { observation: null as typeof observed | null } });
+  const subtree = result.current.nodes.find(node => node.subtreeView)!;
+  act(() => result.current.openSubtree(subtree.subtreeView!));
+  const editorView = result.current.viewKey;
+  act(() => result.current.addNode('Wait'));
+  expect(result.current.canUndo).toBe(true);
+  change.mockClear();
+  rerender({ observation: observed });
+  act(() => { result.current.validate(); result.current.load(); result.current.undo(); result.current.addNode('Wait'); });
+  expect(change).not.toHaveBeenCalled();
+  Object.values(client).forEach(fn => expect(fn).not.toHaveBeenCalled());
+  act(() => result.current.openSubtree('child'));
+  rerender({ observation: { ...observed, nodes: observed.nodes.slice(0, 1) } });
+  expect(result.current.viewTreeId).toBeUndefined();
+  expect(result.current.nodes.map(node => node.id)).toEqual(['root']);
+  rerender({ observation: null });
+  expect(result.current.viewKey).toBe(editorView);
+  expect(result.current.canUndo).toBe(true);
+  expect(result.current.nodes).toHaveLength(1);
+});

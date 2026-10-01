@@ -2,7 +2,7 @@ import { useRemoteTreeRuntime } from '../runtime/useRemoteTreeRuntime';
 import NativeTreeCanvas from '../runtime/NativeTreeCanvas';
 import NativeTreeSettings, { NativeTreeStatus } from '../runtime/NativeTreeSettings';
 import { useNativeTreeController } from '../runtime/useNativeTreeController';
-import { TreeRuntimeId } from '../runtime/types';
+import { TreeRuntimeId, RuntimeObservation } from '../runtime/types';
 import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
 import { blankXml, nativeTreeFromXml, newXmlTemplate, resolveTreeRuntime, treeFormats } from '../runtime/xml';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -139,6 +139,7 @@ export interface BehaviorTreeExecutionSnapshot {
   status?: ExecutionStatus | 'paused' | 'completed' | 'stopped' | 'error';
   startedAt?: number;
   isPersistent?: boolean;
+  isReadOnly?: boolean;
 }
 
 export interface BehaviorTreeExecutionControls {
@@ -552,6 +553,22 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
   const [selectedEngine, setSelectedEngine] = useState<'json' | TreeRuntimeId | null>('json');
   const [nativeArrange, setNativeArrange] = useState(0);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [watched, setWatched] = useState<RuntimeObservation | null>(null);
+  const [watchDismissed, setWatchDismissed] = useState(false);
+  useEffect(() => { setWatched(null); setWatchDismissed(false); }, [ros]);
+  useEffect(() => {
+    if (watched) {
+      const latest = nativeRuntime.state.observations?.find(item => item.id === watched.id || item.source === watched.source);
+      if (latest && latest !== watched) setWatched(latest);
+      else if (!latest && nativeRuntime.state.connected && watched.connected) setWatched({ ...watched, connected: false, error: 'This tree is no longer reported by the ROS host.' });
+    } else if (!isExecuting && !watchDismissed && nativeRuntime.state.connected && !currentTree?.nativeDocument && !currentTree?.nodes.length && nativeRuntime.state.session?.state !== 'running') {
+      const running = nativeRuntime.state.observations?.find(item => item.connected && item.state === 'running');
+      if (running) setWatched(running);
+    }
+  }, [watched, watchDismissed, nativeRuntime.state, currentTree, isExecuting]);
+  const panelEngine = watched?.runtime || selectedEngine;
+  const panelTree = useMemo(() => watched ? { id: watched.id, name: watched.name, nodes: [], edges: [], createdAt: watched.updatedAt, updatedAt: watched.updatedAt } : currentTree, [watched, currentTree]);
   useEffect(
     () => setSelectedEngine(currentTree?.nativeDocument ? currentTree.nativeDocument.runtime : 'json'),
     [currentTree?.id, currentTree?.nativeDocument?.runtime]
@@ -562,7 +579,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     nodes,
     blackboardDefaults: currentTree?.blackboardDefaults,
   }), [nodes, currentTree?.blackboardDefaults]);
-  const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
   const [paletteDragging, setPaletteDragging] = useState(false);
@@ -2087,7 +2103,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   useEffect(() => {
     if (!ros || !isConnected || typeof (ros as any).callOnConnection !== 'function') return;
-    if (currentTree?.nativeDocument) return;
+    if (watched || currentTree?.nativeDocument) return;
     const client = new PersistentBehaviorTreeExecutor(ros);
     persistentExecutorRef.current = client;
     const unsubscribe = client.subscribe(handlePersistentStatus);
@@ -2097,19 +2113,19 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (persistentExecutorRef.current === client) persistentExecutorRef.current = null;
       // Deliberately do not send stop here: the ROS runner owns persistent sessions.
     };
-  }, [handlePersistentStatus, isConnected, ros, !!currentTree?.nativeDocument]);
+  }, [handlePersistentStatus, isConnected, ros, !!currentTree?.nativeDocument, !!watched]);
 
   // Native sessions are host-owned and can be recovered even when the editor
   // reopened with a blank JSON document. One transport serves discovery and UI.
   useEffect(() => {
     const session = nativeRuntime.state.session;
-    if (!session || session.state !== 'running' || currentTree?.nativeDocument || isExecuting || currentTree?.nodes.length) return;
+    if (watched || !session || session.state !== 'running' || currentTree?.nativeDocument || isExecuting || currentTree?.nodes.length) return;
     try {
       loadRootTree(nativeTreeFromXml(session.xml, session.runtime, 'Host tree', session.mainTreeId));
     } catch (error) {
       showSaveNotice({ type: 'error', title: 'Host tree unavailable', message: String(error) });
     }
-  }, [nativeRuntime.state.session, currentTree?.nativeDocument, isExecuting, loadRootTree, showSaveNotice]);
+  }, [nativeRuntime.state.session, currentTree?.nativeDocument, isExecuting, loadRootTree, showSaveNotice, watched]);
 
   // Losing ROS ends whatever was running; another connection (maybe another robot) starts with nothing recorded.
   const executionRosRef = useRef(ros);
@@ -2204,9 +2220,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [pushUndoSnapshot, restoreRootTreeSnapshot]);
 
   useEffect(() => {
-    if (currentTree?.nativeDocument) return;
+    if (watched || currentTree?.nativeDocument) return;
     onExecutionChange?.(executionSnapshot);
-  }, [executionSnapshot, onExecutionChange, !!currentTree?.nativeDocument]);
+  }, [executionSnapshot, onExecutionChange, !!currentTree?.nativeDocument, !!watched]);
 
   // Ctrl/Cmd+I used to open a tiny canvas-anchored micro-form; the global assistant is now a
   // lightweight, non-modal, always-reachable panel, so this shortcut simply opens/focuses it with
@@ -2216,7 +2232,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [onOpenAssistant, panelId]);
 
   useEffect(() => {
-    if (currentTree?.nativeDocument) return;
+    if (watched || currentTree?.nativeDocument) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
@@ -2247,13 +2263,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt, !!currentTree?.nativeDocument]);
+  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt, !!currentTree?.nativeDocument, !!watched]);
 
   useEffect(() => {
-    if (currentTree?.nativeDocument) return;
+    if (watched || currentTree?.nativeDocument) return;
     onExecutionControlsChange?.({ stop: handleStop });
     return () => onExecutionControlsChange?.(null);
-  }, [handleStop, onExecutionControlsChange, !!currentTree?.nativeDocument]);
+  }, [handleStop, onExecutionControlsChange, !!currentTree?.nativeDocument, !!watched]);
 
   const updateCustomBoxSelection = useCallback(
     (gesture: CustomBoxSelectionGesture) => {
@@ -2492,7 +2508,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   // panel rendering its own chat UI; all diff/canvas-overlay/accept-mode logic below is unchanged.
   useEffect(() => {
     if (!onRegisterAssistantBridge) return;
-    if (currentTree?.nativeDocument) {
+    if (watched || currentTree?.nativeDocument) {
       onRegisterAssistantBridge(panelId, null);
       return; // JSON graph proposals cannot change executable native XML.
     }
@@ -2523,6 +2539,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     restoreAgentCheckpoint,
     selectedTreeContext,
     showSaveNotice,
+    watched,
   ]);
 
   const displayedEdges = useMemo(() => {
@@ -3172,14 +3189,15 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const native = useNativeTreeController(
     currentTree?.nativeDocument ? currentTree : null,
     nativeRuntime,
-    selectedEngine,
+    panelEngine,
     loadRootTree,
     onExecutionChange,
-    onExecutionControlsChange
+    onExecutionControlsChange,
+    watched
   );
 
   useEffect(() => {
-    if (!currentTree?.nativeDocument || !isActive) return;
+    if (watched || !currentTree?.nativeDocument || !isActive) return;
     const keyDown = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
@@ -3191,7 +3209,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     window.addEventListener('keydown', keyDown);
     return () => window.removeEventListener('keydown', keyDown);
   }, [!!currentTree?.nativeDocument, isActive, native.locked, native.undo, native.redo]);
-  const nativeDocument = !!currentTree?.nativeDocument;
+  const nativeDocument = !!watched || !!currentTree?.nativeDocument;
   const executing = nativeDocument ? native.running : isExecuting;
   const editingLocked = nativeDocument ? native.locked : isExecuting;
   const newForEngine = () => {
@@ -3214,7 +3232,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             key={format.id}
             type="button"
             aria-label={format.label}
-            aria-pressed={selectedEngine === format.id}
+            aria-pressed={panelEngine === format.id}
             disabled={editingLocked}
             title={format.label}
             onClick={() => {
@@ -3232,7 +3250,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
-        currentTree={currentTree}
+        currentTree={panelTree}
         isExecuting={executing}
         isPaused={isPaused}
         isEditingLocked={editingLocked}
@@ -3257,7 +3275,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         }
         onLoad={handleLoad}
         onNew={newForEngine}
-        onImportLibrary={nativeDocument ? native.importLibrary : undefined}
+        onImportLibrary={!watched && nativeDocument ? native.importLibrary : undefined}
         engineControl={engineControl}
         runtimeStatus={
           nativeDocument ? <NativeTreeStatus controller={native} state={nativeRuntime.state} /> : undefined
@@ -3267,17 +3285,27 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             ? {
                 ready: !!native.ready && !native.preview.error,
                 busy: native.busy,
-                canControl: !!native.session && nativeRuntime.state.connected,
-                canReset: !!native.session && !!native.ready,
+                canControl: !watched && !!native.session && nativeRuntime.state.connected,
+                canReset: !watched && !!native.session && !!native.ready,
                 onCancel: native.session ? native.cancel : () => {},
                 onReset: native.reset,
-                onSource: () => native.setSourceOpen(true),
+                onSource: native.sourceXml ? () => native.setSourceOpen(true) : undefined,
+                observing: !!watched,
               }
             : undefined
         }
         runDisabled={!nativeDocument && selectedEngine !== 'json'}
         runtimeSettings={
           <>
+            {(watched || !!nativeRuntime.state.observations?.length) && <div className="bt-menu-section">
+              <span className="bt-menu-label">Trees on robot</span>
+              {nativeRuntime.state.observations?.filter(item => nativeRuntime.state.runtimes.find(engine => engine.id === item.runtime)?.enabled !== false).map(item => (
+                <button key={item.id} className="bt-menu-action-btn" aria-pressed={watched?.id === item.id} disabled={isExecuting} title={item.source} onClick={() => setWatched(item)}>
+                  {item.name} · {item.runtime === 'btcpp' ? 'BT.CPP' : 'py_trees'} · {item.connected && nativeRuntime.state.connected ? item.state : 'Disconnected'}
+                </button>
+              ))}
+              {watched && <button className="bt-menu-action-btn" onClick={() => { setWatched(null); setWatchDismissed(true); }}>Back to editor</button>}
+            </div>}
             {nativeDocument && <NativeTreeSettings controller={native} />}
             <RuntimeEngineSettings runtime={nativeRuntime} />
           </>
@@ -3364,11 +3392,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           isConnected={isConnected}
           isCollapsed={isPaletteCollapsed}
-          isDisabled={(!nativeDocument && editingLocked) || (nativeDocument && selectedEngine === 'json')}
+          isDisabled={!!watched || (!nativeDocument && editingLocked) || (nativeDocument && selectedEngine === 'json')}
           onToggleCollapse={() => setIsPaletteCollapsed(collapsed => !collapsed)}
           onAddNode={handleAddNode}
           nativeCatalog={
-            selectedEngine && selectedEngine !== 'json'
+            !watched && selectedEngine && selectedEngine !== 'json'
               ? {
                   runtime: selectedEngine,
                   locked:

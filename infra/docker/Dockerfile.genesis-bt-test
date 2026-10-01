@@ -24,6 +24,8 @@ COPY infra/ros/native_behavior_tree_runner.py /ros_ws/native_behavior_tree_runne
 COPY infra/ros/test_bt_ros_bridge.py /ros_ws/test_bt_ros_bridge.py
 COPY infra/ros/test_native_bt_runtime.py /ros_ws/test_native_bt_runtime.py
 COPY infra/ros/test_genesis_bt_e2e.py /ros_ws/test_genesis_bt_e2e.py
+COPY infra/ros/external_py_tree.py /ros_ws/external_py_tree.py
+COPY infra/ros/test_external_bt.py /ros_ws/test_external_bt.py
 COPY examples/behavior_trees /examples/behavior_trees
 COPY infra/docker/genesis_bt_test_entrypoint.sh /ros_ws/genesis_bt_test_entrypoint.sh
 ENTRYPOINT ["bash", "/ros_ws/genesis_bt_test_entrypoint.sh"]

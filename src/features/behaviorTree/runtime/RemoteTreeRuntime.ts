@@ -1,11 +1,78 @@
 import { v4 as uuidv4 } from 'uuid';
 import ROSLIB, { Ros, Topic } from 'roslib';
-import { NativeTreeDocument, RuntimeEvent, RuntimeState, RuntimeSession } from './types';
+import { NativeTreeDocument, RuntimeEvent, RuntimeState, RuntimeSession, RuntimeObservation } from './types';
 import { validateDocument } from './xml';
 
 export const RUNTIME_COMMAND_TOPIC = '/robo_boy/bt/command';
 export const RUNTIME_EVENTS_TOPIC = '/robo_boy/bt/events';
-const initialState = (): RuntimeState => ({ connected: false, runtimes: [], session: null, logs: [], error: null });
+const initialState = (): RuntimeState => ({
+  connected: false,
+  runtimes: [],
+  session: null,
+  logs: [],
+  error: null,
+  observations: [],
+});
+
+function invalidNode(n: any): boolean {
+  return (
+    !n ||
+    typeof n !== 'object' ||
+    ['id', 'label', 'type', 'nativeStatus', 'feedback'].some(
+      field => typeof n[field] !== 'string' || n[field].length > 4096
+    ) ||
+    !n.id ||
+    typeof n.id !== 'string' ||
+    typeof n.label !== 'string' ||
+    typeof n.type !== 'string' ||
+    typeof n.nativeStatus !== 'string' ||
+    typeof n.feedback !== 'string' ||
+    (n.ports !== undefined &&
+      (n.ports === null ||
+        typeof n.ports !== 'object' ||
+        Array.isArray(n.ports) ||
+        Object.values(n.ports).some(value => typeof value !== 'string'))) ||
+    (n.lastResult !== undefined && !['success', 'failure'].includes(n.lastResult)) ||
+    (n.lastNativeResult !== undefined && typeof n.lastNativeResult !== 'string') ||
+    (n.parentId !== null && typeof n.parentId !== 'string') ||
+    !['idle', 'running', 'success', 'failure'].includes(n.status)
+  );
+}
+function validObservation(record: any): boolean {
+  if (
+    !record ||
+    !['btcpp', 'py_trees'].includes(record.runtime) ||
+    !['loaded', 'running', 'completed'].includes(record.state) ||
+    ['id', 'source', 'name'].some(
+      field => typeof record[field] !== 'string' || !record[field] || record[field].length > 4096
+    ) ||
+    typeof record.connected !== 'boolean' ||
+    !Number.isSafeInteger(record.updatedAt) ||
+    (record.xml !== undefined && (typeof record.xml !== 'string' || record.xml.length > 512 * 1024)) ||
+    (record.error != null && typeof record.error !== 'string') ||
+    (record.result != null && !['success', 'failure'].includes(record.result)) ||
+    !Array.isArray(record.nodes) ||
+    !record.nodes.length ||
+    record.nodes.length > 2048 ||
+    record.nodes.some(
+      (node: any) => invalidNode(node) || (node.subtree !== undefined && typeof node.subtree !== 'boolean')
+    )
+  )
+    return false;
+  const byId = new Map<string, any>(record.nodes.map((node: any) => [node.id, node]));
+  if (byId.size !== record.nodes.length || record.nodes.filter((node: any) => node.parentId === null).length !== 1)
+    return false;
+  return record.nodes.every((node: any) => {
+    const visited = new Set<string>();
+    while (node.parentId !== null) {
+      if (visited.has(node.id) || visited.size > 64) return false;
+      visited.add(node.id);
+      node = byId.get(node.parentId);
+      if (!node) return false;
+    }
+    return true;
+  });
+}
 
 function parseEvent(message: unknown): RuntimeEvent | null {
   try {
@@ -16,7 +83,7 @@ function parseEvent(message: unknown): RuntimeEvent | null {
       event.protocolVersion !== 2 ||
       typeof event.hostId !== 'string' ||
       !Number.isSafeInteger(event.sequence) ||
-      !['response', 'snapshot', 'log'].includes(event.type)
+      !['response', 'snapshot', 'log', 'observation'].includes(event.type)
     )
       return null;
     if (event.error !== undefined && typeof event.error !== 'string') return null;
@@ -52,23 +119,15 @@ function parseEvent(message: unknown): RuntimeEvent | null {
         (event.session.error != null && typeof event.session.error !== 'string') ||
         !['loaded', 'running', 'completed', 'stopped', 'cancelled', 'error'].includes(event.session.state) ||
         !Array.isArray(event.session.nodes) ||
-        event.session.nodes.some(
-          (n: any) =>
-            typeof n.id !== 'string' ||
-            typeof n.label !== 'string' ||
-            typeof n.type !== 'string' ||
-            typeof n.nativeStatus !== 'string' ||
-            typeof n.feedback !== 'string' ||
-            (n.ports !== undefined &&
-              (n.ports === null ||
-                typeof n.ports !== 'object' ||
-                Array.isArray(n.ports) ||
-                Object.values(n.ports).some(value => typeof value !== 'string'))) ||
-            (n.lastResult !== undefined && !['success', 'failure'].includes(n.lastResult)) ||
-            (n.lastNativeResult !== undefined && typeof n.lastNativeResult !== 'string') ||
-            (n.parentId !== null && typeof n.parentId !== 'string') ||
-            !['idle', 'running', 'success', 'failure'].includes(n.status)
-        ))
+        event.session.nodes.some(invalidNode))
+    )
+      return null;
+    if (
+      (event.observation !== undefined && !validObservation(event.observation)) ||
+      (event.observations !== undefined &&
+        (!Array.isArray(event.observations) ||
+          event.observations.length > 16 ||
+          event.observations.some((record: any) => !validObservation(record))))
     )
       return null;
     return event as RuntimeEvent;
@@ -138,7 +197,7 @@ export class RemoteTreeRuntime {
       this.retiredHosts.add(this.hostId);
       this.failPending('The host runtime restarted. Reload its status.');
       this.sequence = -1;
-      this.update({ session: null, logs: [] });
+      this.update({ session: null, logs: [], observations: [] });
     }
     this.hostId = event.hostId;
     this.lastSeen = Date.now();
@@ -159,8 +218,19 @@ export class RemoteTreeRuntime {
     const changedRun =
       session && (this.state.session?.id !== session.id || this.state.session?.runId !== session.runId);
     const previousLogs = changedRun ? [] : this.state.logs;
+    const mergeObservation = (record: RuntimeObservation): RuntimeObservation => {
+      const previous = this.state.observations?.find(item => item.id === record.id);
+      return { ...record, ...(record.xml === undefined && previous?.xml ? { xml: previous.xml } : {}) };
+    };
+    let observations = event.observations?.map(mergeObservation) || this.state.observations || [];
+    if (event.observation)
+      observations = [
+        ...observations.filter(item => item.id !== event.observation!.id && item.source !== event.observation!.source),
+        mergeObservation(event.observation),
+      ].slice(-16);
     this.update({
       connected: true,
+      observations,
       error: event.ok === false ? event.error || 'Host command failed.' : null,
       ...(event.runtimes ? { runtimes: event.runtimes } : {}),
       ...(session ? { session } : {}),

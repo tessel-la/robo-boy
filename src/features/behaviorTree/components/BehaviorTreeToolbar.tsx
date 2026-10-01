@@ -33,7 +33,8 @@ interface BehaviorTreeToolbarProps {
     canReset: boolean;
     onCancel: () => void;
     onReset: () => void;
-    onSource: () => void;
+    onSource?: () => void;
+    observing?: boolean;
   };
   runDisabled?: boolean;
   onExecute: () => void;
@@ -271,7 +272,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         }
       >
         {runtimeSettings}
-        {nativeControls ? (
+        {nativeControls?.observing ? null : nativeControls ? (
           <div className="bt-menu-section bt-menu-actions">
             <button
               className="bt-menu-action-btn"
@@ -343,7 +344,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             />
           </svg>
         </button>
-        <button
+        {!nativeControls?.observing && <button
           className={isExecuting && !isPaused && !nativeControls ? 'bt-float-pause-btn' : 'bt-float-run-btn'}
           onClick={isExecuting ? (isPaused ? onResume : onPause) : onExecute}
           disabled={
@@ -366,8 +367,8 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           <span className="bt-float-btn-label">
             {isExecuting && !nativeControls ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
           </span>
-        </button>
-        <button
+        </button>}
+        {!nativeControls?.observing && <button
           className="bt-float-stop-btn"
           onClick={onStop}
           disabled={!isExecuting || (nativeControls ? nativeControls.busy || !nativeControls.canControl : false)}
@@ -379,7 +380,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <rect x="0" y="0" width="11" height="11" rx="2" />
           </svg>
           <span className="bt-float-btn-label">Stop</span>
-        </button>
+        </button>}
       </div>
     </>
   );

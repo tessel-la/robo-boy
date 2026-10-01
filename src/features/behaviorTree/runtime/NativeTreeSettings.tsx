@@ -6,11 +6,28 @@ import { treeFormats } from './xml';
 import './NativeTreeSettings.css';
 
 export function NativeTreeStatus({ controller, state }: { controller: NativeTreeController; state: RuntimeState }) {
-  const format = treeFormats.find(format => format.id === controller.document?.runtime);
+  const format = treeFormats.find(
+    format => format.id === (controller.observed?.runtime || controller.document?.runtime)
+  );
   const descriptor = state.runtimes.find(runtime => runtime.id === format?.id);
   let label = 'Ready';
   let explanation = 'Run sends this tree to the ROS host and starts execution.';
-  if (!state.connected) {
+  if (controller.observed) {
+    const record = controller.observed;
+    label =
+      descriptor?.enabled === false
+        ? 'Monitoring off'
+        : !state.connected || !record.connected
+          ? 'Telemetry lost'
+          : record.state === 'running'
+            ? 'Watching · Running'
+            : record.result === 'success'
+              ? 'Watching · Succeeded'
+              : record.result === 'failure'
+                ? 'Watching · Failed'
+                : 'Watching · Idle';
+    explanation = `Read-only visualization from ${record.source}. Execution is controlled by the robot application.`;
+  } else if (!state.connected) {
     label = 'Disconnected';
     explanation = 'Connect to ROS to run this tree.';
   } else if (descriptor?.enabled === false) {
@@ -49,8 +66,8 @@ export function NativeTreeStatus({ controller, state }: { controller: NativeTree
       role="status"
       title={`${explanation}${descriptor?.version ? ` ${format?.label} ${descriptor.version}.` : ''}`}
       data-testid="bt-runtime-state"
-      data-state={controller.session?.state}
-      data-result={controller.session?.result || undefined}
+      data-state={(controller.observed || controller.session)?.state}
+      data-result={(controller.observed || controller.session)?.result || undefined}
     >
       {label}
     </span>
@@ -58,6 +75,14 @@ export function NativeTreeStatus({ controller, state }: { controller: NativeTree
 }
 
 export default function NativeTreeSettings({ controller }: { controller: NativeTreeController }) {
+  if (controller.observed)
+    return (
+      <div className="bt-menu-section">
+        <span className="bt-menu-label">Watching robot tree</span>
+        <p className="bt-menu-hint">{controller.observed.source}</p>
+        <p className="bt-menu-hint">Live, read-only visualization. The robot application controls execution.</p>
+      </div>
+    );
   return (
     <div className="bt-menu-section bt-native-tree-settings">
       <div className="bt-main-tree-field" role="group" aria-label="Execution tree">
