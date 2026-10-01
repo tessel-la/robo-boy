@@ -1,6 +1,7 @@
 import { Edge, Node, XYPosition } from 'reactflow';
 
 import { getNextBehaviorNodeId, getNodeCounterAfterNodes } from './nodeUtils';
+import { createUuid } from '../../utils/uuid';
 import {
   BehaviorNodeType,
   BehaviorTree,
@@ -626,7 +627,7 @@ export const explodeSubtreeNode = ({
 
   const internalEdges = explodableEdges.map((edge) => ({
     ...deepClone(edge),
-    id: `edge-expand-${subtreeNode.id}-${crypto.randomUUID()}`,
+    id: `edge-expand-${subtreeNode.id}-${createUuid()}`,
     source: idMap.get(edge.source) ?? edge.source,
     target: idMap.get(edge.target) ?? edge.target,
     selected: false,
@@ -635,14 +636,14 @@ export const explodeSubtreeNode = ({
   const makeReconnectedIncomingEdges = (edge: Edge): Edge[] =>
     rootsToReconnect.map((root) => ({
       ...deepClone(edge),
-      id: `edge-expand-in-${subtreeNode.id}-${crypto.randomUUID()}`,
+      id: `edge-expand-in-${subtreeNode.id}-${createUuid()}`,
       target: idMap.get(root.id) ?? root.id,
       selected: false,
     }));
   const makeReconnectedOutgoingEdges = (edge: Edge): Edge[] =>
     leavesToReconnect.map((leaf) => ({
       ...deepClone(edge),
-      id: `edge-expand-out-${subtreeNode.id}-${crypto.randomUUID()}`,
+      id: `edge-expand-out-${subtreeNode.id}-${createUuid()}`,
       source: idMap.get(leaf.id) ?? leaf.id,
       selected: false,
     }));

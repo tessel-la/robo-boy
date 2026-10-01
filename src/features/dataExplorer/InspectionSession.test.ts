@@ -132,6 +132,14 @@ describe('InspectionSession', () => {
     expect(session.getSnapshot().resources).toEqual([]);
   });
 
+  it('starts in an insecure context, where crypto.randomUUID is unavailable', () => {
+    vi.stubGlobal('crypto', { getRandomValues: (bytes: Uint8Array) => bytes.fill(7) });
+    const release = getInspectionSession(ros).acquire('a', demand({ watch: ['/scan'] }));
+    tick(2100);
+    expect(lastLease().client).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    release();
+  });
+
   it('renews its lease while running so the companion keeps probes alive', () => {
     const session = getInspectionSession(ros);
     const release = session.acquire('a', demand({ watch: ['/scan'] }));
