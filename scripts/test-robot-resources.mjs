@@ -18,11 +18,27 @@ const png = Buffer.from(
   'base64'
 );
 const obj = 'mtllib arm.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nusemtl paint\nf 1/1 2/2 3/3\n';
-const stl =
-  'solid arm\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid arm';
+const facet = 'facet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\n';
+// The STL changes version when a test swaps the robot's meshes, the way a new simulation would.
+let stlVersion = 1;
+const stl = () => `solid arm\n${facet.repeat(stlVersion)}endsolid arm`;
+const stlStatuses = [];
 const requests = [];
 const server = createServer((req, res) => {
   requests.push(req.url);
+  if (req.url === '/assets/collision/arm.stl') {
+    // Validators without Cache-Control: left to its heuristics, Chromium would reuse this for days.
+    const etag = `"arm-${stlVersion}"`;
+    res.setHeader('etag', etag);
+    res.setHeader('last-modified', new Date(Date.now() - 30 * 86400e3).toUTCString());
+    if (req.headers['if-none-match'] === etag) {
+      stlStatuses.push(304);
+      res.statusCode = 304;
+      return res.end();
+    }
+    stlStatuses.push(200);
+    return res.end(stl());
+  }
   // Deliberately no Access-Control-Allow-Origin: same deployment as the remote robot.
   if (req.url === '/assets/visual/arm.obj') res.end(obj);
   else if (req.url === '/assets/visual/arm.mtl') res.end('newmtl paint\nKd 1 1 1\nmap_Kd paint.png\n');
@@ -119,6 +135,24 @@ try {
     console.log(`PASS native OBJ + MTL + texture + STL, ${host}, custom port ${port}`);
   }
   assert.ok(requests.includes('/assets/visual/paint.png'));
+  const reload = async () => {
+    stlStatuses.length = 0;
+    const result = await page.evaluate(({ base, description }) => window.loadTestRobot(base, description), {
+      base: `http://127.0.0.1:${port}/assets`,
+      description,
+    });
+    assert.deepEqual(result.errors, []);
+    return { statuses: [...stlStatuses], vertices: result.vertices };
+  };
+  assert.deepEqual(
+    await reload(),
+    { statuses: [304], vertices: 6 },
+    'an unchanged mesh must be revalidated, not downloaded'
+  );
+  stlVersion = 2;
+  assert.deepEqual(await reload(), { statuses: [200], vertices: 9 }, 'a replaced mesh must be downloaded at once');
+  assert.deepEqual(await reload(), { statuses: [304], vertices: 9 }, 'the replaced mesh is cached in turn');
+  console.log('PASS meshes are cached, revalidated on every load, and reloaded when replaced');
   const nativeUrl = `robot-resource://localhost/resource?${new URLSearchParams({ base, url: `${base}/visual/arm.obj` })}`;
   const beforeSandbox = requests.length;
   const sandboxCanRead = await page.evaluate(

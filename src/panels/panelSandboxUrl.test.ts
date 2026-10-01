@@ -18,11 +18,20 @@ describe('panel sandbox URL', () => {
 
     const url = new URL(getPanelSandboxUrl('https://robot.local'));
 
-    expect(registerEmbedTarget).toHaveBeenCalledWith('https://robot.local');
+    expect(registerEmbedTarget).toHaveBeenCalledWith('https://robot.local', []);
     expect(url.href.startsWith(`app://${embedHostFor('https://robot.local')}/panel-sandbox.html?`)).toBe(true);
     expect(url.searchParams.get('parentOrigin')).toBe(window.location.origin);
     // A panel's relative /8089/ frame now resolves on the robot's embed host.
     expect(new URL('/8089/', url).href).toBe(`app://${embedHostFor('https://robot.local')}/8089/`);
+  });
+
+  it('registers the ports a robot without a proxy publishes directly', () => {
+    const registerEmbedTarget = vi.fn();
+    vi.stubGlobal('roboBoyDesktop', { shell: 'electron', registerEmbedTarget });
+
+    getPanelSandboxUrl('https://robot.local', [8089, 0, 8089]);
+
+    expect(registerEmbedTarget).toHaveBeenCalledWith('https://robot.local', [8089]);
   });
 
   it('keeps the old placement in shells without the embed proxy, or without a robot proxy', () => {

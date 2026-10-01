@@ -67,6 +67,7 @@ import {
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
+import { isCameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -973,6 +974,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         webrtcHls: runtimeEndpoints.webrtcHlsBaseUrl,
       },
       embedBaseUrl: runtimeEndpoints.embedBaseUrl,
+      embedDirectPorts: runtimeEndpoints.embedDirectPorts,
     }),
     [runtimeEndpoints]
   );
@@ -3495,6 +3497,26 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           availableTopics={availableCameraTopics}
           onTopicChange={newTopic => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
           selectId={`camera-topic-select-${panel.id}`}
+          streamQuality={
+            isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
+          }
+          onStreamQualityChange={streamQuality => {
+            const update = (previous: WorkspacePanel[]) =>
+              previous.map(candidate =>
+                candidate.id === panel.id && candidate.type === panel.type
+                  ? {
+                      ...candidate,
+                      panelState: {
+                        schemaVersion: 1 as const,
+                        panelId: panel.type,
+                        values: { ...(candidate.panelState?.values ?? {}), streamQuality },
+                      },
+                    }
+                  : candidate
+              );
+            setWorkspacePanels(update);
+            setMobileWorkspacePanels(update);
+          }}
         />
       ) : (
         <div className="placeholder">

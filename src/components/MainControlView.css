@@ -1444,6 +1444,8 @@ body.no-scroll {
 }
 
 .workspace-card {
+  /* Split geometry sizes the complete frame; borders must not extend past its bounds. */
+  box-sizing: border-box;
   position: relative;
   isolation: isolate;
   contain: layout paint style;

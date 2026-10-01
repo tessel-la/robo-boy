@@ -25,16 +25,18 @@ import { UrdfClient } from '../../src/utils/ros3d';
     });
     let meshes = 0;
     let textures = 0;
+    let vertices = 0;
     scene.traverse(object => {
       if (!(object instanceof Mesh)) return;
       meshes++;
+      vertices += object.geometry?.attributes?.position?.count ?? 0;
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
         for (const value of Object.values(material)) {
           if (value instanceof Texture && value.image?.width > 0) textures++;
         }
       }
     });
-    return { meshes, textures, errors };
+    return { meshes, textures, vertices, errors };
   } finally {
     client.dispose();
     if (rosbridge) ros.close();

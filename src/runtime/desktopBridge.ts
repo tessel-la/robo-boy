@@ -29,10 +29,11 @@ export interface RoboBoyDesktopBridge {
   window: DesktopWindow;
   fetchPanelAsset(url: string, init?: { method?: string }): Promise<PanelFetchReply>;
   /**
-   * Names the robot proxy a connection's panel frames reach; see `embedTarget.ts`. Absent in
-   * older shells, which keep the sandbox beside the app.
+   * Names the robot proxy a connection's panel frames reach, and the ports framed from the robot
+   * directly instead; see `embedTarget.ts`. Absent in older shells, which keep the sandbox beside
+   * the app. Older shells ignore `directPorts`.
    */
-  registerEmbedTarget?(baseUrl: string): void;
+  registerEmbedTarget?(baseUrl: string, directPorts?: number[]): void;
   /** Absent in shells built before updates existed. */
   updater?: DesktopUpdater;
 }
