@@ -6,13 +6,15 @@ import ReactFlow, {
   Handle,
   MiniMap,
   Position,
-  useNodesInitialized,
+  ReactFlowProvider,
+  useNodesState,
   useReactFlow,
   useStore,
 } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 import type { RuntimeNode } from './types';
-import type { NativeTreeController, SourceNode } from './useNativeTreeController';
+import type { NativeTreeController } from './useNativeTreeController';
+import type { SourceNode } from './projection';
 import type { RuntimeState } from './types';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import '../components/nodes/NodeStyles.css';
@@ -36,10 +38,9 @@ function NativeNode({ data, selected }: NodeProps<RuntimeNode>) {
         <div className="bt-node-label" title={data.label}>
           {data.label}
         </div>
-        {data.status !== 'idle' && <div className="bt-node-detail">{data.status}</div>}
-        {data.lastResult && data.status === 'idle' && (
-          <div className="bt-node-detail">Last result: {data.lastResult}</div>
-        )}
+        <div className="bt-node-detail">
+          {data.status === 'idle' && data.lastResult ? `Last result: ${data.lastResult}` : data.status}
+        </div>
         {bindings.length > 0 && (
           <div className="bt-data-flow">
             {bindings.map(([name, value]) => (
@@ -60,43 +61,67 @@ function NativeNode({ data, selected }: NodeProps<RuntimeNode>) {
 }
 const nodeTypes = { native: NativeNode };
 
-function NativeViewport({ arrange, follow, nodes }: { arrange: number; follow: boolean; nodes: RuntimeNode[] }) {
-  const initialized = useNodesInitialized();
-  const { fitView } = useReactFlow();
-  const geometry = useStore(
+function NativeViewport({
+  arrange,
+  follow,
+  nodes,
+  viewKey,
+}: {
+  arrange: number;
+  follow: boolean;
+  nodes: SourceNode[];
+  viewKey: string;
+}) {
+  const { fitView, getNodes, getEdges, setNodes } = useReactFlow();
+  // Wait for THIS view, not the previous React Flow store's measured nodes.
+  const initialized = useStore(
     state =>
-      `${state.width}:${state.height}:` +
-      Array.from(state.nodeInternals.values())
-        .map(node => `${node.id}:${node.width}:${node.height}`)
-        .join('|')
+      nodes.length > 0 &&
+      state.nodeInternals.size === nodes.length &&
+      nodes.every(node => {
+        const measured = state.nodeInternals.get(node.id);
+        return !!measured?.width && !!measured.height;
+      })
   );
+  const size = useStore(state => `${state.width}:${state.height}`);
   useEffect(() => {
-    if (!initialized) return;
-    const frame = requestAnimationFrame(() => void fitView({ padding: 0.22 }));
-    return () => cancelAnimationFrame(frame);
-  }, [initialized, geometry, arrange, fitView]);
-  const active = nodes.find(node => node.status === 'running')?.id;
+    if (!initialized || size.split(':').some(dimension => Number(dimension) <= 0)) return;
+    setNodes(arrangeBehaviorTree(getNodes(), getEdges()));
+    // Layout first, then fit the painted, measured graph. Live status updates
+    // never rerun this effect; user zoom/pan owns the viewport between views.
+    let paintFrame = 0;
+    const layoutFrame = requestAnimationFrame(() => {
+      paintFrame = requestAnimationFrame(() => void fitView({ padding: 0.22 }));
+    });
+    return () => {
+      cancelAnimationFrame(layoutFrame);
+      cancelAnimationFrame(paintFrame);
+    };
+  }, [initialized, size, viewKey, arrange, fitView, getNodes, getEdges, setNodes]);
+  const active = [...nodes].reverse().find(node => node.status === 'running')?.id;
   useEffect(() => {
     if (initialized && follow && active) void fitView({ nodes: [{ id: active }], maxZoom: 1.2, duration: 250 });
   }, [initialized, follow, active, fitView]);
   return null;
 }
 
-export default function NativeTreeCanvas({
+function NativeCanvasContent({
   controller,
   state,
   interactionMode,
   follow,
   arrange,
+  onManualNavigation,
 }: {
   controller: NativeTreeController;
   state: RuntimeState;
   interactionMode: 'pan' | 'select';
   follow: boolean;
   arrange: number;
+  onManualNavigation: () => void;
 }) {
   const [inspectedId, setInspectedId] = useState<string | null>(null);
-  useEffect(() => setInspectedId(null), [controller.tree?.id, controller.viewTreeId, controller.sourceOpen]);
+  useEffect(() => setInspectedId(null), [controller.viewKey, controller.sourceOpen]);
   useEffect(() => {
     if (!controller.sourceOpen && !inspectedId) return;
     const close = (event: KeyboardEvent) => {
@@ -108,51 +133,80 @@ export default function NativeTreeCanvas({
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [controller.sourceOpen, controller.setSourceOpen, inspectedId]);
-  const graph = useMemo(() => {
-    const edges = controller.nodes
-      .filter(node => node.parentId)
-      .map(node => ({
-        id: `${node.parentId}-${node.id}`,
-        source: node.parentId!,
-        target: node.id,
-        animated: node.status === 'running',
+  const edges = useMemo(
+    () =>
+      controller.nodes
+        .filter(node => node.parentId)
+        .map(node => ({
+          id: `${node.parentId}-${node.id}`,
+          source: node.parentId!,
+          target: node.id,
+          animated: node.status === 'running',
+        })),
+    [controller.nodes]
+  );
+  const [nodes, setNodes, onNodesChange] = useNodesState<SourceNode>([]);
+  useEffect(() => {
+    setNodes(previous => {
+      const existing = new Map(previous.map(node => [node.id, node]));
+      const updated = controller.nodes.map(data => ({
+        ...existing.get(data.id),
+        id: data.id,
+        type: 'native',
+        position: existing.get(data.id)?.position || { x: 0, y: 0 },
+        data,
       }));
-    const nodes = controller.nodes.map(node => ({ id: node.id, type: 'native', position: { x: 0, y: 0 }, data: node }));
-    return { nodes: arrangeBehaviorTree(nodes, edges), edges };
-  }, [controller.nodes]);
+      return previous.length ? updated : arrangeBehaviorTree(updated, edges);
+    });
+  }, [controller.nodes, controller.viewKey, edges, setNodes]);
   const selected = controller.nodes.find(node => node.id === inspectedId);
   const attributes = selected && ((selected as SourceNode).attributes || selected.ports || {});
-  const nodeLogs = state.logs.filter(log => log.id === selected?.id);
+  const nodeLogs = selected?.runtimeId ? state.logs.filter(log => log.id === selected.runtimeId) : [];
   return (
-    <div className="bt-canvas" data-testid="bt-canvas">
+    <div
+      className="bt-canvas"
+      data-testid="bt-canvas"
+      onPointerDownCapture={event => {
+        if ((event.target as Element).closest('.react-flow__minimap')) onManualNavigation();
+      }}
+    >
       <ReactFlow
-        nodes={graph.nodes}
-        edges={graph.edges}
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
+        zoomOnDoubleClick={false}
         panOnDrag={interactionMode === 'pan'}
         selectionOnDrag={interactionMode === 'select'}
         onNodeClick={(_, node) => setInspectedId(node.id)}
         onPaneClick={() => setInspectedId(null)}
-        onNodeDoubleClick={(_, node) => {
-          const id = (node.data as SourceNode).subtreeId;
-          if (id) controller.selectTree(id);
+        onMoveStart={event => {
+          if (event) onManualNavigation();
         }}
-        fitView
+        onNodeDoubleClick={(_, node) => {
+          const path = (node.data as SourceNode).subtreeView;
+          if (path) controller.openSubtree(path);
+        }}
         minZoom={0.05}
         maxZoom={2}
         deleteKeyCode={null}
         defaultEdgeOptions={{ style: { stroke: 'var(--primary-color)', strokeWidth: 2 } }}
       >
-        <NativeViewport arrange={arrange} follow={follow} nodes={controller.nodes} />
+        <NativeViewport arrange={arrange} follow={follow} nodes={controller.nodes} viewKey={controller.viewKey} />
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls showInteractive={false} />
+        <Controls
+          showInteractive={false}
+          onZoomIn={onManualNavigation}
+          onZoomOut={onManualNavigation}
+          onFitView={onManualNavigation}
+        />
         <MiniMap zoomable pannable style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }} />
       </ReactFlow>
       <div className="bt-runtime-status" role="status">
         {controller.viewTreeId && (
-          <button className="bt-selection-action" onClick={() => controller.selectTree(undefined)}>
+          <button className="bt-selection-action" onClick={controller.parentView}>
             Parent tree
           </button>
         )}
@@ -223,7 +277,7 @@ export default function NativeTreeCanvas({
                 {(selected as SourceNode).subtreeId && (
                   <button
                     className="bt-menu-action-btn"
-                    onClick={() => controller.selectTree((selected as SourceNode).subtreeId)}
+                    onClick={() => controller.openSubtree((selected as SourceNode).subtreeView!)}
                   >
                     Open subtree
                   </button>
@@ -262,5 +316,15 @@ export default function NativeTreeCanvas({
         </aside>
       )}
     </div>
+  );
+}
+
+export default function NativeTreeCanvas(props: React.ComponentProps<typeof NativeCanvasContent>) {
+  // A new definition/view needs fresh DOM measurements, even if its source IDs
+  // overlap the old view. Execution updates keep this store and viewport intact.
+  return (
+    <ReactFlowProvider key={props.controller.viewKey}>
+      <NativeCanvasContent {...props} />
+    </ReactFlowProvider>
   );
 }

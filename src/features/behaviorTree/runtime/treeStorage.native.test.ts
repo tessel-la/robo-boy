@@ -16,8 +16,8 @@ describe('native document persistence and XML files', () => {
     const source = format.template.replace('</root>', '<!-- preserve this -->\n</root>');
     const imported = await importBehaviorTree(new File([source], 'example.xml', { type: 'application/xml' }));
     expect(imported?.nativeDocument?.xml).toBe(source);
-    // Marker-free XML requires an explicit backend selection on import.
-    expect(imported?.nativeDocument?.runtime).toBe(format.id === 'btcpp' ? 'btcpp' : null);
+    // Native syntax identifies the engine without changing the executable source.
+    expect(imported?.nativeDocument?.runtime).toBe(format.id);
     const create = vi.fn().mockReturnValue('blob:native-tree');
     vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: vi.fn() });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});

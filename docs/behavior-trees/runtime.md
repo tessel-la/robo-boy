@@ -4,9 +4,10 @@ Robo Boy supports native **BehaviorTree.CPP** and **py_trees 2.6** execution.
 The Behavior Tree panel uses one menu, toolbar, palette and canvas for JSON
 and both native XML formats. The engine selector changes the available node
 library; **New** creates a tree for that engine. **Import** and repository loading
-use the same menu for every format. Choose an engine for marker-free XML; `BTCPP_format="4"` identifies
-C++. XML source is saved exactly, including ports, subtrees and metadata. Visual
-node graphs show the native host topology and cannot change source semantics.
+use the same menu for every format. The engine pill automatically follows detected tree syntax: `BTCPP_format="4"` identifies
+C++; Python controls with `memory`/`policy` and distinctive built-ins identify py_trees.
+Shared marker-free syntax (for example, a lone custom `Wait`) still requires an explicit engine choice. XML source is saved exactly, including ports, subtrees and metadata. Visual
+node graphs project the source definitions with live native states and cannot change source semantics.
 The shared tree menu opens, saves and exports both JSON and XML trees. **Open
 local folder** lists tree files from a checked-out repository. **Browse repository**
 opens a public GitHub repository with an optional branch, tag or commit; downloads
@@ -14,14 +15,19 @@ are pinned to blob IDs. Use a local checkout for private repositories. XML expor
 preserves source, while browser saves also retain the chosen runtime and main tree.
 
 1. Connect to the ROS host. Runtime discovery happens automatically.
-2. Open XML from a file, repository or saved tree. Choose its runtime for
-   marker-free XML. Select the main tree when a multi-tree document does not
+2. Open XML from a file, repository or saved tree. The matching engine is selected automatically when syntax identifies it; choose an engine for
+   ambiguous marker-free XML. Select the main tree when a multi-tree document does not
    specify one; a single tree is inferred automatically.
 3. Press **Run**. Robo Boy loads the current XML on the host and starts execution.
    The menu also offers **Validate** and **Load on host** for separate checks.
 4. The canvas shows idle/running/success/failure. The palette lists this engine's
    registered nodes, saved documents and subtrees in the current XML. Click a
-   subtree to view its definition without changing the executable main tree.
+   subtree to view its definition without changing the executable main tree. During execution,
+   the main graph stays collapsed and subtree nodes show their live states. Double-click a
+   subtree node to open that exact instance and its running leaves. **Parent tree** returns
+   one level; repeated and nested subtree instances keep separate native state bindings.
+   Loading on the host, reset and rerun preserve the current view. Manual zoom/pan turns off **Follow**;
+   incoming ticks do not fit or rearrange the canvas.
    Click a node to inspect its ports, native status and execution details.
    **XML source** in the menu opens an inspector in the same canvas; Escape
    closes it. There is no permanent feedback/results log. Nodes retain their

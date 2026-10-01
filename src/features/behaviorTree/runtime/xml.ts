@@ -8,6 +8,7 @@ export const newXmlTemplate =
 export const treeFormats: readonly TreeFormatAdapter[] = [
   {
     id: 'btcpp',
+    subtreeTopology: 'wrapped',
     label: 'BehaviorTree.CPP',
     template:
       '<root BTCPP_format="4" main_tree_to_execute="Main">\n  <BehaviorTree ID="Main">\n    <Sequence name="Demo">\n      <Wait name="Wait" seconds="0.5"/>\n      <AlwaysSuccess name="Done"/>\n    </Sequence>\n  </BehaviorTree>\n</root>',
@@ -18,11 +19,33 @@ export const treeFormats: readonly TreeFormatAdapter[] = [
   },
   {
     id: 'py_trees',
+    subtreeTopology: 'inlined',
     label: 'py_trees',
     template:
       '<root main_tree_to_execute="Main">\n  <BehaviorTree ID="Main">\n    <Sequence name="Demo" memory="true">\n      <Wait name="Wait" seconds="0.5"/>\n      <Success name="Done"/>\n    </Sequence>\n  </BehaviorTree>\n</root>',
-    // Shared XML syntax is ambiguous; absence of the C++ marker is not identification.
-    matches: () => false,
+    // Identify positive Python syntax. Marker-free shared/custom leaves remain ambiguous.
+    matches: root =>
+      !root.hasAttribute('BTCPP_format') &&
+      Array.from(root.querySelectorAll('BehaviorTree *')).some(node => {
+        const tag = node.tagName.toLowerCase();
+        return (
+          (['sequence', 'selector', 'fallback'].includes(tag) && node.hasAttribute('memory')) ||
+          (tag === 'parallel' && node.hasAttribute('policy')) ||
+          [
+            'success',
+            'failure',
+            'running',
+            'successisfailure',
+            'failureissuccess',
+            'runningisfailure',
+            'runningissuccess',
+            'successisrunning',
+            'failureisrunning',
+            'oneshot',
+            'statustoblackboard',
+          ].includes(tag)
+        );
+      }),
     validate: root => {
       if (root.hasAttribute('BTCPP_format'))
         throw new Error('This document declares BehaviorTree.CPP. Select that format or explicitly edit its source.');
@@ -87,6 +110,19 @@ export function nativeTreeFromXml(
     updatedAt: now,
     nativeDocument: { xml, runtime: inspected.runtime, mainTreeId: inspected.mainTreeId },
   };
+}
+
+/** Resolve older saved documents as well as imported XML, preserving explicit choices. */
+export function resolveTreeRuntime(tree: BehaviorTree): BehaviorTree {
+  const document = tree.nativeDocument;
+  if (!document || document.runtime) return tree;
+  try {
+    const { runtime } = inspectXml(document.xml);
+    return runtime ? { ...tree, nativeDocument: { ...document, runtime } } : tree;
+  } catch {
+    // Source editing may temporarily be invalid; the controller displays validation errors.
+    return tree;
+  }
 }
 
 export function validateDocument(document: NativeTreeDocument): NativeTreeDocument {

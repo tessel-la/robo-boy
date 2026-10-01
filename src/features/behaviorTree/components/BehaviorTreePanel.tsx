@@ -4,7 +4,7 @@ import NativeTreeSettings from '../runtime/NativeTreeSettings';
 import { useNativeTreeController } from '../runtime/useNativeTreeController';
 import { TreeRuntimeId } from '../runtime/types';
 import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
-import { nativeTreeFromXml, newXmlTemplate, treeFormats } from '../runtime/xml';
+import { nativeTreeFromXml, newXmlTemplate, resolveTreeRuntime, treeFormats } from '../runtime/xml';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -921,7 +921,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       executionStore.clear();
       setInspectedExecution(null);
       const hydrated: BehaviorTree = {
-        ...tree,
+        ...resolveTreeRuntime(tree),
         nodes: resetTransientNodeState(tree.nodes),
         edges: resetTransientEdgeState(tree.edges),
       };
@@ -3249,28 +3249,29 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     }
   };
   const engineControl = (
-    <select
-      className="bt-engine-select"
+    <div
+      className="bt-engine-toggle"
+      role="group"
       aria-label="Behavior Tree engine"
-      value={selectedEngine || ''}
-      disabled={editingLocked}
-      onChange={event => {
-        const engine = event.target.value as 'json' | TreeRuntimeId;
-        setSelectedEngine(engine);
-        if (currentTree?.nativeDocument?.runtime === null && engine !== 'json')
-          native.assignRuntime(engine);
-      }}
     >
-      <option value="" disabled>
-        Choose engine
-      </option>
-      <option value="json">Robo Boy</option>
-      {treeFormats.map(format => (
-        <option key={format.id} value={format.id}>
-          {format.label}
-        </option>
+      {[{ id: 'json' as const, label: 'Robo Boy' }, ...treeFormats].map(format => (
+        <button
+          key={format.id}
+          type="button"
+          aria-label={format.label}
+          aria-pressed={selectedEngine === format.id}
+          disabled={editingLocked}
+          title={format.label}
+          onClick={() => {
+            setSelectedEngine(format.id);
+            if (currentTree?.nativeDocument?.runtime === null && format.id !== 'json')
+              native.assignRuntime(format.id);
+          }}
+        >
+          {format.id === 'btcpp' ? 'BT.CPP' : format.label}
+        </button>
       ))}
-    </select>
+    </div>
   );
 
   return (
@@ -3427,6 +3428,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             state={nativeRuntime.state}
             interactionMode={canvasInteractionMode}
             follow={isFollowMode}
+            onManualNavigation={() => setIsFollowMode(false)}
             arrange={nativeArrange}
           />
         ) : (

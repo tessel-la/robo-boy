@@ -22,11 +22,22 @@
   border: 1px solid var(--border-color); background: var(--input-bg, var(--card-bg));
   color: var(--text-color); font: 12px/1.6 monospace; padding: 8px; border-radius: 6px;
 }
-.bt-engine-select {
-  width: 120px; max-width: 27cqw; min-width: 72px; height: clamp(32px, 7cqw, 36px);
-  padding: 0 8px; border: 1px solid var(--border-color); border-radius: 18px;
-  color: var(--text-color); background: var(--card-bg); font: inherit; font-size: 11px;
+.bt-engine-toggle {
+  display: flex; align-items: center; gap: 2px; padding: 3px;
+  border: 1px solid var(--border-color); border-radius: 18px;
+  background: var(--card-bg); box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
 }
+.bt-engine-toggle button {
+  border: 0; border-radius: 14px; padding: 6px 8px; min-height: 28px;
+  background: transparent; color: var(--text-color-secondary); font: inherit;
+  font-size: 11px; white-space: nowrap; cursor: pointer;
+}
+.bt-engine-toggle button[aria-pressed='true'] {
+  background: var(--primary-color); color: white;
+}
+.bt-engine-toggle button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.bt-engine-toggle button:disabled { cursor: default; opacity: .6; }
+.bt-native-node { transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease; }
 @container (max-width: 640px) {
   .bt-runtime-status { left: 12px; right: 12px; bottom: 8px; }
 }

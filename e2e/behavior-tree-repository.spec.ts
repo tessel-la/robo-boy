@@ -56,12 +56,39 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
         })
       )
       .toEqual([true, true, true]);
-    const engine = page.getByLabel('Behavior Tree engine');
+    const engine = page.getByRole('group', { name: 'Behavior Tree engine' });
+    const engineButton = (id: string) =>
+      engine.getByRole('button', {
+        name: id === 'btcpp' ? 'BehaviorTree.CPP' : id === 'json' ? 'Robo Boy' : 'py_trees',
+        exact: true,
+      });
     const id = name.replace('.xml', '');
     if (name.endsWith('.xml')) {
-      await expect(engine).toHaveValue(id === 'py_trees' ? '' : 'btcpp');
-      await engine.selectOption(id);
-      await expect(engine).toHaveValue(id);
+      await expect(engineButton(id)).toHaveAttribute('aria-pressed', 'true');
+      await expect
+        .poll(() =>
+          page.getByTestId('bt-canvas').evaluate(canvas => {
+            const bounds = canvas.getBoundingClientRect();
+            const nodes = Array.from(canvas.querySelectorAll('.bt-native-node'));
+            return (
+              nodes.length > 0 &&
+              nodes.every(node => {
+                const box = node.getBoundingClientRect();
+                return (
+                  box.width > 0 &&
+                  box.height > 0 &&
+                  box.left >= bounds.left &&
+                  box.right <= bounds.right &&
+                  box.top >= bounds.top &&
+                  box.bottom <= bounds.bottom &&
+                  getComputedStyle(node).visibility === 'visible'
+                );
+              })
+            );
+          })
+        )
+        .toBe(true);
+      await page.screenshot({ path: info.outputPath(`${name}-initial-render.png`) });
       await page.getByTestId('bt-menu-button').click();
       await page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect
@@ -76,10 +103,10 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
       await page.getByRole('button', { name: 'XML source', exact: true }).click();
       const source = readFileSync(`examples/behavior_trees/genesis_transfer_${id}.xml`, 'utf8');
       await expect(page.getByLabel('Tree XML')).toHaveValue(source);
-      await engine.selectOption(id === 'btcpp' ? 'py_trees' : 'btcpp');
+      await engineButton(id === 'btcpp' ? 'py_trees' : 'btcpp').click();
       await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
       await expect(page.getByLabel('Tree XML')).toHaveValue(source);
-      await engine.selectOption(id);
+      await engineButton(id).click();
       await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
       await expect(page.getByRole('log')).toHaveCount(0);
       await expect(page.getByTestId('bt-undo')).toBeDisabled();
@@ -89,7 +116,7 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
       await page.getByRole('button', { name: 'Close node palette', exact: true }).first().click();
       await expect(page.locator('.bt-native-node').filter({ hasText: 'Bind approach object' })).toBeVisible();
       await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
-    } else await expect(engine).toHaveValue('json');
+    } else await expect(engineButton('json')).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('bt-menu-button').click();
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.getByRole('button', { name: 'Close menu', exact: true }).click();
@@ -98,6 +125,29 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
   expect(
     stored.filter((item: any) => item.tree.nativeDocument).map((item: any) => item.tree.nativeDocument.runtime)
   ).toEqual(expect.arrayContaining(['btcpp', 'py_trees']));
+  await page.setViewportSize({ width: 520, height: 820 });
+  await expect
+    .poll(() =>
+      page.getByTestId('bt-canvas').evaluate(canvas => {
+        const bounds = canvas.getBoundingClientRect();
+        return Array.from(canvas.querySelectorAll('.bt-native-node')).every(node => {
+          const box = node.getBoundingClientRect();
+          return (
+            box.width > 0 &&
+            box.height > 0 &&
+            box.left >= bounds.left &&
+            box.right <= bounds.right &&
+            box.top >= bounds.top &&
+            box.bottom <= bounds.bottom
+          );
+        });
+      })
+    )
+    .toBe(true);
+  const toggle = await page.getByRole('group', { name: 'Behavior Tree engine' }).boundingBox();
+  expect(toggle!.x).toBeGreaterThanOrEqual(0);
+  expect(toggle!.x + toggle!.width).toBeLessThanOrEqual(520);
+  await page.screenshot({ path: info.outputPath('py_trees-mobile-render.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId('bt-menu-button').click();
   await page.getByRole('button', { name: 'XML source', exact: true }).click();

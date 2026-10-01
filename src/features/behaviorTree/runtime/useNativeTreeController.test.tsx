@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useNativeTreeController, projectXml } from './useNativeTreeController';
+import { useNativeTreeController } from './useNativeTreeController';
+import { projectXml } from './projection';
 import { nativeTreeFromXml, treeFormats } from './xml';
 import type { useRemoteTreeRuntime } from './useRemoteTreeRuntime';
 
@@ -127,7 +128,7 @@ describe('native controller in the common editor', () => {
     expect(result.current.preview.mainTreeId).toBe('Main');
     act(() => result.current.selectTree('Main'));
     expect(result.current.viewTreeId).toBeUndefined();
-    expect(result.current.nodes).toEqual(runtime.state.session.nodes);
+    expect(result.current.nodes[0].subtreeId).toBe('Child');
   });
   it('rejects an incompatible engine assignment before binding marker-free XML', () => {
     const tree = nativeTreeFromXml(treeFormats[1].template);
@@ -149,5 +150,33 @@ describe('native controller in the common editor', () => {
       label: 'Delay',
       attributes: { name: 'Delay', seconds: '0.5' },
     });
+  });
+  it('keeps the chosen subtree open when loading, running and resetting', async () => {
+    const xml =
+      '<root BTCPP_format="4" main_tree_to_execute="Main"><BehaviorTree ID="Main"><SubTree ID="Child"/></BehaviorTree><BehaviorTree ID="Child"><Wait/></BehaviorTree></root>';
+    const tree = nativeTreeFromXml(xml);
+    const { result } = renderHook(() => useNativeTreeController(tree, runtime, 'btcpp', vi.fn()));
+    act(() => result.current.openSubtree(result.current.nodes[0].subtreeView!));
+    const view = result.current.viewKey;
+    act(() => result.current.run());
+    await waitFor(() => expect(client.start).toHaveBeenCalled());
+    expect(result.current.viewKey).toBe(view);
+    expect(result.current.nodes[0].type).toBe('Wait');
+    act(() => result.current.reset());
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.viewKey).toBe(view);
+  });
+  it('shows validation errors rather than crashing when a browsed definition is edited', () => {
+    const xml =
+      '<root BTCPP_format="4" main_tree_to_execute="Main"><BehaviorTree ID="Main"><Wait/></BehaviorTree><BehaviorTree ID="Unused"><Wait/></BehaviorTree></root>';
+    const tree = nativeTreeFromXml(xml);
+    const { result, rerender } = renderHook(({ tree }) => useNativeTreeController(tree, runtime, 'btcpp', vi.fn()), {
+      initialProps: { tree },
+    });
+    act(() => result.current.selectTree('Unused'));
+    expect(result.current.nodes[0].type).toBe('Wait');
+    rerender({ tree: { ...tree, nativeDocument: { ...tree.nativeDocument!, xml: '<root>' } } });
+    expect(result.current.error).toBe('Invalid XML.');
+    expect(result.current.nodes).toEqual([]);
   });
 });

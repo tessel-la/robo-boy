@@ -3,38 +3,9 @@ import type { BehaviorTree } from '../types';
 import type { BehaviorTreeExecutionControls, BehaviorTreeExecutionSnapshot } from '../components/BehaviorTreePanel';
 import type { useRemoteTreeRuntime } from './useRemoteTreeRuntime';
 import { inspectXml, nativeTreeFromXml, validateDocument } from './xml';
-import type { RuntimeNode, TreeRuntimeId } from './types';
+import type { TreeRuntimeId } from './types';
 
-export interface SourceNode extends RuntimeNode {
-  attributes: Record<string, string>;
-  subtreeId?: string;
-}
-
-export function projectXml(xml: string, runtime: TreeRuntimeId | null, treeId?: string) {
-  const inspected = inspectXml(xml, runtime, treeId);
-  const nodes: SourceNode[] = [];
-  const walk = (element: Element, parentId: string | null) => {
-    const id = `source-${nodes.length}`;
-    nodes.push({
-      id,
-      parentId,
-      label: element.getAttribute('name') || element.getAttribute('ID') || element.tagName,
-      type: element.tagName,
-      status: 'idle',
-      nativeStatus: 'IDLE',
-      feedback: '',
-      attributes: Object.fromEntries(
-        Array.from(element.attributes).map(attribute => [attribute.name, attribute.value])
-      ),
-      ...(element.tagName === 'SubTree' ? { subtreeId: element.getAttribute('ID')! } : {}),
-    });
-    Array.from(element.children).forEach(child => walk(child, id));
-  };
-  inspected.trees
-    .filter(tree => !inspected.mainTreeId || tree.getAttribute('ID') === inspected.mainTreeId)
-    .forEach(tree => walk(tree.children[0], null));
-  return { ...inspected, nodes };
-}
+import { projectXml, bindRuntimeProjection, liveSourceNode } from './projection';
 
 export function useNativeTreeController(
   tree: BehaviorTree | null,
@@ -49,34 +20,52 @@ export function useNativeTreeController(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [viewTreeId, setViewTreeId] = useState<string | undefined>();
+  const [viewPath, setViewPath] = useState<string | undefined>();
+  const [definitionId, setDefinitionId] = useState<string | undefined>();
   const [sourceOpen, setSourceOpen] = useState(false);
   useEffect(() => {
-    setViewTreeId(undefined);
+    setViewPath(undefined);
+    setDefinitionId(undefined);
     setError(null);
     setNotice(null);
     setSourceOpen(false);
   }, [tree?.id]);
-  const preview = useMemo(() => {
-    if (!document) return { nodes: [] as SourceNode[], trees: [] as Element[], mainTreeId: '', error: null };
+  const projection = useMemo(() => {
+    if (!document) return { value: null, error: null };
     try {
-      const definition = projectXml(document.xml, document.runtime, document.mainTreeId);
-      const projection = viewTreeId ? projectXml(document.xml, document.runtime, viewTreeId) : definition;
-      return {
-        ...projection,
-        mainTreeId: definition.mainTreeId,
-        error: definition.mainTreeId ? null : 'Choose the main tree in the tree menu.',
-      };
+      const value = projectXml(document.xml, document.runtime, document.mainTreeId);
+      return { value, error: value.mainTreeId ? null : 'Choose the main tree in the tree menu.' };
     } catch (err) {
-      return { nodes: [] as SourceNode[], trees: [] as Element[], mainTreeId: '', error: (err as Error).message };
+      return { value: null, error: (err as Error).message };
     }
-  }, [document, viewTreeId]);
+  }, [document]);
+  const view = projection.value?.views.get(viewPath || 'main');
+  const viewTreeId = viewPath ? view?.treeId : definitionId;
+  const preview = useMemo(() => {
+    const value = projection.value;
+    const nodes =
+      definitionId && document && value?.trees.some(tree => tree.getAttribute('ID') === definitionId)
+        ? projectXml(document.xml, document.runtime, definitionId).nodes
+        : view?.nodes || value?.nodes || [];
+    return { nodes, trees: value?.trees || [], mainTreeId: value?.mainTreeId || '', error: projection.error };
+  }, [projection, view, definitionId, document]);
   const matching =
     document &&
     state.session?.xml === document.xml &&
     state.session.runtime === document.runtime &&
     (state.session.mainTreeId || '') === (document.mainTreeId || preview.mainTreeId || '');
   const session = matching ? state.session : null;
+  const live = useMemo(
+    () =>
+      projection.value
+        ? bindRuntimeProjection(projection.value, session?.nodes || [])
+        : { bindings: new Map(), error: null },
+    [projection, session?.nodes]
+  );
+  const nodes = useMemo(
+    () => preview.nodes.map(node => liveSourceNode(node, definitionId ? undefined : live.bindings.get(node.id))),
+    [preview.nodes, live, definitionId]
+  );
   const running = state.session?.state === 'running';
   const descriptor = state.runtimes.find(item => item.id === engine);
   const compatible = !!document && engine === document.runtime;
@@ -105,7 +94,6 @@ export function useNativeTreeController(
     document &&
     void perform(async () => {
       if (!ready) throw new Error('Select and enable the engine matching this XML tree.');
-      setViewTreeId(undefined);
       if (!session) await client.load(validateDocument(document));
       else if (session.state !== 'loaded') await client.reset();
       await client.start();
@@ -150,12 +138,29 @@ export function useNativeTreeController(
     descriptor,
     compatible,
     ready,
-    error: error || preview.error || state.error || session?.error,
+    error: error || preview.error || state.error || session?.error || live.error,
     notice,
     sourceOpen,
     setSourceOpen,
     viewTreeId,
-    selectTree: (id?: string) => setViewTreeId(id === preview.mainTreeId ? undefined : id),
+    selectTree: (id?: string) => {
+      const instance =
+        id && id !== preview.mainTreeId
+          ? Array.from(projection.value?.views || []).find(([, item]) => item.treeId === id)
+          : undefined;
+      setViewPath(instance?.[0]);
+      setDefinitionId(id && id !== preview.mainTreeId && !instance ? id : undefined);
+    },
+    openSubtree: (path: string) => {
+      setViewPath(path);
+      setDefinitionId(undefined);
+    },
+    parentView: () => {
+      setViewPath(view?.parent === 'main' ? undefined : view?.parent);
+      setDefinitionId(undefined);
+    },
+    viewKey: `${tree?.id}:${document?.xml}:${viewPath || definitionId || 'main'}`,
+
     changeDocument,
     assignRuntime: (id: TreeRuntimeId) => {
       if (!document) return;
@@ -168,7 +173,7 @@ export function useNativeTreeController(
     },
     run,
     stop,
-    nodes: viewTreeId ? preview.nodes : session?.nodes || preview.nodes,
+    nodes,
     cancel: () => client && void perform(() => client.cancel()),
     reset: () => client && void perform(() => client.reset(), 'Tree reset.'),
     validate: () =>

@@ -89,6 +89,8 @@ export interface TreeFormatAdapter {
   id: TreeRuntimeId;
   label: string;
   template: string;
+  /** Native topology at a SubTree boundary; execution semantics stay in the backend. */
+  subtreeTopology: 'wrapped' | 'inlined';
   matches(root: Element): boolean;
   validate(root: Element): void;
 }

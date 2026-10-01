@@ -94,7 +94,9 @@ identical wire feedback/results to C++. No XML can request a Python import.
 | Extras | scripting, preconditions, TreeNodesModel | constructor kwargs, ports defaults, Python decorators |
 
 Similar syntax does **not** prove semantic equivalence. Explicit BTCPP_format
-allows automatic identification; marker-free XML requires a format selection.
+allows automatic identification. Distinctive Python composite attributes (`memory`,
+`policy`) and Python built-ins also identify py_trees automatically; genuinely shared
+marker-free syntax still requires a format selection.
 The saved editor document stores original XML, runtime ID and main tree ID.
 Layout/status graphs are projections, never serialized back into execution XML.
 Native XML is edited as source; visual editing of its projection is disabled.
@@ -192,6 +194,23 @@ port remappings, including py_trees namespaced keys. Registered JsonGet/JsonSet
 leaves in both workers connect ROS JSON results to subsequent action goals.
 Python redirects the process stdout descriptor to stderr and keeps IPC on a
 dedicated duplicate descriptor so C-level ROS logs cannot corrupt messages.
+
+### Stable native canvas projection
+
+The source projection owns instance addresses and navigable, collapsed definition views.
+The common projection binds a matching session's native topology in child order, using
+`TreeFormatAdapter.subtreeTopology`: C++ keeps its native SubTree wrapper; Python
+aliases the inlined definition root. Names and labels never identify instances. Repeated
+and nested references each get their own view. A topology mismatch disables the state
+binding and reports an error rather than attributing a native state to the wrong source node.
+This is a visualization mapping only; neither backend's executable tree is altered.
+
+The native canvas owns a separate React Flow store, measured layout, and viewport.
+Ticks update data while retaining positions and dimensions. Node status rows reserve
+space, so transitions do not change geometry. Fit occurs after the new view is measured
+and painted, on explicit Arrange and container resize, never on tick state changes.
+User navigation disables Follow, and execution never enters or leaves a subtree view.
+
 
 ## Validation plan
 
