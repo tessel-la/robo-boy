@@ -110,7 +110,7 @@ node counts and recursive subtree expansion are bounded.
 The frontend has a format adapter registry (identify/parse/project/preserve) and
 one `RemoteTreeRuntime` transport/client. Discovery descriptors expose ID,
 version, availability/reason, host-owned enabled state, node registrations and capabilities. The panel
-uses one runtime controller and one native XML workspace for both frameworks;
+uses one native runtime controller and canvas within the shared editor for both frameworks;
 no backend-specific execution decisions belong in panel components.
 
 The ROS host owns a serialized session manager, runtime adapters and supervised
@@ -176,9 +176,22 @@ The shared document menu keeps JSON and XML file/repository loading, saved trees
 names and export consistent. Separate engine switches call `set_enabled` on the
 host. Both default enabled; flags last until executor restart. Disabling halts
 and releases that backend's worker while retaining the stopped session. Disabled
-engines reject validation, loading, starting and reset. The XML workspace's Run
+engines reject validation, loading, starting and reset. The shared panel's Run
 loads changed source and resets terminal sessions automatically. Native source
 editing and main-tree selection preserve framework-specific semantics.
+
+The toolbar, menu and palette remain mounted across JSON/XML loads. The native
+controller owns XML projection and remote lifecycle, while the canvas uses the
+same React Flow layout and node styling as the JSON editor. The engine selector
+chooses a library and never translates source. Execution requires a compatible,
+available and enabled engine. The palette provides read-only subtree definition
+browsing without changing the execution entrypoint. Original XML and per-node
+ports/status/feedback live in on-demand canvas inspectors; no permanent log panel
+or separate XML workspace replaces the editor. Worker snapshots carry native
+port remappings, including py_trees namespaced keys. Registered JsonGet/JsonSet
+leaves in both workers connect ROS JSON results to subsequent action goals.
+Python redirects the process stdout descriptor to stderr and keeps IPC on a
+dedicated duplicate descriptor so C-level ROS logs cannot corrupt messages.
 
 ## Validation plan
 

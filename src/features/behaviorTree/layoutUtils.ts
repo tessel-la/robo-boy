@@ -1,21 +1,19 @@
-import { Edge } from 'reactflow';
-
-import { BehaviorTreeNode } from './types';
+import { Edge, Node } from 'reactflow';
 
 const DEFAULT_NODE_WIDTH = 180;
 const DEFAULT_NODE_HEIGHT = 96;
 const HORIZONTAL_GAP = 64;
 const VERTICAL_GAP = 88;
 
-const getNodeWidth = (node: BehaviorTreeNode): number => node.width ?? DEFAULT_NODE_WIDTH;
+const getNodeWidth = (node: Node): number => node.width ?? DEFAULT_NODE_WIDTH;
 
-const getNodeHeight = (node: BehaviorTreeNode): number => node.height ?? DEFAULT_NODE_HEIGHT;
+const getNodeHeight = (node: Node): number => node.height ?? DEFAULT_NODE_HEIGHT;
 
 /**
  * Arranges behavior nodes as a top-down forest while preserving outgoing edge order.
  * Disconnected nodes become additional roots and malformed cycles are laid out once.
  */
-export const arrangeBehaviorTree = (nodes: BehaviorTreeNode[], edges: Edge[]): BehaviorTreeNode[] => {
+export const arrangeBehaviorTree = <T extends Node>(nodes: T[], edges: Edge[]): T[] => {
   if (nodes.length === 0) return nodes;
 
   const nodeById = new Map(nodes.map(node => [node.id, node]));

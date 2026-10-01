@@ -73,12 +73,49 @@ public:
   void onHalted() override { cancellations.push_back(id(*this)); results.erase(id(*this)); }
 };
 
+class JsonGet : public BT::SyncActionNode {
+public:
+  JsonGet(const std::string& name, const BT::NodeConfig& config) : SyncActionNode(name, config) {}
+  static BT::PortsList providedPorts() {
+    return {BT::InputPort<std::string>("json"), BT::InputPort<std::string>("field"), BT::OutputPort<std::string>("value")};
+  }
+  BT::NodeStatus tick() override {
+    auto json = getInput<std::string>("json"), field = getInput<std::string>("field");
+    if (!json || !field) throw BT::RuntimeError("JsonGet requires json and field ports");
+    auto object = Json::parse(json.value());
+    if (!object.is_object()) throw BT::RuntimeError("JsonGet requires a JSON object");
+    if (!object.contains(field.value())) return BT::NodeStatus::FAILURE;
+    setOutput("value", object.at(field.value()).dump());
+    return BT::NodeStatus::SUCCESS;
+  }
+};
+
+class JsonSet : public BT::SyncActionNode {
+public:
+  JsonSet(const std::string& name, const BT::NodeConfig& config) : SyncActionNode(name, config) {}
+  static BT::PortsList providedPorts() {
+    return {BT::InputPort<std::string>("json", std::string(""), "Base JSON object (empty starts a new object)"),
+      BT::InputPort<std::string>("field"), BT::InputPort<std::string>("value"), BT::OutputPort<std::string>("result")};
+  }
+  BT::NodeStatus tick() override {
+    auto json = getInput<std::string>("json"), field = getInput<std::string>("field"), value = getInput<std::string>("value");
+    if (!json || !field || !value) throw BT::RuntimeError("JsonSet requires valid json, field and value ports");
+    auto object = json.value().empty() ? Json::object() : Json::parse(json.value());
+    if (!object.is_object()) throw BT::RuntimeError("JsonSet requires a JSON object");
+    object[field.value()] = Json::parse(value.value());
+    setOutput("result", object.dump());
+    return BT::NodeStatus::SUCCESS;
+  }
+};
+
 int main() {
   std::ostream protocol(std::cout.rdbuf());
   std::cout.rdbuf(std::cerr.rdbuf()); // Node output belongs to logs, never the JSON channel.
   BT::BehaviorTreeFactory factory;
   factory.registerNodeType<Wait>("Wait");
   factory.registerNodeType<RosAction>("RosAction");
+  factory.registerNodeType<JsonGet>("JsonGet");
+  factory.registerNodeType<JsonSet>("JsonSet");
   // Operator-owned allowlist, never populated by an XML upload.
   if (const char* plugins = std::getenv("ROBOBOY_BTCPP_PLUGINS")) {
     std::stringstream paths(plugins);
@@ -91,8 +128,11 @@ int main() {
     Json nodes = Json::array();
     if (tree) {
       BT::applyRecursiveVisitor(tree->rootNode(), [&](BT::TreeNode* node) {
+        Json ports = Json::object();
+        for(const auto& port : static_cast<const BT::TreeNode*>(node)->config().input_ports) ports[port.first] = port.second;
+        for(const auto& port : static_cast<const BT::TreeNode*>(node)->config().output_ports) ports[port.first] = port.second;
         nodes.push_back({{"id",id(*node)}, {"parentId",nullptr}, {"label",node->name()},
-          {"type",node->registrationName()}, {"status",normalized(node->status())}, {"nativeStatus",native(node->status())}, {"feedback",""}});
+          {"type",node->registrationName()}, {"status",normalized(node->status())}, {"nativeStatus",native(node->status())}, {"feedback",""}, {"ports",ports}});
       });
       // Visitor topology retains native subtree instances and their IDs.
       BT::applyRecursiveVisitor(tree->rootNode(), [&](BT::TreeNode* parent) {

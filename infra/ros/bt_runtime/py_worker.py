@@ -15,8 +15,10 @@ import sysconfig
 # ROS setup prepends distro site-packages; the executor venv owns its XML version.
 sys.path.insert(0, sysconfig.get_path('purelib'))
 
-# Node print statements never corrupt the IPC stream.
-protocol_stdout = sys.stdout
+# Keep IPC on a dedicated descriptor. Native ROS logging writes directly to
+# stdout's file descriptor and bypasses Python redirect_stdout.
+protocol_stdout = os.fdopen(os.dup(sys.stdout.fileno()), 'w', buffering=1)
+os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
 sys.stdout = sys.stderr
 import py_trees
 from py_trees.parsers.behaviour_tree_xml import parse_behaviour_tree_xml, DECORATOR_NODES
@@ -69,6 +71,37 @@ class RosAction(BehaviourWithPorts):
             cancellations.append(str(self.id))
 
 
+class JsonGet(BehaviourWithPorts):
+    INPUT_PORTS = {'json': PortInformation(data_type=str, required=True), 'field': PortInformation(data_type=str, required=True)}
+    OUTPUT_PORTS = {'value': PortInformation(data_type=str, required=True)}
+
+    def update(self):
+        data = json.loads(self.get_input('json'))
+        if not isinstance(data, dict):
+            raise ValueError('JsonGet requires a JSON object')
+        field = self.get_input('field')
+        if field not in data:
+            self.feedback_message = 'Missing JSON field: ' + field
+            return py_trees.common.Status.FAILURE
+        self._set_output('value', json.dumps(data[field]))
+        return py_trees.common.Status.SUCCESS
+
+
+class JsonSet(BehaviourWithPorts):
+    INPUT_PORTS = {'json': PortInformation(data_type=str, default_value=''),
+                   'field': PortInformation(data_type=str, required=True), 'value': PortInformation(data_type=str, required=True)}
+    OUTPUT_PORTS = {'result': PortInformation(data_type=str, required=True)}
+
+    def update(self):
+        source = self.get_input('json')
+        data = json.loads(source) if source else {}
+        if not isinstance(data, dict):
+            raise ValueError('JsonSet requires a JSON object')
+        data[self.get_input('field')] = json.loads(self.get_input('value'))
+        self._set_output('result', json.dumps(data))
+        return py_trees.common.Status.SUCCESS
+
+
 # The upstream XML parser requires PortsMixin leaves. Wrap native constant
 # behaviors without reimplementing their lifecycle or status semantics.
 for behavior_name in ('Success', 'Failure', 'Running', 'Dummy'):
@@ -109,9 +142,16 @@ def snapshot():
     nodes = []
     if tree:
         def walk(node, parent=None):
+            ports = {}
+            if isinstance(node, PortsMixin):
+                for name in node.input_ports():
+                    key = node._get_blackboard_key(name)
+                    ports[name] = str(node.get_input(name)) if key.endswith('__const') else '{' + key + '}'
+                for name in node.output_ports():
+                    ports[name] = '{' + node._get_blackboard_key(name) + '}'
             nodes.append({'id': str(node.id), 'parentId': parent, 'label': node.name,
                           'type': type(node).__name__, 'status': status_map[node.status.name],
-                          'nativeStatus': node.status.name, 'feedback': node.feedback_message})
+                          'nativeStatus': node.status.name, 'feedback': node.feedback_message, 'ports': ports})
             for child in node.children:
                 walk(child, str(node.id))
         walk(tree.root)

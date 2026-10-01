@@ -1,0 +1,41 @@
+<!-- py_trees: transfer. Motion goals use explicit subtree ports. -->
+<root main_tree_to_execute="Main">
+  <BehaviorTree ID="Main">
+    <Sequence name="Detect, pick and transfer" memory="true">
+      <RosAction name="Detect blue cube" action_name="/arm_1/detect_object" action_type="genesis_manipulator_interfaces/action/DetectObject" goal_b64="eyJxdWVyeSI6ImJsdWVfY3ViZSIsImtpbmQiOiJib3giLCJpbmNsdWRlX2ZpeGVkIjpmYWxzZSwidGltZW91dCI6NX0=" timeout="12" result="{detection}"/>
+      <JsonGet name="Read detected name" json="{detection}" field="name" value="{object_id}"/>
+      <SubTree ID="Pick" name="Pick detected object" object="{object_id}" picked="{grasp_result}"/>
+      <JsonSet name="Choose transfer distance" field="distance" value="0.12" result="{transfer_config}"/>
+      <JsonGet name="Read transfer distance" json="{transfer_config}" field="distance" value="{transfer_offset}"/>
+      <SubTree ID="Place" name="Transfer and release" offset="{transfer_offset}" released="{release_result}"/>
+      <JsonGet name="Check release output" json="{release_result}" field="success" value="{released_ok}"/>
+      <Wait name="Settle after release" seconds="0.2"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="Pick">
+    <Sequence name="Approach and grasp" memory="true">
+      <JsonSet name="Bind approach object" field="object_id" value="{object}" result="{approach_goal}"/>
+      <JsonSet name="Approach standoff" json="{approach_goal}" field="standoff" value="0.05" result="{approach_goal}"/>
+      <JsonSet name="Approach duration" json="{approach_goal}" field="duration" value="0.4" result="{approach_goal}"/>
+      <JsonSet name="Approach deadline" json="{approach_goal}" field="timeout" value="8" result="{approach_goal}"/>
+      <RosAction name="Approach detected object" action_name="/arm_1/approach_object" action_type="genesis_manipulator_interfaces/action/ApproachObject" timeout="12" goal="{approach_goal}" result="{approached}"/>
+      <JsonSet name="Bind grasp object" field="object_id" value="{object}" result="{grasp_goal}"/>
+      <JsonSet name="Reuse completed approach" json="{grasp_goal}" field="skip_approach" value="true" result="{grasp_goal}"/>
+      <JsonSet name="Grasp distance" json="{grasp_goal}" field="max_distance" value="0.08" result="{grasp_goal}"/>
+      <JsonSet name="Grasp duration" json="{grasp_goal}" field="duration" value="0.4" result="{grasp_goal}"/>
+      <JsonSet name="Grasp deadline" json="{grasp_goal}" field="timeout" value="8" result="{grasp_goal}"/>
+      <RosAction name="Grasp detected object" action_name="/arm_1/grasp_object" action_type="genesis_manipulator_interfaces/action/GraspObject" timeout="12" goal="{grasp_goal}" result="{picked}"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="Place">
+    <Sequence name="Move and release" memory="true">
+      <JsonSet name="Bind transfer offset" field="y" value="{offset}" result="{motion_goal}"/>
+      <JsonSet name="Lift object" json="{motion_goal}" field="z" value="0.10" result="{motion_goal}"/>
+      <JsonSet name="World frame" json="{motion_goal}" field="translation_frame" value="&quot;world&quot;" result="{motion_goal}"/>
+      <JsonSet name="Transfer duration" json="{motion_goal}" field="duration" value="0.4" result="{motion_goal}"/>
+      <JsonSet name="Transfer deadline" json="{motion_goal}" field="timeout" value="8" result="{motion_goal}"/>
+      <RosAction name="Transfer held object" action_name="/arm_1/move_end_effector" action_type="genesis_manipulator_interfaces/action/MoveEndEffector" timeout="12" goal="{motion_goal}" result="{moved}"/>
+      <RosAction name="Release object" action_name="/arm_1/release_object" action_type="genesis_manipulator_interfaces/action/ReleaseObject" goal_b64="eyJvcGVuaW5nIjowLjA4LCJkdXJhdGlvbiI6MC40LCJ0aW1lb3V0Ijo4fQ==" timeout="12" result="{released}"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

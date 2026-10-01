@@ -1,8 +1,10 @@
 # Behavior Tree execution on a ROS host
 
 Robo Boy supports native **BehaviorTree.CPP** and **py_trees 2.6** execution.
-The Behavior Tree menu's **New XML tree** / **Import** opens a common XML
-workspace. Choose a runtime for marker-free XML; `BTCPP_format="4"` identifies
+The Behavior Tree panel uses one menu, toolbar, palette and canvas for JSON
+and both native XML formats. The engine selector changes the available node
+library; **New** creates a tree for that engine. **Import** and repository loading
+use the same menu for every format. Choose an engine for marker-free XML; `BTCPP_format="4"` identifies
 C++. XML source is saved exactly, including ports, subtrees and metadata. Visual
 node graphs show the native host topology and cannot change source semantics.
 The shared tree menu opens, saves and exports both JSON and XML trees. **Open
@@ -17,13 +19,23 @@ preserves source, while browser saves also retain the chosen runtime and main tr
    specify one; a single tree is inferred automatically.
 3. Press **Run**. Robo Boy loads the current XML on the host and starts execution.
    The menu also offers **Validate** and **Load on host** for separate checks.
-4. Use **Tree states** for idle/running/success/failure and native status metadata.
-   **Feedback and results** contains ROS feedback, output messages and errors.
-   Nodes retain their last observed result separately when native controls reset
-   them to idle within a tick. Reset clears these results.
+4. The canvas shows idle/running/success/failure. The palette lists this engine's
+   registered nodes, saved documents and subtrees in the current XML. Click a
+   subtree to view its definition without changing the executable main tree.
+   Click a node to inspect its ports, native status and execution details.
+   **XML source** in the menu opens an inspector in the same canvas; Escape
+   closes it. There is no permanent feedback/results log. Nodes retain their
+   last observed result when native controls reset them to idle within a tick.
+   Reset clears these results.
 5. **Stop** or **Cancel** halts the tree and requests cancellation of active goals.
    **Reset** reconstructs the original tree and blackboard. **Run** after a terminal
    result resets it automatically before rerunning.
+
+Switching engines preserves the open document. Run is disabled until the
+selected engine matches the document and is available and enabled on the host.
+Native XML graph editing, AI generation, undo and pause are disabled because
+these controls would not preserve backend semantics; edit the original source
+from its inspector. Subtree browsing remains available during execution.
 
 Runtime availability/version and failure reasons are visible. An unavailable
 backend never causes execution with the other backend. A lost ROS connection
@@ -82,7 +94,7 @@ some options or substitutes a policy. `success_on_selected` is unsupported until
 the native XML parser can identify selected children. Registered host classes own
 their constructor arguments and ports.
 
-Included nodes are `Wait(seconds)` and `RosAction` plus native framework nodes.
+Included nodes are `Wait(seconds)`, `RosAction`, `JsonGet` and `JsonSet` plus native framework nodes.
 py_trees' Success/Failure/Running/Dummy leaves are PortsMixin wrappers around
 the native behavior classes, required by its upstream XML parser. Runtime
 Discovery returns actual node registration IDs. `RosAction` accepts:
@@ -100,6 +112,16 @@ Both native parsers interpret braced port values as blackboard references.
 Literal JSON therefore uses the explicit `goal_b64` port in both XML formats. This preserves the parser's remapping semantics and does not
 rewrite user source. `goal_b64` takes precedence when
 provided. Encode with `base64.b64encode(json.dumps(goal).encode()).decode()`.
+
+`JsonGet` reads a top-level `field` from an input JSON object (`json`) and writes
+its JSON-serialized value to `value`. Missing fields return FAILURE; invalid JSON
+or a non-object input raises a native execution error. `JsonSet` starts with an
+empty object when `json` is omitted, parses the JSON-serialized `value`, assigns
+`field`, and writes the object to `result`. It raises an error for malformed data.
+Strings therefore retain JSON quotes when extracted; the paired setter parses
+them back into strings. These are registered native leaves in each worker.
+Snapshots preserve configured runtime port wiring (including py_trees absolute
+blackboard namespaces); the source inspector retains exact original attributes.
 
 Trusted host operators can register additional node implementations:
 `ROBOBOY_BTCPP_PLUGINS` is a colon-separated list of shared-library paths;
@@ -151,19 +173,24 @@ planning or GPU rendering behavior.
 ### Validation recorded on 1 October 2026
 
 The integration image runs BehaviorTree.CPP **4.10.0**, py_trees **2.6.0** and
-py_trees_ros on ROS Jazzy. The 27 native/ROS tests pass; shared tests exercise
-both backends, including cancellation acceptance races, unavailable runtimes,
-native exceptions, transactional loading and reset after a worker crash.
-Both Chromium workflows pass against the actual ROS/rosbridge/Genesis action
-bridge, including disabling an engine during a live action and original XML
-recovery after reloading during execution. Two repository browser workflows pass
-for shared JSON/XML local folders and public GitHub loading.
-The 23 existing Behavior Tree editor browser tests also pass, covering JSON
-editing, import, undo, responsive layouts and execution.
+py_trees_ros on ROS Jazzy. All **31 native/ROS tests** pass, including both richer
+example pairs, explicit subtree ports, JSON goal construction, recovery,
+reset/rerun and C-level stdout isolation. Both pairs execute and rerun through
+real ROS actions in the deterministic Genesis mock environment.
 
-The frontend suite passes 1,492 tests across 191 files (10 existing skips);
-lint and production build pass. Genesis's existing suite passes 21 tests and its
-native executor Compose overlay validates. The simulation uses Genesis's mock
-backend; actual GPU physics and rendering have not been validated.
+All **31 Chromium workflows** pass across JSON editor regressions, shared
+repository loading and six native runtime/example workflows. Repository tests
+verify the shell stays mounted, source survives engine switching, saved engine
+metadata persists, and mobile inspectors/menu fit the viewport. Native tests
+verify independent engine switches, cancellation, reconnect, node details and
+four richer action trees. Screenshots confirm shared toolbar/canvas styling.
 
-CI runs the native/ROS suite and the Chromium workflows in its native BT job.
+The frontend suite, type check, lint and production build pass. Genesis's
+**22 tests** pass. The connected live ROS executor was discovered before its
+idle service was updated, retaining domain 14, CycloneDDS and the Genesis
+interface overlay. Both engines acknowledge commands and validate all four
+new examples on that host without replacing its existing session.
+
+The simulation tests use Genesis's mock backend; actual GPU physics, collision
+planning and rendering have not been validated. CI runs the native/ROS suite
+and Chromium workflows in its native BT job.

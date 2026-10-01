@@ -37,7 +37,9 @@ function parseEvent(message: unknown): RuntimeEvent | null {
             typeof r.available !== 'boolean' ||
             (r.reason !== undefined && typeof r.reason !== 'string') ||
             (r.enabled !== undefined && typeof r.enabled !== 'boolean') ||
-            (r.version !== undefined && typeof r.version !== 'string')
+            (r.version !== undefined && typeof r.version !== 'string') ||
+            (r.nodes !== undefined &&
+              (!Array.isArray(r.nodes) || r.nodes.some((name: unknown) => typeof name !== 'string')))
         ))
     )
       return null;
@@ -57,6 +59,11 @@ function parseEvent(message: unknown): RuntimeEvent | null {
             typeof n.type !== 'string' ||
             typeof n.nativeStatus !== 'string' ||
             typeof n.feedback !== 'string' ||
+            (n.ports !== undefined &&
+              (n.ports === null ||
+                typeof n.ports !== 'object' ||
+                Array.isArray(n.ports) ||
+                Object.values(n.ports).some(value => typeof value !== 'string'))) ||
             (n.lastResult !== undefined && !['success', 'failure'].includes(n.lastResult)) ||
             (n.lastNativeResult !== undefined && typeof n.lastNativeResult !== 'string') ||
             (n.parentId !== null && typeof n.parentId !== 'string') ||
@@ -166,9 +173,10 @@ export class RemoteTreeRuntime {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        const error = command === 'discover'
-          ? 'No Behavior Tree executor responded on this ROS host. Start or update the host executor, then discover engines again.'
-          : 'The host did not acknowledge the command. Discover its status before retrying.';
+        const error =
+          command === 'discover'
+            ? 'No Behavior Tree executor responded on this ROS host. Start or update the host executor, then discover engines again.'
+            : 'The host did not acknowledge the command. Discover its status before retrying.';
         this.update({ error });
         reject(new Error(error));
       }, 15000);

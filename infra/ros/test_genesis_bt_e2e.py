@@ -76,10 +76,10 @@ class GenesisRuntimeE2E(unittest.TestCase):
             source = re.sub(r'goal_b64="[^"]*"', 'goal_b64="' + base64.b64encode(json.dumps(goal).encode()).decode() + '"', source)
         return source
 
-    def load(self, runtime, source):
+    def load(self, runtime, source, main_tree_id="Move"):
         if self.session and self.session['state'] == 'running':
             self.command('cancel', sessionId=self.session['id'])
-        return self.command('load', runtime=runtime, xml=source, mainTreeId='Move')['session']
+        return self.command('load', runtime=runtime, xml=source, mainTreeId=main_tree_id)['session']
 
     def test_01_discover_both_actual_runtimes(self):
         descriptors = self.command('discover')['runtimes']
@@ -134,7 +134,29 @@ class GenesisRuntimeE2E(unittest.TestCase):
                 final = self.next_event(lambda e: e.get('session', {}).get('state') in ('completed', 'error'))['session']
                 self.assertEqual(final['result'], 'failure')
 
-    def test_05_reconnect_observes_host_owned_execution(self):
+    def test_05_rich_examples_subtrees_ports_recovery_and_rerun(self):
+        for runtime in ('btcpp', 'py_trees'):
+            for variant in ('transfer', 'recovery'):
+                with self.subTest(runtime=runtime, variant=variant):
+                    source = Path(f'/examples/behavior_trees/genesis_{variant}_{runtime}.xml').read_text()
+                    self.command('validate', runtime=runtime, xml=source, mainTreeId='Main')
+                    loaded = self.load(runtime, source, 'Main')
+                    for run in range(2):
+                        if run: self.command('reset', sessionId=loaded['id'])
+                        self.history.clear()
+                        self.command('start', sessionId=loaded['id'])
+                        final = self.next_event(lambda e: e.get('session', {}).get('state') in ('completed', 'error'), timeout=40)['session']
+                        self.assertEqual(final['result'], 'success', final.get('error'))
+                        results = [e['log'] for e in self.history if e.get('log', {}).get('type') == 'result']
+                        self.assertEqual(len(results), 6 if variant == 'recovery' else 5)
+                        if variant == 'recovery': self.assertFalse(results[0]['success'])
+                        self.assertTrue(all(r['success'] for r in results[-5:]))
+                        self.assertTrue(any(r['result'].get('name') == 'blue_cube' for r in results))
+                        self.assertTrue(any(r['result'].get('object_id') == 'blue_cube' for r in results))
+                        self.assertTrue(any(n['type'] == 'JsonSet' and 'ports' in n for n in final['nodes']))
+                        self.assertTrue(any(e.get('log', {}).get('type') == 'feedback' for e in self.history))
+
+    def test_06_reconnect_observes_host_owned_execution(self):
         for runtime in ('btcpp', 'py_trees'):
             with self.subTest(runtime=runtime):
                 loaded = self.load(runtime, self.source(runtime, {'x': .01, 'duration': 3., 'timeout': 8.}))

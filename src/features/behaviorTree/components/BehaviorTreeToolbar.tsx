@@ -24,6 +24,17 @@ interface BehaviorTreeToolbarProps {
   onNew: () => void;
   onNewXml?: () => void;
   runtimeSettings?: React.ReactNode;
+  engineControl?: React.ReactNode;
+  nativeControls?: {
+    ready: boolean;
+    busy: boolean;
+    canControl: boolean;
+    canReset: boolean;
+    onCancel: () => void;
+    onReset: () => void;
+    onSource: () => void;
+  };
+  runDisabled?: boolean;
   onExecute: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -60,6 +71,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onNew,
   onNewXml,
   runtimeSettings,
+  engineControl,
+  nativeControls,
+  runDisabled = false,
   onExecute,
   onPause,
   onResume,
@@ -81,6 +95,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   return (
     <>
       <BehaviorTreeDocumentMenu
+        allowDuringExecution={!!nativeControls}
         currentTree={currentTree}
         isEditingLocked={isEditingLocked}
         nodeCount={nodeCount}
@@ -88,14 +103,16 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         onLoad={onLoad}
         onNew={onNew}
         onNewXml={onNewXml}
+        onEditSource={nativeControls?.onSource}
         onExport={onExport}
         onRename={onRename}
         triggerAfter={
           <>
+            {engineControl}
             <button
               className={`bt-float-icon-btn bt-palette-toggle${isPaletteCollapsed ? '' : ' active'}`}
               onClick={onTogglePalette}
-              disabled={isEditingLocked}
+              disabled={isEditingLocked && !nativeControls}
               title={isPaletteCollapsed ? 'Show node palette' : 'Hide node palette'}
               aria-label="Toggle node palette"
               data-testid="bt-palette-toggle"
@@ -133,7 +150,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <button
               className="bt-float-icon-btn bt-agent-tree-btn"
               onClick={onOpenAgent}
-              disabled={isEditingLocked}
+              disabled={isEditingLocked || !!nativeControls}
               title="Create tree with AI"
               aria-label="Create tree with AI"
               data-testid="bt-open-agent"
@@ -252,15 +269,34 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         }
       >
         {runtimeSettings}
-        <div className="bt-menu-section">
-          <label className="bt-menu-label">Blackboard {isExecuting ? '(live)' : '(defaults)'}</label>
-          <BlackboardEditor
-            values={blackboardValues}
-            types={blackboardTypes}
-            readOnly={isExecuting}
-            onChange={onBlackboardDefaultsChange}
-          />
-        </div>
+        {nativeControls ? (
+          <div className="bt-menu-section bt-menu-actions">
+            <button
+              className="bt-menu-action-btn"
+              disabled={nativeControls.busy || !isExecuting || !nativeControls.canControl}
+              onClick={nativeControls.onCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="bt-menu-action-btn"
+              disabled={nativeControls.busy || !nativeControls.canReset}
+              onClick={nativeControls.onReset}
+            >
+              Reset
+            </button>
+          </div>
+        ) : (
+          <div className="bt-menu-section">
+            <label className="bt-menu-label">Blackboard {isExecuting ? '(live)' : '(defaults)'}</label>
+            <BlackboardEditor
+              values={blackboardValues}
+              types={blackboardTypes}
+              readOnly={isExecuting}
+              onChange={onBlackboardDefaultsChange}
+            />
+          </div>
+        )}
       </BehaviorTreeDocumentMenu>
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
@@ -271,7 +307,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           <input
             type="checkbox"
             checked={persistentExecution}
-            disabled={isExecuting}
+            disabled={isExecuting || !!nativeControls}
             onChange={event => onPersistentExecutionChange(event.target.checked)}
           />
           <svg className="bt-persistent-toggle-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -306,13 +342,16 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           </svg>
         </button>
         <button
-          className={isExecuting && !isPaused ? 'bt-float-pause-btn' : 'bt-float-run-btn'}
+          className={isExecuting && !isPaused && !nativeControls ? 'bt-float-pause-btn' : 'bt-float-run-btn'}
           onClick={isExecuting ? (isPaused ? onResume : onPause) : onExecute}
-          title={isExecuting ? (isPaused ? 'Resume execution' : 'Pause execution') : 'Execute tree'}
-          aria-label={isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          disabled={
+            runDisabled || (nativeControls ? nativeControls.busy || !nativeControls.ready || isExecuting : false)
+          }
+          title={isExecuting && !nativeControls ? (isPaused ? 'Resume execution' : 'Pause execution') : 'Execute tree'}
+          aria-label={isExecuting && !nativeControls ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
           data-testid="bt-run-pause"
         >
-          {isExecuting && !isPaused ? (
+          {isExecuting && !isPaused && !nativeControls ? (
             <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden="true">
               <rect x="1" y="1" width="3" height="11" rx="1" />
               <rect x="7" y="1" width="3" height="11" rx="1" />
@@ -322,12 +361,14 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               <path d="M1 1l9 5.5L1 12V1z" />
             </svg>
           )}
-          <span className="bt-float-btn-label">{isExecuting ? (isPaused ? 'Resume' : 'Pause') : 'Run'}</span>
+          <span className="bt-float-btn-label">
+            {isExecuting && !nativeControls ? (isPaused ? 'Resume' : 'Pause') : 'Run'}
+          </span>
         </button>
         <button
           className="bt-float-stop-btn"
           onClick={onStop}
-          disabled={!isExecuting}
+          disabled={!isExecuting || (nativeControls ? nativeControls.busy || !nativeControls.canControl : false)}
           title="Stop execution"
           aria-label="Stop"
           data-testid="bt-stop"

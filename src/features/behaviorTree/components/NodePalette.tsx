@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Ros } from 'roslib';
 import { discoverAllROSResources } from '../services/rosDiscovery';
-import {
-  BEHAVIOR_TREE_STORAGE_EVENT,
-  listBehaviorTrees,
-} from '../storage/treeStorage';
+import { BEHAVIOR_TREE_STORAGE_EVENT, listBehaviorTrees } from '../storage/treeStorage';
 import {
   BehaviorTree,
   ROSDiscoveryResult,
@@ -15,6 +12,8 @@ import {
   ROSTopicInfo,
 } from '../types';
 import './NodePalette.css';
+import type { RuntimeDescriptor, TreeRuntimeId } from '../runtime/types';
+import { treeFormats } from '../runtime/xml';
 
 type PaletteResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
 
@@ -150,22 +149,23 @@ interface NodePaletteProps {
   isCollapsed: boolean;
   isDisabled?: boolean;
   onToggleCollapse: () => void;
-  onAddNode?: (
-    type: BehaviorNodeType,
-    item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree
-  ) => void;
+  onAddNode?: (type: BehaviorNodeType, item?: ROSActionInfo | ROSServiceInfo | ROSTopicInfo | BehaviorTree) => void;
+  nativeCatalog?: {
+    runtime: TreeRuntimeId;
+    locked: boolean;
+    descriptor?: RuntimeDescriptor;
+    trees: Array<{ id: string; label: string; onOpen: () => void }>;
+    onOpenSaved: (tree: BehaviorTree) => void;
+  };
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 768px)';
 
-const matchesResourceSearch = (
-  resource: { name: string; type: string },
-  terms: string[]
-): boolean => {
+const matchesResourceSearch = (resource: { name: string; type: string }, terms: string[]): boolean => {
   if (terms.length === 0) return true;
 
   const searchableText = `${resource.name} ${resource.type}`.toLocaleLowerCase();
-  return terms.every((term) => searchableText.includes(term));
+  return terms.every(term => searchableText.includes(term));
 };
 
 const NodePalette: React.FC<NodePaletteProps> = ({
@@ -175,6 +175,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   isDisabled = false,
   onToggleCollapse,
   onAddNode,
+  nativeCatalog,
 }) => {
   const [rosResources, setRosResources] = useState<ROSDiscoveryResult>({
     actions: [],
@@ -191,7 +192,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     services: false,
     topics: false,
   });
-  const [savedTrees, setSavedTrees] = useState(() => listBehaviorTrees().filter(saved => !saved.tree.nativeDocument));
+  const [allSavedTrees, setSavedTrees] = useState(listBehaviorTrees);
+  const savedTrees = allSavedTrees.filter(saved => !saved.tree.nativeDocument);
 
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
@@ -204,7 +206,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   // re-render would delay adding document listeners past the first touchmove.
   const isDraggingRef = useRef(false);
   const onToggleCollapseRef = useRef(onToggleCollapse);
-  useEffect(() => { onToggleCollapseRef.current = onToggleCollapse; }, [onToggleCollapse]);
+  useEffect(() => {
+    onToggleCollapseRef.current = onToggleCollapse;
+  }, [onToggleCollapse]);
 
   React.useEffect(() => {
     const mq = window.matchMedia(MOBILE_BREAKPOINT);
@@ -305,10 +309,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     };
   }, [isMobile, isCollapsed]);
 
-  const handleCornerResizeStart = (
-    corner: PaletteResizeCorner,
-    event: React.PointerEvent<HTMLDivElement>
-  ) => {
+  const handleCornerResizeStart = (corner: PaletteResizeCorner, event: React.PointerEvent<HTMLDivElement>) => {
     const palette = paletteRef.current;
     const parent = palette?.parentElement;
     if (!palette || !parent) return;
@@ -350,19 +351,13 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       if (corner.includes('w')) {
         left = Math.min(Math.max(startFrame.left + deltaX, margin), startRight - minWidth);
       } else {
-        right = Math.max(
-          Math.min(startRight + deltaX, parentRect.width - margin),
-          startFrame.left + minWidth
-        );
+        right = Math.max(Math.min(startRight + deltaX, parentRect.width - margin), startFrame.left + minWidth);
       }
 
       if (corner.includes('n')) {
         top = Math.min(Math.max(startFrame.top + deltaY, margin), startBottom - minHeight);
       } else {
-        bottom = Math.max(
-          Math.min(startBottom + deltaY, parentRect.height - margin),
-          startFrame.top + minHeight
-        );
+        bottom = Math.max(Math.min(startBottom + deltaY, parentRect.height - margin), startFrame.top + minHeight);
       }
 
       setPaletteFrame({ left, top, width: right - left, height: bottom - top });
@@ -409,38 +404,36 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   );
   const isResourceSearchActive = resourceSearchTerms.length > 0;
   const filteredActions = useMemo(
-    () => rosResources.actions.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    () => rosResources.actions.filter(resource => matchesResourceSearch(resource, resourceSearchTerms)),
     [resourceSearchTerms, rosResources.actions]
   );
   const filteredServices = useMemo(
-    () => rosResources.services.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    () => rosResources.services.filter(resource => matchesResourceSearch(resource, resourceSearchTerms)),
     [resourceSearchTerms, rosResources.services]
   );
   const filteredTopics = useMemo(
-    () => rosResources.topics.filter((resource) => matchesResourceSearch(resource, resourceSearchTerms)),
+    () => rosResources.topics.filter(resource => matchesResourceSearch(resource, resourceSearchTerms)),
     [resourceSearchTerms, rosResources.topics]
   );
-  const filteredResourceCount =
-    filteredActions.length + filteredServices.length + filteredTopics.length;
-  const resourceCount =
-    rosResources.actions.length + rosResources.services.length + rosResources.topics.length;
+  const filteredResourceCount = filteredActions.length + filteredServices.length + filteredTopics.length;
+  const resourceCount = rosResources.actions.length + rosResources.services.length + rosResources.topics.length;
 
   // Discover ROS resources once when first connected.
   // We guard with a ref so switching tabs back and forth doesn't re-trigger
   // discovery (which would flood rosbridge with service calls).
   useEffect(() => {
-    if (isConnected && ros && !hasDiscovered.current) {
+    if (!nativeCatalog && isConnected && ros && !hasDiscovered.current) {
       hasDiscovered.current = true;
       handleDiscover();
     }
     if (!isConnected) {
       hasDiscovered.current = false;
     }
-  }, [isConnected, ros]);
+  }, [isConnected, ros, !!nativeCatalog]);
 
   useEffect(() => {
     const handleSavedTreesChanged = () => {
-      setSavedTrees(listBehaviorTrees().filter(saved => !saved.tree.nativeDocument));
+      setSavedTrees(listBehaviorTrees());
     };
 
     window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
@@ -461,7 +454,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleDragStart = (
@@ -501,22 +494,89 @@ const NodePalette: React.FC<NodePaletteProps> = ({
             : undefined
       }
     >
-      {isMobile && (
-        <div
-          className="palette-drag-handle"
-          ref={handleRef}
-        />
-      )}
+      {isMobile && <div className="palette-drag-handle" ref={handleRef} />}
       {/* palette-body scrolls independently — drag handle stays outside overflow */}
       <div className="palette-body">
-      <div className="palette-header">
-        <h3 className="palette-title">Node Palette</h3>
-        <button className="palette-toggle" onClick={onToggleCollapse} title="Collapse Palette" aria-label="Collapse palette">
-          <IconChevronLeft />
-          <span>Close</span>
-        </button>
-      </div>
+        <div className="palette-header">
+          <h3 className="palette-title">Node Palette</h3>
+          <button
+            className="palette-toggle"
+            onClick={onToggleCollapse}
+            title="Collapse Palette"
+            aria-label="Collapse palette"
+          >
+            <IconChevronLeft />
+            <span>Close</span>
+          </button>
+        </div>
 
+        {nativeCatalog ? (
+          <>
+            <p className="palette-empty">
+              {treeFormats.find(format => format.id === nativeCatalog.runtime)?.label} · XML nodes and subtrees
+            </p>
+            <div className="palette-section">
+              <h4 className="palette-section-header">Subtrees in this document</h4>
+              <div className="palette-section-content">
+                {nativeCatalog.trees.map(tree => (
+                  <button
+                    className="palette-node palette-node-ros"
+                    key={tree.id}
+                    onClick={tree.onOpen}
+                    aria-label={`View subtree ${tree.label}`}
+                  >
+                    <span className="palette-node-icon">
+                      <IconSubtree />
+                    </span>
+                    <span className="palette-node-label">{tree.label}</span>
+                  </button>
+                ))}
+                {!nativeCatalog.trees.length && (
+                  <p className="palette-empty">Open XML for this engine to browse its subtrees.</p>
+                )}
+              </div>
+            </div>
+            <div className="palette-section">
+              <h4 className="palette-section-header">
+                Saved trees · {treeFormats.find(format => format.id === nativeCatalog.runtime)?.label}
+              </h4>
+              <div className="palette-section-content">
+                {allSavedTrees
+                  .filter(saved => saved.tree.nativeDocument?.runtime === nativeCatalog.runtime)
+                  .map(({ tree }) => (
+                    <button
+                      className="palette-node palette-node-ros"
+                      key={tree.id}
+                      disabled={isDisabled || nativeCatalog.locked}
+                      onClick={() => nativeCatalog.onOpenSaved(tree)}
+                    >
+                      <span className="palette-node-icon">
+                        <IconSubtree />
+                      </span>
+                      <span className="palette-node-label">{tree.name}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+            <div className="palette-section">
+              <h4 className="palette-section-header">Registered nodes</h4>
+              <div className="palette-section-content">
+                {(nativeCatalog.descriptor?.nodes || []).map(name => (
+                  <div className="palette-node palette-node-registration" key={name}>
+                    <span className="palette-node-label">{name}</span>
+                  </div>
+                ))}
+                {!nativeCatalog.descriptor?.nodes?.length && (
+                  <p className="palette-empty">
+                    {nativeCatalog.descriptor?.reason ||
+                      'Connect and discover this host engine to list its registered nodes.'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
       {isConnected && (
         <button
           className="palette-discover-btn"
@@ -778,7 +838,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         )}
         </div>
       )}
-      </div>{/* end palette-body */}
+          </>
+        )}
+      </div>
+      {/* end palette-body */}
       {(['nw', 'ne', 'sw', 'se'] as const).map(corner => (
         <div
           key={corner}

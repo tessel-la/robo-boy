@@ -1,7 +1,10 @@
 import { useRemoteTreeRuntime } from '../runtime/useRemoteTreeRuntime';
-import NativeTreeWorkspace from '../runtime/NativeTreeWorkspace';
+import NativeTreeCanvas from '../runtime/NativeTreeCanvas';
+import NativeTreeSettings from '../runtime/NativeTreeSettings';
+import { useNativeTreeController } from '../runtime/useNativeTreeController';
+import { TreeRuntimeId } from '../runtime/types';
 import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
-import { nativeTreeFromXml, newXmlTemplate } from '../runtime/xml';
+import { nativeTreeFromXml, newXmlTemplate, treeFormats } from '../runtime/xml';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -547,6 +550,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [nodes, setNodes] = useState<BehaviorTreeNode[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
+  const [selectedEngine, setSelectedEngine] = useState<'json' | TreeRuntimeId | null>('json');
+  const [nativeArrange, setNativeArrange] = useState(0);
+  useEffect(
+    () => setSelectedEngine(currentTree?.nativeDocument ? currentTree.nativeDocument.runtime : 'json'),
+    [currentTree?.id, currentTree?.nativeDocument?.runtime]
+  );
   const [rootTree, setRootTree] = useState<BehaviorTree | null>(null);
   const [treePath, setTreePath] = useState<string[]>([]);
   const blackboardVariables = useMemo(() => listBlackboardVariables({
@@ -3221,55 +3230,123 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [applySelectionState, getZoom, isActive, setCenter]
   );
 
-  if (currentTree?.nativeDocument) {
-    return <NativeTreeWorkspace tree={currentTree} runtime={nativeRuntime} isConnected={isConnected}
-      onChange={loadRootTree} onNewGraph={handleNew} onExecutionChange={onExecutionChange}
-      onExecutionControlsChange={onExecutionControlsChange}/>;
-  }
+  const native = useNativeTreeController(
+    currentTree?.nativeDocument ? currentTree : null,
+    nativeRuntime,
+    selectedEngine,
+    loadRootTree,
+    onExecutionChange,
+    onExecutionControlsChange
+  );
+  const nativeDocument = !!currentTree?.nativeDocument;
+  const executing = nativeDocument ? native.running : isExecuting;
+  const editingLocked = nativeDocument ? native.locked : isExecuting;
+  const newForEngine = () => {
+    if (selectedEngine === 'json') handleNew();
+    else {
+      const format = treeFormats.find(item => item.id === selectedEngine);
+      handleLoad(nativeTreeFromXml(format?.template || newXmlTemplate, format?.id));
+    }
+  };
+  const engineControl = (
+    <select
+      className="bt-engine-select"
+      aria-label="Behavior Tree engine"
+      value={selectedEngine || ''}
+      disabled={editingLocked}
+      onChange={event => {
+        const engine = event.target.value as 'json' | TreeRuntimeId;
+        setSelectedEngine(engine);
+        if (currentTree?.nativeDocument?.runtime === null && engine !== 'json')
+          native.assignRuntime(engine);
+      }}
+    >
+      <option value="" disabled>
+        Choose engine
+      </option>
+      <option value="json">Robo Boy</option>
+      {treeFormats.map(format => (
+        <option key={format.id} value={format.id}>
+          {format.label}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
         currentTree={currentTree}
-        isExecuting={isExecuting}
+        isExecuting={executing}
         isPaused={isPaused}
-        isEditingLocked={isExecuting}
+        isEditingLocked={editingLocked}
         isPaletteCollapsed={isPaletteCollapsed}
-        nodeCount={nodes.length}
-        canUndo={canUndo}
-        canRedo={canRedo}
+        nodeCount={nativeDocument ? native.nodes.length : nodes.length}
+        canUndo={!nativeDocument && canUndo}
+        canRedo={!nativeDocument && canRedo}
         interactionMode={canvasInteractionMode}
         isFollowMode={isFollowMode}
-        persistentExecution={persistentExecution}
-        onSave={handleSave}
+        persistentExecution={nativeDocument || persistentExecution}
+        onSave={
+          nativeDocument
+            ? () => {
+                const ok = saveBehaviorTree(currentTree!);
+                showSaveNotice({
+                  type: ok ? 'success' : 'error',
+                  title: ok ? 'Tree saved' : 'Save failed',
+                  message: ok ? 'The XML source and engine were saved.' : 'Could not save tree.',
+                });
+              }
+            : handleSave
+        }
         onLoad={handleLoad}
-        onNew={handleNew}
+        onNew={newForEngine}
         onNewXml={() => handleLoad(nativeTreeFromXml(newXmlTemplate))}
-        runtimeSettings={<RuntimeEngineSettings runtime={nativeRuntime}/>}
-        onExecute={handleExecute}
+        engineControl={engineControl}
+        nativeControls={
+          nativeDocument
+            ? {
+                ready: !!native.ready && !native.preview.error,
+                busy: native.busy,
+                canControl: !!native.session && nativeRuntime.state.connected,
+                canReset: !!native.session && !!native.ready,
+                onCancel: native.session ? native.cancel : () => {},
+                onReset: native.reset,
+                onSource: () => native.setSourceOpen(true),
+              }
+            : undefined
+        }
+        runDisabled={!nativeDocument && selectedEngine !== 'json'}
+        runtimeSettings={
+          <>
+            {nativeDocument && <NativeTreeSettings controller={native} />}
+            <RuntimeEngineSettings runtime={nativeRuntime} />
+          </>
+        }
+        onExecute={nativeDocument ? native.run : handleExecute}
         onPause={handlePause}
         onResume={handleResume}
-        onStop={handleStop}
+        onStop={nativeDocument ? native.stop : handleStop}
         onExport={handleExport}
-        onArrange={handleArrange}
-        onTogglePalette={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
+        onArrange={nativeDocument ? () => setNativeArrange(value => value + 1) : handleArrange}
+        onTogglePalette={() => setIsPaletteCollapsed(collapsed => !collapsed)}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onInteractionModeChange={setCanvasInteractionMode}
         onToggleFollowMode={() =>
-          setIsFollowMode((enabled) => {
+          setIsFollowMode(enabled => {
             const nextEnabled = !enabled;
             isFollowModeRef.current = nextEnabled;
             return nextEnabled;
           })
         }
-        onPersistentExecutionChange={(enabled) => {
+        onPersistentExecutionChange={enabled => {
           setPersistentExecution(enabled);
           savePersistentExecutionPreference(enabled);
         }}
         onOpenAgent={() => onOpenAssistant?.({ panelId })}
         onRename={handleRename}
-        blackboardValues={isExecuting ? liveBlackboard : (currentTree?.blackboardDefaults || {})}
+        blackboardValues={isExecuting ? liveBlackboard : currentTree?.blackboardDefaults || {}}
         blackboardTypes={currentTree?.blackboardTypes || {}}
         onBlackboardDefaultsChange={handleBlackboardDefaultsChange}
       />
@@ -3294,12 +3371,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               </svg>
             ) : (
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path
-                  d="M1.5 1.5l10 10M11.5 1.5l-10 10"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
+                <path d="M1.5 1.5l10 10M11.5 1.5l-10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             )}
           </div>
@@ -3307,11 +3379,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             <div className="bt-save-toast-title">{saveNotice.title}</div>
             <div className="bt-save-toast-message">{saveNotice.message}</div>
           </div>
-          <button
-            className="bt-save-toast-close"
-            onClick={dismissSaveNotice}
-            aria-label="Dismiss notification"
-          >
+          <button className="bt-save-toast-close" onClick={dismissSaveNotice} aria-label="Dismiss notification">
             ×
           </button>
         </div>
@@ -3330,11 +3398,38 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
           ros={ros}
           isConnected={isConnected}
           isCollapsed={isPaletteCollapsed}
-          isDisabled={isExecuting}
-          onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)}
+          isDisabled={(!nativeDocument && editingLocked) || (nativeDocument && selectedEngine === 'json')}
+          onToggleCollapse={() => setIsPaletteCollapsed(collapsed => !collapsed)}
           onAddNode={handleAddNode}
+          nativeCatalog={
+            selectedEngine && selectedEngine !== 'json'
+              ? {
+                  runtime: selectedEngine,
+                  locked: editingLocked,
+                  descriptor: nativeRuntime.state.runtimes.find(item => item.id === selectedEngine),
+                  trees:
+                    currentTree?.nativeDocument?.runtime === selectedEngine
+                      ? native.preview.trees.map(tree => ({
+                          id: tree.getAttribute('ID')!,
+                          label: tree.getAttribute('ID')!,
+                          onOpen: () => native.selectTree(tree.getAttribute('ID')!),
+                        }))
+                      : [],
+                  onOpenSaved: handleLoad,
+                }
+              : undefined
+          }
         />
 
+        {nativeDocument ? (
+          <NativeTreeCanvas
+            controller={native}
+            state={nativeRuntime.state}
+            interactionMode={canvasInteractionMode}
+            follow={isFollowMode}
+            arrange={nativeArrange}
+          />
+        ) : (
         <div
           className="bt-canvas"
           ref={reactFlowWrapper}
@@ -3579,8 +3674,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
-
 
       {editingAction && (
         <ActionParameterEditor
@@ -3633,7 +3728,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   );
 };
 
-const BehaviorTreePanel: React.FC<BehaviorTreePanelProps> = (props) => (
+const BehaviorTreePanel: React.FC<BehaviorTreePanelProps> = props => (
   <ReactFlowProvider>
     <BehaviorTreePanelInner {...props} />
   </ReactFlowProvider>

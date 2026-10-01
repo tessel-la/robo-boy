@@ -16,6 +16,7 @@ export interface RuntimeNode {
   status: RuntimeNodeStatus;
   nativeStatus: string;
   feedback: string;
+  ports?: Record<string, string>;
   lastResult?: 'success' | 'failure';
   lastNativeResult?: string;
 }

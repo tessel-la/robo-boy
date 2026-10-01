@@ -1,5 +1,7 @@
 """Host protocol and real framework tests. Image tests require both runtimes."""
 import os
+import tempfile
+from pathlib import Path
 import time
 import unittest
 from unittest.mock import patch
@@ -176,6 +178,77 @@ class RealRuntimeTests(unittest.TestCase):
                 manager.tick()
                 self.assertEqual(manager.session['state'], 'error')
             finally: manager.close()
+
+    def test_json_ports_subtree_goal_and_runtime_metadata(self):
+        for adapter, _ in self.adapters():
+            with self.subTest(runtime=adapter.id):
+                bridge, events = NullBridge(), []
+                manager = RuntimeManager(events.append, bridge, [adapter])
+                source = xml(adapter.id,
+                    '<Sequence><JsonSet field="name" value="&quot;blue_cube&quot;" result="{detected}"/>'
+                    '<JsonGet json="{detected}" field="name" value="{object}"/>'
+                    '<SubTree ID="Child" object="{object}" action_result="{finished}"/></Sequence>',
+                    '<BehaviorTree ID="Child"><Sequence>'
+                    '<JsonSet field="object_id" value="{object}" result="{goal}"/>'
+                    '<JsonSet json="{goal}" field="duration" value="0.4" result="{goal}"/>'
+                    '<RosAction action_name="/test" action_type="test/action/Test" goal="{goal}" result="{action_result}"/>'
+                    '</Sequence></BehaviorTree>')
+                try:
+                    manager.command(dict(protocolVersion=2, requestId='load', command='load', runtime=adapter.id, xml=source))
+                    self.assertTrue(events[-1]['ok'], events[-1].get('error'))
+                    configured = next(n for n in manager.session['nodes'] if n['type'] == 'JsonGet')
+                    self.assertEqual(configured['ports']['field'], 'name')
+                    self.assertIn('detected', configured['ports']['json'])
+                    manager.command(dict(protocolVersion=2, requestId='start', command='start', sessionId=manager.session['id']))
+                    manager.tick()
+                    self.assertEqual(bridge.actions[0]['goal'], {'object_id': 'blue_cube', 'duration': .4})
+                    bridge.events = [dict(type='result', id=bridge.actions[0]['id'], success=True, result={'success': True})]
+                    manager.tick()
+                    self.assertEqual(manager.session['result'], 'success')
+                    manager.command(dict(protocolVersion=2, requestId='reset', command='reset', sessionId=manager.session['id']))
+                    manager.command(dict(protocolVersion=2, requestId='rerun', command='start', sessionId=manager.session['id']))
+                    manager.tick()
+                    self.assertEqual(bridge.actions[-1]['goal'], {'object_id': 'blue_cube', 'duration': .4})
+                finally: manager.close()
+
+    def test_json_missing_field_is_failure_and_malformed_data_is_error(self):
+        for adapter, _ in self.adapters():
+            cases = [
+                ('<Sequence><JsonSet field="present" value="true" result="{data}"/>'
+                 '<JsonGet json="{data}" field="missing" value="{out}"/></Sequence>', 'failure'),
+                ('<JsonGet json="[]" field="name" value="{out}"/>', 'error'),
+                ('<JsonGet json="bad-json" field="name" value="{out}"/>', 'error'),
+                ('<JsonSet field="name" value="bad-json" result="{out}"/>', 'error'),
+                ('<JsonSet json="[]" field="name" value="true" result="{out}"/>', 'error'),
+            ]
+            for body, expected in cases:
+                with self.subTest(runtime=adapter.id, body=body):
+                    manager = RuntimeManager(lambda e: None, NullBridge(), [adapter])
+                    try:
+                        manager.command(dict(protocolVersion=2, requestId='load', command='load', runtime=adapter.id, xml=xml(adapter.id, body)))
+                        self.assertIsNotNone(manager.session)
+                        manager.command(dict(protocolVersion=2, requestId='start', command='start', sessionId=manager.session['id']))
+                        manager.tick()
+                        if expected == 'error':
+                            self.assertEqual(manager.session['state'], 'error')
+                            self.assertTrue(manager.session['error'])
+                        else: self.assertEqual(manager.session['result'], expected)
+                    finally: manager.close()
+
+    def test_python_native_stdout_cannot_corrupt_worker_protocol(self):
+        for adapter, _ in self.adapters():
+            if adapter.id != 'py_trees': continue
+            with tempfile.TemporaryDirectory() as directory:
+                Path(directory, 'native_stdout_probe.py').write_text("import os\nos.write(1, b'native ROS log\\n')\n")
+                with patch.dict(os.environ, {'ROBOBOY_PY_TREES_MODULES': 'native_stdout_probe',
+                                            'PYTHONPATH': directory + ':' + os.environ.get('PYTHONPATH', '')}):
+                    discovered = adapter.discover()
+                    self.assertTrue(discovered['available'], discovered.get('reason'))
+                    worker, loaded = adapter.open(xml('py_trees', '<Wait seconds="0"/>'))
+                    try:
+                        self.assertIn('native ROS log', loaded['output'])
+                        self.assertEqual(worker.call('tick')['result'], 'success')
+                    finally: worker.close()
 
     def test_native_backend_specific_semantics(self):
         for adapter, _ in self.adapters():

@@ -94,6 +94,10 @@ describe('common ROS runtime client', () => {
     expect(client.getState().runtimes).toHaveLength(2);
     expect(client.getState().runtimes[1].reason).toBe('XML parser missing');
   });
+  it.each(['Wait', [4], null])('rejects malformed discovered node libraries %j', nodes => {
+    event({ runtimes: [{ id: 'btcpp', available: true, nodes }] });
+    expect(client.getState().runtimes).toEqual([]);
+  });
   it.each(treeFormats)('loads $id without changing source and uses correlated lifecycle controls', async format => {
     const promise = client.load({ runtime: format.id, xml: format.template });
     expect(command()).toMatchObject({ command: 'load', runtime: format.id, xml: format.template, mainTreeId: 'Main' });
@@ -109,11 +113,27 @@ describe('common ROS runtime client', () => {
   it('synchronizes live nodes, feedback and terminal results; ignores stale snapshots', () => {
     event({ session });
     event({ type: 'log', session, log: { type: 'feedback', id: 'node', feedback: { progress: 0.5 } } });
-    event({ session: { ...session, state: 'completed', result: 'success', nodes: [{ ...node, status: 'idle', lastResult: 'success', lastNativeResult: 'SUCCESS' }] } });
+    event({
+      session: {
+        ...session,
+        state: 'completed',
+        result: 'success',
+        nodes: [{ ...node, status: 'idle', lastResult: 'success', lastNativeResult: 'SUCCESS' }],
+      },
+    });
     event({ sequence: 1, session });
     expect(client.getState().session?.result).toBe('success');
     expect(client.getState().session?.nodes[0]).toMatchObject({ status: 'idle', lastResult: 'success' });
     expect(client.getState().logs[0].feedback).toEqual({ progress: 0.5 });
+  });
+  it('preserves native port metadata for the node inspector', () => {
+    event({ session: { ...session, nodes: [{ ...node, ports: { goal: '{target}', timeout: '8' } }] } });
+    expect(client.getState().session?.nodes[0].ports).toEqual({ goal: '{target}', timeout: '8' });
+  });
+  it.each([null, [], { goal: 4 }])('rejects malformed port metadata %j without replacing current state', ports => {
+    event({ session });
+    event({ session: { ...session, nodes: [{ ...node, ports }] } });
+    expect(client.getState().session?.nodes[0].ports).toBeUndefined();
   });
   it('merges compact snapshots without losing original XML and clears prior run logs', () => {
     event({ session: { ...session, runId: 'run-one' } });

@@ -518,3 +518,10 @@
     max-height: none;
   }
 }
+
+button.palette-node {
+  width: calc(100% - 16px); box-sizing: border-box; font: inherit; color: var(--text-color); text-align: left; cursor: pointer;
+}
+button.palette-node:disabled { opacity: 0.45; cursor: default; }
+
+.palette-node-registration { cursor: default; }

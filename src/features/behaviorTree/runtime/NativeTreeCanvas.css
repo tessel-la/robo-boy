@@ -1,0 +1,32 @@
+.bt-native-node { width: 180px; }
+.bt-runtime-status {
+  position: absolute; bottom: 12px; left: 64px; right: 180px; z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-color-secondary); pointer-events: none;
+}
+.bt-runtime-status button { pointer-events: auto; }
+.bt-native-error { color: var(--error-color, #dc2626); }
+.bt-native-inspector-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 12px; border-bottom: 1px solid var(--border-color);
+}
+.bt-native-inspector-header button {
+  background: transparent; color: var(--text-color); border: 0; font-size: 20px; padding: 0 5px;
+}
+.bt-native-inspector-body { overflow: auto; padding: 12px; font-size: 12px; }
+.bt-native-inspector-body dt { font-weight: bold; margin-top: 10px; }
+.bt-native-inspector-body dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--text-color-secondary); }
+.bt-native-inspector-body pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.bt-native-inspector-body textarea {
+  width: 100%; min-height: 330px; box-sizing: border-box; resize: vertical;
+  border: 1px solid var(--border-color); background: var(--input-bg, var(--card-bg));
+  color: var(--text-color); font: 12px/1.6 monospace; padding: 8px; border-radius: 6px;
+}
+.bt-engine-select {
+  width: 120px; max-width: 27cqw; min-width: 72px; height: clamp(32px, 7cqw, 36px);
+  padding: 0 8px; border: 1px solid var(--border-color); border-radius: 18px;
+  color: var(--text-color); background: var(--card-bg); font: inherit; font-size: 11px;
+}
+@container (max-width: 640px) {
+  .bt-runtime-status { left: 12px; right: 12px; bottom: 8px; }
+}

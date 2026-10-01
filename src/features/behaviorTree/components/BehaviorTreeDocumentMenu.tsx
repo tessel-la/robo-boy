@@ -19,6 +19,7 @@ interface Props {
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
   onNewXml?: () => void;
+  onEditSource?: () => void;
   onExport: () => void;
   onRename: (name: string) => void;
   children?: React.ReactNode;
@@ -33,6 +34,7 @@ export default function BehaviorTreeDocumentMenu({
   onLoad,
   onNew,
   onNewXml,
+  onEditSource,
   onExport,
   onRename,
   children,
@@ -242,6 +244,7 @@ export default function BehaviorTreeDocumentMenu({
             Import
           </button>
         </fieldset>
+        {onEditSource && <button className="bt-menu-action-btn" onClick={() => { onEditSource(); closeMenu(); }}>XML source</button>}
       </div>
 
       <div className="bt-menu-tree-section">
