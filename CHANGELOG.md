@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.16.0-alpha...robo-boy-v0.17.0-alpha) (2026-10-01)
+
+
+### Features
+
+* frame published robot ports directly in the desktop app ([#209](https://github.com/tessel-la/robo-boy/issues/209)) ([691bd94](https://github.com/tessel-la/robo-boy/commit/691bd9466310bde228e7925b46b9b5e186b04755))
+* lighter camera streams and revalidated mesh cache ([#210](https://github.com/tessel-la/robo-boy/issues/210)) ([eee19bb](https://github.com/tessel-la/robo-boy/commit/eee19bb0744838dbd8292761c8e58f092c54a1b3))
+
+
+### Bug Fixes
+
+* keep workspace window borders inside layout bounds ([#208](https://github.com/tessel-la/robo-boy/issues/208)) ([3bda90e](https://github.com/tessel-la/robo-boy/commit/3bda90eedf9f04eed222f8007f6721536ad2115e))
+
 ## [0.16.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.15.0-alpha...robo-boy-v0.16.0-alpha) (2026-09-30)
 
 
