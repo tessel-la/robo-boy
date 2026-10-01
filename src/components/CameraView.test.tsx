@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import CameraView from './CameraView';
+import { clearCameraSourceSizes } from '../utils/cameraStreamQuality';
 
 // Mock ROSLIB.Ros
 const createMockRos = (isConnected: boolean = true) => ({
@@ -16,10 +17,13 @@ describe('CameraView', () => {
     cameraTopic: '/camera/image_raw',
     availableTopics: ['/camera/image_raw', '/camera/depth'],
     onTopicChange: vi.fn(),
+    // These cases check the URL web_video_server is given as-is; the presets are covered below.
+    streamQuality: 'original' as const,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearCameraSourceSizes();
   });
 
   describe('rendering', () => {
@@ -54,13 +58,13 @@ describe('CameraView', () => {
     it('should render topic selector when topics available', () => {
       render(<CameraView {...defaultProps} />);
 
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByLabelText('Camera topic')).toBeInTheDocument();
     });
 
     it('should show all available topics in dropdown', () => {
       render(<CameraView {...defaultProps} />);
 
-      const options = screen.getAllByRole('option');
+      const options = screen.getByLabelText('Camera topic').querySelectorAll('option');
       expect(options).toHaveLength(2);
       expect(options[0]).toHaveValue('/camera/image_raw');
       expect(options[1]).toHaveValue('/camera/depth');
@@ -69,7 +73,7 @@ describe('CameraView', () => {
     it('should have current topic selected', () => {
       render(<CameraView {...defaultProps} />);
 
-      const select = screen.getByRole('combobox');
+      const select = screen.getByLabelText('Camera topic');
       expect(select).toHaveValue('/camera/image_raw');
     });
 
@@ -77,7 +81,7 @@ describe('CameraView', () => {
       const mockOnTopicChange = vi.fn();
       render(<CameraView {...defaultProps} onTopicChange={mockOnTopicChange} />);
 
-      const select = screen.getByRole('combobox');
+      const select = screen.getByLabelText('Camera topic');
       fireEvent.change(select, { target: { value: '/camera/depth' } });
 
       expect(mockOnTopicChange).toHaveBeenCalledWith('/camera/depth');
@@ -172,6 +176,125 @@ describe('CameraView', () => {
 
       const img = screen.getByRole('img');
       expect(img).toHaveAttribute('alt', 'Stream for /camera/image_raw');
+    });
+  });
+
+  describe('stream quality', () => {
+    let source: { width: number; height: number } | null;
+    let probes: string[];
+    let panelSize: { width: number; height: number } | null;
+
+    beforeEach(() => {
+      source = { width: 1920, height: 1080 };
+      probes = [];
+      panelSize = null;
+      // The snapshot that reveals the camera's frame size.
+      vi.stubGlobal(
+        'Image',
+        class {
+          naturalWidth = 0;
+          naturalHeight = 0;
+          onload: (() => void) | null = null;
+          onerror: (() => void) | null = null;
+          removeAttribute() {}
+          set src(value: string) {
+            probes.push(value);
+            setTimeout(() => {
+              if (!source) return this.onerror?.();
+              this.naturalWidth = source.width;
+              this.naturalHeight = source.height;
+              this.onload?.();
+            });
+          }
+        }
+      );
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(private readonly callback: ResizeObserverCallback) {}
+          observe() {
+            if (panelSize) this.callback([{ contentRect: panelSize } as ResizeObserverEntry], this as never);
+          }
+          disconnect() {}
+        }
+      );
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    const props = { ...defaultProps, streamQuality: undefined };
+
+    it('offers the presets and starts at Auto', () => {
+      render(<CameraView {...props} />);
+
+      const select = screen.getByLabelText('Stream quality');
+      expect(select).toHaveValue('auto');
+      expect([...select.querySelectorAll('option')].map(option => option.value)).toEqual([
+        'auto',
+        'low',
+        'medium',
+        'high',
+        'original',
+      ]);
+    });
+
+    it('sizes an Auto stream to the panel, in the camera aspect ratio', async () => {
+      panelSize = { width: 600, height: 400 };
+      render(<CameraView {...props} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/video_stream/stream?topic=/camera/image_raw&type=mjpeg&width=640&height=360&quality=60'
+        )
+      );
+      expect(probes).toEqual(['/video_stream/snapshot?topic=/camera/image_raw&quality=20']);
+    });
+
+    it('waits for the frame size instead of streaming a stretched picture', () => {
+      render(<CameraView {...props} streamQuality="low" onStreamQualityChange={vi.fn()} />);
+
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      expect(screen.getByText('Sizing stream...')).toBeInTheDocument();
+    });
+
+    it('caps a preset at its width and never upscales a smaller camera', async () => {
+      const { unmount } = render(<CameraView {...props} streamQuality="low" onStreamQualityChange={vi.fn()} />);
+      await waitFor(() =>
+        expect(screen.getByRole('img').getAttribute('src')).toMatch(/&width=640&height=360&quality=40$/)
+      );
+      unmount();
+
+      clearCameraSourceSizes();
+      source = { width: 640, height: 480 };
+      render(<CameraView {...props} streamQuality="high" onStreamQualityChange={vi.fn()} />);
+      await waitFor(() =>
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/video_stream/stream?topic=/camera/image_raw&type=mjpeg&quality=80'
+        )
+      );
+    });
+
+    it('still lowers the JPEG quality when the frame size cannot be read', async () => {
+      source = null;
+      render(<CameraView {...props} streamQuality="medium" onStreamQualityChange={vi.fn()} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/video_stream/stream?topic=/camera/image_raw&type=mjpeg&quality=60'
+        )
+      );
+    });
+
+    it('reports a new preset to its owner', () => {
+      const onStreamQualityChange = vi.fn();
+      render(<CameraView {...props} streamQuality="auto" onStreamQualityChange={onStreamQualityChange} />);
+
+      fireEvent.change(screen.getByLabelText('Stream quality'), { target: { value: 'original' } });
+
+      expect(onStreamQualityChange).toHaveBeenCalledWith('original');
     });
   });
 });

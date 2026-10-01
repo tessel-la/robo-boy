@@ -68,6 +68,10 @@
   /* Semi-transparent background */
   padding: 5px;
   border-radius: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
 }
 
 .camera-topic-selector.overlay select {
@@ -79,6 +83,9 @@
   border-radius: 3px;
   max-width: 200px;
   /* Limit width */
+  /* The app-wide form style stretches selects and spaces them for a form; these sit side by side. */
+  width: auto;
+  margin: 0;
 }
 
 :root[data-runtime='tauri'] .camera-topic-selector.overlay select option {

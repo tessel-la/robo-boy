@@ -51,6 +51,13 @@ unrelated absolute URL keep using normal browser fetching and need that server's
 The web app continues to use `/mesh_resources` through Caddy, or ordinary CORS when configured to
 connect directly. Other services such as Ollama retain their existing origin requirements.
 
+Meshes are cached but checked on every load. The Electron transport asks the server with
+`cache: 'no-cache'`, and Caddy marks `/mesh_resources` responses `Cache-Control: no-cache`, so an
+unchanged mesh costs a 304 and a mesh replaced on the robot (another simulation, a new cell) is
+downloaded the next time the 3D panel loads. This needs a mesh server that sends `ETag` or
+`Last-Modified` and answers conditional requests; one that sends neither is downloaded in full each
+time, as before. The Tauri transport does not cache.
+
 If TF frames appear but the robot mesh does not, check asset requests as well as `/robot_description`:
 a valid URDF can arrive while every OBJ/STL/DAE request fails. In older desktop builds, a missing
 `Access-Control-Allow-Origin` response header causes exactly this symptom.
@@ -109,7 +116,24 @@ Tauri development and production both execute Vite's frontend entry as an ES mod
 
 The Linux desktop shell uses WebKitGTK. Robo-Boy uses WebKit's accelerated DMABUF renderer by default so desktop rendering stays as close as possible to the browser.
 
-The connected workspace is loaded on demand. Inactive mobile camera and 3D panels release their stream and renderer, and inactive TF trees unsubscribe until shown again. High-rate TF visualization traffic uses CBOR with a bounded queue and update rate so stale transforms cannot build a main-thread backlog.
+The connected workspace is loaded on demand. Inactive mobile camera and 3D panels release their stream and renderer, and inactive TF trees unsubscribe until shown again.
+
+A camera panel asks web_video_server for a smaller JPEG stream through its **Stream** preset, which
+is saved with the tile. Full-size MJPEG is 20–80 Mbit/s for a 1080p camera, more than most remote
+links carry, so frames queue on the robot and the picture lags by seconds.
+
+| Preset   | Frame width                                              | JPEG quality      |
+| -------- | -------------------------------------------------------- | ----------------- |
+| Auto     | Fits the panel and screen density, up to 1920 (default)  | 60                |
+| Low      | Up to 640                                                | 40                |
+| Medium   | Up to 960                                                | 60                |
+| High     | Up to 1920                                               | 80                |
+| Original | The camera's own                                         | Server default    |
+
+The panel reads the camera's frame size once per topic from a single low-quality `/snapshot`, because
+web_video_server stretches the frame when given only a width. It never asks for more pixels than the
+camera has, and Auto snaps to a few fixed widths so resizing a tile restarts the stream only rarely.
+On a 1080p camera, Low is roughly a tenth of Original's bandwidth. High-rate TF visualization traffic uses CBOR with a bounded queue and update rate so stale transforms cannot build a main-thread backlog.
 
 On machines where the GPU stack opens to a blank window or crashes, use the compatibility renderer:
 

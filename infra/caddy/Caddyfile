@@ -63,8 +63,13 @@
 
 	# Proxy mesh resources to the configured backend. The backend owns the
 	# active robot assets; Robo Boy remains independent of robot and simulator.
+	# Browsers may cache a mesh but must ask the backend before reusing it: an unchanged mesh
+	# costs a 304, and one replaced by a new simulation or cell is fetched again at once. Without
+	# this, a backend sending only Last-Modified lets the browser reuse old meshes for days.
 	handle_path /mesh_resources/* {
-		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000} {
+			header_down Cache-Control "no-cache"
+		}
 	}
 
 	# Recordings on the ROS host, served read-only by its recorder: a listing and the MCAP files,
@@ -182,9 +187,11 @@
 		}
 	}
 
-	# Proxy mesh resources to the configured robot backend.
+	# Proxy mesh resources to the configured robot backend; revalidated, see the HTTPS block.
 	handle_path /mesh_resources/* {
-		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000}
+		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000} {
+			header_down Cache-Control "no-cache"
+		}
 	}
 
 	# Recordings on the ROS host; see the HTTPS block.
