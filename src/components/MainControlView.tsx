@@ -973,6 +973,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         webrtcHls: runtimeEndpoints.webrtcHlsBaseUrl,
       },
       embedBaseUrl: runtimeEndpoints.embedBaseUrl,
+      embedDirectPorts: runtimeEndpoints.embedDirectPorts,
     }),
     [runtimeEndpoints]
   );
