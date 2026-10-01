@@ -3,6 +3,7 @@ import { runSerializedRosapi } from '../../utils/rosapiQueue';
 import { boundedPreview, decodeResources } from './model';
 import type { ActionGoal, Diagnostic, InspectionDemand, InspectionSnapshot, Metric, Resource } from './types';
 import type { BagInfo } from '../recordReplay/types';
+import { createUuid } from '../../utils/uuid';
 
 const PREFIX = '/roboboy/inspection';
 const PROBE_LIMIT = 32;
@@ -146,7 +147,7 @@ export class InspectionSession {
   }
   private start() {
     ++this.generation;
-    this.client = crypto.randomUUID();
+    this.client = createUuid();
     this.abort = new AbortController();
     this.set({ ...emptySnapshot(), mode: this.replay ? 'recorded' : 'browser', loading: true });
     this.lastHost = 0;
