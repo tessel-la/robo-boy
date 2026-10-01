@@ -37,6 +37,8 @@ describe('native robot resource requests', () => {
         method: 'GET',
         credentials: 'omit',
         redirect: 'manual',
+        // Cached, but revalidated on every load so a mesh replaced on the robot is never stale.
+        cache: 'no-cache',
       })
     );
   });

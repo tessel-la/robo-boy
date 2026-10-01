@@ -31,6 +31,11 @@ export async function fetchRobotResource(
         method: 'GET',
         credentials: 'omit',
         redirect: 'manual',
+        // Keep meshes in the session's HTTP cache, but ask the server every time: an unchanged
+        // mesh comes back as a few-byte 304, and one replaced on the robot (a different
+        // simulation, a new cell) is downloaded at once. The default mode would instead trust a
+        // server that sends Last-Modified without Cache-Control for days and show stale meshes.
+        cache: 'no-cache',
         signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
       });
       if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.has('location')) {
