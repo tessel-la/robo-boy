@@ -6,6 +6,7 @@ export interface ContainedSelectOption {
   value: string;
   label: string;
   group?: string;
+  disabled?: boolean;
 }
 
 interface Props {
@@ -73,6 +74,7 @@ const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange,
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const selected = options.find(option => option.value === value);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   const grouped = useMemo(() => {
     const groups = new Map<string, ContainedSelectOption[]>();
     options.forEach(option => {
@@ -127,9 +129,9 @@ const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange,
       <select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
         {grouped.map(([group, groupOptions]) => group ? (
           <optgroup key={group} label={group}>
-            {groupOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {groupOptions.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
           </optgroup>
-        ) : groupOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>))}
+        ) : groupOptions.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>))}
       </select>
     );
   }
@@ -163,6 +165,7 @@ const ContainedSelect: React.FC<Props> = ({ ariaLabel, value, options, onChange,
                 <button
                   type="button"
                   role="option"
+                  disabled={disabled || option.disabled}
                   aria-selected={option.value === value}
                   className={option.value === value ? 'selected' : ''}
                   key={option.value}

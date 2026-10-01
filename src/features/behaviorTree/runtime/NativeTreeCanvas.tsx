@@ -18,6 +18,7 @@ import type { SourceNode } from './projection';
 import type { RuntimeState } from './types';
 import { arrangeBehaviorTree } from '../layoutUtils';
 import { ORDERED_EDGE_STYLE } from '../orderUtils';
+import SubtreeParentButton, { useSubtreeReturnAnchor } from '../components/SubtreeParentButton';
 import '../components/nodes/NodeStyles.css';
 import '../components/execution/ExecutionDetails.css';
 import './NativeTreeCanvas.css';
@@ -247,6 +248,8 @@ function NativeCanvasContent({
     [controller.nodes]
   );
   const [nodes, setNodes, onNodesChange] = useNodesState<SourceNode>([]);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const parentAnchor = useSubtreeReturnAnchor(canvasRef, !!controller.viewTreeId, controller.viewKey, nodes);
   useEffect(() => {
     setNodes(previous => {
       const existing = new Map(previous.map(node => [node.id, node]));
@@ -271,6 +274,7 @@ function NativeCanvasContent({
   const nodeLogs = selected?.runtimeId ? state.logs.filter(log => log.id === selected.runtimeId) : [];
   return (
     <div
+      ref={canvasRef}
       className="bt-canvas"
       data-testid="bt-canvas"
       onDragOver={event => {
@@ -369,14 +373,7 @@ function NativeCanvasContent({
         />
         <MiniMap zoomable pannable style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }} />
       </ReactFlow>
-      {controller.viewTreeId && (
-        <nav className="bt-native-navigation" aria-label="Tree navigation">
-          <button className="bt-menu-action-btn" onClick={controller.parentView}>
-            Parent tree
-          </button>
-          <span>{controller.viewTreeId}</span>
-        </nav>
-      )}
+      {parentAnchor && <SubtreeParentButton anchor={parentAnchor} onNavigate={controller.parentView} />}
       {controller.error && (
         <div className="bt-native-alert" role="alert">
           {controller.error}

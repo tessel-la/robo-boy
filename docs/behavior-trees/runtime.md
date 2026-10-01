@@ -21,7 +21,7 @@ preserves source, while browser saves also retain the chosen runtime and main tr
    registered nodes, saved documents and subtrees in the current XML. Click
    **View** next to a subtree to inspect its definition without changing the executable main tree. Tap the subtree entry to append an instance, or drag it onto the canvas and connect it. During execution,
    the main graph stays collapsed and subtree nodes show their live states. Double-click a
-   subtree node to open that exact instance and its running leaves. **Parent tree** returns
+   subtree node to open that exact instance and its running leaves. **Parent** returns
    one level; repeated and nested subtree instances keep separate native state bindings.
    Loading on the host, reset and rerun preserve the current view. Manual zoom/pan turns off **Follow**;
    incoming ticks do not fit or rearrange the canvas.
@@ -54,7 +54,7 @@ The menu's **Execution engines · ROS host** has separate switches for
 BehaviorTree.CPP and py_trees. Both are enabled initially. Disabling an engine
 halts its tree, requests cancellation of its ROS goals and closes its worker;
 the engine disappears from the toolbar selector and its palette entries are disabled. The open document is preserved. Re-enable it and **Run** to reset
-and rerun. The execution pill beside Run shows Ready, Running, Succeeded, Failed or a connection/engine issue; a hover explains the state. Subtree navigation sits above the canvas, and host-tree recovery is in the menu. These settings belong to the connected host and last until its
+and rerun. The execution pill beside Run shows Ready, Running, Succeeded, Failed or a connection/engine issue; a hover explains the state. All formats share the floating **Parent** control beside the graph. The menu's **Tree to run** picker uses the same contained mobile selection UI as other editor fields. Browsing subtrees keeps that execution choice. Host-tree recovery is in the menu. These settings belong to the connected host and last until its
 executor restarts. **Discover engines** refreshes availability manually.
 
 ## Installation and ROS interfaces
@@ -183,12 +183,12 @@ example pairs, explicit subtree ports, JSON goal construction, recovery,
 reset/rerun and C-level stdout isolation. Both pairs execute and rerun through
 real ROS actions in the deterministic Genesis mock environment.
 
-All **260 frontend Behavior Tree tests** and **35 Chromium workflows** pass across JSON editor regressions, shared
+All **260 frontend Behavior Tree tests** and **37 Chromium workflows** pass across JSON editor regressions, shared
 repository loading and ten native runtime/example workflows. Repository tests
 verify the shell stays mounted, source survives engine switching, saved engine
 metadata persists, and mobile inspectors/menu fit the viewport. Native tests
 verify independent engine switches, cancellation, reconnect, node details and
-four richer action trees. Authoring tests cover pointer-based dragging/connections, saved disconnected drafts, undo/redo, atomic library imports with explicit prefixes, native ports and child priority, validation/execution, reset/rerun, and XML export/reimport for both engines. Screenshots confirm shared toolbar/canvas styling.
+four richer action trees. Native touch tests cover nested Parent navigation, responsive placement and main-tree selection within the mobile viewport. Authoring tests cover pointer-based dragging/connections, saved disconnected drafts, undo/redo, atomic library imports with explicit prefixes, native ports and child priority, validation/execution, reset/rerun, and XML export/reimport for both engines. Screenshots confirm shared toolbar/canvas styling.
 
 The frontend suite, type check, lint and production build pass. Genesis's
 **22 tests** pass. The connected live ROS executor was discovered before its

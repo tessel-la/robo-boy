@@ -195,7 +195,7 @@ leaves in both workers connect ROS JSON results to subsequent action goals.
 Python redirects the process stdout descriptor to stderr and keeps IPC on a
 dedicated duplicate descriptor so C-level ROS logs cannot corrupt messages.
 
-Folder imports use local File APIs and list filenames with their relative directories and format. GitHub fetching is removed. Opening replaces the document; Add imports XML definitions for composition. Runtime status is a human-readable pill beside Run. Run loads automatically, Check tree validates without execution, and opening a different host tree is an explicit menu action. The canvas has subtree navigation above the graph and error messages, without host loading/recovery controls at the bottom.
+Folder imports use local File APIs and list filenames with their relative directories and format. GitHub fetching is removed. Opening replaces the document; Add imports XML definitions for composition. Runtime status is a human-readable pill beside Run. Run loads automatically, Check tree validates without execution, and opening a different host tree is an explicit menu action. JSON and native canvases share the same floating Parent component and graph-relative placement, including updates after painted pan/zoom and resizing. Main-tree selection reuses the editor's contained mobile picker, preserving the separation between browsing a subtree and selecting the execution entry point. The canvas retains error messages without host loading/recovery controls at the bottom.
 
 ### Stable native canvas projection
 

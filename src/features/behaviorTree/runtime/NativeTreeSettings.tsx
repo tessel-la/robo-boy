@@ -1,7 +1,9 @@
-import React, { useId } from 'react';
+import React from 'react';
+import ContainedSelect from '../components/ContainedSelect';
 import type { NativeTreeController } from './useNativeTreeController';
 import type { RuntimeState } from './types';
 import { treeFormats } from './xml';
+import './NativeTreeSettings.css';
 
 export function NativeTreeStatus({ controller, state }: { controller: NativeTreeController; state: RuntimeState }) {
   const format = treeFormats.find(format => format.id === controller.document?.runtime);
@@ -56,31 +58,25 @@ export function NativeTreeStatus({ controller, state }: { controller: NativeTree
 }
 
 export default function NativeTreeSettings({ controller }: { controller: NativeTreeController }) {
-  const mainTreeId = useId();
   return (
-    <div className="bt-menu-section">
-      <label className="bt-menu-label" htmlFor={mainTreeId}>
-        Tree to run
-      </label>
-      <select
-        id={mainTreeId}
-        aria-label="Main XML tree"
-        value={controller.document?.mainTreeId || controller.preview.mainTreeId || ''}
-        disabled={controller.locked}
-        onChange={event => controller.changeDocument({ mainTreeId: event.target.value })}
-      >
-        <option value="" disabled>
-          Choose a tree
-        </option>
-        {controller.preview.trees.map(tree => (
-          <option key={tree.getAttribute('ID')} value={tree.getAttribute('ID')!}>
-            {tree.getAttribute('ID')}
-          </option>
-        ))}
-      </select>
-      <p className="bt-menu-hint">
-        Run automatically loads this tree on ROS and starts it. Viewing a subtree does not change the tree to run.
-      </p>
+    <div className="bt-menu-section bt-native-tree-settings">
+      <div className="bt-main-tree-field" role="group" aria-label="Execution tree">
+        <span className="bt-menu-label">Tree to run</span>
+        <ContainedSelect
+          ariaLabel="Main XML tree"
+          value={controller.document?.mainTreeId || controller.preview.mainTreeId || ''}
+          options={[
+            { value: '', label: 'Choose a tree', disabled: true },
+            ...controller.preview.trees.map(tree => ({
+              value: tree.getAttribute('ID')!,
+              label: tree.getAttribute('ID')!,
+            })),
+          ]}
+          disabled={controller.locked || !controller.preview.trees.length}
+          onChange={mainTreeId => controller.changeDocument({ mainTreeId })}
+        />
+      </div>
+      <p className="bt-menu-hint">Run loads and starts this tree on ROS. Browsing subtrees keeps this choice.</p>
       <button
         className="bt-menu-action-btn"
         disabled={controller.locked || !controller.ready || !!controller.preview.error}
@@ -88,7 +84,7 @@ export default function NativeTreeSettings({ controller }: { controller: NativeT
       >
         Check tree
       </button>
-      <p className="bt-menu-hint">Check the tree on ROS without starting execution.</p>
+      <p className="bt-menu-hint">Validate on ROS without running.</p>
       {controller.notice && (
         <p className="bt-menu-hint" role="status">
           {controller.notice}

@@ -4,7 +4,8 @@
 .contained-select-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--primary-color) 25%, transparent); border-color: var(--primary-color); }
 .contained-select-popover { position: fixed; z-index: 10000; overflow-y: auto; overscroll-behavior: contain; padding: 5px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-bg); color: var(--text-color); box-shadow: 0 10px 32px rgba(0, 0, 0, .24); scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
 .contained-select-popover button { width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font-size: 12px; text-align: left; }
-.contained-select-popover button:hover, .contained-select-popover button.selected { background: color-mix(in srgb, var(--primary-color) 12%, transparent); color: var(--primary-color); }
+.contained-select-popover button:hover:not(:disabled), .contained-select-popover button.selected { background: color-mix(in srgb, var(--primary-color) 12%, transparent); color: var(--primary-color); }
+.contained-select-popover button:disabled { opacity: .5; cursor: default; }
 .contained-select-group { padding: 8px 9px 4px; color: var(--text-color-secondary); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .contained-select-popover::-webkit-scrollbar { width: 5px; }
 .contained-select-popover::-webkit-scrollbar-track { background: transparent; }

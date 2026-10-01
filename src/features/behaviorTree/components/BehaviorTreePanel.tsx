@@ -33,7 +33,6 @@ import {
   FaEdit,
   FaExpandArrowsAlt,
   FaFolderOpen,
-  FaLevelUpAlt,
   FaObjectGroup,
   FaSave,
   FaTrash,
@@ -43,6 +42,7 @@ import { nodeTypes } from './nodes/nodeTypes';
 import NodePalette from './NodePalette';
 import NodeSearch from './NodeSearch';
 import BehaviorTreeToolbar from './BehaviorTreeToolbar';
+import SubtreeParentButton, { useSubtreeReturnAnchor } from './SubtreeParentButton';
 import type { BehaviorTreeInteractionMode } from './BehaviorTreeToolbar';
 import NodeNameEditor from './NodeNameEditor';
 import ActionParameterEditor from './ActionParameterEditor';
@@ -592,7 +592,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [editingConfigNodeId, setEditingConfigNodeId] = useState<string | null>(null);
   const [liveBlackboard, setLiveBlackboard] = useState<Record<string, unknown>>({});
   const [orderingParentId, setOrderingParentId] = useState<string | null>(null);
-  const [subtreeReturnAnchor, setSubtreeReturnAnchor] = useState<{ x: number; y: number } | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const [executionSnapshot, setExecutionSnapshot] = useState<BehaviorTreeExecutionSnapshot>({
     isExecuting: false,
@@ -628,7 +627,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const boxSelectionEndPendingRef = useRef(false);
   const customBoxSelectionGestureRef = useRef<CustomBoxSelectionGesture | null>(null);
   const customBoxSelectionRectRef = useRef<DOMRect | null>(null);
-  const subtreeReturnAnchorFrameRef = useRef<number | null>(null);
   const manualEdgeSelectionRef = useRef<ManualEdgeSelection | null>(null);
   const nodeMultiSelectSnapshotRef = useRef<Set<string> | null>(null);
   const isFollowModeRef = useRef(false);
@@ -2345,9 +2343,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       boxSelectionEndedAtRef.current = 0;
       boxSelectionPointerDownRef.current = false;
       boxSelectionEndPendingRef.current = false;
-      if (subtreeReturnAnchorFrameRef.current !== null) {
-        window.cancelAnimationFrame(subtreeReturnAnchorFrameRef.current);
-      }
       if (followExecutionFrameRef.current !== null) {
         window.cancelAnimationFrame(followExecutionFrameRef.current);
       }
@@ -2641,66 +2636,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     window.requestAnimationFrame(() => centerTreeInView());
   }, [addNodeAtPosition, agentPreviewTree, centerTreeInView, clearAgentPreview, persistEditorTree, screenToFlowPosition]);
 
-  const updateSubtreeReturnAnchor = useCallback(() => {
-    if (treePathRef.current.length === 0) {
-      setSubtreeReturnAnchor(null);
-      return;
-    }
-
-    const canvas = reactFlowWrapper.current;
-    if (!canvas) return;
-
-    const canvasRect = canvas.getBoundingClientRect();
-    const nodeElements = Array.from(canvas.querySelectorAll<HTMLElement>('.react-flow__node'));
-
-    if (nodeElements.length === 0) {
-      setSubtreeReturnAnchor({ x: 16, y: 64 });
-      return;
-    }
-
-    const bounds = nodeElements.reduce(
-      (acc, element) => {
-        const rect = element.getBoundingClientRect();
-        if (rect.width <= 0 && rect.height <= 0) return acc;
-        return {
-          left: Math.min(acc.left, rect.left),
-          top: Math.min(acc.top, rect.top),
-          right: Math.max(acc.right, rect.right),
-          bottom: Math.max(acc.bottom, rect.bottom),
-        };
-      },
-      { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
-    );
-
-    if (!Number.isFinite(bounds.left)) {
-      setSubtreeReturnAnchor({ x: 16, y: 64 });
-      return;
-    }
-
-    const x = Math.min(Math.max(bounds.left - canvasRect.left - 2, 8), Math.max(canvasRect.width - 132, 8));
-    const aboveY = bounds.top - canvasRect.top - 46;
-    const y =
-      aboveY >= 8
-        ? aboveY
-        : Math.min(Math.max(bounds.bottom - canvasRect.top + 10, 8), Math.max(canvasRect.height - 40, 8));
-
-    setSubtreeReturnAnchor({ x, y });
-  }, []);
-
-  const scheduleSubtreeReturnAnchorUpdate = useCallback(() => {
-    if (subtreeReturnAnchorFrameRef.current !== null) {
-      window.cancelAnimationFrame(subtreeReturnAnchorFrameRef.current);
-    }
-
-    subtreeReturnAnchorFrameRef.current = window.requestAnimationFrame(() => {
-      subtreeReturnAnchorFrameRef.current = null;
-      updateSubtreeReturnAnchor();
-    });
-  }, [updateSubtreeReturnAnchor]);
-
-  useEffect(() => {
-    scheduleSubtreeReturnAnchorUpdate();
-  }, [nodes, scheduleSubtreeReturnAnchorUpdate, treePath]);
+  const subtreeReturnAnchor = useSubtreeReturnAnchor(
+    reactFlowWrapper, treePath.length > 0, treePath, nodes
+  );
 
   const orderingParent = useMemo(() => {
     const parent = behaviorNodes.find((node) => node.id === orderingParentId);
@@ -3487,7 +3425,6 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             onSelectionChange={onSelectionChange}
             onSelectionStart={handleSelectionStart}
             onSelectionEnd={handleSelectionEnd}
-            onMove={scheduleSubtreeReturnAnchorUpdate}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
             selectionMode={SelectionMode.Partial}
@@ -3535,23 +3472,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             />
           )}
           <NodeSearch nodes={behaviorNodes} onSelectNode={handleSearchSelect} />
-          {treePath.length > 0 && subtreeReturnAnchor && (
-            <button
-              type="button"
-              className="bt-subtree-parent-action"
-              style={{ left: subtreeReturnAnchor.x, top: subtreeReturnAnchor.y }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleNavigateUp();
-              }}
-              title="Back to parent tree"
-              aria-label="Back to parent tree"
-              data-testid="bt-subtree-parent"
-            >
-              <FaLevelUpAlt aria-hidden="true" />
-              <span>Parent</span>
-            </button>
+          {subtreeReturnAnchor && (
+            <SubtreeParentButton anchor={subtreeReturnAnchor} onNavigate={handleNavigateUp} />
           )}
           {!isExecuting &&
             selectionActionAnchor &&

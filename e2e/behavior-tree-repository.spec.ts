@@ -115,7 +115,7 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
       await page.getByRole('button', { name: 'View subtree Pick', exact: true }).click();
       await page.getByRole('button', { name: 'Close node palette', exact: true }).first().click();
       await expect(page.locator('.bt-native-node').filter({ hasText: 'Bind approach object' })).toBeVisible();
-      await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
     } else await expect(engineButton('json')).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('bt-menu-button').click();
     await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -195,4 +195,89 @@ test('folder imports have clear names and paths without GitHub controls', async 
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Load on host', exact: true })).toHaveCount(0);
   await expect(page.locator('.bt-runtime-status')).toHaveCount(0);
+});
+
+test.describe('native mobile navigation and settings', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  for (const runtime of ['btcpp', 'py_trees'] as const) {
+    test(`${runtime}: uses the shared Parent control and a contained main-tree picker`, async ({ page }, info) => {
+      await openPanel(page);
+      const source = `<root ${runtime === 'btcpp' ? 'BTCPP_format="4"' : ''} main_tree_to_execute="Main">
+        <BehaviorTree ID="Main"><Sequence ${runtime === 'py_trees' ? 'memory="true"' : ''}><SubTree ID="Branch" name="Open branch"/><Wait seconds="0.2"/></Sequence></BehaviorTree>
+        <BehaviorTree ID="Branch"><Sequence ${runtime === 'py_trees' ? 'memory="true"' : ''}><SubTree ID="Leaf" name="Open leaf"/></Sequence></BehaviorTree>
+        <BehaviorTree ID="Leaf"><Wait name="Leaf wait" seconds="0.2"/></BehaviorTree>
+      </root>`;
+      await page.getByTestId('bt-menu-button').tap();
+      await page.locator('input[type="file"][accept=".json,.xml"]').setInputFiles({
+        name: `${runtime}.xml`,
+        mimeType: 'application/xml',
+        buffer: Buffer.from(source),
+      });
+      const openSubtree = async (name: string) => {
+        const node = page.locator('.bt-native-node').filter({ hasText: name });
+        await node.tap();
+        await node.tap();
+      };
+      await openSubtree('Open branch');
+      const parent = page.getByTestId('bt-subtree-parent');
+      await expect(parent).toHaveText('Parent');
+      await expect(parent).toHaveAttribute('aria-label', 'Back to parent tree');
+      await expect(parent).toHaveClass('bt-subtree-parent-action');
+      await openSubtree('Open leaf');
+      await expect(page.locator('.bt-native-node')).toHaveCount(1);
+      await expect(parent).toBeVisible();
+      const canvas = page.getByTestId('bt-canvas');
+      const assertContained = async () => {
+        await expect
+          .poll(async () => {
+            const bounds = (await canvas.boundingBox())!;
+            const button = (await parent.boundingBox())!;
+            const node = (await page.locator('.bt-native-node').boundingBox())!;
+            return (
+              button.x >= bounds.x &&
+              button.y >= bounds.y &&
+              button.x + button.width <= bounds.x + bounds.width &&
+              button.y + button.height <= bounds.y + bounds.height &&
+              (button.y + button.height <= node.y || button.y >= node.y + node.height)
+            );
+          })
+          .toBe(true);
+      };
+      await assertContained();
+      await page.setViewportSize({ width: 520, height: 740 });
+      // Let the panel's height transition and the resulting graph fit paint
+      // before checking/capturing the resized navigation control.
+      await canvas.evaluate(async element => {
+        await Promise.all(element.getAnimations().map(animation => animation.finished));
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      });
+      await assertContained();
+      await page.screenshot({ path: info.outputPath('native-subtree-mobile.png'), animations: 'disabled' });
+      await parent.tap();
+      await expect(page.locator('.bt-native-node').filter({ hasText: 'Open leaf' })).toHaveCount(1);
+      await parent.tap();
+      await expect(parent).toHaveCount(0);
+      await expect(page.locator('.bt-native-node').filter({ hasText: 'Open branch' })).toHaveCount(1);
+      await page.getByTestId('bt-menu-button').tap();
+      const picker = page.getByRole('button', { name: 'Main XML tree', exact: true });
+      await picker.scrollIntoViewIfNeeded();
+      await expect(picker).toHaveText('Main');
+      await expect
+        .poll(() => picker.evaluate(element => element.getBoundingClientRect().height))
+        .toBeGreaterThanOrEqual(44);
+      await picker.tap();
+      const options = page.getByRole('listbox', { name: 'Main XML tree options' });
+      await expect(options.getByRole('option', { name: 'Choose a tree' })).toBeDisabled();
+      const box = (await options.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(520);
+      expect(box.y + box.height).toBeLessThanOrEqual(740);
+      await page.screenshot({ path: info.outputPath('native-main-tree-picker.png'), animations: 'disabled' });
+      await options.getByRole('option', { name: 'Branch', exact: true }).tap();
+      await expect(picker).toHaveText('Branch');
+      await page.getByRole('button', { name: 'Close menu', exact: true }).tap();
+      await expect(page.locator('.bt-native-node')).toHaveCount(2);
+      await expect(parent).toHaveCount(0);
+    });
+  }
 });

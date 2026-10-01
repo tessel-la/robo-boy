@@ -160,7 +160,7 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await expect(task).toHaveClass(/status-success/);
       await task.dblclick();
       await expect(page.locator('.bt-native-node').filter({ hasText: 'WaitPhase' })).toHaveClass(/status-success/);
-      await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
       await menuAction(page, 'Reset');
       await page.getByRole('button', { name: 'Run', exact: true }).click();
       await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded');
@@ -208,9 +208,9 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await expect(nested).toHaveClass(/status-running/);
       await nested.dblclick();
       await expect(page.locator('.bt-native-node').filter({ hasText: 'Live leaf' })).toHaveClass(/status-running/);
-      await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
       await expect(nested).toBeVisible();
-      await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
       await expect(second).toHaveClass(/status-running/, { timeout: 10000 });
       await expect(first).toHaveClass(/status-success/);
       await second.dblclick();
@@ -230,7 +230,7 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await page.getByRole('button', { name: 'Run', exact: true }).click();
       // Rerun keeps this second instance open; it remains idle while the first runs.
       await expect(leaf).toHaveClass(/status-idle/);
-      await expect(page.getByRole('button', { name: 'Parent tree', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Back to parent tree', exact: true })).toBeVisible();
       await menuAction(page, 'Cancel');
     });
     test(`${runtime}: discover, load, run, node details, cancel, reset and rerun in the shared panel`, async ({
@@ -387,20 +387,20 @@ test.describe('native runtimes against Genesis ROS host', () => {
           '{object}'
         );
         await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
-        await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+        await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
         await page.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(page.locator('.bt-native-node.status-running').first()).toBeVisible();
         await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded', { timeout: 40000 });
         // Execution never replaces the collapsed definition or enters a subtree.
         await expect(page.locator('.bt-native-node').filter({ hasText: 'Grasp detected object' })).toHaveCount(0);
-        await expect(page.getByRole('button', { name: 'Parent tree', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Back to parent tree', exact: true })).toHaveCount(0);
         const pick = page.locator('.bt-native-node').filter({ hasText: 'Pick detected object' });
         await expect(pick).toHaveClass(/status-success/);
         await pick.dblclick();
         await expect(page.locator('.bt-native-node').filter({ hasText: 'Grasp detected object' })).toHaveClass(
           /status-success/
         );
-        await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+        await page.getByRole('button', { name: 'Back to parent tree', exact: true }).click();
         await expect(page.getByRole('log')).toHaveCount(0);
         await page.screenshot({ path: test.info().outputPath(`${runtime}-${variant}.png`) });
         await menuAction(page, 'XML source');

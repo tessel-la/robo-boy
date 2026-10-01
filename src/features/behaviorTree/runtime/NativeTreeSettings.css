@@ -1,0 +1,27 @@
+.bt-main-tree-field > select,
+.bt-main-tree-field > .contained-select-trigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-color);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+.bt-main-tree-field > :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  border-color: var(--primary-color);
+}
+.bt-main-tree-field > :disabled {
+  opacity: 0.6;
+}
+@media (max-width: 600px) {
+  .bt-main-tree-field > .contained-select-trigger {
+    min-height: 44px;
+  }
+}
