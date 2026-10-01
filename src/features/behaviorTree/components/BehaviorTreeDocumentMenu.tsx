@@ -18,7 +18,7 @@ interface Props {
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
-  onNewXml?: () => void;
+  onImportLibrary?: (tree: BehaviorTree, prefix?: string) => void;
   onEditSource?: () => void;
   onExport: () => void;
   onRename: (name: string) => void;
@@ -33,7 +33,7 @@ export default function BehaviorTreeDocumentMenu({
   onSave,
   onLoad,
   onNew,
-  onNewXml,
+  onImportLibrary,
   onEditSource,
   onExport,
   onRename,
@@ -48,7 +48,8 @@ export default function BehaviorTreeDocumentMenu({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [pendingNew, setPendingNew] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const newKind = useRef<'graph' | 'xml'>('graph');
+  const libraryInput = useRef<HTMLInputElement>(null);
+  const [libraryPrefix, setLibraryPrefix] = useState('');
 
   // Sync local name whenever the active tree changes
   useEffect(() => {
@@ -119,24 +120,21 @@ export default function BehaviorTreeDocumentMenu({
     setPendingDelete(null);
   };
 
-  const handleNew = (kind: 'graph' | 'xml' = 'graph') => {
-    newKind.current = kind;
+  const handleNew = () => {
     if (nodeCount > 0 || currentTree?.nativeDocument) {
       setPendingDelete(null);
       setPendingNew(true);
       return;
     }
 
-    if (kind === 'xml') onNewXml?.();
-    else onNew();
+    onNew();
     closeMenu();
   };
 
   const cancelNew = () => setPendingNew(false);
 
   const confirmNew = () => {
-    if (newKind.current === 'xml') onNewXml?.();
-    else onNew();
+    onNew();
     closeMenu();
   };
 
@@ -233,19 +231,33 @@ export default function BehaviorTreeDocumentMenu({
             </svg>
             Export
           </button>
-          <button className="bt-menu-action-btn" onClick={() => handleNew('xml')}>
-            New XML tree
-          </button>
           <button className="bt-menu-action-btn" onClick={handleImport}>
             <svg width="14" height="16" viewBox="0 0 14 16" fill="currentColor">
               <path d="M7 11V2M3 6l4-5 4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
               <path d="M1 12v3h12v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
             </svg>
-            Import
+            Open file
           </button>
         </fieldset>
+        <p className="bt-menu-hint">New uses the engine selected in the toolbar. Open replaces the current tree. Save keeps a local copy; Export downloads a tree file.</p>
         {onEditSource && <button className="bt-menu-action-btn" onClick={() => { onEditSource(); closeMenu(); }}>XML source</button>}
       </div>
+
+      {onImportLibrary && <div className="bt-menu-section">
+        <label className="bt-menu-label">Subtree library · add to this tree</label>
+        <p className="bt-menu-hint">Import XML definitions to the palette, then drag or tap them to compose this tree. The library must use the same engine.</p>
+        <label className="bt-native-field">Library prefix (optional)
+          <input aria-label="Library prefix" placeholder="e.g. pick" value={libraryPrefix} disabled={isEditingLocked} onChange={event => setLibraryPrefix(event.target.value)} />
+        </label>
+        <p className="bt-menu-hint">Use a prefix for conflicting tree IDs. It renames imported definitions and references; py_trees subtree namespaces can change.</p>
+        <button className="bt-menu-action-btn" disabled={isEditingLocked} onClick={() => libraryInput.current?.click()}>Import subtree file</button>
+        <input ref={libraryInput} hidden type="file" accept=".xml,.json" aria-label="Subtree library file" onChange={async event => {
+          const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
+          setImportError(null);
+          try { const tree = await importBehaviorTree(file); if (!tree) throw new Error('Could not read this subtree library. Use valid self-contained XML.'); onImportLibrary(tree, libraryPrefix); }
+          catch (err) { setImportError((err as Error).message); }
+        }} />
+      </div>}
 
       <div className="bt-menu-tree-section">
         <label className="bt-menu-label">
@@ -293,6 +305,7 @@ export default function BehaviorTreeDocumentMenu({
       {children}
       <TreeRepositoryBrowser
         disabled={isEditingLocked}
+        onImportLibrary={onImportLibrary ? tree => onImportLibrary(tree, libraryPrefix) : undefined}
         onLoad={tree => {
           onLoad(tree);
           closeMenu();

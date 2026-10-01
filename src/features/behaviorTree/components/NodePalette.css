@@ -525,3 +525,6 @@ button.palette-node {
 button.palette-node:disabled { opacity: 0.45; cursor: default; }
 
 .palette-node-registration { cursor: default; }
+
+.palette-native-row { display: flex; align-items: center; gap: 4px; }
+.palette-native-row .palette-node { flex: 1; min-width: 0; }

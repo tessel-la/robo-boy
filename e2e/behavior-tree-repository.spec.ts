@@ -43,7 +43,7 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
   for (const name of ['visual.json', 'btcpp.xml', 'py_trees.xml', 'btcpp.xml', 'visual.json', 'py_trees.xml']) {
     await page.getByTestId('bt-menu-button').click();
     await page.locator('input[webkitdirectory]').setInputFiles(folder);
-    await page.getByRole('button', { name: new RegExp(name.replace('.', '\\.')) }).click();
+    await page.locator('.bt-repository-files .bt-menu-tree-row').filter({ hasText: name }).click();
     await expect
       .poll(() =>
         page.evaluate(() => {

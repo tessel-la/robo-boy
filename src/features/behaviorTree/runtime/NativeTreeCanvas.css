@@ -41,3 +41,15 @@
 @container (max-width: 640px) {
   .bt-runtime-status { left: 12px; right: 12px; bottom: 8px; }
 }
+.bt-native-field { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; }
+.bt-native-field span { min-width: 70px; overflow-wrap: anywhere; }
+.bt-native-field input, .bt-native-port-form input {
+  min-width: 0; flex: 1; padding: 6px; border: 1px solid var(--border-color);
+  background: var(--input-bg, var(--card-bg)); color: var(--text-color); border-radius: 5px;
+}
+.bt-native-port-form { display: flex; flex-wrap: wrap; gap: 6px; }
+.bt-native-port-form input { width: 110px; }
+.bt-native-edit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.bt-native-edge-actions { position: absolute; bottom: 42px; left: 50%; transform: translateX(-50%); z-index: 5; }
+.bt-repository-file-row { display: flex; gap: 6px; align-items: center; }
+.bt-repository-file-row .bt-menu-tree-row { flex: 1; min-width: 0; }

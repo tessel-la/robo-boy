@@ -1,5 +1,6 @@
 import { BehaviorTree, SavedBehaviorTree } from '../types';
-import { inspectXml, nativeTreeFromXml } from '../runtime/xml';
+import { inspectXml, nativeTreeFromXml, validateDocument } from '../runtime/xml';
+import { editorState } from '../runtime/authoring';
 import { syncReferencedSubtrees } from '../subtreeUtils';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
@@ -140,7 +141,7 @@ export const exportBehaviorTree = (tree: BehaviorTree): void => {
       version: STORAGE_VERSION,
     };
     
-    const dataStr = tree.nativeDocument?.xml ?? JSON.stringify(savedTree, null, 2);
+    const dataStr = (tree.nativeDocument ? validateDocument(tree.nativeDocument).xml : undefined) ?? JSON.stringify(savedTree, null, 2);
     const dataBlob = new Blob([dataStr], { type: tree.nativeDocument ? 'application/xml' : 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     
@@ -171,6 +172,7 @@ export const parseBehaviorTreeFile = (content: string, name: string): BehaviorTr
       throw new Error('Invalid native tree document');
     }
     inspectXml(document.xml, document.runtime, document.mainTreeId);
+    if (document.editor) editorState(document);
   }
   return savedTree.tree;
 };

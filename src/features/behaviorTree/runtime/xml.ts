@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BehaviorTree } from '../types';
 import { NativeTreeDocument, TreeFormatAdapter, TreeRuntimeId } from './types';
+import { cppEditorNodes, pythonEditorNodes } from './nodeTemplates';
+import { executableXml } from './authoring';
 
 export const newXmlTemplate =
   '<root main_tree_to_execute="Main">\n  <BehaviorTree ID="Main">\n    <Wait name="Wait" seconds="0.5"/>\n  </BehaviorTree>\n</root>';
@@ -9,6 +11,8 @@ export const treeFormats: readonly TreeFormatAdapter[] = [
   {
     id: 'btcpp',
     subtreeTopology: 'wrapped',
+    editorNodes: cppEditorNodes,
+    subtreeDefaults: () => ({}),
     label: 'BehaviorTree.CPP',
     template:
       '<root BTCPP_format="4" main_tree_to_execute="Main">\n  <BehaviorTree ID="Main">\n    <Sequence name="Demo">\n      <Wait name="Wait" seconds="0.5"/>\n      <AlwaysSuccess name="Done"/>\n    </Sequence>\n  </BehaviorTree>\n</root>',
@@ -20,6 +24,13 @@ export const treeFormats: readonly TreeFormatAdapter[] = [
   {
     id: 'py_trees',
     subtreeTopology: 'inlined',
+    editorNodes: pythonEditorNodes,
+    subtreeDefaults: definition =>
+      Object.fromEntries(
+        Array.from(definition.attributes)
+          .filter(attribute => !['ID', 'name'].includes(attribute.name))
+          .map(attribute => [attribute.name, attribute.value])
+      ),
     label: 'py_trees',
     template:
       '<root main_tree_to_execute="Main">\n  <BehaviorTree ID="Main">\n    <Sequence name="Demo" memory="true">\n      <Wait name="Wait" seconds="0.5"/>\n      <Success name="Done"/>\n    </Sequence>\n  </BehaviorTree>\n</root>',
@@ -112,6 +123,15 @@ export function nativeTreeFromXml(
   };
 }
 
+export function blankXml(runtime: TreeRuntimeId): string {
+  const format = treeFormats.find(item => item.id === runtime)!;
+  const root = new DOMParser().parseFromString(format.template, 'application/xml').documentElement;
+  const control = root.querySelector('BehaviorTree')!.children[0];
+  Array.from(control.children).forEach(child => child.remove());
+  control.setAttribute('name', 'Root');
+  return new XMLSerializer().serializeToString(root);
+}
+
 /** Resolve older saved documents as well as imported XML, preserving explicit choices. */
 export function resolveTreeRuntime(tree: BehaviorTree): BehaviorTree {
   const document = tree.nativeDocument;
@@ -126,9 +146,10 @@ export function resolveTreeRuntime(tree: BehaviorTree): BehaviorTree {
 }
 
 export function validateDocument(document: NativeTreeDocument): NativeTreeDocument {
-  const inspected = inspectXml(document.xml, document.runtime, document.mainTreeId);
+  const xml = executableXml(document);
+  const inspected = inspectXml(xml, document.runtime, document.mainTreeId);
   if (!inspected.runtime)
     throw new Error('Choose the XML runtime. This document uses syntax shared by both frameworks.');
   if (!inspected.mainTreeId) throw new Error('Choose the main tree to execute.');
-  return { ...document, runtime: inspected.runtime, mainTreeId: inspected.mainTreeId };
+  return { xml, runtime: inspected.runtime, mainTreeId: inspected.mainTreeId };
 }

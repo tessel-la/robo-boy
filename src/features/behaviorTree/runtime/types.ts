@@ -1,10 +1,29 @@
 export type TreeRuntimeId = 'btcpp' | 'py_trees';
 
-/** Original source is the executable document. The visual graph is a projection only. */
+/** Native source and metadata; an optional visual draft compiles back into the same format. */
 export interface NativeTreeDocument {
   runtime: TreeRuntimeId | null;
   xml: string;
   mainTreeId?: string;
+  editor?: NativeEditorState;
+}
+
+/** Saved visual draft. XML remains the template/metadata source until compilation. */
+export interface NativeEditorNode {
+  id: string;
+  treeId: string;
+  parentId: string | null;
+  order: number;
+  template: string;
+  position?: { x: number; y: number };
+}
+export interface NativeEditorState {
+  version: 1;
+  nodes: NativeEditorNode[];
+}
+export interface NativeNodeTemplate {
+  defaults: Record<string, string>;
+  children: 'none' | 'one' | 'many' | 'host';
 }
 
 export type RuntimeNodeStatus = 'idle' | 'running' | 'success' | 'failure';
@@ -91,6 +110,8 @@ export interface TreeFormatAdapter {
   template: string;
   /** Native topology at a SubTree boundary; execution semantics stay in the backend. */
   subtreeTopology: 'wrapped' | 'inlined';
+  editorNodes: Record<string, NativeNodeTemplate>;
+  subtreeDefaults(definition: Element): Record<string, string>;
   matches(root: Element): boolean;
   validate(root: Element): void;
 }

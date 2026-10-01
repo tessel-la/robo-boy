@@ -99,7 +99,7 @@ allows automatic identification. Distinctive Python composite attributes (`memor
 marker-free syntax still requires a format selection.
 The saved editor document stores original XML, runtime ID and main tree ID.
 Layout/status graphs are projections, never serialized back into execution XML.
-Native XML is edited as source; visual editing of its projection is disabled.
+Native XML is edited through a persisted native definition graph or directly as source. The graph compiles into native XML; the runtime projection remains a view of host-owned execution.
 Unknown constructs remain intact. Host native parsers validate registered nodes.
 File includes/imports are rejected for remote uploads: native parsers otherwise
 read arbitrary host paths. Self-contained documents support multiple subtrees;
@@ -186,7 +186,7 @@ The toolbar, menu and palette remain mounted across JSON/XML loads. The native
 controller owns XML projection and remote lifecycle, while the canvas uses the
 same React Flow layout and node styling as the JSON editor. The engine selector
 chooses a library and never translates source. Execution requires a compatible,
-available and enabled engine. The palette provides read-only subtree definition
+available and enabled engine. The palette provides subtree composition and definition
 browsing without changing the execution entrypoint. Original XML and per-node
 ports/status/feedback live in on-demand canvas inspectors; no permanent log panel
 or separate XML workspace replaces the editor. Worker snapshots carry native
@@ -211,6 +211,28 @@ space, so transitions do not change geometry. Fit occurs after the new view is m
 and painted, on explicit Arrange and container resize, never on tick state changes.
 User navigation disables Follow, and execution never enters or leaves a subtree view.
 
+### Native authoring and subtree libraries
+
+Native trees need an editable definition graph, including disconnected drafts, rather
+than only a runtime projection. The native document retains its original XML as the
+metadata/template source and optionally stores a versioned editor graph with stable
+node IDs, child ordering and positions. XML serialization uses the original elements,
+attributes, text/comments and document metadata; execution still uses each native parser.
+Disconnected or incomplete graphs can be saved as drafts but cannot load, run or export
+executable XML. Source editing explicitly replaces the visual draft.
+
+Format adapters own native control/decorator arity and constructor defaults. The common
+editor owns insertion, connections, cycle prevention, ordering, removal, attributes,
+layout and history. Registered custom nodes retain host-defined semantics and receive
+native validation before execution. Editing locks while the host runs a tree.
+
+Opening a repository file replaces the active document; importing its subtree library
+adds its definitions and metadata to the active document instead. Imports are atomic,
+include nested dependencies, reject incompatible engines, and reject conflicting IDs.
+An explicit user-supplied prefix can rename imported definitions and their SubTree
+references. This is never an automatic format translation; Python subtree namespaces
+may change when definition IDs are renamed. Imported libraries become draggable
+palette entries, with a separate action to inspect a definition.
 
 ## Validation plan
 

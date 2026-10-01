@@ -155,7 +155,8 @@ interface NodePaletteProps {
     locked: boolean;
     descriptor?: RuntimeDescriptor;
     trees: Array<{ id: string; label: string; onOpen: () => void }>;
-    onOpenSaved: (tree: BehaviorTree) => void;
+    onAdd: (tag: string, attributes?: Record<string, string>) => void;
+    onAddSaved: (tree: BehaviorTree) => void;
   };
 }
 
@@ -513,26 +514,34 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         {nativeCatalog ? (
           <>
             <p className="palette-empty">
-              {treeFormats.find(format => format.id === nativeCatalog.runtime)?.label} · XML nodes and subtrees
+              {treeFormats.find(format => format.id === nativeCatalog.runtime)?.label} · Drag onto the canvas, then connect. Tap to append to the root control.
             </p>
+            <div className="palette-resource-search">
+              <IconSearch /><input className="palette-resource-search-input" type="search" aria-label="Search native nodes and subtrees" placeholder="Search nodes and subtrees…" value={resourceQuery} onChange={event => setResourceQuery(event.target.value)} />
+            </div>
             <div className="palette-section">
               <h4 className="palette-section-header">Subtrees in this document</h4>
               <div className="palette-section-content">
-                {nativeCatalog.trees.map(tree => (
+                {nativeCatalog.trees.filter(tree => tree.label.toLowerCase().includes(resourceQuery.toLowerCase())).map(tree => (
+                  <div key={tree.id} className="palette-native-row">
                   <button
                     className="palette-node palette-node-ros"
-                    key={tree.id}
-                    onClick={tree.onOpen}
-                    aria-label={`View subtree ${tree.label}`}
+                    disabled={isDisabled || nativeCatalog.locked}
+                    draggable={!isDisabled && !nativeCatalog.locked}
+                    onDragStart={event => { event.dataTransfer.setData('application/reactflow', JSON.stringify({ native: true, tag: 'SubTree', attributes: { ID: tree.id } })); event.dataTransfer.effectAllowed = 'copy'; }}
+                    onClick={() => nativeCatalog.onAdd('SubTree', { ID: tree.id })}
+                    aria-label={`Add subtree ${tree.label}`}
                   >
                     <span className="palette-node-icon">
                       <IconSubtree />
                     </span>
                     <span className="palette-node-label">{tree.label}</span>
                   </button>
+                  <button className="palette-toggle" aria-label={`View subtree ${tree.label}`} onClick={tree.onOpen}>View</button>
+                  </div>
                 ))}
                 {!nativeCatalog.trees.length && (
-                  <p className="palette-empty">Open XML for this engine to browse its subtrees.</p>
+                  <p className="palette-empty">Create or open a tree for this engine to add nodes.</p>
                 )}
               </div>
             </div>
@@ -542,13 +551,16 @@ const NodePalette: React.FC<NodePaletteProps> = ({
               </h4>
               <div className="palette-section-content">
                 {allSavedTrees
-                  .filter(saved => saved.tree.nativeDocument?.runtime === nativeCatalog.runtime)
+                  .filter(saved => saved.tree.nativeDocument?.runtime === nativeCatalog.runtime && saved.tree.name.toLowerCase().includes(resourceQuery.toLowerCase()))
                   .map(({ tree }) => (
                     <button
                       className="palette-node palette-node-ros"
                       key={tree.id}
                       disabled={isDisabled || nativeCatalog.locked}
-                      onClick={() => nativeCatalog.onOpenSaved(tree)}
+                      draggable={!isDisabled && !nativeCatalog.locked}
+                      onDragStart={event => { event.dataTransfer.setData('application/reactflow', JSON.stringify({ native: true, savedTree: tree })); event.dataTransfer.effectAllowed = 'copy'; }}
+                      onClick={() => nativeCatalog.onAddSaved(tree)}
+                      aria-label={`Add saved subtree ${tree.name}`}
                     >
                       <span className="palette-node-icon">
                         <IconSubtree />
@@ -559,12 +571,17 @@ const NodePalette: React.FC<NodePaletteProps> = ({
               </div>
             </div>
             <div className="palette-section">
-              <h4 className="palette-section-header">Registered nodes</h4>
+              <h4 className="palette-section-header">Nodes for this engine</h4>
               <div className="palette-section-content">
-                {(nativeCatalog.descriptor?.nodes || []).map(name => (
-                  <div className="palette-node palette-node-registration" key={name}>
+                {Array.from(new Set([...Object.keys(treeFormats.find(format => format.id === nativeCatalog.runtime)!.editorNodes), ...(nativeCatalog.descriptor?.nodes || [])])).filter(name => name !== 'SubTree' && name.toLowerCase().includes(resourceQuery.toLowerCase())).map(name => (
+                  <button className="palette-node palette-node-registration" key={name}
+                    disabled={isDisabled || nativeCatalog.locked}
+                    draggable={!isDisabled && !nativeCatalog.locked}
+                    aria-label={`Add ${name} node`}
+                    onDragStart={event => { event.dataTransfer.setData('application/reactflow', JSON.stringify({ native: true, tag: name })); event.dataTransfer.effectAllowed = 'copy'; }}
+                    onClick={() => nativeCatalog.onAdd(name)}>
                     <span className="palette-node-label">{name}</span>
-                  </div>
+                  </button>
                 ))}
                 {!nativeCatalog.descriptor?.nodes?.length && (
                   <p className="palette-empty">

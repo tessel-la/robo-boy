@@ -2,6 +2,22 @@ import { Edge } from 'reactflow';
 
 import { BehaviorNodeType, BehaviorTreeNode } from './types';
 
+export const ORDERED_EDGE_STYLE = {
+  labelShowBg: true,
+  labelBgPadding: [5, 4] as [number, number],
+  labelBgBorderRadius: 999,
+  labelStyle: {
+    fill: 'var(--card-bg, #ffffff)',
+    fontSize: 11,
+    fontWeight: 700,
+  },
+  labelBgStyle: {
+    fill: 'var(--primary-color, #4285f4)',
+    stroke: 'var(--card-bg, #ffffff)',
+    strokeWidth: 2,
+  },
+};
+
 const ORDERED_CONTROL_NODE_TYPES = new Set<string>([
   BehaviorNodeType.Sequence,
   BehaviorNodeType.Selector,
@@ -81,19 +97,7 @@ export const annotateOrderedEdges = (
     return {
       ...edge,
       label: String(order),
-      labelShowBg: true,
-      labelBgPadding: [5, 4] as [number, number],
-      labelBgBorderRadius: 999,
-      labelStyle: {
-        fill: 'var(--card-bg, #ffffff)',
-        fontSize: 11,
-        fontWeight: 700,
-      },
-      labelBgStyle: {
-        fill: 'var(--primary-color, #4285f4)',
-        stroke: 'var(--card-bg, #ffffff)',
-        strokeWidth: 2,
-      },
+      ...ORDERED_EDGE_STYLE,
     };
   });
 };

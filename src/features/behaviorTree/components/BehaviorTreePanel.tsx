@@ -4,7 +4,7 @@ import NativeTreeSettings from '../runtime/NativeTreeSettings';
 import { useNativeTreeController } from '../runtime/useNativeTreeController';
 import { TreeRuntimeId } from '../runtime/types';
 import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
-import { nativeTreeFromXml, newXmlTemplate, resolveTreeRuntime, treeFormats } from '../runtime/xml';
+import { blankXml, nativeTreeFromXml, newXmlTemplate, resolveTreeRuntime, treeFormats } from '../runtime/xml';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -565,6 +565,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(true);
+  const [paletteDragging, setPaletteDragging] = useState(false);
   const [agentPreviewTree, setAgentPreviewTree] = useState<BehaviorTree | null>(null);
   const [agentPreviewDimensions, setAgentPreviewDimensions] = useState<
     Record<string, { width: number; height: number }>
@@ -3238,6 +3239,20 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     onExecutionChange,
     onExecutionControlsChange
   );
+
+  useEffect(() => {
+    if (!currentTree?.nativeDocument || !isActive) return;
+    const keyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+      if (!native.locked && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) native.redo(); else native.undo();
+      }
+    };
+    window.addEventListener('keydown', keyDown);
+    return () => window.removeEventListener('keydown', keyDown);
+  }, [!!currentTree?.nativeDocument, isActive, native.locked, native.undo, native.redo]);
   const nativeDocument = !!currentTree?.nativeDocument;
   const executing = nativeDocument ? native.running : isExecuting;
   const editingLocked = nativeDocument ? native.locked : isExecuting;
@@ -3245,7 +3260,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     if (selectedEngine === 'json') handleNew();
     else {
       const format = treeFormats.find(item => item.id === selectedEngine);
-      handleLoad(nativeTreeFromXml(format?.template || newXmlTemplate, format?.id));
+      handleLoad(nativeTreeFromXml(format ? blankXml(format.id) : newXmlTemplate, format?.id));
     }
   };
   const engineControl = (
@@ -3283,8 +3298,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         isEditingLocked={editingLocked}
         isPaletteCollapsed={isPaletteCollapsed}
         nodeCount={nativeDocument ? native.nodes.length : nodes.length}
-        canUndo={!nativeDocument && canUndo}
-        canRedo={!nativeDocument && canRedo}
+        canUndo={nativeDocument ? native.canUndo : canUndo}
+        canRedo={nativeDocument ? native.canRedo : canRedo}
         interactionMode={canvasInteractionMode}
         isFollowMode={isFollowMode}
         persistentExecution={nativeDocument || persistentExecution}
@@ -3295,14 +3310,14 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
                 showSaveNotice({
                   type: ok ? 'success' : 'error',
                   title: ok ? 'Tree saved' : 'Save failed',
-                  message: ok ? 'The XML source and engine were saved.' : 'Could not save tree.',
+                  message: ok ? 'The tree, layout and draft connections were saved.' : 'Could not save tree.',
                 });
               }
             : handleSave
         }
         onLoad={handleLoad}
         onNew={newForEngine}
-        onNewXml={() => handleLoad(nativeTreeFromXml(newXmlTemplate))}
+        onImportLibrary={nativeDocument ? native.importLibrary : undefined}
         engineControl={engineControl}
         nativeControls={
           nativeDocument
@@ -3328,11 +3343,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onPause={handlePause}
         onResume={handleResume}
         onStop={nativeDocument ? native.stop : handleStop}
-        onExport={handleExport}
+        onExport={nativeDocument ? () => { const exported = native.exportTree(); if (exported) exportBehaviorTree(exported); } : handleExport}
         onArrange={nativeDocument ? () => setNativeArrange(value => value + 1) : handleArrange}
         onTogglePalette={() => setIsPaletteCollapsed(collapsed => !collapsed)}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+        onUndo={nativeDocument ? native.undo : handleUndo}
+        onRedo={nativeDocument ? native.redo : handleRedo}
         onInteractionModeChange={setCanvasInteractionMode}
         onToggleFollowMode={() =>
           setIsFollowMode(enabled => {
@@ -3386,11 +3401,18 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         </div>
       )}
 
-      <div className="bt-content">
+      <div className="bt-content"
+        onDragStartCapture={event => {
+          if ((event.target as HTMLElement).closest('.node-palette')) setPaletteDragging(true);
+        }}
+        onDragEndCapture={() => setPaletteDragging(false)}
+        onDropCapture={() => setPaletteDragging(false)}
+      >
         {!isPaletteCollapsed && (
           <button
             type="button"
             className="bt-palette-backdrop"
+            style={paletteDragging ? { pointerEvents: 'none' } : undefined}
             onClick={() => setIsPaletteCollapsed(true)}
             aria-label="Close node palette"
           />
@@ -3406,7 +3428,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             selectedEngine && selectedEngine !== 'json'
               ? {
                   runtime: selectedEngine,
-                  locked: editingLocked,
+                  locked: editingLocked || !nativeDocument || !native.compatible,
                   descriptor: nativeRuntime.state.runtimes.find(item => item.id === selectedEngine),
                   trees:
                     currentTree?.nativeDocument?.runtime === selectedEngine
@@ -3416,7 +3438,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
                           onOpen: () => native.selectTree(tree.getAttribute('ID')!),
                         }))
                       : [],
-                  onOpenSaved: handleLoad,
+                  onAdd: (tag, attributes) => native.addNode(tag, attributes),
+                  onAddSaved: native.addSaved,
                 }
               : undefined
           }

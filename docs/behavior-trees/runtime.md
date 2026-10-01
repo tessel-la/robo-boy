@@ -3,11 +3,10 @@
 Robo Boy supports native **BehaviorTree.CPP** and **py_trees 2.6** execution.
 The Behavior Tree panel uses one menu, toolbar, palette and canvas for JSON
 and both native XML formats. The engine selector changes the available node
-library; **New** creates a tree for that engine. **Import** and repository loading
+library; **New** creates a tree for that engine. **Open file** and repository loading
 use the same menu for every format. The engine pill automatically follows detected tree syntax: `BTCPP_format="4"` identifies
 C++; Python controls with `memory`/`policy` and distinctive built-ins identify py_trees.
-Shared marker-free syntax (for example, a lone custom `Wait`) still requires an explicit engine choice. XML source is saved exactly, including ports, subtrees and metadata. Visual
-node graphs project the source definitions with live native states and cannot change source semantics.
+Shared marker-free syntax (for example, a lone custom `Wait`) still requires an explicit engine choice. XML source retains native ports, subtrees and metadata. Visual editing composes native XML using the selected engine’s node definitions; it does not translate between engines. Layout-only edits leave the executable XML unchanged.
 The shared tree menu opens, saves and exports both JSON and XML trees. **Open
 local folder** lists tree files from a checked-out repository. **Browse repository**
 opens a public GitHub repository with an optional branch, tag or commit; downloads
@@ -21,8 +20,8 @@ preserves source, while browser saves also retain the chosen runtime and main tr
 3. Press **Run**. Robo Boy loads the current XML on the host and starts execution.
    The menu also offers **Validate** and **Load on host** for separate checks.
 4. The canvas shows idle/running/success/failure. The palette lists this engine's
-   registered nodes, saved documents and subtrees in the current XML. Click a
-   subtree to view its definition without changing the executable main tree. During execution,
+   registered nodes, saved documents and subtrees in the current XML. Click
+   **View** next to a subtree to inspect its definition without changing the executable main tree. Tap the subtree entry to append an instance, or drag it onto the canvas and connect it. During execution,
    the main graph stays collapsed and subtree nodes show their live states. Double-click a
    subtree node to open that exact instance and its running leaves. **Parent tree** returns
    one level; repeated and nested subtree instances keep separate native state bindings.
@@ -39,9 +38,11 @@ preserves source, while browser saves also retain the chosen runtime and main tr
 
 Switching engines preserves the open document. Run is disabled until the
 selected engine matches the document and is available and enabled on the host.
-Native XML graph editing, AI generation, undo and pause are disabled because
-these controls would not preserve backend semantics; edit the original source
-from its inspector. Subtree browsing remains available during execution.
+Both native engines support dragging, connections, port/attribute editing, child priority, branch deletion, layout, and undo/redo (toolbar or Ctrl/Cmd+Z). Tap palette entries to append to the root control; drag to place disconnected nodes, then connect the bottom parent handle to the top child handle. Click a node to edit ports; braced values such as `{target}` bind to the native blackboard. **Earlier/Later** changes child execution order. Execution locks editing. AI generation and pause remain unavailable for native trees.
+
+To compose a tree from a repository, select an engine and choose **New**. In the menu, **Add subtrees** next to a repository XML file or **Import subtree file** adds all of its definitions, nested dependencies and port metadata to the current document. Add those definitions from the palette, configure their ports, and choose **Tree to run** before running. Libraries must use the same engine and be self-contained; includes/imports must be inlined. Conflicting IDs are rejected atomically. An optional **Library prefix** explicitly renames definitions and references; Python subtree namespaces may change. Repeat to combine several files.
+
+**Save** retains disconnected drafts and node positions in browser storage. **Export** downloads executable native XML, so all definitions must have one connected root and valid control/decorator arity. JSON envelopes containing native documents also retain drafts when opened. Editing **XML source** replaces the visual draft; save first to retain unconnected nodes. Unknown custom node ports/arity remain owned by the host and are checked through **Validate**. Subtree browsing remains available during execution.
 
 Runtime availability/version and failure reasons are visible. An unavailable
 backend never causes execution with the other backend. A lost ROS connection
@@ -133,7 +134,7 @@ Trusted host operators can register additional node implementations:
 `ROBOBOY_BTCPP_PLUGINS` is a colon-separated list of shared-library paths;
 `ROBOBOY_PY_TREES_MODULES` is a colon-separated list of Python module names.
 The graph-based AI proposal editor remains available for Robo Boy JSON trees;
-native XML uses source editing to preserve framework semantics.
+native XML offers visual port editing and source editing while preserving framework semantics.
 
 These execute trusted host code and cannot be selected by uploaded XML.
 py_trees_ros setup passes a ROS node and spins callbacks for registered ROS
@@ -184,12 +185,12 @@ example pairs, explicit subtree ports, JSON goal construction, recovery,
 reset/rerun and C-level stdout isolation. Both pairs execute and rerun through
 real ROS actions in the deterministic Genesis mock environment.
 
-All **31 Chromium workflows** pass across JSON editor regressions, shared
-repository loading and six native runtime/example workflows. Repository tests
+All **262 frontend Behavior Tree tests** and **35 Chromium workflows** pass across JSON editor regressions, shared
+repository loading and ten native runtime/example workflows. Repository tests
 verify the shell stays mounted, source survives engine switching, saved engine
 metadata persists, and mobile inspectors/menu fit the viewport. Native tests
 verify independent engine switches, cancellation, reconnect, node details and
-four richer action trees. Screenshots confirm shared toolbar/canvas styling.
+four richer action trees. Authoring tests cover pointer-based dragging/connections, saved disconnected drafts, undo/redo, atomic library imports with explicit prefixes, native ports and child priority, validation/execution, reset/rerun, and XML export/reimport for both engines. Screenshots confirm shared toolbar/canvas styling.
 
 The frontend suite, type check, lint and production build pass. Genesis's
 **22 tests** pass. The connected live ROS executor was discovered before its

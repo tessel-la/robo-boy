@@ -2,7 +2,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNativeTreeController } from './useNativeTreeController';
 import { projectXml } from './projection';
-import { nativeTreeFromXml, treeFormats } from './xml';
+import { blankXml, nativeTreeFromXml, treeFormats } from './xml';
+import { useState } from 'react';
 import type { useRemoteTreeRuntime } from './useRemoteTreeRuntime';
 
 const client = { load: vi.fn(), start: vi.fn(), stop: vi.fn(), cancel: vi.fn(), reset: vi.fn(), validate: vi.fn() };
@@ -30,6 +31,37 @@ describe('native controller in the common editor', () => {
     });
     await waitFor(() => expect(client.start).toHaveBeenCalled());
     expect(client.load).toHaveBeenCalledWith(tree.nativeDocument);
+  });
+  it.each(treeFormats)('keeps $id draft edits, history, IDs and compiled host source synchronized', async format => {
+    const initial = nativeTreeFromXml(blankXml(format.id), format.id);
+    const { result } = renderHook(() => {
+      const [tree, setTree] = useState(initial);
+      return useNativeTreeController(tree, runtime, format.id, setTree);
+    });
+    const root = result.current.nodes[0].editId!;
+    const view = result.current.viewKey;
+    act(() => result.current.addNode('Wait', { seconds: '0.1' }, { x: 100, y: 200 }));
+    const leaf = result.current.nodes[1].editId!;
+    expect(result.current.error).toContain('Connect all nodes');
+    act(() => result.current.run());
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(client.load).not.toHaveBeenCalled();
+    act(() => result.current.connect(root, leaf));
+    expect(result.current.error).toBeNull();
+    expect(result.current.viewKey).toBe(view);
+    act(() => result.current.undo());
+    expect(result.current.error).toContain('Connect all nodes');
+    expect(result.current.nodes[1].editId).toBe(leaf);
+    act(() => result.current.redo());
+    expect(result.current.error).toBeNull();
+    act(() => result.current.run());
+    await waitFor(() => expect(client.start).toHaveBeenCalled());
+    expect(client.load).toHaveBeenCalledWith({
+      runtime: format.id,
+      mainTreeId: 'Main',
+      xml: result.current.document!.xml,
+    });
+    expect(client.load.mock.calls[0][0].editor).toBeUndefined();
   });
   it('resets the terminal session before rerunning', async () => {
     const tree = nativeTreeFromXml(treeFormats[0].template);
@@ -106,6 +138,26 @@ describe('native controller in the common editor', () => {
     expect(result.current.document!.mainTreeId).toBe('Main');
     expect(result.current.preview.mainTreeId).toBe('Main');
     expect(changed).not.toHaveBeenCalled();
+  });
+  it('returns through nested library definitions before they have an executable instance', () => {
+    const tree = nativeTreeFromXml(`<root BTCPP_format="4" main_tree_to_execute="Main">
+      <BehaviorTree ID="Main"><Wait/></BehaviorTree>
+      <BehaviorTree ID="Library"><SubTree ID="Child"/></BehaviorTree>
+      <BehaviorTree ID="Child"><SubTree ID="Leaf"/></BehaviorTree>
+      <BehaviorTree ID="Leaf"><Wait/></BehaviorTree></root>`);
+    const { result } = renderHook(() => useNativeTreeController(tree, runtime, 'btcpp', vi.fn()));
+    act(() => result.current.selectTree('Library'));
+    act(() => result.current.openSubtree(result.current.nodes[0].subtreeView!));
+    expect(result.current.viewTreeId).toBe('Child');
+    act(() => result.current.openSubtree(result.current.nodes[0].subtreeView!));
+    expect(result.current.viewTreeId).toBe('Leaf');
+    act(() => result.current.parentView());
+    expect(result.current.viewTreeId).toBe('Child');
+    act(() => result.current.parentView());
+    expect(result.current.viewTreeId).toBe('Library');
+    act(() => result.current.parentView());
+    expect(result.current.viewTreeId).toBeUndefined();
+    expect(result.current.nodes[0].type).toBe('Wait');
   });
   it('returns to live main-tree state after browsing when the entrypoint is inferred from XML', () => {
     const xml =

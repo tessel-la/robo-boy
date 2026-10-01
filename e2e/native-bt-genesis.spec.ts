@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Buffer } from 'node:buffer';
 
 // Opt-in live integration. No ROS/WebSocket or action mocks are installed.
@@ -40,6 +41,144 @@ test.describe('native runtimes against Genesis ROS host', () => {
   test.describe.configure({ mode: 'serial' });
   test.skip(!endpoint, 'Start the isolated Genesis BT image and set ROBOBOY_BT_E2E_URL.');
   for (const runtime of ['btcpp', 'py_trees'] as const) {
+    test(`${runtime}: visually build, compose repository subtrees, edit ports and execute`, async ({ page }, info) => {
+      test.setTimeout(90000);
+      page.setDefaultTimeout(15000);
+      await page.goto('/');
+      await connect(page);
+      await panel(page);
+      await page
+        .getByRole('group', { name: 'Behavior Tree engine' })
+        .getByRole('button', {
+          name: runtime === 'btcpp' ? 'BehaviorTree.CPP' : 'py_trees',
+          exact: true,
+        })
+        .click();
+      await page.getByTestId('bt-menu-button').click();
+      await page.getByRole('button', { name: 'New', exact: true }).click();
+      const confirm = page.getByRole('button', { name: 'Create new tree', exact: true });
+      if (await confirm.count()) await confirm.click();
+      const closeMenu = page.getByRole('button', { name: 'Close menu', exact: true });
+      if (await closeMenu.count()) await closeMenu.click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(1);
+      await page.getByTestId('bt-palette-toggle').click();
+      await page.getByLabel('Search native nodes and subtrees').fill('Wait');
+      const canvas = page.getByTestId('bt-canvas');
+      const box = (await canvas.boundingBox())!;
+      const entryButton = page.getByRole('button', { name: 'Add Wait node', exact: true });
+      await entryButton.hover();
+      const entry = (await entryButton.boundingBox())!;
+
+      await page.mouse.move(entry.x + entry.width / 2, entry.y + entry.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(entry.x + entry.width / 2 + 12, entry.y + entry.height / 2, { steps: 3 });
+      await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.65, { steps: 12 });
+      await page.mouse.move(box.x + box.width * 0.75 + 1, box.y + box.height * 0.65 + 1);
+      await page.mouse.up();
+      await page.getByRole('button', { name: 'Close node palette', exact: true }).first().click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(2);
+      await expect(page.getByRole('alert')).toContainText('Connect all nodes');
+      await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+      // Preserve a disconnected draft through local Save and reload.
+      await menuAction(page, 'Save');
+      await page.reload();
+      await connect(page);
+      await panel(page);
+      await page.getByTestId('bt-menu-button').click();
+      await page.locator('.bt-menu-tree-list .bt-menu-tree-row').filter({ hasText: 'XML tree' }).click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(2);
+      await expect(page.getByRole('alert')).toContainText('Connect all nodes');
+      const root = page.locator('.react-flow__node-native').filter({ hasText: 'Root' });
+      const wait = page.locator('.react-flow__node-native').filter({ hasText: 'Wait' });
+      const connectHandles = async () => {
+        await root.locator('.react-flow__handle-bottom').hover();
+        const from = (await root.locator('.react-flow__handle-bottom').boundingBox())!;
+        const to = (await wait.locator('.react-flow__handle-top').boundingBox())!;
+        await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+        await page.mouse.up();
+        await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+      };
+      await connectHandles();
+      await wait.click();
+      await page.getByLabel('Node attribute seconds').fill('0.8');
+      await page.getByLabel('Node attribute seconds').press('Enter');
+      await page.getByRole('button', { name: 'Detach node', exact: true }).click();
+      await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+      await page.getByTestId('bt-undo').click();
+      await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+      await page.getByTestId('bt-redo').click();
+      await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+      await connectHandles();
+      const folder = info.outputPath('subtree-library');
+      mkdirSync(folder, { recursive: true });
+      const source = `<root ${runtime === 'btcpp' ? 'BTCPP_format="4"' : ''}>
+        <!-- reusable library -->
+        <BehaviorTree ID="Task" ${runtime === 'py_trees' ? 'delay="0.2"' : ''}><Sequence ${runtime === 'py_trees' ? 'memory="true"' : ''}><SubTree ID="WaitPhase" seconds="{delay}"/></Sequence></BehaviorTree>
+        <BehaviorTree ID="WaitPhase"><Wait name="Library wait" seconds="{seconds}"/></BehaviorTree>
+        <TreeNodesModel><SubTree ID="Task"><input_port name="delay" default="0.2"/></SubTree></TreeNodesModel>
+      </root>`;
+      writeFileSync(resolve(folder, 'tasks.xml'), source);
+      await page.getByTestId('bt-menu-button').click();
+      await page.locator('input[webkitdirectory]').setInputFiles(folder);
+      await page.getByRole('button', { name: /Add subtrees from .*tasks\.xml$/ }).click();
+      await expect(page.getByLabel('Main XML tree')).toHaveValue('Main');
+      // Collision errors do not replace or partially modify the current document.
+      await page.getByRole('button', { name: /Add subtrees from .*tasks\.xml$/ }).click();
+      await expect(page.getByRole('alert')).toContainText('already exists');
+      await page.getByLabel('Library prefix').fill('extra');
+      await page.getByRole('button', { name: /Add subtrees from .*tasks\.xml$/ }).click();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+      await page.getByTestId('bt-palette-toggle').click();
+      await page.getByLabel('Search native nodes and subtrees').fill('Task');
+      await expect(page.getByRole('button', { name: 'Add subtree extra_Task', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Add subtree Task', exact: true }).click();
+      await page.getByRole('button', { name: 'Close node palette', exact: true }).first().click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(3);
+      const task = page.locator('.bt-native-node').filter({ hasText: 'Task' });
+      await task.click();
+      await expect(page.getByLabel('Node attribute delay')).toHaveValue('0.2');
+      await page.getByLabel('Node attribute delay').fill('0.4');
+      await page.getByLabel('Node attribute delay').press('Enter');
+      await page.getByRole('button', { name: 'Earlier', exact: true }).click();
+      await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+      await menuAction(page, 'XML source');
+      await expect(page.getByLabel('Tree XML')).toHaveValue(/reusable library/);
+      const xml = await page.getByLabel('Tree XML').inputValue();
+      expect(xml.indexOf('ID="Task" delay="0.4"')).toBeLessThan(xml.indexOf('seconds="0.8"'));
+      await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+      await page.getByTestId('bt-menu-button').click();
+      await page.getByRole('button', { name: 'Validate', exact: true }).click();
+      await expect(page.getByText('Native validation passed.', { exact: false })).toBeVisible();
+      await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('bt-runtime-state')).toContainText('running');
+      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success');
+      await expect(task).toHaveClass(/status-success/);
+      await task.dblclick();
+      await expect(page.locator('.bt-native-node').filter({ hasText: 'WaitPhase' })).toHaveClass(/status-success/);
+      await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
+      await menuAction(page, 'Reset');
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success');
+      await page.screenshot({ path: info.outputPath(`${runtime}-composed.png`) });
+      await page.getByTestId('bt-menu-button').click();
+      const downloaded = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Export', exact: true }).click();
+      const download = await downloaded;
+      expect(readFileSync((await download.path())!, 'utf8')).toBe(xml);
+      await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+      await importTree(page, runtime, xml);
+      await expect(page.locator('.bt-native-node')).toHaveCount(3);
+      await task.click();
+      await page.getByRole('button', { name: 'Delete branch', exact: true }).click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(2);
+      await page.getByTestId('bt-undo').click();
+      await expect(page.locator('.bt-native-node')).toHaveCount(3);
+    });
     test(`${runtime}: repeated nested subtrees keep live instance state and a stable viewport`, async ({ page }) => {
       test.setTimeout(60000);
       await page.goto('/');
@@ -228,7 +367,9 @@ test.describe('native runtimes against Genesis ROS host', () => {
         await page.getByRole('button', { name: 'View subtree Pick', exact: true }).click();
         await page.getByRole('button', { name: 'Close node palette', exact: true }).first().click();
         await page.locator('.bt-native-node').filter({ hasText: 'Bind approach object' }).click();
-        await expect(page.getByLabel('Node details', { exact: true })).toContainText('{object}');
+        await expect(page.getByLabel('Node details', { exact: true }).getByLabel('Node attribute value')).toHaveValue(
+          '{object}'
+        );
         await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
         await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
         await page.getByRole('button', { name: 'Run', exact: true }).click();

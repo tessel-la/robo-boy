@@ -7,6 +7,10 @@ export interface SourceNode extends RuntimeNode {
   /** Instance address, independent of native UID, names and tick state. */
   subtreeView?: string;
   runtimeId?: string;
+  editId?: string;
+  childOrder?: number;
+  childrenPolicy?: 'none' | 'one' | 'many' | 'host';
+  position?: { x: number; y: number };
 }
 interface InstanceNode {
   source: SourceNode;
@@ -19,17 +23,20 @@ interface TreeView {
 }
 
 /** Project definitions once; each SubTree occurrence owns a separate navigable view. */
-export function projectXml(xml: string, runtime: TreeRuntimeId | null, treeId?: string) {
+export function projectXml(xml: string, runtime: TreeRuntimeId | null, treeId?: string, addresses?: Map<string, string>) {
   const inspected = inspectXml(xml, runtime, treeId);
   const definitions = new Map(inspected.trees.map(tree => [tree.getAttribute('ID')!, tree.children[0]]));
   const views = new Map<string, TreeView>();
   const buildView = (id: string, path: string, parent?: string): InstanceNode => {
     const view: TreeView = { treeId: id, parent, nodes: [] };
     views.set(path, view);
-    const walk = (element: Element, address: string, parentId: string | null): InstanceNode => {
+    const walk = (element: Element, nodePath: string, parentId: string | null): InstanceNode => {
+      const editId = addresses?.get(`${id}:${nodePath}`);
+      const address = editId ? `${path}/${editId}` : `${path}/${nodePath}`;
       const subtree = ['subtree', 'subtreeplus'].includes(element.tagName.toLowerCase());
       const source: SourceNode = {
         id: address,
+        editId,
         parentId,
         label: element.getAttribute('name') || element.getAttribute('ID') || element.tagName,
         type: element.tagName,
@@ -44,10 +51,10 @@ export function projectXml(xml: string, runtime: TreeRuntimeId | null, treeId?: 
         source,
         children: subtree
           ? [buildView(source.subtreeId!, address, path)]
-          : Array.from(element.children).map((child, index) => walk(child, `${address}/${index}`, address)),
+          : Array.from(element.children).map((child, index) => walk(child, `${nodePath}/${index}`, address)),
       };
     };
-    return walk(definitions.get(id)!, `${path}/0`, null);
+    return walk(definitions.get(id)!, '0', null);
   };
   const root = inspected.mainTreeId ? buildView(inspected.mainTreeId, 'main') : null;
   return { ...inspected, root, views, nodes: views.get('main')?.nodes || [] };

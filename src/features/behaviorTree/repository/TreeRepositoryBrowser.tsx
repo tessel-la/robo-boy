@@ -5,9 +5,11 @@ import { githubRepositoryFiles, localRepositoryFiles, RepositoryTreeFile } from 
 export default function TreeRepositoryBrowser({
   onLoad,
   disabled,
+  onImportLibrary,
 }: {
   onLoad: (tree: BehaviorTree) => void;
   disabled: boolean;
+  onImportLibrary?: (tree: BehaviorTree) => void;
 }) {
   const [repository, setRepository] = useState('');
   const [revision, setRevision] = useState('');
@@ -109,12 +111,12 @@ export default function TreeRepositoryBrowser({
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
-          <p className="bt-menu-hint">JSON and XML files. Robo Boy validates each tree when opened.</p>
+          <p className="bt-menu-hint">Click a file to open it. {onImportLibrary ? 'Add subtrees keeps your current tree and imports the XML definitions to its palette.' : 'JSON and XML files are validated when opened.'}</p>
           <div className="bt-repository-files">
             {shown.slice(0, 100).map(file => (
+              <div className="bt-repository-file-row" key={file.path}>
               <button
                 className="bt-menu-tree-row"
-                key={file.path}
                 disabled={disabled || busy}
                 onClick={() =>
                   void run(async signal => {
@@ -126,6 +128,10 @@ export default function TreeRepositoryBrowser({
                 <span className="bt-menu-tree-name">{file.path}</span>
                 <small>{file.format}</small>
               </button>
+              {onImportLibrary && file.format === 'XML' && <button className="bt-menu-action-btn"
+                disabled={disabled || busy} aria-label={`Add subtrees from ${file.path}`}
+                onClick={() => void run(async signal => { const tree = await file.load(signal); if (!signal.aborted) onImportLibrary(tree); })}>Add subtrees</button>}
+              </div>
             ))}
           </div>
           {shown.length > 100 && (

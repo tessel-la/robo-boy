@@ -22,7 +22,7 @@ interface BehaviorTreeToolbarProps {
   onSave: () => void;
   onLoad: (tree: BehaviorTree) => void;
   onNew: () => void;
-  onNewXml?: () => void;
+  onImportLibrary?: (tree: BehaviorTree, prefix?: string) => void;
   runtimeSettings?: React.ReactNode;
   engineControl?: React.ReactNode;
   nativeControls?: {
@@ -69,7 +69,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onSave,
   onLoad,
   onNew,
-  onNewXml,
+  onImportLibrary,
   runtimeSettings,
   engineControl,
   nativeControls,
@@ -102,7 +102,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
         onSave={onSave}
         onLoad={onLoad}
         onNew={onNew}
-        onNewXml={onNewXml}
+        onImportLibrary={onImportLibrary}
         onEditSource={nativeControls?.onSource}
         onExport={onExport}
         onRename={onRename}

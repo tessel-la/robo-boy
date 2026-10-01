@@ -5,7 +5,7 @@ export default function NativeTreeSettings({ controller }: { controller: NativeT
   return (
     <div className="bt-menu-section">
       <label className="bt-menu-label" htmlFor={mainTreeId}>
-        Main tree
+        Tree to run
       </label>
       <select
         id={mainTreeId}
@@ -23,6 +23,12 @@ export default function NativeTreeSettings({ controller }: { controller: NativeT
           </option>
         ))}
       </select>
+      <p className="bt-menu-hint">
+        Run loads and starts this definition on the ROS host. Viewing a subtree does not change the tree to run.
+      </p>
+      <p className="bt-menu-hint">
+        Validate checks the tree without running it. Load on host prepares it for later execution.
+      </p>
       <div className="bt-menu-actions">
         <button
           className="bt-menu-action-btn"

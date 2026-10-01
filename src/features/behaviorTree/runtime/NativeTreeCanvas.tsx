@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -17,6 +17,7 @@ import type { NativeTreeController } from './useNativeTreeController';
 import type { SourceNode } from './projection';
 import type { RuntimeState } from './types';
 import { arrangeBehaviorTree } from '../layoutUtils';
+import { ORDERED_EDGE_STYLE } from '../orderUtils';
 import '../components/nodes/NodeStyles.css';
 import '../components/execution/ExecutionDetails.css';
 import './NativeTreeCanvas.css';
@@ -29,6 +30,7 @@ function NativeNode({ data, selected }: NodeProps<RuntimeNode>) {
     <div
       className={`bt-node bt-native-node status-${status}${selected ? ' selected' : ''}`}
       data-testid={`native-node-${data.id}`}
+      title={(data as SourceNode).subtreeId ? 'Double-click to open this subtree instance' : undefined}
     >
       <Handle type="target" position={Position.Top} className="bt-handle" />
       <div className="bt-node-header">
@@ -55,8 +57,81 @@ function NativeNode({ data, selected }: NodeProps<RuntimeNode>) {
       <div className="bt-node-status">
         <div className={`bt-status-indicator status-${status}`} />
       </div>
-      <Handle type="source" position={Position.Bottom} className="bt-handle" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="bt-handle"
+        isConnectableStart={(data as SourceNode).childrenPolicy !== 'none'}
+      />
     </div>
+  );
+}
+function NativeNodeEditor({ node, controller }: { node: SourceNode; controller: NativeTreeController }) {
+  const [attributes, setAttributes] = useState(node.attributes);
+  const [port, setPort] = useState('');
+  const [value, setValue] = useState('');
+  useEffect(() => setAttributes(node.attributes), [node.attributes]);
+  const commit = (next: Record<string, string>) => controller.setAttributes(node.editId!, next);
+  return (
+    <>
+      <p className="bt-menu-hint">
+        Use {'{key}'} to bind a port to the blackboard. Child priority follows connection order; Earlier/Later changes
+        it.
+      </p>
+      {Object.entries(attributes).map(([name, entry]) => (
+        <label className="bt-native-field" key={name}>
+          <span>{name}</span>
+          <input
+            aria-label={`Node attribute ${name}`}
+            value={entry}
+            onChange={event => setAttributes({ ...attributes, [name]: event.target.value })}
+            onBlur={() => commit(attributes)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+          />
+          <button
+            aria-label={`Remove attribute ${name}`}
+            onClick={() => {
+              const next = { ...attributes };
+              delete next[name];
+              setAttributes(next);
+              commit(next);
+            }}
+          >
+            ×
+          </button>
+        </label>
+      ))}
+      <form
+        className="bt-native-port-form"
+        onSubmit={event => {
+          event.preventDefault();
+          if (!port.trim()) return;
+          const next = { ...attributes, [port.trim()]: value };
+          setAttributes(next);
+          commit(next);
+          setPort('');
+          setValue('');
+        }}
+      >
+        <input
+          aria-label="New attribute or port"
+          placeholder="Port or attribute"
+          value={port}
+          onChange={event => setPort(event.target.value)}
+        />
+        <input
+          aria-label="New port value"
+          placeholder="Value or {key}"
+          value={value}
+          onChange={event => setValue(event.target.value)}
+        />
+        <button className="bt-menu-action-btn" type="submit">
+          Add port
+        </button>
+      </form>
+    </>
   );
 }
 const nodeTypes = { native: NativeNode };
@@ -66,11 +141,13 @@ function NativeViewport({
   follow,
   nodes,
   viewKey,
+  onArrange,
 }: {
   arrange: number;
   follow: boolean;
   nodes: SourceNode[];
   viewKey: string;
+  onArrange: (positions: Array<{ id: string; x: number; y: number }>) => void;
 }) {
   const { fitView, getNodes, getEdges, setNodes } = useReactFlow();
   // Wait for THIS view, not the previous React Flow store's measured nodes.
@@ -83,15 +160,30 @@ function NativeViewport({
         return !!measured?.width && !!measured.height;
       })
   );
+  const fitted = useRef<string>();
+  const arrangeCommit = useRef(onArrange);
+  arrangeCommit.current = onArrange;
   const size = useStore(state => `${state.width}:${state.height}`);
   useEffect(() => {
     if (!initialized || size.split(':').some(dimension => Number(dimension) <= 0)) return;
-    setNodes(arrangeBehaviorTree(getNodes(), getEdges()));
+    const request = `${size}:${arrange}`;
+    if (fitted.current === request) return;
+    const explicitArrange = fitted.current !== undefined && !fitted.current.endsWith(`:${arrange}`);
+    fitted.current = request;
+    const arranged =
+      explicitArrange || !nodes.some(node => node.position) ? arrangeBehaviorTree(getNodes(), getEdges()) : null;
+    if (arranged) setNodes(arranged);
     // Layout first, then fit the painted, measured graph. Live status updates
     // never rerun this effect; user zoom/pan owns the viewport between views.
     let paintFrame = 0;
     const layoutFrame = requestAnimationFrame(() => {
-      paintFrame = requestAnimationFrame(() => void fitView({ padding: 0.22 }));
+      paintFrame = requestAnimationFrame(() => {
+        void fitView({ padding: 0.22 });
+        if (explicitArrange && arranged)
+          arrangeCommit.current(
+            arranged.filter(node => node.data.editId).map(node => ({ id: node.data.editId, ...node.position }))
+          );
+      });
     });
     return () => {
       cancelAnimationFrame(layoutFrame);
@@ -120,12 +212,20 @@ function NativeCanvasContent({
   arrange: number;
   onManualNavigation: () => void;
 }) {
+  const { screenToFlowPosition } = useReactFlow();
+  const [edgeChild, setEdgeChild] = useState<string | null>(null);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
-  useEffect(() => setInspectedId(null), [controller.viewKey, controller.sourceOpen]);
+  const inspectTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(inspectTimer.current), [controller.viewKey]);
+  useEffect(() => {
+    clearTimeout(inspectTimer.current);
+    setInspectedId(null);
+  }, [controller.viewKey, controller.sourceOpen]);
   useEffect(() => {
     if (!controller.sourceOpen && !inspectedId) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        clearTimeout(inspectTimer.current);
         controller.setSourceOpen(false);
         setInspectedId(null);
       }
@@ -141,6 +241,7 @@ function NativeCanvasContent({
           id: `${node.parentId}-${node.id}`,
           source: node.parentId!,
           target: node.id,
+          label: node.childOrder ? String(node.childOrder) : undefined,
           animated: node.status === 'running',
         })),
     [controller.nodes]
@@ -153,10 +254,16 @@ function NativeCanvasContent({
         ...existing.get(data.id),
         id: data.id,
         type: 'native',
-        position: existing.get(data.id)?.position || { x: 0, y: 0 },
+        position: data.position || existing.get(data.id)?.position || { x: 0, y: 0 },
         data,
       }));
-      return previous.length ? updated : arrangeBehaviorTree(updated, edges);
+      if (!previous.length || updated.some(node => !existing.has(node.id) && !node.data.position)) {
+        return arrangeBehaviorTree(updated, edges).map(node => ({
+          ...node,
+          position: node.data.position || node.position,
+        }));
+      }
+      return updated;
     });
   }, [controller.nodes, controller.viewKey, edges, setNodes]);
   const selected = controller.nodes.find(node => node.id === inspectedId);
@@ -166,6 +273,27 @@ function NativeCanvasContent({
     <div
       className="bt-canvas"
       data-testid="bt-canvas"
+      onDragOver={event => {
+        if (controller.editable) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }
+      }}
+      onDrop={event => {
+        event.preventDefault();
+        if (!controller.editable) return;
+        try {
+          const payload = JSON.parse(event.dataTransfer.getData('application/reactflow'));
+          const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          if (payload.native && payload.savedTree) controller.addSaved(payload.savedTree, position);
+          else if (payload.native && typeof payload.tag === 'string')
+            controller.addNode(payload.tag, payload.attributes, position);
+          else if (payload.item?.nativeDocument) controller.addSaved(payload.item, position);
+          else throw new Error('Choose a native node or a subtree for this engine.');
+        } catch (err) {
+          controller.reportError((err as Error).message);
+        }
+      }}
       onPointerDownCapture={event => {
         if ((event.target as Element).closest('.react-flow__minimap')) onManualNavigation();
       }}
@@ -175,26 +303,63 @@ function NativeCanvasContent({
         edges={edges}
         onNodesChange={onNodesChange}
         nodeTypes={nodeTypes}
-        nodesDraggable={false}
-        nodesConnectable={false}
+        nodesDraggable={controller.editable}
+        nodeDragThreshold={4}
+        nodesConnectable={controller.editable}
+        onConnect={connection => {
+          const parent = controller.nodes.find(node => node.id === connection.source)?.editId;
+          const child = controller.nodes.find(node => node.id === connection.target)?.editId;
+          if (parent && child) controller.connect(parent, child);
+        }}
+        onNodeDragStop={(_, __, dragged) => {
+          controller.move(
+            dragged.filter(node => node.data.editId).map(node => ({ id: node.data.editId!, ...node.position }))
+          );
+        }}
+        onEdgeClick={(_, edge) => {
+          clearTimeout(inspectTimer.current);
+          setInspectedId(null);
+          setEdgeChild(controller.nodes.find(node => node.id === edge.target)?.editId || null);
+        }}
         zoomOnDoubleClick={false}
         panOnDrag={interactionMode === 'pan'}
         selectionOnDrag={interactionMode === 'select'}
-        onNodeClick={(_, node) => setInspectedId(node.id)}
-        onPaneClick={() => setInspectedId(null)}
+        onNodeClick={(event, node) => {
+          clearTimeout(inspectTimer.current);
+          setEdgeChild(null);
+          // Let a subtree double-click finish before an inspector can cover it.
+          if (node.data.subtreeView && event.detail)
+            inspectTimer.current = setTimeout(() => setInspectedId(node.id), 400);
+          else setInspectedId(node.id);
+        }}
+        onPaneClick={() => {
+          clearTimeout(inspectTimer.current);
+          setInspectedId(null);
+          setEdgeChild(null);
+        }}
         onMoveStart={event => {
           if (event) onManualNavigation();
         }}
         onNodeDoubleClick={(_, node) => {
+          clearTimeout(inspectTimer.current);
           const path = (node.data as SourceNode).subtreeView;
           if (path) controller.openSubtree(path);
         }}
         minZoom={0.05}
         maxZoom={2}
         deleteKeyCode={null}
-        defaultEdgeOptions={{ style: { stroke: 'var(--primary-color)', strokeWidth: 2 } }}
+        defaultEdgeOptions={{
+          style: { stroke: 'var(--primary-color)', strokeWidth: 2 },
+          ...ORDERED_EDGE_STYLE,
+        }}
       >
-        <NativeViewport arrange={arrange} follow={follow} nodes={controller.nodes} viewKey={controller.viewKey} />
+        <NativeViewport
+          arrange={arrange}
+          follow={follow}
+          nodes={controller.nodes}
+          viewKey={controller.viewKey}
+          onArrange={controller.move}
+        />
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls
           showInteractive={false}
@@ -242,6 +407,19 @@ function NativeCanvasContent({
           </button>
         )}
       </div>
+      {edgeChild && controller.editable && (
+        <div className="bt-native-edge-actions">
+          <button
+            className="bt-menu-action-btn"
+            onClick={() => {
+              controller.disconnect(edgeChild);
+              setEdgeChild(null);
+            }}
+          >
+            Disconnect nodes
+          </button>
+        </div>
+      )}
       {(controller.sourceOpen || selected) && (
         <aside
           className="bt-exec-card bt-native-inspector"
@@ -261,13 +439,18 @@ function NativeCanvasContent({
           </div>
           <div className="bt-native-inspector-body">
             {controller.sourceOpen ? (
-              <textarea
-                aria-label="Tree XML"
-                spellCheck={false}
-                value={controller.document!.xml}
-                disabled={controller.locked}
-                onChange={event => controller.changeDocument({ xml: event.target.value, mainTreeId: undefined })}
-              />
+              <>
+                <p className="bt-menu-hint">
+                  Editing XML replaces the visual draft. Save first to keep disconnected nodes and their layout.
+                </p>
+                <textarea
+                  aria-label="Tree XML"
+                  spellCheck={false}
+                  value={controller.document!.xml}
+                  disabled={controller.locked}
+                  onChange={event => controller.changeDocument({ xml: event.target.value, mainTreeId: undefined })}
+                />
+              </>
             ) : (
               <>
                 <p>
@@ -283,15 +466,45 @@ function NativeCanvasContent({
                   </button>
                 )}
                 <h4>Ports and attributes</h4>
-                <dl>
-                  {Object.entries(attributes!).map(([name, value]) => (
-                    <React.Fragment key={name}>
-                      <dt>{name}</dt>
-                      <dd>{value}</dd>
-                    </React.Fragment>
-                  ))}
-                </dl>
+                {controller.editable && selected!.editId ? (
+                  <NativeNodeEditor key={selected!.editId} node={selected!} controller={controller} />
+                ) : (
+                  <dl>
+                    {Object.entries(attributes!).map(([name, value]) => (
+                      <React.Fragment key={name}>
+                        <dt>{name}</dt>
+                        <dd>{value}</dd>
+                      </React.Fragment>
+                    ))}
+                  </dl>
+                )}
                 {!Object.keys(attributes!).length && <p>No configured ports.</p>}
+                {controller.editable && selected!.editId && (
+                  <div className="bt-native-edit-actions">
+                    <button className="bt-menu-action-btn" onClick={() => controller.reorder(selected!.editId!, -1)}>
+                      Earlier
+                    </button>
+                    <button className="bt-menu-action-btn" onClick={() => controller.reorder(selected!.editId!, 1)}>
+                      Later
+                    </button>
+                    <button
+                      className="bt-menu-action-btn"
+                      disabled={!selected!.parentId}
+                      onClick={() => controller.disconnect(selected!.editId!)}
+                    >
+                      Detach node
+                    </button>
+                    <button
+                      className="bt-menu-action-btn"
+                      onClick={() => {
+                        controller.remove(selected!.editId!);
+                        setInspectedId(null);
+                      }}
+                    >
+                      Delete branch
+                    </button>
+                  </div>
+                )}
                 {selected!.feedback && <p>{selected!.feedback}</p>}
                 {nodeLogs.length > 0 && (
                   <details>
