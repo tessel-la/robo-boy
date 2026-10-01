@@ -8,9 +8,7 @@ use the same menu for every format. The engine pill automatically follows detect
 C++; Python controls with `memory`/`policy` and distinctive built-ins identify py_trees.
 Shared marker-free syntax (for example, a lone custom `Wait`) still requires an explicit engine choice. XML source retains native ports, subtrees and metadata. Visual editing composes native XML using the selected engine’s node definitions; it does not translate between engines. Layout-only edits leave the executable XML unchanged.
 The shared tree menu opens, saves and exports both JSON and XML trees. **Open
-local folder** lists tree files from a checked-out repository. **Browse repository**
-opens a public GitHub repository with an optional branch, tag or commit; downloads
-are pinned to blob IDs. Use a local checkout for private repositories. XML export
+local folder** lists JSON/XML tree files from a folder or checked-out repository. Files show their name, subfolder and format; search filters the list. GitHub browsing is not part of the tree panel. XML export
 preserves source, while browser saves also retain the chosen runtime and main tree.
 
 1. Connect to the ROS host. Runtime discovery happens automatically.
@@ -18,7 +16,7 @@ preserves source, while browser saves also retain the chosen runtime and main tr
    ambiguous marker-free XML. Select the main tree when a multi-tree document does not
    specify one; a single tree is inferred automatically.
 3. Press **Run**. Robo Boy loads the current XML on the host and starts execution.
-   The menu also offers **Validate** and **Load on host** for separate checks.
+   The menu offers **Check tree** to validate on ROS without executing. Run handles loading automatically.
 4. The canvas shows idle/running/success/failure. The palette lists this engine's
    registered nodes, saved documents and subtrees in the current XML. Click
    **View** next to a subtree to inspect its definition without changing the executable main tree. Tap the subtree entry to append an instance, or drag it onto the canvas and connect it. During execution,
@@ -40,23 +38,23 @@ Switching engines preserves the open document. Run is disabled until the
 selected engine matches the document and is available and enabled on the host.
 Both native engines support dragging, connections, port/attribute editing, child priority, branch deletion, layout, and undo/redo (toolbar or Ctrl/Cmd+Z). Tap palette entries to append to the root control; drag to place disconnected nodes, then connect the bottom parent handle to the top child handle. Click a node to edit ports; braced values such as `{target}` bind to the native blackboard. **Earlier/Later** changes child execution order. Execution locks editing. AI generation and pause remain unavailable for native trees.
 
-To compose a tree from a repository, select an engine and choose **New**. In the menu, **Add subtrees** next to a repository XML file or **Import subtree file** adds all of its definitions, nested dependencies and port metadata to the current document. Add those definitions from the palette, configure their ports, and choose **Tree to run** before running. Libraries must use the same engine and be self-contained; includes/imports must be inlined. Conflicting IDs are rejected atomically. An optional **Library prefix** explicitly renames definitions and references; Python subtree namespaces may change. Repeat to combine several files.
+To compose a tree from a repository, select an engine and choose **New**. In the menu, **+ Add** next to a folder's XML file or **Import subtree file** adds all of its definitions, nested dependencies and port metadata to the current document. Add those definitions from the palette, configure their ports, and choose **Tree to run** before running. Libraries must use the same engine and be self-contained; includes/imports must be inlined. Conflicting IDs are rejected atomically. An optional **Library prefix** explicitly renames definitions and references; Python subtree namespaces may change. Repeat to combine several files.
 
-**Save** retains disconnected drafts and node positions in browser storage. **Export** downloads executable native XML, so all definitions must have one connected root and valid control/decorator arity. JSON envelopes containing native documents also retain drafts when opened. Editing **XML source** replaces the visual draft; save first to retain unconnected nodes. Unknown custom node ports/arity remain owned by the host and are checked through **Validate**. Subtree browsing remains available during execution.
+**Save** retains disconnected drafts and node positions in browser storage. **Export** downloads executable native XML, so all definitions must have one connected root and valid control/decorator arity. JSON envelopes containing native documents also retain drafts when opened. Editing **XML source** replaces the visual draft; save first to retain unconnected nodes. Unknown custom node ports/arity remain owned by the host and are checked through **Check tree**. Subtree browsing remains available during execution.
 
 Runtime availability/version and failure reasons are visible. An unavailable
 backend never causes execution with the other backend. A lost ROS connection
 leaves remote ownership unchanged; the panel reports lost visibility and cannot
-claim cancellation succeeded. Reconnect/Discover retrieves host status; **Show
-host tree** adopts an existing remote document. Cancellation acknowledgement
+claim cancellation succeeded. Reconnect/Discover retrieves host status; **Open
+host tree** in the menu adopts an existing remote document. Cancellation acknowledgement
 means native halt completed and ROS goal cancellation was requested; the ROS
 action server owns the physical stop and may acknowledge it asynchronously.
 
 The menu's **Execution engines · ROS host** has separate switches for
 BehaviorTree.CPP and py_trees. Both are enabled initially. Disabling an engine
 halts its tree, requests cancellation of its ROS goals and closes its worker;
-the document remains available for editing. Re-enable it and **Run** to reset
-and rerun. These settings belong to the connected host and last until its
+the engine disappears from the toolbar selector and its palette entries are disabled. The open document is preserved. Re-enable it and **Run** to reset
+and rerun. The execution pill beside Run shows Ready, Running, Succeeded, Failed or a connection/engine issue; a hover explains the state. Subtree navigation sits above the canvas, and host-tree recovery is in the menu. These settings belong to the connected host and last until its
 executor restarts. **Discover engines** refreshes availability manually.
 
 ## Installation and ROS interfaces
@@ -185,7 +183,7 @@ example pairs, explicit subtree ports, JSON goal construction, recovery,
 reset/rerun and C-level stdout isolation. Both pairs execute and rerun through
 real ROS actions in the deterministic Genesis mock environment.
 
-All **262 frontend Behavior Tree tests** and **35 Chromium workflows** pass across JSON editor regressions, shared
+All **260 frontend Behavior Tree tests** and **35 Chromium workflows** pass across JSON editor regressions, shared
 repository loading and ten native runtime/example workflows. Repository tests
 verify the shell stays mounted, source survives engine switching, saved engine
 metadata persists, and mobile inspectors/menu fit the viewport. Native tests

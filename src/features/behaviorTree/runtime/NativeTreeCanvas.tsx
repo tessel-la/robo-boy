@@ -369,44 +369,19 @@ function NativeCanvasContent({
         />
         <MiniMap zoomable pannable style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)' }} />
       </ReactFlow>
-      <div className="bt-runtime-status" role="status">
-        {controller.viewTreeId && (
-          <button className="bt-selection-action" onClick={controller.parentView}>
+      {controller.viewTreeId && (
+        <nav className="bt-native-navigation" aria-label="Tree navigation">
+          <button className="bt-menu-action-btn" onClick={controller.parentView}>
             Parent tree
           </button>
-        )}
-        <span>
-          {controller.descriptor?.version && `${controller.descriptor.version} · `}
-          {!state.connected
-            ? 'Host executor unavailable'
-            : !controller.descriptor?.available
-              ? controller.descriptor?.reason || 'Runtime unavailable'
-              : controller.descriptor.enabled === false
-                ? 'Engine disabled'
-                : 'Available on ROS host'}
-        </span>
-        {controller.session && (
-          <span data-testid="bt-runtime-state">
-            {' '}
-            · {controller.session.state}
-            {controller.session.result ? `: ${controller.session.result}` : ''}
-          </span>
-        )}
-        {!controller.compatible && (
-          <span> · Select the engine matching this tree, or load a tree for the selected engine.</span>
-        )}
-        {controller.notice && <span> · {controller.notice}</span>}
-        {controller.error && (
-          <span className="bt-native-error" role="alert">
-            {controller.error}
-          </span>
-        )}
-        {controller.differentHostTree && (
-          <button disabled={controller.busy} onClick={controller.showHost}>
-            Show host tree
-          </button>
-        )}
-      </div>
+          <span>{controller.viewTreeId}</span>
+        </nav>
+      )}
+      {controller.error && (
+        <div className="bt-native-alert" role="alert">
+          {controller.error}
+        </div>
+      )}
       {edgeChild && controller.editable && (
         <div className="bt-native-edge-actions">
           <button

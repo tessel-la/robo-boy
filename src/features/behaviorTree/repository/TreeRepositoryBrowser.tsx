@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BehaviorTree } from '../types';
-import { githubRepositoryFiles, localRepositoryFiles, RepositoryTreeFile } from './treeRepository';
+import { localRepositoryFiles, RepositoryTreeFile } from './treeRepository';
 
 export default function TreeRepositoryBrowser({
   onLoad,
@@ -11,43 +11,41 @@ export default function TreeRepositoryBrowser({
   disabled: boolean;
   onImportLibrary?: (tree: BehaviorTree) => void;
 }) {
-  const [repository, setRepository] = useState('');
-  const [revision, setRevision] = useState('');
   const [files, setFiles] = useState<RepositoryTreeFile[]>([]);
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [listed, setListed] = useState(false);
+  const [folderName, setFolderName] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
   const folder = useRef<HTMLInputElement>(null);
   useEffect(() => () => request.current?.abort(), []);
-  const run = async (action: (signal: AbortSignal) => Promise<void>) => {
+  const open = async (file: RepositoryTreeFile, add = false) => {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
     setError(null);
-    let timedOut = false;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 15000);
     try {
-      await action(controller.signal);
+      const tree = await file.load(controller.signal);
+      if (!controller.signal.aborted) {
+        if (add) onImportLibrary?.(tree);
+        else onLoad(tree);
+      }
     } catch (err) {
-      if (timedOut) setError('Repository request timed out. Retry or open a local folder.');
-      else if (!controller.signal.aborted) setError((err as Error).message);
+      if (!controller.signal.aborted) setError((err as Error).message);
     } finally {
-      clearTimeout(timeout);
-      if (!controller.signal.aborted || timedOut) setBusy(false);
+      if (request.current === controller) setBusy(false);
     }
   };
   const shown = files.filter(file => file.path.toLowerCase().includes(filter.toLowerCase()));
   return (
     <div className="bt-menu-section bt-repository-browser">
-      <label className="bt-menu-label">Open from repository</label>
+      <label className="bt-menu-label">Trees from a folder</label>
+      <p className="bt-menu-hint">
+        Choose a folder containing JSON or XML trees, including a local repository checkout.
+      </p>
       <button className="bt-menu-action-btn" disabled={disabled || busy} onClick={() => folder.current?.click()}>
-        Open local folder
+        {folderName ? 'Change folder' : 'Open local folder'}
       </button>
       <input
         ref={folder}
@@ -57,87 +55,85 @@ export default function TreeRepositoryBrowser({
         aria-label="Repository folder"
         {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
         onChange={event => {
-          setFiles(localRepositoryFiles(Array.from(event.target.files || [])));
-          setListed(true);
+          const selected = Array.from(event.target.files || []);
+          if (!selected.length) return;
+          setFiles(localRepositoryFiles(selected));
+          setFolderName(selected[0].webkitRelativePath.split('/')[0] || 'Selected folder');
+          setFilter('');
           setError(null);
           event.target.value = '';
         }}
       />
-      <form
-        onSubmit={event => {
-          event.preventDefault();
-          void run(async signal => {
-            setFiles(await githubRepositoryFiles(repository, revision, signal));
-            setListed(true);
-          });
-        }}
-      >
-        <label>
-          GitHub repository
-          <input
-            aria-label="GitHub repository"
-            placeholder="owner/repository"
-            value={repository}
-            disabled={disabled || busy}
-            onChange={e => setRepository(e.target.value)}
-          />
-        </label>
-        <label>
-          Branch, tag or commit
-          <input
-            aria-label="Repository revision"
-            placeholder="Default branch"
-            value={revision}
-            disabled={disabled || busy}
-            onChange={e => setRevision(e.target.value)}
-          />
-        </label>
-        <button className="bt-menu-action-btn" disabled={disabled || busy || !repository.trim()} type="submit">
-          Browse repository
-        </button>
-      </form>
-      {busy && <p role="status">Loading repository…</p>}
+      {busy && <p role="status">Opening tree…</p>}
       {error && (
         <p role="alert" className="bt-native-error">
           {error}
         </p>
       )}
-      {listed && (
+      {folderName && (
         <>
+          <div className="bt-folder-heading">
+            <strong title={folderName}>{folderName}</strong>
+            <span>
+              {files.length} {files.length === 1 ? 'tree file' : 'tree files'}
+            </span>
+          </div>
           <input
             type="search"
             aria-label="Search repository trees"
-            placeholder="Filter files or folder…"
+            placeholder="Search files or folders…"
             value={filter}
-            onChange={e => setFilter(e.target.value)}
+            onChange={event => setFilter(event.target.value)}
           />
-          <p className="bt-menu-hint">Click a file to open it. {onImportLibrary ? 'Add subtrees keeps your current tree and imports the XML definitions to its palette.' : 'JSON and XML files are validated when opened.'}</p>
-          <div className="bt-repository-files">
-            {shown.slice(0, 100).map(file => (
-              <div className="bt-repository-file-row" key={file.path}>
-              <button
-                className="bt-menu-tree-row"
-                disabled={disabled || busy}
-                onClick={() =>
-                  void run(async signal => {
-                    const tree = await file.load(signal);
-                    if (!signal.aborted) onLoad(tree);
-                  })
-                }
-              >
-                <span className="bt-menu-tree-name">{file.path}</span>
-                <small>{file.format}</small>
-              </button>
-              {onImportLibrary && file.format === 'XML' && <button className="bt-menu-action-btn"
-                disabled={disabled || busy} aria-label={`Add subtrees from ${file.path}`}
-                onClick={() => void run(async signal => { const tree = await file.load(signal); if (!signal.aborted) onImportLibrary(tree); })}>Add subtrees</button>}
-              </div>
-            ))}
-          </div>
+          <p className="bt-menu-hint">
+            Open a file to replace the current tree.
+            {onImportLibrary && ' Add imports its subtrees into the current tree.'}
+          </p>
+          <ul className="bt-repository-files" aria-label="Folder tree files">
+            {shown.slice(0, 100).map(file => {
+              const parts = file.path.split('/');
+              const name = parts.pop()!;
+              const directory = parts.slice(1).join('/') || 'Folder root';
+              return (
+                <li className="bt-repository-file-row" key={file.path}>
+                  <button
+                    className="bt-menu-tree-row"
+                    disabled={disabled || busy}
+                    aria-label={`Open ${file.path}`}
+                    title={file.path}
+                    onClick={() => void open(file)}
+                  >
+                    <span className="bt-folder-format" aria-hidden="true">
+                      {file.format}
+                    </span>
+                    <span className="bt-folder-file-info">
+                      <strong>{name}</strong>
+                      <small>{directory}</small>
+                    </span>
+                  </button>
+                  {onImportLibrary && file.format === 'XML' && (
+                    <button
+                      className="bt-folder-add"
+                      disabled={disabled || busy}
+                      aria-label={`Add subtrees from ${file.path}`}
+                      title="Add subtrees to the current tree"
+                      onClick={() => void open(file, true)}
+                    >
+                      <span aria-hidden="true">+</span> Add
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
           {shown.length > 100 && (
-            <p className="bt-menu-hint">Showing 100 of {shown.length} files. Filter by folder or filename.</p>
+            <p className="bt-menu-hint">Showing 100 of {shown.length} files. Narrow the search to see others.</p>
           )}
-          {shown.length === 0 && <p className="bt-menu-hint">No matching JSON or XML files.</p>}
+          {shown.length === 0 && (
+            <p className="bt-menu-hint">
+              {files.length ? 'No matching tree files.' : 'This folder has no JSON or XML tree files.'}
+            </p>
+          )}
         </>
       )}
     </div>

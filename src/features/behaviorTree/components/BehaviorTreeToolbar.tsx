@@ -24,6 +24,7 @@ interface BehaviorTreeToolbarProps {
   onNew: () => void;
   onImportLibrary?: (tree: BehaviorTree, prefix?: string) => void;
   runtimeSettings?: React.ReactNode;
+  runtimeStatus?: React.ReactNode;
   engineControl?: React.ReactNode;
   nativeControls?: {
     ready: boolean;
@@ -71,6 +72,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   onNew,
   onImportLibrary,
   runtimeSettings,
+  runtimeStatus,
   engineControl,
   nativeControls,
   runDisabled = false,
@@ -300,7 +302,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
       </BehaviorTreeDocumentMenu>
       {/* ── Floating top-right: delete + run/stop ─────────────── */}
       <div className="bt-float-actions">
-        <label
+        {nativeControls ? runtimeStatus : <label
           className={`bt-persistent-toggle${persistentExecution ? ' active' : ''}`}
           title="Keep this tree running in ROS if Robo-Boy is closed"
         >
@@ -321,7 +323,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             <span />
           </span>
           <span className="bt-persistent-toggle-label">Keep running</span>
-        </label>
+        </label>}
         <button
           className={`bt-float-icon-btn bt-follow-mode-btn${isFollowMode ? ' active' : ''}`}
           onClick={onToggleFollowMode}

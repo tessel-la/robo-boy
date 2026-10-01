@@ -1,5 +1,60 @@
 import React, { useId } from 'react';
 import type { NativeTreeController } from './useNativeTreeController';
+import type { RuntimeState } from './types';
+import { treeFormats } from './xml';
+
+export function NativeTreeStatus({ controller, state }: { controller: NativeTreeController; state: RuntimeState }) {
+  const format = treeFormats.find(format => format.id === controller.document?.runtime);
+  const descriptor = state.runtimes.find(runtime => runtime.id === format?.id);
+  let label = 'Ready';
+  let explanation = 'Run sends this tree to the ROS host and starts execution.';
+  if (!state.connected) {
+    label = 'Disconnected';
+    explanation = 'Connect to ROS to run this tree.';
+  } else if (descriptor?.enabled === false) {
+    label = 'Engine off';
+    explanation = `Enable ${format?.label || 'this engine'} in the tree menu to run this tree.`;
+  } else if (!descriptor?.available) {
+    label = 'Unavailable';
+    explanation = descriptor?.reason || 'Check engine availability in the tree menu.';
+  } else if (!controller.compatible) {
+    label = 'Select engine';
+    explanation = `Select ${format?.label || 'an engine'} for this tree.`;
+  } else if (state.session?.state === 'running' && !controller.session) {
+    label = 'Host busy';
+    explanation = 'A different tree is running on ROS. Open host tree from the menu to inspect or control it.';
+  } else if (controller.preview.error) {
+    label = 'Incomplete';
+    explanation = controller.preview.error;
+  } else if (controller.busy) {
+    label = 'Working…';
+    explanation = 'Waiting for the ROS host.';
+  } else if (controller.session) {
+    const session = controller.session;
+    label =
+      session.state === 'completed'
+        ? session.result === 'success'
+          ? 'Succeeded'
+          : 'Failed'
+        : { loaded: 'Ready', running: 'Running', stopped: 'Stopped', cancelled: 'Cancelled', error: 'Error' }[
+            session.state
+          ];
+    if (session.state !== 'loaded') explanation = session.error || `${format?.label}: ${label}.`;
+  }
+  return (
+    <span
+      className="bt-runtime-chip"
+      role="status"
+      title={`${explanation}${descriptor?.version ? ` ${format?.label} ${descriptor.version}.` : ''}`}
+      data-testid="bt-runtime-state"
+      data-state={controller.session?.state}
+      data-result={controller.session?.result || undefined}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function NativeTreeSettings({ controller }: { controller: NativeTreeController }) {
   const mainTreeId = useId();
   return (
@@ -15,7 +70,7 @@ export default function NativeTreeSettings({ controller }: { controller: NativeT
         onChange={event => controller.changeDocument({ mainTreeId: event.target.value })}
       >
         <option value="" disabled>
-          Choose main tree
+          Choose a tree
         </option>
         {controller.preview.trees.map(tree => (
           <option key={tree.getAttribute('ID')} value={tree.getAttribute('ID')!}>
@@ -24,27 +79,31 @@ export default function NativeTreeSettings({ controller }: { controller: NativeT
         ))}
       </select>
       <p className="bt-menu-hint">
-        Run loads and starts this definition on the ROS host. Viewing a subtree does not change the tree to run.
+        Run automatically loads this tree on ROS and starts it. Viewing a subtree does not change the tree to run.
       </p>
-      <p className="bt-menu-hint">
-        Validate checks the tree without running it. Load on host prepares it for later execution.
-      </p>
-      <div className="bt-menu-actions">
-        <button
-          className="bt-menu-action-btn"
-          disabled={controller.locked || !controller.ready || !!controller.preview.error}
-          onClick={controller.validate}
-        >
-          Validate
-        </button>
-        <button
-          className="bt-menu-action-btn"
-          disabled={controller.locked || !controller.ready || !!controller.preview.error}
-          onClick={controller.load}
-        >
-          Load on host
-        </button>
-      </div>
+      <button
+        className="bt-menu-action-btn"
+        disabled={controller.locked || !controller.ready || !!controller.preview.error}
+        onClick={controller.validate}
+      >
+        Check tree
+      </button>
+      <p className="bt-menu-hint">Check the tree on ROS without starting execution.</p>
+      {controller.notice && (
+        <p className="bt-menu-hint" role="status">
+          {controller.notice}
+        </p>
+      )}
+      {controller.differentHostTree && (
+        <div className="bt-host-tree">
+          <p className="bt-menu-hint">
+            A different tree is on the ROS host. Open it to inspect or control it. Your current tree will be replaced.
+          </p>
+          <button className="bt-menu-action-btn" disabled={controller.busy} onClick={controller.showHost}>
+            Open host tree
+          </button>
+        </div>
+      )}
     </div>
   );
 }

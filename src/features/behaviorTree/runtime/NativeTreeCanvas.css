@@ -1,10 +1,4 @@
 .bt-native-node { width: 180px; }
-.bt-runtime-status {
-  position: absolute; bottom: 12px; left: 64px; right: 180px; z-index: 5;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  font-size: 11px; color: var(--text-color-secondary); pointer-events: none;
-}
-.bt-runtime-status button { pointer-events: auto; }
 .bt-native-error { color: var(--error-color, #dc2626); }
 .bt-native-inspector-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -38,9 +32,6 @@
 .bt-engine-toggle button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 .bt-engine-toggle button:disabled { cursor: default; opacity: .6; }
 .bt-native-node { transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease; }
-@container (max-width: 640px) {
-  .bt-runtime-status { left: 12px; right: 12px; bottom: 8px; }
-}
 .bt-native-field { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; }
 .bt-native-field span { min-width: 70px; overflow-wrap: anywhere; }
 .bt-native-field input, .bt-native-port-form input {
@@ -51,5 +42,42 @@
 .bt-native-port-form input { width: 110px; }
 .bt-native-edit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .bt-native-edge-actions { position: absolute; bottom: 42px; left: 50%; transform: translateX(-50%); z-index: 5; }
-.bt-repository-file-row { display: flex; gap: 6px; align-items: center; }
-.bt-repository-file-row .bt-menu-tree-row { flex: 1; min-width: 0; }
+
+.bt-native-navigation {
+  position: absolute;
+  top: 82px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 100px);
+  color: var(--text-color-secondary);
+  font-size: 12px;
+}
+.bt-native-navigation span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bt-native-alert {
+  position: absolute;
+  bottom: 12px;
+  left: 64px;
+  right: 220px;
+  z-index: 5;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--error-color, #dc2626);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+@container (max-width: 640px) {
+  .bt-native-alert {
+    left: 12px;
+    right: 12px;
+    bottom: 8px;
+  }
+}

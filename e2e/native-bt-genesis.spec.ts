@@ -151,19 +151,19 @@ test.describe('native runtimes against Genesis ROS host', () => {
       expect(xml.indexOf('ID="Task" delay="0.4"')).toBeLessThan(xml.indexOf('seconds="0.8"'));
       await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
       await page.getByTestId('bt-menu-button').click();
-      await page.getByRole('button', { name: 'Validate', exact: true }).click();
-      await expect(page.getByText('Native validation passed.', { exact: false })).toBeVisible();
+      await page.getByRole('button', { name: 'Check tree', exact: true }).click();
+      await expect(page.getByText('Tree check passed.', { exact: false })).toBeVisible();
       await page.getByRole('button', { name: 'Close menu', exact: true }).click();
       await page.getByRole('button', { name: 'Run', exact: true }).click();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('running');
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'running');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded');
       await expect(task).toHaveClass(/status-success/);
       await task.dblclick();
       await expect(page.locator('.bt-native-node').filter({ hasText: 'WaitPhase' })).toHaveClass(/status-success/);
       await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
       await menuAction(page, 'Reset');
       await page.getByRole('button', { name: 'Run', exact: true }).click();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded');
       await page.screenshot({ path: info.outputPath(`${runtime}-composed.png`) });
       await page.getByTestId('bt-menu-button').click();
       const downloaded = page.waitForEvent('download');
@@ -176,6 +176,12 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await task.click();
       await page.getByRole('button', { name: 'Delete branch', exact: true }).click();
       await expect(page.locator('.bt-native-node')).toHaveCount(2);
+      await expect(
+        page.getByTestId('bt-canvas').getByRole('button', { name: 'Open host tree', exact: true })
+      ).toHaveCount(0);
+      await page.getByTestId('bt-menu-button').click();
+      await expect(page.getByRole('button', { name: 'Open host tree', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Close menu', exact: true }).click();
       await page.getByTestId('bt-undo').click();
       await expect(page.locator('.bt-native-node')).toHaveCount(3);
     });
@@ -217,7 +223,7 @@ test.describe('native runtimes against Genesis ROS host', () => {
       const transform = await viewport.getAttribute('style');
       await page.waitForTimeout(400);
       await expect(viewport).toHaveAttribute('style', transform!);
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success', { timeout: 10000 });
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded', { timeout: 10000 });
       await expect(leaf).toHaveClass(/status-success/);
       await menuAction(page, 'Reset');
       await expect(leaf).toHaveClass(/status-idle/);
@@ -271,17 +277,27 @@ test.describe('native runtimes against Genesis ROS host', () => {
         await engine.click();
         await expect(engine).toBeChecked();
       }
+      const engineOption = page.getByRole('group', { name: 'Behavior Tree engine' }).getByRole('button', {
+        name: runtime === 'btcpp' ? 'BehaviorTree.CPP' : 'py_trees',
+        exact: true,
+      });
+      await expect(engineOption).toBeVisible();
       await engine.click();
       await expect(engine).not.toBeChecked();
+      await expect(engineOption).toHaveCount(0);
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Engine off');
       await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
       await engine.click();
       await expect(engine).toBeChecked();
-      await page.getByRole('button', { name: 'Validate', exact: true }).click();
-      await expect(page.getByText(/Native validation passed/)).toBeVisible();
+      await expect(engineOption).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('button', { name: 'Load on host', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('checkbox', { name: 'Keep running', exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Check tree', exact: true }).click();
+      await expect(page.getByText(/Tree check passed/)).toBeVisible();
       await page.getByRole('button', { name: 'Close menu', exact: true }).click();
       await page.getByRole('button', { name: 'Run', exact: true }).click();
       await expect(page.locator('.bt-native-node.status-running').first()).toBeVisible();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success', { timeout: 30000 });
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded', { timeout: 30000 });
       await expect(page.locator('.bt-native-node.status-success')).toHaveCount(3);
       await expect(page.getByRole('log')).toHaveCount(0);
       await expect
@@ -309,23 +325,23 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await expect(details).toContainText('result');
       await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
       await menuAction(page, 'Reset');
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('loaded');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'loaded');
       await menuAction(page, 'XML source');
       const encoded = Buffer.from(JSON.stringify({ x: 0.01, duration: 6, timeout: 8 })).toString('base64');
       const slow = source.replace(/goal_b64="[^"]*"/, `goal_b64="${encoded}"`);
       await page.getByLabel('Tree XML').fill(slow);
       await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
       await page.getByRole('button', { name: 'Run', exact: true }).click();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('running');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'running');
       await page.getByTestId('bt-menu-button').click();
       await engine.click();
       await expect(engine).not.toBeChecked();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('stopped');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'stopped');
       await engine.click();
       await expect(engine).toBeChecked();
       await page.getByRole('button', { name: 'Close menu', exact: true }).click();
       await page.getByRole('button', { name: 'Run', exact: true }).click();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('running');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'running');
       // Wheel navigation turns Follow off and remains stable across streamed ticks.
       const follow = page.getByTestId('bt-follow-mode');
       if ((await follow.getAttribute('aria-pressed')) === 'false') await follow.click();
@@ -340,18 +356,18 @@ test.describe('native runtimes against Genesis ROS host', () => {
       await page.waitForTimeout(600);
       await expect(viewport).toHaveAttribute('style', transform!);
       await menuAction(page, 'Cancel');
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('cancelled');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'cancelled');
       await menuAction(page, 'Reset');
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('loaded');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'loaded');
       await page.getByRole('button', { name: 'Run', exact: true }).click();
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('running');
+      await expect(page.getByTestId('bt-runtime-state')).toHaveAttribute('data-state', 'running');
       await page.reload();
       await connect(page);
       await panel(page);
       await expect(page.getByTestId('bt-runtime-state')).toBeVisible({ timeout: 30000 });
       await menuAction(page, 'XML source');
       await expect(page.getByLabel('Tree XML')).toHaveValue(slow);
-      await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success', { timeout: 30000 });
+      await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded', { timeout: 30000 });
     });
     for (const variant of ['transfer', 'recovery']) {
       test(`${runtime}: ${variant} example visualizes subtrees, wired ports and multiple real actions`, async ({
@@ -374,7 +390,7 @@ test.describe('native runtimes against Genesis ROS host', () => {
         await page.getByRole('button', { name: 'Parent tree', exact: true }).click();
         await page.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(page.locator('.bt-native-node.status-running').first()).toBeVisible();
-        await expect(page.getByTestId('bt-runtime-state')).toContainText('completed: success', { timeout: 40000 });
+        await expect(page.getByTestId('bt-runtime-state')).toHaveText('Succeeded', { timeout: 40000 });
         // Execution never replaces the collapsed definition or enters a subtree.
         await expect(page.locator('.bt-native-node').filter({ hasText: 'Grasp detected object' })).toHaveCount(0);
         await expect(page.getByRole('button', { name: 'Parent tree', exact: true })).toHaveCount(0);

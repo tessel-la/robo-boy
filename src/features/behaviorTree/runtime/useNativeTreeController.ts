@@ -390,7 +390,7 @@ export function useNativeTreeController(
     validate: () =>
       client &&
       document &&
-      void perform(() => client.validate(validateDocument(document)), 'Native validation passed.'),
+      void perform(() => client.validate(validateDocument(document)), 'Tree check passed. Run when you are ready.'),
     load: () =>
       client && document && void perform(() => client.load(validateDocument(document)), 'Tree loaded on ROS host.'),
     showHost: () =>

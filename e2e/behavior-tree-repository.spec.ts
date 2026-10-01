@@ -147,6 +147,9 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
   const toggle = await page.getByRole('group', { name: 'Behavior Tree engine' }).boundingBox();
   expect(toggle!.x).toBeGreaterThanOrEqual(0);
   expect(toggle!.x + toggle!.width).toBeLessThanOrEqual(520);
+  await expect
+    .poll(() => page.getByTestId('bt-runtime-state').evaluate(chip => chip.scrollWidth <= chip.clientWidth))
+    .toBe(true);
   await page.screenshot({ path: info.outputPath('py_trees-mobile-render.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId('bt-menu-button').click();
@@ -164,24 +167,32 @@ test('uses one shell for repeated JSON, C++ and py_trees repository loads, subtr
   await page.screenshot({ path: info.outputPath('xml-menu-mobile.png'), animations: 'disabled' });
 });
 
-test('browses public GitHub trees through the shared JSON/XML menu', async ({ page }) => {
-  const source = readFileSync('examples/behavior_trees/genesis_btcpp.xml', 'utf8');
-  const sha = 'a'.repeat(40);
-  await page.route('https://api.github.com/repos/example/trees**', async route => {
-    const url = route.request().url();
-    const body = url.includes('/git/blobs/')
-      ? { encoding: 'base64', content: Buffer.from(source).toString('base64') }
-      : url.includes('/git/trees/')
-        ? { tree: [{ type: 'blob', path: 'examples/native.xml', sha, size: source.length }] }
-        : { default_branch: 'dev' };
-    await route.fulfill({ json: body, headers: { 'access-control-allow-origin': '*' } });
-  });
+test('folder imports have clear names and paths without GitHub controls', async ({ page }, info) => {
   await openPanel(page);
   await page.getByTestId('bt-menu-button').click();
-  await page.getByLabel('GitHub repository', { exact: true }).fill('example/trees');
-  await page.getByRole('button', { name: 'Browse repository', exact: true }).click();
-  await page.getByRole('button', { name: 'examples/native.xml XML', exact: true }).click();
-  await page.getByTestId('bt-menu-button').click();
-  await page.getByRole('button', { name: 'XML source', exact: true }).click();
-  await expect(page.getByLabel('Tree XML')).toHaveValue(source);
+  await expect(page.getByLabel('GitHub repository', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Browse repository', exact: true })).toHaveCount(0);
+  const folder = info.outputPath('tasks');
+  mkdirSync(resolve(folder, 'pick'), { recursive: true });
+  writeFileSync(resolve(folder, 'pick', 'approach.xml'), readFileSync('examples/behavior_trees/genesis_btcpp.xml'));
+  writeFileSync(resolve(folder, 'notes.txt'), 'ignored');
+  await page.locator('input[webkitdirectory]').setInputFiles(folder);
+  const list = page.getByRole('list', { name: 'Folder tree files' });
+  await expect(list.getByRole('listitem')).toHaveCount(1);
+  const file = list.getByRole('button', { name: 'Open tasks/pick/approach.xml', exact: true });
+  await expect(file).toContainText('approach.xml');
+  await expect(file).toContainText('pick');
+  await page.getByLabel('Search repository trees').fill('missing');
+  await expect(page.getByText('No matching tree files.', { exact: true })).toBeVisible();
+  await page.getByLabel('Search repository trees').fill('approach');
+  await file.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('folder-list.png'), animations: 'disabled' });
+  await file.click();
+  await expect(
+    page
+      .getByRole('group', { name: 'Behavior Tree engine' })
+      .getByRole('button', { name: 'BehaviorTree.CPP', exact: true })
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Load on host', exact: true })).toHaveCount(0);
+  await expect(page.locator('.bt-runtime-status')).toHaveCount(0);
 });

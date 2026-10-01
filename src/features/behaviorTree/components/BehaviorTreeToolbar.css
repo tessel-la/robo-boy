@@ -1321,38 +1321,146 @@ fieldset.bt-menu-actions {
   justify-content: flex-start;
   padding: 0 11px;
 }
-.bt-repository-browser form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-}
-.bt-repository-browser label {
-  font-size: 12px;
-}
 .bt-repository-browser input:not([type='file']) {
   box-sizing: border-box;
   width: 100%;
-  padding: 8px;
-  margin-top: 4px;
-  background: var(--input-bg, var(--card-bg, #fff));
-  color: var(--text-color, #333);
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--input-bg, var(--card-bg));
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.bt-folder-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 8px;
+  font-size: 12px;
+}
+.bt-folder-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bt-folder-heading > span {
+  flex-shrink: 0;
+  color: var(--text-color-secondary);
+  font-size: 11px;
 }
 .bt-repository-files {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
 }
-.bt-repository-files button {
-  width: 100%;
+.bt-repository-file-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.bt-repository-file-row .bt-menu-tree-row {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  gap: 10px;
   text-align: left;
-  background: transparent;
-  color: var(--text-color, #333);
   border: 0;
-  gap: 8px;
+  background: transparent;
+  color: var(--text-color);
 }
-.bt-repository-files .bt-menu-tree-name {
-  white-space: normal;
-  overflow-wrap: anywhere;
+.bt-folder-format {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  background: var(--background-color);
+  color: var(--text-color-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+.bt-folder-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.bt-folder-file-info strong,
+.bt-folder-file-info small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bt-folder-file-info strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.bt-folder-file-info small {
+  color: var(--text-color-secondary);
+  font-size: 11px;
+}
+.bt-folder-add {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 9px;
+  margin-right: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 11px;
+  cursor: pointer;
+}
+.bt-folder-add:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+.bt-folder-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.bt-folder-add span {
+  font-size: 15px;
+}
+.bt-runtime-chip {
+  display: block;
+  box-sizing: border-box;
+  max-width: 160px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container (max-width: 640px) {
+  .bt-runtime-chip {
+    max-width: 76px;
+    font-size: 11px;
+    padding: 8px;
+  }
+}
+@container (max-width: 420px) {
+  .bt-runtime-chip {
+    max-width: 60px;
+  }
+}
+@media (max-width: 600px) {
+  .bt-runtime-chip {
+    max-width: 120px;
+  }
 }

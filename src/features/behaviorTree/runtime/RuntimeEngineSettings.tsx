@@ -39,7 +39,9 @@ export default function RuntimeEngineSettings({ runtime }: { runtime: ReturnType
             </label>
             <small>
               {!state.connected
-                ? client ? 'Host executor unavailable' : 'Connect to ROS to configure'
+                ? client
+                  ? 'Host executor unavailable'
+                  : 'Connect to ROS to configure'
                 : descriptor?.available
                   ? `${descriptor.version || ''} · ${descriptor.enabled === false ? 'Disabled' : 'Enabled'}`
                   : descriptor?.reason || 'Unavailable on host'}
@@ -48,7 +50,8 @@ export default function RuntimeEngineSettings({ runtime }: { runtime: ReturnType
         );
       })}
       <p className="bt-menu-hint">
-        Disabling an engine stops its active tree. Settings apply to this host until its executor restarts.
+        Disabled engines are hidden from the toolbar. Turning one off stops its active tree and keeps the open document.
+        Settings apply to this host until its executor restarts.
       </p>
       <button
         className="bt-menu-action-btn"

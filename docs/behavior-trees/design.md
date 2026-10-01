@@ -174,11 +174,11 @@ including unavailable reasons. Auto-selection follows the document's format
 and never substitutes one backend when it is missing. Native node registration
 and supported XML capabilities are published from the actual worker.
 
-The shared document menu keeps JSON and XML file/repository loading, saved trees,
+The shared document menu keeps JSON and XML file/folder loading, saved trees,
 names and export consistent. Separate engine switches call `set_enabled` on the
 host. Both default enabled; flags last until executor restart. Disabling halts
 and releases that backend's worker while retaining the stopped session. Disabled
-engines reject validation, loading, starting and reset. The shared panel's Run
+engines reject validation, loading, starting and reset, and are hidden from the toolbar selector. Documents retain their format and source when an engine is disabled; selecting an enabled engine never translates them. The shared panel's Run
 loads changed source and resets terminal sessions automatically. Native source
 editing and main-tree selection preserve framework-specific semantics.
 
@@ -194,6 +194,8 @@ port remappings, including py_trees namespaced keys. Registered JsonGet/JsonSet
 leaves in both workers connect ROS JSON results to subsequent action goals.
 Python redirects the process stdout descriptor to stderr and keeps IPC on a
 dedicated duplicate descriptor so C-level ROS logs cannot corrupt messages.
+
+Folder imports use local File APIs and list filenames with their relative directories and format. GitHub fetching is removed. Opening replaces the document; Add imports XML definitions for composition. Runtime status is a human-readable pill beside Run. Run loads automatically, Check tree validates without execution, and opening a different host tree is an explicit menu action. The canvas has subtree navigation above the graph and error messages, without host loading/recovery controls at the bottom.
 
 ### Stable native canvas projection
 

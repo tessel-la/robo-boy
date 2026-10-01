@@ -1,6 +1,6 @@
 import { useRemoteTreeRuntime } from '../runtime/useRemoteTreeRuntime';
 import NativeTreeCanvas from '../runtime/NativeTreeCanvas';
-import NativeTreeSettings from '../runtime/NativeTreeSettings';
+import NativeTreeSettings, { NativeTreeStatus } from '../runtime/NativeTreeSettings';
 import { useNativeTreeController } from '../runtime/useNativeTreeController';
 import { TreeRuntimeId } from '../runtime/types';
 import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
@@ -3269,23 +3269,25 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       role="group"
       aria-label="Behavior Tree engine"
     >
-      {[{ id: 'json' as const, label: 'Robo Boy' }, ...treeFormats].map(format => (
-        <button
-          key={format.id}
-          type="button"
-          aria-label={format.label}
-          aria-pressed={selectedEngine === format.id}
-          disabled={editingLocked}
-          title={format.label}
-          onClick={() => {
-            setSelectedEngine(format.id);
-            if (currentTree?.nativeDocument?.runtime === null && format.id !== 'json')
-              native.assignRuntime(format.id);
-          }}
-        >
-          {format.id === 'btcpp' ? 'BT.CPP' : format.label}
-        </button>
-      ))}
+      {[{ id: 'json' as const, label: 'Robo Boy' }, ...treeFormats]
+        .filter(format => nativeRuntime.state.runtimes.find(runtime => runtime.id === format.id)?.enabled !== false)
+        .map(format => (
+          <button
+            key={format.id}
+            type="button"
+            aria-label={format.label}
+            aria-pressed={selectedEngine === format.id}
+            disabled={editingLocked}
+            title={format.label}
+            onClick={() => {
+              setSelectedEngine(format.id);
+              if (currentTree?.nativeDocument?.runtime === null && format.id !== 'json')
+                native.assignRuntime(format.id);
+            }}
+          >
+            {format.id === 'btcpp' ? 'BT.CPP' : format.label}
+          </button>
+        ))}
     </div>
   );
 
@@ -3319,6 +3321,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onNew={newForEngine}
         onImportLibrary={nativeDocument ? native.importLibrary : undefined}
         engineControl={engineControl}
+        runtimeStatus={
+          nativeDocument ? <NativeTreeStatus controller={native} state={nativeRuntime.state} /> : undefined
+        }
         nativeControls={
           nativeDocument
             ? {
@@ -3428,7 +3433,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
             selectedEngine && selectedEngine !== 'json'
               ? {
                   runtime: selectedEngine,
-                  locked: editingLocked || !nativeDocument || !native.compatible,
+                  locked:
+                    editingLocked || !nativeDocument || !native.compatible || native.descriptor?.enabled === false,
                   descriptor: nativeRuntime.state.runtimes.find(item => item.id === selectedEngine),
                   trees:
                     currentTree?.nativeDocument?.runtime === selectedEngine
