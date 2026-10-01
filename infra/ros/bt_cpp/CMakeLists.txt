@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(robo_boy_btcpp LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(behaviortree_cpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
+add_executable(robo-boy-btcpp worker.cpp)
+target_link_libraries(robo-boy-btcpp PRIVATE behaviortree_cpp::behaviortree_cpp nlohmann_json::nlohmann_json)
+install(TARGETS robo-boy-btcpp DESTINATION bin)

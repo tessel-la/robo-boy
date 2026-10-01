@@ -1,4 +1,5 @@
 import { BehaviorTree, SavedBehaviorTree } from '../types';
+import { inspectXml, nativeTreeFromXml } from '../runtime/xml';
 import { syncReferencedSubtrees } from '../subtreeUtils';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
@@ -139,19 +140,39 @@ export const exportBehaviorTree = (tree: BehaviorTree): void => {
       version: STORAGE_VERSION,
     };
     
-    const dataStr = JSON.stringify(savedTree, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const dataStr = tree.nativeDocument?.xml ?? JSON.stringify(savedTree, null, 2);
+    const dataBlob = new Blob([dataStr], { type: tree.nativeDocument ? 'application/xml' : 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${tree.name.replace(/[^a-z0-9]/gi, '_')}_${tree.id}.json`;
+    link.download = `${tree.name.replace(/[^a-z0-9]/gi, '_')}_${tree.id}.${tree.nativeDocument ? 'xml' : 'json'}`;
     link.click();
     
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error('Failed to export behavior tree:', error);
   }
+};
+
+/** Parse the same tree document regardless of file, saved envelope or repository source. */
+export const parseBehaviorTreeFile = (content: string, name: string): BehaviorTree => {
+  if (name.toLowerCase().endsWith('.xml') || content.trimStart().startsWith('<')) {
+    return nativeTreeFromXml(content, null, name.replace(/\.xml$/i, ''));
+  }
+  const savedTree: SavedBehaviorTree = JSON.parse(content);
+  if (!savedTree?.tree || typeof savedTree.tree.id !== 'string' || typeof savedTree.tree.name !== 'string'
+    || !Array.isArray(savedTree.tree.nodes) || !Array.isArray(savedTree.tree.edges)) {
+    throw new Error('Invalid behavior tree file format');
+  }
+  if (savedTree.tree.nativeDocument) {
+    const document = savedTree.tree.nativeDocument;
+    if (![null, 'btcpp', 'py_trees'].includes(document.runtime) || typeof document.xml !== 'string') {
+      throw new Error('Invalid native tree document');
+    }
+    inspectXml(document.xml, document.runtime, document.mainTreeId);
+  }
+  return savedTree.tree;
 };
 
 /**
@@ -163,15 +184,7 @@ export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => 
     
     reader.onload = (e) => {
       try {
-        const content = e.target?.result as string;
-        const savedTree: SavedBehaviorTree = JSON.parse(content);
-        
-        // Validate structure
-        if (!savedTree.tree || !savedTree.tree.id || !savedTree.tree.nodes) {
-          throw new Error('Invalid behavior tree file format');
-        }
-
-        resolve(savedTree.tree);
+        resolve(parseBehaviorTreeFile(e.target?.result as string, file.name));
       } catch (error) {
         console.error('Failed to import behavior tree:', error);
         resolve(null);

@@ -225,7 +225,7 @@ async function seedOrderedSequenceTree(page: Page) {
 
 async function importTreeFromMenu(page: Page, tree: Record<string, unknown>) {
   await page.getByTestId('bt-menu-button').click();
-  const input = page.locator('input[type="file"]');
+  const input = page.locator('input[type="file"][accept=".json,.xml"]');
   await input.setInputFiles({
     name: 'imported-tree.json',
     mimeType: 'application/json',
@@ -451,7 +451,7 @@ test.describe('Behavior Tree panel', () => {
     await page.locator('.bt-menu-name-input').fill('Collision Tree');
     await page.keyboard.press('Enter');
     await page.getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('button', { name: 'New' }).click();
+    await page.getByRole('button', { name: 'New', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Create new tree?' })).toBeVisible();
     await page.getByRole('button', { name: 'Create new tree' }).click();
 
@@ -628,7 +628,7 @@ test.describe('Behavior Tree panel', () => {
     await expect(page.locator('.react-flow__node').filter({ hasText: 'Sequence' })).toHaveCount(1);
 
     await page.getByTestId('bt-menu-button').click();
-    await page.getByRole('button', { name: 'New' }).click();
+    await page.getByRole('button', { name: 'New', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Create new tree?' })).toBeVisible();
     await page.getByRole('button', { name: 'Create new tree' }).click();
     await expect(page.locator('.react-flow__node')).toHaveCount(0);

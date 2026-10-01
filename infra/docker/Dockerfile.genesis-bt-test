@@ -1,0 +1,29 @@
+# Build the normal runtime image first. Genesis is a named read-only build context.
+ARG BT_RUNTIME_IMAGE=robo-boy-bt-runtime:test
+FROM ${BT_RUNTIME_IMAGE}
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-colcon-common-extensions ros-${ROS_DISTRO}-rosidl-default-generators \
+    ros-${ROS_DISTRO}-robot-state-publisher && rm -rf /var/lib/apt/lists/*
+COPY --from=genesis ros/genesis_manipulator_interfaces /genesis_ws/src/genesis_manipulator_interfaces
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && cd /genesis_ws && \
+    colcon build --merge-install --packages-select genesis_manipulator_interfaces
+COPY --from=genesis src /opt/genesis/src
+COPY --from=genesis config/default.toml /opt/genesis/config/default.toml
+COPY --from=genesis assets /opt/genesis/assets
+COPY --from=genesis ros/genesis_ros_bridge.py /opt/genesis/genesis_ros_bridge.py
+RUN /opt/bt-venv/bin/pip install --no-cache-dir 'fastapi>=0.116,<1' 'pillow>=11,<13' 'uvicorn>=0.35,<1' 'httpx>=0.28,<1'
+ENV PYTHONPATH=/opt/genesis/src \
+    GENESIS_BT_E2E=1 REQUIRE_BT_RUNTIMES=1 \
+    ROS_DOMAIN_ID=87 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    GENESIS_SIM_URL=http://127.0.0.1:8000 \
+    GENESIS_ROBOT_URDF=/opt/genesis/assets/robots/panda/panda.urdf
+COPY infra/ros/bt_runtime /ros_ws/bt_runtime
+COPY infra/ros/native_behavior_tree_runner.py /ros_ws/native_behavior_tree_runner.py
+COPY infra/ros/test_bt_ros_bridge.py /ros_ws/test_bt_ros_bridge.py
+COPY infra/ros/test_native_bt_runtime.py /ros_ws/test_native_bt_runtime.py
+COPY infra/ros/test_genesis_bt_e2e.py /ros_ws/test_genesis_bt_e2e.py
+COPY examples/behavior_trees /examples/behavior_trees
+COPY infra/docker/genesis_bt_test_entrypoint.sh /ros_ws/genesis_bt_test_entrypoint.sh
+ENTRYPOINT ["bash", "/ros_ws/genesis_bt_test_entrypoint.sh"]

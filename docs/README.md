@@ -12,6 +12,7 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [iOS application](ios.md): build the Tauri iOS shell on a hosted Mac or your own, sideload the unsigned app, and connect it to a ROS stack on the network.
 - [Android application](android.md): build, run, and install the Tauri app on a phone, with the Wear OS boundary documented.
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
+- [Behavior Tree runtimes](behavior-trees/runtime.md): native BehaviorTree.CPP and py_trees XML discovery, execution, feedback, cancellation, and Genesis validation.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
 - [AI assistant](ai-assistant.md): the global assistant's capabilities, trust model, provider support, and privacy/credential handling.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.

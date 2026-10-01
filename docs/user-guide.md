@@ -47,7 +47,22 @@ The behavior-tree editor provides sequence, selector, and parallel control nodes
 
 Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets Robo-Boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
 
-Trees are stored in the current browser and can be imported or exported as JSON.
+Native **BehaviorTree.CPP** and **py_trees** XML trees use the same panel's XML workspace.
+Choose **New XML tree** or open an XML file from the tree menu. **Open local folder**
+and **Browse repository** list both JSON and XML trees from a checkout or public
+GitHub repository. Choose the runtime for marker-free XML, then **Run**; discovery
+and host loading happen automatically. Each engine has its own enable switch in
+the menu. Disabling it halts its tree and cancels its ROS goals; the setting lasts
+until the host executor restarts. **Tree states** shows live
+native node statuses; **Feedback and results** shows ROS feedback and output.
+**Stop**, **Cancel**, **Reset** and rerun operate on the connected ROS host.
+Native runs are always owned by the host and survive browser closure. Availability,
+version and connection errors are displayed without substituting another runtime.
+See [Behavior Tree runtimes](behavior-trees/runtime.md) for XML semantics, installation
+and equivalent Genesis examples.
+
+Trees are stored in the current browser. Visual trees import/export JSON; native
+trees preserve and export original XML. Marker-free XML requires a runtime choice.
 
 ## Custom Control Pads
 

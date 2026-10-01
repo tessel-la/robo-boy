@@ -1,4 +1,5 @@
 import { Node, Edge } from 'reactflow';
+import type { NativeTreeDocument } from './runtime/types';
 
 // Execution status for behavior tree nodes
 export enum ExecutionStatus {
@@ -181,6 +182,7 @@ export type BehaviorTreeNode = Node<BehaviorNodeData>;
 
 // Complete behavior tree structure
 export interface BehaviorTree {
+  nativeDocument?: NativeTreeDocument;
   id: string;
   name: string;
   description?: string;

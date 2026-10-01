@@ -22,6 +22,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       e2e: ${{ steps.filter.outputs.e2e }}
       ros: ${{ steps.filter.outputs.ros }}
+      native_bt: ${{ steps.filter.outputs.native_bt }}
 
     steps:
     - name: Checkout code
@@ -60,6 +61,18 @@ jobs:
             - 'config/playwright.config.ts'
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
+          native_bt:
+            - 'infra/ros/**'
+            - 'infra/docker/Dockerfile.ros'
+            - 'infra/docker/Dockerfile.genesis-bt-test'
+            - 'infra/docker/genesis_bt_test_entrypoint.sh'
+            - 'infra/docker/ros_entrypoint.sh'
+            - 'src/features/behaviorTree/**'
+            - 'examples/behavior_trees/**'
+            - 'scripts/test-native-bt-genesis.sh'
+            - 'e2e/native-bt-genesis.spec.ts'
+            - 'e2e/behavior-tree*.spec.ts'
+            - '.github/workflows/test.yml'
           ros:
             - 'infra/ros/**'
             - '.github/workflows/test.yml'
@@ -392,3 +405,53 @@ jobs:
       run: |
         python -m pip install pyyaml
         python -m unittest discover -s infra/ros -v
+
+  native-bt:
+    name: Native BT and Genesis integration
+    runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.native_bt == 'true'
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+    - name: Checkout pinned Genesis API and ROS interfaces
+      uses: actions/checkout@v4
+      with:
+        repository: tessel-la/genesis-manipulator-sim
+        ref: d00ef384c8fc9bf7623fee8e17dcaa1b89414313
+        path: .genesis-bt-source
+    - name: Build and test both actual native runtimes through Genesis ROS
+      env:
+        GENESIS_SIM_DIR: ${{ github.workspace }}/.genesis-bt-source
+      run: ./scripts/test-native-bt-genesis.sh
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - name: Prepare native runtime browser tests
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium
+        npm run build
+    - name: Test the panel against the actual Genesis ROS host
+      env:
+        PLAYWRIGHT_SKIP_WEB_SERVER: '1'
+        ROBOBOY_BT_E2E_URL: ws://localhost:9095
+      run: |
+        docker run -d --rm -p 127.0.0.1:9095:9090 --name robo-boy-genesis-bt-browser robo-boy-genesis-bt:test sleep infinity
+        npm run preview -- --port 5173 --strictPort > /tmp/bt-preview.log 2>&1 &
+        BT_PREVIEW_PID=$!
+        trap 'kill "$BT_PREVIEW_PID" 2>/dev/null || true; docker rm -f robo-boy-genesis-bt-browser' EXIT
+        for attempt in {1..30}; do
+          if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
+          sleep 1
+        done
+        npm run e2e -- e2e/native-bt-genesis.spec.ts e2e/behavior-tree-repository.spec.ts --project=chromium --workers=1
+    - name: Upload native runtime browser results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-bt-browser-results
+        path: test-results/
+        if-no-files-found: ignore

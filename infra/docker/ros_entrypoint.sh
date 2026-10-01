@@ -119,6 +119,15 @@ done) &
     sleep 2
 done) &
 
+# Both native XML runtimes execute on this ROS host through one session protocol.
+if [ "${ROBOBOY_NATIVE_BT_RUNTIME:-1}" != "0" ]; then
+(while true; do
+    python3 /ros_ws/native_behavior_tree_runner.py
+    echo "[native_behavior_tree_runner] exited, restarting in 2s..."
+    sleep 2
+done) &
+fi
+
 # Coalesces /tf into /roboboy/tf at ROBOBOY_TF_RELAY_HZ for browsers (0 disables it).
 # A kHz /tf forwarded message-for-message saturates rosbridge and, on a remote link,
 # fills its write queue, which then drops outgoing messages, service responses included.

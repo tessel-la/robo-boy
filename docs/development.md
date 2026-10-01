@@ -347,3 +347,11 @@ structured so that adding them later means adding the signing environment to the
 not restructuring the pipeline.
 
 Every push to `main`, including a development promotion or merged Release Please pull request, runs the `Sync main to dev` workflow. It merges `main` back into `dev` so release versions and changelog updates remain in both branches. If that workflow reports a merge conflict, reconcile `main` into a branch based on the latest `dev` and merge that fix before the next promotion.
+
+## Native Behavior Tree integration tests
+
+`./scripts/test-native-bt-genesis.sh` builds real BehaviorTree.CPP and py_trees
+executors and tests them through ROS topics against Genesis's deterministic mock
+action bridge. The sibling Genesis repository supplies its ROS interfaces and API
+as a read-only Docker build context. See [the runtime guide](behavior-trees/runtime.md)
+for opt-in browser tests and deployment with actual Genesis physics.

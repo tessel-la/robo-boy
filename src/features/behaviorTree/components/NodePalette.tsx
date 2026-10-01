@@ -191,7 +191,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     services: false,
     topics: false,
   });
-  const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
+  const [savedTrees, setSavedTrees] = useState(() => listBehaviorTrees().filter(saved => !saved.tree.nativeDocument));
 
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
@@ -440,7 +440,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   useEffect(() => {
     const handleSavedTreesChanged = () => {
-      setSavedTrees(listBehaviorTrees());
+      setSavedTrees(listBehaviorTrees().filter(saved => !saved.tree.nativeDocument));
     };
 
     window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);

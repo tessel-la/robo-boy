@@ -1,0 +1,11 @@
+<root main_tree_to_execute="Move">
+  <BehaviorTree ID="Move">
+    <Sequence name="Move and settle" memory="true">
+      <RosAction name="Move 1 cm" action_name="/arm_1/move_end_effector"
+        action_type="genesis_manipulator_interfaces/action/MoveEndEffector"
+        goal_b64="eyJ4IjowLjAxLCJ0cmFuc2xhdGlvbl9mcmFtZSI6IndvcmxkIiwiZHVyYXRpb24iOjAuNCwidGltZW91dCI6NS4wfQ=="
+        timeout="8" result="{motion_result}"/>
+      <Wait name="Settle" seconds="0.2"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

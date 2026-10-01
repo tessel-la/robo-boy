@@ -15,6 +15,9 @@ SHELL ["/bin/bash", "-c"]
 # dependencies here; robot-specific interfaces are supplied through overlays.
 RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
     apt-get update && apt-get install -y --no-install-recommends \
+      cmake make g++ git nlohmann-json3-dev python3-venv \
+      ros-${ROS_DISTRO}-py-trees-ros \
+      ros-${ROS_DISTRO}-behaviortree-cpp \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
       ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
       ros-${ROS_DISTRO}-rosbridge-server \
@@ -40,12 +43,24 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     proxy_path="$(python3 -c 'import importlib.util; print(importlib.util.find_spec("rosapi.proxy").origin)')" && \
     sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
 
+# py_trees 2.6 provides the native XML/ports workflow; distro versions may not.
+# A system-site venv keeps ROS's compiled Python interfaces available.
+RUN python3 -m venv --system-site-packages /opt/bt-venv && \
+    /opt/bt-venv/bin/pip install --no-cache-dir py_trees==2.6.0
+ENV PATH="/opt/bt-venv/bin:${PATH}"
+COPY infra/ros/bt_cpp /tmp/bt_cpp
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    cmake -S /tmp/bt_cpp -B /tmp/bt_cpp/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /tmp/bt_cpp/build -j2 && cmake --install /tmp/bt_cpp/build && rm -rf /tmp/bt_cpp
+
 # Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws
 
 WORKDIR /ros_ws
 
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
+COPY infra/ros/bt_runtime /ros_ws/bt_runtime
+COPY infra/ros/native_behavior_tree_runner.py /ros_ws/native_behavior_tree_runner.py
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
 COPY infra/ros/bt_execution_details.py /ros_ws/bt_execution_details.py
 COPY infra/ros/recording_runner.py /ros_ws/recording_runner.py

@@ -1,3 +1,7 @@
+import { useRemoteTreeRuntime } from '../runtime/useRemoteTreeRuntime';
+import NativeTreeWorkspace from '../runtime/NativeTreeWorkspace';
+import RuntimeEngineSettings from '../runtime/RuntimeEngineSettings';
+import { nativeTreeFromXml, newXmlTemplate } from '../runtime/xml';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -539,6 +543,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   onOpenAssistant,
   onRegisterAssistantBridge,
 }) => {
+  const nativeRuntime = useRemoteTreeRuntime(ros, isConnected);
   const [nodes, setNodes] = useState<BehaviorTreeNode[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
@@ -2074,6 +2079,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
   useEffect(() => {
     if (!ros || !isConnected || typeof (ros as any).callOnConnection !== 'function') return;
+    if (currentTree?.nativeDocument) return;
     const client = new PersistentBehaviorTreeExecutor(ros);
     persistentExecutorRef.current = client;
     const unsubscribe = client.subscribe(handlePersistentStatus);
@@ -2083,7 +2089,19 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (persistentExecutorRef.current === client) persistentExecutorRef.current = null;
       // Deliberately do not send stop here: the ROS runner owns persistent sessions.
     };
-  }, [handlePersistentStatus, isConnected, ros]);
+  }, [handlePersistentStatus, isConnected, ros, !!currentTree?.nativeDocument]);
+
+  // Native sessions are host-owned and can be recovered even when the editor
+  // reopened with a blank JSON document. One transport serves discovery and UI.
+  useEffect(() => {
+    const session = nativeRuntime.state.session;
+    if (!session || session.state !== 'running' || currentTree?.nativeDocument || isExecuting || currentTree?.nodes.length) return;
+    try {
+      loadRootTree(nativeTreeFromXml(session.xml, session.runtime, 'Host tree', session.mainTreeId));
+    } catch (error) {
+      showSaveNotice({ type: 'error', title: 'Host tree unavailable', message: String(error) });
+    }
+  }, [nativeRuntime.state.session, currentTree?.nativeDocument, isExecuting, loadRootTree, showSaveNotice]);
 
   // Losing ROS ends whatever was running; another connection (maybe another robot) starts with nothing recorded.
   const executionRosRef = useRef(ros);
@@ -2178,8 +2196,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [pushUndoSnapshot, restoreRootTreeSnapshot]);
 
   useEffect(() => {
+    if (currentTree?.nativeDocument) return;
     onExecutionChange?.(executionSnapshot);
-  }, [executionSnapshot, onExecutionChange]);
+  }, [executionSnapshot, onExecutionChange, !!currentTree?.nativeDocument]);
 
   // Ctrl/Cmd+I used to open a tiny canvas-anchored micro-form; the global assistant is now a
   // lightweight, non-modal, always-reachable panel, so this shortcut simply opens/focuses it with
@@ -2189,6 +2208,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   }, [onOpenAssistant, panelId]);
 
   useEffect(() => {
+    if (currentTree?.nativeDocument) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
@@ -2219,12 +2239,13 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt]);
+  }, [handleRedo, handleUndo, isActive, isExecuting, openInlineAgentPrompt, !!currentTree?.nativeDocument]);
 
   useEffect(() => {
+    if (currentTree?.nativeDocument) return;
     onExecutionControlsChange?.({ stop: handleStop });
     return () => onExecutionControlsChange?.(null);
-  }, [handleStop, onExecutionControlsChange]);
+  }, [handleStop, onExecutionControlsChange, !!currentTree?.nativeDocument]);
 
   const updateCustomBoxSelection = useCallback(
     (gesture: CustomBoxSelectionGesture) => {
@@ -2466,6 +2487,10 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   // panel rendering its own chat UI; all diff/canvas-overlay/accept-mode logic below is unchanged.
   useEffect(() => {
     if (!onRegisterAssistantBridge) return;
+    if (currentTree?.nativeDocument) {
+      onRegisterAssistantBridge(panelId, null);
+      return; // JSON graph proposals cannot change executable native XML.
+    }
     const bridge: BehaviorTreeAssistantBridge = {
       panelId,
       label: currentTree?.name ?? 'Behavior Tree',
@@ -3196,6 +3221,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     [applySelectionState, getZoom, isActive, setCenter]
   );
 
+  if (currentTree?.nativeDocument) {
+    return <NativeTreeWorkspace tree={currentTree} runtime={nativeRuntime} isConnected={isConnected}
+      onChange={loadRootTree} onNewGraph={handleNew} onExecutionChange={onExecutionChange}
+      onExecutionControlsChange={onExecutionControlsChange}/>;
+  }
+
   return (
     <div className="behavior-tree-panel" data-testid="behavior-tree-panel">
       <BehaviorTreeToolbar
@@ -3213,6 +3244,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         onSave={handleSave}
         onLoad={handleLoad}
         onNew={handleNew}
+        onNewXml={() => handleLoad(nativeTreeFromXml(newXmlTemplate))}
+        runtimeSettings={<RuntimeEngineSettings runtime={nativeRuntime}/>}
         onExecute={handleExecute}
         onPause={handlePause}
         onResume={handleResume}

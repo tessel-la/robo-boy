@@ -86,10 +86,21 @@ rosbridge is a single Python process that serializes every outgoing message and 
 - `services/rosDiscovery.ts`: ROS resource discovery, from one inspector graph snapshot when the ROS stack has one, else through rosapi with a timeout on every call; schema discovery through rosapi.
 - `engine/executor.ts`: sequence, selector, parallel, action, service, and topic execution.
 - `engine/persistentExecutor.ts`: the versioned command/status transport for ROS-owned executions.
-- `storage/treeStorage.ts`: versioned browser persistence and JSON import/export.
+- `runtime/`: common native XML workspace, format adapters, ROS transport and synchronization.
+- `storage/treeStorage.ts`: versioned browser persistence and JSON/XML import/export.
 - Root helpers and types: node creation, ordering, layout, search, and templates.
 
 The editor owns graph state; an executor consumes a complete tree snapshot and emits execution events. Local runs use the browser executor. Opt-in persistent runs are sent to `infra/ros/behavior_tree_runner.py`, which owns ROS clients independently of the browser and exposes reconnectable status over standard `std_msgs/String` topics. Keep graph editing independent from either execution transport so both remain testable.
+
+Native XML documents additionally preserve source, runtime and main tree ID. The
+`runtime/RemoteTreeRuntime.ts` interface delegates discovery, native validation,
+loading and lifecycle to `infra/ros/native_behavior_tree_runner.py`. Its serialized
+session manager supervises separate BehaviorTree.CPP and py_trees/py_trees_ros
+workers. The native libraries own control flow; the frontend graph is a projection
+of their topology and statuses. Protocol v2 correlates requests and scopes snapshots
+to sessions/host boots. Source XML is sent on responses, while tick snapshots carry
+node state without retransmitting source. Existing v1 JSON trees remain compatible.
+See [the runtime design](behavior-trees/design.md) and [operator guide](behavior-trees/runtime.md).
 
 The Data Explorer keeps one inspection session per ROS connection (`src/features/dataExplorer/InspectionSession.ts`), shared by every Explorer tile and released when the last one closes. Graph discovery, endpoint counts, QoS and traffic measurement run on the ROS host in `infra/ros/inspection_runner.py`, which serves leased, expiring probes over `std_msgs/String` topics and never calls robot services. Without it the session falls back to the serialized rosapi queue and labels browser-side rates as such; see [Data Explorer](data-explorer.md).
 
@@ -170,7 +181,7 @@ State is intentionally local to the browser:
 | Panel split                  | `useResizablePanels`      | `localStorage`                                                   |
 | Themes                       | `App` and theme utilities | `localStorage`                                                   |
 | Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON                                |
-| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
+| Behavior trees               | `treeStorage.ts`          | Versioned `localStorage`, JSON graphs or native XML documents     |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
 | External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
 | Assistant settings           | `assistant/storage`       | `localStorage` (plaintext, see [AI assistant](ai-assistant.md))  |
