@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMBED_PORT_PATH, embedHostFor, isEmbedHost, normalizeEmbedBaseUrl } from './embedTarget';
+import { EMBED_PORT_PATH, embedHostFor, isEmbedHost, normalizeEmbedBaseUrl, parseEmbedPorts } from './embedTarget';
 
 describe('embed targets', () => {
   it('keeps only a plain http(s) origin', () => {
@@ -30,5 +30,14 @@ describe('embed targets', () => {
     expect(EMBED_PORT_PATH.test('/8089/vendor/mujoco.wasm')).toBe(true);
     expect(EMBED_PORT_PATH.test('/panel-sandbox.html')).toBe(false);
     expect(EMBED_PORT_PATH.test('/123456/')).toBe(false);
+  });
+
+  it('reads direct ports from a list and drops anything that is not a port', () => {
+    expect(parseEmbedPorts('8089')).toEqual([8089]);
+    expect(parseEmbedPorts(' 8090, 8089 8089,,')).toEqual([8089, 8090]);
+    expect(parseEmbedPorts('0, 70000, 80.5, abc, -1')).toEqual([]);
+    expect(parseEmbedPorts([8089, '9000', null, {}])).toEqual([8089, 9000]);
+    expect(parseEmbedPorts(undefined)).toEqual([]);
+    expect(parseEmbedPorts('')).toEqual([]);
   });
 });

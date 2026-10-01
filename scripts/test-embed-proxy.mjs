@@ -3,6 +3,7 @@
  * against a robot's Robo-Boy proxy serving a page on an allowed port:
  * ROBOBOY_TEST_EMBED_BASE=https://robot.local ROBOBOY_TEST_EMBED_PATH=/8089/ npm run test:embed-proxy
  * ROBOBOY_TEST_EMBED_SELECTOR (default `body`) names the element that shows the page has rendered.
+ * ROBOBOY_TEST_EMBED_DIRECT_PORTS (for example 8089) frames those ports from the robot directly.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -55,9 +56,40 @@ const server = createServer((req, res) => {
   }
 });
 
+// Stands in for a service a robot publishes directly, with no proxy in front: it knows nothing of
+// the /<port> prefix and redirects within its own root.
+const directRequests = [];
+const directServer = createServer((req, res) => {
+  directRequests.push(`${req.method} ${req.url}`);
+  const gzip = /\bgzip\b/.test(req.headers['accept-encoding'] ?? '');
+  const send = (type, body) => {
+    res.writeHead(200, { 'content-type': type, 'x-viewer-session': 'direct-1', ...(gzip ? { 'content-encoding': 'gzip' } : {}) });
+    res.end(gzip ? gzipSync(body) : body);
+  };
+  if (req.url === '/') send('text/html', '<!doctype html><title>direct</title><script type="module" src="app.js"></script>');
+  else if (req.url === '/app.js') {
+    send(
+      'text/javascript',
+      `const response = await fetch('api/state', { method: 'POST', body: 'pong' });
+       document.body.dataset.result = JSON.stringify({ body: await response.text(), session: response.headers.get('x-viewer-session') });`
+    );
+  } else if (req.url === '/api/state' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => send('application/json', JSON.stringify({ echoed: body })));
+  } else if (req.url === '/moved') {
+    res.writeHead(302, { location: '/' });
+    res.end();
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
 let electron;
 try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => directServer.listen(0, '127.0.0.1', resolve));
   const robotProxy = `http://127.0.0.1:${server.address().port}`;
   const sandboxDir = path.join(work, 'public');
   const sandboxBuild = spawnSync(process.execPath, [path.join(root, 'scripts/build-panel-sandbox.mjs')], {
@@ -129,8 +161,8 @@ try {
   await page.waitForFunction(() => typeof window.openPanelSandbox === 'function');
 
   // What the WebView panel does inside its sandbox: frame /<port>/ in the panel root.
-  const frameInSandbox = async (embedBaseUrl, framePath) => {
-    const sandboxUrl = await page.evaluate(base => window.openPanelSandbox(base), embedBaseUrl);
+  const frameInSandbox = async (embedBaseUrl, framePath, directPorts = []) => {
+    const sandboxUrl = await page.evaluate(([base, ports]) => window.openPanelSandbox(base, ports), [embedBaseUrl, directPorts]);
     const sandbox = page.frames().find(frame => frame.url() === sandboxUrl);
     assert.ok(sandbox, `sandbox frame must load at ${sandboxUrl}`);
     await sandbox.evaluate(src => {
@@ -168,8 +200,34 @@ try {
   assert.equal(requests.length, before, 'unregistered hosts must not reach any robot');
   console.log('PASS unregistered embed hosts and the app host reach no robot');
 
+  // A robot without a proxy: its allowed port is fetched directly, the /<port> prefix stripped, and
+  // the service's own root redirect lands back under /<port>/ on the embed host.
+  const directPort = directServer.address().port;
+  const proxyRequests = requests.length;
+  const direct = await frameInSandbox('https://127.0.0.1', `/${directPort}/moved`, [directPort]);
+  const directFrame = await waitForFrame(url => url === `app://${direct.embedHost}/${directPort}/`);
+  await directFrame.waitForFunction(() => document.body?.dataset.result, undefined, { timeout: 15000 });
+  assert.deepEqual(JSON.parse(await directFrame.evaluate(() => document.body.dataset.result)),
+    { body: JSON.stringify({ echoed: 'pong' }), session: 'direct-1' });
+  assert.deepEqual(directRequests, ['GET /moved', 'GET /', 'GET /app.js', 'POST /api/state']);
+  // Any other port is refused in the shell, and nothing goes to the robot's proxy either.
+  const refused = await page.evaluate(
+    ([host, port]) => fetch(`app://${host}/${port}/`).then(response => response.status, () => 'blocked'),
+    [direct.embedHost, directPort + 1]
+  );
+  assert.equal(refused, 404);
+  assert.equal(directRequests.length, 4, 'a port outside the list must not reach the robot');
+  assert.equal(requests.length, proxyRequests, 'a direct target never goes through the robot proxy');
+  console.log('PASS direct ports: the allowed port is framed from the robot, prefix stripped; others are refused');
+
   if (process.env.ROBOBOY_TEST_EMBED_BASE) {
-    const live = await frameInSandbox(process.env.ROBOBOY_TEST_EMBED_BASE, process.env.ROBOBOY_TEST_EMBED_PATH || '/8089/');
+    const liveDirectPorts = (process.env.ROBOBOY_TEST_EMBED_DIRECT_PORTS || '').split(/[\s,]+/).filter(Boolean).map(Number);
+    const live = await frameInSandbox(process.env.ROBOBOY_TEST_EMBED_BASE, process.env.ROBOBOY_TEST_EMBED_PATH || '/8089/', liveDirectPorts);
+    // The shell answers an unreachable robot with an error page, which also renders: require the
+    // robot's own 200 first.
+    const livePath = process.env.ROBOBOY_TEST_EMBED_PATH || '/8089/';
+    const liveStatus = await page.evaluate(url => fetch(url).then(response => response.status), `app://${live.embedHost}${livePath}`);
+    assert.equal(liveStatus, 200, `the robot must serve ${livePath} through the embed route`);
     const frame = await waitForFrame(url => url.startsWith(`app://${live.embedHost}/`) && !url.includes('panel-sandbox'));
     // The page rendered through the route once the chosen element exists and has content.
     const selector = process.env.ROBOBOY_TEST_EMBED_SELECTOR || 'body';
@@ -187,5 +245,6 @@ try {
 } finally {
   await electron?.close();
   await new Promise(resolve => server.close(resolve));
+  await new Promise(resolve => directServer.close(resolve));
   await rm(work, { recursive: true, force: true });
 }

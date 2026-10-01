@@ -74,6 +74,12 @@ each connection's panel sandbox its own host, `app://embed-<id>/`, and forwards 
 default 443). The robot's allowlist still decides which ports are reachable, cookies are not
 forwarded, and hosts the app did not register reach nothing. Tauri keeps the sandbox beside the app.
 
+A robot that runs no Robo-Boy proxy can publish a service on its own port instead, listening on
+all interfaces. Build the desktop app with `VITE_EMBED_DIRECT_PORTS` (for example `8089`, or a comma
+separated list): each listed port's `/<port>/` frames are then fetched from `http://<host>:<port>/`
+with the prefix stripped, and every other port is refused, so this list replaces the robot's
+allowlist. The service is then reachable by anyone who can reach the robot, without TLS.
+
 `npm run test:embed-proxy` checks the route against a local fixture. An optional read-only live
 check frames a page on one of the robot's allowed ports and waits until `ROBOBOY_TEST_EMBED_SELECTOR`
 (default `body`) renders content:

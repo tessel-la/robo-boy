@@ -1,5 +1,5 @@
 import { ipcMain, net } from 'electron';
-import { EMBED_PORT_PATH, embedHostFor, isEmbedHost, normalizeEmbedBaseUrl } from '../src/runtime/embedTarget';
+import { EMBED_PORT_PATH, embedHostFor, isEmbedHost, normalizeEmbedBaseUrl, parseEmbedPorts } from '../src/runtime/embedTarget';
 
 /**
  * Forwards a connection's embed host to the robot proxy it stands for.
@@ -8,19 +8,37 @@ import { EMBED_PORT_PATH, embedHostFor, isEmbedHost, normalizeEmbedBaseUrl } fro
  * own Robo-Boy proxy, which publishes the ports its deployment allows; here the sandbox sits on
  * `app://embed-<id>/` and this forwards the same path to that proxy, so the robot's allowlist
  * decides exactly as it does for a browser. Hosts nobody registered reach nothing.
+ *
+ * A robot that runs no such proxy can publish ports directly instead. For a target registered with
+ * `directPorts`, `/<port>/<path>` is fetched from `http://<robot>:<port>/<path>`, with the prefix
+ * stripped just as the proxy strips it, and every port outside that list is refused: the app's
+ * list is then the only allowlist.
  */
 
 export { isEmbedHost };
 
-const targets = new Map<string, string>();
+interface EmbedTarget {
+  baseUrl: string;
+  directPorts: Set<number>;
+}
 
-/** Records a robot proxy the renderer is about to frame, returning its host or null if refused. */
-export const addEmbedTarget = (value: unknown): string | null => {
+const targets = new Map<string, EmbedTarget>();
+
+/** Records a robot the renderer is about to frame, returning its host or null if refused. */
+export const addEmbedTarget = (value: unknown, directPorts: unknown = []): string | null => {
   const baseUrl = typeof value === 'string' ? normalizeEmbedBaseUrl(value) : null;
   if (!baseUrl) return null;
   const host = embedHostFor(baseUrl);
-  targets.set(host, baseUrl);
+  targets.set(host, { baseUrl, directPorts: new Set(parseEmbedPorts(directPorts)) });
   return host;
+};
+
+/** `http://<robot>:<port>`, the origin a direct port is fetched from. */
+const directOrigin = (baseUrl: string, port: number): string => {
+  const url = new URL(baseUrl);
+  url.protocol = 'http:';
+  url.port = String(port);
+  return url.origin;
 };
 
 // The shell's network stack negotiates and decodes compression itself, sets its own framing, and
@@ -118,9 +136,19 @@ export async function fetchEmbed(
   const url = new URL(request.url);
   if (url.pathname === '/panel-sandbox.html') return serveSandbox();
 
-  const baseUrl = targets.get(url.hostname);
-  if (!baseUrl) return notFound('No robot is registered for this embed host.');
-  if (!EMBED_PORT_PATH.test(url.pathname)) return notFound('Only /<port>/ paths are forwarded to the robot.');
+  const target = targets.get(url.hostname);
+  if (!target) return notFound('No robot is registered for this embed host.');
+  const portPath = EMBED_PORT_PATH.exec(url.pathname);
+  if (!portPath) return notFound('Only /<port>/ paths are forwarded to the robot.');
+
+  // Through the robot's proxy, which keeps the /<port> prefix and its own allowlist; or straight to
+  // an allowed port, whose server knows nothing of the prefix.
+  const port = Number(portPath[1]);
+  const direct = target.directPorts.size > 0;
+  if (direct && !target.directPorts.has(port)) return notFound(`Port ${port} is not published for embedding.`);
+  const origin = direct ? directOrigin(target.baseUrl, port) : target.baseUrl;
+  const prefix = direct ? `/${port}` : '';
+  const upstreamPath = direct ? url.pathname.slice(prefix.length) || '/' : url.pathname;
 
   const headers = new Headers(request.headers);
   for (const name of DROPPED_REQUEST_HEADERS) headers.delete(name);
@@ -129,15 +157,15 @@ export async function fetchEmbed(
   let upstream: UpstreamReply;
   try {
     upstream = await requestUpstream(
-      `${baseUrl}${url.pathname}${url.search}`,
+      `${origin}${upstreamPath}${url.search}`,
       request.method,
       headers,
       hasBody ? await request.arrayBuffer() : undefined,
       request.signal
     );
   } catch (error) {
-    console.error('[embed] Robot proxy unreachable:', baseUrl, error);
-    return new Response(`The robot proxy at ${baseUrl} could not be reached.`, {
+    console.error('[embed] Robot unreachable:', origin, error);
+    return new Response(`${direct ? 'The robot' : 'The robot proxy'} at ${origin} could not be reached.`, {
       status: 502,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     });
@@ -145,13 +173,14 @@ export async function fetchEmbed(
 
   const responseHeaders = upstream.headers;
   for (const name of DROPPED_RESPONSE_HEADERS) responseHeaders.delete(name);
-  // The proxy already maps redirects onto /<port>/ of its own origin, which the frame has to follow
-  // on this host instead. Absolute, because the shell does not resolve a relative Location.
+  // The proxy already maps redirects onto /<port>/ of its own origin; a direct port redirects within
+  // its own root. Either way the frame has to follow on this host, under /<port>/ for a direct one.
+  // Absolute, because the shell does not resolve a relative Location.
   const location = responseHeaders.get('location');
   if (location) {
-    const target = new URL(location, `${baseUrl}${url.pathname}`);
-    if (target.origin === baseUrl) {
-      responseHeaders.set('location', new URL(`${target.pathname}${target.search}${target.hash}`, url).href);
+    const redirect = new URL(location, `${origin}${upstreamPath}`);
+    if (redirect.origin === origin) {
+      responseHeaders.set('location', new URL(`${prefix}${redirect.pathname}${redirect.search}${redirect.hash}`, url).href);
     }
   }
 
@@ -166,8 +195,8 @@ export async function fetchEmbed(
 
 /** Accepts registrations from the app's own top-level page, never from a frame inside it. */
 export const registerEmbedProxy = (): void => {
-  ipcMain.on('roboboy:embed-register', (event, baseUrl: unknown) => {
+  ipcMain.on('roboboy:embed-register', (event, baseUrl: unknown, directPorts: unknown) => {
     if (event.senderFrame !== event.sender.mainFrame) return;
-    if (!addEmbedTarget(baseUrl)) console.warn('[embed] Refused embed target:', baseUrl);
+    if (!addEmbedTarget(baseUrl, directPorts)) console.warn('[embed] Refused embed target:', baseUrl);
   });
 };

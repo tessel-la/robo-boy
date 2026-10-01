@@ -31,6 +31,18 @@ export const normalizeEmbedBaseUrl = (value: string): string | null => {
  * A stable host label for one robot proxy. Stable so a reloaded panel lands on the host the shell
  * already knows; hashed because an origin is not a valid DNS label and may exceed 63 characters.
  */
+/**
+ * Ports a desktop shell reaches directly on the robot, from a list such as "8089, 8090".
+ * Invalid entries are dropped; an empty list keeps the robot's proxy as the only route.
+ */
+export const parseEmbedPorts = (value: unknown): number[] => {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[\s,]+/) : [];
+  const ports = items
+    .map(item => (typeof item === 'number' || typeof item === 'string' ? Number(item) : NaN))
+    .filter(port => Number.isInteger(port) && port >= 1 && port <= 65535);
+  return [...new Set(ports)].sort((a, b) => a - b);
+};
+
 export const embedHostFor = (baseUrl: string): string => {
   // Two 32-bit FNV-1a passes with different offsets: collisions only need to be unlikely among the
   // handful of robots one app connects to, not resistant to anyone choosing them.
