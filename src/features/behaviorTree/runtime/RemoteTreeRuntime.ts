@@ -1,10 +1,20 @@
 import { v4 as uuidv4 } from 'uuid';
 import ROSLIB, { Ros, Topic } from 'roslib';
-import { NativeTreeDocument, RuntimeEvent, RuntimeState, RuntimeSession, RuntimeObservation } from './types';
+import {
+  NativeTreeDocument,
+  RuntimeEvent,
+  RuntimeState,
+  RuntimeSession,
+  RuntimeObservation,
+  RuntimeObservationDelta,
+} from './types';
 import { validateDocument } from './xml';
 
 export const RUNTIME_COMMAND_TOPIC = '/robo_boy/bt/command';
 export const RUNTIME_EVENTS_TOPIC = '/robo_boy/bt/events';
+// Observed robot trees can have thousands of nodes; host status replies carry them whole.
+export const MAX_OBSERVED_NODES = 16384;
+const MAX_EVENT_CHARS = 32 * 1024 * 1024;
 const initialState = (): RuntimeState => ({
   connected: false,
   runtimes: [],
@@ -51,9 +61,10 @@ function validObservation(record: any): boolean {
     (record.xml !== undefined && (typeof record.xml !== 'string' || record.xml.length > 512 * 1024)) ||
     (record.error != null && typeof record.error !== 'string') ||
     (record.result != null && !['success', 'failure'].includes(record.result)) ||
+    (record.version !== undefined && !Number.isSafeInteger(record.version)) ||
     !Array.isArray(record.nodes) ||
     !record.nodes.length ||
-    record.nodes.length > 2048 ||
+    record.nodes.length > MAX_OBSERVED_NODES ||
     record.nodes.some(
       (node: any) => invalidNode(node) || (node.subtree !== undefined && typeof node.subtree !== 'boolean')
     )
@@ -74,10 +85,57 @@ function validObservation(record: any): boolean {
   });
 }
 
+function validObservationDelta(delta: any): boolean {
+  return (
+    !!delta &&
+    ['btcpp', 'py_trees'].includes(delta.runtime) &&
+    ['loaded', 'running', 'completed'].includes(delta.state) &&
+    ['id', 'source', 'name'].every(
+      field => typeof delta[field] === 'string' && delta[field] && delta[field].length <= 4096
+    ) &&
+    typeof delta.connected === 'boolean' &&
+    [delta.updatedAt, delta.version, delta.baseVersion].every(Number.isSafeInteger) &&
+    (delta.error == null || typeof delta.error === 'string') &&
+    (delta.result == null || ['success', 'failure'].includes(delta.result)) &&
+    Array.isArray(delta.changes) &&
+    delta.changes.length <= MAX_OBSERVED_NODES &&
+    delta.changes.every(
+      (change: any) =>
+        !!change &&
+        ['id', 'nativeStatus', 'feedback'].every(
+          field => typeof change[field] === 'string' && change[field].length <= 4096
+        ) &&
+        ['idle', 'running', 'success', 'failure'].includes(change.status) &&
+        (change.lastResult === undefined || ['success', 'failure'].includes(change.lastResult)) &&
+        (change.lastNativeResult === undefined || typeof change.lastNativeResult === 'string')
+    )
+  );
+}
+
+/** The delta applied to the tree it was computed from; null when that version is not the one held here. */
+export function applyObservationDelta(
+  previous: RuntimeObservation | undefined,
+  delta: RuntimeObservationDelta
+): RuntimeObservation | null {
+  if (!previous || previous.version !== delta.baseVersion) return null;
+  const changes = new Map(delta.changes.map(change => [change.id, change]));
+  let applied = 0;
+  const nodes = previous.nodes.map(node => {
+    const change = changes.get(node.id);
+    if (!change) return node; // Unchanged nodes keep their identity for memoized views.
+    applied += 1;
+    const { lastResult: _result, lastNativeResult: _native, ...structure } = node;
+    return { ...structure, ...change };
+  });
+  if (applied !== changes.size) return null;
+  const { changes: _changes, baseVersion: _base, ...fields } = delta;
+  return { ...previous, ...fields, nodes };
+}
+
 function parseEvent(message: unknown): RuntimeEvent | null {
   try {
     const data = (message as { data?: unknown })?.data;
-    if (typeof data !== 'string' || data.length > 4 * 1024 * 1024) return null;
+    if (typeof data !== 'string' || data.length > MAX_EVENT_CHARS) return null;
     const event = JSON.parse(data);
     if (
       event.protocolVersion !== 2 ||
@@ -124,6 +182,7 @@ function parseEvent(message: unknown): RuntimeEvent | null {
       return null;
     if (
       (event.observation !== undefined && !validObservation(event.observation)) ||
+      (event.observationDelta !== undefined && !validObservationDelta(event.observationDelta)) ||
       (event.observations !== undefined &&
         (!Array.isArray(event.observations) ||
           event.observations.length > 16 ||
@@ -228,6 +287,16 @@ export class RemoteTreeRuntime {
         ...observations.filter(item => item.id !== event.observation!.id && item.source !== event.observation!.source),
         mergeObservation(event.observation),
       ].slice(-16);
+    if (event.observationDelta) {
+      const delta = event.observationDelta;
+      const updated = applyObservationDelta(
+        observations.find(item => item.id === delta.id),
+        delta
+      );
+      // A missed update (or a tree first seen as a delta) needs the whole tree again.
+      if (updated) observations = observations.map(item => (item.id === delta.id ? updated : item));
+      else this.resync();
+    }
     this.update({
       connected: true,
       observations,
@@ -237,6 +306,16 @@ export class RemoteTreeRuntime {
       logs: event.log ? [...previousLogs, event.log].slice(-200) : previousLogs,
     });
   };
+  private resyncing = false;
+  private resync() {
+    if (this.resyncing) return;
+    this.resyncing = true;
+    this.status()
+      .catch(() => undefined)
+      .finally(() => {
+        this.resyncing = false;
+      });
+  }
   private request(command: string, fields: Record<string, unknown> = {}): Promise<RuntimeEvent> {
     if (this.disposed || !this.ros.isConnected) return Promise.reject(new Error('Connect to ROS first.'));
     const requestId = uuidv4();

@@ -4,7 +4,8 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
-MAX_NODES = 2048
+# Observed robot trees are read-only telemetry and can be far larger than authored ones (thousands of nodes).
+MAX_NODES = 16384
 MAX_BYTES = 512 * 1024
 STATES = {0: ('idle', 'IDLE'), 1: ('running', 'RUNNING'), 2: ('success', 'SUCCESS'),
           3: ('failure', 'FAILURE'), 4: ('idle', 'SKIPPED')}
@@ -12,7 +13,7 @@ STATES = {0: ('idle', 'IDLE'), 1: ('running', 'RUNNING'), 2: ('success', 'SUCCES
 
 def validate_graph(nodes):
     if not isinstance(nodes, list) or not 1 <= len(nodes) <= MAX_NODES:
-        raise ValueError('External tree must contain 1–2048 nodes')
+        raise ValueError(f'External tree must contain 1–{MAX_NODES} nodes')
     by_id = {}
     for node in nodes:
         if not isinstance(node, dict) or (node.get('parentId') is not None and not isinstance(node['parentId'], str)):

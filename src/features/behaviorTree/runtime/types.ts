@@ -92,6 +92,24 @@ export interface RuntimeObservation extends Omit<RuntimeSession, 'xml'> {
   updatedAt: number;
   /** Optional runtime instance XML. Never load it as an editable definition. */
   xml?: string;
+  /** Increments with every host update; a delta applies only on top of its `baseVersion`. */
+  version?: number;
+}
+
+/** Live fields of one observed node; absent result fields were cleared on the host. */
+export type RuntimeNodeChange = Pick<
+  RuntimeNode,
+  'id' | 'status' | 'nativeStatus' | 'feedback' | 'lastResult' | 'lastNativeResult'
+>;
+
+/** Update of an observed tree whose topology is unchanged: only the nodes whose live fields changed. */
+export interface RuntimeObservationDelta extends Pick<
+  RuntimeObservation,
+  'id' | 'runtime' | 'name' | 'source' | 'state' | 'result' | 'error' | 'connected' | 'updatedAt'
+> {
+  version: number;
+  baseVersion: number;
+  changes: RuntimeNodeChange[];
 }
 
 export interface RuntimeState {
@@ -117,6 +135,7 @@ export interface RuntimeEvent {
   log?: RuntimeLog;
   observations?: RuntimeObservation[];
   observation?: RuntimeObservation;
+  observationDelta?: RuntimeObservationDelta;
 }
 
 export interface TreeFormatAdapter {

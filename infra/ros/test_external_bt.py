@@ -76,6 +76,39 @@ class ObservationContracts(unittest.TestCase):
             with self.assertRaises(ValueError): validate_graph(nodes)
 
 
+    def test_observed_topology_travels_once_then_only_changed_nodes(self):
+        from bt_runtime.manager import RuntimeManager
+        from test_native_bt_runtime import NullBridge
+        class Adapter:
+            id = 'btcpp'
+            def discover(self): return dict(id=self.id, available=False)
+        events = []
+        manager = RuntimeManager(events.append, NullBridge(), [Adapter()])
+        _, nodes = groot_graph(XML)
+        manager.observe(observation('btcpp', 'robot', 'Main', 'groot', nodes, XML))
+        self.assertEqual((events[-1]['observation']['version'], len(events[-1]['observation']['nodes'])), (1, 5))
+        running = copy.deepcopy(nodes)
+        running[2].update(status='running', nativeStatus='RUNNING', feedback='Moving')
+        manager.observe(observation('btcpp', 'robot', 'Main', 'groot', running, XML))
+        delta = events[-1]['observationDelta']
+        self.assertNotIn('observation', events[-1])
+        self.assertEqual((delta['baseVersion'], delta['version'], delta['state']), (1, 2, 'loaded'))
+        self.assertEqual(delta['changes'], [{'id': '2', 'status': 'running', 'nativeStatus': 'RUNNING', 'feedback': 'Moving'}])
+        self.assertEqual(manager.observations['robot']['nodes'][2]['feedback'], 'Moving')  # Full state kept for status.
+        self.assertEqual(manager.dispatch({'command': 'status'})['observations'][0]['version'], 2)
+        manager.observe(observation('btcpp', 'robot', 'Main', 'groot', running, XML))
+        self.assertEqual(events[-1]['observationDelta']['changes'], [])
+        renamed = copy.deepcopy(running)
+        renamed[2]['label'] = 'Other'
+        manager.observe(observation('btcpp', 'robot', 'Main', 'groot', renamed, XML))
+        self.assertEqual(events[-1]['observation']['version'], 4)  # New topology: whole tree again.
+        self.assertNotIn('xml', events[-1]['observation'])
+
+    def test_observed_trees_beyond_authoring_limits(self):
+        nodes = [{'id': 'root', 'parentId': None, 'label': 'Root', 'type': 'Sequence', 'status': 'running', 'nativeStatus': 'RUNNING', 'feedback': ''}]
+        nodes += [{**nodes[0], 'id': str(i), 'parentId': 'root', 'type': 'Wait'} for i in range(6000)]
+        self.assertEqual(observation('py_trees', 'id', 'Big', 'topic', nodes)['state'], 'running')
+
     def test_registry_capacity_eviction_and_failed_replacement_are_atomic(self):
         from bt_runtime.manager import RuntimeManager
         from test_native_bt_runtime import NullBridge
@@ -93,7 +126,7 @@ class ObservationContracts(unittest.TestCase):
         huge = observation('btcpp', 'replacement', 'Tree', 'source-0', copy.deepcopy(nodes))
         for node in huge['nodes']:
             node['ports'] = {str(i): 'x' * 4096 for i in range(128)}
-        huge['nodes'] += [{**huge['nodes'][4], 'id': str(i), 'parentId': '0'} for i in range(5, 8)]
+        huge['nodes'] += [{**huge['nodes'][4], 'id': str(i), 'parentId': '0'} for i in range(5, 64)]  # Over 24 MB.
         with self.assertRaises(ValueError): manager.observe(huge)
         self.assertEqual(manager.observations, previous)
         manager.observe({**previous['0'], 'connected': False})

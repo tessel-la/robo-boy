@@ -231,6 +231,31 @@ describe('independent robot observations', () => {
     event({ hostId: 'new-host', observations: [] });
     expect(client.getState().observations).toEqual([]);
   });
+  it('applies live-field deltas on top of the version it holds, and resyncs after a gap', () => {
+    const child = { ...node, id: 'child', parentId: 'node', label: 'Move', lastResult: 'success', lastNativeResult: 'SUCCESS' };
+    const tree = { ...external, version: 4, nodes: [node, child] };
+    event({ observations: [tree] });
+    const unchanged = client.getState().observations[0].nodes[0];
+    const delta = { id: 'external', runtime: 'btcpp', name: 'Robot mission', source: 'tcp://robot:1667', state: 'running', result: null, error: null, connected: true, updatedAt: 124 };
+    event({ type: 'observation', observationDelta: { ...delta, version: 5, baseVersion: 4, changes: [{ id: 'child', status: 'running', nativeStatus: 'RUNNING', feedback: 'Moving' }] } });
+    const [root, moving] = client.getState().observations[0].nodes;
+    expect(root).toBe(unchanged);
+    expect(moving).toEqual({ ...node, id: 'child', parentId: 'node', label: 'Move', feedback: 'Moving' }); // Result cleared.
+    expect(client.getState().observations[0]).toMatchObject({ version: 5, updatedAt: 124 });
+    expect(fake.topics[0].publish).not.toHaveBeenCalled();
+    event({ type: 'observation', observationDelta: { ...delta, version: 7, baseVersion: 6, changes: [] } });
+    expect(client.getState().observations[0].version).toBe(5);
+    expect(command()).toMatchObject({ command: 'status' });
+    reply({ observations: [{ ...tree, version: 7 }] });
+    expect(client.getState().observations[0].version).toBe(7);
+    event({ type: 'observation', observationDelta: { ...delta, version: 8, baseVersion: 7, changes: [{ id: 'unknown', status: 'idle', nativeStatus: 'IDLE', feedback: '' }] } });
+    expect(client.getState().observations[0].version).toBe(7);
+  });
+  it('accepts observed trees larger than authored ones', () => {
+    const nodes = [node, ...Array.from({ length: 5000 }, (_, i) => ({ ...node, id: `n${i}`, parentId: 'node' }))];
+    event({ observations: [{ ...external, nodes }] });
+    expect(client.getState().observations[0].nodes).toHaveLength(5001);
+  });
   it.each([null, [{ ...node, parentId: 'missing' }], [node, node], [{ ...node, parentId: 'node' }]])('rejects malformed native telemetry topology %j', nodes => {
     event({ observation: { ...external, nodes } });
     expect(client.getState().observations).toEqual([]);

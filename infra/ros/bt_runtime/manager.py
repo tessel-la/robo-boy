@@ -13,6 +13,10 @@ from .adapters import BehaviorTreeCppAdapter, PyTreesAdapter
 from .observations import validate_graph, MAX_BYTES
 
 ACTIVE = ('running',)
+# An observed tree's topology travels once; later updates carry only nodes whose live fields changed.
+OBSERVED_STRUCTURE = ('parentId', 'label', 'type', 'ports', 'subtree')
+OBSERVED_LIVE = ('status', 'nativeStatus', 'feedback', 'lastResult', 'lastNativeResult')
+OBSERVATION_CAPACITY = 24 * 1024 * 1024
 
 
 class RuntimeManager:
@@ -33,6 +37,7 @@ class RuntimeManager:
         self.node_feedback = {}
         self.node_results = {}
         self.observations = {}
+        self.observation_shapes = {}  # id -> (topology key, serialized size)
 
     def observe(self, record):
         if not isinstance(record, dict) or record.get('runtime') not in self.adapters:
@@ -57,24 +62,40 @@ class RuntimeManager:
         # Retain outcomes reported before native parents invalidate/reset descendants.
         previous = self.observations.get(record['id'])
         old_nodes = {node['id']: node for node in previous['nodes']} if previous else {}
-        record = copy.deepcopy(record)
+        record = {**record, 'nodes': [dict(node) for node in record['nodes']]}
         for node in record['nodes']:
             if node['status'] == 'idle' and 'lastResult' not in node and node['id'] in old_nodes:
                 for field in ('lastResult', 'lastNativeResult'):
                     if field in old_nodes[node['id']]: node[field] = old_nodes[node['id']][field]
+        shape = tuple((node['id'], *(node.get(field) for field in OBSERVED_STRUCTURE)) for node in record['nodes'])
+        same_shape = previous is not None and previous.get('xml') == record.get('xml') and self.observation_shapes[record['id']][0] == shape
+        record['version'] = previous['version'] + 1 if previous else 1
+        # Sizing serializes the whole tree, so it is only redone when the topology changes.
+        size = self.observation_shapes[record['id']][1] if same_shape else len(json.dumps(record).encode())
         # A publisher restart replaces its old identity, not the managed session.
         candidate = {id: item for id, item in self.observations.items()
                      if item['source'] != record['source'] or id == record['id']}
         candidate[record['id']] = record
+        sizes = {id: self.observation_shapes[id][1] for id in candidate if id != record['id']}
+        sizes[record['id']] = size
         def excessive():
-            return len(candidate) > 16 or len(json.dumps(list(candidate.values())).encode()) > 3 * 1024 * 1024
+            return len(candidate) > 16 or sum(sizes[id] for id in candidate) > OBSERVATION_CAPACITY
         for stale in sorted((item for item in candidate.values() if not item['connected'] and item['id'] != record['id']), key=lambda item: item['updatedAt']):
             if not excessive(): break
             del candidate[stale['id']]
         if excessive(): raise ValueError('External monitoring capacity exceeded')
         evicted = any(id not in candidate for id in self.observations)
         self.observations = candidate
-        update = copy.deepcopy(record)
+        self.observation_shapes = {id: self.observation_shapes[id] for id in candidate if id != record['id']}
+        self.observation_shapes[record['id']] = (shape, size)
+        if same_shape and not evicted:
+            changes = [{field: node[field] for field in ('id', *OBSERVED_LIVE) if field in node}
+                       for node in record['nodes']
+                       if any(node.get(field) != old_nodes[node['id']].get(field) for field in OBSERVED_LIVE)]
+            delta = {field: record.get(field) for field in ('id', 'runtime', 'name', 'source', 'state', 'result', 'error', 'connected', 'updatedAt', 'version')}
+            self.emit('observation', observationDelta={**delta, 'baseVersion': previous['version'], 'changes': changes})
+            return
+        update = dict(record)
         if previous and previous.get('xml') == record.get('xml'): update.pop('xml', None)
         self.emit('observation', observation=update, **({'observations': list(candidate.values())} if evicted else {}))
 
