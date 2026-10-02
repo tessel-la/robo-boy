@@ -1,4 +1,5 @@
 import { useRemoteTreeRuntime } from '../runtime/useRemoteTreeRuntime';
+import { useRecordedTreeRuntime } from '../runtime/recordedTrees';
 import NativeTreeCanvas from '../runtime/NativeTreeCanvas';
 import NativeTreeSettings, { NativeTreeStatus } from '../runtime/NativeTreeSettings';
 import { useNativeTreeController } from '../runtime/useNativeTreeController';
@@ -128,6 +129,8 @@ interface BehaviorTreePanelProps {
    * replaces the old embedded BehaviorTreeAgentPanel entirely; see docs/ai-assistant.md. */
   onOpenAssistant?: (context: { panelId: string }) => void;
   onRegisterAssistantBridge?: (panelId: string, bridge: BehaviorTreeAssistantBridge | null) => void;
+  /** `ros` replays a recording: show the recorded trees read-only instead of a host runtime. */
+  replay?: boolean;
 }
 
 export interface BehaviorTreeExecutionSnapshot {
@@ -546,8 +549,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   panelId = 'primary',
   onOpenAssistant,
   onRegisterAssistantBridge,
+  replay = false,
 }) => {
-  const nativeRuntime = useRemoteTreeRuntime(ros, isConnected);
+  const liveRuntime = useRemoteTreeRuntime(replay ? null : ros, !replay && isConnected);
+  const recordedRuntime = useRecordedTreeRuntime(replay ? ros : null);
+  const nativeRuntime: ReturnType<typeof useRemoteTreeRuntime> = replay ? recordedRuntime : liveRuntime;
   const [nodes, setNodes] = useState<BehaviorTreeNode[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [currentTree, setCurrentTree] = useState<BehaviorTree | null>(null);
@@ -563,10 +569,12 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
       if (latest && latest !== watched) setWatched(latest);
       else if (!latest && nativeRuntime.state.connected && watched.connected) setWatched({ ...watched, connected: false, error: 'This tree is no longer reported by the ROS host.' });
     } else if (!isExecuting && !watchDismissed && nativeRuntime.state.connected && !currentTree?.nativeDocument && !currentTree?.nodes.length && nativeRuntime.state.session?.state !== 'running') {
-      const running = nativeRuntime.state.observations?.find(item => item.connected && item.state === 'running');
+      const observations = nativeRuntime.state.observations || [];
+      // A recording can be opened at any cursor; show its tree even where it is not running.
+      const running = observations.find(item => item.connected && item.state === 'running') || (replay ? observations[0] : undefined);
       if (running) setWatched(running);
     }
-  }, [watched, watchDismissed, nativeRuntime.state, currentTree, isExecuting]);
+  }, [watched, watchDismissed, nativeRuntime.state, currentTree, isExecuting, replay]);
   const panelEngine = watched?.runtime || selectedEngine;
   const panelTree = useMemo(() => watched ? { id: watched.id, name: watched.name, nodes: [], edges: [], createdAt: watched.updatedAt, updatedAt: watched.updatedAt } : currentTree, [watched, currentTree]);
   useEffect(
@@ -3294,11 +3302,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
               }
             : undefined
         }
-        runDisabled={!nativeDocument && selectedEngine !== 'json'}
+        runDisabled={replay || (!nativeDocument && selectedEngine !== 'json')}
         runtimeSettings={
           <>
             {(watched || !!nativeRuntime.state.observations?.length) && <div className="bt-menu-section">
-              <span className="bt-menu-label">Trees on robot</span>
+              <span className="bt-menu-label">{replay ? 'Recorded trees' : 'Trees on robot'}</span>
               {nativeRuntime.state.observations?.filter(item => nativeRuntime.state.runtimes.find(engine => engine.id === item.runtime)?.enabled !== false).map(item => (
                 <button key={item.id} className="bt-menu-action-btn" aria-pressed={watched?.id === item.id} disabled={isExecuting} title={item.source} onClick={() => setWatched(item)}>
                   {item.name} · {item.runtime === 'btcpp' ? 'BT.CPP' : 'py_trees'} · {item.connected && nativeRuntime.state.connected ? item.state : 'Disconnected'}

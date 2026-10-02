@@ -3131,10 +3131,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       {viewMode === 'tfTree' && !tfEverMounted && <div className="placeholder">Loading...</div>}
       {btEverMounted && (
         <div className="view-slot" style={viewMode !== 'behaviorTree' ? { display: 'none' } : undefined}>
-          {isConnected && ros ? (
+          {replaySource.ros || (isConnected && ros) ? (
             <BehaviorTreePanel
-              ros={ros}
-              isConnected={isConnected}
+              key={replaySource.ros ? `view:replay:${replaySource.generation}` : 'view:live'}
+              ros={replaySource.ros ?? ros}
+              isConnected={Boolean(replaySource.ros) || isConnected}
+              replay={Boolean(replaySource.ros)}
               isActive={viewMode === 'behaviorTree'}
               onExecutionChange={handleStandardBtExecutionChange}
               onExecutionControlsChange={controls => {
@@ -3470,10 +3472,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       );
     }
 
-    if ((!isConnected || !ros) && !(['3d', 'tfTree', 'camera'].includes(panel.type) && replaySource.ros)) {
+    const replayable = ['3d', 'tfTree', 'camera', 'behaviorTree'].includes(panel.type);
+    if ((!isConnected || !ros) && !(replayable && replaySource.ros)) {
       return <div className="placeholder">
         {!connectionParams.offline ? waitingForRobot
-          : ['3d', 'tfTree', 'camera'].includes(panel.type) ? 'Open a recording in Record & Replay to see it here.'
+          : replayable ? 'Open a recording in Record & Replay to see it here.'
             : 'This panel needs a live robot connection.'}
       </div>;
     }
@@ -3539,10 +3542,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }
 
     if (panel.type === 'behaviorTree') {
+      // During replay, the recorded trees replace the live ones, like recorded camera frames do.
       return (
         <BehaviorTreePanel
-          ros={ros}
-          isConnected={isConnected}
+          key={replaySource.ros ? `${panel.id}:replay:${replaySource.generation}` : `${panel.id}:live`}
+          ros={replaySource.ros ?? ros}
+          isConnected={Boolean(replaySource.ros) || isConnected}
+          replay={Boolean(replaySource.ros)}
           isActive={isPanelActive}
           onExecutionChange={setBtExecution}
           onExecutionControlsChange={controls => {
