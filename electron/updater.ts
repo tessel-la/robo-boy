@@ -8,10 +8,9 @@ import path from 'node:path';
 /**
  * Updates for the packaged shell: the Linux .deb and the Apple Silicon Mac app.
  *
- * Everything that has to be trusted happens here rather than in the page. The page runs on
- * Chromium's network stack, which this shell starts with certificate errors ignored (robots serve
- * self-signed certificates), so neither the release it saw nor a checksum it passes could be
- * relied on. Node's fetch keeps its own certificate checks: the release is looked up again here,
+ * Everything that has to be trusted happens here rather than in the page. Neither the release
+ * the page saw nor a checksum it passes is trusted. Node's fetch keeps its own certificate checks,
+ * independent of Chromium's exceptions for local robots: the release is looked up again here,
  * the installer is fetched only from GitHub's hosts, checked against the SHA-256 GitHub publishes,
  * and installed only from the path this module wrote.
  */

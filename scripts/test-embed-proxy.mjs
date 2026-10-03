@@ -126,12 +126,13 @@ try {
       import { app, BrowserWindow, protocol } from 'electron';
       import { readFile } from 'node:fs/promises';
       import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './electron/embedProxy';
-      app.commandLine.appendSwitch('ignore-certificate-errors');
+      import { configureCertificates } from './electron/certificates';
       app.setPath('userData', ${JSON.stringify(path.join(work, 'profile'))});
       protocol.registerSchemesAsPrivileged([
         {scheme:'app', privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}
       ]);
       app.whenReady().then(async () => {
+        configureCertificates();
         registerEmbedProxy();
         const sandbox = async () => new Response(await readFile(${JSON.stringify(path.join(sandboxDir, 'panel-sandbox.html'))}), {headers:{'content-type':'text/html'}});
         protocol.handle('app', async request => {
