@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
+import { getConnectionStorageKey } from '../runtime/connectionStorage';
 import { getVisualizationStateForKey, saveVisualizationStateForKey } from '../utils/visualizationState';
 
 const connect = vi.fn();
@@ -313,12 +314,13 @@ const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | 
   layoutId: type === 'pad' ? 'custom-drive' : undefined,
 });
 
-const renderMainControlView = () =>
+const renderMainControlView = (storageScope?: string) =>
   render(
     <MainControlView
       connectionParams={connectionParams}
       onDisconnect={vi.fn()}
       connectionNavigation={connectionNavigation}
+      storageScope={storageScope}
     />
   );
 
@@ -492,6 +494,56 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByRole('button', { name: 'Manage installations…' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it.each([undefined, 'target-test'])('keeps a cleared workspace empty on reconnect with scope %s', async storageScope => {
+    const view = renderMainControlView(storageScope);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Pad controls' }));
+    expect(await screen.findByLabelText('Pad controls')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Pad controls' }));
+    expect(screen.getByText('Add panel')).toBeInTheDocument();
+    view.unmount();
+
+    expect(localStorage.getItem(getConnectionStorageKey(workspacePanelsKey, storageScope))).toBe('[]');
+    // The unused legacy mobile state still contains the old defaults, even on desktop.
+    expect(JSON.parse(localStorage.getItem(getConnectionStorageKey(mobileWorkspacePanelsKey, storageScope))!))
+      .toHaveLength(2);
+    renderMainControlView(storageScope);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pad controls')).not.toBeInTheDocument();
+  });
+
+  it('keeps an untouched empty workspace empty on the next connection', async () => {
+    const view = renderMainControlView();
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    view.unmount();
+    renderMainControlView();
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pad controls')).not.toBeInTheDocument();
+  });
+
+  it('keeps a saved empty local replay workspace empty instead of recreating starter panels', async () => {
+    localStorage.setItem(workspacePanelsKey, '[]');
+    render(<MainControlView connectionParams={{ ...connectionParams, offline: true }} onDisconnect={vi.fn()} />);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('record-replay-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('native-time-series')).not.toBeInTheDocument();
+  });
+
+  it('still creates starter panels for a new local replay workspace', async () => {
+    render(<MainControlView connectionParams={{ ...connectionParams, offline: true }} onDisconnect={vi.fn()} />);
+    expect(await screen.findByTestId('record-replay-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('native-time-series')).toBeInTheDocument();
   });
 
   it('opens panel management from the session menu without using the add-panel menu', () => {
@@ -1130,7 +1182,7 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Pad controls')).toBeInTheDocument();
   });
 
-  it('migrates legacy mobile panels only when the unified workspace is empty', async () => {
+  it('migrates legacy mobile panels when no unified workspace has been saved', async () => {
     localStorage.setItem(
       mobileWorkspacePanelsKey,
       JSON.stringify([makePanel('legacy-camera', 'camera', 'Camera'), makePanel('legacy-pad', 'pad', 'Pad controls')])

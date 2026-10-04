@@ -599,34 +599,35 @@ const isWorkspacePanel = (panel: unknown): panel is WorkspacePanel => {
   return normalizeWorkspacePanel(panel) !== null;
 };
 
-const loadWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
+const loadWorkspacePanels = (storageScope?: string): WorkspacePanel[] | null => {
   try {
     const stored = readConnectionStorage(WORKSPACE_PANELS_KEY, storageScope);
-    if (!stored) return [];
+    if (!stored) return null;
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel) : [];
+    return Array.isArray(parsed) ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel) : null;
   } catch (error) {
     console.error('Failed to load desktop workspace panels:', error);
-    return [];
+    return null;
   }
 };
 
-const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
+const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] | null => {
   const desktopPanels = loadWorkspacePanels(storageScope);
-  if (desktopPanels.length > 0) return desktopPanels;
+  // A saved empty array is an intentional workspace, so it must not trigger legacy migration.
+  if (desktopPanels !== null) return desktopPanels;
 
   try {
     const stored = readConnectionStorage(MOBILE_WORKSPACE_PANELS_KEY, storageScope);
-    if (!stored) return [];
+    if (!stored) return null;
     const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return null;
     return parsed
       .map(panel => normalizeWorkspacePanel(panel))
       .filter(isWorkspacePanel)
       .map(panel => ({ ...panel, id: generateUniqueId('workspace-panel') }));
   } catch (error) {
     console.error('Failed to migrate mobile workspace panels:', error);
-    return [];
+    return null;
   }
 };
 
@@ -991,9 +992,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(() => {
     const saved = loadUnifiedWorkspacePanels(storageScope);
-    return connectionParams.offline && !saved.length
+    return saved ?? (connectionParams.offline
       ? [createWorkspacePanel({ type: 'recordReplay' }, {}), createWorkspacePanel({ type: 'timeSeries' }, {})]
-      : saved;
+      : []);
   });
   const workspacePanelsRef = useRef(workspacePanels);
   workspacePanelsRef.current = workspacePanels;
