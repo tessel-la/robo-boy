@@ -260,10 +260,12 @@ Install the Rust auditor with `cargo install cargo-audit --locked` if needed. De
 also runs on pull requests that change either the npm or Rust manifests and lockfiles.
 Keep Vitest and its coverage providers on matching releases. The XML parser override requires
 `@xmldom/xmldom` 0.9.12 or newer because ROSLIB's dependency otherwise resolves to an older line.
+Keep the TypeScript ESLint parser and plugin on matching 8.71 or newer releases; the older
+parser's globbing dependencies pull in `braces`, which has an unpatched security advisory.
 If npm 9 or 10 fails dependency resolution with `edgesOut`, use npm 11 to update the lockfile;
 the resulting lockfile still supports `npm ci` with the project's existing tooling.
 
-As of 2026-09-24, both audits report zero vulnerabilities after the security updates. RustSec
+As of 2026-10-04, both audits report zero vulnerabilities after the security updates. RustSec
 still reports six unmaintained crates (`proc-macro-error` and five `unic-*` crates) and the
 [`glib::VariantStrIter` soundness warning](https://rustsec.org/advisories/RUSTSEC-2024-0429.html).
 These arrive through Tauri's GTK3/WebKitGTK and URL-pattern dependencies. The `glib` fix requires
