@@ -3,7 +3,7 @@
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
 [![Coverage](https://codecov.io/gh/tessel-la/robo-boy/branch/main/graph/badge.svg)](https://codecov.io/gh/tessel-la/robo-boy)
-[![Version](https://img.shields.io/github/v/tag/tessel-la/robo-boy?sort=semver&label=version)](https://github.com/tessel-la/robo-boy/tags)
+[![Version](https://img.shields.io/github/v/tag/tessel-la/robo-boy?filter=robo-boy-v*&sort=semver&label=version)](https://github.com/tessel-la/robo-boy/releases?q=robo-boy-v&expanded=true)
 [![License](https://img.shields.io/github/license/tessel-la/robo-boy)](https://github.com/tessel-la/robo-boy/blob/main/LICENSE)
 
 <p align="center">
@@ -18,11 +18,14 @@ The shortest route. The app needs only the ROS services, so there is no certific
 proxy to run.
 
 1. Install a package for the current release:
-   [`.deb`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-amd64.deb) ·
-   [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) ·
-   [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) ·
-   [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe) ·
-   [`.ipa`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-iphone-unsigned.ipa)
+
+   | Platform | Package |
+   | --- | --- |
+   | Linux | [`.deb`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-amd64.deb) · [`.rpm`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-linux-x86_64.rpm) |
+   | macOS | [`.dmg`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-macos-universal.dmg) |
+   | Windows | [`.exe`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-windows-x64-setup.exe) |
+   | iPhone | [`.ipa`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-iphone-unsigned.ipa) |
+   | Android | [`.apk`](https://github.com/tessel-la/robo-boy/releases/latest/download/Robo-Boy-android.apk) |
 
    The iPhone package is unsigned, because signing an iOS app needs an Apple account. Sign it with
    your own and sideload it: [iOS application](docs/ios.md).
@@ -38,15 +41,14 @@ proxy to run.
 3. Open the app. It asks for the address of the computer running ROS — `localhost` when that is the same
    computer — and remembers it, so later launches offer **Quick Connect** straight to it.
 
-See [Application](docs/application.md) for desktop setup, or [Android application](docs/android.md)
-to run the same controller from Android Studio on a phone.
+See the [desktop](docs/application.md), [iPhone](docs/ios.md), and [Android](docs/android.md)
+guides for platform setup and development.
 
 ## Start With Docker
 
 Use this when Robo-Boy has to be opened in a browser, including from a phone or another computer. A browser
 needs HTTPS before it grants a page a camera, and the app and the robot services have to share one origin;
 Caddy and a locally trusted certificate supply both.
-
 
 ### Prerequisites
 
