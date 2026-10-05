@@ -102,6 +102,12 @@ export interface InspectionSnapshot {
   online: boolean;
   loading: boolean;
   updatedAt: number;
+  /**
+   * The graph held is the companion's latest, confirmed by its live heartbeat. A graph alone is not
+   * enough: it is latched, so a client can be handed one built long before, still carrying the
+   * small age it had when published.
+   */
+  current: boolean;
   now: number;
   errors: string[];
   truncated: boolean;

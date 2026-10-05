@@ -337,21 +337,37 @@ const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal): Promise<RO
       resolve(result);
     };
     const onAbort = () => finish(null);
+    const accept = (snapshot: ReturnType<typeof session.getSnapshot>) => {
+      if (snapshot.truncated) console.warn('[BT] The ROS graph exceeds the inspector budget; some resources are missing.');
+      finish(resourcesToDiscovery(snapshot.resources));
+    };
     const check = () => {
       const snapshot = session.getSnapshot();
-      if (snapshot.mode === 'host' && snapshot.online) {
-        if (snapshot.truncated) console.warn('[BT] The ROS graph exceeds the inspector budget; some resources are missing.');
-        finish(resourcesToDiscovery(snapshot.resources));
+      // Wait for a graph the inspector's heartbeat confirms as current. The first one delivered is
+      // latched and can predate servers started since -- only the next refresh would show them.
+      if (snapshot.mode === 'host' && snapshot.online && snapshot.current) {
+        accept(snapshot);
       } else if (
+        // Only the browser's own topic listing can show there is no inspector at all.
+        snapshot.mode !== 'host' &&
         !snapshot.loading &&
         !snapshot.resources.some(item => item.kind === 'topic' && item.name === INSPECTOR_GRAPH_TOPIC)
       ) {
         finish(null);
       }
     };
-    const timer = setTimeout(() => finish(null), GRAPH_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      // A live inspector that never confirmed its graph still beats discovering call by call.
+      const snapshot = session.getSnapshot();
+      if (snapshot.mode === 'host' && snapshot.online) {
+        console.warn('[BT] The inspector graph was not confirmed current in time; using the latest one.');
+        accept(snapshot);
+      } else finish(null);
+    }, GRAPH_TIMEOUT_MS);
     signal?.addEventListener('abort', onAbort, { once: true });
     unsubscribe = session.subscribe(check);
+    // Ask for a rebuild now rather than at the inspector's next ~2 s pass.
+    session.refresh?.();
     check();
   });
 
