@@ -7,6 +7,7 @@ import AssistantSubscriptionSettings from './AssistantSubscriptionSettings';
 import { getProviderDefaults } from '../storage/assistantStorage';
 import AssistantThinkingSettings from './AssistantThinkingSettings';
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
+import type { ApiKeyStoragePolicy, ApiKeyStorageState } from '../../../runtime/assistantSubscription';
 
 interface AssistantSettingsPopoverProps {
   settings: AssistantSettings;
@@ -17,6 +18,9 @@ interface AssistantSettingsPopoverProps {
   ollamaModelsError: string;
   isLoadingOllamaModels: boolean;
   onRefreshOllamaModels: () => void;
+  apiKeyStorage?: ApiKeyStorageState;
+  loadingCredentials?: boolean;
+  onApiKeyStorageChange?: (policy: ApiKeyStoragePolicy) => void;
 }
 
 /** Provider, model, voice, and context settings presented with the same section hierarchy used by
@@ -30,6 +34,9 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
   ollamaModelsError,
   isLoadingOllamaModels,
   onRefreshOllamaModels,
+  apiKeyStorage,
+  loadingCredentials,
+  onApiKeyStorageChange,
 }) => (
   <div className="assistant-settings-popover" role="dialog" aria-label="Assistant settings">
     <div className="assistant-settings-popover-header">
@@ -169,6 +176,30 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
                   }
                 />
               </label>
+              {getDesktopBridge()?.assistant?.getApiKeyStorage && onApiKeyStorageChange && (
+                <div className="assistant-setting-field assistant-key-storage-field">
+                  <label>
+                    Remember API key
+                    <select
+                      disabled={loadingCredentials}
+                      value={apiKeyStorage?.policy ?? 'automatic'}
+                      onChange={event => onApiKeyStorageChange(event.target.value as ApiKeyStoragePolicy)}
+                    >
+                      <option value="automatic">Automatic (secure storage)</option>
+                      <option value="session">This session only</option>
+                      <option value="local">Save unencrypted on this device</option>
+                    </select>
+                  </label>
+                  <span className="assistant-key-note" role="status">
+                    {apiKeyStorage?.warning ??
+                      (apiKeyStorage?.storage === 'encrypted'
+                        ? 'Saved with OS encryption.'
+                        : apiKeyStorage?.storage === 'session'
+                          ? 'Kept for this app session. Re-enter after quitting Robo-Boy.'
+                          : 'Secure storage is used when available. If unavailable, the key stays in this app session.')}
+                  </span>
+                </div>
+              )}
               <AssistantThinkingSettings
                 provider={settings.provider}
                 model={settings.model}
@@ -226,7 +257,9 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
         {settings.authMode === 'subscription'
           ? 'Subscription credentials stay in the desktop runtime. ChatGPT credentials use the OS credential store; Claude Code manages its own sign-in. Conversation history stays in this browser.'
           : getDesktopBridge()?.assistant?.setApiKey
-            ? 'API keys are saved locally by Robo-Boy with no keychain or password prompt. They are not encrypted; someone with access to your app files can read them. Conversation history stays on this device.'
+            ? getDesktopBridge()?.assistant?.getApiKeyStorage
+              ? 'API keys use OS encryption when available; storage failures do not prevent use. Your OS may request keychain access. This session only and unencrypted saving avoid keychain access. Conversation history stays on this device.'
+              : 'This desktop version saves API keys locally without encryption. Update Robo-Boy to use secure storage. Conversation history stays on this device.'
             : 'API keys and conversation history are stored in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
       </p>
     </div>

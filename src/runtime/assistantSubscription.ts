@@ -1,6 +1,12 @@
 /** Public native assistant contract. Subscription credentials and executable paths stay native. */
 export type SubscriptionProvider = 'openai' | 'anthropic';
 export type AssistantAuthMode = 'api-key' | 'subscription';
+export type ApiKeyStoragePolicy = 'automatic' | 'session' | 'local';
+export interface ApiKeyStorageState {
+  policy: ApiKeyStoragePolicy;
+  storage: 'encrypted' | 'plaintext' | 'session' | 'none';
+  warning?: string;
+}
 import type { AssistantProviderId } from '../features/assistant/providers/types';
 import type { ThinkingEffort } from '../features/assistant/providers/thinking';
 
@@ -39,7 +45,12 @@ export interface SubscriptionChatRequest {
 export interface AssistantSubscriptionBridge {
   /** API transports need the key in renderer memory; disk persistence belongs to the native store. */
   getApiKey?(provider: AssistantProviderId): Promise<string | undefined>;
-  setApiKey?(provider: AssistantProviderId, key: string): Promise<void>;
+  setApiKey?(
+    provider: AssistantProviderId,
+    key: string,
+    policy?: ApiKeyStoragePolicy
+  ): Promise<ApiKeyStorageState | void>;
+  getApiKeyStorage?(provider: AssistantProviderId): Promise<ApiKeyStorageState>;
   getState(provider: SubscriptionProvider): Promise<SubscriptionState>;
   signIn(provider: SubscriptionProvider, accountId?: string): Promise<SubscriptionState>;
   cancelSignIn(provider: SubscriptionProvider): Promise<void>;

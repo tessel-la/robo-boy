@@ -1349,6 +1349,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.assistant-key-storage-field {
+  grid-column: 1 / -1;
+}
+
 .assistant-settings-grid label,
 .assistant-setting-field,
 .assistant-settings-grid .assistant-speech-field {

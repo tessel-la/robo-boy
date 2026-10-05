@@ -2,19 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
 import { loadAssistantSettings, saveAssistantSettings } from './assistantStorage';
 import type { AssistantSettings } from '../types';
+import type { ApiKeyStoragePolicy, ApiKeyStorageState } from '../../../runtime/assistantSubscription';
 
 /** Settings stay local; Electron keys are hydrated into memory and persisted natively. */
 export function useAssistantSettings() {
   const [settings, setSettings] = useState(loadAssistantSettings);
   const [storageError, setStorageError] = useState('');
   const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [apiKeyStorage, setApiKeyStorage] = useState<ApiKeyStorageState>();
   const current = useRef(settings);
   const legacy = useRef(settings);
   const bridge = getDesktopBridge()?.assistant;
   const nativeKeys = !!bridge?.getApiKey && !!bridge?.setApiKey;
   const migrationDone = useRef(!nativeKeys || !legacy.current.apiKey);
   const initialization = useRef<Promise<void>>();
-  const legacyKeyUpdate = useRef<Promise<void>>();
+  const legacyKeyUpdate = useRef<Promise<unknown>>();
   const keyEpoch = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -32,6 +34,8 @@ export function useAssistantSettings() {
     let cancelled = false;
     const provider = settings.provider;
     const epoch = keyEpoch.current;
+    setApiKeyStorage(undefined);
+    setStorageError('');
     setLoadingCredentials(true);
     if (!initialization.current)
       initialization.current = (async () => {
@@ -46,15 +50,17 @@ export function useAssistantSettings() {
       })();
     void initialization.current
       .then(() => bridge!.getApiKey!(provider))
-      .then(key => {
+      .then(async key => {
+        const state = await bridge!.getApiKeyStorage?.(provider);
         if (cancelled || keyEpoch.current !== epoch) return;
         current.current = { ...current.current, apiKey: key ?? '' };
         setSettings(current.current);
+        setApiKeyStorage(state);
       })
       .catch(() => {
         if (!cancelled && keyEpoch.current === epoch)
           setStorageError(
-            'Could not load the saved API key. If it was encrypted by an earlier version, enter it once again to switch to local storage. Existing records are retained until migration succeeds.'
+            'Could not load the saved API key. You can enter it once again and keep using the assistant. Existing records are retained until migration succeeds.'
           );
       })
       .finally(() => {
@@ -72,28 +78,40 @@ export function useAssistantSettings() {
     setSettings(current.current);
     persist();
     if (nativeKeys && patch.apiKey !== undefined && !providerChanged) {
-      const provider = current.current.provider;
-      const epoch = keyEpoch.current;
-      setStorageError('');
-      const saved = bridge!.setApiKey!(provider, patch.apiKey);
-      if (provider === legacy.current.provider) legacyKeyUpdate.current = saved;
-      void saved
-        .then(() => {
-          // An explicitly re-entered key can complete a previously failed migration.
-          // Never let a stale legacy browser record overwrite that new native key on restart.
-          if (!migrationDone.current && provider === legacy.current.provider) {
-            migrationDone.current = true;
-            initialization.current = Promise.resolve();
-            if (mounted.current) persist();
-          }
-        })
-        .catch(() => {
-          if (mounted.current && keyEpoch.current === epoch)
-            setStorageError(
-              'The API key is kept for this session but could not be saved on this device. Check storage permissions and available space, then enter the key again.'
-            );
-        });
+      saveKey(patch.apiKey);
     }
   };
-  return { settings, updateSettings, storageError, loadingCredentials };
+
+  const saveKey = (key: string, policy?: ApiKeyStoragePolicy) => {
+    const provider = current.current.provider;
+    const epoch = keyEpoch.current;
+    setStorageError('');
+    setLoadingCredentials(false);
+    if (policy) setApiKeyStorage({ policy, storage: 'none', warning: 'Updating key storage…' });
+    const saved = policy === undefined ? bridge!.setApiKey!(provider, key) : bridge!.setApiKey!(provider, key, policy);
+    if (provider === legacy.current.provider) legacyKeyUpdate.current = saved;
+    void saved
+      .then(state => {
+        if (mounted.current && keyEpoch.current === epoch && state) setApiKeyStorage(state);
+        if (!migrationDone.current && provider === legacy.current.provider) {
+          migrationDone.current = true;
+          initialization.current = Promise.resolve();
+          if (mounted.current) persist();
+        }
+      })
+      .catch(() => {
+        if (mounted.current && keyEpoch.current === epoch) {
+          setApiKeyStorage({ policy: policy ?? apiKeyStorage?.policy ?? 'automatic', storage: 'session' });
+          setStorageError(
+            'The API key is kept for this session but could not be saved on this device. Check storage permissions and available space, then enter the key again.'
+          );
+        }
+      });
+  };
+  const updateApiKeyStorage = (policy: ApiKeyStoragePolicy) => {
+    if (!nativeKeys || !bridge?.getApiKeyStorage || loadingCredentials) return;
+    keyEpoch.current++;
+    saveKey(current.current.apiKey, policy);
+  };
+  return { settings, updateSettings, storageError, loadingCredentials, apiKeyStorage, updateApiKeyStorage };
 }

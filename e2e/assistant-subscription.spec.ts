@@ -4,6 +4,7 @@ import { installRosMock } from './helpers/rosMock';
 test('switches both providers between API and native sign-in, then sends a subscription turn', async ({ page }) => {
   await page.addInitScript(() => {
     const keys: Record<string, string> = {};
+    const storage: Record<string, { policy: string; storage: string; warning?: string }> = {};
     localStorage.setItem(
       'robo-boy-assistant-settings',
       JSON.stringify({ provider: 'openai', model: 'gpt-4.1', apiKey: 'legacy-test-key' })
@@ -31,8 +32,19 @@ test('switches both providers between API and native sign-in, then sends a subsc
       }),
       assistant: {
         getApiKey: async (provider: string) => keys[provider],
-        setApiKey: async (provider: string, key: string) => {
+        getApiKeyStorage: async (provider: string) => storage[provider] ?? { policy: 'automatic', storage: 'none' },
+        setApiKey: async (provider: string, key: string, policy?: string) => {
           keys[provider] = key;
+          const selected = policy ?? storage[provider]?.policy ?? 'automatic';
+          storage[provider] = {
+            policy: selected,
+            storage: selected === 'local' ? 'plaintext' : 'session',
+            warning:
+              selected === 'local'
+                ? 'Saved unencrypted on this device. Someone with access to your app files or backups can read this key.'
+                : 'Secure storage is unavailable. This key works for this app session.',
+          };
+          return storage[provider];
         },
         getState: async (provider: string) => snapshot(provider),
         signIn: async (provider: string) => {
@@ -65,6 +77,14 @@ test('switches both providers between API and native sign-in, then sends a subsc
   const panel = page.getByTestId('assistant-panel');
   await panel.getByRole('button', { name: 'Assistant settings' }).click();
   const settings = panel.getByRole('dialog', { name: 'Assistant settings' });
+  await expect(settings.getByRole('status')).toHaveText(/Secure storage is unavailable/);
+  await settings.getByRole('combobox', { name: 'Remember API key' }).selectOption('local');
+  await expect(settings.getByRole('status')).toHaveText(/Saved unencrypted on this device/);
+  await expect(settings.getByLabel('API key', { exact: true })).toHaveValue('legacy-test-key');
+  await page.screenshot({ path: 'test-results/assistant-key-storage.png' });
+  expect(await page.evaluate(() => localStorage.getItem('robo-boy-assistant-settings'))).not.toContain(
+    'legacy-test-key'
+  );
   await settings.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('openai');
   await settings.getByRole('combobox', { name: 'Authentication', exact: true }).selectOption('subscription');
   await expect(settings.getByRole('textbox', { name: 'API key', exact: true })).toHaveCount(0);

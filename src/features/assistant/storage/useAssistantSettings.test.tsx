@@ -170,4 +170,80 @@ describe('native API-key migration', () => {
     expect(setApiKey).not.toHaveBeenCalled();
     expect(localStorage.getItem('robo-boy-assistant-settings')).not.toContain('stale-secret');
   });
+  it('migrates into session memory when encryption is unavailable and shows the native warning', async () => {
+    localStorage.setItem(
+      'robo-boy-assistant-settings',
+      JSON.stringify({ provider: 'openai', apiKey: 'legacy-secret' })
+    );
+    let key: string | undefined;
+    const state = { policy: 'automatic', storage: 'session', warning: 'Secure storage is unavailable.' };
+    vi.stubGlobal('roboBoyDesktop', {
+      assistant: {
+        getApiKey: vi.fn(async () => key),
+        setApiKey: vi.fn(async (_provider: string, value: string) => {
+          key = value;
+          return state;
+        }),
+        getApiKeyStorage: vi.fn(async () => state),
+      },
+    });
+    const { result } = renderHook(useAssistantSettings);
+    await waitFor(() => expect(result.current.loadingCredentials).toBe(false));
+    expect(result.current.settings.apiKey).toBe('legacy-secret');
+    expect(result.current.apiKeyStorage).toEqual(state);
+    expect(result.current.storageError).toBe('');
+    expect(localStorage.getItem('robo-boy-assistant-settings')).not.toContain('legacy-secret');
+  });
+  it('forwards an explicit storage choice and ignores a late result from an earlier choice', async () => {
+    localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', apiKey: '' }));
+    let finish!: (state: any) => void;
+    const setApiKey = vi.fn(async (_provider: string, _key: string, policy: string) => ({
+      policy,
+      storage: 'session',
+    }));
+    setApiKey.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finish = resolve;
+        })
+    );
+    vi.stubGlobal('roboBoyDesktop', {
+      assistant: {
+        getApiKey: vi.fn(async () => 'saved-key'),
+        setApiKey,
+        getApiKeyStorage: vi.fn(async () => ({ policy: 'automatic', storage: 'encrypted' })),
+      },
+    });
+    const { result } = renderHook(useAssistantSettings);
+    await waitFor(() => expect(result.current.loadingCredentials).toBe(false));
+    act(() => result.current.updateApiKeyStorage('local'));
+    act(() => result.current.updateApiKeyStorage('session'));
+    await waitFor(() => expect(result.current.apiKeyStorage?.policy).toBe('session'));
+    await act(async () => finish({ policy: 'local', storage: 'plaintext' }));
+    expect(result.current.apiKeyStorage?.policy).toBe('session');
+    expect(setApiKey).toHaveBeenNthCalledWith(1, 'openai', 'saved-key', 'local');
+    expect(setApiKey).toHaveBeenNthCalledWith(2, 'openai', 'saved-key', 'session');
+  });
+  it('allows immediate use of an edited key even while the old native load is pending', async () => {
+    let finish!: (key: string) => void;
+    vi.stubGlobal('roboBoyDesktop', {
+      assistant: {
+        getApiKey: vi.fn(
+          () =>
+            new Promise(resolve => {
+              finish = resolve;
+            })
+        ),
+        setApiKey: vi.fn(async () => ({ policy: 'automatic', storage: 'session' })),
+      },
+    });
+    const { result } = renderHook(useAssistantSettings);
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(result.current.loadingCredentials).toBe(true);
+    act(() => result.current.updateSettings({ apiKey: 'usable-key' }));
+    expect(result.current.loadingCredentials).toBe(false);
+    expect(result.current.settings.apiKey).toBe('usable-key');
+    await act(async () => finish('older-key'));
+    expect(result.current.settings.apiKey).toBe('usable-key');
+  });
 });

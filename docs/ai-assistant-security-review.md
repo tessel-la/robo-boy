@@ -5,18 +5,21 @@ OAuth callback, native IPC and official Claude Code subprocesses.
 
 ## Findings and changes
 
-- **API-key storage follows the user's password-free UX requirement.** Electron stores per-provider
-  keys in an app-owned plaintext `api-keys.json` record, with no calls to OS keychain APIs. They
-  remain credentials that grant provider access and may incur charges; someone with access to
-  app files or backups can read them. Old encrypted `api-keys.bin` records are preserved and never
-  unlocked automatically; explicit key re-entry establishes the new local record. Migration
-  clears the live browser entry only after native persistence succeeds; failed migration retains
-  the old key and reports an error. Other deployment modes retain their disclosed browser storage.
+- **API-key storage favors OS protection without blocking use.** The default uses asynchronous
+  `safeStorage`; failures fall back to native session memory, never implicit plaintext persistence.
+  Each native operation is bounded to three seconds and failed availability is cached until restart.
+  The OS may still show its own keychain permission/unlock dialog; asynchronous operation and a
+  timeout keep Robo-Boy responsive but cannot dismiss that OS UI. Per-provider session-only and
+  explicit plaintext modes bypass all keychain calls. The UI discloses actual storage and the
+  plaintext risk. Existing plaintext records are upgraded where possible, otherwise preserved
+  with disclosure; legacy encrypted records remain recoverable. Browser migration clears the
+  live browser secret only after a native write succeeds, including empty session/clear markers.
+  Failed writes keep the new key usable in session memory and preserve the previous disk record.
 - **Credential-file ownership and write durability.** ChatGPT sessions and API keys share atomic
   record writes. POSIX directories are restricted to `0700`, records to `0600`; temporary files
   are synced before rename. ChatGPT tokens retain OS-backed encryption and failed persistence
   does not activate a new session in memory. Linux `basic_text` and unavailable keyrings are
-  refused for ChatGPT tokens; API-key saving works independently of the OS keyring.
+  refused for ChatGPT tokens and automatic API-key encryption. API keys fall back to session memory.
 - **OAuth callback shutdown.** The old callback forcibly closed active browser connections after
   writing confirmation. It now flushes the response before settling the attempt, closes gracefully,
   ignores duplicate completion, bounds idle clients and handles listener errors without an
@@ -50,9 +53,14 @@ frontend/native type checks, focused lint, and web/Electron production builds. B
 dependency lockfile. GitHub separately reports seven alerts on the repository's default branch
 (three high, four moderate); this audit does not resolve or dismiss those default-branch alerts.
 
-Password-free storage regression tests verify restart recovery, concurrent provider writes,
-owner-only permissions, locked/missing keyrings, preserved old encrypted records, explicit
-re-entry, cleared-key precedence, and rejection of damaged records without overwriting them.
+The current graceful-storage change passed 294 assistant/native regression tests, the Chromium
+settings flow, frontend/native type checks, focused lint and the Electron production build.
+The regression suite covers concurrent writes, encrypted restart recovery,
+explicit local/session preferences, cleared-key precedence, missing/locked/basic-text backends,
+rejected and hanging encryption operations, late completions, plaintext and encrypted migration,
+damaged-record preservation, session usability after disk failure and renderer hydration races.
+The Chromium settings flow verifies session disclosure and explicit plaintext selection alongside
+subscription sign-in and thinking controls. Platform keychain behavior is mocked, not certified.
 
 Automated tests use fake tokens, signed test identities, mock network responses and fake subprocesses.
 They verify the storage contract, permissions, migrations, trust boundary and request behavior;

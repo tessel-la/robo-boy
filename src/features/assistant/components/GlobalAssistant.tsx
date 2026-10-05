@@ -259,7 +259,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const compact = useCompactAssistant();
-    const { settings, updateSettings: persistSettings, storageError, loadingCredentials } = useAssistantSettings();
+    const { settings, updateSettings: persistSettings, storageError, loadingCredentials, apiKeyStorage, updateApiKeyStorage } = useAssistantSettings();
     const [messages, setMessages] = useState<AssistantMessage[]>(() => loadAssistantConversation().map(stored => ({
       id: uuidv4(), role: stored.role, content: stored.content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: stored.createdAt,
     })));
@@ -1052,6 +1052,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         resolvedBaseUrl={resolvedSettings.baseUrl}
         onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, authMode: 'api-key', apiKey: '', thinkingEffort: undefined, ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}
         onUpdateSettings={updateSettings}
+        apiKeyStorage={apiKeyStorage}
+        loadingCredentials={loadingCredentials}
+        onApiKeyStorageChange={updateApiKeyStorage}
         ollamaModels={ollamaModels}
         ollamaModelsError={ollamaModelsError}
         isLoadingOllamaModels={isLoadingOllamaModels}

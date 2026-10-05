@@ -10,7 +10,7 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
 5. Review any proposed change in the editor that owns it — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
 
-Settings (provider, model, API key, instructions) live in the gear icon inside the panel and persist to this browser only.
+Settings (provider, model, API key, instructions) live in the gear icon inside the panel. Preferences persist in this browser; current Electron shells own API-key persistence natively.
 
 ### API keys and subscription sign-in
 
@@ -177,19 +177,38 @@ The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS
 
 ## Privacy And Credentials
 
-In the updated Electron shell, API keys are saved automatically in Robo-Boy's own app-data file,
-`assistant/api-keys/api-keys.json`. This is plaintext storage with no keychain/password dependency.
-POSIX directories use `0700` and files `0600`; writes are serialized, atomic, and synced before
-rename. File permissions protect against other ordinary OS users, but someone with access to
-your app files or backups can read the keys. API keys remain credentials that can incur charges.
+In the updated Electron shell, **Remember API key** has three per-provider choices:
 
-The native bridge allows only the trusted main app frame to read or update a key. API transports
-load it into renderer memory. Existing browser keys migrate automatically: the live settings
-entry is cleared only after local persistence succeeds, and failures retain the original entry.
-Keys from the previous encrypted `api-keys.bin` version need one-time re-entry. Robo-Boy never
-attempts to unlock that file automatically, preserving it and avoiding an OS password dialog;
-new local records (including cleared-key markers) take precedence. Clearing a key removes its
-local secret. Historical browser/database/backup copies are not securely erased.
+- **Automatic (secure storage)** is the default. Keys are encrypted with Electron's asynchronous
+  OS-backed `safeStorage` API when available. Missing/locked stores, rejected operations and
+  timeouts fall back to native memory for the current app session. Newly entered keys are never
+  silently written as plaintext. Settings disclose when the key must be re-entered after quitting.
+- **This session only** bypasses the OS credential store and retains the key until Robo-Boy quits.
+- **Save unencrypted on this device** explicitly enables private plaintext persistence and bypasses
+  the OS credential store. Someone with access to app files or backups can read this key.
+
+Robo-Boy does not ask for a storage password or require an unlock before using an entered API key.
+The OS can still display a keychain permission/unlock dialog in Automatic mode; Electron cannot
+universally suppress it. Each asynchronous native operation has a three-second timeout, and an
+unavailable store is not retried until the next app start. Late native completions cannot write
+an older key. The other two modes avoid keychain calls entirely. These choices apply to API keys;
+subscription credentials retain their separate storage requirements.
+
+The per-provider record lives in `assistant/api-keys/api-keys.json`. Encrypted entries contain
+ciphertext; session entries contain only an empty marker and the storage preference. Clearing or
+switching to session-only storage replaces that provider's saved secret, preventing old keys
+from resurfacing. Writes remain serialized, atomic and synced before rename; POSIX directories
+use `0700` and files `0600`. API keys remain credentials that can incur charges.
+
+The native bridge permits only the trusted main app frame to read or update keys and preferences.
+API transports load keys into renderer memory. Existing browser keys migrate automatically, and
+the live browser entry is cleared only after the native write succeeds (including session markers).
+Failures preserve the original browser entry. Earlier plaintext app records upgrade to encryption
+when that provider is loaded and secure storage is available. If unavailable, the existing saved
+key remains usable, with an explicit plaintext disclosure; choosing session-only removes it.
+Legacy encrypted `api-keys.bin` records are recovered when they can be decrypted; otherwise they
+are preserved and a replacement key can be entered. New records and cleared markers take
+precedence. Historical browser/database/backup copies are not securely erased.
 
 ChatGPT subscription tokens retain their separate OS-backed encrypted storage described above.
 Claude Code continues to own its subscription credential storage.

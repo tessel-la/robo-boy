@@ -87,6 +87,10 @@ describe('native assistant boundary', () => {
     expect(() =>
       native.handlers.get('roboboy:assistant-save-api-key')!(event(1, 'https://attacker.test'), 'openai', 'key')
     ).toThrow(/Untrusted/);
+    expect(() => native.handlers.get('roboboy:assistant-api-key-storage')!(child, 'openai')).toThrow(/app window/);
+    expect(() => native.handlers.get('roboboy:assistant-save-api-key')!(event(), 'openai', 'key', 'invalid')).toThrow(
+      /policy/
+    );
   });
   it('cancels in-flight inference when its account changes and never returns a stale result', async () => {
     registerAssistantSubscriptions('app://robo-boy');

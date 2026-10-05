@@ -4,8 +4,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
 import { getDefaultAssistantSettings } from '../storage/assistantStorage';
 import type { AssistantSettings } from '../types';
+import type { ApiKeyStorageState, ApiKeyStoragePolicy } from '../../../runtime/assistantSubscription';
 
-function Settings() {
+function Settings({
+  storage,
+  onStorageChange,
+  loading,
+}: { storage?: ApiKeyStorageState; onStorageChange?: (policy: ApiKeyStoragePolicy) => void; loading?: boolean } = {}) {
   const [settings, setSettings] = useState<AssistantSettings>({
     ...getDefaultAssistantSettings(),
     provider: 'openai',
@@ -22,6 +27,9 @@ function Settings() {
       ollamaModelsError=""
       isLoadingOllamaModels={false}
       onRefreshOllamaModels={() => {}}
+      apiKeyStorage={storage}
+      onApiKeyStorageChange={onStorageChange}
+      loadingCredentials={loading}
     />
   );
 }
@@ -83,5 +91,28 @@ describe('provider authentication settings', () => {
     expect(select).toHaveValue('high');
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-4.1' } });
     expect(screen.queryByRole('combobox', { name: 'Thinking effort' })).toBeNull();
+  });
+  it('shows the session fallback and offers explicit plaintext saving without a confirmation dialog', () => {
+    vi.stubGlobal('roboBoyDesktop', { assistant: { getApiKeyStorage: vi.fn(), setApiKey: vi.fn() } });
+    const onStorageChange = vi.fn();
+    render(
+      <Settings
+        storage={{
+          policy: 'automatic',
+          storage: 'session',
+          warning: 'Secure storage is unavailable. This key works for this session.',
+        }}
+        onStorageChange={onStorageChange}
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('This key works for this session');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Remember API key' }), { target: { value: 'local' } });
+    expect(onStorageChange).toHaveBeenCalledWith('local');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+  it('prevents a storage-policy change from replacing a key before hydration finishes', () => {
+    vi.stubGlobal('roboBoyDesktop', { assistant: { getApiKeyStorage: vi.fn(), setApiKey: vi.fn() } });
+    render(<Settings loading onStorageChange={vi.fn()} />);
+    expect(screen.getByRole('combobox', { name: 'Remember API key' })).toBeDisabled();
   });
 });

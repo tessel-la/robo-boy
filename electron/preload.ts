@@ -50,7 +50,8 @@ const desktopBridge = {
 
   assistant: {
     getApiKey: provider => ipcRenderer.invoke('roboboy:assistant-api-key', provider),
-    setApiKey: (provider, key) => ipcRenderer.invoke('roboboy:assistant-save-api-key', provider, key),
+    setApiKey: (provider, key, policy) => ipcRenderer.invoke('roboboy:assistant-save-api-key', provider, key, policy),
+    getApiKeyStorage: provider => ipcRenderer.invoke('roboboy:assistant-api-key-storage', provider),
     getState: provider => ipcRenderer.invoke('roboboy:assistant-state', provider),
     signIn: (provider, accountId) => ipcRenderer.invoke('roboboy:assistant-sign-in', provider, accountId),
     cancelSignIn: provider => ipcRenderer.invoke('roboboy:assistant-cancel-sign-in', provider),

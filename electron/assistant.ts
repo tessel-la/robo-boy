@@ -144,9 +144,13 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     protect(event);
     return apiKeys.get(provider);
   });
-  ipcMain.handle('roboboy:assistant-save-api-key', (event, provider: unknown, key: unknown) => {
+  ipcMain.handle('roboboy:assistant-api-key-storage', (event, provider: unknown) => {
     protect(event);
-    return apiKeys.set(provider, key);
+    return apiKeys.getStorage(provider);
+  });
+  ipcMain.handle('roboboy:assistant-save-api-key', (event, provider: unknown, key: unknown, policy?: unknown) => {
+    protect(event);
+    return apiKeys.set(provider, key, policy);
   });
   ipcMain.handle('roboboy:assistant-state', (event, value: unknown) => {
     protect(event);
