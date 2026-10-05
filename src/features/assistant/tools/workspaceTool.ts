@@ -20,6 +20,8 @@ export type WorkspaceEditOperation =
 export interface WorkspaceEditResult {
   operation: WorkspaceEditOperation;
   ok: boolean;
+  /** The created/replaced tile, so subsequent settings target it after mounting. */
+  panelId?: string;
   /** What happened, in the user's terms: "Added a Behavior tree panel" / "No panel with id …". */
   message: string;
 }
@@ -47,7 +49,8 @@ with one or more of these operations, in order:
 - {"op":"applyLayout","layoutId":"<id from savedLayouts>"}
 - {"op":"saveLayout","title":"name"}
 - {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" / "timeSeries" instead of panelId when the user just says "the 3D view" / "the plot".
-To plot something when no Time Series panel is open, add one ("panelType":"timeSeries") and put the plotting request in "followUp"; the panel reports its settings once it is on screen. Field paths follow the message type's definition ("twist.twist.linear.x" for nav_msgs/msg/Odometry); prefer the panel's "numericFieldsByTopic" once a topic has been seen. Read each signal's "status" to confirm a change actually plots, and fix a signal that stays at "no samples yet".
+To plot something when no Time Series panel is open, return addPanel ("panelType":"timeSeries") followed by configurePanel ("panelType":"timeSeries") in the same operations list. The app waits for the new panel before configuring it; that configuration targets the newly added panel. Its settings accept "addSignals":[{"topic":"<graph topic>","messageType":"<graph type>","fieldPath":"<numeric dot/index path>","label":"optional","unit":"optional"}], "timeWindowSec", and "autoScale":true. Omit fieldPath to detect up to 8 numeric fields from the first message. Use the open panel's settingsHelp for filters, math and other controls. If you need the panel's settings before choosing signals, put the complete plotting request in "followUp" instead.
+JointState fields are numeric arrays: position[0], velocity[0], effort[0], etc. A live sample's name[i] identifies that joint's array index; never treat a joint name as an object key or invent an index. Use sampled names for labels. For a general joint-state plot, prefer position fields; if there is no sample, omit fieldPath for automatic discovery and explain that data is pending. Field paths follow the message type's definition ("twist.twist.linear.x" for nav_msgs/msg/Odometry); prefer the panel's "numericFieldsByTopic" once a topic has been seen. Read each signal's "status" to confirm a change actually plots, and fix a signal that stays at "no samples yet". A saved configuration is not proof of received data.
 Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace shows at most two panels; adding another panel replaces the selected panel, or the first visible panel when none is selected.
 A turn returns one JSON object. If the user asks for both a workspace change and any other task, "followUp" is REQUIRED. Put only workspace operations in "operations", and copy every remaining task in full into "followUp". For example, "add a behavior tree panel with a tree that moves the robot left" must return the addPanel operation plus "followUp":"Build a behavior tree that moves the robot left." The app sends it as the next turn once the change is on screen.`;
 

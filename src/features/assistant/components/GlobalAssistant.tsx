@@ -11,6 +11,7 @@ import { loadGamepadLibrary } from '../../customGamepad/gamepadStorage';
 import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGamepad/types';
 import { CAMERA_MESSAGE_TYPES, JOY_MESSAGE_TYPES, POSE_STAMPED_MESSAGE_TYPES, TWIST_MESSAGE_TYPES } from '../../customGamepad/rosMessageUtils';
 import { createRosGraphCache } from '../context/rosGraphCache';
+import { timeSeriesContextTopics } from '../context/timeSeriesContext';
 import { CONTEXT_CATALOG, type ContextCatalogEntry } from '../capabilities';
 import {
   captureRosout,
@@ -30,7 +31,7 @@ import { useAssistantSettings } from '../storage/useAssistantSettings';
 import { fetchBehaviorTreeSchemas } from '../tools/behaviorTreeTool';
 import { validatePadAgainstRos } from '../tools/padValidator';
 import { validateRosActionProposal } from '../tools/rosActionValidator';
-import type { WorkspaceEditOperation, WorkspaceEditResult } from '../tools/workspaceTool';
+import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../tools/workspaceTool';
 import type {
   AssistantAttachment,
   AssistantAutoContext,
@@ -158,7 +159,12 @@ const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTur
  * `followUp`. Recover an explicit second create/build clause so a multi-part request does not
  * silently stop after changing the layout. Keep this narrow: a plain "add a Pad panel" must not
  * be mistaken for a request to build a new Pad. */
-const inferWorkspaceFollowUp = (text: string, needs: AssistantTurnNeeds): string | null => {
+const inferWorkspaceFollowUp = (text: string, needs: AssistantTurnNeeds, results: WorkspaceEditResult[], catalog: WorkspaceSnapshot['panelCatalog']): string | null => {
+  if (
+    results.some(result => result.ok && result.operation.op === 'addPanel' && resolvePanelType(result.operation.panelType, catalog) === 'timeSeries') &&
+    !results.some(result => result.operation.op === 'configurePanel') &&
+    /\b(?:plot|graph|chart|joints?|joint[ _-]?states?)\b|\bwith\b/i.test(text)
+  ) return `Configure the Time Series panel just added to fulfill this request: ${text}. The panel is already open; do not add another panel.`;
   if (!needs.workspace || (!needs.behaviorTree && !needs.pad)) return null;
   const clauses = text.split(/\b(?:and then|then|and|also)\b/i).map(clause => clause.trim()).filter(Boolean);
   const remaining = clauses.slice(1).find(clause =>
@@ -283,6 +289,11 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     const bridgesRef = useRef<Map<string, BehaviorTreeAssistantBridge>>(new Map());
     const panelBridgesRef = useRef<Map<string, PanelSettingsBridge>>(new Map());
+    const panelBridgeWaitersRef = useRef(new Set<() => void>());
+    const workspaceRef = useRef(workspace);
+    workspaceRef.current = workspace;
+    const applyWorkspaceEditRef = useRef(onApplyWorkspaceEdit);
+    applyWorkspaceEditRef.current = onApplyWorkspaceEdit;
     const lastRegisteredBridgeIdRef = useRef<string | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     /** Every in-flight context retrieval. They are independent -- tagging a second resource must not
@@ -364,45 +375,90 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       registerPanelSettingsBridge: (panelId, bridge) => {
         if (bridge) panelBridgesRef.current.set(panelId, bridge);
         else panelBridgesRef.current.delete(panelId);
+        panelBridgeWaitersRef.current.forEach(check => check());
       },
     }), [pinnedBehaviorTreePanelId]);
 
     /** The workspace snapshot with each bridged panel's live settings folded in, read at send
      * time so the model sees what the panel shows now, not what it showed at the last render. */
     const workspaceWithPanelSettings = (): WorkspaceSnapshot => ({
-      ...workspace,
-      openPanels: workspace.openPanels.map(panel => {
+      ...workspaceRef.current,
+      openPanels: workspaceRef.current.openPanels.map(panel => {
         const bridge = panelBridgesRef.current.get(panel.id.replace(/^mobile:/, ''));
         return bridge ? { ...panel, settings: bridge.describe(), settingsHelp: bridge.settingsHelp } : panel;
       }),
     });
 
     /** `configurePanel` is answered by the panel itself; everything else by the host. */
-    const applyWorkspaceOperations = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
-      const hostOperations = operations.filter(operation => operation.op !== 'configurePanel');
-      const hostResults = hostOperations.length
-        ? onApplyWorkspaceEdit
-          ? onApplyWorkspaceEdit(hostOperations)
-          : hostOperations.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }))
-        : [];
-      let hostIndex = 0;
-      return operations.map(operation => {
-        if (operation.op !== 'configurePanel') return hostResults[hostIndex++];
-        const wantedId = operation.panelId?.replace(/^mobile:/, '');
-        const bridge = wantedId
-          ? panelBridgesRef.current.get(wantedId)
-          : [...panelBridgesRef.current.values()].find(candidate => candidate.panelType === operation.panelType);
+    const waitForPanelBridge = (panelId: string, panelType: string, signal: AbortSignal): Promise<PanelSettingsBridge | undefined> =>
+      new Promise((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          signal.removeEventListener('abort', cancel);
+          panelBridgeWaitersRef.current.delete(check);
+        };
+        const cancel = () => { cleanup(); reject(abortError()); };
+        const check = () => {
+          const bridge = panelBridgesRef.current.get(panelId);
+          if (bridge?.panelType === panelType) { cleanup(); resolve(bridge); }
+        };
+        const timer = setTimeout(() => { cleanup(); resolve(undefined); }, 5000);
+        panelBridgeWaitersRef.current.add(check);
+        signal.addEventListener('abort', cancel, { once: true });
+        if (signal.aborted) cancel();
+        else check();
+      });
+
+    const applyWorkspaceOperations = async (operations: WorkspaceEditOperation[], signal: AbortSignal): Promise<WorkspaceEditResult[]> => {
+      const results: WorkspaceEditResult[] = [];
+      const added = new Map<string, string>();
+      for (let index = 0; index < operations.length;) {
+        signal.throwIfAborted();
+        const operation = operations[index];
+        // Layout saves read committed React state. Preserve the host's safeguard across batches
+        // separated by a panel-settings operation rather than saving a stale configuration.
+        if (operation.op === 'saveLayout' && results.some(result => result.ok && result.operation.op !== 'saveLayout')) {
+          results.push({ operation, ok: false, message: 'Ask again to save once the changes above are on screen.' });
+          index++;
+          continue;
+        }
+        if (operation.op !== 'configurePanel') {
+          // Keep adjacent host operations batched for atomic mobile remove + add handling.
+          const start = index;
+          while (index < operations.length && operations[index].op !== 'configurePanel' && (index === start || operations[index].op !== 'saveLayout')) index++;
+          const batch = operations.slice(start, index);
+          const hostResults: WorkspaceEditResult[] = applyWorkspaceEditRef.current?.(batch) ?? batch.map(operation => ({ operation, ok: false, message: 'The workspace cannot be edited from here.' }));
+          for (const result of hostResults) {
+            if (result.ok && result.panelId && result.operation.op === 'addPanel') {
+              const type = resolvePanelType(result.operation.panelType, workspaceRef.current.panelCatalog);
+              if (type) added.set(type, result.panelId);
+            }
+          }
+          results.push(...hostResults);
+          continue;
+        }
+        index++;
+        const panelType = operation.panelType && (resolvePanelType(operation.panelType, workspaceRef.current.panelCatalog) ?? operation.panelType);
+        const newPanelId = panelType && added.get(panelType);
+        const wantedId = operation.panelId?.replace(/^mobile:/, '') ?? newPanelId;
+        const bridge = wantedId && newPanelId === wantedId
+          ? await waitForPanelBridge(wantedId, panelType!, signal)
+          : wantedId ? panelBridgesRef.current.get(wantedId)
+            : [...panelBridgesRef.current.values()].find(candidate => candidate.panelType === panelType);
+        signal.throwIfAborted();
         if (!bridge) {
           const target = wantedId ? `panel "${wantedId}"` : `a ${operation.panelType} panel`;
-          return { operation, ok: false, message: `No open ${target} can be configured from here.` };
+          results.push({ operation, ok: false, message: `No open ${target} can be configured from here.` });
+          continue;
         }
         const outcomes = bridge.apply(operation.settings);
-        return {
+        results.push({
           operation,
           ok: outcomes.length > 0 && outcomes.every(outcome => outcome.ok),
           message: outcomes.length ? outcomes.map(outcome => `${outcome.ok ? '' : '✗ '}${outcome.message}`).join(' ') : 'Nothing in those settings applied.',
-        };
-      });
+        });
+      }
+      return results;
     };
 
     useEffect(() => {
@@ -783,15 +839,22 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           const rosout = await captureRosout(ros, controller.signal);
           turnChips.push({ id: 'rosout:turn', label: 'Live /rosout capture', source: 'rosout', automatic: false, fetchedAt: Date.now(), generation: generationAtSend, value: rosout });
         }
-        if (ros && isConnected && discovery && /\b(sample|latest|current value|current message|read)\b/i.test(userText)) {
-          const namedTopic = discovery.topics.find(item => userText.includes(item.name));
-          if (namedTopic) {
-            setProgress([`Sampling ${namedTopic.name}…`]);
+        if (ros && isConnected && discovery) {
+          const plotTopics = timeSeriesContextTopics(userText, discovery.topics);
+          const namedTopic = /\b(sample|latest|current value|current message|read)\b/i.test(userText)
+            ? discovery.topics.find(item => userText.includes(item.name)) : undefined;
+          const topics = plotTopics.length ? plotTopics : namedTopic ? [namedTopic] : [];
+          for (const topic of topics) {
+            if (turnChips.some(chip => (chip.value as { name?: string })?.name === topic.name && !chip.stale)) continue;
+            setProgress([`Sampling ${topic.name}…`]);
             const [schema, sample] = await Promise.all([
-              fetchMessageSchema(ros, namedTopic.type, controller.signal),
-              sampleRosTopic(ros, namedTopic.name, namedTopic.type, { signal: controller.signal }),
+              fetchMessageSchema(ros, topic.type, controller.signal).catch(error => {
+                if (controller.signal.aborted) throw error;
+                return { unavailable: 'The message schema could not be retrieved; use the sample or automatic field discovery.' };
+              }),
+              sampleRosTopic(ros, topic.name, topic.type, { ...(plotTopics.length ? { maxMessages: 1 } : {}), signal: controller.signal }),
             ]);
-            turnChips.push({ id: `ros:turn-topic:${namedTopic.name}`, label: `Live topic: ${namedTopic.name}`, source: 'ros', automatic: false, fetchedAt: Date.now(), generation: generationAtSend, value: { ...namedTopic, schema, sample } });
+            turnChips.push({ id: `ros:turn-topic:${topic.name}`, label: `Live topic: ${topic.name}`, source: 'ros', automatic: true, fetchedAt: Date.now(), generation: generationAtSend, value: { ...topic, schema, sample } });
           }
         }
         if (controller.signal.aborted || currentGenerationRef.current !== generationAtSend) throw abortError();
@@ -838,7 +901,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           const issues = discovery ? validatePadAgainstRos(response.layout, discovery) : [];
           pushMessage({ id: uuidv4(), role: 'assistant', content: `Built Pad “${response.layout.name}”. Review its complete layout and bindings in the Pad editor before saving.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed });
         } else if (response.kind === 'workspaceEdit') {
-          const results = applyWorkspaceOperations(response.operations);
+          const results = await applyWorkspaceOperations(response.operations, controller.signal);
           const applied = results.filter(result => result.ok).length;
           const content = applied === results.length
             ? response.summary || `Applied ${applied} workspace change${applied === 1 ? '' : 's'}.`
@@ -847,7 +910,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           pushMessage(reply);
           // The rest of the request runs against the changed workspace — a panel added a moment
           // ago has registered its bridge by the time the next turn gathers context.
-          const followUp = response.followUp || inferWorkspaceFollowUp(userText, needs);
+          const followUp = response.followUp || inferWorkspaceFollowUp(userText, needs, results, workspaceRef.current.panelCatalog);
           if (followUp && applied > 0) {
             const nextHistory = [...history, userMessage, reply];
             // Queued so this turn's `finally` has released the generating flag first.

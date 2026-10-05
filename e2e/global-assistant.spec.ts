@@ -36,6 +36,8 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
   );
   expect(launcherBox!.y + launcherBox!.height).toBeGreaterThan((await page.evaluate(() => window.innerHeight)) - 30);
   await launcher.click();
+  // The open toggle moves beside the frame; measure idle corners with the pointer outside it.
+  await page.mouse.move(20, 20);
 
   const panel = page.getByTestId('assistant-panel');
   await expect(panel).toBeVisible();

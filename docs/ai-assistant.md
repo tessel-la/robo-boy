@@ -69,6 +69,24 @@ Official contracts: [ChatGPT plan usage](https://developers.openai.com/siwc/toke
 
 There is no context picker to manage. What is left for the user to choose is the data that is genuinely expensive: a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture.
 
+Plotting requests automatically retrieve a schema and one bounded live sample for up to three
+explicitly named topics. A joint-state request without a topic name samples graph topics of type
+`sensor_msgs/msg/JointState` (or its ROS 1 spelling), so joint names and array indices are available
+without manually tagging the topic. It does not subscribe to every topic on the graph.
+
+The assistant can add a Time Series panel and configure it in one reply. Settings wait for that
+specific tile to mount, including a mobile replacement. If the model only adds the panel and
+omits the remaining plotting task, the app continues that task against the updated workspace.
+Open plots report connected/active state, signals and field paths, sample counts, latest sample
+timestamps, numeric fields, filters/math, and plot controls. A saved signal with no samples is
+reported as pending; it is not evidence that the robot is publishing.
+
+For example: “Add a Time Series panel showing joint positions from /robot/joint_states.”
+Joint-state fields use indexed paths such as `position[0]`; the sample's `name[0]` provides its label.
+If data is unavailable, automatic discovery starts when a message arrives (up to eight fields;
+at most sixteen configured signals). Indexed paths follow the publisher's array order; joint-name
+labels do not dynamically rebind if that order changes. Specific named joints need a live sample.
+
 **Tagging.** Typing `@` names a resource in a sentence — it reads back as `@Camera` or `@/cmd_vel` — and for a ROS topic, service or action it also fetches that live data, which is too costly to carry for every one of them. `CONTEXT_CATALOG` is what the picker offers and what the prompt lists, so the two cannot disagree.
 
 A mention is coloured as it is written: a backdrop behind the textarea paints the marks, since a textarea cannot style its own content, and it stays coloured in the transcript. One treatment for every kind of resource, tinted from the text colour of whatever surface it sits on — colouring by source gave a workspace tag the theme's primary, the same colour as the user's own message bubble, so it disappeared into it while a Pad tag beside it stayed visible. Matching is case-insensitive, because nobody types "TF tree" the way the panel spells it.

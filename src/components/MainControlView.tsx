@@ -1900,18 +1900,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       setIsWorkspaceTemplateMenuOpen(false);
       return;
     }
+    const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
+    const newPanel = createWorkspacePanel(
+      { type },
+      {
+        cameraTopic: options?.cameraTopic || selectedCameraTopic || availableCameraTopics[0],
+        layoutId: options?.layoutId || selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+        title: options?.title || panelCatalogById.get(type)?.name,
+      }
+    );
+    if (options?.explorer) configureExplorerTarget(newPanel, options.explorer);
     setWorkspacePanels(prev => {
-      const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
-      const newPanel = createWorkspacePanel(
-        { type },
-        {
-          cameraTopic: options?.cameraTopic || selectedCameraTopic || availableCameraTopics[0],
-          layoutId: options?.layoutId || selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
-          title: options?.title || panelCatalogById.get(type)?.name,
-        }
-      );
       const nextPanels = [...prev];
-      if (options?.explorer) configureExplorerTarget(newPanel, options.explorer);
       nextPanels.push(newPanel);
       setWorkspaceTileOrder(prevOrder => {
         const nextOrder = normalizeWorkspaceTileOrder(
@@ -1936,6 +1936,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceTemplateMenuOpen(false);
     setWorkspaceReplaceMenuStyle(null);
+    return newPanel.id;
   };
 
   const handleReturnToSplitView = () => {
@@ -2642,16 +2643,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             });
             stackedReplacementPanelId = null;
             panelsChanged = true;
-            results.push({ operation, ok: true, message: `Showing ${panelName(type)} in the mobile workspace.` });
+            results.push({ operation, ok: true, panelId: target.id, message: `Showing ${panelName(type)} in the mobile workspace.` });
             break;
           }
-          handleAddWorkspacePanel(type, undefined, undefined, {
+          const panelId = handleAddWorkspacePanel(type, undefined, undefined, {
             cameraTopic: type === 'camera' ? operation.cameraTopic : undefined,
             layoutId: type === 'pad' ? padId : undefined,
             title: operation.title,
           });
           panelsChanged = true;
-          results.push({ operation, ok: true, message: `Added a ${panelName(type)} panel.` });
+          results.push({ operation, ok: !!panelId, panelId, message: panelId ? `Added a ${panelName(type)} panel.` : 'No room for another panel.' });
           break;
         }
         case 'removePanel': {

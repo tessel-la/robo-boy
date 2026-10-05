@@ -100,6 +100,8 @@ export const describeTimeSeries = (engine: TimeSeriesEngine): Record<string, unk
       ...(series.filter.type !== 'raw' ? { filter: series.filter } : {}),
       ...(isDefaultMath(series.math) ? {} : { math: describeMath(series.math, config.series) }),
       status,
+      sampleCount: size,
+      ...(runtime?.buffer.latest() ? { latestSampleAt: runtime.buffer.latest()!.time } : {}),
     };
   });
   return {
@@ -445,4 +447,3 @@ export const applyTimeSeriesSettings = (
   if (!outcomes.length) fail(`Nothing in those settings applies to the Time Series panel. ${TIME_SERIES_SETTINGS_HELP}`);
   return result;
 };
-

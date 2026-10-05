@@ -1025,6 +1025,15 @@
   transform: rotate(8deg) scale(0.94);
 }
 
+/* Keep the desktop toggle beside the docked frame, clear of Send and settings controls.
+   A dragged frame may cover it; its own close button remains available. */
+@media (min-width: 768px) {
+  .assistant-launcher.is-open {
+    right: calc(clamp(420px, 32vw, 480px) + var(--floating-action-inset));
+    z-index: 1399;
+  }
+}
+
 .assistant-launcher:active {
   transform: scale(0.88);
 }
