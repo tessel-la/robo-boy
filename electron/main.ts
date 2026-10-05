@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { registerUpdater } from './updater';
 import { registerRobotResources, robotResourceScheme } from './robotResources';
 import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
+import { configureCertificates } from './certificates';
+import { registerPanelFetch } from './panelFetch';
+import { registerAssistantSubscriptions } from './assistant';
 
 /**
  * The Electron desktop shell.
@@ -115,42 +118,14 @@ const serveRenderer = (rendererRoot: string | null): void => {
 };
 
 /**
- * Hosts the renderer may install panels from, matching the scope Tauri's HTTP capability grants.
- *
- * The official inventory publishes manifests and bundles as GitHub release assets, which carry no
- * CORS headers, so the renderer cannot fetch them itself. Requests made here run in the main
- * process, outside that enforcement, which is why the set of reachable hosts is stated rather
- * than left open: everything else is refused before a request is made.
- */
-const PANEL_FETCH_HOSTS = new Set([
-  'github.com',
-  'api.github.com',
-  'objects.githubusercontent.com',
-  'raw.githubusercontent.com',
-  'release-assets.githubusercontent.com',
-]);
-
-const isPanelFetchAllowed = (target: string): boolean => {
-  try {
-    const url = new URL(target);
-    return url.protocol === 'https:' && PANEL_FETCH_HOSTS.has(url.hostname);
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Chromium flags the video panels depend on.
  *
- * A robot's WebRTC gateway serves its own certificate on a private address, so the stream is
- * reached over plain HTTP; without this the renderer treats the gateway as an insecure origin and
- * refuses to open the peer connection at all.
+ * The privileged app:// origin provides the secure context WebRTC needs even when the gateway
+ * is reached over plain HTTP. Self-signed HTTPS is handled by configureCertificates, not a flag
+ * that disables certificate checks throughout Chromium.
  */
 const configureChromium = (): void => {
   app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
-  // Robots answer on private addresses with self-signed certificates. The renderer only ever
-  // reaches the gateway the operator typed in, so a certificate it cannot chain is expected.
-  app.commandLine.appendSwitch('ignore-certificate-errors');
 };
 
 /**
@@ -224,24 +199,6 @@ const configurePermissions = (): void => {
   });
 };
 
-const registerPanelFetch = (): void => {
-  ipcMain.handle('roboboy:panel-fetch', async (_event, target: string, init?: { method?: string }) => {
-    if (!isPanelFetchAllowed(target)) {
-      throw new Error(`Refusing to fetch a panel from an unlisted host: ${target}`);
-    }
-
-    const response = await net.fetch(target, { method: init?.method ?? 'GET', redirect: 'follow' });
-    // The renderer rebuilds a Response from these, so the body crosses as a buffer rather than as
-    // a stream, which the bridge cannot carry.
-    return {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      body: await response.arrayBuffer(),
-    };
-  });
-};
-
 const registerWindowControls = (): void => {
   const windowFor = (event: Electron.IpcMainInvokeEvent): BrowserWindow | null =>
     BrowserWindow.fromWebContents(event.sender);
@@ -281,11 +238,13 @@ if (!app.requestSingleInstanceLock()) {
   ]);
 
   void app.whenReady().then(async () => {
+    configureCertificates();
     serveRenderer(devServerUrl ? null : path.join(currentDir, '../renderer'));
     configurePermissions();
     registerEmbedProxy();
     registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
+    registerAssistantSubscriptions(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerWindowControls();
     registerUpdater();
 

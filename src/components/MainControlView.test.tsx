@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
+import { getConnectionStorageKey } from '../runtime/connectionStorage';
 import { getVisualizationStateForKey, saveVisualizationStateForKey } from '../utils/visualizationState';
 
 const connect = vi.fn();
@@ -128,8 +129,8 @@ vi.mock('../features/dataExplorer/DataExplorerPanel', () => ({
 }));
 
 vi.mock('../panels/PanelManagerDialog', () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div role="dialog" aria-label="External panels">
+  default: ({ onClose, requestedInstallPanelId }: { onClose: () => void; requestedInstallPanelId?: string }) => (
+    <div role="dialog" aria-label="External panels" data-requested={requestedInstallPanelId ?? ''}>
       <button type="button" onClick={onClose}>
         Close panel manager
       </button>
@@ -313,12 +314,13 @@ const makePanel = (id: string, type: 'camera' | '3d' | 'pad' | 'behaviorTree' | 
   layoutId: type === 'pad' ? 'custom-drive' : undefined,
 });
 
-const renderMainControlView = () =>
+const renderMainControlView = (storageScope?: string) =>
   render(
     <MainControlView
       connectionParams={connectionParams}
       onDisconnect={vi.fn()}
       connectionNavigation={connectionNavigation}
+      storageScope={storageScope}
     />
   );
 
@@ -492,6 +494,56 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByRole('button', { name: 'Manage installations…' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
     expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+  });
+
+  it.each([undefined, 'target-test'])('keeps a cleared workspace empty on reconnect with scope %s', async storageScope => {
+    const view = renderMainControlView(storageScope);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
+    expect(await screen.findByTestId('camera-view')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText('Add workspace panel')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Pad controls' }));
+    expect(await screen.findByLabelText('Pad controls')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Pad controls' }));
+    expect(screen.getByText('Add panel')).toBeInTheDocument();
+    view.unmount();
+
+    expect(localStorage.getItem(getConnectionStorageKey(workspacePanelsKey, storageScope))).toBe('[]');
+    // The unused legacy mobile state still contains the old defaults, even on desktop.
+    expect(JSON.parse(localStorage.getItem(getConnectionStorageKey(mobileWorkspacePanelsKey, storageScope))!))
+      .toHaveLength(2);
+    renderMainControlView(storageScope);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pad controls')).not.toBeInTheDocument();
+  });
+
+  it('keeps an untouched empty workspace empty on the next connection', async () => {
+    const view = renderMainControlView();
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    view.unmount();
+    renderMainControlView();
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pad controls')).not.toBeInTheDocument();
+  });
+
+  it('keeps a saved empty local replay workspace empty instead of recreating starter panels', async () => {
+    localStorage.setItem(workspacePanelsKey, '[]');
+    render(<MainControlView connectionParams={{ ...connectionParams, offline: true }} onDisconnect={vi.fn()} />);
+    expect(await screen.findByText('Add panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('record-replay-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('native-time-series')).not.toBeInTheDocument();
+  });
+
+  it('still creates starter panels for a new local replay workspace', async () => {
+    render(<MainControlView connectionParams={{ ...connectionParams, offline: true }} onDisconnect={vi.fn()} />);
+    expect(await screen.findByTestId('record-replay-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('native-time-series')).toBeInTheDocument();
   });
 
   it('opens panel management from the session menu without using the add-panel menu', () => {
@@ -1130,7 +1182,7 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.getByLabelText('Pad controls')).toBeInTheDocument();
   });
 
-  it('migrates legacy mobile panels only when the unified workspace is empty', async () => {
+  it('migrates legacy mobile panels when no unified workspace has been saved', async () => {
     localStorage.setItem(
       mobileWorkspacePanelsKey,
       JSON.stringify([makePanel('legacy-camera', 'camera', 'Camera'), makePanel('legacy-pad', 'pad', 'Pad controls')])
@@ -1180,6 +1232,8 @@ describe('MainControlView desktop workspace', () => {
       operations: [
         { op: 'addPanel', panelType: 'Behavior tree' },
         { op: 'setCameraTopic', panelId: 'panel-camera', cameraTopic: '/not/a/camera' },
+        { op: 'setCameraQuality', panelId: 'panel-camera', quality: 'low' },
+        { op: 'setCameraQuality', panelId: 'panel-camera', quality: 'ultra' },
         { op: 'removePanel', panelId: 'ghost' },
       ],
     }));
@@ -1195,6 +1249,13 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
     expect(screen.getByText('"/not/a/camera" is not an available image topic.')).toBeInTheDocument();
     expect(screen.getByText('No open panel with id "ghost".')).toBeInTheDocument();
+    expect(screen.getByText('Camera now streams at Low quality.')).toBeInTheDocument();
+    expect(screen.getByText('"ultra" is not a stream quality; use auto, low, medium, high, original.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')[0]).toMatchObject({
+        id: 'panel-camera', panelState: { values: { streamQuality: 'low' } },
+      })
+    );
     // The model was told which panel types exist.
     expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"panelCatalog"');
 
@@ -1207,6 +1268,80 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await screen.findByText('Removed the Camera panel.');
     await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
+  });
+
+  it('lets the assistant use connection tabs, the theme and installed panels, but not install one by itself', async () => {
+    const setPanelEnabled = vi.fn();
+    useInstalledPanels.mockReturnValue({
+      ...useInstalledPanels(),
+      allPanels: [{ manifest: { id: 'la.tessel.roboboy.hello', name: 'Hello Panel', version: '1.0.0' }, origin: 'installed', isEnabled: true }],
+      setPanelEnabled,
+    });
+    const selectTheme = vi.fn();
+    const navigation = {
+      ...connectionNavigation,
+      tabs: [
+        { id: 'test', label: 'Test robot', description: 'Test robot', status: 'connected' as const },
+        { id: 'arm', label: 'Arm', description: '10.0.0.2', status: 'disconnected' as const },
+      ],
+    };
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Done.',
+      operations: [
+        { op: 'setTheme', themeId: 'Dark' },
+        { op: 'setTheme', themeId: 'neon' },
+        { op: 'setPanelEnabled', panelType: 'Hello Panel', enabled: false },
+        { op: 'setPanelEnabled', panelType: 'camera', enabled: false },
+        { op: 'closeConnection', connectionId: 'test' },
+        { op: 'closeConnection', connectionId: 'Arm' },
+        { op: 'switchConnection', connectionId: 'ghost' },
+        { op: 'openNewConnection' },
+        { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+        { op: 'switchConnection', connectionId: 'arm' },
+      ],
+    }));
+    render(
+      <MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} connectionNavigation={navigation}
+        appControls={{ themeId: 'light', themes: [{ id: 'light', name: 'Light' }, { id: 'dark', name: 'Dark' }], selectTheme }} />
+    );
+    fireEvent.click(await screen.findByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), { target: { value: 'use the dark theme and switch to the other robot' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Switched to the Dark theme.');
+    expect(selectTheme).toHaveBeenCalledWith('dark');
+    expect(screen.getByText('No theme "neon"; available: light, dark.')).toBeInTheDocument();
+    expect(setPanelEnabled).toHaveBeenCalledWith('la.tessel.roboboy.hello', false);
+    expect(screen.getByText('Hello Panel is hidden from the add-panel menu.')).toBeInTheDocument();
+    expect(screen.getByText('No installed panel "camera". Built-in panels are always offered.')).toBeInTheDocument();
+    expect(screen.getByText('Test robot is the connection this conversation runs in; close it from its tab.')).toBeInTheDocument();
+    expect(navigation.onClose).toHaveBeenCalledWith('arm');
+    expect(screen.getByText('No connection tab "ghost".')).toBeInTheDocument();
+    expect(navigation.onAdd).toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'External panels' })).toHaveAttribute('data-requested', 'la.tessel.lidar');
+    expect(navigation.onSelect).toHaveBeenCalledWith('arm');
+
+    const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt as string;
+    expect(prompt).toContain('"connections":{"current":"test","tabs":[{"id":"test","label":"Test robot"');
+    expect(prompt).toContain('"theme":"light","themes":[{"id":"light","name":"Light"},{"id":"dark","name":"Dark"}]');
+    expect(prompt).toContain('"panels":[{"id":"la.tessel.roboboy.hello","name":"Hello Panel","version":"1.0.0","origin":"installed","enabled":true}]');
+  });
+
+  it('tells the assistant which Behavior Tree is running and where it is', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'It is moving the arm.' }));
+    renderMainControlView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start mocked tree' }));
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), { target: { value: 'what is the robot doing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('It is moving the arm.');
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain(
+      '"behaviorTreeExecution":{"running":true,"treeName":"Inspect Tree","activeNode":"Move arm"}'
+    );
   });
 
   it('lets the assistant add a visible panel in the unified mobile workspace', async () => {

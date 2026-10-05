@@ -10,29 +10,41 @@ export type WorkspaceEditOperation =
   | { op: 'addPanel'; panelType: string; title?: string; cameraTopic?: string; padId?: string }
   | { op: 'removePanel'; panelId: string }
   | { op: 'setCameraTopic'; panelId: string; cameraTopic: string }
+  /** Stream preset of a camera panel: auto | low | medium | high | original. */
+  | { op: 'setCameraQuality'; panelId: string; quality: string }
   | { op: 'setPanelPad'; panelId: string; padId: string }
   | { op: 'applyLayout'; layoutId: string }
   | { op: 'saveLayout'; title: string }
   /** Routed to the panel's own settings bridge; `panelType` picks the first such panel when the
    * user did not name one ("the 3D view"). */
-  | { op: 'configurePanel'; panelId?: string; panelType?: string; settings: Record<string, unknown> };
+  | { op: 'configurePanel'; panelId?: string; panelType?: string; settings: Record<string, unknown> }
+  /** App-level: the connection tabs, the theme, and which installed panels are offered. */
+  | { op: 'switchConnection'; connectionId: string }
+  | { op: 'openNewConnection' }
+  | { op: 'closeConnection'; connectionId: string }
+  | { op: 'setTheme'; themeId: string }
+  | { op: 'setPanelEnabled'; panelType: string; enabled: boolean }
+  /** Opens the panel manager; with `installPanelId` it prepares that install for the user to review. */
+  | { op: 'openPanelManager'; installPanelId?: string };
 
 export interface WorkspaceEditResult {
   operation: WorkspaceEditOperation;
   ok: boolean;
+  /** The created/replaced tile, so subsequent settings target it after mounting. */
+  panelId?: string;
   /** What happened, in the user's terms: "Added a Behavior tree panel" / "No panel with id …". */
   message: string;
 }
 
 export const WORKSPACE_CAPABILITY: AssistantCapability = {
   id: 'workspace-edit',
-  summary: 'You can change the workspace yourself: add or remove panels, switch a camera panel\'s topic or a Pad panel\'s Pad, apply a saved layout, save the current one, and change the settings of an open panel (which TF frames the 3D view shows, its fixed frame, its URDF/point-cloud/laser visualizations, the TF tree\'s filters, and everything a Time Series panel plots: signals, labels, colours, smoothing, math on one or several signals, time window, Y axis, pause and clear).',
+  summary: 'You can change the workspace and the app yourself: switch, open or close robot connection tabs, change the theme, offer or hide installed panels, open the panel manager (an install is always reviewed and applied by the user there), add or remove panels, switch a camera panel\'s topic or stream quality or a Pad panel\'s Pad, apply a saved layout, save the current one, and change the settings of an open panel (which TF frames the 3D view shows, its fixed frame, its URDF/point-cloud/laser visualizations, the TF tree\'s filters, everything a Time Series panel plots: signals, labels, colours, smoothing, math on one or several signals, time window, Y axis, pause and clear, what the Data Explorer watches and checks, and Record & Replay\'s playback and recorder).',
   detail: [
     'Do it with the workspace tool below instead of telling the user which menu to use. The change is applied at once and you report what changed.',
     'Panel types you can add are listed in the workspace context ("panelCatalog"); use the exact id.',
     'An open panel with a "settings" object in the workspace context can be configured; its "settingsHelp" says which keys it takes.',
   ],
-  invocations: ['add a behavior tree panel', 'remove the camera panel', 'load my inspection layout', 'save this layout as Teleop', 'show base_link and camera_link in the 3D view', 'turn on the URDF in the 3D panel', 'plot /odom linear x squared', 'show the difference between commanded and measured speed', 'set the time series window to 60 seconds', 'smooth the speed signal'],
+  invocations: ['add a behavior tree panel', 'remove the camera panel', 'lower the camera quality', 'switch to the other robot', 'use the dark theme', 'hide the hello panel', 'install the lidar panel', 'load my inspection layout', 'save this layout as Teleop', 'show base_link and camera_link in the 3D view', 'turn on the URDF in the 3D panel', 'plot /odom linear x squared', 'show the difference between commanded and measured speed', 'set the time series window to 60 seconds', 'smooth the speed signal'],
   responseKind: 'workspaceEdit',
 };
 
@@ -43,11 +55,18 @@ with one or more of these operations, in order:
 - {"op":"addPanel","panelType":"<id from panelCatalog>","title":"optional","cameraTopic":"/optional for camera panels","padId":"optional saved Pad id for pad panels"}
 - {"op":"removePanel","panelId":"<id from openPanels>"}
 - {"op":"setCameraTopic","panelId":"<camera panel id>","cameraTopic":"/image topic from the ROS graph"}
+- {"op":"setCameraQuality","panelId":"<camera panel id>","quality":"auto|low|medium|high|original"} — low saves bandwidth on a slow link, original sends full-resolution frames
 - {"op":"setPanelPad","panelId":"<pad panel id>","padId":"<saved Pad id>"}
 - {"op":"applyLayout","layoutId":"<id from savedLayouts>"}
 - {"op":"saveLayout","title":"name"}
-- {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" / "timeSeries" instead of panelId when the user just says "the 3D view" / "the plot".
-To plot something when no Time Series panel is open, add one ("panelType":"timeSeries") and put the plotting request in "followUp"; the panel reports its settings once it is on screen. Field paths follow the message type's definition ("twist.twist.linear.x" for nav_msgs/msg/Odometry); prefer the panel's "numericFieldsByTopic" once a topic has been seen. Read each signal's "status" to confirm a change actually plots, and fix a signal that stays at "no samples yet".
+- {"op":"switchConnection","connectionId":"<id from connections.tabs>"} / {"op":"openNewConnection"} (opens the connect form) / {"op":"closeConnection","connectionId":"<another tab's id>"} — the robot connection tabs; the current one cannot be closed from chat
+- {"op":"setTheme","themeId":"<id from app.themes>"}
+- {"op":"setPanelEnabled","panelType":"<id from app.panels>","enabled":true|false} — offers or hides an installed panel in the add menu; it stays installed
+- {"op":"openPanelManager","installPanelId":"optional catalog panel id"} — opens the panel manager; with installPanelId it prepares that install, which the user reviews and applies there (panels are third-party code, so you never install one yourself)
+- {"op":"configurePanel","panelId":"<id of an open panel that has settings>","settings":{...keys from that panel's settingsHelp...}} — or "panelType":"3d" / "timeSeries" / "dataExplorer" / "recordReplay" instead of panelId when the user just says "the 3D view" / "the plot" / "the explorer" / "the recording".
+To plot something when no Time Series panel is open, return addPanel ("panelType":"timeSeries") followed by configurePanel ("panelType":"timeSeries") in the same operations list. The app waits for the new panel before configuring it; that configuration targets the newly added panel. Its settings accept "addSignals":[{"topic":"<graph topic>","messageType":"<graph type>","fieldPath":"<numeric dot/index path>","label":"optional","unit":"optional"}], "timeWindowSec", and "autoScale":true. Omit fieldPath to detect up to 8 numeric fields from the first message. Use the open panel's settingsHelp for filters, math and other controls. If you need the panel's settings before choosing signals, put the complete plotting request in "followUp" instead.
+The Data Explorer ("dataExplorer") watches topics, keeps health rules, and holds diagnostics and logs; Record & Replay ("recordReplay") plays and reads recordings and drives the recorder. With neither open, add the panel and configure it in the same operations list. A request whose answer is read on the next turn (a selected resource's message, "logs", "sample" or "read") needs the question in "followUp", e.g. operations [configurePanel {"read":{"topics":["/rosout"],"match":"error"}}] with "followUp":"Summarise the errors in the recording.". Watching, health rules, playback and the recorder are app functions that never command the robot; use them when the user asks.
+JointState fields are numeric arrays: position[0], velocity[0], effort[0], etc. A live sample's name[i] identifies that joint's array index; never treat a joint name as an object key or invent an index. Use sampled names for labels. For a general joint-state plot, prefer position fields; if there is no sample, omit fieldPath for automatic discovery and explain that data is pending. Field paths follow the message type's definition ("twist.twist.linear.x" for nav_msgs/msg/Odometry); prefer the panel's "numericFieldsByTopic" once a topic has been seen. Read each signal's "status" to confirm a change actually plots, and fix a signal that stays at "no samples yet". A saved configuration is not proof of received data.
 Use only panel ids, panel types, Pad ids, layout ids, frames and topics that appear in the supplied context. On a phone the workspace shows at most two panels; adding another panel replaces the selected panel, or the first visible panel when none is selected.
 A turn returns one JSON object. If the user asks for both a workspace change and any other task, "followUp" is REQUIRED. Put only workspace operations in "operations", and copy every remaining task in full into "followUp". For example, "add a behavior tree panel with a tree that moves the robot left" must return the addPanel operation plus "followUp":"Build a behavior tree that moves the robot left." The app sends it as the next turn once the change is on screen.`;
 
@@ -84,6 +103,11 @@ export const parseWorkspaceEditOperations = (raw: unknown): { operations: Worksp
         if (!panelId || !cameraTopic) return rejected.push(`Operation ${index + 1}: setCameraTopic needs a panelId and a cameraTopic.`);
         return operations.push({ op: 'setCameraTopic', panelId, cameraTopic });
       }
+      case 'setCameraQuality': {
+        const quality = asString(item.quality);
+        if (!panelId || !quality) return rejected.push(`Operation ${index + 1}: setCameraQuality needs a panelId and a quality.`);
+        return operations.push({ op: 'setCameraQuality', panelId, quality });
+      }
       case 'setPanelPad': {
         const padId = asString(item.padId);
         if (!panelId || !padId) return rejected.push(`Operation ${index + 1}: setPanelPad needs a panelId and a padId.`);
@@ -98,6 +122,28 @@ export const parseWorkspaceEditOperations = (raw: unknown): { operations: Worksp
         const title = asString(item.title);
         if (!title) return rejected.push(`Operation ${index + 1}: saveLayout needs a title.`);
         return operations.push({ op: 'saveLayout', title });
+      }
+      case 'switchConnection':
+      case 'closeConnection': {
+        const connectionId = asString(item.connectionId);
+        if (!connectionId) return rejected.push(`Operation ${index + 1}: ${item.op} needs a connectionId.`);
+        return operations.push({ op: item.op, connectionId });
+      }
+      case 'openNewConnection':
+        return operations.push({ op: 'openNewConnection' });
+      case 'setTheme': {
+        const themeId = asString(item.themeId);
+        if (!themeId) return rejected.push(`Operation ${index + 1}: setTheme needs a themeId.`);
+        return operations.push({ op: 'setTheme', themeId });
+      }
+      case 'setPanelEnabled': {
+        const panelType = asString(item.panelType);
+        if (!panelType || typeof item.enabled !== 'boolean') return rejected.push(`Operation ${index + 1}: setPanelEnabled needs a panelType and enabled true or false.`);
+        return operations.push({ op: 'setPanelEnabled', panelType, enabled: item.enabled });
+      }
+      case 'openPanelManager': {
+        const installPanelId = asString(item.installPanelId);
+        return operations.push({ op: 'openPanelManager', ...(installPanelId ? { installPanelId } : {}) });
       }
       case 'configurePanel': {
         const panelType = asString(item.panelType);

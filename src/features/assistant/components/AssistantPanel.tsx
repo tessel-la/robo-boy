@@ -1,3 +1,4 @@
+import type { ApiKeyStoragePolicy, ApiKeyStorageState } from '../../../runtime/assistantSubscription';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaArrowLeft, FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
@@ -65,6 +66,9 @@ export interface AssistantPanelProps {
   resolvedBaseUrl: string;
   onProviderChange: (provider: AssistantProviderId) => void;
   onUpdateSettings: (patch: Partial<AssistantSettings>) => void;
+  apiKeyStorage?: ApiKeyStorageState;
+  loadingCredentials?: boolean;
+  onApiKeyStorageChange?: (policy: ApiKeyStoragePolicy) => void;
   ollamaModels: string[];
   ollamaModelsError: string;
   isLoadingOllamaModels: boolean;
@@ -202,7 +206,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
     onOpenResource, canOpenResource, contextPickerSections,
     attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
-    onProviderChange, onUpdateSettings, ollamaModels, ollamaModelsError, isLoadingOllamaModels,
+    onProviderChange, onUpdateSettings, apiKeyStorage, loadingCredentials, onApiKeyStorageChange, ollamaModels, ollamaModelsError, isLoadingOllamaModels,
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
   } = props;
 
@@ -546,7 +550,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           />
         ))}
 
-        {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
+        {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} apiKeyStorage={apiKeyStorage} loadingCredentials={loadingCredentials} onApiKeyStorageChange={onApiKeyStorageChange} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
         <div ref={chatRef} className="assistant-chat" onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
           {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Ask Robo-Boy AI to build a Pad or a Behavior Tree, look up a transform, or explain anything in your current workspace.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}

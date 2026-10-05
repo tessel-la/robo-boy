@@ -22,6 +22,9 @@ interface PanelManagerDialogProps {
   onClose: () => void;
   onApplied: () => Promise<void> | void;
   onPanelEnabledChange: (panelId: string, isEnabled: boolean) => void;
+  /** A catalog panel to prepare for installing as soon as the sources load (asked for by the assistant).
+   * It only reaches the review step: applying it stays the user's decision. */
+  requestedInstallPanelId?: string;
 }
 
 const splitLines = (value: string): string[] =>
@@ -148,6 +151,7 @@ const PanelManagerDialog = ({
   onClose,
   onApplied,
   onPanelEnabledChange,
+  requestedInstallPanelId,
 }: PanelManagerDialogProps) => {
   // Desktop installs panels into the app's own storage; the web app drives the deployment's
   // manager service. Same dialog, different backend.
@@ -311,6 +315,19 @@ const PanelManagerDialog = ({
     if (!config) return;
     void requestPreview(withCatalogPanelSelected(config, installedIds, panelId), panelId);
   };
+
+  // Prepare the requested install once, as soon as the sources are loaded.
+  const preparedRequestRef = useRef<string | undefined>();
+  useEffect(() => {
+    if (!config || !requestedInstallPanelId || preparedRequestRef.current === requestedInstallPanelId) return;
+    preparedRequestRef.current = requestedInstallPanelId;
+    if (installedIds.includes(requestedInstallPanelId)) {
+      setNotice(`${requestedInstallPanelId} is already installed.`);
+      return;
+    }
+    installCatalogPanel(requestedInstallPanelId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, requestedInstallPanelId]);
 
   const removeCatalogPanel = (panelId: string) => {
     if (!config) return;

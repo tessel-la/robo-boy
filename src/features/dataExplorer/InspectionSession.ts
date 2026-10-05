@@ -3,12 +3,15 @@ import { runSerializedRosapi } from '../../utils/rosapiQueue';
 import { boundedPreview, decodeResources } from './model';
 import type { ActionGoal, Diagnostic, InspectionDemand, InspectionSnapshot, Metric, Resource } from './types';
 import type { BagInfo } from '../recordReplay/types';
+import { createUuid } from '../../utils/uuid';
 
 const PREFIX = '/roboboy/inspection';
 const PROBE_LIMIT = 32;
 /** Browser previews are throttled by rosbridge to one message per 100 ms. */
 const BROWSER_THROTTLE_MS = 100;
 const sessions = new WeakMap<Ros, InspectionSession>();
+/** Older than this, a companion graph is not known to be current (it rebuilds every ~2 s). */
+const CURRENT_GRAPH_AGE_S = 3;
 export const emptySnapshot = (): InspectionSnapshot => ({
   resources: [],
   metrics: {},
@@ -21,6 +24,7 @@ export const emptySnapshot = (): InspectionSnapshot => ({
   online: false,
   loading: false,
   updatedAt: 0,
+  current: false,
   now: Date.now(),
   errors: [],
   truncated: false,
@@ -69,6 +73,9 @@ export class InspectionSession {
   private goalMap = new Map<string, Map<string, ActionGoal>>();
   private diagnosticTopics = new Set<string>();
   private graphRevision = -1;
+  /** What the companion's heartbeat last reported: its graph revision and that graph's age. */
+  private hostGraphRevision = -1;
+  private hostGraphAge = Infinity;
   private lastRefreshRequest = -Infinity;
   private previewTimes = new Map<string, number>();
   private watchStarted = new Map<string, number>();
@@ -146,13 +153,15 @@ export class InspectionSession {
   }
   private start() {
     ++this.generation;
-    this.client = crypto.randomUUID();
+    this.client = createUuid();
     this.abort = new AbortController();
     this.set({ ...emptySnapshot(), mode: this.replay ? 'recorded' : 'browser', loading: true });
     this.lastHost = 0;
     this.lastLease = 0;
     this.lastDiscovery = -Infinity;
     this.graphRevision = -1;
+    this.hostGraphRevision = -1;
+    this.hostGraphAge = Infinity;
     this.lastRefreshRequest = -Infinity;
     if (this.replay) {
       const info = this.replay.info;
@@ -244,6 +253,7 @@ export class InspectionSession {
       online: true,
       loading: false,
       updatedAt: typeof value.age === 'number' ? Date.now() - value.age * 1000 : 0,
+      current: this.graphIsCurrent(true),
       truncated: value.truncated === true,
       errors: Array.isArray(value.errors)
         ? value.errors.filter((v): v is string => typeof v === 'string').slice(0, 10)
@@ -261,8 +271,12 @@ export class InspectionSession {
     // Metrics arrive every 500 ms and double as the companion heartbeat: the graph itself is only
     // republished when discovery finds a change.
     this.lastHost = performance.now();
+    if (typeof value.graphRevision === 'number') this.hostGraphRevision = value.graphRevision;
+    if (typeof value.graphAge === 'number') this.hostGraphAge = value.graphAge;
     if (typeof value.graphAge === 'number' && this.snapshot.online)
       this.set({ updatedAt: Date.now() - value.graphAge * 1000 });
+    if (this.snapshot.current !== this.graphIsCurrent(this.snapshot.online))
+      this.set({ current: this.graphIsCurrent(this.snapshot.online) });
     if (
       typeof value.graphRevision === 'number' &&
       value.graphRevision !== this.graphRevision &&
@@ -530,7 +544,7 @@ export class InspectionSession {
     if (!this.replay) {
       if (now - this.lastLease >= 2000) this.sendLease();
       if (this.snapshot.online && now - this.lastHost > 5000) {
-        this.set({ online: false, mode: 'browser', metrics: {}, trends: {} });
+        this.set({ online: false, current: false, mode: 'browser', metrics: {}, trends: {} });
         this.reconcile();
       }
       if (!this.snapshot.online && now - this.lastDiscovery > 15000) void this.discover();
@@ -579,6 +593,14 @@ export class InspectionSession {
     }
     this.set({ now: this.now() });
     this.notify();
+  }
+  /**
+   * The companion rebuilds its graph every ~2 s while anyone holds a lease, so a heartbeat for the
+   * revision held, about a graph younger than a few seconds, means nothing newer exists.
+   */
+  private graphIsCurrent(online: boolean): boolean {
+    return online && this.graphRevision >= 0 && this.hostGraphRevision === this.graphRevision
+      && this.hostGraphAge <= CURRENT_GRAPH_AGE_S;
   }
   refresh = () => {
     this.sendLease(false, true);

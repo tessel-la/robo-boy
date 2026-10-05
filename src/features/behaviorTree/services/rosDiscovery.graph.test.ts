@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '../../dataExplorer/types';
 
 const inspection = vi.hoisted(() => ({
-  snapshot: { mode: 'browser', online: false, loading: true, truncated: false, resources: [] as unknown[] },
+  snapshot: { mode: 'browser', online: false, current: false, loading: true, truncated: false, resources: [] as unknown[] },
   listeners: new Set<() => void>(),
   released: 0,
+  refreshed: 0,
 }));
 
 vi.mock('../../dataExplorer/InspectionSession', () => ({
@@ -13,6 +14,9 @@ vi.mock('../../dataExplorer/InspectionSession', () => ({
       inspection.released += 1;
     },
     getSnapshot: () => inspection.snapshot,
+    refresh: () => {
+      inspection.refreshed += 1;
+    },
     subscribe: (listener: () => void) => {
       inspection.listeners.add(listener);
       return () => inspection.listeners.delete(listener);
@@ -80,9 +84,10 @@ describe('discoverAllROSResources', () => {
     }) as any;
 
   beforeEach(() => {
-    inspection.snapshot = { mode: 'browser', online: false, loading: true, truncated: false, resources: [] };
+    inspection.snapshot = { mode: 'browser', online: false, current: false, loading: true, truncated: false, resources: [] };
     inspection.listeners.clear();
     inspection.released = 0;
+    inspection.refreshed = 0;
     service.respond = true;
     service.calls = [];
   });
@@ -94,10 +99,11 @@ describe('discoverAllROSResources', () => {
     const ros = rosapiRos();
     const getServices = vi.spyOn(ros, 'getServices');
     const pending = discoverAllROSResources(ros);
-    inspection.snapshot = { mode: 'host', online: true, loading: false, truncated: false, resources: graph };
+    inspection.snapshot = { mode: 'host', online: true, current: true, loading: false, truncated: false, resources: graph };
     inspection.listeners.forEach(listener => listener());
 
     const result = await pending;
+    expect(inspection.refreshed).toBe(1);
     expect(result.actions.map(action => action.name)).toEqual(['/arm_a/move_to_joints']);
     expect(result.services.map(item => item.name)).toEqual(['/arm_a/reset']);
     expect(getServices).not.toHaveBeenCalled();
@@ -105,11 +111,42 @@ describe('discoverAllROSResources', () => {
     expect(inspection.released).toBe(1);
   });
 
+  it('waits past a stale latched graph for the one the inspector confirms', async () => {
+    const pending = discoverAllROSResources(rosapiRos());
+    // The latched graph predates the action server: delivered first, but not current.
+    const stale = graph.filter(item => item.kind !== 'action');
+    inspection.snapshot = { mode: 'host', online: true, current: false, loading: false, truncated: false, resources: stale };
+    inspection.listeners.forEach(listener => listener());
+    await Promise.resolve();
+    expect(inspection.released).toBe(0);
+
+    inspection.snapshot = { ...inspection.snapshot, current: true, resources: graph };
+    inspection.listeners.forEach(listener => listener());
+    const result = await pending;
+    expect(result.actions.map(action => action.name)).toEqual(['/arm_a/move_to_joints']);
+    expect(service.calls).toEqual([]);
+  });
+
+  it('uses a live but unconfirmed graph at the timeout rather than discovering call by call', async () => {
+    vi.useFakeTimers();
+    const ros = rosapiRos();
+    const getServices = vi.spyOn(ros, 'getServices');
+    const pending = discoverAllROSResources(ros);
+    inspection.snapshot = { mode: 'host', online: true, current: false, loading: false, truncated: false, resources: graph };
+    inspection.listeners.forEach(listener => listener());
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    const result = await pending;
+    expect(result.actions.map(action => action.name)).toEqual(['/arm_a/move_to_joints']);
+    expect(getServices).not.toHaveBeenCalled();
+  });
+
   it('falls back at once when the topic list shows no inspector', async () => {
     const pending = discoverAllROSResources(rosapiRos());
     inspection.snapshot = {
       mode: 'browser',
       online: false,
+      current: false,
       loading: false,
       truncated: false,
       resources: [resource('topic', '/chatter', ['std_msgs/msg/String'])],
@@ -132,6 +169,7 @@ describe('discoverAllROSResources', () => {
     inspection.snapshot = {
       mode: 'browser',
       online: false,
+      current: false,
       loading: false,
       truncated: false,
       resources: [resource('topic', '/roboboy/inspection/graph', ['std_msgs/msg/String'])],

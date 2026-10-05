@@ -1,5 +1,6 @@
 import type { DesktopUpdater } from './desktopUpdater';
 import type { DesktopWindow, ResizeDirection } from './desktopWindow';
+import type { AssistantSubscriptionBridge } from './assistantSubscription';
 
 /**
  * The Electron shell's view of itself, as its preload script exposes it.
@@ -36,6 +37,8 @@ export interface RoboBoyDesktopBridge {
   registerEmbedTarget?(baseUrl: string, directPorts?: number[]): void;
   /** Absent in shells built before updates existed. */
   updater?: DesktopUpdater;
+  /** Subscription credentials are held by the native runtime, never by the renderer. */
+  assistant?: AssistantSubscriptionBridge;
 }
 
 /** Statuses the Response constructor refuses to pair with a body. */

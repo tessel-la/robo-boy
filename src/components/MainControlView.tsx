@@ -67,7 +67,8 @@ import {
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
-import { isCameraStreamQuality } from '../utils/cameraStreamQuality';
+import { APP_VERSION } from '../features/appUpdate/releases';
+import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -392,6 +393,15 @@ interface MainControlViewProps {
   storageScope?: string;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
   connectionNavigation?: ConnectionTabsProps;
+  /** App-wide settings the assistant may read and change; owned by the app shell. */
+  appControls?: AssistantAppControls;
+}
+
+/** The theme is chosen at app level, above every connection's workspace. */
+export interface AssistantAppControls {
+  themeId: string;
+  themes: Array<{ id: string; name: string }>;
+  selectTheme: (themeId: string) => void;
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
@@ -599,34 +609,35 @@ const isWorkspacePanel = (panel: unknown): panel is WorkspacePanel => {
   return normalizeWorkspacePanel(panel) !== null;
 };
 
-const loadWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
+const loadWorkspacePanels = (storageScope?: string): WorkspacePanel[] | null => {
   try {
     const stored = readConnectionStorage(WORKSPACE_PANELS_KEY, storageScope);
-    if (!stored) return [];
+    if (!stored) return null;
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel) : [];
+    return Array.isArray(parsed) ? parsed.map(panel => normalizeWorkspacePanel(panel)).filter(isWorkspacePanel) : null;
   } catch (error) {
     console.error('Failed to load desktop workspace panels:', error);
-    return [];
+    return null;
   }
 };
 
-const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] => {
+const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] | null => {
   const desktopPanels = loadWorkspacePanels(storageScope);
-  if (desktopPanels.length > 0) return desktopPanels;
+  // A saved empty array is an intentional workspace, so it must not trigger legacy migration.
+  if (desktopPanels !== null) return desktopPanels;
 
   try {
     const stored = readConnectionStorage(MOBILE_WORKSPACE_PANELS_KEY, storageScope);
-    if (!stored) return [];
+    if (!stored) return null;
     const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return null;
     return parsed
       .map(panel => normalizeWorkspacePanel(panel))
       .filter(isWorkspacePanel)
       .map(panel => ({ ...panel, id: generateUniqueId('workspace-panel') }));
   } catch (error) {
     console.error('Failed to migrate mobile workspace panels:', error);
-    return [];
+    return null;
   }
 };
 
@@ -962,6 +973,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   storageScope,
   onConnectionStatusChange,
   connectionNavigation,
+  appControls,
 }) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
@@ -991,9 +1003,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [isMobileSwapAnimating, setIsMobileSwapAnimating] = useState(false);
   const [workspacePanels, setWorkspacePanels] = useState<WorkspacePanel[]>(() => {
     const saved = loadUnifiedWorkspacePanels(storageScope);
-    return connectionParams.offline && !saved.length
+    return saved ?? (connectionParams.offline
       ? [createWorkspacePanel({ type: 'recordReplay' }, {}), createWorkspacePanel({ type: 'timeSeries' }, {})]
-      : saved;
+      : []);
   });
   const workspacePanelsRef = useRef(workspacePanels);
   workspacePanelsRef.current = workspacePanels;
@@ -1103,6 +1115,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   const [isPanelManagerOpen, setIsPanelManagerOpen] = useState(false);
+  /** A catalog panel the assistant asked to install: the manager prepares it for the user to review. */
+  const [panelManagerInstallId, setPanelManagerInstallId] = useState<string | undefined>();
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   const [workspacePadMenu, setWorkspacePadMenu] = useState<WorkspacePadMenuState | null>(null);
@@ -1899,18 +1913,18 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       setIsWorkspaceTemplateMenuOpen(false);
       return;
     }
+    const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
+    const newPanel = createWorkspacePanel(
+      { type },
+      {
+        cameraTopic: options?.cameraTopic || selectedCameraTopic || availableCameraTopics[0],
+        layoutId: options?.layoutId || selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
+        title: options?.title || panelCatalogById.get(type)?.name,
+      }
+    );
+    if (options?.explorer) configureExplorerTarget(newPanel, options.explorer);
     setWorkspacePanels(prev => {
-      const selectedPadPanel = selectedPanelId ? activePanels.find(panel => panel.id === selectedPanelId) : null;
-      const newPanel = createWorkspacePanel(
-        { type },
-        {
-          cameraTopic: options?.cameraTopic || selectedCameraTopic || availableCameraTopics[0],
-          layoutId: options?.layoutId || selectedPadPanel?.layoutId || gamepadLibrary[0]?.id,
-          title: options?.title || panelCatalogById.get(type)?.name,
-        }
-      );
       const nextPanels = [...prev];
-      if (options?.explorer) configureExplorerTarget(newPanel, options.explorer);
       nextPanels.push(newPanel);
       setWorkspaceTileOrder(prevOrder => {
         const nextOrder = normalizeWorkspaceTileOrder(
@@ -1935,6 +1949,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceAddMenuOpen(false);
     setIsWorkspaceTemplateMenuOpen(false);
     setWorkspaceReplaceMenuStyle(null);
+    return newPanel.id;
   };
 
   const handleReturnToSplitView = () => {
@@ -2379,6 +2394,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, cameraTopic } : panel)));
   };
 
+  const handleWorkspaceCameraQualityChange = (panelId: string, streamQuality: CameraStreamQuality) => {
+    const update = (previous: WorkspacePanel[]) =>
+      previous.map(candidate =>
+        candidate.id === panelId
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), streamQuality } } }
+          : candidate
+      );
+    setWorkspacePanels(update);
+    setMobileWorkspacePanels(update);
+  };
+
   const handleWorkspacePadLayoutChange = (panelId: string, layoutId: string) => {
     setWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
@@ -2641,16 +2667,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             });
             stackedReplacementPanelId = null;
             panelsChanged = true;
-            results.push({ operation, ok: true, message: `Showing ${panelName(type)} in the mobile workspace.` });
+            results.push({ operation, ok: true, panelId: target.id, message: `Showing ${panelName(type)} in the mobile workspace.` });
             break;
           }
-          handleAddWorkspacePanel(type, undefined, undefined, {
+          const panelId = handleAddWorkspacePanel(type, undefined, undefined, {
             cameraTopic: type === 'camera' ? operation.cameraTopic : undefined,
             layoutId: type === 'pad' ? padId : undefined,
             title: operation.title,
           });
           panelsChanged = true;
-          results.push({ operation, ok: true, message: `Added a ${panelName(type)} panel.` });
+          results.push({ operation, ok: !!panelId, panelId, message: panelId ? `Added a ${panelName(type)} panel.` : 'No room for another panel.' });
           break;
         }
         case 'removePanel': {
@@ -2686,6 +2712,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           }
           handleWorkspaceCameraTopicChange(panel.id, operation.cameraTopic);
           results.push({ operation, ok: true, message: `${panel.title} now shows ${operation.cameraTopic}.` });
+          break;
+        }
+        case 'setCameraQuality': {
+          const panel = findPanel(operation.panelId);
+          if (!panel || panel.type !== 'camera') {
+            results.push({ operation, ok: false, message: `No camera panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (!isCameraStreamQuality(operation.quality)) {
+            results.push({ operation, ok: false, message: `"${operation.quality}" is not a stream quality; use ${CAMERA_STREAM_QUALITIES.join(', ')}.` });
+            break;
+          }
+          handleWorkspaceCameraQualityChange(panel.id, operation.quality);
+          results.push({ operation, ok: true, message: `${panel.title} now streams at ${CAMERA_STREAM_PRESETS[operation.quality].label} quality.` });
           break;
         }
         case 'setPanelPad': {
@@ -2727,6 +2767,67 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           setSavedWorkspaceLayouts(prev => [...prev, savedLayout]);
           setActiveWorkspaceLayoutId(savedLayout.id);
           results.push({ operation, ok: true, message: `Saved the current workspace as "${operation.title}".` });
+          break;
+        }
+        case 'switchConnection':
+        case 'closeConnection': {
+          const tab = connectionNavigation?.tabs.find(item => item.id === operation.connectionId || item.label === operation.connectionId);
+          if (!connectionNavigation || !tab) {
+            results.push({ operation, ok: false, message: `No connection tab "${operation.connectionId}".` });
+            break;
+          }
+          if (operation.op === 'switchConnection') {
+            connectionNavigation.onSelect(tab.id);
+            results.push({ operation, ok: true, message: `Switched to ${tab.label}. Its own assistant answers there.` });
+          } else if (tab.id === connectionNavigation.activeTabId) {
+            results.push({ operation, ok: false, message: `${tab.label} is the connection this conversation runs in; close it from its tab.` });
+          } else {
+            connectionNavigation.onClose(tab.id);
+            results.push({ operation, ok: true, message: `Closed the connection to ${tab.label}.` });
+          }
+          break;
+        }
+        case 'openNewConnection': {
+          if (!connectionNavigation) {
+            results.push({ operation, ok: false, message: 'Connections cannot be opened from here.' });
+            break;
+          }
+          connectionNavigation.onAdd();
+          results.push({ operation, ok: true, message: 'Opened the form to connect to another robot.' });
+          break;
+        }
+        case 'setTheme': {
+          const theme = appControls?.themes.find(item => item.id === operation.themeId || item.name.toLowerCase() === operation.themeId.toLowerCase());
+          if (!appControls || !theme) {
+            results.push({ operation, ok: false, message: `No theme "${operation.themeId}"${appControls ? `; available: ${appControls.themes.map(item => item.id).join(', ')}` : ''}.` });
+            break;
+          }
+          appControls.selectTheme(theme.id);
+          results.push({ operation, ok: true, message: `Switched to the ${theme.name} theme.` });
+          break;
+        }
+        case 'setPanelEnabled': {
+          const wanted = operation.panelType.toLowerCase();
+          const panel = (installedPanelRegistry.allPanels ?? []).find(item => item.manifest.id.toLowerCase() === wanted || item.manifest.name.toLowerCase() === wanted);
+          if (!panel) {
+            results.push({ operation, ok: false, message: `No installed panel "${operation.panelType}". Built-in panels are always offered.` });
+            break;
+          }
+          installedPanelRegistry.setPanelEnabled(panel.manifest.id, operation.enabled);
+          results.push({ operation, ok: true, message: `${panel.manifest.name} is ${operation.enabled ? 'offered in' : 'hidden from'} the add-panel menu.` });
+          break;
+        }
+        case 'openPanelManager': {
+          setPanelManagerInstallId(operation.installPanelId);
+          setIsPanelManagerOpen(true);
+          setIsWorkspaceAddMenuOpen(false);
+          results.push({
+            operation,
+            ok: true,
+            message: operation.installPanelId
+              ? `Opened the panel manager to install ${operation.installPanelId}. Review the verified changes there and apply them to install it.`
+              : 'Opened the panel manager.',
+          });
           break;
         }
       }
@@ -3370,6 +3471,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const catalogEntry = panelCatalogById.get(panel.type);
 
     if (panel.type === 'dataExplorer') return <DataExplorerPanel ros={ros} connected={isConnected}
+      panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
       generation={connectionGeneration} isActive={isPanelActive && isActive}
       replaySession={replaySession} replayGeneration={replaySource.generation} state={panel.panelState?.values}
       onStateChange={values => {
@@ -3380,7 +3482,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })} />;
 
     if (panel.type === 'recordReplay') {
-      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession} ros={ros} connected={isConnected}
+      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession}
+        panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} ros={ros} connected={isConnected}
         isActive={isPanelActive && isActive} state={panel.panelState?.values}
         onStateChange={values => {
           const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
@@ -3500,23 +3603,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
-          onStreamQualityChange={streamQuality => {
-            const update = (previous: WorkspacePanel[]) =>
-              previous.map(candidate =>
-                candidate.id === panel.id && candidate.type === panel.type
-                  ? {
-                      ...candidate,
-                      panelState: {
-                        schemaVersion: 1 as const,
-                        panelId: panel.type,
-                        values: { ...(candidate.panelState?.values ?? {}), streamQuality },
-                      },
-                    }
-                  : candidate
-              );
-            setWorkspacePanels(update);
-            setMobileWorkspacePanels(update);
-          }}
+          onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
         />
       ) : (
         <div className="placeholder">
@@ -4486,8 +4573,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           installedPanels={installedPanelRegistry.managedPanels}
           availablePanels={installedPanelRegistry.allPanels}
           onPanelEnabledChange={installedPanelRegistry.setPanelEnabled}
-          onClose={() => setIsPanelManagerOpen(false)}
+          onClose={() => { setIsPanelManagerOpen(false); setPanelManagerInstallId(undefined); }}
           onApplied={installedPanelRegistry.refresh}
+          requestedInstallPanelId={panelManagerInstallId}
         />
       )}
 
@@ -4509,6 +4597,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       <GlobalAssistant
         ref={assistantRef}
         ros={ros}
+        visualizationRos={visualizationRos}
         isConnected={isConnected}
         connectionGeneration={connectionGeneration}
         onReviewPadProposal={handleReviewAssistantPad}
@@ -4581,6 +4670,30 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             layout: layout.layout,
           })),
           panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
+          ...(connectionNavigation ? { connections: {
+            current: connectionNavigation.activeTabId,
+            tabs: connectionNavigation.tabs.filter(tab => !tab.isClosing).map(tab => ({
+              id: tab.id, label: tab.label, description: tab.description, status: tab.status, current: tab.id === connectionNavigation.activeTabId,
+            })),
+          } } : {}),
+          app: {
+            version: APP_VERSION,
+            theme: appControls?.themeId ?? 'unknown',
+            themes: appControls?.themes ?? [],
+            panels: (installedPanelRegistry.allPanels ?? []).map(panel => ({
+              id: panel.manifest.id, name: panel.manifest.name, version: panel.manifest.version, origin: panel.origin, enabled: panel.isEnabled,
+            })),
+            panelIssues: (installedPanelRegistry.issues ?? []).map(issue => issue.message),
+          },
+          ...(btExecution.treeName ? { behaviorTreeExecution: {
+            running: btExecution.isExecuting,
+            ...(btExecution.isPaused ? { paused: true } : {}),
+            treeName: btExecution.treeName,
+            ...(btExecution.activeNodeLabel ? { activeNode: btExecution.activeNodeLabel } : {}),
+            ...(btExecution.status ? { status: btExecution.status } : {}),
+            ...(btExecution.isExecuting && btExecution.startedAt ? { runningForSec: Math.round((Date.now() - btExecution.startedAt) / 1000) } : {}),
+            ...(btExecution.isPersistent ? { persistent: true } : {}),
+          } } : {}),
         })}
       />
     </div>

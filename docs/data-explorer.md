@@ -132,6 +132,22 @@ Pose topics have no 3D shortcut for now, because their 3D arrow does not show th
 While a recording is open, Time Series, 3D, Camera and TF follow it. If the Explorer inspects the live robot at that
 time, these actions are disabled, so recorded data is never shown under a live label.
 
+## The AI assistant
+
+While a Data Explorer is open, the assistant sees what it shows and can act on it. Ask, for
+example, "which topics have no subscribers", "watch /scan and /odom", "alert me if /cmd_vel goes
+silent for 2 seconds", or "what do the diagnostics say".
+
+- It reads every resource with its counts, the rates of watched topics, QoS problems,
+  diagnostics, the newest `/rosout` entries, events, and each health rule with its state.
+- It can watch and stop watching topics, add, change or remove health rules, select a resource
+  (to read its endpoints, schema and latest message), and switch the view or the diagnostic topic.
+- It can list any of the 200 kept log entries by level, node or text.
+
+Everything it changes appears in the panel straight away, the same as a click. Watching and rules
+only observe; they never publish to the robot's own topics. With no Explorer open, the assistant
+can add one first. See [AI Assistant](ai-assistant.md#context).
+
 ## What the numbers mean
 
 The observation point is always labelled, because the same topic can measure differently in each:

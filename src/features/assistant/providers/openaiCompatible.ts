@@ -1,5 +1,6 @@
 import { checkedFetch, readSse } from './transport';
 import type { SendChat } from './types';
+import { selectedThinkingEffort } from './thinking';
 
 /** Shared by real OpenAI and any local/self-hosted server that speaks the same
  * `/chat/completions` shape (LM Studio, vLLM, llama.cpp server, etc.). */
@@ -11,7 +12,7 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
   const body: Record<string, unknown> = {
     model: settings.model,
     stream: true,
-    temperature: 0.2,
+    ...(settings.provider === 'openai' && /^(?:gpt-[56](?:[.-]|$)|o[134](?:-|$))/.test(settings.model) ? {} : { temperature: 0.2 }),
     messages: [
       { role: 'system', content: systemPrompt },
       ...messages.map(turn => ({
@@ -29,6 +30,8 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
       })),
     ],
   };
+  const effort = selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort);
+  if (effort) body.reasoning_effort = effort;
   if (jsonMode) body.response_format = { type: 'json_object' };
 
   const response = await checkedFetch(url, { method: 'POST', signal, headers, body: JSON.stringify(body) });

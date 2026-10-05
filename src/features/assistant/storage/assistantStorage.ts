@@ -1,5 +1,6 @@
 import type { AssistantProviderId } from '../providers/types';
 import type { AssistantSettings, StoredAssistantMessage } from '../types';
+import { selectedThinkingEffort } from '../providers/thinking';
 
 const SETTINGS_STORAGE_KEY = 'robo-boy-assistant-settings';
 const CONVERSATION_STORAGE_KEY = 'robo-boy-assistant-conversation-v1';
@@ -32,6 +33,7 @@ export const getProviderDefaults = (provider: AssistantProviderId) => ({
 
 export const getDefaultAssistantSettings = (): AssistantSettings => ({
   provider: 'openai-compatible',
+  authMode: 'api-key',
   apiKey: '',
   ...PROVIDER_DEFAULTS['openai-compatible'],
   systemContext: '',
@@ -44,15 +46,18 @@ export const loadAssistantSettings = (): AssistantSettings => {
   const defaults = getDefaultAssistantSettings();
   try {
     const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    const settings = stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    if (settings.authMode !== 'subscription' || !['openai', 'anthropic'].includes(settings.provider)) settings.authMode = 'api-key';
+    settings.thinkingEffort = selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort, settings.authMode === 'subscription');
+    return settings;
   } catch {
     return defaults;
   }
 };
 
-export const saveAssistantSettings = (settings: AssistantSettings): void => {
+export const saveAssistantSettings = (settings: AssistantSettings, omitApiKey = false): void => {
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(omitApiKey ? { ...settings, apiKey: '' } : settings));
   } catch (error) {
     console.warn('Unable to save assistant settings to localStorage.', error);
   }

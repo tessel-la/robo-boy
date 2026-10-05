@@ -132,6 +132,14 @@ describe('InspectionSession', () => {
     expect(session.getSnapshot().resources).toEqual([]);
   });
 
+  it('starts in an insecure context, where crypto.randomUUID is unavailable', () => {
+    vi.stubGlobal('crypto', { getRandomValues: (bytes: Uint8Array) => bytes.fill(7) });
+    const release = getInspectionSession(ros).acquire('a', demand({ watch: ['/scan'] }));
+    tick(2100);
+    expect(lastLease().client).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    release();
+  });
+
   it('renews its lease while running so the companion keeps probes alive', () => {
     const session = getInspectionSession(ros);
     const release = session.acquire('a', demand({ watch: ['/scan'] }));
@@ -199,6 +207,25 @@ describe('InspectionSession', () => {
     expect(session.getSnapshot().online).toBe(true);
     metrics({ metrics: {}, graphRevision: 2 });
     expect(lastLease()).toMatchObject({ refresh: true });
+    release();
+  });
+
+  it('calls a graph current only once the heartbeat confirms its revision and freshness', () => {
+    const session = getInspectionSession(ros);
+    const release = session.acquire('a', demand());
+    // A latched graph from an earlier client: online, but not yet known to be current.
+    graph([{ kind: 'topic', name: '/scan', types: ['T'] }], 3);
+    expect(session.getSnapshot()).toMatchObject({ online: true, current: false });
+    // The inspector has moved on: its heartbeat names a newer revision.
+    metrics({ metrics: {}, graphRevision: 4, graphAge: 0.2 });
+    expect(session.getSnapshot().current).toBe(false);
+    graph([{ kind: 'topic', name: '/scan', types: ['T'] }, { kind: 'action', name: '/move', types: ['A'] }], 4);
+    expect(session.getSnapshot().current).toBe(true);
+    // A heartbeat about an old rebuild no longer vouches for the graph.
+    metrics({ metrics: {}, graphRevision: 4, graphAge: 30 });
+    expect(session.getSnapshot().current).toBe(false);
+    metrics({ metrics: {}, graphRevision: 4, graphAge: 0.5 });
+    expect(session.getSnapshot().current).toBe(true);
     release();
   });
 

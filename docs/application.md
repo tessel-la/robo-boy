@@ -195,6 +195,15 @@ The Electron shell exists for that case. It bundles Chromium, so a packaged desk
 same WebRTC stack a browser does and the HLS fallback stays unused. It renders the identical React
 tree -- there is no second frontend -- and differs only in what draws it.
 
+The secure `app://` origin keeps WebRTC available when a robot gateway uses plain HTTP. For
+self-signed HTTPS and `wss`, Electron accepts certificates on private IPv4 addresses (RFC 1918,
+VPN shared address space `100.64.0.0/10`), loopback, link-local, IPv6 unique-local addresses,
+and `.local` / `.localhost` names. Use one of these addresses for a robot with a self-signed
+certificate; other DNS names and public IP addresses need a normally trusted certificate.
+Public hosts retain Chromium's certificate checks. Panel inventory, manifest and bundle downloads
+use Node's certificate-checked fetch, with HTTPS and the GitHub host allowlist enforced on every
+redirect, independently of these robot exceptions.
+
 Which shell to use:
 
 | | Tauri | Electron |
@@ -308,8 +317,7 @@ until a newer one appears.
 | macOS, Electron (Apple Silicon) | `Robo-Boy-macos-arm64-electron.dmg` | The app bundle is replaced from the disk image, then reopened  |
 
 Everything that has to be trusted happens in the desktop shell, never in the page: the shell looks
-the release up on GitHub over its own certificate-checked connection (the Electron page runs with
-certificate errors ignored, for robots' self-signed certificates), downloads the installer only
+the release up on GitHub over its own certificate-checked connection, downloads the installer only
 from GitHub's hosts, and installs it only if its size and SHA-256 match what GitHub publishes for
 that release asset. Nothing needs to be signed or configured in CI. If installing in place is not
 possible (the password prompt is dismissed, no `pkexec`, the app cannot replace its bundle), the

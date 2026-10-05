@@ -4,6 +4,10 @@ import { ROS_OPERATION_CAPABILITY } from './tools/rosActionValidator';
 import { TF_CAPABILITY } from './context/tfContext';
 import { WORKSPACE_CAPABILITY, WORKSPACE_PROMPT_FRAGMENT } from './tools/workspaceTool';
 import { describeCapabilities, type AssistantCapability } from './capabilities';
+import { DATA_EXPLORER_CAPABILITY } from '../dataExplorer/assistantBridge';
+import { RECORD_REPLAY_CAPABILITY } from '../recordReplay/assistantBridge';
+import { CAMERA_FRAME_CAPABILITY } from './context/cameraContext';
+import { PAD_VALUES_CAPABILITY } from './context/padContext';
 import type { AssistantAutoContext, AssistantContextChip, AssistantSettings } from './types';
 
 const BASE_PERSONA = `You are the Robo-Boy assistant, a single global copilot embedded in the Robo-Boy robot teleoperation app. Use only the workspace, Pad, Behavior Tree, ROS, TF, diagnostics, and attachment context supplied below. Every item includes its source and freshness. Never claim that you lack access to data that is present in the supplied context. Never invent a ROS name, type, field, frame, Pad, panel, or Behavior Tree. Robo-Boy does not let this chat execute robot-affecting operations; propose them for review through the Pad or Behavior Tree workflows. Answer directly when the user asks a question. Only produce one of the structured JSON outputs described below when the user's request matches that tool.`;
@@ -63,6 +67,10 @@ Complete valid example (two sticks driving one Joy topic):
  * holds each entry to what its implementation actually does. */
 export const ASSISTANT_CAPABILITIES: readonly AssistantCapability[] = [
   WORKSPACE_CAPABILITY,
+  DATA_EXPLORER_CAPABILITY,
+  RECORD_REPLAY_CAPABILITY,
+  CAMERA_FRAME_CAPABILITY,
+  PAD_VALUES_CAPABILITY,
   TF_CAPABILITY,
   PAD_CAPABILITY,
   BEHAVIOR_TREE_CAPABILITY,
@@ -98,6 +106,7 @@ export interface ComposeSystemPromptInput {
 const describeAutoContext = (auto: AssistantAutoContext): string => {
   const sections: string[] = [];
   sections.push(`### Workspace\n${JSON.stringify(auto.workspace)}`);
+  if (auto.assistantSettings) sections.push(`### Your own settings (provider and model the user chose)\n${JSON.stringify(auto.assistantSettings)}`);
 
   if (auto.ros) {
     const age = Math.round((Date.now() - auto.ros.fetchedAt) / 1000);

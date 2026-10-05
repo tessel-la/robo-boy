@@ -10,9 +10,11 @@ export type { AssistantProviderId };
 
 export interface AssistantSettings {
   provider: AssistantProviderId;
+  authMode?: import('../../runtime/assistantSubscription').AssistantAuthMode;
   apiKey: string;
   baseUrl: string;
   model: string;
+  thinkingEffort?: import('./providers/thinking').ThinkingEffort;
   systemContext: string;
   robotContext: string;
   ollamaUseBackendHost: boolean;
@@ -128,6 +130,31 @@ export interface WorkspaceSnapshot {
   savedLayouts: WorkspaceLayoutContext[];
   /** Panel types the shell can add right now (built-in plus installed external panels). */
   panelCatalog: Array<{ id: string; name: string }>;
+  /** Every robot connection tab in this window; only the current one's robot is in the rest of the context. */
+  connections?: {
+    current: string | null;
+    tabs: Array<{ id: string; label: string; description: string; status: 'disconnected' | 'connecting' | 'connected'; current: boolean }>;
+  };
+  /** App-level settings and installed panels. Nothing here is secret: credentials never enter it. */
+  app?: {
+    version: string;
+    theme: string;
+    themes: Array<{ id: string; name: string }>;
+    /** Installed panels (built-in ones are always available): offered in the add menu when enabled. */
+    panels: Array<{ id: string; name: string; version: string; origin: 'bundled' | 'installed'; enabled: boolean }>;
+    panelIssues: string[];
+  };
+  /** The Behavior Tree running on the robot, or the last one that ran. Read-only: the chat never
+   * starts, pauses or stops a tree. */
+  behaviorTreeExecution?: {
+    running: boolean;
+    paused?: boolean;
+    treeName: string;
+    activeNode?: string;
+    status?: string;
+    runningForSec?: number;
+    persistent?: boolean;
+  };
   fetchedAt: number;
 }
 
@@ -138,6 +165,8 @@ export interface WorkspaceSnapshot {
  */
 export interface AssistantAutoContext {
   workspace: WorkspaceSnapshot;
+  /** The assistant's own settings, without any credential. */
+  assistantSettings?: { provider: string; model: string; authMode?: string; thinkingEffort?: string };
   ros?: {
     resources: unknown;
     fetchedAt: number;
@@ -184,12 +213,18 @@ export interface BehaviorTreeAssistantBridge {
  * model always sees the current values; `apply()` receives the model's patch and reports every
  * outcome in the user's terms, exactly like the workspace tool's other operations.
  */
+export interface PanelSettingsOutcome {
+  ok: boolean;
+  message: string;
+}
+
 export interface PanelSettingsBridge {
   panelType: string;
   /** One paragraph for the model: which keys `apply` understands and what they mean. */
   settingsHelp: string;
   describe(): Record<string, unknown>;
-  apply(settings: Record<string, unknown>): Array<{ ok: boolean; message: string }>;
+  /** May finish asynchronously, e.g. when it reads messages; the assistant waits for it. */
+  apply(settings: Record<string, unknown>): PanelSettingsOutcome[] | Promise<PanelSettingsOutcome[]>;
 }
 
 export interface PadValidationIssue {

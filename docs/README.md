@@ -14,6 +14,8 @@ The root [README](../README.md) contains only the shortest path to running Robo-
 - [Robot workspace overlays](robot-overlays.md): expose custom ROS 2 messages, services, and actions from simulation workspaces.
 - [Custom gamepads](custom-gamepads.md): understand layouts, supported components, persistence, and extension points.
 - [AI assistant](ai-assistant.md): the global assistant's capabilities, trust model, provider support, and privacy/credential handling.
+- [AI subscription investigation](ai-subscription-investigation.md): feasibility, integration scope, and estimated effort for ChatGPT and Claude subscription access.
+- [Assistant security review](ai-assistant-security-review.md): credential storage, sign-in recovery, verified boundaries and remaining platform limits.
 - [Application architecture](architecture.md): system boundaries, runtime data flow, code ownership, persistence, and development rules.
 - [Performance evaluation](performance.md): run the frontend profile and verify rendering, TF,
   URDF, and panel lifecycle invariants.
