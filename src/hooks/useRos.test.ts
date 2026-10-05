@@ -251,7 +251,7 @@ describe('useRos', () => {
     unmount();
 
     expect(closeMock).toHaveBeenCalled();
-    expect(offMock.mock.calls.map(call => call[0])).toEqual(['connection', 'error', 'close']);
+    expect(offMock.mock.calls.map(call => call[0])).toEqual(['/roboboy/control/status', 'connection', 'error', 'close']);
   });
 
   it('reconnects with the same parameters after returning from standby', () => {

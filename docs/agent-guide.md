@@ -62,14 +62,14 @@ Browser or Tauri webview
         | Web: same-origin proxy or selected backend host
         | Desktop: selected backend host and direct ports
         v
-rosapi + rosbridge + web_video_server
+control gateway -> private rosbridge + rosapi; web_video_server
         |
         | ROS 2 DDS on the host network
         v
 robot or simulation nodes
 ```
 
-Robo-Boy has no application server or user database. `App` owns connection and global theme state.
+Robo-Boy has no user database. Its robot-host control gateway arbitrates sessions before private rosbridge; see [Shared robot control](robot-control.md). `App` owns connection and global theme state.
 `MainControlView` coordinates the active ROS connection, workspace, built-in and external panel catalog, primary view,
 control area, and cross-feature controls. Large feature behavior belongs below the shell in its feature module,
 services, hooks, persistence layer, or renderer.

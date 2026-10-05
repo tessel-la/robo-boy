@@ -390,5 +390,5 @@ jobs:
     - name: Test the recording service
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
       run: |
-        python -m pip install pyyaml
+        python -m pip install pyyaml tornado
         python -m unittest discover -s infra/ros -v

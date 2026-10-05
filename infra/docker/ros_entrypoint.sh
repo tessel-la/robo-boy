@@ -6,6 +6,7 @@ RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 ROS_AUTOMATIC_DISCOVERY_RANGE="${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
 ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-}"
 ROSBRIDGE_PORT="${ROSBRIDGE_PORT:-9090}"
+ROSBRIDGE_INTERNAL_PORT="${ROSBRIDGE_INTERNAL_PORT:-9092}"
 ROSBRIDGE_USE_EVENTS_EXECUTOR="${ROSBRIDGE_USE_EVENTS_EXECUTOR:-true}"
 ROSBRIDGE_USE_COMPRESSION="${ROSBRIDGE_USE_COMPRESSION:-true}"
 export ROBOBOY_TF_RELAY_HZ="${ROBOBOY_TF_RELAY_HZ:-60}"
@@ -134,9 +135,15 @@ fi
 # rosbridge WebSocket server with the single rosapi node; see rosbridge_launch.xml for why
 # each option is set and why no other rosapi may run.
 ros2 launch /ros_ws/rosbridge_launch.xml \
-    port:="${ROSBRIDGE_PORT}" \
+    port:="${ROSBRIDGE_INTERNAL_PORT}" \
+    address:=127.0.0.1 \
     use_events_executor:="${ROSBRIDGE_USE_EVENTS_EXECUTOR}" \
     use_compression:="${ROSBRIDGE_USE_COMPRESSION}" &
+
+# The public WebSocket endpoint owns control; raw rosbridge is loopback-only.
+# Do not restart the gateway in-place: wait -n restarts the complete stack and
+# its durable journal fences unconfirmed work after a crash.
+python3 /ros_ws/control_gateway.py --port "${ROSBRIDGE_PORT}" --upstream-port "${ROSBRIDGE_INTERNAL_PORT}" &
 
 # Launch web_video_server
 ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &

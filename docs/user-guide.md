@@ -14,6 +14,15 @@ Successful Host or IP connections are saved on the landing page as recent machin
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
+## Shared Control
+
+Connections start read-only. Open **Read-only** in the top bar and select **Request control** before
+using pads or running a tree. One session controls the whole robot endpoint; other sessions retain
+telemetry and editing. The menu shows the owner, blocked-command reasons, release, and transfer.
+A persistent tree keeps its reservation across disconnects; reconnect and select **Manage running tree**
+to pause, resume, or stop it before sending other commands.
+See [Shared robot control](robot-control.md) for leases, recovery, and deployment requirements.
+
 ## Main Views
 
 ### Camera

@@ -22,6 +22,8 @@ export type ScriptedServiceCall = {
 };
 
 type MockRosResources = {
+  /** Existing feature tests start as an established controller. Ownership UX tests opt into observer. */
+  controlMode?: 'owner' | 'observer';
   /** Answers per action name, one per goal in turn; the last one repeats. */
   actionGoals?: Record<string, ScriptedActionGoal[]>;
   /** Answers per service name, one per call in turn; the last one repeats. */
@@ -43,6 +45,7 @@ const defaultResources: Required<MockRosResources> = {
 
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
   const mockResources = {
+    controlMode: resources.controlMode ?? 'owner',
     topics: resources.topics ?? defaultResources.topics,
     services: resources.services ?? defaultResources.services,
     actionServers: resources.actionServers ?? defaultResources.actionServers,
@@ -84,6 +87,17 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       onmessage: Listener | null = null;
       private listeners = new Map<string, Set<Listener>>();
       private subscriptions = new Map<string, string>();
+      private controlOwner = initResources.controlMode === 'owner';
+      private controlLabel = 'Test operator';
+      private controlStatus(error = '') {
+        setTimeout(() => this.emit('message', { data: JSON.stringify({ op: 'publish', topic: '/roboboy/control/status', msg: { data: JSON.stringify({
+          version: 1, selfId: 'test-session', owner: this.controlOwner ? 'test-session' : null,
+          ownerLabel: this.controlLabel, token: this.controlOwner ? 'test-lease' : null,
+          state: this.controlOwner ? 'owned' : 'available', ready: true, pending: 0,
+          leaseMs: 10000, reason: '', error, adoptable: false, managing: false,
+          clients: [{ id: 'test-session', label: this.controlLabel }],
+        }) } }) }), 0);
+      }
 
       constructor(url: string) {
         this.url = url;
@@ -105,7 +119,27 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       }
 
       send(payload: string) {
-        const message = JSON.parse(payload);
+        let message = JSON.parse(payload);
+        if (message.op === 'roboboy_frame') message = message.message;
+        if (message.op === 'roboboy_control') {
+          if (message.action === 'acquire') this.controlOwner = true;
+          if (message.action === 'release') this.controlOwner = false;
+          if (message.action === 'identify') this.controlLabel = message.label;
+          this.controlStatus();
+          return;
+        }
+        if (message.op === 'subscribe' && message.topic === '/roboboy/control/status') {
+          this.controlStatus();
+          return;
+        }
+        const read = ['subscribe', 'unsubscribe', 'advertise', 'unadvertise'].includes(message.op)
+          || (message.op === 'call_service' && message.service.startsWith('/rosapi/'))
+          || (message.op === 'publish' && message.topic === '/roboboy/inspection/request')
+          || (message.op === 'publish' && message.topic === '/robo_boy/behavior_tree/command' && JSON.parse(message.msg.data).command === 'status');
+        if (!read && ['publish', 'call_service', 'send_action_goal'].includes(message.op) && (!this.controlOwner || message.controlToken !== 'test-lease')) {
+          this.controlStatus('Read-only session: request control before sending robot commands.');
+          return;
+        }
         if (message.op === 'subscribe' && typeof message.topic === 'string') {
           this.subscriptions.set(message.id ?? message.topic, message.topic);
           MockWebSocket.subscriptionCounts.set(

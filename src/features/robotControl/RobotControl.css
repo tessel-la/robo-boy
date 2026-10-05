@@ -1,0 +1,51 @@
+.robot-control {
+  position: relative;
+  min-width: 0;
+  font-size: 12px;
+}
+.robot-control summary {
+  cursor: pointer;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px;
+}
+.robot-control.has-control summary {
+  color: var(--primary-color, #28ad82);
+}
+.robot-control-popover {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1200;
+  width: min(310px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 8px;
+  background: var(--background-color, #20242a);
+  color: var(--text-color, #eee);
+  box-shadow: 0 8px 24px #0006;
+  display: grid;
+  gap: 8px;
+  white-space: normal;
+}
+.robot-control-popover p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.robot-control-popover label {
+  display: grid;
+  gap: 4px;
+}
+.robot-control-popover input,
+.robot-control-popover select {
+  min-width: 0;
+  width: 100%;
+}
+.robot-control-popover button {
+  padding: 6px;
+}
+.robot-control-popover small {
+  line-height: 1.4;
+}

@@ -6,6 +6,7 @@ import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { FiActivity, FiDisc, FiSearch, FiSettings, FiX } from 'react-icons/fi';
+import { RobotControl } from '../features/robotControl/RobotControl';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import { describeConnectionTarget, type ConnectionParams, type ConnectionStatus } from '../runtime/connections';
 import {
@@ -4373,6 +4374,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           )}
         </div>
         <div className="status-controls">
+          <RobotControl ros={ros} />
           <button
             type="button"
             className={`connection-status-icon ${connectionStatus}`}

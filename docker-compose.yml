@@ -114,6 +114,7 @@ services:
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
       - ${ROBOBOY_RECORDINGS_PATH:-./recordings}:/recordings:rw
       - recordings-socket:/run/roboboy-recordings
+      - control-journal:/var/lib/roboboy-control
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
@@ -146,6 +147,7 @@ volumes:
   ollama-relay-socket:
   webrtc-relay-socket:
   recordings-socket:
+  control-journal:
 
 networks:
   app-net:
