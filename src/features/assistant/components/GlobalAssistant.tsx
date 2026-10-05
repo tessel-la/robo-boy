@@ -538,6 +538,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const selection = bridge?.getSelectedTreeContext() ?? null;
       return {
         workspace: workspaceWithPanelSettings(),
+        assistantSettings: {
+          provider: settings.provider,
+          model: resolvedSettings.model,
+          ...(settings.authMode ? { authMode: settings.authMode } : {}),
+          ...(settings.thinkingEffort ? { thinkingEffort: settings.thinkingEffort } : {}),
+        },
         ...(discovery && rosGraph ? { ros: {
           resources: discovery, fetchedAt: rosGraph.fetchedAt, generation: rosGraph.generation,
           stale: rosGraph.generation !== connectionGeneration,

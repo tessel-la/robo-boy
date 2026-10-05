@@ -20,6 +20,6 @@ export const computeNeeds = (text: string, chips: AssistantContextChip[]): Assis
       // Time Series requests rarely say "panel": "plot the speed squared", "smooth that signal".
       /\bplot|\bgraph|\bchart|\bsignals?\b|\btime ?series\b|\bcurves?\b|\baxis\b|\bsmooth|\bfilter|\bderivative\b|\bintegra|\bsquared?\b|\bexpression\b|\bscale\b|\boffset\b|\bnormali[sz]e/.test(lower) ||
       // Data Explorer and Record & Replay requests: "watch /scan", "add a health rule", "what's in this bag".
-      /\bcamera\b|\bquality\b|\bwatch|\btrack|\bmonitor|\balert|\bsilen|\bstale\b|\bhealth\b|\brules?\b|\bdiagnostic|\blogs?\b|\brosout\b|\bexplorer\b|\bsubscribers?\b|\bpublishers?\b|\bbandwidth\b|\bhz\b|\bfrequenc|\bqos\b|\brosbag|\bbag\b|\bmcap\b|\brecord|\breplay|\bplayback\b|\bseek\b|\brewind\b/.test(lower),
+      /\bcamera\b|\bquality\b|\bswitch\b|\brobots?\b|\bconnect|\btabs?\b|\btheme\b|\bdark\b|\binstall|\bplugins?\b|\bsettings\b|\bwatch|\btrack|\bmonitor|\balert|\bsilen|\bstale\b|\bhealth\b|\brules?\b|\bdiagnostic|\blogs?\b|\brosout\b|\bexplorer\b|\bsubscribers?\b|\bpublishers?\b|\bbandwidth\b|\bhz\b|\bfrequenc|\bqos\b|\brosbag|\bbag\b|\bmcap\b|\brecord|\breplay|\bplayback\b|\bseek\b|\brewind\b/.test(lower),
   };
 };

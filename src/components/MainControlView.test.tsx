@@ -129,8 +129,8 @@ vi.mock('../features/dataExplorer/DataExplorerPanel', () => ({
 }));
 
 vi.mock('../panels/PanelManagerDialog', () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div role="dialog" aria-label="External panels">
+  default: ({ onClose, requestedInstallPanelId }: { onClose: () => void; requestedInstallPanelId?: string }) => (
+    <div role="dialog" aria-label="External panels" data-requested={requestedInstallPanelId ?? ''}>
       <button type="button" onClick={onClose}>
         Close panel manager
       </button>
@@ -1268,6 +1268,64 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await screen.findByText('Removed the Camera panel.');
     await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
+  });
+
+  it('lets the assistant use connection tabs, the theme and installed panels, but not install one by itself', async () => {
+    const setPanelEnabled = vi.fn();
+    useInstalledPanels.mockReturnValue({
+      ...useInstalledPanels(),
+      allPanels: [{ manifest: { id: 'la.tessel.roboboy.hello', name: 'Hello Panel', version: '1.0.0' }, origin: 'installed', isEnabled: true }],
+      setPanelEnabled,
+    });
+    const selectTheme = vi.fn();
+    const navigation = {
+      ...connectionNavigation,
+      tabs: [
+        { id: 'test', label: 'Test robot', description: 'Test robot', status: 'connected' as const },
+        { id: 'arm', label: 'Arm', description: '10.0.0.2', status: 'disconnected' as const },
+      ],
+    };
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({
+      kind: 'workspaceEdit',
+      summary: 'Done.',
+      operations: [
+        { op: 'setTheme', themeId: 'Dark' },
+        { op: 'setTheme', themeId: 'neon' },
+        { op: 'setPanelEnabled', panelType: 'Hello Panel', enabled: false },
+        { op: 'setPanelEnabled', panelType: 'camera', enabled: false },
+        { op: 'closeConnection', connectionId: 'test' },
+        { op: 'closeConnection', connectionId: 'Arm' },
+        { op: 'switchConnection', connectionId: 'ghost' },
+        { op: 'openNewConnection' },
+        { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+        { op: 'switchConnection', connectionId: 'arm' },
+      ],
+    }));
+    render(
+      <MainControlView connectionParams={connectionParams} onDisconnect={vi.fn()} connectionNavigation={navigation}
+        appControls={{ themeId: 'light', themes: [{ id: 'light', name: 'Light' }, { id: 'dark', name: 'Dark' }], selectTheme }} />
+    );
+    fireEvent.click(await screen.findByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), { target: { value: 'use the dark theme and switch to the other robot' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await screen.findByText('Switched to the Dark theme.');
+    expect(selectTheme).toHaveBeenCalledWith('dark');
+    expect(screen.getByText('No theme "neon"; available: light, dark.')).toBeInTheDocument();
+    expect(setPanelEnabled).toHaveBeenCalledWith('la.tessel.roboboy.hello', false);
+    expect(screen.getByText('Hello Panel is hidden from the add-panel menu.')).toBeInTheDocument();
+    expect(screen.getByText('No installed panel "camera". Built-in panels are always offered.')).toBeInTheDocument();
+    expect(screen.getByText('Test robot is the connection this conversation runs in; close it from its tab.')).toBeInTheDocument();
+    expect(navigation.onClose).toHaveBeenCalledWith('arm');
+    expect(screen.getByText('No connection tab "ghost".')).toBeInTheDocument();
+    expect(navigation.onAdd).toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'External panels' })).toHaveAttribute('data-requested', 'la.tessel.lidar');
+    expect(navigation.onSelect).toHaveBeenCalledWith('arm');
+
+    const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt as string;
+    expect(prompt).toContain('"connections":{"current":"test","tabs":[{"id":"test","label":"Test robot"');
+    expect(prompt).toContain('"theme":"light","themes":[{"id":"light","name":"Light"},{"id":"dark","name":"Dark"}]');
+    expect(prompt).toContain('"panels":[{"id":"la.tessel.roboboy.hello","name":"Hello Panel","version":"1.0.0","origin":"installed","enabled":true}]');
   });
 
   it('tells the assistant which Behavior Tree is running and where it is', async () => {

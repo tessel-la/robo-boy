@@ -106,6 +106,7 @@ export interface ComposeSystemPromptInput {
 const describeAutoContext = (auto: AssistantAutoContext): string => {
   const sections: string[] = [];
   sections.push(`### Workspace\n${JSON.stringify(auto.workspace)}`);
+  if (auto.assistantSettings) sections.push(`### Your own settings (provider and model the user chose)\n${JSON.stringify(auto.assistantSettings)}`);
 
   if (auto.ros) {
     const age = Math.round((Date.now() - auto.ros.fetchedAt) / 1000);

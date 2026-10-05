@@ -35,6 +35,33 @@ describe('workspace tool', () => {
     ]);
   });
 
+  it('parses the app-level operations', () => {
+    const { operations, rejected } = parseWorkspaceEditOperations([
+      { op: 'switchConnection', connectionId: 'robot-2' },
+      { op: 'closeConnection' },
+      { op: 'openNewConnection' },
+      { op: 'setTheme', themeId: 'dark' },
+      { op: 'setTheme' },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: false },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: 'no' },
+      { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+      { op: 'openPanelManager' },
+    ]);
+    expect(operations).toEqual([
+      { op: 'switchConnection', connectionId: 'robot-2' },
+      { op: 'openNewConnection' },
+      { op: 'setTheme', themeId: 'dark' },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: false },
+      { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+      { op: 'openPanelManager' },
+    ]);
+    expect(rejected).toEqual([
+      'Operation 2: closeConnection needs a connectionId.',
+      'Operation 5: setTheme needs a themeId.',
+      'Operation 7: setPanelEnabled needs a panelType and enabled true or false.',
+    ]);
+  });
+
   it('is a response kind the parser accepts, and refuses a turn with nothing valid in it', () => {
     const parsed = parseAssistantResponse(
       JSON.stringify({ kind: 'workspaceEdit', summary: 'Add it', operations: [{ op: 'addPanel', panelType: '3d' }, { op: 'x' }] }),

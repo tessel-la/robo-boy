@@ -67,6 +67,7 @@ import {
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
+import { APP_VERSION } from '../features/appUpdate/releases';
 import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
@@ -392,6 +393,15 @@ interface MainControlViewProps {
   storageScope?: string;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
   connectionNavigation?: ConnectionTabsProps;
+  /** App-wide settings the assistant may read and change; owned by the app shell. */
+  appControls?: AssistantAppControls;
+}
+
+/** The theme is chosen at app level, above every connection's workspace. */
+export interface AssistantAppControls {
+  themeId: string;
+  themes: Array<{ id: string; name: string }>;
+  selectTheme: (themeId: string) => void;
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
@@ -963,6 +973,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   storageScope,
   onConnectionStatusChange,
   connectionNavigation,
+  appControls,
 }) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
@@ -1104,6 +1115,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   const [isPanelManagerOpen, setIsPanelManagerOpen] = useState(false);
+  /** A catalog panel the assistant asked to install: the manager prepares it for the user to review. */
+  const [panelManagerInstallId, setPanelManagerInstallId] = useState<string | undefined>();
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   const [workspacePadMenu, setWorkspacePadMenu] = useState<WorkspacePadMenuState | null>(null);
@@ -2754,6 +2767,67 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           setSavedWorkspaceLayouts(prev => [...prev, savedLayout]);
           setActiveWorkspaceLayoutId(savedLayout.id);
           results.push({ operation, ok: true, message: `Saved the current workspace as "${operation.title}".` });
+          break;
+        }
+        case 'switchConnection':
+        case 'closeConnection': {
+          const tab = connectionNavigation?.tabs.find(item => item.id === operation.connectionId || item.label === operation.connectionId);
+          if (!connectionNavigation || !tab) {
+            results.push({ operation, ok: false, message: `No connection tab "${operation.connectionId}".` });
+            break;
+          }
+          if (operation.op === 'switchConnection') {
+            connectionNavigation.onSelect(tab.id);
+            results.push({ operation, ok: true, message: `Switched to ${tab.label}. Its own assistant answers there.` });
+          } else if (tab.id === connectionNavigation.activeTabId) {
+            results.push({ operation, ok: false, message: `${tab.label} is the connection this conversation runs in; close it from its tab.` });
+          } else {
+            connectionNavigation.onClose(tab.id);
+            results.push({ operation, ok: true, message: `Closed the connection to ${tab.label}.` });
+          }
+          break;
+        }
+        case 'openNewConnection': {
+          if (!connectionNavigation) {
+            results.push({ operation, ok: false, message: 'Connections cannot be opened from here.' });
+            break;
+          }
+          connectionNavigation.onAdd();
+          results.push({ operation, ok: true, message: 'Opened the form to connect to another robot.' });
+          break;
+        }
+        case 'setTheme': {
+          const theme = appControls?.themes.find(item => item.id === operation.themeId || item.name.toLowerCase() === operation.themeId.toLowerCase());
+          if (!appControls || !theme) {
+            results.push({ operation, ok: false, message: `No theme "${operation.themeId}"${appControls ? `; available: ${appControls.themes.map(item => item.id).join(', ')}` : ''}.` });
+            break;
+          }
+          appControls.selectTheme(theme.id);
+          results.push({ operation, ok: true, message: `Switched to the ${theme.name} theme.` });
+          break;
+        }
+        case 'setPanelEnabled': {
+          const wanted = operation.panelType.toLowerCase();
+          const panel = (installedPanelRegistry.allPanels ?? []).find(item => item.manifest.id.toLowerCase() === wanted || item.manifest.name.toLowerCase() === wanted);
+          if (!panel) {
+            results.push({ operation, ok: false, message: `No installed panel "${operation.panelType}". Built-in panels are always offered.` });
+            break;
+          }
+          installedPanelRegistry.setPanelEnabled(panel.manifest.id, operation.enabled);
+          results.push({ operation, ok: true, message: `${panel.manifest.name} is ${operation.enabled ? 'offered in' : 'hidden from'} the add-panel menu.` });
+          break;
+        }
+        case 'openPanelManager': {
+          setPanelManagerInstallId(operation.installPanelId);
+          setIsPanelManagerOpen(true);
+          setIsWorkspaceAddMenuOpen(false);
+          results.push({
+            operation,
+            ok: true,
+            message: operation.installPanelId
+              ? `Opened the panel manager to install ${operation.installPanelId}. Review the verified changes there and apply them to install it.`
+              : 'Opened the panel manager.',
+          });
           break;
         }
       }
@@ -4499,8 +4573,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           installedPanels={installedPanelRegistry.managedPanels}
           availablePanels={installedPanelRegistry.allPanels}
           onPanelEnabledChange={installedPanelRegistry.setPanelEnabled}
-          onClose={() => setIsPanelManagerOpen(false)}
+          onClose={() => { setIsPanelManagerOpen(false); setPanelManagerInstallId(undefined); }}
           onApplied={installedPanelRegistry.refresh}
+          requestedInstallPanelId={panelManagerInstallId}
         />
       )}
 
@@ -4595,6 +4670,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             layout: layout.layout,
           })),
           panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
+          ...(connectionNavigation ? { connections: {
+            current: connectionNavigation.activeTabId,
+            tabs: connectionNavigation.tabs.filter(tab => !tab.isClosing).map(tab => ({
+              id: tab.id, label: tab.label, description: tab.description, status: tab.status, current: tab.id === connectionNavigation.activeTabId,
+            })),
+          } } : {}),
+          app: {
+            version: APP_VERSION,
+            theme: appControls?.themeId ?? 'unknown',
+            themes: appControls?.themes ?? [],
+            panels: (installedPanelRegistry.allPanels ?? []).map(panel => ({
+              id: panel.manifest.id, name: panel.manifest.name, version: panel.manifest.version, origin: panel.origin, enabled: panel.isEnabled,
+            })),
+            panelIssues: (installedPanelRegistry.issues ?? []).map(issue => issue.message),
+          },
           ...(btExecution.treeName ? { behaviorTreeExecution: {
             running: btExecution.isExecuting,
             ...(btExecution.isPaused ? { paused: true } : {}),

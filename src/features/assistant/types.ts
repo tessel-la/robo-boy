@@ -130,6 +130,20 @@ export interface WorkspaceSnapshot {
   savedLayouts: WorkspaceLayoutContext[];
   /** Panel types the shell can add right now (built-in plus installed external panels). */
   panelCatalog: Array<{ id: string; name: string }>;
+  /** Every robot connection tab in this window; only the current one's robot is in the rest of the context. */
+  connections?: {
+    current: string | null;
+    tabs: Array<{ id: string; label: string; description: string; status: 'disconnected' | 'connecting' | 'connected'; current: boolean }>;
+  };
+  /** App-level settings and installed panels. Nothing here is secret: credentials never enter it. */
+  app?: {
+    version: string;
+    theme: string;
+    themes: Array<{ id: string; name: string }>;
+    /** Installed panels (built-in ones are always available): offered in the add menu when enabled. */
+    panels: Array<{ id: string; name: string; version: string; origin: 'bundled' | 'installed'; enabled: boolean }>;
+    panelIssues: string[];
+  };
   /** The Behavior Tree running on the robot, or the last one that ran. Read-only: the chat never
    * starts, pauses or stops a tree. */
   behaviorTreeExecution?: {
@@ -151,6 +165,8 @@ export interface WorkspaceSnapshot {
  */
 export interface AssistantAutoContext {
   workspace: WorkspaceSnapshot;
+  /** The assistant's own settings, without any credential. */
+  assistantSettings?: { provider: string; model: string; authMode?: string; thinkingEffort?: string };
   ros?: {
     resources: unknown;
     fetchedAt: number;
