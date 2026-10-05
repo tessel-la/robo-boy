@@ -5,14 +5,18 @@ OAuth callback, native IPC and official Claude Code subprocesses.
 
 ## Findings and changes
 
-- **API keys were stored in plaintext settings.** Electron now stores per-provider keys in encrypted
-  native records and hydrates them into renderer memory for the existing API transports. Migration
+- **API-key storage follows the user's password-free UX requirement.** Electron stores per-provider
+  keys in an app-owned plaintext `api-keys.json` record, with no calls to OS keychain APIs. They
+  remain credentials that grant provider access and may incur charges; someone with access to
+  app files or backups can read them. Old encrypted `api-keys.bin` records are preserved and never
+  unlocked automatically; explicit key re-entry establishes the new local record. Migration
   clears the live browser entry only after native persistence succeeds; failed migration retains
   the old key and reports an error. Other deployment modes retain their disclosed browser storage.
-- **Credential-file ownership and write durability.** ChatGPT sessions and API keys share OS-backed
-  encryption and atomic record writes. POSIX directories are restricted to `0700`, records to
-  `0600`; encrypted temporary files are synced before rename. Failed persistence does not activate
-  new ChatGPT session state in memory. Linux `basic_text` and unavailable keyrings are refused.
+- **Credential-file ownership and write durability.** ChatGPT sessions and API keys share atomic
+  record writes. POSIX directories are restricted to `0700`, records to `0600`; temporary files
+  are synced before rename. ChatGPT tokens retain OS-backed encryption and failed persistence
+  does not activate a new session in memory. Linux `basic_text` and unavailable keyrings are
+  refused for ChatGPT tokens; API-key saving works independently of the OS keyring.
 - **OAuth callback shutdown.** The old callback forcibly closed active browser connections after
   writing confirmation. It now flushes the response before settling the attempt, closes gracefully,
   ignores duplicate completion, bounds idle clients and handles listener errors without an
@@ -40,11 +44,15 @@ runtime settings cannot be supplied through the assistant request.
 
 ## Limits of this review
 
-Validation passed: 268 assistant/native regression tests, one Chromium settings-flow test,
+The original encrypted-storage review passed 268 assistant/native regression tests and one Chromium settings-flow test,
 frontend/native type checks, focused lint, and web/Electron production builds. Both full
 `npm audit` and `npm audit --omit=dev` report zero known vulnerabilities for this branch's
 dependency lockfile. GitHub separately reports seven alerts on the repository's default branch
 (three high, four moderate); this audit does not resolve or dismiss those default-branch alerts.
+
+Password-free storage regression tests verify restart recovery, concurrent provider writes,
+owner-only permissions, locked/missing keyrings, preserved old encrypted records, explicit
+re-entry, cleared-key precedence, and rejection of damaged records without overwriting them.
 
 Automated tests use fake tokens, signed test identities, mock network responses and fake subprocesses.
 They verify the storage contract, permissions, migrations, trust boundary and request behavior;

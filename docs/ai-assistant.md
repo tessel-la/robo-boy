@@ -177,15 +177,22 @@ The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS
 
 ## Privacy And Credentials
 
-In the updated Electron shell, API keys are encrypted with OS-backed `safeStorage` in
-`assistant/api-keys/api-keys.bin`. The native bridge allows only the trusted main app frame to
-read or update a key. API transports load it into renderer memory when needed. Existing browser
-keys migrate automatically: the live settings entry is cleared only after encrypted persistence
-succeeds, and a failed migration retains the original entry and displays an error. Clearing a key
-removes the native secret, retaining an empty marker to prevent stale browser keys from returning.
-Previously stored copies in browser databases or backups are
-not securely erased by migration. Encryption protects disk storage, not a compromised logged-in
-OS account or running app.
+In the updated Electron shell, API keys are saved automatically in Robo-Boy's own app-data file,
+`assistant/api-keys/api-keys.json`. This is plaintext storage with no keychain/password dependency.
+POSIX directories use `0700` and files `0600`; writes are serialized, atomic, and synced before
+rename. File permissions protect against other ordinary OS users, but someone with access to
+your app files or backups can read the keys. API keys remain credentials that can incur charges.
+
+The native bridge allows only the trusted main app frame to read or update a key. API transports
+load it into renderer memory. Existing browser keys migrate automatically: the live settings
+entry is cleared only after local persistence succeeds, and failures retain the original entry.
+Keys from the previous encrypted `api-keys.bin` version need one-time re-entry. Robo-Boy never
+attempts to unlock that file automatically, preserving it and avoiding an OS password dialog;
+new local records (including cleared-key markers) take precedence. Clearing a key removes its
+local secret. Historical browser/database/backup copies are not securely erased.
+
+ChatGPT subscription tokens retain their separate OS-backed encrypted storage described above.
+Claude Code continues to own its subscription credential storage.
 
 Browser, Tauri/mobile and older Electron shells retain their existing plaintext `localStorage`
 API-key behavior; use a server-side proxy for shared deployments. No provider key or subscription

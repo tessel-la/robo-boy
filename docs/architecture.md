@@ -151,7 +151,7 @@ The Electron shell optionally supplies subscription inference through the narrow
 caller and requests and owns cancellation; separate native modules own ChatGPT OAuth/encrypted
 accounts and the official restricted Claude Code process. Subscription credentials remain native. The
 renderer reuses its existing context, response parser, proposal validation and editor flows.
-API keys use the same encrypted file helper in `electron/assistantStorage.ts`; the settings
+API keys use an app-owned plaintext JSON file with the same atomic file writer in `electron/assistantStorage.ts`; the settings
 owner migrates legacy browser keys and loads native keys into renderer memory for API transports.
 Web and Tauri/mobile keep API-key transports; see [AI assistant](ai-assistant.md#api-keys-and-subscription-sign-in).
 
@@ -182,7 +182,7 @@ State is intentionally local to the browser:
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
 | 3D configuration             | `visualizationState.ts`   | Memory plus `localStorage`                                       |
 | External panel instance data | `MainControlView`         | Owned/versioned JSON envelope; 64 KiB per tile in `localStorage` |
-| Assistant settings           | `assistant/storage`       | `localStorage`; Electron API keys use encrypted native storage (see [AI assistant](ai-assistant.md)) |
+| Assistant settings           | `assistant/storage`       | `localStorage`; Electron API keys use private, plaintext app-data storage (see [AI assistant](ai-assistant.md)) |
 | Assistant conversation       | `assistant/storage`       | Versioned `localStorage`, capped to 100 messages, role/content only |
 
 Visited mobile editor panel types remain mounted while hidden so transient editing state survives panel switches. Camera and 3D panels are released while hidden to stop video decoding, ROS subscriptions, and WebGL rendering; their serializable configuration remains in the workspace and visualization storage. Browser-owned ROS clients and executions are session-only. An explicitly persistent behavior-tree run is owned by the ROS stack; the app shell discovers it on reconnect and the editor rehydrates its tree and live statuses. No live client object is serialized in browser storage.

@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron';
-import { chmod, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { access, chmod, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -33,13 +33,18 @@ export async function readEncryptedJson(directory: string, filename: string): Pr
 /** Atomic, encrypted, owner-only records. Commit memory only after this resolves. */
 export async function writeEncryptedJson(directory: string, filename: string, value: unknown): Promise<void> {
   requireSecureStorage();
+  await writePrivateRecord(directory, filename, safeStorage.encryptString(JSON.stringify(value)));
+}
+
+/** App-owned records need no keychain. Atomic writes preserve the last saved value on failure. */
+async function writePrivateRecord(directory: string, filename: string, contents: Buffer | string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (process.platform !== 'win32') await chmod(directory, 0o700);
   const temporary = join(directory, `${filename}-${randomUUID()}.tmp`);
   try {
     const file = await open(temporary, 'wx', 0o600);
     try {
-      await file.writeFile(safeStorage.encryptString(JSON.stringify(value)));
+      await file.writeFile(contents);
       await file.sync();
     } finally {
       await file.close();
@@ -64,8 +69,13 @@ export class AssistantApiKeys {
     return value;
   }
   private async load(): Promise<Record<string, string>> {
-    const value = (await readEncryptedJson(this.directory, 'api-keys.bin')) as any;
-    if (value === undefined) return {};
+    let value: any;
+    try {
+      value = JSON.parse(await readFile(join(this.directory, 'api-keys.json'), 'utf8'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+      throw new Error('Cannot read the saved assistant API keys. The existing record has been preserved.');
+    }
     if (
       value?.version !== 1 ||
       !value.keys ||
@@ -81,7 +91,21 @@ export class AssistantApiKeys {
   }
   get(value: unknown): Promise<string | undefined> {
     const provider = this.provider(value);
-    return this.exclusive(async () => (await this.load())[provider]);
+    return this.exclusive(async () => {
+      const key = (await this.load())[provider];
+      if (key !== undefined) return key;
+      // Never touch safeStorage for API keys: decrypting a legacy record can summon an OS
+      // password dialog. Preserve it and let explicit re-entry establish the new local record.
+      try {
+        await access(join(this.directory, 'api-keys.bin'));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+        throw new Error('Cannot read the saved assistant API keys. The existing record has been preserved.');
+      }
+      throw new Error(
+        'A previous encrypted API-key record exists. Enter the key once again to use local storage without a keychain. The old record has been preserved.'
+      );
+    });
   }
   set(value: unknown, key: unknown): Promise<void> {
     const provider = this.provider(value);
@@ -90,7 +114,7 @@ export class AssistantApiKeys {
       const keys = await this.load();
       // Keep an empty marker so a stale legacy browser entry cannot restore a cleared key.
       keys[provider] = key;
-      await writeEncryptedJson(this.directory, 'api-keys.bin', { version: 1, keys });
+      await writePrivateRecord(this.directory, 'api-keys.json', JSON.stringify({ version: 1, keys }));
     });
   }
 }

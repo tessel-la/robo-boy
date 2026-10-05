@@ -52,9 +52,9 @@ export function useAssistantSettings() {
         setSettings(current.current);
       })
       .catch(() => {
-        if (!cancelled)
+        if (!cancelled && keyEpoch.current === epoch)
           setStorageError(
-            'Could not unlock or save the API key in the OS credential store. Unlock your system keyring and restart Robo-Boy. An existing browser key is retained until migration succeeds.'
+            'Could not load the saved API key. If it was encrypted by an earlier version, enter it once again to switch to local storage. Existing records are retained until migration succeeds.'
           );
       })
       .finally(() => {
@@ -73,12 +73,13 @@ export function useAssistantSettings() {
     persist();
     if (nativeKeys && patch.apiKey !== undefined && !providerChanged) {
       const provider = current.current.provider;
+      const epoch = keyEpoch.current;
       setStorageError('');
       const saved = bridge!.setApiKey!(provider, patch.apiKey);
       if (provider === legacy.current.provider) legacyKeyUpdate.current = saved;
       void saved
         .then(() => {
-          // An explicitly re-entered key can complete migration after a previously locked keyring.
+          // An explicitly re-entered key can complete a previously failed migration.
           // Never let a stale legacy browser record overwrite that new native key on restart.
           if (!migrationDone.current && provider === legacy.current.provider) {
             migrationDone.current = true;
@@ -87,9 +88,9 @@ export function useAssistantSettings() {
           }
         })
         .catch(() => {
-          if (mounted.current)
+          if (mounted.current && keyEpoch.current === epoch)
             setStorageError(
-              'The API key is kept for this session but could not be saved securely. Unlock your system keyring and enter the key again.'
+              'The API key is kept for this session but could not be saved on this device. Check storage permissions and available space, then enter the key again.'
             );
         });
     }

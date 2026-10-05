@@ -226,7 +226,7 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
         {settings.authMode === 'subscription'
           ? 'Subscription credentials stay in the desktop runtime. ChatGPT credentials use the OS credential store; Claude Code manages its own sign-in. Conversation history stays in this browser.'
           : getDesktopBridge()?.assistant?.setApiKey
-            ? 'API keys are encrypted with the OS credential store and loaded into app memory for API requests. Settings and conversation history stay on this device.'
+            ? 'API keys are saved locally by Robo-Boy with no keychain or password prompt. They are not encrypted; someone with access to your app files can read them. Conversation history stays on this device.'
             : 'API keys and conversation history are stored in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
       </p>
     </div>
