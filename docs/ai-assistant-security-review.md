@@ -40,6 +40,12 @@ runtime settings cannot be supplied through the assistant request.
 
 ## Limits of this review
 
+Validation passed: 268 assistant/native regression tests, one Chromium settings-flow test,
+frontend/native type checks, focused lint, and web/Electron production builds. Both full
+`npm audit` and `npm audit --omit=dev` report zero known vulnerabilities for this branch's
+dependency lockfile. GitHub separately reports seven alerts on the repository's default branch
+(three high, four moderate); this audit does not resolve or dismiss those default-branch alerts.
+
 Automated tests use fake tokens, signed test identities, mock network responses and fake subprocesses.
 They verify the storage contract, permissions, migrations, trust boundary and request behavior;
 they do not constitute a penetration test or target-OS keychain certification. No real account
