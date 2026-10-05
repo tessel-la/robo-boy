@@ -89,13 +89,20 @@ export default function TimeSeriesPanel({
 
   // Topic types for signals the assistant adds by topic name alone.
   const topicTypesRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const connectionRef = useRef({ ros, connected, connectionGeneration });
+  connectionRef.current = { ros, connected, connectionGeneration };
   const refreshTopicTypes = useCallback(() => {
     if (!ros || !connected || typeof ros.getTopics !== 'function') return;
     ros.getTopics(result => {
+      const current = connectionRef.current;
+      if (current.ros !== ros || !current.connected || current.connectionGeneration !== connectionGeneration) return;
       topicTypesRef.current = new Map(result.topics.map((topic, index) => [topic, result.types[index]]));
     });
-  }, [ros, connected]);
-  useEffect(refreshTopicTypes, [refreshTopicTypes, connectionGeneration]);
+  }, [ros, connected, connectionGeneration]);
+  useEffect(() => {
+    topicTypesRef.current = new Map();
+    refreshTopicTypes();
+  }, [refreshTopicTypes]);
   useEffect(() => {
     if (!panelId || !onRegisterAssistantBridge) return;
     const bridge: PanelSettingsBridge = {
@@ -103,7 +110,7 @@ export default function TimeSeriesPanel({
       settingsHelp: TIME_SERIES_SETTINGS_HELP,
       describe: () => {
         refreshTopicTypes();
-        return describeTimeSeries(engine);
+        return { ...describeTimeSeries(engine), connected, active };
       },
       apply: settings => {
         const result = applyTimeSeriesSettings(engine.config, settings, { topicTypes: topicTypesRef.current, discovered: engine.discovered });
@@ -115,7 +122,7 @@ export default function TimeSeriesPanel({
     };
     onRegisterAssistantBridge(panelId, bridge);
     return () => onRegisterAssistantBridge(panelId, null);
-  }, [panelId, onRegisterAssistantBridge, engine, save, refreshTopicTypes]);
+  }, [panelId, onRegisterAssistantBridge, engine, save, refreshTopicTypes, connected, active]);
 
   useEffect(() => {
     if (!ros || !connected || !active) return;

@@ -1025,6 +1025,15 @@
   transform: rotate(8deg) scale(0.94);
 }
 
+/* Keep the desktop toggle beside the docked frame, clear of Send and settings controls.
+   A dragged frame may cover it; its own close button remains available. */
+@media (min-width: 768px) {
+  .assistant-launcher.is-open {
+    right: calc(clamp(420px, 32vw, 480px) + var(--floating-action-inset));
+    z-index: 1399;
+  }
+}
+
 .assistant-launcher:active {
   transform: scale(0.88);
 }
@@ -1340,6 +1349,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.assistant-key-storage-field {
+  grid-column: 1 / -1;
+}
+
 .assistant-settings-grid label,
 .assistant-setting-field,
 .assistant-settings-grid .assistant-speech-field {
@@ -1383,6 +1396,39 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
   gap: 6px;
+}
+
+.assistant-subscription-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.assistant-subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assistant-subscription-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--background-color, #fff);
+  color: var(--text-color);
+  font: inherit;
+  cursor: pointer;
+}
+
+.assistant-subscription-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.assistant-subscription-note,
+.assistant-subscription-status {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .assistant-model-refresh {

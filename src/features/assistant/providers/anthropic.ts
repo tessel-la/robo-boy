@@ -1,5 +1,6 @@
 import { checkedFetch, readSse } from './transport';
 import type { SendChat } from './types';
+import { selectedThinkingEffort } from './thinking';
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -13,6 +14,7 @@ const JSON_MODE_INSTRUCTION =
 
 export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, jsonMode }) => {
   const url = `${settings.baseUrl.replace(/\/$/, '')}/messages`;
+  const effort = selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort);
   const response = await checkedFetch(url, {
     method: 'POST',
     signal,
@@ -28,7 +30,7 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
       model: settings.model,
       max_tokens: 4096,
       stream: true,
-      temperature: 0.2,
+      ...(effort ? { output_config: { effort }, thinking: { type: 'adaptive' } } : { temperature: 0.2 }),
       system: jsonMode ? `${systemPrompt}${JSON_MODE_INSTRUCTION}` : systemPrompt,
       messages: messages.map(turn => ({
         role: turn.role,

@@ -8,6 +8,9 @@ export const transcribeAssistantAudio = async (
   settings: AssistantProviderSettings,
   signal?: AbortSignal
 ): Promise<string> => {
+  if (settings.authMode === 'subscription') {
+    throw new Error('Subscription sign-in does not include audio transcription. Use browser voice recognition or choose API key for transcription.');
+  }
   if (!settings.baseUrl.trim()) {
     throw new Error('Set a base URL before using voice input.');
   }

@@ -3,6 +3,7 @@ import { sendChat as sendGemini } from './gemini';
 import { sendChat as sendOllama } from './ollama';
 import { sendChat as sendOpenAiCompatible } from './openaiCompatible';
 import { sendChat as sendAnthropic } from './anthropic';
+import { sendSubscriptionChat } from './subscription';
 import type { AssistantProviderId, SendChat, SendChatRequest } from './types';
 
 const PROVIDERS: Record<AssistantProviderId, SendChat> = {
@@ -14,6 +15,7 @@ const PROVIDERS: Record<AssistantProviderId, SendChat> = {
 };
 
 export const sendAssistantChat = (request: SendChatRequest): Promise<string> => {
+  if (request.settings.authMode === 'subscription') return sendSubscriptionChat(request);
   const provider = PROVIDERS[request.settings.provider];
   if (!provider) throw new Error(`Unknown assistant provider "${request.settings.provider}".`);
   request.onProgress?.(`Contacting ${request.settings.provider} (${request.settings.model})…`);

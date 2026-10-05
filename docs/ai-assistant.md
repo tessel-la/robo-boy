@@ -10,13 +10,82 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
 5. Review any proposed change in the editor that owns it — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
 
-Settings (provider, model, API key, instructions) live in the gear icon inside the panel and persist to this browser only.
+Settings (provider, model, API key, instructions) live in the gear icon inside the panel. Preferences persist in this browser; current Electron shells own API-key persistence natively.
+
+### API keys and subscription sign-in
+
+For OpenAI and Anthropic Claude, **Authentication** selects **API key** or **Sign in** (subscription).
+API-key mode keeps the existing model, base URL and key fields. Switching authentication modes does
+not discard the saved API key, and subscription requests never fall back to API billing.
+
+Recognized OpenAI reasoning models and current Claude Sonnet/Opus models show **Thinking effort**.
+Choose Model default to send no override, or select an offered level to control reasoning depth.
+Changing models or authentication resets the override. OpenAI subscription requests use
+`reasoning.effort`, its API transport uses `reasoning_effort`, Claude API requests use adaptive
+thinking and `output_config.effort`, and Claude Code receives `--effort`. Higher effort can take
+longer and consume more tokens or plan allowance; organization caps still apply. Unknown model
+IDs and unsupported models retain their default behavior instead of receiving speculative fields.
+See [OpenAI reasoning controls](https://developers.openai.com/api/docs/guides/reasoning) and
+[Claude effort controls](https://code.claude.com/docs/en/model-config#adjust-effort-level).
+
+Subscription sign-in currently requires the **Electron desktop app**. Browser and Tauri/mobile builds
+show the desktop requirement and continue to support API-key authentication; they do not run a hidden
+credential proxy. Older desktop shells also need an update before the sign-in controls are available.
+
+- **OpenAI:** choose Continue with ChatGPT, complete the browser sign-in and allow ChatGPT plan usage.
+  The model picker uses the selected account's catalog. Add account, account selection, reconnect,
+  sign-out and Manage usage are available in settings. An eligible plan is required; sign-in alone
+  does not guarantee inference access. The native runtime uses the documented Sign in with ChatGPT
+  OAuth/Responses contract, with `jose` for signed identity verification. It does not use private
+  ChatGPT endpoints or extract credentials from another application.
+- **Claude:** install the official Claude Code CLI **2.1.278 or newer**, then choose Sign in through
+  Claude Code. Anthropic's own runtime completes login and manages credentials in a Robo-Boy-specific
+  configuration directory, separate from the user's ordinary Claude Code setup. Choose Sonnet,
+  Opus or Haiku; availability and usage follow the account. Robo-Boy launches the unmodified native
+  binary without a shell and without API keys or gateway credentials inherited from its environment.
+  The runtime's tools, skills, plugins, hooks, Chrome integration and inherited MCP configuration are
+  disabled. It receives the full conversation as JSON context plus the final turn's images, rather
+  than adopting a persistent Claude Code project session. Its output goes through the existing
+  assistant parser and validators.
+
+ChatGPT credentials are encrypted with Electron's OS-backed `safeStorage`, written atomically under
+the native app's data directory, and never returned to the renderer. On Linux, a working system
+keyring is required; the insecure `basic_text` backend is refused. Claude Code owns its own native
+credential storage. Neither provider's subscription tokens enter `localStorage`, prompts or exports.
+The native bridge validates the top-level app caller and bounded request data. Account changes,
+window navigation/closure and cancellation stop in-flight work; late results are rejected.
+
+Browser speech recognition remains available with sign-in. Recorded-audio transcription is not
+included in these subscription transports; choose API-key mode for a provider that supports it.
+
+Official contracts: [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source),
+[preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations),
+[Claude Code authentication](https://code.claude.com/docs/en/authentication), and
+[Claude product integration conditions](https://code.claude.com/docs/en/legal-and-compliance).
 
 ## Context
 
 **Everything the app holds goes in every turn.** The workspace snapshot (panels with their configuration, the current and saved layouts), every saved Pad and every saved Behavior Tree as complete JSON, the whole ROS graph, and the node and parameter lists. They are local reads, so making a user fetch the right one first cost more than carrying them all. Every reply lists what it used, with source and age, and a reconnect marks stale data rather than presenting it as current.
 
 There is no context picker to manage. What is left for the user to choose is the data that is genuinely expensive: a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture.
+
+Plotting requests automatically retrieve a schema and one bounded live sample for up to three
+explicitly named topics. A joint-state request without a topic name samples graph topics of type
+`sensor_msgs/msg/JointState` (or its ROS 1 spelling), so joint names and array indices are available
+without manually tagging the topic. It does not subscribe to every topic on the graph.
+
+The assistant can add a Time Series panel and configure it in one reply. Settings wait for that
+specific tile to mount, including a mobile replacement. If the model only adds the panel and
+omits the remaining plotting task, the app continues that task against the updated workspace.
+Open plots report connected/active state, signals and field paths, sample counts, latest sample
+timestamps, numeric fields, filters/math, and plot controls. A saved signal with no samples is
+reported as pending; it is not evidence that the robot is publishing.
+
+For example: “Add a Time Series panel showing joint positions from /robot/joint_states.”
+Joint-state fields use indexed paths such as `position[0]`; the sample's `name[0]` provides its label.
+If data is unavailable, automatic discovery starts when a message arrives (up to eight fields;
+at most sixteen configured signals). Indexed paths follow the publisher's array order; joint-name
+labels do not dynamically rebind if that order changes. Specific named joints need a live sample.
 
 **Tagging.** Typing `@` names a resource in a sentence — it reads back as `@Camera` or `@/cmd_vel` — and for a ROS topic, service or action it also fetches that live data, which is too costly to carry for every one of them. `CONTEXT_CATALOG` is what the picker offers and what the prompt lists, so the two cannot disagree.
 
@@ -71,6 +140,10 @@ Whole-conversation history is sent to the provider on every turn (see [Known lim
 `src/features/assistant/` is a self-contained feature module (see [Application architecture](architecture.md#global-ai-assistant)):
 
 - `providers/` — one file per vendor (OpenAI, Gemini, Ollama, OpenAI-compatible, Anthropic) behind a single `sendChat` contract, using real multi-turn message arrays.
+- `providers/subscription.ts` — routes subscription requests to the typed native bridge in
+  `src/runtime/assistantSubscription.ts`. `electron/assistant.ts` owns caller validation, cancellation
+  and account transitions; `openaiSubscription.ts` owns OAuth, encrypted accounts and Responses;
+  `claudeSubscription.ts` owns the restricted official CLI lifecycle. The browser holds no tokens.
 - `context/` — `rosGraphCache.ts` (TTL + single-flight + reconnect-generation invalidation around the existing `discoverAllROSResources`), `rosContext.ts` (exact interface/schema lookups, bounded topic sampling, bounded `/rosout` capture), `tfContext.ts` (on-demand transform and distance, no background subscription), `workspaceSnapshot.ts` (pure builder consumed by `MainControlView`).
 - `tools/` — `padGeneration.ts` (proposal normalization, binding validation, overlap repair), `padValidator.ts` (whole-Pad-vs-ROS check), `rosActionValidator.ts` (existence and type check for review-only operation cards), `behaviorTreeTool.ts` (reuses the kept `treeGeneration.ts` parser).
 - `components/` — `GlobalAssistant.tsx` (conversation/provider/context state, exposes an imperative `open()`/`registerBehaviorTreeBridge()` handle), `AssistantPanel.tsx` (the desktop side panel / mobile full-screen dialog), `AssistantSettingsPopover.tsx`, and the relocated `AssistantSpeechTextarea.tsx` / `AssistantSketchEditor.tsx`.
@@ -104,7 +177,46 @@ The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS
 
 ## Privacy And Credentials
 
-Provider settings, including the API key, are stored in plaintext `localStorage` — unchanged from the previous BT-agent assistant, which already disclosed this in its own UI. This is **not** hardened further in this change; a real secret store (OS keychain via a new Tauri command, or a backend proxy) is a materially separate, security-review-worthy change and is left as documented future work. The API key is never included in any prompt, log, or exported conversation.
+In the updated Electron shell, **Remember API key** has three per-provider choices:
+
+- **Automatic (secure storage)** is the default. Keys are encrypted with Electron's asynchronous
+  OS-backed `safeStorage` API when available. Missing/locked stores, rejected operations and
+  timeouts fall back to native memory for the current app session. Newly entered keys are never
+  silently written as plaintext. Settings disclose when the key must be re-entered after quitting.
+- **This session only** bypasses the OS credential store and retains the key until Robo-Boy quits.
+- **Save unencrypted on this device** explicitly enables private plaintext persistence and bypasses
+  the OS credential store. Someone with access to app files or backups can read this key.
+
+Robo-Boy does not ask for a storage password or require an unlock before using an entered API key.
+The OS can still display a keychain permission/unlock dialog in Automatic mode; Electron cannot
+universally suppress it. Each asynchronous native operation has a three-second timeout, and an
+unavailable store is not retried until the next app start. Late native completions cannot write
+an older key. The other two modes avoid keychain calls entirely. These choices apply to API keys;
+subscription credentials retain their separate storage requirements.
+
+The per-provider record lives in `assistant/api-keys/api-keys.json`. Encrypted entries contain
+ciphertext; session entries contain only an empty marker and the storage preference. Clearing or
+switching to session-only storage replaces that provider's saved secret, preventing old keys
+from resurfacing. Writes remain serialized, atomic and synced before rename; POSIX directories
+use `0700` and files `0600`. API keys remain credentials that can incur charges.
+
+The native bridge permits only the trusted main app frame to read or update keys and preferences.
+API transports load keys into renderer memory. Existing browser keys migrate automatically, and
+the live browser entry is cleared only after the native write succeeds (including session markers).
+Failures preserve the original browser entry. Earlier plaintext app records upgrade to encryption
+when that provider is loaded and secure storage is available. If unavailable, the existing saved
+key remains usable, with an explicit plaintext disclosure; choosing session-only removes it.
+Legacy encrypted `api-keys.bin` records are recovered when they can be decrypted; otherwise they
+are preserved and a replacement key can be entered. New records and cleared markers take
+precedence. Historical browser/database/backup copies are not securely erased.
+
+ChatGPT subscription tokens retain their separate OS-backed encrypted storage described above.
+Claude Code continues to own its subscription credential storage.
+
+Browser, Tauri/mobile and older Electron shells retain their existing plaintext `localStorage`
+API-key behavior; use a server-side proxy for shared deployments. No provider key or subscription
+token is included in assistant prompts, logs or conversation exports. Nonsecret provider/model/
+thinking preferences and conversation history remain in browser storage.
 
 Conversation history (role, content, timestamp only — never attachments or settings) persists to `localStorage`, capped at 100 messages, so it survives a reload. This is a new capability the BT-owned assistant did not have.
 

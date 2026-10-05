@@ -113,3 +113,17 @@ it('lets the assistant read and change the plot through its settings bridge', as
   unmount();
   expect(register).toHaveBeenLastCalledWith('plot-1', null);
 });
+it('discards topic types returned by a previous connection and reports inactive state', async () => {
+  const p = props();
+  let done!: (result: { topics: string[]; types: string[] }) => void;
+  (p.ros.getTopics as ReturnType<typeof vi.fn>).mockImplementation(callback => { done = callback; });
+  const register = vi.fn();
+  const { rerender } = render(<TimeSeriesPanel {...p} panelId="plot" onRegisterAssistantBridge={register} />);
+  rerender(<TimeSeriesPanel {...p} connected={false} connectionGeneration={2} panelId="plot" onRegisterAssistantBridge={register} />);
+  act(() => done({ topics: ['/old'], types: ['T'] }));
+  const bridge = register.mock.lastCall?.[1] as PanelSettingsBridge;
+  expect(bridge.describe()).toMatchObject({ connected: false });
+  let outcomes: ReturnType<PanelSettingsBridge['apply']> = [];
+  act(() => { outcomes = bridge.apply({ addSignals: [{ topic: '/old', fieldPath: 'value' }] }); });
+  expect(outcomes).toEqual([{ ok: false, message: '/old is not in the ROS graph, so its message type is unknown.' }]);
+});

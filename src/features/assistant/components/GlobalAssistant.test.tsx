@@ -22,6 +22,7 @@ vi.mock('../../behaviorTree/services/rosDiscovery', async importOriginal => {
 import GlobalAssistant, { type GlobalAssistantHandle } from './GlobalAssistant';
 import { resolveCompactAssistantFrame } from './mobileAssistantLayout';
 import type { WorkspaceSnapshot } from '../types';
+import type { WorkspaceEditOperation } from '../tools/workspaceTool';
 
 const workspace: WorkspaceSnapshot = {
   connectionStatus: 'connected',
@@ -269,6 +270,62 @@ describe('GlobalAssistant', () => {
     const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt as string;
     expect(prompt).toContain('"displayedTfFrames":["world"]');
     expect(prompt).toContain('Keys: showTfFrames.');
+  });
+
+  it('waits for the newly added plot and configures it rather than an older plot', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({
+      kind: 'workspaceEdit', summary: 'Joint positions configured.', operations: [
+        { op: 'addPanel', panelType: 'timeSeries' },
+        { op: 'configurePanel', panelType: 'timeSeries', settings: { addSignals: [{ topic: '/joint_states', messageType: 'sensor_msgs/msg/JointState', fieldPath: 'position[0]' }] } },
+        { op: 'saveLayout', title: 'Joint plot' },
+      ],
+    }));
+    const host = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, panelId: 'new-plot', message: 'Added plot.' })));
+    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] } });
+    const oldApply = vi.fn(), apply = vi.fn(() => [{ ok: true, message: 'Added joint position.' }]);
+    act(() => ref.current?.registerPanelSettingsBridge('old-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply: oldApply }));
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a time series panel with joint states' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(host).toHaveBeenCalledOnce());
+    expect(apply).not.toHaveBeenCalled();
+    act(() => ref.current?.registerPanelSettingsBridge('new-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply }));
+    await waitFor(() => expect(screen.getByText('Added joint position.')).toBeInTheDocument());
+    expect(apply).toHaveBeenCalledWith({ addSignals: [{ topic: '/joint_states', messageType: 'sensor_msgs/msg/JointState', fieldPath: 'position[0]' }] });
+    expect(oldApply).not.toHaveBeenCalled();
+    expect(host).toHaveBeenCalledOnce();
+    expect(screen.getByText('Ask again to save once the changes above are on screen.')).toBeInTheDocument();
+    expect(sendAssistantChatMock).toHaveBeenCalledOnce();
+  });
+
+  it('cancels settings waiting on a new panel when the assistant closes', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'workspaceEdit', operations: [
+      { op: 'addPanel', panelType: 'timeSeries' },
+      { op: 'configurePanel', panelType: 'timeSeries', settings: { paused: true } },
+    ] }));
+    const host = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, panelId: 'new-plot', message: 'Added plot.' })));
+    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] } });
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a time series panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(host).toHaveBeenCalledOnce());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    const apply = vi.fn();
+    act(() => ref.current?.registerPanelSettingsBridge('new-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply }));
+    await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('recovers the joint-state plotting task when the model only adds the panel', async () => {
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'timeSeries' }] }))
+      .mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'Plotting task continued.' }));
+    renderOpenAssistant({
+      workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] },
+      onApplyWorkspaceEdit: operations => operations.map(operation => ({ operation, ok: true, panelId: 'plot', message: 'Added plot.' })),
+    });
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a timeserie panel with the joints states showing in the ui' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(screen.getByText('Plotting task continued.')).toBeInTheDocument());
+    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('do not add another panel');
+    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('joints states showing in the ui');
   });
 
   it('tells the user when no host is mounted to edit the workspace', async () => {

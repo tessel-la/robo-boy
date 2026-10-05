@@ -7,6 +7,7 @@ import { registerRobotResources, robotResourceScheme } from './robotResources';
 import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
 import { configureCertificates } from './certificates';
 import { registerPanelFetch } from './panelFetch';
+import { registerAssistantSubscriptions } from './assistant';
 
 /**
  * The Electron desktop shell.
@@ -243,6 +244,7 @@ if (!app.requestSingleInstanceLock()) {
     registerEmbedProxy();
     registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
+    registerAssistantSubscriptions(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerWindowControls();
     registerUpdater();
 
