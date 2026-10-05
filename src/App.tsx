@@ -216,6 +216,13 @@ function App() {
     ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false })),
   ];
 
+  // What the assistant may read and change at app level.
+  const appControls = {
+    themeId: selectedThemeId,
+    themes: allThemesForSelector.map(theme => ({ id: theme.id, name: theme.name })),
+    selectTheme,
+  };
+
   const themeControl = (
     <ThemeSelector
       currentThemeId={selectedThemeId}
@@ -263,6 +270,7 @@ function App() {
                           isActive={isActive}
                           storageScope={session.storageScope}
                           onConnectionStatusChange={status => handleConnectionStatusChange(session.id, status)}
+                          appControls={appControls}
                           onDisconnect={() => handleCloseConnection(session.id)}
                           connectionNavigation={{
                             tabs: connectionSessions,

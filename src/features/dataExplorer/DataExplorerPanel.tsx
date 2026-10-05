@@ -53,6 +53,13 @@ import TopicActions, { viewFor } from './TopicActions';
 import ResourceList, { BulkBar, type ListColumns } from './ResourceList';
 import ResourceGraph, { isInfrastructureNode } from './ResourceGraph';
 import HealthView, { downloadJson, type HealthSection } from './HealthView';
+import {
+  applyExplorerSettings,
+  DATA_EXPLORER_SETTINGS_HELP,
+  describeDataExplorer,
+  type LogQuery,
+} from './assistantBridge';
+import type { PanelSettingsBridge } from '../assistant/types';
 import './DataExplorerPanel.css';
 
 export interface ExplorerOpenRequest {
@@ -74,6 +81,9 @@ interface Props {
   state?: RoboBoyJsonObject;
   onStateChange: (value: RoboBoyJsonObject) => void;
   onOpen: (request: ExplorerOpenRequest) => void;
+  /** Lets the AI assistant read what the panel shows and change its settings. */
+  panelId?: string;
+  onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
 const EMPTY = createEmptySnapshot();
 const emptySubscribe = () => () => {};
@@ -153,6 +163,8 @@ export default function DataExplorerPanel({
   state,
   onStateChange,
   onOpen,
+  panelId,
+  onRegisterAssistantBridge,
 }: Props) {
   const [config, setConfig] = useState(() => sanitizeExplorerConfig(state?.config));
   const [inspectorTab, setInspectorTab] = useState('value');
@@ -472,6 +484,91 @@ export default function DataExplorerPanel({
   // While replay is open, Time Series, 3D, Camera and TF follow the recording, so opening them from
   // a live inspection would show recorded data under a live label.
   const liveDuringReplay = !replay && Boolean(replaySession.source.ros);
+  // The AI assistant's bridge is registered once and reads the latest state through this ref, so
+  // a new snapshot every half second does not re-register it.
+  const assistantLogQuery = useRef<LogQuery>();
+  const assistantState = useRef({
+    snapshot,
+    config,
+    ruleStates,
+    replay,
+    recordedSeconds,
+    liveDuringReplay,
+    active,
+    connected,
+    change,
+    session,
+  });
+  assistantState.current = {
+    snapshot,
+    config,
+    ruleStates,
+    replay,
+    recordedSeconds,
+    liveDuringReplay,
+    active,
+    connected,
+    change,
+    session,
+  };
+  useEffect(() => {
+    if (!panelId || !onRegisterAssistantBridge) return;
+    // The session's own snapshot is newer than the one this render holds.
+    const latestSnapshot = () => assistantState.current.session?.getSnapshot() ?? assistantState.current.snapshot;
+    const graphReady = () => {
+      const snapshot = latestSnapshot();
+      return !assistantState.current.session || (!snapshot.loading && snapshot.resources.length > 0);
+    };
+    const waitForGraph = (timeoutMs: number) =>
+      new Promise<void>(resolve => {
+        const session = assistantState.current.session;
+        if (!session) return resolve();
+        const done = () => {
+          clearTimeout(timer);
+          unsubscribe();
+          resolve();
+        };
+        const timer = setTimeout(done, timeoutMs);
+        const unsubscribe = session.subscribe(() => {
+          if (graphReady()) done();
+        });
+      });
+    const bridge: PanelSettingsBridge = {
+      panelType: 'dataExplorer',
+      settingsHelp: DATA_EXPLORER_SETTINGS_HELP,
+      describe: () => {
+        const current = assistantState.current;
+        return describeDataExplorer({
+          snapshot: latestSnapshot(),
+          // `change` updates this ref at once; the follow-up turn can run before React re-renders.
+          config: latestConfig.current,
+          ruleStates: current.ruleStates,
+          recording: current.replay?.snapshot.info
+            ? { name: current.replay.snapshot.info.name, seconds: current.recordedSeconds }
+            : undefined,
+          liveDuringReplay: current.liveDuringReplay,
+          active: current.active,
+          connected: current.connected || Boolean(current.replay),
+          logQuery: assistantLogQuery.current,
+        });
+      },
+      apply: async settings => {
+        // A panel the assistant just added is still discovering: wait for its first graph, so the
+        // request is checked against real topics and the next turn sees what it selected.
+        if (!graphReady()) await waitForGraph(4000);
+        const current = assistantState.current;
+        const result = applyExplorerSettings(latestConfig.current, settings, latestSnapshot(), {
+          recording: Boolean(current.replay),
+        });
+        if (Object.keys(result.patch).length) current.change(result.patch);
+        if (result.refresh) current.session?.refresh();
+        if (result.logQuery) assistantLogQuery.current = result.logQuery;
+        return result.outcomes;
+      },
+    };
+    onRegisterAssistantBridge(panelId, bridge);
+    return () => onRegisterAssistantBridge(panelId, null);
+  }, [panelId, onRegisterAssistantBridge]);
   const watchMany = (names: string[]) => {
     // Like the row icon, the bulk button toggles: when every selected topic is watched, it unwatches them.
     if (names.length && names.every(name => config.watched.includes(name))) {

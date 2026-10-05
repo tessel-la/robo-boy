@@ -186,6 +186,38 @@ describe('PanelManagerDialog', () => {
     );
   });
 
+  it('prepares an install the assistant asked for, and leaves applying it to the user', async () => {
+    const officialSummary = { id: 'la.tessel.roboboy.timeseries', name: 'ROS Time Series', description: 'Plots.', version: '1.0.0' };
+    const timeseriesPanel = { ...panel, id: officialSummary.id, name: officialSummary.name, version: officialSummary.version };
+    api.catalog.mockResolvedValue({ panels: [officialSummary] });
+    api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [timeseriesPanel], changes: [{ type: 'add', panel: timeseriesPanel }] });
+    const { rerender } = render(
+      <PanelManagerDialog installedPanels={[]} availablePanels={availableFrom([])} onPanelEnabledChange={vi.fn()} onClose={vi.fn()} onApplied={vi.fn()}
+        requestedInstallPanelId={officialSummary.id} />
+    );
+    await screen.findByText('add ROS Time Series@1.0.0');
+    expect(api.preview).toHaveBeenCalledTimes(1);
+    expect(api.preview.mock.calls[0][1]).toMatchObject({ selection: { mode: 'include', panelIds: expect.arrayContaining([officialSummary.id]) } });
+    expect(api.apply).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Apply this exact plan' })).toBeDisabled();
+
+    // The same request is prepared once, not again on every render.
+    rerender(
+      <PanelManagerDialog installedPanels={[]} availablePanels={availableFrom([])} onPanelEnabledChange={vi.fn()} onClose={vi.fn()} onApplied={vi.fn()}
+        requestedInstallPanelId={officialSummary.id} />
+    );
+    expect(api.preview).toHaveBeenCalledTimes(1);
+  });
+
+  it('says when a requested panel is already installed', async () => {
+    render(
+      <PanelManagerDialog installedPanels={[panel] as never} availablePanels={availableFrom([panel])} onPanelEnabledChange={vi.fn()} onClose={vi.fn()} onApplied={vi.fn()}
+        requestedInstallPanelId={panel.id} />
+    );
+    expect(await screen.findByText(`${panel.id} is already installed.`)).toBeInTheDocument();
+    expect(api.preview).not.toHaveBeenCalled();
+  });
+
   it('installs an official catalog panel with Install, confirm, and Apply', async () => {
     const officialSummary = {
       id: 'la.tessel.roboboy.timeseries',

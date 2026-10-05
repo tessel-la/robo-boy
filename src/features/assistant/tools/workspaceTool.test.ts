@@ -14,6 +14,8 @@ describe('workspace tool', () => {
       { op: 'removePanel' },
       { op: 'teleport' },
       null,
+      { op: 'setCameraQuality', panelId: 'p2', quality: 'low' },
+      { op: 'setCameraQuality', panelId: 'p2' },
     ]);
 
     expect(operations).toEqual([
@@ -23,11 +25,40 @@ describe('workspace tool', () => {
       { op: 'setPanelPad', panelId: 'p3', padId: 'drive' },
       { op: 'applyLayout', layoutId: 'l1' },
       { op: 'saveLayout', title: 'Teleop' },
+      { op: 'setCameraQuality', panelId: 'p2', quality: 'low' },
     ]);
     expect(rejected).toEqual([
       'Operation 7: removePanel needs a panelId.',
       'Operation 8: unknown op "teleport".',
       'Operation 9: unknown op "undefined".',
+      'Operation 11: setCameraQuality needs a panelId and a quality.',
+    ]);
+  });
+
+  it('parses the app-level operations', () => {
+    const { operations, rejected } = parseWorkspaceEditOperations([
+      { op: 'switchConnection', connectionId: 'robot-2' },
+      { op: 'closeConnection' },
+      { op: 'openNewConnection' },
+      { op: 'setTheme', themeId: 'dark' },
+      { op: 'setTheme' },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: false },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: 'no' },
+      { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+      { op: 'openPanelManager' },
+    ]);
+    expect(operations).toEqual([
+      { op: 'switchConnection', connectionId: 'robot-2' },
+      { op: 'openNewConnection' },
+      { op: 'setTheme', themeId: 'dark' },
+      { op: 'setPanelEnabled', panelType: 'hello', enabled: false },
+      { op: 'openPanelManager', installPanelId: 'la.tessel.lidar' },
+      { op: 'openPanelManager' },
+    ]);
+    expect(rejected).toEqual([
+      'Operation 2: closeConnection needs a connectionId.',
+      'Operation 5: setTheme needs a themeId.',
+      'Operation 7: setPanelEnabled needs a panelType and enabled true or false.',
     ]);
   });
 
