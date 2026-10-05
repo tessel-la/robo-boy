@@ -1,6 +1,8 @@
-/** Public native assistant contract. Credentials and executable paths never cross this boundary. */
+/** Public native assistant contract. Subscription credentials and executable paths stay native. */
 export type SubscriptionProvider = 'openai' | 'anthropic';
 export type AssistantAuthMode = 'api-key' | 'subscription';
+import type { AssistantProviderId } from '../features/assistant/providers/types';
+import type { ThinkingEffort } from '../features/assistant/providers/thinking';
 
 export function subscriptionErrorMessage(cause: unknown): string {
   const message = cause instanceof Error ? cause.message : 'The account connection failed.';
@@ -24,6 +26,7 @@ export interface SubscriptionState {
 export interface SubscriptionChatRequest {
   provider: SubscriptionProvider;
   model: string;
+  thinkingEffort?: ThinkingEffort;
   systemPrompt: string;
   messages: {
     role: 'user' | 'assistant';
@@ -34,6 +37,9 @@ export interface SubscriptionChatRequest {
 }
 
 export interface AssistantSubscriptionBridge {
+  /** API transports need the key in renderer memory; disk persistence belongs to the native store. */
+  getApiKey?(provider: AssistantProviderId): Promise<string | undefined>;
+  setApiKey?(provider: AssistantProviderId, key: string): Promise<void>;
   getState(provider: SubscriptionProvider): Promise<SubscriptionState>;
   signIn(provider: SubscriptionProvider, accountId?: string): Promise<SubscriptionState>;
   cancelSignIn(provider: SubscriptionProvider): Promise<void>;

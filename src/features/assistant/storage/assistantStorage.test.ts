@@ -44,6 +44,12 @@ describe('assistantStorage', () => {
     localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', apiKey: 'saved-key', model: 'saved-model' }));
     expect(loadAssistantSettings()).toMatchObject({ authMode: 'api-key', apiKey: 'saved-key', model: 'saved-model' });
   });
+  it('persists thinking effort and removes unsupported values on reload', () => {
+    saveAssistantSettings({ ...getDefaultAssistantSettings(), provider: 'openai', model: 'gpt-6.1-sol', thinkingEffort: 'high' });
+    expect(loadAssistantSettings().thinkingEffort).toBe('high');
+    localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', model: 'gpt-4.1', thinkingEffort: 'high' }));
+    expect(loadAssistantSettings().thinkingEffort).toBeUndefined();
+  });
 
   it.each(['openai', 'anthropic', 'gemini', 'ollama'])('restores subscription mode only for supported providers (%s)', provider => {
     localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider, authMode: 'subscription' }));

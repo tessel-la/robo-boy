@@ -3,11 +3,16 @@ import { installRosMock } from './helpers/rosMock';
 
 test('switches both providers between API and native sign-in, then sends a subscription turn', async ({ page }) => {
   await page.addInitScript(() => {
+    const keys: Record<string, string> = {};
+    localStorage.setItem(
+      'robo-boy-assistant-settings',
+      JSON.stringify({ provider: 'openai', model: 'gpt-4.1', apiKey: 'legacy-test-key' })
+    );
     let connected = false;
     const snapshot = (provider: string) => ({
       activeAccountId: connected ? 'account' : undefined,
       accounts: connected ? [{ id: 'account', label: 'user@example.test', connected: true, planEnabled: true }] : [],
-      models: connected ? [{ id: provider === 'openai' ? 'plan-model' : 'sonnet', label: 'Subscription model' }] : [],
+      models: connected ? [{ id: provider === 'openai' ? 'gpt-6.1-sol' : 'sonnet', label: 'Subscription model' }] : [],
     });
     (window as any).roboBoyDesktop = {
       shell: 'electron',
@@ -25,6 +30,10 @@ test('switches both providers between API and native sign-in, then sends a subsc
         body: new TextEncoder().encode('{"schemaVersion":1,"panels":[]}').buffer,
       }),
       assistant: {
+        getApiKey: async (provider: string) => keys[provider],
+        setApiKey: async (provider: string, key: string) => {
+          keys[provider] = key;
+        },
         getState: async (provider: string) => snapshot(provider),
         signIn: async (provider: string) => {
           connected = true;
@@ -39,6 +48,7 @@ test('switches both providers between API and native sign-in, then sends a subsc
         manageUsage: async () => {},
         cancel: async () => {},
         send: async (_id: string, request: any) => {
+          if (request.thinkingEffort !== 'high') throw new Error('Thinking effort was not forwarded.');
           if ('apiKey' in request || 'baseUrl' in request)
             throw new Error('Credentials crossed the subscription bridge.');
           return '{"kind":"explanation","message":"Subscription connection works."}';
@@ -60,7 +70,12 @@ test('switches both providers between API and native sign-in, then sends a subsc
   await expect(settings.getByRole('textbox', { name: 'API key', exact: true })).toHaveCount(0);
   await settings.getByRole('button', { name: 'Continue with ChatGPT' }).click();
   await expect(settings.getByText('Using ChatGPT subscription')).toBeVisible();
-  await expect(settings.getByLabel('ChatGPT subscription model')).toHaveValue('plan-model');
+  await expect(settings.getByLabel('ChatGPT subscription model')).toHaveValue('gpt-6.1-sol');
+  await settings.getByRole('combobox', { name: 'Thinking effort' }).selectOption('high');
+  await expect(settings.getByRole('combobox', { name: 'Thinking effort' })).toHaveValue('high');
+  expect(await page.evaluate(() => localStorage.getItem('robo-boy-assistant-settings'))).not.toContain(
+    'legacy-test-key'
+  );
   await page.screenshot({ path: 'test-results/assistant-chatgpt-settings.png' });
   await settings.getByRole('combobox', { name: 'Authentication', exact: true }).selectOption('api-key');
   await expect(settings.getByRole('textbox', { name: 'API key', exact: true })).toBeVisible();
@@ -71,6 +86,7 @@ test('switches both providers between API and native sign-in, then sends a subsc
   await settings.getByRole('button', { name: 'Sign out', exact: true }).click();
   await settings.getByRole('button', { name: 'Sign in through Claude Code' }).click();
   await expect(settings.getByText(/Using Claude Code subscription/)).toBeVisible();
+  await settings.getByRole('combobox', { name: 'Thinking effort' }).selectOption('high');
   await page.screenshot({ path: 'test-results/assistant-claude-settings.png' });
   await panel.getByRole('button', { name: 'Back to assistant' }).click();
   await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Check the connection.');

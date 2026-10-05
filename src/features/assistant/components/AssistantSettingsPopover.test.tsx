@@ -60,4 +60,28 @@ describe('provider authentication settings', () => {
     expect(screen.getByText(/Subscription sign-in is available in the updated/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue with ChatGPT' })).toBeNull();
   });
+  it('keeps malformed post-login replies inside settings instead of crashing the application', async () => {
+    const assistant = {
+      getState: vi.fn(async () => ({ accounts: [], models: [] })),
+      signIn: vi.fn(async () => ({ accounts: [], models: null })),
+      cancelSignIn: vi.fn(async () => {}),
+    };
+    vi.stubGlobal('roboBoyDesktop', { assistant });
+    render(<Settings />);
+    fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'subscription' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue with ChatGPT' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with ChatGPT' }));
+    await screen.findByText(/invalid account state/);
+    expect(screen.getByRole('dialog', { name: 'Assistant settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with ChatGPT' })).toBeEnabled();
+  });
+  it('offers thinking effort for a supported model and resets it on model change', () => {
+    render(<Settings />);
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-6.1-sol' } });
+    const select = screen.getByRole('combobox', { name: 'Thinking effort' });
+    fireEvent.change(select, { target: { value: 'high' } });
+    expect(select).toHaveValue('high');
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-4.1' } });
+    expect(screen.queryByRole('combobox', { name: 'Thinking effort' })).toBeNull();
+  });
 });

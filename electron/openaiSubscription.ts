@@ -1,8 +1,7 @@
-import { safeStorage, shell } from 'electron';
+import { shell } from 'electron';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readEncryptedJson, writeEncryptedJson, requireSecureStorage } from './assistantStorage';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { SubscriptionChatRequest, SubscriptionState } from '../src/runtime/assistantSubscription';
 
@@ -95,17 +94,6 @@ async function checkedJson(response: Response): Promise<any> {
   return body;
 }
 
-export function requireSecureStorage(): void {
-  if (
-    !safeStorage.isEncryptionAvailable() ||
-    (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
-  ) {
-    throw new Error(
-      'ChatGPT sign-in needs an OS credential store. Unlock or enable your system keyring and restart Robo-Boy. API-key mode is still available.'
-    );
-  }
-}
-
 /** Bind before opening the browser. A bad state/host/path never consumes the pending attempt. */
 export async function oauthCallback(
   state: string,
@@ -124,6 +112,8 @@ export async function oauthCallback(
   });
   // The caller may still be waiting for the system browser when the attempt is cancelled.
   void result.catch(() => {});
+  let settled = false,
+    closed = false;
   const server = createServer((request, response) => {
     let url: URL;
     try {
@@ -142,15 +132,22 @@ export async function oauthCallback(
       response.writeHead(404).end();
       return;
     }
-    if (url.searchParams.get('state') !== state) {
+    if (settled || url.searchParams.get('state') !== state) {
       response.writeHead(400).end('Invalid sign-in attempt.');
       return;
     }
+    settled = true;
+    response.once('finish', () => {
+      resolve(url.searchParams);
+      close();
+    });
+    response.once('error', () => {
+      reject(new Error('ChatGPT callback could not finish. Please try again.'));
+      close();
+    });
     response
-      .writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
+      .writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store', Connection: 'close' })
       .end('You can return to Robo-Boy.');
-    resolve(url.searchParams);
-    close();
   });
   let port = 0;
   await new Promise<void>((yes, no) => {
@@ -170,11 +167,20 @@ export async function oauthCallback(
     close();
   }, 300_000);
   function close() {
+    if (closed) return;
+    closed = true;
     clearTimeout(timeout);
     signal.removeEventListener('abort', cancel);
     server.close();
-    server.closeAllConnections();
+    server.closeIdleConnections();
   }
+  server.on('error', () => {
+    reject(new Error('ChatGPT callback listener failed. Please try again.'));
+    close();
+  });
+  server.setTimeout(10_000, socket => socket.destroy());
+  server.requestTimeout = 10_000;
+  server.headersTimeout = 10_000;
   signal.addEventListener('abort', cancel, { once: true });
   if (signal.aborted) cancel();
   return { redirectUri: `http://127.0.0.1:${port}/auth/callback`, result, close };
@@ -240,36 +246,26 @@ export class OpenAiSubscription {
 
   private async load(): Promise<SavedState> {
     if (this.saved) return this.saved;
-    try {
-      const encrypted = await readFile(join(this.directory, 'accounts.bin'));
-      requireSecureStorage();
-      const state = JSON.parse(safeStorage.decryptString(encrypted));
-      if (!isSavedState(state)) throw new Error();
+    const state = await readEncryptedJson(this.directory, 'accounts.bin');
+    if (state !== undefined) {
+      if (!isSavedState(state)) throw new Error('Invalid saved ChatGPT accounts.');
       return (this.saved = state);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-        throw new Error('Cannot unlock the saved ChatGPT accounts. Unlock your system keyring and restart Robo-Boy.');
-      return (this.saved = { version: 1, hostId: `urn:uuid:${randomUUID()}`, accounts: [] });
     }
+    return (this.saved = { version: 1, hostId: `urn:uuid:${randomUUID()}`, accounts: [] });
   }
 
   private async save(next: SavedState): Promise<void> {
-    requireSecureStorage();
-    await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const temporary = join(this.directory, `accounts-${randomUUID()}.tmp`);
-    try {
-      await writeFile(temporary, safeStorage.encryptString(JSON.stringify(next)), { mode: 0o600, flag: 'wx' });
-      await rename(temporary, join(this.directory, 'accounts.bin'));
-      this.saved = next;
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeEncryptedJson(this.directory, 'accounts.bin', next);
+    this.saved = next;
   }
 
   private async verify(idToken: string, clientId: string, nonce?: string) {
     if (!this.jwks) {
       const metadata = await checkedJson(
-        await fetch(`${AUTH}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(15_000) })
+        await fetch(`${AUTH}/.well-known/openid-configuration`, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(15_000),
+        })
       );
       const url = new URL(metadata.jwks_uri);
       if (metadata.issuer !== AUTH || url.origin !== AUTH)
@@ -456,6 +452,7 @@ export class OpenAiSubscription {
       const access = await this.access();
       const body = await checkedJson(
         await fetch(`${RESOURCE}/models`, {
+          redirect: 'error',
           headers: { Authorization: `Bearer ${access}` },
           signal: AbortSignal.timeout(20_000),
         })
@@ -472,6 +469,10 @@ export class OpenAiSubscription {
     }
     // Refresh may have invalidated a session. Never report its earlier snapshot as connected.
     const current = await this.exclusive(() => this.load());
+    if (current.activeAccountId !== saved.activeAccountId) {
+      state.models = [];
+      state.error = 'ChatGPT account changed while loading models. Refresh the account.';
+    }
     state.activeAccountId = current.activeAccountId;
     state.accounts = current.accounts.map(account => ({
       id: account.id,
@@ -490,7 +491,10 @@ export class OpenAiSubscription {
       let failed = false;
       try {
         const metadata = await checkedJson(
-          await fetch(`${AUTH}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(15_000) })
+          await fetch(`${AUTH}/.well-known/openid-configuration`, {
+            redirect: 'error',
+            signal: AbortSignal.timeout(15_000),
+          })
         );
         const endpoint = new URL(metadata.revocation_endpoint);
         if (endpoint.origin !== AUTH) throw new Error();
@@ -522,12 +526,14 @@ export class OpenAiSubscription {
     signal.throwIfAborted();
     const response = await fetch(`${RESOURCE}/responses`, {
       method: 'POST',
+      redirect: 'error',
       signal,
       headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: request.model,
         store: false,
         stream: true,
+        ...(request.thinkingEffort ? { reasoning: { effort: request.thinkingEffort } } : {}),
         instructions:
           request.systemPrompt +
           (request.jsonMode ? '\nReturn only one valid JSON object. No markdown or prose outside JSON.' : ''),

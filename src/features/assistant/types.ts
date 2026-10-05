@@ -14,6 +14,7 @@ export interface AssistantSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  thinkingEffort?: import('./providers/thinking').ThinkingEffort;
   systemContext: string;
   robotContext: string;
   ollamaUseBackendHost: boolean;

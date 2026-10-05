@@ -26,7 +26,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === '--version') console.log('2.1.278 (Claude Code)');
-else if (args[0] === '--help') console.log('--restricted --safe-mode --tools --strict-mcp-config --setting-sources --no-session-persistence');
+else if (args[0] === '--help') console.log('--restricted --safe-mode --tools --strict-mcp-config --setting-sources --no-session-persistence --effort');
 else if (args[0] === 'auth') console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'test@example.test' }));
 else if (args[args.indexOf('--model') + 1] === 'hang') {
   fs.writeFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'started'), 'yes');
@@ -70,6 +70,7 @@ else if (args[args.indexOf('--model') + 1] === 'hang') {
         {
           provider: 'anthropic',
           model: 'sonnet',
+          thinkingEffort: 'high',
           systemPrompt: 'Robot operations require review.',
           messages,
           jsonMode: true,
@@ -81,6 +82,7 @@ else if (args[args.indexOf('--model') + 1] === 'hang') {
     expect(details.apiKey).toBeUndefined();
     expect(details.token).toBeUndefined();
     expect(details.args).toContain('--restricted');
+    expect(details.args[details.args.indexOf('--effort') + 1]).toBe('high');
     expect(details.instructions).toContain('Robot operations require review.');
     expect(details.input.message.content[0].text).toBe(
       JSON.stringify(messages.map(({ role, content }) => ({ role, content })))
@@ -103,5 +105,15 @@ else if (args[args.indexOf('--model') + 1] === 'hang') {
     controller.abort();
     await rejected;
     expect((await readdir(config)).filter(name => name.startsWith('chat-'))).toEqual([]);
+  });
+  it('removes stale prompt directories on startup while preserving CLI configuration', async () => {
+    await mkdir(join(config, 'chat-Ab12Cd'), { recursive: true });
+    await writeFile(join(config, 'chat-Ab12Cd', 'instructions.txt'), 'private old prompt');
+    await writeFile(join(config, 'settings.json'), '{}');
+    await mkdir(join(config, 'chat-user-config'));
+    await runtime.getState();
+    expect(await readdir(config)).not.toContain('chat-Ab12Cd');
+    expect(await readFile(join(config, 'settings.json'), 'utf8')).toBe('{}');
+    expect(await readdir(config)).toContain('chat-user-config');
   });
 });

@@ -2,14 +2,24 @@ import React, { useEffect, useRef, useState } from 'react';
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
 import type { SubscriptionProvider, SubscriptionState } from '../../../runtime/assistantSubscription';
 import { subscriptionErrorMessage } from '../../../runtime/assistantSubscription';
+import type { ThinkingEffort } from '../providers/thinking';
+import AssistantThinkingSettings from './AssistantThinkingSettings';
 
 interface Props {
   provider: SubscriptionProvider;
   model: string;
   onModelChange: (model: string) => void;
+  thinkingEffort?: ThinkingEffort;
+  onThinkingChange: (effort: ThinkingEffort | undefined) => void;
 }
 
-const AssistantSubscriptionSettings: React.FC<Props> = ({ provider, model, onModelChange }) => {
+const AssistantSubscriptionSettings: React.FC<Props> = ({
+  provider,
+  model,
+  onModelChange,
+  thinkingEffort,
+  onThinkingChange,
+}) => {
   const bridge = getDesktopBridge()?.assistant;
   const [state, setState] = useState<SubscriptionState>({ accounts: [], models: [] });
   const [busy, setBusy] = useState('');
@@ -18,6 +28,25 @@ const AssistantSubscriptionSettings: React.FC<Props> = ({ provider, model, onMod
   const modelRef = useRef(model);
   modelRef.current = model;
   const apply = (next: SubscriptionState) => {
+    // Check before scheduling a render. An invalid bridge reply must become a local error,
+    // never replace the entire application's tree with the global error boundary.
+    if (
+      !next ||
+      !Array.isArray(next.accounts) ||
+      !Array.isArray(next.models) ||
+      next.accounts.some(
+        account =>
+          !account ||
+          typeof account.id !== 'string' ||
+          typeof account.label !== 'string' ||
+          typeof account.connected !== 'boolean' ||
+          typeof account.planEnabled !== 'boolean'
+      ) ||
+      next.models.some(item => !item || typeof item.id !== 'string' || typeof item.label !== 'string') ||
+      (next.error !== undefined && typeof next.error !== 'string')
+    ) {
+      throw new Error('The desktop runtime returned an invalid account state. Refresh or restart Robo-Boy.');
+    }
     setState(next);
     if (next.models.length && !next.models.some(item => item.id === modelRef.current)) onModelChange(next.models[0].id);
   };
@@ -169,6 +198,14 @@ const AssistantSubscriptionSettings: React.FC<Props> = ({ provider, model, onMod
           ))}
         </select>
       </label>
+      <AssistantThinkingSettings
+        provider={provider}
+        model={model}
+        subscription
+        value={thinkingEffort}
+        disabled={!!busy || !active?.planEnabled}
+        onChange={onThinkingChange}
+      />
       {(error || state.error) && (
         <p className="assistant-model-error" role="alert">
           {error || state.error}

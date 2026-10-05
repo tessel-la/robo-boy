@@ -25,7 +25,8 @@ import { composeAssistantSystemPrompt, type AssistantTurnNeeds } from '../prompt
 import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
 import { transcribeAssistantAudio } from '../providers/transcription';
-import { getProviderDefaults, loadAssistantConversation, loadAssistantSettings, saveAssistantConversation, saveAssistantSettings } from '../storage/assistantStorage';
+import { getProviderDefaults, loadAssistantConversation, saveAssistantConversation } from '../storage/assistantStorage';
+import { useAssistantSettings } from '../storage/useAssistantSettings';
 import { fetchBehaviorTreeSchemas } from '../tools/behaviorTreeTool';
 import { validatePadAgainstRos } from '../tools/padValidator';
 import { validateRosActionProposal } from '../tools/rosActionValidator';
@@ -252,7 +253,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const compact = useCompactAssistant();
-    const [settings, setSettings] = useState<AssistantSettings>(loadAssistantSettings);
+    const { settings, updateSettings: persistSettings, storageError, loadingCredentials } = useAssistantSettings();
     const [messages, setMessages] = useState<AssistantMessage[]>(() => loadAssistantConversation().map(stored => ({
       id: uuidv4(), role: stored.role, content: stored.content, attachments: [], contextChipIds: [], checkpoint: null, createdAt: stored.createdAt,
     })));
@@ -330,6 +331,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       authMode: settings.authMode,
       apiKey: settings.apiKey,
       model: settings.model,
+      thinkingEffort: settings.thinkingEffort,
       baseUrl: settings.provider === 'ollama' && settings.ollamaUseBackendHost ? runtime.ollamaBaseUrl : settings.baseUrl,
     }), [runtime.ollamaBaseUrl, settings]);
 
@@ -417,12 +419,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         try {
           const models = await fetchOllamaModels(resolvedSettings.baseUrl, settings.apiKey, controller.signal);
           setOllamaModels(models);
-          setSettings(previous => {
-            if (!models.length || models.includes(previous.model)) return previous;
-            const next = { ...previous, model: models[0] };
-            saveAssistantSettings(next);
-            return next;
-          });
+          if (!controller.signal.aborted && models.length && !models.includes(settings.model)) persistSettings({ model: models[0] });
         } catch (cause) {
           if (!controller.signal.aborted) setOllamaModelsError(cause instanceof Error ? cause.message : 'Could not load Ollama models.');
         } finally {
@@ -435,11 +432,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const updateSettings = (patch: Partial<AssistantSettings>) => {
       abortRef.current?.abort();
       setError('');
-      setSettings(previous => {
-        const next = { ...previous, ...patch };
-        saveAssistantSettings(next);
-        return next;
-      });
+      persistSettings(patch);
     };
 
     const refreshRosContext = async (forceRefresh = false, expectedGeneration = connectionGeneration) => {
@@ -709,6 +702,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const userText = rawPrompt.trim();
       const turnAttachmentsRequested = attachmentsOverride ?? attachments;
       if ((!userText && turnAttachmentsRequested.length === 0) || isGenerating) return;
+      if (settings.authMode !== 'subscription' && loadingCredentials) { setError('Wait for the saved API key to load before sending.'); return; }
       if (!resolvedSettings.model.trim()) { setError('Choose a model in Assistant settings before sending.'); return; }
       if (settings.authMode !== 'subscription' && !resolvedSettings.baseUrl.trim()) { setError('Set a base URL in Assistant settings before sending.'); return; }
       if (settings.authMode !== 'subscription' && settings.provider !== 'openai-compatible' && settings.provider !== 'ollama' && !settings.apiKey.trim()) { setError(`Add an API key for ${settings.provider} in Assistant settings before sending.`); return; }
@@ -972,7 +966,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         messages={messages}
         isGenerating={isGenerating}
         progressMessages={progress}
-        error={error}
+        error={error || storageError}
         clarificationSuggestions={clarificationSuggestions}
         onSelectSuggestion={setPrompt}
         prompt={prompt}
@@ -993,7 +987,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onSketchAttach={handleSketchAttach}
         settings={settings}
         resolvedBaseUrl={resolvedSettings.baseUrl}
-        onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, authMode: 'api-key', apiKey: '', ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}
+        onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, authMode: 'api-key', apiKey: '', thinkingEffort: undefined, ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}
         onUpdateSettings={updateSettings}
         ollamaModels={ollamaModels}
         ollamaModelsError={ollamaModelsError}

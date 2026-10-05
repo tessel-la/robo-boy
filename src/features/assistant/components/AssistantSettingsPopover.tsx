@@ -5,6 +5,8 @@ import { transcribeAssistantAudio } from '../providers/transcription';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSubscriptionSettings from './AssistantSubscriptionSettings';
 import { getProviderDefaults } from '../storage/assistantStorage';
+import AssistantThinkingSettings from './AssistantThinkingSettings';
+import { getDesktopBridge } from '../../../runtime/desktopBridge';
 
 interface AssistantSettingsPopoverProps {
   settings: AssistantSettings;
@@ -61,6 +63,7 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
                 onChange={event =>
                   onUpdate({
                     authMode: event.target.value as 'api-key' | 'subscription',
+                    thinkingEffort: undefined,
                     model: event.target.value === 'subscription' ? '' : getProviderDefaults(settings.provider).model,
                   })
                 }
@@ -75,7 +78,9 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
             <AssistantSubscriptionSettings
               provider={settings.provider}
               model={settings.model}
-              onModelChange={model => onUpdate({ model })}
+              thinkingEffort={settings.thinkingEffort}
+              onThinkingChange={thinkingEffort => onUpdate({ thinkingEffort })}
+              onModelChange={model => onUpdate({ model, thinkingEffort: undefined })}
             />
           ) : (
             <>
@@ -144,7 +149,10 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
               ) : (
                 <label>
                   Model
-                  <input value={settings.model} onChange={event => onUpdate({ model: event.target.value })} />
+                  <input
+                    value={settings.model}
+                    onChange={event => onUpdate({ model: event.target.value, thinkingEffort: undefined })}
+                  />
                 </label>
               )}
               <label>
@@ -161,6 +169,12 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
                   }
                 />
               </label>
+              <AssistantThinkingSettings
+                provider={settings.provider}
+                model={settings.model}
+                value={settings.thinkingEffort}
+                onChange={thinkingEffort => onUpdate({ thinkingEffort })}
+              />
             </>
           )}
         </div>
@@ -211,7 +225,9 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
       <p className="assistant-key-note">
         {settings.authMode === 'subscription'
           ? 'Subscription credentials stay in the desktop runtime. ChatGPT credentials use the OS credential store; Claude Code manages its own sign-in. Conversation history stays in this browser.'
-          : 'Settings and conversation history stay in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
+          : getDesktopBridge()?.assistant?.setApiKey
+            ? 'API keys are encrypted with the OS credential store and loaded into app memory for API requests. Settings and conversation history stay on this device.'
+            : 'API keys and conversation history are stored in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
       </p>
     </div>
   </div>

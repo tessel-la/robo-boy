@@ -49,6 +49,8 @@ const desktopBridge = {
   nativeWindowControls,
 
   assistant: {
+    getApiKey: provider => ipcRenderer.invoke('roboboy:assistant-api-key', provider),
+    setApiKey: (provider, key) => ipcRenderer.invoke('roboboy:assistant-save-api-key', provider, key),
     getState: provider => ipcRenderer.invoke('roboboy:assistant-state', provider),
     signIn: (provider, accountId) => ipcRenderer.invoke('roboboy:assistant-sign-in', provider, accountId),
     cancelSignIn: provider => ipcRenderer.invoke('roboboy:assistant-cancel-sign-in', provider),

@@ -10,6 +10,7 @@ export interface AssistantProviderSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  thinkingEffort?: import('./thinking').ThinkingEffort;
 }
 
 export interface AssistantChatImage {

@@ -1,6 +1,7 @@
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
 import { subscriptionErrorMessage } from '../../../runtime/assistantSubscription';
 import type { SendChat } from './types';
+import { selectedThinkingEffort } from './thinking';
 
 export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, messages, signal, jsonMode }) => {
   const bridge = getDesktopBridge()?.assistant;
@@ -23,7 +24,8 @@ export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, m
   signal?.addEventListener('abort', cancel, { once: true });
   try {
     const result = await Promise.race([
-      bridge.send(id, { provider: settings.provider, model: settings.model, systemPrompt, messages, jsonMode }),
+      bridge.send(id, { provider: settings.provider, model: settings.model, systemPrompt, messages, jsonMode,
+        thinkingEffort: selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort, true) }),
       aborted,
     ]);
     if (signal?.aborted) throw new DOMException('Request cancelled.', 'AbortError');

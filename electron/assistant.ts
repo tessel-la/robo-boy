@@ -2,6 +2,8 @@ import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
 import { OpenAiSubscription } from './openaiSubscription';
 import { ClaudeSubscription } from './claudeSubscription';
+import { AssistantApiKeys } from './assistantStorage';
+import { thinkingEfforts } from '../src/features/assistant/providers/thinking';
 import type { SubscriptionChatRequest, SubscriptionProvider } from '../src/runtime/assistantSubscription';
 
 export function subscriptionProvider(value: unknown): SubscriptionProvider {
@@ -30,6 +32,11 @@ export function validateSubscriptionRequest(value: unknown): SubscriptionChatReq
     input.messages.length > 1000
   )
     throw new Error('Invalid assistant request.');
+  if (
+    input.thinkingEffort !== undefined &&
+    !thinkingEfforts(provider, input.model, true).includes(input.thinkingEffort)
+  )
+    throw new Error('Unsupported thinking effort for this model. Choose Model default in Assistant settings.');
   let size = input.systemPrompt.length;
   const messages = input.messages.map(turn => {
     if (
@@ -65,6 +72,7 @@ export function validateSubscriptionRequest(value: unknown): SubscriptionChatReq
     systemPrompt: input.systemPrompt,
     messages,
     jsonMode: input.jsonMode,
+    ...(input.thinkingEffort ? { thinkingEffort: input.thinkingEffort } : {}),
   };
   if (JSON.stringify(request).length > 32 * 1024 * 1024)
     throw new Error('Assistant context is too large. Shorten the conversation or attachments.');
@@ -83,6 +91,7 @@ export function assertAssistantCaller(event: IpcMainInvokeEvent, rendererOrigin:
 export function registerAssistantSubscriptions(rendererOrigin: string): void {
   const openai = new OpenAiSubscription(join(app.getPath('userData'), 'assistant', 'chatgpt'));
   const claude = new ClaudeSubscription(join(app.getPath('userData'), 'assistant', 'claude-code'));
+  const apiKeys = new AssistantApiKeys(join(app.getPath('userData'), 'assistant', 'api-keys'));
   const requests = new Map<string, { owner: number; provider: SubscriptionProvider; controller: AbortController }>();
   const changes = new Map<SubscriptionProvider, { owner: number; controller: AbortController }>();
   const owners = new Set<number>();
@@ -131,6 +140,14 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     }
   };
 
+  ipcMain.handle('roboboy:assistant-api-key', (event, provider: unknown) => {
+    protect(event);
+    return apiKeys.get(provider);
+  });
+  ipcMain.handle('roboboy:assistant-save-api-key', (event, provider: unknown, key: unknown) => {
+    protect(event);
+    return apiKeys.set(provider, key);
+  });
   ipcMain.handle('roboboy:assistant-state', (event, value: unknown) => {
     protect(event);
     return state(subscriptionProvider(value));

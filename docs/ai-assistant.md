@@ -18,6 +18,16 @@ For OpenAI and Anthropic Claude, **Authentication** selects **API key** or **Sig
 API-key mode keeps the existing model, base URL and key fields. Switching authentication modes does
 not discard the saved API key, and subscription requests never fall back to API billing.
 
+Recognized OpenAI reasoning models and current Claude Sonnet/Opus models show **Thinking effort**.
+Choose Model default to send no override, or select an offered level to control reasoning depth.
+Changing models or authentication resets the override. OpenAI subscription requests use
+`reasoning.effort`, its API transport uses `reasoning_effort`, Claude API requests use adaptive
+thinking and `output_config.effort`, and Claude Code receives `--effort`. Higher effort can take
+longer and consume more tokens or plan allowance; organization caps still apply. Unknown model
+IDs and unsupported models retain their default behavior instead of receiving speculative fields.
+See [OpenAI reasoning controls](https://developers.openai.com/api/docs/guides/reasoning) and
+[Claude effort controls](https://code.claude.com/docs/en/model-config#adjust-effort-level).
+
 Subscription sign-in currently requires the **Electron desktop app**. Browser and Tauri/mobile builds
 show the desktop requirement and continue to support API-key authentication; they do not run a hidden
 credential proxy. Older desktop shells also need an update before the sign-in controls are available.
@@ -149,7 +159,20 @@ The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS
 
 ## Privacy And Credentials
 
-Provider settings, including the API key, are stored in plaintext `localStorage` — unchanged from the previous BT-agent assistant, which already disclosed this in its own UI. This is **not** hardened further in this change; a real secret store (OS keychain via a new Tauri command, or a backend proxy) is a materially separate, security-review-worthy change and is left as documented future work. The API key is never included in any prompt, log, or exported conversation.
+In the updated Electron shell, API keys are encrypted with OS-backed `safeStorage` in
+`assistant/api-keys/api-keys.bin`. The native bridge allows only the trusted main app frame to
+read or update a key. API transports load it into renderer memory when needed. Existing browser
+keys migrate automatically: the live settings entry is cleared only after encrypted persistence
+succeeds, and a failed migration retains the original entry and displays an error. Clearing a key
+removes the native secret, retaining an empty marker to prevent stale browser keys from returning.
+Previously stored copies in browser databases or backups are
+not securely erased by migration. Encryption protects disk storage, not a compromised logged-in
+OS account or running app.
+
+Browser, Tauri/mobile and older Electron shells retain their existing plaintext `localStorage`
+API-key behavior; use a server-side proxy for shared deployments. No provider key or subscription
+token is included in assistant prompts, logs or conversation exports. Nonsecret provider/model/
+thinking preferences and conversation history remain in browser storage.
 
 Conversation history (role, content, timestamp only — never attachments or settings) persists to `localStorage`, capped at 100 messages, so it survives a reload. This is a new capability the BT-owned assistant did not have.
 

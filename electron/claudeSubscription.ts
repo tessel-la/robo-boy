@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
 import type { SubscriptionChatRequest, SubscriptionState } from '../src/runtime/assistantSubscription';
@@ -95,6 +95,7 @@ export function claudeResult(output: string): string {
 export class ClaudeSubscription {
   private executable?: string;
   private discovery?: Promise<string>;
+  private prepared?: Promise<void>;
   constructor(private directory: string) {}
 
   private async binary(): Promise<string> {
@@ -138,6 +139,7 @@ export class ClaudeSubscription {
           '--strict-mcp-config',
           '--setting-sources',
           '--no-session-persistence',
+          '--effort',
         ]) {
           if (!help.includes(flag)) throw new Error(INSTALL_MESSAGE);
         }
@@ -156,7 +158,20 @@ export class ClaudeSubscription {
     executable?: string
   ): Promise<string> {
     signal.throwIfAborted();
-    await mkdir(this.directory, { recursive: true, mode: 0o700 });
+    if (!this.prepared)
+      this.prepared = (async () => {
+        await mkdir(this.directory, { recursive: true, mode: 0o700 });
+        if (process.platform !== 'win32') await chmod(this.directory, 0o700);
+        // A previous main-process crash can leave private prompt files behind. Clean only our
+        // temporary directories before starting any requests in this single-instance runtime.
+        const entries = await readdir(this.directory, { withFileTypes: true });
+        await Promise.all(
+          entries
+            .filter(entry => entry.isDirectory() && /^chat-[A-Za-z0-9]{6}$/.test(entry.name))
+            .map(entry => rm(join(this.directory, entry.name), { recursive: true, force: true }))
+        );
+      })();
+    await this.prepared;
     // Discovery probes a candidate explicitly; requests use only a validated binary.
     const binary = executable ?? (await this.binary());
     signal.throwIfAborted();
@@ -270,7 +285,14 @@ export class ClaudeSubscription {
       }
       const input = JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n';
       const output = await this.run(
-        [...CLAUDE_CHAT_FLAGS, '--model', request.model, '--system-prompt-file', join(cwd, 'instructions.txt')],
+        [
+          ...CLAUDE_CHAT_FLAGS,
+          '--model',
+          request.model,
+          ...(request.thinkingEffort ? ['--effort', request.thinkingEffort] : []),
+          '--system-prompt-file',
+          join(cwd, 'instructions.txt'),
+        ],
         signal,
         input,
         cwd

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
@@ -58,7 +58,9 @@ describe('loopback callback', () => {
       expect((await fetch(callback.redirectUri.replace('/auth/callback', '/other') + '?state=expected')).status).toBe(
         404
       );
-      await fetch(callback.redirectUri + '?state=expected&code=code&client_id=issued');
+      const confirmation = await fetch(callback.redirectUri + '?state=expected&code=code&client_id=issued');
+      expect(await confirmation.text()).toBe('You can return to Robo-Boy.');
+      expect(confirmation.headers.get('cache-control')).toBe('no-store');
       expect((await callback.result).get('code')).toBe('code');
     } finally {
       callback.close();
@@ -170,6 +172,11 @@ describe('ChatGPT account lifecycle', () => {
     expect(refreshes).toBe(1);
     expect(JSON.stringify(state)).not.toContain('secret-');
     expect((await readFile(join(directory, 'accounts.bin'))).toString()).not.toContain('secret-access');
+    if (process.platform !== 'win32') {
+      expect((await stat(directory)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(directory, 'accounts.bin'))).mode & 0o777).toBe(0o600);
+    }
+    expect((await new OpenAiSubscription(directory).getState()).accounts[0].connected).toBe(true);
     const result = await runtime.send(
       {
         provider: 'openai',
@@ -199,6 +206,25 @@ describe('ChatGPT account lifecycle', () => {
     identityAudience = 'other-client';
     await expect(runtime.signIn(undefined, new AbortController().signal)).rejects.toThrow(/aud/);
     expect((await runtime.getState()).accounts[0].connected).toBe(false);
+  });
+  it('passes selected thinking effort through Responses and leaves default requests unconfigured', async () => {
+    await runtime.signIn(undefined, new AbortController().signal);
+    await runtime.send(
+      {
+        provider: 'openai',
+        model: 'gpt-6.1-sol',
+        thinkingEffort: 'high',
+        systemPrompt: '',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      new AbortController().signal
+    );
+    expect(lastRequest.reasoning).toEqual({ effort: 'high' });
+    await runtime.send(
+      { provider: 'openai', model: 'gpt-6.1-sol', systemPrompt: '', messages: [{ role: 'user', content: 'hello' }] },
+      new AbortController().signal
+    );
+    expect(lastRequest).not.toHaveProperty('reasoning');
   });
   it('does not treat identity-only consent as plan access', async () => {
     grantedScope = 'openid email';

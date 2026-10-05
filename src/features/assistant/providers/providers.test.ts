@@ -96,6 +96,27 @@ describe('sendAssistantChat', () => {
     expect(body.contents.map((entry: any) => entry.role)).toEqual(['user', 'model']);
   });
 
+  it('sets OpenAI reasoning effort and omits the unsupported temperature parameter', async () => {
+    fetchMock.mockResolvedValue({ ok: true, body: sseBody([]) });
+    await sendAssistantChat({ settings: { ...settingsFor('openai'), model: 'gpt-6.1-sol', thinkingEffort: 'high' }, systemPrompt: '', messages: [{ role: 'user', content: 'hi' }] });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe('high');
+    expect(body).not.toHaveProperty('temperature');
+  });
+
+  it('enables adaptive Claude thinking with selected effort while discarding thinking summaries from replies', async () => {
+    fetchMock.mockResolvedValue({ ok: true, body: sseBody([
+      'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"internal"}}\n\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"answer"}}\n\n',
+    ]) });
+    const reply = await sendAssistantChat({ settings: { ...settingsFor('anthropic'), model: 'claude-sonnet-5', thinkingEffort: 'high' }, systemPrompt: '', messages: [{ role: 'user', content: 'hi' }] });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.output_config).toEqual({ effort: 'high' });
+    expect(body.thinking).toEqual({ type: 'adaptive' });
+    expect(body).not.toHaveProperty('temperature');
+    expect(reply).toBe('answer');
+  });
+
   it('sends Ollama chat requests as NDJSON with a native system message', async () => {
     fetchMock.mockResolvedValue({ ok: true, body: ndjsonBody(['{"message":{"content":"Hi"}}', '{"message":{"content":"!"}}']) });
 

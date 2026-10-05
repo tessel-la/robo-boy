@@ -59,6 +59,16 @@ describe('native assistant boundary', () => {
     ).toEqual(chat);
     expect(() => validateSubscriptionRequest({ ...chat, provider: 'ollama' })).toThrow();
     expect(() => validateSubscriptionRequest({ ...chat, model: '--bad' })).toThrow();
+    expect(() => validateSubscriptionRequest({ ...chat, model: 'gpt-6.1-sol', thinkingEffort: 'ultracode' })).toThrow(
+      /thinking/
+    );
+    expect(() => validateSubscriptionRequest({ ...chat, model: 'gpt-4.1', thinkingEffort: 'high' })).toThrow(
+      /thinking/
+    );
+    expect(validateSubscriptionRequest({ ...chat, model: 'gpt-6.1-sol', thinkingEffort: 'high' })).toHaveProperty(
+      'thinkingEffort',
+      'high'
+    );
     expect(() =>
       validateSubscriptionRequest({ ...chat, messages: [{ role: 'assistant', content: 'reply' }] })
     ).toThrow();
@@ -68,6 +78,15 @@ describe('native assistant boundary', () => {
         messages: [{ role: 'user', content: '', images: [{ mimeType: 'image/svg+xml', data: 'AA==' }] }],
       })
     ).toThrow();
+  });
+  it('blocks credential retrieval by untrusted or embedded frames', () => {
+    registerAssistantSubscriptions('app://robo-boy');
+    const child = event();
+    child.senderFrame = { url: 'app://robo-boy/index.html' };
+    expect(() => native.handlers.get('roboboy:assistant-api-key')!(child, 'openai')).toThrow(/app window/);
+    expect(() =>
+      native.handlers.get('roboboy:assistant-save-api-key')!(event(1, 'https://attacker.test'), 'openai', 'key')
+    ).toThrow(/Untrusted/);
   });
   it('cancels in-flight inference when its account changes and never returns a stale result', async () => {
     registerAssistantSubscriptions('app://robo-boy');
