@@ -87,6 +87,39 @@ If data is unavailable, automatic discovery starts when a message arrives (up to
 at most sixteen configured signals). Indexed paths follow the publisher's array order; joint-name
 labels do not dynamically rebind if that order changes. Specific named joints need a live sample.
 
+**Data Explorer and Record & Replay.** While either panel is open, its contents go in every turn
+like any other panel's settings, and the assistant can act on it with `configurePanel`.
+
+- **Data Explorer:** every topic, service, action and node with its counts, the measured rate,
+  bandwidth and message age of watched topics, QoS incompatibilities, diagnostics (problems
+  first), the newest `/rosout` entries with warning and error counts, events, and each health
+  rule with its state. The assistant can watch or stop watching topics (32 at most), add, change
+  or remove health rules, select a resource, and switch the view. A selected resource brings its
+  endpoints, QoS, schema and latest message.
+- **Logs:** the Explorer keeps the newest 200 `/rosout` entries since it opened. The assistant
+  sees the newest 25; when it needs more, it asks for the matching entries by level, node or text
+  and reads them on its next turn.
+- **Record & Replay:** the open recording's name, size, duration and start time, every topic with
+  type, message count, average rate and the start of its definition, the playback position, the
+  recordings stored on the ROS host, and the recorder's state and options. The assistant can open
+  a recording stored on the ROS host, play, pause, seek, change speed and looping, and set
+  recording options. When asked to record, it can start, pause, resume, split or stop a recording.
+  A file on this device can only be opened by the user.
+- **Message contents of a recording:** "sample" reads the latest message of up to six topics at
+  the playback position. "read" goes through up to six topics over any stretch of the recording
+  with a reader of its own, so playback is not disturbed. It can keep one message per interval,
+  keep only named fields, or keep only messages containing a word. It returns at most 300 messages
+  and about 60 KB, and still counts every match, so "how many errors" has a true answer. A read
+  stops after 20 seconds or half a million messages and says where it stopped.
+
+Data that a request reads (a selected message, a log query, a sample, a read) arrives on the
+assistant's next turn. The model therefore puts the question in `followUp`, and the app sends it
+as soon as the data is there: a panel's `apply` may finish asynchronously, and the assistant waits
+for it before continuing.
+
+The assistant can also see which Behavior Tree is running, its active node and its last status,
+and it can set a camera panel's stream quality.
+
 **Tagging.** Typing `@` names a resource in a sentence — it reads back as `@Camera` or `@/cmd_vel` — and for a ROS topic, service or action it also fetches that live data, which is too costly to carry for every one of them. `CONTEXT_CATALOG` is what the picker offers and what the prompt lists, so the two cannot disagree.
 
 A mention is coloured as it is written: a backdrop behind the textarea paints the marks, since a textarea cannot style its own content, and it stays coloured in the transcript. One treatment for every kind of resource, tinted from the text colour of whatever surface it sits on — colouring by source gave a workspace tag the theme's primary, the same colour as the user's own message bubble, so it disappeared into it while a Pad tag beside it stayed visible. Matching is case-insensitive, because nobody types "TF tree" the way the panel spells it.
@@ -114,8 +147,11 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 | Every saved Pad and Behavior Tree | ✅ (complete JSON, every turn) | | | |
 | ROS node and parameter names | ✅ (every turn) | | | |
 | Live topic sample | | ✅ (3 messages by default, 40 at most, 24 KiB each) | | |
-| Workspace: add/remove panels, camera topic or Pad of a panel, load/save layouts | | | ✅ applied at once through the same handlers as the menus; each outcome is listed in the reply | |
+| Workspace: add/remove panels, camera topic, stream quality or Pad of a panel, load/save layouts | | | ✅ applied at once through the same handlers as the menus; each outcome is listed in the reply | |
 | Open panel settings: 3D view (frames, visualizations), TF tree (filters), Time Series (signals, math, smoothing, window, Y axis, pause/clear) | ✅ (each bridged panel's current settings and signal status) | | ✅ applied at once through the panel's settings bridge; each outcome is listed in the reply | |
+| Data Explorer: resources and counts, watched-topic rates, QoS issues, diagnostics, `/rosout`, events, health rules | ✅ (while the panel is open; bounded) | ✅ (a resource's latest message and schema, up to 200 kept log entries) | ✅ watch/unwatch, health rules, selection and view, applied at once | |
+| Record & Replay: the open recording, its topics and definitions, playback, recordings on the ROS host, recorder state | ✅ (while the panel is open) | ✅ (messages at a position, or a whole stretch of up to six topics) | ✅ open a recording from the ROS host, playback, recording options; start/stop recording when asked | ❌ opening a file from this device (only the user can choose it) |
+| Behavior Tree run state (running, active node, status) | ✅ | | | ❌ starting, pausing or stopping a tree |
 | Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
 | Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | |
 | Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |
@@ -126,10 +162,11 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 
 ## Trust Model
 
-Two tiers, and the assistant never silently crosses from one to the next:
+Three tiers, and the assistant never silently crosses from one to the next:
 
 1. **Read-only inspection** — ROS graph discovery, schemas and bounded samples, TF lookups, `/rosout`, workspace/Pad/BT reads. No confirmation needed; every value shown carries its source and fetch time, and is marked stale if a reconnect happened since.
-2. **Proposals** — a Pad, a Behavior Tree, or a ROS operation. Nothing is written, saved, or sent until the user acts in the editor that owns it. Pad and BT proposals are validated (topic/service/action existence and message-type match) against the live ROS graph, and a Pad proposal is normalized, binding-checked and overlap-repaired before it opens in the Pad editor.
+2. **App functions applied at once** — workspace changes, panel settings, watching topics, health rules, playback, and the recorder on the ROS host. None of them commands the robot: watching and rules use the Robo-Boy inspection companion, and recording uses the Robo-Boy recorder, both on their own topics. Every outcome is listed in the reply, and the assistant is told to record only when the user asks.
+3. **Proposals** — a Pad, a Behavior Tree, or a ROS operation. Nothing is written, saved, or sent until the user acts in the editor that owns it. Pad and BT proposals are validated (topic/service/action existence and message-type match) against the live ROS graph, and a Pad proposal is normalized, binding-checked and overlap-repaired before it opens in the Pad editor.
 
 **Robot-affecting execution never happens from chat.** A proposed publish, service call, or action goal renders as a review-only card with its target, type, and payload; there is no button that runs it. To act on one, put it into a Pad or a Behavior Tree and run it there, where the existing review, validation, and cancellation behavior applies. The former `tools/rosActionGuard.ts` execution path is removed, not disabled.
 
@@ -227,8 +264,11 @@ The assistant has no dependency edge to or from `src/panels/` — it cannot be r
 ## Known Limitations
 
 - **The whole conversation is sent on every turn, and so is every Pad and Behavior Tree.** There is no summarization or sliding window, and the libraries are carried in full. A large library or a long conversation will grow the request past a small model's context window; the trade was made deliberately, against making the user fetch the right resource before asking about it.
-- **`/diagnostics` and ROS 2 lifecycle state are not read.** No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk the shared queue and `discoverAllROSResources` already guard against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
+- **Diagnostics are read only while a Data Explorer is open, and ROS 2 lifecycle state is not read.** The assistant can add an Explorer to read diagnostics. No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk the shared queue and `discoverAllROSResources` already guard against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
 - **ROS operation proposals are checked for existence and top-level message-type match, not full field-level payload schema.** A Behavior Tree or Pad proposal does get the full schema; a standalone publish/call/send card only gets the name/type check. Since nothing runs from chat, this bounds a review aid rather than an execution gate.
+- **A recording on this device cannot be opened by the assistant**, and reading one is bounded: at most six topics, 300 returned messages, about 60 KB and 20 seconds per read. Ask several narrower questions for a long recording.
+- **Logs are those the Data Explorer kept since it opened** (the newest 200), or a short live `/rosout` capture. Older robot logs are not available unless they were recorded.
+- **What the camera shows, and the live values a Pad displays, are not read.** The assistant sees a camera panel's topic and quality and a Pad's layout, not their pictures or numbers; ask about the topic itself instead.
 - **Only Pads are generated, not external panels.** An external panel is a versioned, sandboxed artifact under `src/panels/`, outside the assistant's dependency boundary.
 - **The composer's tag colouring is a backdrop, not styled text.** A textarea cannot carry inline styling, so the marks are painted by a mirrored layer behind it. It must keep the same font, padding and wrapping as the textarea to stay aligned; a `contenteditable` composer would style the text directly but cost IME, undo, and mobile-keyboard behavior that currently works.
 - **Re-typing a mention by hand reuses the resource read for it earlier in the conversation** rather than re-reading it. Selecting it again from the picker forces a fresh read, and `Context used` always shows the age of what was actually sent.

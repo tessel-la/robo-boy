@@ -14,6 +14,8 @@ describe('workspace tool', () => {
       { op: 'removePanel' },
       { op: 'teleport' },
       null,
+      { op: 'setCameraQuality', panelId: 'p2', quality: 'low' },
+      { op: 'setCameraQuality', panelId: 'p2' },
     ]);
 
     expect(operations).toEqual([
@@ -23,11 +25,13 @@ describe('workspace tool', () => {
       { op: 'setPanelPad', panelId: 'p3', padId: 'drive' },
       { op: 'applyLayout', layoutId: 'l1' },
       { op: 'saveLayout', title: 'Teleop' },
+      { op: 'setCameraQuality', panelId: 'p2', quality: 'low' },
     ]);
     expect(rejected).toEqual([
       'Operation 7: removePanel needs a panelId.',
       'Operation 8: unknown op "teleport".',
       'Operation 9: unknown op "undefined".',
+      'Operation 11: setCameraQuality needs a panelId and a quality.',
     ]);
   });
 

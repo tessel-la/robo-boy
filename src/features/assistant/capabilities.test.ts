@@ -3,6 +3,7 @@ import { ASSISTANT_CAPABILITIES } from './prompt';
 import { CONTEXT_CATALOG } from './capabilities';
 import { parseDistanceRequest, parseTransformRequest, TF_CAPABILITY } from './context/tfContext';
 import { parseAssistantResponse } from './responseParser';
+import { computeNeeds } from './turnNeeds';
 
 /**
  * The capability registry is what the assistant tells users it can do. Prose in a prompt drifts
@@ -37,6 +38,18 @@ describe('assistant capability registry', () => {
       sourceFrame: 'odom',
       targetFrame: 'base_link',
     });
+  });
+
+  it('routes every phrasing a workspace capability offers to the workspace tool', () => {
+    const workspaceCapabilities = ASSISTANT_CAPABILITIES.filter(capability => capability.responseKind === 'workspaceEdit');
+    expect(workspaceCapabilities.map(capability => capability.id)).toEqual(
+      expect.arrayContaining(['workspace-edit', 'data-explorer', 'record-replay'])
+    );
+    for (const capability of workspaceCapabilities) {
+      for (const phrase of capability.invocations ?? []) {
+        expect(computeNeeds(phrase, []).workspace, `"${phrase}" (${capability.id}) does not reach the workspace tool`).toBe(true);
+      }
+    }
   });
 
   it('names only response kinds the parser still accepts', () => {

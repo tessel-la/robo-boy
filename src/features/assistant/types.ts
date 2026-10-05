@@ -130,6 +130,17 @@ export interface WorkspaceSnapshot {
   savedLayouts: WorkspaceLayoutContext[];
   /** Panel types the shell can add right now (built-in plus installed external panels). */
   panelCatalog: Array<{ id: string; name: string }>;
+  /** The Behavior Tree running on the robot, or the last one that ran. Read-only: the chat never
+   * starts, pauses or stops a tree. */
+  behaviorTreeExecution?: {
+    running: boolean;
+    paused?: boolean;
+    treeName: string;
+    activeNode?: string;
+    status?: string;
+    runningForSec?: number;
+    persistent?: boolean;
+  };
   fetchedAt: number;
 }
 
@@ -186,12 +197,18 @@ export interface BehaviorTreeAssistantBridge {
  * model always sees the current values; `apply()` receives the model's patch and reports every
  * outcome in the user's terms, exactly like the workspace tool's other operations.
  */
+export interface PanelSettingsOutcome {
+  ok: boolean;
+  message: string;
+}
+
 export interface PanelSettingsBridge {
   panelType: string;
   /** One paragraph for the model: which keys `apply` understands and what they mean. */
   settingsHelp: string;
   describe(): Record<string, unknown>;
-  apply(settings: Record<string, unknown>): Array<{ ok: boolean; message: string }>;
+  /** May finish asynchronously, e.g. when it reads messages; the assistant waits for it. */
+  apply(settings: Record<string, unknown>): PanelSettingsOutcome[] | Promise<PanelSettingsOutcome[]>;
 }
 
 export interface PadValidationIssue {

@@ -12,6 +12,8 @@ import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGa
 import { CAMERA_MESSAGE_TYPES, JOY_MESSAGE_TYPES, POSE_STAMPED_MESSAGE_TYPES, TWIST_MESSAGE_TYPES } from '../../customGamepad/rosMessageUtils';
 import { createRosGraphCache } from '../context/rosGraphCache';
 import { timeSeriesContextTopics } from '../context/timeSeriesContext';
+import { cameraFrameTopics, captureCameraFrame, wantsCameraFrame, type CameraFrame } from '../context/cameraContext';
+import { padDisplayBindings, readPadValues, wantsPadValues } from '../context/padContext';
 import { CONTEXT_CATALOG, type ContextCatalogEntry } from '../capabilities';
 import {
   captureRosout,
@@ -23,6 +25,7 @@ import {
 } from '../context/rosContext';
 import { captureTfSnapshotOnDemand, lookupTransformOnDemand, parseDistanceRequest, parseTransformRequest, type TfLookupResult } from '../context/tfContext';
 import { composeAssistantSystemPrompt, type AssistantTurnNeeds } from '../prompt';
+import { computeNeeds } from '../turnNeeds';
 import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
 import { transcribeAssistantAudio } from '../providers/transcription';
@@ -56,6 +59,8 @@ export interface GlobalAssistantHandle {
 
 export interface GlobalAssistantProps {
   ros: Ros | null;
+  /** What camera, 3D and plot panels show: the open recording during replay, else the live robot. */
+  visualizationRos?: Ros | null;
   isConnected: boolean;
   connectionGeneration: number;
   workspace: WorkspaceSnapshot;
@@ -139,22 +144,6 @@ const createAttachment = async (file: File): Promise<AssistantAttachment> => {
   };
 };
 
-const computeNeeds = (text: string, chips: AssistantContextChip[]): AssistantTurnNeeds => {
-  const lower = text.toLowerCase();
-  return {
-    behaviorTree: chips.some(chip => chip.source === 'behaviorTree') || /\bbehavior[ -]?tree\b|\bbt\b/.test(lower),
-    pad: chips.some(chip => chip.source === 'pad') || /\bpad\b|\bgamepad\b|\bjoystick\b|\bcontroller\b/.test(lower),
-    rosAction: /\bpublish\b|\bcall\b|\bservice\b|\baction\b|\btopic\b|\bsend\b/.test(lower),
-    // Anything about what is on screen: the tool's fragment is short, so err on the side of
-    // offering it whenever a panel, layout or window is mentioned.
-    workspace:
-      chips.some(chip => chip.source === 'workspace') ||
-      /\blayout\b|\bpanel\b|\bworkspace\b|\bwindow\b|\bview\b|\bopen\b|\bclose\b|\badd\b|\bremove\b|\bshow\b|\bhide\b/.test(lower) ||
-      // Time Series requests rarely say "panel": "plot the speed squared", "smooth that signal".
-      /\bplot|\bgraph|\bchart|\bsignals?\b|\btime ?series\b|\bcurves?\b|\baxis\b|\bsmooth|\bfilter|\bderivative\b|\bintegra|\bsquared?\b|\bexpression\b|\bscale\b|\boffset\b|\bnormali[sz]e/.test(lower),
-  };
-};
-
 /** Models sometimes obey the one-object response contract but omit the workspace tool's
  * `followUp`. Recover an explicit second create/build clause so a multi-part request does not
  * silently stop after changing the layout. Keep this narrow: a plain "add a Pad panel" must not
@@ -176,6 +165,16 @@ const inferWorkspaceFollowUp = (text: string, needs: AssistantTurnNeeds, results
   const withMatch = text.match(/\bwith\s+((?:a|an|the)\s+)?((?:behavior[ -]?tree|bt|tree|pad|gamepad)\b[\s\S]*)/i);
   return withMatch ? `Build ${withMatch[0].slice(5).trim()}` : null;
 };
+
+/** Topics of a ROS source that has no discovery cache, such as an open recording. */
+const listRosTopics = (source: Ros) =>
+  new Promise<Array<{ name: string; type: string }>>(resolve => {
+    const timer = setTimeout(() => resolve([]), 3000);
+    source.getTopics(result => {
+      clearTimeout(timer);
+      resolve(result.topics.map((name, index) => ({ name, type: result.types[index] ?? '' })));
+    }, () => { clearTimeout(timer); resolve([]); });
+  });
 
 const readPadLibrary = () => {
   try {
@@ -255,7 +254,7 @@ const formatTfDistanceAnswer = (lookup: TfLookupResult): string => {
 };
 
 const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
-  ({ ros, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
+  ({ ros, visualizationRos, isConnected, connectionGeneration, workspace, onReviewPadProposal, onOpenResource, canOpenResource, onApplyWorkspaceEdit }, ref) => {
     const runtime = useRuntimeConfig();
     const [isOpen, setIsOpen] = useState(false);
     const compact = useCompactAssistant();
@@ -451,7 +450,13 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           results.push({ operation, ok: false, message: `No open ${target} can be configured from here.` });
           continue;
         }
-        const outcomes = bridge.apply(operation.settings);
+        let outcomes: Awaited<ReturnType<PanelSettingsBridge['apply']>>;
+        try {
+          outcomes = await bridge.apply(operation.settings);
+        } catch (cause) {
+          outcomes = [{ ok: false, message: cause instanceof Error ? cause.message : 'The panel could not apply those settings.' }];
+        }
+        signal.throwIfAborted();
         results.push({
           operation,
           ok: outcomes.length > 0 && outcomes.every(outcome => outcome.ok),
@@ -857,12 +862,45 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
             turnChips.push({ id: `ros:turn-topic:${topic.name}`, label: `Live topic: ${topic.name}`, source: 'ros', automatic: true, fetchedAt: Date.now(), generation: generationAtSend, value: { ...topic, schema, sample } });
           }
         }
+        // What a camera shows: its latest frame goes to the model as an image.
+        const cameraFrames: CameraFrame[] = [];
+        const imageRos = visualizationRos && visualizationRos !== ros ? visualizationRos : isConnected ? ros : null;
+        if (imageRos && wantsCameraFrame(userText)) {
+          const panelTopics = workspaceRef.current.openPanels
+            .filter(panel => panel.type === 'camera' && typeof panel.configuration?.cameraTopic === 'string')
+            .map(panel => panel.configuration!.cameraTopic as string);
+          const topics = imageRos === ros ? discovery?.topics ?? [] : await listRosTopics(imageRos);
+          for (const topic of cameraFrameTopics(userText, panelTopics, topics)) {
+            setProgress([`Capturing a frame from ${topic.name}…`]);
+            try {
+              cameraFrames.push(await captureCameraFrame(imageRos, topic, { signal: controller.signal }));
+            } catch (cause) {
+              if (controller.signal.aborted) throw cause;
+              turnChips.push({ id: `camera:${topic.name}`, label: `Camera ${topic.name}`, source: 'ros', automatic: true, fetchedAt: Date.now(), generation: generationAtSend, value: { topic: topic.name, unavailable: cause instanceof Error ? cause.message : String(cause) } });
+            }
+          }
+        }
+        // What an open Pad's gauges, readouts and states show right now.
+        if (ros && isConnected && wantsPadValues(userText)) {
+          const padIds = [...new Set([
+            ...workspaceRef.current.openPanels.filter(panel => panel.type === 'pad').map(panel => panel.configuration?.layoutId),
+            workspaceRef.current.selectedPadLayoutId,
+          ].filter((id): id is string => typeof id === 'string'))].slice(0, 2);
+          for (const padId of padIds) {
+            const pad = readPadLibrary().find(item => item.id === padId || item.layout.id === padId);
+            if (!pad || !padDisplayBindings(pad.layout).length) continue;
+            setProgress([`Reading what ${pad.name} shows…`]);
+            const values = await readPadValues(ros, pad.layout, controller.signal);
+            turnChips.push({ id: `pad-values:${pad.id}`, label: `Live values on Pad ${pad.name}`, source: 'pad', automatic: true, fetchedAt: Date.now(), generation: generationAtSend, value: values });
+          }
+        }
         if (controller.signal.aborted || currentGenerationRef.current !== generationAtSend) throw abortError();
 
         const autoContext = buildAutoContext(discovery, interfaceSchemas);
         const contextUsed: AssistantContextUsage[] = [
           ...describeAutoContext(autoContext),
           ...turnChips.map(chip => ({ label: `Selected: ${chip.label}`, source: chip.source, ageSeconds: Math.round((Date.now() - chip.fetchedAt) / 1000), stale: chip.stale })),
+          ...cameraFrames.map(frame => ({ label: `Camera frame: ${frame.topic} (${frame.width}×${frame.height})`, source: 'ros' as const, ageSeconds: 0 })),
         ];
         const systemPrompt = composeAssistantSystemPrompt({ settings, autoContext, pinnedChips: turnChips, needs });
         const chatMessages: AssistantChatTurn[] = nextHistory.map(message => ({
@@ -875,6 +913,11 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         const textAttachments = turnAttachments.filter(item => item.kind === 'text');
         if (imageAttachments.length) chatMessages[lastIndex] = { ...chatMessages[lastIndex], images: imageAttachments.map(item => ({ mimeType: item.mimeType, data: item.content })) };
         if (textAttachments.length) chatMessages[lastIndex] = { ...chatMessages[lastIndex], content: `${chatMessages[lastIndex].content}\n\nAttached files:\n${textAttachments.map(item => `### ${item.name}\n${item.content}`).join('\n\n')}` };
+        if (cameraFrames.length) chatMessages[lastIndex] = {
+          ...chatMessages[lastIndex],
+          content: `${chatMessages[lastIndex].content}\n\n[The app attached the latest camera frame${cameraFrames.length > 1 ? 's' : ''}: ${cameraFrames.map(frame => `${frame.topic} (${frame.width}×${frame.height})`).join(', ')}.]`,
+          images: [...(chatMessages[lastIndex].images ?? []), ...cameraFrames.map(frame => ({ mimeType: frame.mimeType, data: frame.data }))],
+        };
 
         setProgress(['Waiting for the model…']);
         const raw = await sendAssistantChat({

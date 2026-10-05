@@ -143,3 +143,22 @@ The container writes as root, so each finished bag is handed to the owner of the
 the host user). This matters for snap browsers (Ubuntu's Firefox and Chromium): they only open files your user
 owns, and report other files as "The operation was aborted". If the recording root itself is owned by root, create
 it as your user first (`mkdir recordings`).
+
+## The AI assistant
+
+While a Record & Replay panel is open, the assistant can work with recordings. Ask, for example,
+"what is in this rosbag", "show me /odom at 30 seconds", "list every error in /rosout", "play it
+at 2x", or "record /scan and /odom".
+
+- It sees the open recording: every topic with type, message count, average rate and
+  definition, the duration and the playback position. It also sees the recordings stored on the
+  ROS host and the recorder's state and options.
+- It can read message contents: the latest message of up to six topics at any position, or every
+  message of up to six topics over a stretch of the recording, filtered by a word, thinned to one
+  message per interval, or cut to named fields. Reading uses a separate reader, so playback is not
+  disturbed. A read returns at most 300 messages and stops after 20 seconds, saying where.
+- It can open a recording stored on the ROS host, play, pause, seek, change speed and looping,
+  set recording options, and start, pause, resume, split or stop a recording when you ask.
+
+It cannot open a file on this device: drop it on the panel or choose it yourself. See
+[AI Assistant](ai-assistant.md#context).

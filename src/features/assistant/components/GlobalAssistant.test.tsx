@@ -272,6 +272,51 @@ describe('GlobalAssistant', () => {
     expect(prompt).toContain('Keys: showTfFrames.');
   });
 
+  it('waits for a panel that reads data before the follow-up turn, which then sees what it read', async () => {
+    sendAssistantChatMock
+      .mockResolvedValueOnce(JSON.stringify({
+        kind: 'workspaceEdit',
+        summary: 'Reading the errors.',
+        operations: [
+          { op: 'configurePanel', panelType: 'recordReplay', settings: { read: { topics: ['/rosout'], match: 'error' } } },
+          { op: 'configurePanel', panelType: 'dataExplorer', settings: { watch: ['/scan'] } },
+        ],
+        followUp: 'Summarise the errors in the recording.',
+      }))
+      .mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'Two planner errors.' }));
+    const ref = createRef<GlobalAssistantHandle>();
+    render(<GlobalAssistant ref={ref} ros={null} isConnected={false} connectionGeneration={0} workspace={{ ...workspace, openPanels: [{ id: 'rr', type: 'recordReplay', title: 'Record & Replay' }, { id: 'de', type: 'dataExplorer', title: 'Data Explorer' }] }} />);
+    let lastRead: unknown;
+    let finishRead: () => void = () => undefined;
+    act(() => {
+      ref.current?.registerPanelSettingsBridge('rr', {
+        panelType: 'recordReplay', settingsHelp: '', describe: () => ({ lastRead }),
+        apply: () => new Promise(resolve => {
+          finishRead = () => { lastRead = { matched: 2, messages: ['No path found'] }; resolve([{ ok: true, message: 'Found 2 matching messages.' }]); };
+        }),
+      });
+      ref.current?.registerPanelSettingsBridge('de', {
+        panelType: 'dataExplorer', settingsHelp: '', describe: () => ({}),
+        apply: () => { throw new Error('The inspector is unavailable.'); },
+      });
+      ref.current?.open();
+    });
+
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'what errors are in this rosbag' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledTimes(1));
+    // The reply waits for the read rather than answering before the data exists.
+    expect(screen.queryByText('Found 2 matching messages.')).not.toBeInTheDocument();
+    act(() => finishRead());
+
+    await waitFor(() => expect(screen.getByText('Two planner errors.')).toBeInTheDocument());
+    expect(screen.getByText('Found 2 matching messages.')).toBeInTheDocument();
+    expect(screen.getByText('✗ The inspector is unavailable.')).toBeInTheDocument();
+    const followUp = sendAssistantChatMock.mock.calls[1][0];
+    expect(followUp.messages.at(-1)).toMatchObject({ role: 'user', content: 'Summarise the errors in the recording.' });
+    expect(followUp.systemPrompt).toContain('No path found');
+  });
+
   it('waits for the newly added plot and configures it rather than an older plot', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({
       kind: 'workspaceEdit', summary: 'Joint positions configured.', operations: [

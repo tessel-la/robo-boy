@@ -67,7 +67,7 @@ import {
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
-import { isCameraStreamQuality } from '../utils/cameraStreamQuality';
+import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -2381,6 +2381,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, cameraTopic } : panel)));
   };
 
+  const handleWorkspaceCameraQualityChange = (panelId: string, streamQuality: CameraStreamQuality) => {
+    const update = (previous: WorkspacePanel[]) =>
+      previous.map(candidate =>
+        candidate.id === panelId
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), streamQuality } } }
+          : candidate
+      );
+    setWorkspacePanels(update);
+    setMobileWorkspacePanels(update);
+  };
+
   const handleWorkspacePadLayoutChange = (panelId: string, layoutId: string) => {
     setWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
@@ -2688,6 +2699,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           }
           handleWorkspaceCameraTopicChange(panel.id, operation.cameraTopic);
           results.push({ operation, ok: true, message: `${panel.title} now shows ${operation.cameraTopic}.` });
+          break;
+        }
+        case 'setCameraQuality': {
+          const panel = findPanel(operation.panelId);
+          if (!panel || panel.type !== 'camera') {
+            results.push({ operation, ok: false, message: `No camera panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (!isCameraStreamQuality(operation.quality)) {
+            results.push({ operation, ok: false, message: `"${operation.quality}" is not a stream quality; use ${CAMERA_STREAM_QUALITIES.join(', ')}.` });
+            break;
+          }
+          handleWorkspaceCameraQualityChange(panel.id, operation.quality);
+          results.push({ operation, ok: true, message: `${panel.title} now streams at ${CAMERA_STREAM_PRESETS[operation.quality].label} quality.` });
           break;
         }
         case 'setPanelPad': {
@@ -3372,6 +3397,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const catalogEntry = panelCatalogById.get(panel.type);
 
     if (panel.type === 'dataExplorer') return <DataExplorerPanel ros={ros} connected={isConnected}
+      panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
       generation={connectionGeneration} isActive={isPanelActive && isActive}
       replaySession={replaySession} replayGeneration={replaySource.generation} state={panel.panelState?.values}
       onStateChange={values => {
@@ -3382,7 +3408,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })} />;
 
     if (panel.type === 'recordReplay') {
-      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession} ros={ros} connected={isConnected}
+      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession}
+        panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} ros={ros} connected={isConnected}
         isActive={isPanelActive && isActive} state={panel.panelState?.values}
         onStateChange={values => {
           const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
@@ -3502,23 +3529,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
-          onStreamQualityChange={streamQuality => {
-            const update = (previous: WorkspacePanel[]) =>
-              previous.map(candidate =>
-                candidate.id === panel.id && candidate.type === panel.type
-                  ? {
-                      ...candidate,
-                      panelState: {
-                        schemaVersion: 1 as const,
-                        panelId: panel.type,
-                        values: { ...(candidate.panelState?.values ?? {}), streamQuality },
-                      },
-                    }
-                  : candidate
-              );
-            setWorkspacePanels(update);
-            setMobileWorkspacePanels(update);
-          }}
+          onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
         />
       ) : (
         <div className="placeholder">
@@ -4511,6 +4522,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       <GlobalAssistant
         ref={assistantRef}
         ros={ros}
+        visualizationRos={visualizationRos}
         isConnected={isConnected}
         connectionGeneration={connectionGeneration}
         onReviewPadProposal={handleReviewAssistantPad}
@@ -4583,6 +4595,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             layout: layout.layout,
           })),
           panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
+          ...(btExecution.treeName ? { behaviorTreeExecution: {
+            running: btExecution.isExecuting,
+            ...(btExecution.isPaused ? { paused: true } : {}),
+            treeName: btExecution.treeName,
+            ...(btExecution.activeNodeLabel ? { activeNode: btExecution.activeNodeLabel } : {}),
+            ...(btExecution.status ? { status: btExecution.status } : {}),
+            ...(btExecution.isExecuting && btExecution.startedAt ? { runningForSec: Math.round((Date.now() - btExecution.startedAt) / 1000) } : {}),
+            ...(btExecution.isPersistent ? { persistent: true } : {}),
+          } } : {}),
         })}
       />
     </div>

@@ -212,6 +212,44 @@ export class ReplaySession {
     clearTimeout(this.bufferTimer);
     if (this.snapshot.buffering) this.update({ buffering: false });
   }
+  /**
+   * Reads chosen topics over a stretch of the recording with a reader of its own, so playback and
+   * the panels following it are not disturbed. `keep` decides message by message; reading stops at
+   * `end`, when `keep` answers 'stop', or when the signal aborts.
+   */
+  readRange(
+    startSec: number,
+    endSec: number,
+    topics: string[],
+    keep: (message: ReplayMessage) => boolean | 'stop',
+    signal?: AbortSignal
+  ): Promise<{ complete: boolean }> {
+    const info = this.snapshot.info;
+    const bag = this.bag;
+    if (!info || !bag) return Promise.reject(new Error('No recording is open.'));
+    if (signal?.aborted) return Promise.reject(new DOMException('Reading the recording was cancelled.', 'AbortError'));
+    const start = this.toTime(Math.min(this.duration, Math.max(0, startSec)));
+    const end = this.toTime(Math.min(this.duration, Math.max(0, endSec)));
+    return new Promise((resolve, reject) => {
+      const worker = this.createWorker();
+      const finish = (error?: Error, complete = true) => {
+        worker.terminate();
+        signal?.removeEventListener('abort', abort);
+        if (error) reject(error); else resolve({ complete });
+      };
+      const abort = () => finish(new DOMException('Reading the recording was cancelled.', 'AbortError'));
+      signal?.addEventListener('abort', abort, { once: true });
+      worker.onerror = event => finish(new Error(event.message || 'The recording reader stopped unexpectedly.'));
+      worker.onmessage = ({ data }: MessageEvent<ReaderResponse>) => {
+        if (data.op === 'error') return finish(new Error(data.error));
+        if (data.op === 'opened') return worker.postMessage({ id: 2, op: 'read', start, end, topics } satisfies ReaderRequest);
+        for (const item of data.messages) if (keep(item) === 'stop') return finish(undefined, false);
+        if (data.done) finish();
+        else worker.postMessage({ op: 'ack', id: data.id });
+      };
+      worker.postMessage({ id: 1, op: 'open', source: bag } satisfies ReaderRequest);
+    });
+  }
   close() {
     clearTimeout(this.timer); clearTimeout(this.topicTimer); clearTimeout(this.bufferTimer);
     this.worker?.terminate(); this.worker = undefined; ++this.requestId;

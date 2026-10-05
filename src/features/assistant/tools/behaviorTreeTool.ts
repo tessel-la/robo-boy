@@ -38,7 +38,10 @@ export { parseGeneratedBehaviorTree } from '../../behaviorTree/agent/treeGenerat
 export const BEHAVIOR_TREE_CAPABILITY: AssistantCapability = {
   id: 'behavior-tree-generation',
   summary: 'You can build or change a Behavior Tree.',
-  detail: ['It previews on the open Behavior Tree canvas for the user to accept or reject, or is saved to their library when no canvas is open.'],
+  detail: [
+    'It previews on the open Behavior Tree canvas for the user to accept or reject, or is saved to their library when no canvas is open.',
+    'The workspace context\'s "behaviorTreeExecution" says whether a tree is running, paused or finished, which node is active and its last status. You can read it, but only the user starts, pauses or stops a tree.',
+  ],
   responseKind: 'behaviorTree',
 };
 

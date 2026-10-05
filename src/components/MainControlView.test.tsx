@@ -1232,6 +1232,8 @@ describe('MainControlView desktop workspace', () => {
       operations: [
         { op: 'addPanel', panelType: 'Behavior tree' },
         { op: 'setCameraTopic', panelId: 'panel-camera', cameraTopic: '/not/a/camera' },
+        { op: 'setCameraQuality', panelId: 'panel-camera', quality: 'low' },
+        { op: 'setCameraQuality', panelId: 'panel-camera', quality: 'ultra' },
         { op: 'removePanel', panelId: 'ghost' },
       ],
     }));
@@ -1247,6 +1249,13 @@ describe('MainControlView desktop workspace', () => {
     expect(await screen.findByLabelText('Behavior tree')).toBeInTheDocument();
     expect(screen.getByText('"/not/a/camera" is not an available image topic.')).toBeInTheDocument();
     expect(screen.getByText('No open panel with id "ghost".')).toBeInTheDocument();
+    expect(screen.getByText('Camera now streams at Low quality.')).toBeInTheDocument();
+    expect(screen.getByText('"ultra" is not a stream quality; use auto, low, medium, high, original.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')[0]).toMatchObject({
+        id: 'panel-camera', panelState: { values: { streamQuality: 'low' } },
+      })
+    );
     // The model was told which panel types exist.
     expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('"panelCatalog"');
 
@@ -1259,6 +1268,22 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await screen.findByText('Removed the Camera panel.');
     await waitFor(() => expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument());
+  });
+
+  it('tells the assistant which Behavior Tree is running and where it is', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-bt', 'behaviorTree', 'Behavior tree')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-bt']));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'It is moving the arm.' }));
+    renderMainControlView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start mocked tree' }));
+
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), { target: { value: 'what is the robot doing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('It is moving the arm.');
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain(
+      '"behaviorTreeExecution":{"running":true,"treeName":"Inspect Tree","activeNode":"Move arm"}'
+    );
   });
 
   it('lets the assistant add a visible panel in the unified mobile workspace', async () => {
