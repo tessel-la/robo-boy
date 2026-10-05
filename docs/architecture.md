@@ -146,6 +146,13 @@ small, serializable workspace snapshot for it to read, and receives Pad proposal
 editor — no protocol or provider logic lives in `MainControlView` itself, matching this doc's "Adding a Feature"
 guidance.
 
+The Electron shell optionally supplies subscription inference through the narrow
+`src/runtime/assistantSubscription.ts` contract. `electron/assistant.ts` validates the top-level
+caller and requests and owns cancellation; separate native modules own ChatGPT OAuth/encrypted
+accounts and the official restricted Claude Code process. Credentials remain native. The
+renderer reuses its existing context, response parser, proposal validation and editor flows.
+Web and Tauri/mobile keep API-key transports; see [AI assistant](ai-assistant.md#api-keys-and-subscription-sign-in).
+
 The assistant proposes; it never acts on the robot. A topic publish, service call, or action goal is rendered as
 a review-only card, and reaching the robot means putting it through the Pad or Behavior Tree editors, which own
 that path already. Its ROS reads share `src/utils/rosapiQueue.ts` with the rest of the app, because rosbridge

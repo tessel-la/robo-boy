@@ -5,6 +5,8 @@ export type AssistantProviderId = 'openai' | 'gemini' | 'ollama' | 'openai-compa
 
 export interface AssistantProviderSettings {
   provider: AssistantProviderId;
+  /** Missing in older saved settings means API-key authentication. */
+  authMode?: import('../../../runtime/assistantSubscription').AssistantAuthMode;
   apiKey: string;
   baseUrl: string;
   model: string;

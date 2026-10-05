@@ -1385,6 +1385,39 @@
   gap: 6px;
 }
 
+.assistant-subscription-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.assistant-subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assistant-subscription-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--background-color, #fff);
+  color: var(--text-color);
+  font: inherit;
+  cursor: pointer;
+}
+
+.assistant-subscription-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.assistant-subscription-note,
+.assistant-subscription-status {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .assistant-model-refresh {
   display: grid;
   width: 44px;

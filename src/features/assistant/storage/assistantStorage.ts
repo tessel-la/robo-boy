@@ -32,6 +32,7 @@ export const getProviderDefaults = (provider: AssistantProviderId) => ({
 
 export const getDefaultAssistantSettings = (): AssistantSettings => ({
   provider: 'openai-compatible',
+  authMode: 'api-key',
   apiKey: '',
   ...PROVIDER_DEFAULTS['openai-compatible'],
   systemContext: '',
@@ -44,7 +45,9 @@ export const loadAssistantSettings = (): AssistantSettings => {
   const defaults = getDefaultAssistantSettings();
   try {
     const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    const settings = stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    if (settings.authMode !== 'subscription' || !['openai', 'anthropic'].includes(settings.provider)) settings.authMode = 'api-key';
+    return settings;
   } catch {
     return defaults;
   }

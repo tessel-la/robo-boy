@@ -40,6 +40,16 @@ describe('assistantStorage', () => {
     expect(loadAssistantSettings()).toEqual(getDefaultAssistantSettings());
   });
 
+  it('migrates old settings to API mode while retaining their credentials and model', () => {
+    localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', apiKey: 'saved-key', model: 'saved-model' }));
+    expect(loadAssistantSettings()).toMatchObject({ authMode: 'api-key', apiKey: 'saved-key', model: 'saved-model' });
+  });
+
+  it.each(['openai', 'anthropic', 'gemini', 'ollama'])('restores subscription mode only for supported providers (%s)', provider => {
+    localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider, authMode: 'subscription' }));
+    expect(loadAssistantSettings().authMode).toBe(['openai', 'anthropic'].includes(provider) ? 'subscription' : 'api-key');
+  });
+
   it.each(['__TAURI_INTERNALS__', 'roboBoyDesktop'])('connects directly to local Ollama with %s', marker => {
     vi.stubGlobal(marker, {});
     try {

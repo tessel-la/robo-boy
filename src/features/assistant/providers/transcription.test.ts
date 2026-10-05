@@ -34,6 +34,11 @@ describe('transcribeAssistantAudio', () => {
   const jsonResponse = (payload: unknown) =>
     new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
+  it.each(['openai', 'anthropic'] as const)('does not silently bill a saved API key for subscription voice input (%s)', async provider => {
+    await expect(transcribeAssistantAudio(recording(), settingsFor(provider, { authMode: 'subscription' }))).rejects.toThrow(/does not include audio transcription/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('uploads the recording as multipart audio and returns the trimmed transcript', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ text: '  drive forward  ' }));
 

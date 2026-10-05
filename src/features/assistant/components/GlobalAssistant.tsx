@@ -327,6 +327,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
 
     const resolvedSettings: AssistantProviderSettings = useMemo(() => ({
       provider: settings.provider,
+      authMode: settings.authMode,
       apiKey: settings.apiKey,
       model: settings.model,
       baseUrl: settings.provider === 'ollama' && settings.ollamaUseBackendHost ? runtime.ollamaBaseUrl : settings.baseUrl,
@@ -432,6 +433,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     }, [ollamaModelsRefresh, resolvedSettings.baseUrl, settings.apiKey, settings.provider]);
 
     const updateSettings = (patch: Partial<AssistantSettings>) => {
+      abortRef.current?.abort();
       setError('');
       setSettings(previous => {
         const next = { ...previous, ...patch };
@@ -707,8 +709,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const userText = rawPrompt.trim();
       const turnAttachmentsRequested = attachmentsOverride ?? attachments;
       if ((!userText && turnAttachmentsRequested.length === 0) || isGenerating) return;
-      if (!resolvedSettings.baseUrl.trim() || !resolvedSettings.model.trim()) { setError('Set both a base URL and model in Assistant settings before sending.'); return; }
-      if (settings.provider !== 'openai-compatible' && settings.provider !== 'ollama' && !settings.apiKey.trim()) { setError(`Add an API key for ${settings.provider} in Assistant settings before sending.`); return; }
+      if (!resolvedSettings.model.trim()) { setError('Choose a model in Assistant settings before sending.'); return; }
+      if (settings.authMode !== 'subscription' && !resolvedSettings.baseUrl.trim()) { setError('Set a base URL in Assistant settings before sending.'); return; }
+      if (settings.authMode !== 'subscription' && settings.provider !== 'openai-compatible' && settings.provider !== 'ollama' && !settings.apiKey.trim()) { setError(`Add an API key for ${settings.provider} in Assistant settings before sending.`); return; }
 
       // A resource tagged a moment ago may still be retrieving; sending now would silently drop the
       // context the prompt names.
@@ -990,7 +993,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onSketchAttach={handleSketchAttach}
         settings={settings}
         resolvedBaseUrl={resolvedSettings.baseUrl}
-        onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, apiKey: '', ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}
+        onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, authMode: 'api-key', apiKey: '', ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}
         onUpdateSettings={updateSettings}
         ollamaModels={ollamaModels}
         ollamaModelsError={ollamaModelsError}

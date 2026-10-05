@@ -1,0 +1,79 @@
+import { test, expect } from '@playwright/test';
+import { installRosMock } from './helpers/rosMock';
+
+test('switches both providers between API and native sign-in, then sends a subscription turn', async ({ page }) => {
+  await page.addInitScript(() => {
+    let connected = false;
+    const snapshot = (provider: string) => ({
+      activeAccountId: connected ? 'account' : undefined,
+      accounts: connected ? [{ id: 'account', label: 'user@example.test', connected: true, planEnabled: true }] : [],
+      models: connected ? [{ id: provider === 'openai' ? 'plan-model' : 'sonnet', label: 'Subscription model' }] : [],
+    });
+    (window as any).roboBoyDesktop = {
+      shell: 'electron',
+      nativeWindowControls: true,
+      window: {
+        isMaximized: async () => false,
+        onResized: async () => () => {},
+        minimize: async () => {},
+        toggleMaximize: async () => {},
+        close: async () => {},
+      },
+      fetchPanelAsset: async () => ({
+        status: 200,
+        headers: {},
+        body: new TextEncoder().encode('{"schemaVersion":1,"panels":[]}').buffer,
+      }),
+      assistant: {
+        getState: async (provider: string) => snapshot(provider),
+        signIn: async (provider: string) => {
+          connected = true;
+          return snapshot(provider);
+        },
+        cancelSignIn: async () => {},
+        selectAccount: async (provider: string) => snapshot(provider),
+        signOut: async (provider: string) => {
+          connected = false;
+          return snapshot(provider);
+        },
+        manageUsage: async () => {},
+        cancel: async () => {},
+        send: async (_id: string, request: any) => {
+          if ('apiKey' in request || 'baseUrl' in request)
+            throw new Error('Credentials crossed the subscription bridge.');
+          return '{"kind":"explanation","message":"Subscription connection works."}';
+        },
+      },
+    };
+  });
+  await installRosMock(page);
+  await page.goto('/');
+  await page.locator('#ros2Value').fill('127.0.0.1');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  await panel.getByRole('button', { name: 'Assistant settings' }).click();
+  const settings = panel.getByRole('dialog', { name: 'Assistant settings' });
+  await settings.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('openai');
+  await settings.getByRole('combobox', { name: 'Authentication', exact: true }).selectOption('subscription');
+  await expect(settings.getByRole('textbox', { name: 'API key', exact: true })).toHaveCount(0);
+  await settings.getByRole('button', { name: 'Continue with ChatGPT' }).click();
+  await expect(settings.getByText('Using ChatGPT subscription')).toBeVisible();
+  await expect(settings.getByLabel('ChatGPT subscription model')).toHaveValue('plan-model');
+  await page.screenshot({ path: 'test-results/assistant-chatgpt-settings.png' });
+  await settings.getByRole('combobox', { name: 'Authentication', exact: true }).selectOption('api-key');
+  await expect(settings.getByRole('textbox', { name: 'API key', exact: true })).toBeVisible();
+  await settings.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('anthropic');
+  await settings.getByRole('combobox', { name: 'Authentication', exact: true }).selectOption('subscription');
+  await expect(settings.getByText(/Using Claude Code subscription/)).toBeVisible();
+  await expect(settings.getByLabel('Claude Code subscription model')).toHaveValue('sonnet');
+  await settings.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await settings.getByRole('button', { name: 'Sign in through Claude Code' }).click();
+  await expect(settings.getByText(/Using Claude Code subscription/)).toBeVisible();
+  await page.screenshot({ path: 'test-results/assistant-claude-settings.png' });
+  await panel.getByRole('button', { name: 'Back to assistant' }).click();
+  await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Check the connection.');
+  await page.keyboard.press('Enter');
+  await expect(panel.getByText('Subscription connection works.')).toBeVisible();
+});

@@ -12,6 +12,47 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 
 Settings (provider, model, API key, instructions) live in the gear icon inside the panel and persist to this browser only.
 
+### API keys and subscription sign-in
+
+For OpenAI and Anthropic Claude, **Authentication** selects **API key** or **Sign in** (subscription).
+API-key mode keeps the existing model, base URL and key fields. Switching authentication modes does
+not discard the saved API key, and subscription requests never fall back to API billing.
+
+Subscription sign-in currently requires the **Electron desktop app**. Browser and Tauri/mobile builds
+show the desktop requirement and continue to support API-key authentication; they do not run a hidden
+credential proxy. Older desktop shells also need an update before the sign-in controls are available.
+
+- **OpenAI:** choose Continue with ChatGPT, complete the browser sign-in and allow ChatGPT plan usage.
+  The model picker uses the selected account's catalog. Add account, account selection, reconnect,
+  sign-out and Manage usage are available in settings. An eligible plan is required; sign-in alone
+  does not guarantee inference access. The native runtime uses the documented Sign in with ChatGPT
+  OAuth/Responses contract, with `jose` for signed identity verification. It does not use private
+  ChatGPT endpoints or extract credentials from another application.
+- **Claude:** install the official Claude Code CLI **2.1.278 or newer**, then choose Sign in through
+  Claude Code. Anthropic's own runtime completes login and manages credentials in a Robo-Boy-specific
+  configuration directory, separate from the user's ordinary Claude Code setup. Choose Sonnet,
+  Opus or Haiku; availability and usage follow the account. Robo-Boy launches the unmodified native
+  binary without a shell and without API keys or gateway credentials inherited from its environment.
+  The runtime's tools, skills, plugins, hooks, Chrome integration and inherited MCP configuration are
+  disabled. It receives the full conversation as JSON context plus the final turn's images, rather
+  than adopting a persistent Claude Code project session. Its output goes through the existing
+  assistant parser and validators.
+
+ChatGPT credentials are encrypted with Electron's OS-backed `safeStorage`, written atomically under
+the native app's data directory, and never returned to the renderer. On Linux, a working system
+keyring is required; the insecure `basic_text` backend is refused. Claude Code owns its own native
+credential storage. Neither provider's subscription tokens enter `localStorage`, prompts or exports.
+The native bridge validates the top-level app caller and bounded request data. Account changes,
+window navigation/closure and cancellation stop in-flight work; late results are rejected.
+
+Browser speech recognition remains available with sign-in. Recorded-audio transcription is not
+included in these subscription transports; choose API-key mode for a provider that supports it.
+
+Official contracts: [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source),
+[preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations),
+[Claude Code authentication](https://code.claude.com/docs/en/authentication), and
+[Claude product integration conditions](https://code.claude.com/docs/en/legal-and-compliance).
+
 ## Context
 
 **Everything the app holds goes in every turn.** The workspace snapshot (panels with their configuration, the current and saved layouts), every saved Pad and every saved Behavior Tree as complete JSON, the whole ROS graph, and the node and parameter lists. They are local reads, so making a user fetch the right one first cost more than carrying them all. Every reply lists what it used, with source and age, and a reconnect marks stale data rather than presenting it as current.
@@ -71,6 +112,10 @@ Whole-conversation history is sent to the provider on every turn (see [Known lim
 `src/features/assistant/` is a self-contained feature module (see [Application architecture](architecture.md#global-ai-assistant)):
 
 - `providers/` — one file per vendor (OpenAI, Gemini, Ollama, OpenAI-compatible, Anthropic) behind a single `sendChat` contract, using real multi-turn message arrays.
+- `providers/subscription.ts` — routes subscription requests to the typed native bridge in
+  `src/runtime/assistantSubscription.ts`. `electron/assistant.ts` owns caller validation, cancellation
+  and account transitions; `openaiSubscription.ts` owns OAuth, encrypted accounts and Responses;
+  `claudeSubscription.ts` owns the restricted official CLI lifecycle. The browser holds no tokens.
 - `context/` — `rosGraphCache.ts` (TTL + single-flight + reconnect-generation invalidation around the existing `discoverAllROSResources`), `rosContext.ts` (exact interface/schema lookups, bounded topic sampling, bounded `/rosout` capture), `tfContext.ts` (on-demand transform and distance, no background subscription), `workspaceSnapshot.ts` (pure builder consumed by `MainControlView`).
 - `tools/` — `padGeneration.ts` (proposal normalization, binding validation, overlap repair), `padValidator.ts` (whole-Pad-vs-ROS check), `rosActionValidator.ts` (existence and type check for review-only operation cards), `behaviorTreeTool.ts` (reuses the kept `treeGeneration.ts` parser).
 - `components/` — `GlobalAssistant.tsx` (conversation/provider/context state, exposes an imperative `open()`/`registerBehaviorTreeBridge()` handle), `AssistantPanel.tsx` (the desktop side panel / mobile full-screen dialog), `AssistantSettingsPopover.tsx`, and the relocated `AssistantSpeechTextarea.tsx` / `AssistantSketchEditor.tsx`.

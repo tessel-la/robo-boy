@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { AssistantSubscriptionBridge } from '../src/runtime/assistantSubscription';
 
 /**
  * The only channel between the renderer and the desktop shell.
@@ -46,6 +47,17 @@ const desktopBridge = {
   shell: 'electron' as const,
   robotResourceProtocol: true,
   nativeWindowControls,
+
+  assistant: {
+    getState: provider => ipcRenderer.invoke('roboboy:assistant-state', provider),
+    signIn: (provider, accountId) => ipcRenderer.invoke('roboboy:assistant-sign-in', provider, accountId),
+    cancelSignIn: provider => ipcRenderer.invoke('roboboy:assistant-cancel-sign-in', provider),
+    selectAccount: (provider, accountId) => ipcRenderer.invoke('roboboy:assistant-select-account', provider, accountId),
+    signOut: provider => ipcRenderer.invoke('roboboy:assistant-sign-out', provider),
+    manageUsage: provider => ipcRenderer.invoke('roboboy:assistant-usage', provider),
+    send: (id, request) => ipcRenderer.invoke('roboboy:assistant-send', id, request),
+    cancel: id => ipcRenderer.invoke('roboboy:assistant-cancel', id),
+  } satisfies AssistantSubscriptionBridge,
 
   window: {
     minimize: () => ipcRenderer.invoke('roboboy:window-minimize') as Promise<void>,

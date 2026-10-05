@@ -10,6 +10,7 @@ export type { AssistantProviderId };
 
 export interface AssistantSettings {
   provider: AssistantProviderId;
+  authMode?: import('../../runtime/assistantSubscription').AssistantAuthMode;
   apiKey: string;
   baseUrl: string;
   model: string;
