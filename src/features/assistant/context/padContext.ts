@@ -1,3 +1,4 @@
+import type { AssistantCapability } from '../capabilities';
 import type { Ros } from 'roslib';
 import {
   describeRawValue,
@@ -108,3 +109,10 @@ export async function readPadValues(ros: Ros, layout: CustomGamepadLayout, signa
     ),
   };
 }
+
+export const PAD_VALUES_CAPABILITY: AssistantCapability = {
+  id: 'pad-values',
+  summary:
+    'When the user asks what an open Pad shows, the app reads the current values of its gauges, levels, readouts, states, text, plots and heartbeats, formatted and scaled as the Pad shows them, with any warning or alarm level.',
+  invocations: ['what does the pad show', 'what is the battery level', 'what are the current readings'],
+};

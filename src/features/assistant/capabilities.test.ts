@@ -4,6 +4,8 @@ import { CONTEXT_CATALOG } from './capabilities';
 import { parseDistanceRequest, parseTransformRequest, TF_CAPABILITY } from './context/tfContext';
 import { parseAssistantResponse } from './responseParser';
 import { computeNeeds } from './turnNeeds';
+import { CAMERA_FRAME_CAPABILITY, wantsCameraFrame } from './context/cameraContext';
+import { PAD_VALUES_CAPABILITY, wantsPadValues } from './context/padContext';
 
 /**
  * The capability registry is what the assistant tells users it can do. Prose in a prompt drifts
@@ -50,6 +52,11 @@ describe('assistant capability registry', () => {
         expect(computeNeeds(phrase, []).workspace, `"${phrase}" (${capability.id}) does not reach the workspace tool`).toBe(true);
       }
     }
+  });
+
+  it('reads a camera frame or Pad values for every phrasing those capabilities offer', () => {
+    for (const phrase of CAMERA_FRAME_CAPABILITY.invocations ?? []) expect(wantsCameraFrame(phrase), phrase).toBe(true);
+    for (const phrase of PAD_VALUES_CAPABILITY.invocations ?? []) expect(wantsPadValues(phrase), phrase).toBe(true);
   });
 
   it('names only response kinds the parser still accepts', () => {

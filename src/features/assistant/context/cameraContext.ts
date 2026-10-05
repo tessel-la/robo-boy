@@ -1,3 +1,4 @@
+import type { AssistantCapability } from '../capabilities';
 import ROSLIB, { type Ros } from 'roslib';
 import {
   COMPRESSED_IMAGE_TYPES,
@@ -141,3 +142,11 @@ export function captureCameraFrame(
     });
   });
 }
+
+export const CAMERA_FRAME_CAPABILITY: AssistantCapability = {
+  id: 'camera-frames',
+  summary:
+    'When the user asks what a camera shows, the app attaches the latest frame of each open camera panel (up to two, or an image topic they name) to their message as an image, from the open recording during replay. Describe what you see in it.',
+  detail: ['If no frame is attached, say why from the context (no camera panel, or no image arrived) instead of guessing what the camera shows.'],
+  invocations: ['what does the camera see', 'describe the image', 'is there anyone in front of the camera'],
+};

@@ -19,6 +19,11 @@ vi.mock('../../behaviorTree/services/rosDiscovery', async importOriginal => {
   return { ...actual, ...discoveryMock };
 });
 
+const cameraMock = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock('../context/cameraContext', async importOriginal => {
+  const actual = await importOriginal<typeof import('../context/cameraContext')>();
+  return { ...actual, captureCameraFrame: cameraMock.capture };
+});
 import GlobalAssistant, { type GlobalAssistantHandle } from './GlobalAssistant';
 import { resolveCompactAssistantFrame } from './mobileAssistantLayout';
 import type { WorkspaceSnapshot } from '../types';
@@ -270,6 +275,43 @@ describe('GlobalAssistant', () => {
     const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt as string;
     expect(prompt).toContain('"displayedTfFrames":["world"]');
     expect(prompt).toContain('Keys: showTfFrames.');
+  });
+
+  it('attaches the latest frame of the open camera, from the recording during replay, when asked what it shows', async () => {
+    sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'A person near the dock.' }));
+    cameraMock.capture.mockReset();
+    cameraMock.capture
+      .mockResolvedValueOnce({ topic: '/front/image_raw/compressed', mimeType: 'image/jpeg', data: 'SlBFRw==', width: 640, height: 480 })
+      .mockRejectedValueOnce(new Error('No image arrived on /rear within 4 s.'));
+    const recording = { getTopics: (callback: (result: { topics: string[]; types: string[] }) => void) => callback({
+      topics: ['/front/image_raw', '/front/image_raw/compressed', '/rear'],
+      types: ['sensor_msgs/msg/Image', 'sensor_msgs/msg/CompressedImage', 'sensor_msgs/msg/Image'],
+    }) };
+    const ref = createRef<GlobalAssistantHandle>();
+    render(<GlobalAssistant ref={ref} ros={null} visualizationRos={recording as never} isConnected={false} connectionGeneration={0}
+      workspace={{ ...workspace, openPanels: [
+        { id: 'cam1', type: 'camera', title: 'Front', configuration: { cameraTopic: '/front/image_raw' } },
+        { id: 'cam2', type: 'camera', title: 'Rear', configuration: { cameraTopic: '/rear' } },
+      ] }} />);
+    act(() => ref.current?.open());
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'what do you see in the camera' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByText('A person near the dock.')).toBeInTheDocument());
+    expect(cameraMock.capture.mock.calls.map(call => call[1].name)).toEqual(['/front/image_raw/compressed', '/rear']);
+    expect(cameraMock.capture.mock.calls[0][0]).toBe(recording);
+    const request = sendAssistantChatMock.mock.calls[0][0];
+    const last = request.messages[request.messages.length - 1];
+    expect(last.images).toEqual([{ mimeType: 'image/jpeg', data: 'SlBFRw==' }]);
+    expect(last.content).toContain('latest camera frame: /front/image_raw/compressed (640×480)');
+    expect(request.systemPrompt).toContain('No image arrived on /rear within 4 s.');
+
+    sendAssistantChatMock.mockClear();
+    cameraMock.capture.mockClear();
+    fireEvent.change(screen.getByLabelText('Continue the conversation'), { target: { value: 'remove the camera panel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledTimes(1));
+    expect(cameraMock.capture).not.toHaveBeenCalled();
   });
 
   it('waits for a panel that reads data before the follow-up turn, which then sees what it read', async () => {
