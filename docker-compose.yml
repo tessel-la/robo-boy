@@ -125,6 +125,7 @@ services:
       - ROBOBOY_RECORDINGS_SOCKET=/run/roboboy-recordings/recordings.sock
       - ROBOBOY_RECORDINGS_PORT=${ROBOBOY_RECORDINGS_PORT:-}
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - ROBOBOY_CONTROL_ALLOWED_ORIGINS=${ROBOBOY_CONTROL_ALLOWED_ORIGINS:-}
       # rosbridge load tuning; see docs/performance.md ("rosbridge load").
       - ROSBRIDGE_USE_EVENTS_EXECUTOR=${ROSBRIDGE_USE_EVENTS_EXECUTOR:-true}
       - ROSBRIDGE_USE_COMPRESSION=${ROSBRIDGE_USE_COMPRESSION:-true}

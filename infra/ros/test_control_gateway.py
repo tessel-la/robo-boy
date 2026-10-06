@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import tornado.httpserver
+import tornado.httpclient
 import tornado.netutil
 import tornado.testing
 import tornado.web
@@ -190,6 +191,98 @@ class AuthorityTests(unittest.TestCase):
         self.assertIn(self.a, self.closed)
         self.control(self.b, 'acquire')
         self.assertEqual(self.authority.owner, self.b)
+
+    def test_observer_read_write_failures_do_not_fault_or_revoke_another_owner(self):
+        self.control(self.a, 'acquire')
+        self.goal(self.a)
+        token = self.authority.token
+        def fail(_message):
+            raise RuntimeError('Transient upstream failure')
+        for message in (
+            dict(op='subscribe', topic='/image'),
+            dict(op='call_service', service='/rosapi/topics', id='read'),
+            dict(op='publish', topic=BT_COMMAND, msg=dict(data=json.dumps(dict(protocolVersion=1, command='status')))),
+        ):
+            with self.subTest(op=message['op']):
+                observer = self.add()
+                self.authority.clients[observer]['forward'] = fail
+                self.authority.receive(observer, message)
+                self.assertFalse(self.authority.fault)
+                self.assertEqual((self.authority.owner, self.authority.token), (self.a, token))
+                self.assertIn((self.a, 'goal'), self.authority.pending)
+                self.assertIn(observer, self.closed)
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.assertEqual(self.forwarded[self.a][-1]['topic'], '/cmd_vel')
+
+    def test_failed_read_on_idle_owner_releases_without_latching_fault(self):
+        self.control(self.a, 'acquire')
+        def fail(_message):
+            raise RuntimeError('Transient upstream failure')
+        self.authority.clients[self.a]['forward'] = fail
+        self.command(self.a, 'subscribe', topic='/image')
+        self.assertFalse(self.authority.fault)
+        self.assertIsNone(self.authority.owner)
+        self.control(self.b, 'acquire')
+        self.assertEqual(self.authority.owner, self.b)
+
+    def test_unexpected_observer_control_error_is_connection_scoped(self):
+        self.control(self.a, 'acquire')
+        token = self.authority.token
+        def fail(_client, _message):
+            raise RuntimeError('Unexpected status handling error')
+        self.authority.control = fail
+        self.control(self.b, 'status')
+        self.assertFalse(self.authority.fault)
+        self.assertEqual((self.authority.owner, self.authority.token), (self.a, token))
+        self.assertIn(self.b, self.closed)
+
+    def test_failed_read_on_owner_with_work_still_fences_uncertain_work(self):
+        self.control(self.a, 'acquire')
+        self.goal(self.a)
+        def fail(_message):
+            raise RuntimeError('Lost transport with work')
+        self.authority.clients[self.a]['forward'] = fail
+        self.command(self.a, 'subscribe', topic='/image')
+        self.assertTrue(self.authority.fault)
+        self.assertIsNone(self.authority.token)
+        self.assertIn((self.a, 'goal'), self.authority.pending)
+        self.control(self.b, 'acquire')
+        self.assertNotEqual(self.authority.owner, self.b)
+
+    def test_failed_commands_and_cancellation_keep_durable_recovery_fence(self):
+        def fail(_message):
+            raise TypeError('Upstream encoding or write failure')
+        for command in (
+            dict(op='publish', topic='/cmd_vel', msg={}),
+            dict(op='call_service', service='/reset', id='reset'),
+            dict(op='send_action_goal', action='/move', id='goal'),
+        ):
+            with self.subTest(op=command['op']), tempfile.TemporaryDirectory() as directory:
+                self.setUp()
+                marker = Path(directory) / 'unconfirmed'
+                self.authority.marker = marker
+                self.control(self.a, 'acquire')
+                self.authority.clients[self.a]['forward'] = fail
+                self.command(self.a, **command)
+                self.assertTrue(self.authority.fault)
+                self.assertIsNone(self.authority.token)
+                self.assertTrue(marker.exists())
+                self.authority.tick()  # Repeated failed cancellations must not escape.
+                self.control(self.b, 'acquire')
+                self.assertNotEqual(self.authority.owner, self.b)
+                self.assertTrue(Authority(marker).fault)
+
+    def test_journal_failure_before_command_keeps_recovery_fence(self):
+        self.control(self.a, 'acquire')
+        def fail():
+            raise OSError('Journal unavailable')
+        self.authority.dirty = fail
+        self.goal(self.a)
+        self.assertTrue(self.authority.fault)
+        self.assertIsNone(self.authority.token)
+        self.assertFalse(self.forwarded[self.a])
+        self.control(self.b, 'acquire')
+        self.assertNotEqual(self.authority.owner, self.b)
 
     def test_lease_expiry_checked_before_each_command_and_no_auto_reacquisition(self):
         self.control(self.a, 'acquire')
@@ -434,6 +527,37 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
             socket.close()
         self.bridge_server.stop()
         super().tearDown()
+
+    @tornado.testing.gen_test
+    async def test_origin_allowlist_rejects_unlisted_browser_origins_before_upstream_connect(self):
+        allowed = frozenset(('https://roboboy.example', 'http://127.0.0.1:5173', 'tauri://localhost'))
+        server = tornado.httpserver.HTTPServer(application(self.authority, self.upstream_url, allowed))
+        sockets = tornado.netutil.bind_sockets(0, '127.0.0.1')
+        server.add_sockets(sockets)
+        url = f'ws://127.0.0.1:{sockets[0].getsockname()[1]}/websocket'
+        try:
+            for origin in ('https://untrusted.example', 'https://roboboy.example.evil', 'https://sub.roboboy.example', 'http://127.0.0.1', 'null'):
+                with self.subTest(origin=origin), self.assertRaises(tornado.httpclient.HTTPClientError) as rejected:
+                    await tornado.websocket.websocket_connect(tornado.httpclient.HTTPRequest(url, headers={'Origin': origin}))
+                self.assertEqual(rejected.exception.code, 403)
+            self.assertFalse(self.authority.clients)
+            self.assertFalse(self.bridge_sockets)
+            for origin in (*allowed, None):
+                headers = {'Origin': origin} if origin is not None else {}
+                client = await tornado.websocket.websocket_connect(tornado.httpclient.HTTPRequest(url, headers=headers))
+                self.clients.append(client)
+                status = await self.status(client)
+                self.assertIsNone(status['token'])
+        finally:
+            server.stop()
+
+    @tornado.testing.gen_test
+    async def test_unconfigured_gateway_preserves_cross_origin_access(self):
+        request = tornado.httpclient.HTTPRequest(self.get_url('/websocket').replace('http:', 'ws:'), headers={'Origin': 'https://remote-roboboy.example'})
+        client = await tornado.websocket.websocket_connect(request)
+        self.clients.append(client)
+        status = await self.status(client)
+        self.assertIsNone(status['owner'])
 
     @tornado.testing.gen_test
     async def test_simultaneous_requests_observer_reads_single_owner_and_transfer(self):

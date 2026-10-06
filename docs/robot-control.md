@@ -51,6 +51,8 @@ The two-minute inactivity timeout is **not a guaranteed minimum control duration
 | Runner status missing or more than 10 seconds old | Block acquisition and new mutations; continue subscriptions and discovery. |
 | Upstream lost with pending work, runner restarts with work, or gateway restarts with an unconfirmed-work journal | Fail closed; require operator recovery after verifying the robot is stopped. |
 
+Read-only forwarding failures retire the affected connection without fencing another session's control. Losing the owner's transport still releases its lease. A failed command write, lost transport with outstanding work, or a recovery-journal failure retains the robot-wide recovery fence because completion is uncertain. Action-cancellation write failures remain fenced and do not escape the recovery loop.
+
 A disconnected session's upstream socket stays alive while a tracked request is outstanding. The gateway continues consuming terminal results even when the viewer is gone or slow. This allows ordinary disconnect recovery without discarding the only completion notification. Mutating service/action results are requested without compression or fragmentation so the gateway can inspect them. Request IDs cannot be reused within a connection.
 
 ### Persistent behavior trees
@@ -97,6 +99,18 @@ docker compose up -d --build ros-stack
 Endpoint URLs and Caddy routes are unchanged. An old frontend can still observe the gateway but cannot issue unchecked writes. An updated frontend connected to raw legacy rosbridge receives no authority status and its command envelopes are rejected; it does not fall back to unsafe control. The upgraded runner is required for acquisition, including when no tree panel is open. Local recording replay does not connect to the gateway.
 
 Run **one authority for a shared control domain**. Two independent gateways to the same hardware would have independent leases; exposing the private rosbridge or other command paths would bypass this boundary. Use the deployment's existing network access controls/authentication for trusted users. This change coordinates sessions; it does not add accounts or roles, and it cannot arbitrate unrelated native ROS publishers, shell tools, or trusted loopback/DDS peers.
+
+### Optional browser-origin restriction
+
+By default, the public gateway accepts cross-origin WebSockets for existing web and desktop deployments. To restrict which browser pages can connect, set `ROBOBOY_CONTROL_ALLOWED_ORIGINS` in Compose's environment file, then recreate the ROS stack:
+
+```dotenv
+ROBOBOY_CONTROL_ALLOWED_ORIGINS=https://robot.example,http://10.8.0.1,http://127.0.0.1:5173,tauri://localhost
+```
+
+Standalone gateways accept the same environment variable or `--allowed-origins` with a comma-separated list. Values match the exact browser `Origin` header: scheme, hostname, and port when present, with no path or trailing slash. There are no wildcard or subdomain matches, and unlisted origins receive HTTP 403 before a ROS connection or session is created. An empty setting preserves existing cross-origin behavior. Include every web address and the actual desktop webview origin used by the deployment. Opaque origins such as `null` are rejected unless explicitly listed; allowing `null` admits every opaque-origin browser page, not just one desktop app.
+
+This is **browser-origin filtering, not user authentication**. Tornado permits clients without an `Origin` header, preserving native integrations, and non-browser clients can forge an allowed origin. Anyone with network access can still claim an available lease through those clients. Keep the endpoint behind the deployment's trusted network/VPN, firewall, or authenticated proxy; if using a proxy for authentication, restrict direct access to port 9090 as well. The UI's read-only/control states describe session ownership, not user permissions.
 
 ## Verification
 

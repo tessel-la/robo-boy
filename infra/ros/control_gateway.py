@@ -159,6 +159,17 @@ class Authority:
         for client_id in list(self.clients):
             self.status(client_id)
 
+    def forward(self, client_id, message, mutating=False):
+        try:
+            self.clients[client_id]['forward'](message)
+        except Exception:
+            # A failed read affects its connection, not another session's lease.
+            # Admitted writes and previously pending work can have an uncertain
+            # outcome, so retain the recovery fence when retiring that connection.
+            if mutating:
+                self.fault = 'Upstream command write failed; operator recovery required.'
+            self.upstream_lost(client_id)
+
     def tick(self):
         self.tick_expiry()
         # Retry cancellation: a goal may not have been registered by rosbridge yet.
@@ -182,14 +193,14 @@ class Authority:
             self.dirty()
             self.pending[(self.owner, request['id'])] = request
             self.clients[self.owner]['wrote_topics'] = False
-            self.clients[self.owner]['forward'](request)
+            self.forward(self.owner, request)
         self.cancel_work()
         self.clean_if_safe()
 
     def cancel_work(self):
         for (client_id, _), message in list(self.pending.items()):
             if message['op'] == 'send_action_goal':
-                self.clients[client_id]['forward'](dict(op='cancel_action_goal', id=message['id'], action=message['action']))
+                self.forward(client_id, dict(op='cancel_action_goal', id=message['id'], action=message['action']), mutating=True)
         if self.stop_persistent and (self.runner_busy or self.runner_waiting) and self.runner_send:
             self.runner_send(dict(op='publish', topic=BT_COMMAND, msg=dict(data=json.dumps(dict(
                 protocolVersion=1, command='stop', sessionId=self.runner_waiting or self.runner_session)))))
@@ -305,6 +316,7 @@ class Authority:
         if client_id not in self.clients or not self.clients[client_id]['connected']:
             return
         self.tick_expiry()
+        mutating = False
         try:
             if not isinstance(message, dict):
                 raise ValueError('Only JSON objects are accepted.')
@@ -316,6 +328,7 @@ class Authority:
             if message.get('id') is not None and (not isinstance(message['id'], str) or len(message['id']) > 256):
                 raise ValueError('Request IDs must be strings of at most 256 characters.')
             if op == 'roboboy_control':
+                mutating = message.get('action') in ('release', 'transfer', 'approve', 'adopt')
                 self.control(client_id, message)
                 return
             if op in ('subscribe', 'unsubscribe') and message.get('topic') == STATUS_TOPIC:
@@ -346,6 +359,7 @@ class Authority:
                     raise ValueError('Read-only session: request control before sending robot commands.')
                 if self.managing and not (op == 'publish' and message.get('topic') == BT_COMMAND and command.get('command') in ('stop', 'pause', 'resume')):
                     raise ValueError('Managing a persistent tree: stop or finish it before sending other commands.')
+                mutating = True
                 if op == 'cancel_action_goal':
                     previous = self.pending.get((client_id, message.get('id')))
                     if not previous or previous.get('action') != message['action']:
@@ -381,13 +395,17 @@ class Authority:
                 self.clients[client_id]['error'] = ''
                 self.activity = self.clock()
             forwarded = {key: value for key, value in message.items() if key != 'controlToken'}
-            self.clients[client_id]['forward'](forwarded)
+            self.forward(client_id, forwarded, mutating=not read)
         except (ValueError, TypeError) as error:
             self.reject(client_id, message if isinstance(message, dict) else {}, str(error))
         except Exception:
-            self.fault = 'Upstream write or recovery journal failed; operator recovery required.'
-            self.release(self.fault)
-            self.broadcast()
+            if mutating:
+                self.fault = 'Upstream write or recovery journal failed; operator recovery required.'
+                self.release(self.fault)
+                self.broadcast()
+            else:
+                self.reject(client_id, message if isinstance(message, dict) else {}, 'Session failed; reconnect to the ROS gateway.')
+                self.upstream_lost(client_id)
 
     def tick_expiry(self):
         now = self.clock()
@@ -449,16 +467,17 @@ class Authority:
 
 
 class GatewaySocket(tornado.websocket.WebSocketHandler):
-    def initialize(self, authority, upstream_url):
+    def initialize(self, authority, upstream_url, allowed_origins):
         self.authority = authority
         self.upstream_url = upstream_url
+        self.allowed_origins = allowed_origins
         self.client_id = None
         self.upstream_socket = None
 
     def check_origin(self, origin):
-        # Like rosbridge: cross-origin web/desktop access. Deployment auth/network
-        # policy belongs at the perimeter; session names are not authenticated users.
-        return True
+        # Origin restricts browser pages, not users: native clients can omit or
+        # spoof it. Perimeter authentication/network policy is still required.
+        return self.allowed_origins is None or origin in self.allowed_origins
 
     def get_compression_options(self):
         return {}
@@ -562,11 +581,11 @@ async def monitor_runner(authority, url):
         await asyncio.sleep(1)
 
 
-def application(authority, upstream_url):
+def application(authority, upstream_url, allowed_origins=None):
     # Use Tornado's version-appropriate pong timeout. In 6.4 a timeout equal
     # to the interval can close a healthy socket before its first ping.
     # Transport keepalive is independent of the 10-second control lease.
-    return tornado.web.Application([(r'/.*', GatewaySocket, dict(authority=authority, upstream_url=upstream_url))], websocket_max_message_size=10000000,
+    return tornado.web.Application([(r'/.*', GatewaySocket, dict(authority=authority, upstream_url=upstream_url, allowed_origins=allowed_origins))], websocket_max_message_size=10000000,
                                    websocket_ping_interval=3)
 
 
@@ -575,10 +594,13 @@ def main():
     parser.add_argument('--port', type=int, default=9090)
     parser.add_argument('--upstream-port', type=int, default=9092)
     parser.add_argument('--journal', default='/var/lib/roboboy-control/unconfirmed')
+    parser.add_argument('--allowed-origins', default=os.environ.get('ROBOBOY_CONTROL_ALLOWED_ORIGINS', ''),
+                        help='Comma-separated exact browser Origin values; empty preserves cross-origin access. Not authentication.')
     args = parser.parse_args()
     authority = Authority(args.journal)
     url = f'ws://127.0.0.1:{args.upstream_port}'
-    application(authority, url).listen(args.port, address='0.0.0.0')
+    allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
+    application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')
     tornado.ioloop.PeriodicCallback(authority.tick, 1000).start()
     tornado.ioloop.IOLoop.current().spawn_callback(monitor_runner, authority, url)
     tornado.ioloop.IOLoop.current().start()
