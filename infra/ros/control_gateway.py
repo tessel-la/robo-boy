@@ -515,8 +515,11 @@ async def monitor_runner(authority, url):
 
 
 def application(authority, upstream_url):
+    # Use Tornado's version-appropriate pong timeout. In 6.4 a timeout equal
+    # to the interval can close a healthy socket before its first ping.
+    # Transport keepalive is independent of the 10-second control lease.
     return tornado.web.Application([(r'/.*', GatewaySocket, dict(authority=authority, upstream_url=upstream_url))], websocket_max_message_size=10000000,
-                                   websocket_ping_interval=3, websocket_ping_timeout=3)
+                                   websocket_ping_interval=3)
 
 
 def main():

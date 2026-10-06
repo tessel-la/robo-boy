@@ -343,6 +343,24 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
         transferred = await self.status(observer, lambda value: bool(value['token']))
         self.assertNotEqual(transferred['token'], owner_status['token'])
 
+    @tornado.testing.gen_test(timeout=15)
+    async def test_owner_and_observer_survive_transport_keepalive(self):
+        owner, owner_id = await self.connect()
+        observer, _ = await self.connect()
+        await owner.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
+        lease = await self.status(owner, lambda value: bool(value['token']))
+        # Cross the first two transport ping intervals with no ROS traffic.
+        # Tornado 6.4 checks the pong deadline before sending the first ping;
+        # setting its timeout equal to the interval closes healthy clients.
+        for _ in range(2):
+            await asyncio.sleep(3.25)
+            await owner.write_message(json.dumps(dict(op='roboboy_control', action='heartbeat', token=lease['token'])))
+            renewed = await self.status(owner, lambda value: value['owner'] == owner_id)
+            self.assertEqual(renewed['token'], lease['token'])
+            await observer.write_message(json.dumps(dict(op='roboboy_control', action='status')))
+            seen = await self.status(observer, lambda value: value['owner'] == owner_id)
+            self.assertIsNone(seen['token'])
+
     @tornado.testing.gen_test
     async def test_disconnected_owner_retains_action_transport_until_terminal_result(self):
         a, aid = await self.connect()

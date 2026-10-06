@@ -28,6 +28,8 @@ A single user needs one explicit control request after connecting. Reconnection 
 
 The owner sends a heartbeat every **2 seconds**. A lease expires after **10 seconds** without renewal, measured by the server's monotonic clock. Every incoming request checks expiry before admission, even between timer ticks. Tokens change on acquisition and transfer, belong to one server-generated connection ID, and are never sent to observers. A copied token cannot authorize a different connection.
 
+WebSocket transport pings run every **3 seconds**, using Tornado's default pong timeout. This keeps observer and controller connections alive independently of ownership. A transport socket remaining open never extends the control lease without the owner's application heartbeat.
+
 A heartbeat only proves connectivity. After **120 seconds** without an accepted mutating command, control releases automatically, provided no work is outstanding. A long action or persistent run keeps the reservation while it runs. Continuous publishers count as command activity, including publishers emitting neutral values. Ownership is not tied to whether a panel is visible or a browser pointer is moving.
 
 | Event | Expected behavior |
