@@ -90,6 +90,7 @@ describe('ControlSession', () => {
     const session = new ControlSession(ros);
     status({ owner: 'a', token: 'lease', state: 'owned' });
     vi.advanceTimersByTime(11000);
+    expect(session.hasRecentStatus()).toBe(false);
     expect(session.getSnapshot()).toBeNull();
     ros.callOnConnection({ op: 'publish', topic: '/cmd_vel' });
     expect(send).toHaveBeenLastCalledWith(

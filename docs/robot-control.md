@@ -15,7 +15,7 @@ The lock covers the **whole endpoint**, including every namespace and robot reac
 ## Operator workflow
 
 1. Connect normally. The workspace starts **read-only**; there is no automatic acquisition, takeover, or retry of a blocked command.
-2. Open **Robot control** in the top bar (the lock icon on smaller screens, **Read-only** on desktop), optionally set a session name, and select **Request control**. Requests are atomic and first processed wins. A losing session sees the owner and remains an observer.
+2. Open **Robot control** in the top bar (the lock icon on smaller screens, **Read-only** on desktop), optionally set a session name, and select **Request control**. When control is available, acquisition is atomic and first processed wins. When another session owns control, this sends that owner a consent request; it does not take over.
 3. Use pads, services, actions, and trees normally. All built-in panels and permission-approved external panel operations share the connection's lease.
 4. Select **Release control** to revoke the lease and request cancellation of browser actions and persistent trees. Outstanding work must finish before the endpoint becomes available.
 5. **Transfer control** selects a connected session. It is allowed only when no service, action, or persistent tree remains outstanding. Topic queues drain before the new session gets a fresh token. A recipient that disconnects during handover does not receive control.
@@ -24,6 +24,12 @@ The top bar shows the control state, with the owner name in the menu and, when s
 
 A single user needs one explicit control request after connecting. Reconnection starts a new observer session and never resumes old control or replays a rejected command.
 
+### Requesting control from another session
+
+The current owner receives a bell badge and the control menu opens once for each new request, without moving keyboard focus away from robot controls. They can **Grant** or **Deny**. Grant uses the same safe handover as direct transfer: it requires a ready runner and no outstanding service, action, or persistent work, then drains topic writes before issuing a new token. Deny remains available while work runs. Approval never cancels running work; the owner must finish or stop it first.
+
+Each connected requester can have one pending request. Repeated clicks reuse that request; the requester can cancel it or see a denial. Requests expire after **60 seconds**, and they never renew the owner's heartbeat lease or inactivity timer. Owner release, disconnect, expiry, or transfer cancels outstanding requests; requester disconnect cancels that session's request. There is no automatic takeover or acquisition queue. Competing approvals produce exactly one transfer, and stale decisions cannot approve a later request. Incoming requests are visible only to the current owner; each requester sees its own result.
+
 ## Leases and recovery
 
 The owner sends a heartbeat every **2 seconds**. A lease expires after **10 seconds** without renewal, measured by the server's monotonic clock. Every incoming request checks expiry before admission, even between timer ticks. Tokens change on acquisition and transfer, belong to one server-generated connection ID, and are never sent to observers. A copied token cannot authorize a different connection.
@@ -31,6 +37,8 @@ The owner sends a heartbeat every **2 seconds**. A lease expires after **10 seco
 WebSocket transport pings run every **3 seconds**, using Tornado's default pong timeout. This keeps observer and controller connections alive independently of ownership. A transport socket remaining open never extends the control lease without the owner's application heartbeat.
 
 A heartbeat only proves connectivity. After **120 seconds** without an accepted mutating command, control releases automatically, provided no work is outstanding. A long action or persistent run keeps the reservation while it runs. Continuous publishers count as command activity, including publishers emitting neutral values. Ownership is not tied to whether a panel is visible or a browser pointer is moving.
+
+The two-minute inactivity timeout is **not a guaranteed minimum control duration**. Closing or refreshing the page closes its socket and fences ownership immediately; losing connectivity or browser suspension can stop heartbeats and expire the ten-second lease sooner. Switching tabs or workspaces preserves a connected socket when gateway status is fresh. Returning after status becomes stale recreates the connection as an observer. Browsers such as mobile Safari can suspend background timers and sockets, so background ownership cannot be guaranteed. Lease loss can leave telemetry connected; it does not itself disconnect the whole session.
 
 | Event | Expected behavior |
 | --- | --- |
@@ -73,7 +81,7 @@ The `control-journal` named volume survives container replacement. A marker is f
 - Use ROS 2 `send_action_goal` / `cancel_action_goal` for actions. Direct calls to `/_action/` services are rejected because a send-goal service response does not establish action completion.
 - Only a positive allowlist of rosapi discovery/read services is available to observers. `set_param`, `delete_param`, and arbitrary robot services require control. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require control.
 - Publisher advertisement can occur while observing; actual publishes require ownership. Status-topic publishing, latched command publishers, service/action server advertisement, and unknown rosbridge operations are rejected. Cleanup, unsubscription, and unadvertisement remain allowed.
-- The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, and `adopt`. Only the owner with a valid token can release, transfer, or renew.
+- The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, `adopt`, `request`, `cancel_request`, `approve`, and `deny`. Only the owner with a valid token can release, transfer, renew, approve, or deny. `cancel_request`, `approve`, and `deny` require the exact `requestId`. Version-1 status adds optional `requests` entries (`id`, `clientId`, `label`) for the owner and a connection-specific `request` result (`id`, `state`, `message`), with states `pending`, `accepted`, `granted`, `denied`, `expired`, or `cancelled`.
 - Topic publishing is fire-and-forget. A FIFO barrier proves admission to ROS, not physical stopping. Robot controllers **must provide their own command watchdog/deadman and emergency-stop behavior**; no generic UI can infer a safe neutral message for every topic. Integrations that start asynchronous work through opaque topic messages or services that return before physical completion need a tracked ROS action or the persistent runner. Do not use a quick service response as proof that a background actuator job finished.
 
 New panels can therefore use existing ROS operations without implementing a second lock. An integration exposing a new asynchronous command transport must add its lifetime tracking at the gateway/robot boundary before relying on handover safety.

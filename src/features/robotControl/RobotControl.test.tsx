@@ -42,6 +42,59 @@ function fakeControlRos() {
 import { RobotControl } from './RobotControl';
 
 describe('RobotControl', () => {
+  it('lets an observer request a held lease and see or cancel the pending decision', () => {
+    const { ros, send, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() => status({ owner: 'b', ownerLabel: 'Bob', state: 'owned' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'request' }));
+    act(() =>
+      status({ owner: 'b', state: 'owned', request: { id: 'r', state: 'pending', message: 'Waiting for Bob.' } })
+    );
+    expect(screen.getByRole('button', { name: 'Request sent' })).toBeDisabled();
+    expect(screen.getByText('Waiting for Bob.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'cancel_request', requestId: 'r' }));
+    act(() =>
+      status({
+        owner: 'b',
+        state: 'owned',
+        request: { id: 'r', state: 'denied', message: 'Bob denied your control request.' },
+      })
+    );
+    expect(screen.getByText('Bob denied your control request.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeEnabled();
+    view.unmount();
+    session.dispose();
+  });
+
+  it('notifies the owner once per request and offers safe grant or deny controls', () => {
+    const { ros, send, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    const requests = [{ id: 'r', clientId: 'b', label: 'Bob' }];
+    act(() => status({ owner: 'a', token: 'lease', state: 'owned', requests, pending: 1 }));
+    expect(view.container.querySelector('details')).toHaveAttribute('open');
+    expect(screen.getByRole('button', { name: 'Grant control to Bob' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deny control to Bob' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close robot control' }));
+    act(() => status({ owner: 'a', token: 'lease', state: 'owned', requests }));
+    expect(view.container.querySelector('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('button', { name: 'Deny control to Bob' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'deny', requestId: 'r', token: 'lease' }));
+    act(() =>
+      status({ owner: 'a', token: 'lease', state: 'owned', requests: [{ id: 'new', clientId: 'b', label: 'Bob' }] })
+    );
+    expect(view.container.querySelector('details')).toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('button', { name: 'Grant control to Bob' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action: 'approve', requestId: 'new', token: 'lease' })
+    );
+    view.unmount();
+    session.dispose();
+  });
+
   it('shows ownership, blocked command reasons, request and transfer controls', () => {
     const { ros, send, status } = fakeControlRos();
     const session = new ControlSession(ros);

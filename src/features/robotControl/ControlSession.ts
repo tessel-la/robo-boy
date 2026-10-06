@@ -16,6 +16,12 @@ export interface ControlStatus {
   reason: string;
   error: string;
   clients: { id: string; label: string }[];
+  requests?: { id: string; clientId: string; label: string }[];
+  request?: {
+    id: string;
+    state: 'pending' | 'accepted' | 'granted' | 'denied' | 'expired' | 'cancelled';
+    message: string;
+  } | null;
 }
 
 type WireMessage = Record<string, unknown>;
@@ -82,6 +88,18 @@ export class ControlSession {
         status.pending < 0 ||
         (status.owner !== null && typeof status.owner !== 'string') ||
         (status.token !== null && typeof status.token !== 'string') ||
+        (status.requests !== undefined &&
+          (!Array.isArray(status.requests) ||
+            !status.requests.every(
+              request =>
+                typeof request?.id === 'string' &&
+                typeof request?.clientId === 'string' &&
+                typeof request?.label === 'string'
+            ))) ||
+        (status.request != null &&
+          (typeof status.request.id !== 'string' ||
+            typeof status.request.message !== 'string' ||
+            !['pending', 'accepted', 'granted', 'denied', 'expired', 'cancelled'].includes(status.request.state))) ||
         !status.clients.every(client => typeof client?.id === 'string' && typeof client?.label === 'string')
       )
         return;
@@ -100,6 +118,7 @@ export class ControlSession {
   };
 
   getSnapshot = () => this.status;
+  hasRecentStatus = () => Boolean(this.status && Date.now() - this.seen < this.status.leaseMs);
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -107,8 +126,18 @@ export class ControlSession {
     };
   };
   command(
-    action: 'acquire' | 'release' | 'transfer' | 'identify' | 'heartbeat' | 'adopt',
-    extra: { label?: string; target?: string } = {}
+    action:
+      | 'acquire'
+      | 'release'
+      | 'transfer'
+      | 'identify'
+      | 'heartbeat'
+      | 'adopt'
+      | 'request'
+      | 'cancel_request'
+      | 'approve'
+      | 'deny',
+    extra: { label?: string; target?: string; requestId?: string } = {}
   ) {
     this.send?.({ op: 'roboboy_control', action, token: this.status?.token, ...extra });
   }

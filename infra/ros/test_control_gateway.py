@@ -64,12 +64,124 @@ class AuthorityTests(unittest.TestCase):
         self.control(self.a, 'transfer', target=self.b)
         self.assertEqual(self.authority.owner, self.b)
         self.assertNotEqual(stale, self.authority.token)
+
         self.authority.receive(self.a, dict(op='publish', topic='/cmd_vel', msg={}, controlToken=stale))
         self.authority.receive(self.b, dict(op='publish', topic='/cmd_vel', msg={}, controlToken=stale))
         self.assertFalse(self.forwarded[self.a] or self.forwarded[self.b])
         self.control(self.b, 'release')
         self.control(self.a, 'acquire')
         self.assertNotEqual(stale, self.authority.token)
+
+    def test_requests_are_deduplicated_private_and_can_be_denied_or_cancelled(self):
+        self.control(self.a, 'acquire')
+        token, expires, activity = self.authority.token, self.authority.expires, self.authority.activity
+        self.control(self.b, 'request')
+        request = self.authority.snapshot(self.b)['request']
+        self.control(self.b, 'request')
+        self.assertEqual(self.authority.snapshot(self.b)['request'], request)
+        self.assertEqual(len(self.authority.snapshot(self.a)['requests']), 1)
+        self.assertEqual(self.authority.snapshot(self.b)['requests'], [])
+        self.assertEqual((self.authority.token, self.authority.expires, self.authority.activity), (token, expires, activity))
+        self.control(self.b, 'approve', requestId=request['id'])
+        self.assertEqual(self.authority.owner, self.a)
+        self.control(self.a, 'deny', requestId=request['id'])
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'denied')
+        self.control(self.b, 'request')
+        new_request = self.authority.snapshot(self.b)['request']['id']
+        self.control(self.a, 'approve', requestId=request['id'])
+        self.assertIn(new_request, self.authority.control_requests)
+        self.control(self.b, 'cancel_request', requestId=request['id'])
+        self.assertIn(new_request, self.authority.control_requests)
+        self.control(self.b, 'cancel_request', requestId=new_request)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'cancelled')
+        self.assertFalse(self.authority.control_requests)
+
+    def test_approval_transfers_once_and_cancels_competing_requests(self):
+        self.control(self.a, 'acquire')
+        old = self.authority.token
+        c = self.add()
+        for client in (self.b, c):
+            self.control(client, 'request')
+        first, second = [self.authority.snapshot(client)['request']['id'] for client in (self.b, c)]
+        self.control(self.a, 'approve', requestId=first)
+        self.assertEqual(self.authority.owner, self.b)
+        self.assertNotEqual(self.authority.token, old)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'granted')
+        self.assertEqual(self.authority.snapshot(c)['request']['state'], 'cancelled')
+        self.authority.receive(self.a, dict(op='roboboy_control', action='approve', requestId=second, token=old))
+        self.control(self.b, 'approve', requestId=second)
+        self.assertEqual(self.authority.owner, self.b)
+
+    def test_approval_waits_for_actions_and_persistent_work_but_denial_does_not(self):
+        self.control(self.a, 'acquire')
+        self.goal(self.a)
+        self.control(self.b, 'request')
+        request_id = self.authority.snapshot(self.b)['request']['id']
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.a)
+        self.assertIn(request_id, self.authority.control_requests)
+        self.authority.upstream(self.a, dict(op='action_result', id='goal', status=4))
+        self.runner('running', 'tree', 1)
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.a)
+        self.control(self.a, 'deny', requestId=request_id)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'denied')
+        self.control(self.b, 'request')
+        request_id = self.authority.snapshot(self.b)['request']['id']
+        self.runner()
+        self.authority.runner_ready = False
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.a)
+        self.runner()
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.b)
+
+    def test_request_expiry_is_checked_before_approval_between_ticks(self):
+        self.control(self.a, 'acquire')
+        self.control(self.b, 'request')
+        request_id = self.authority.snapshot(self.b)['request']['id']
+        self.now = 60
+        self.authority.expires = 70
+        self.runner()
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.a)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'expired')
+        self.assertFalse(self.authority.control_requests)
+
+    def test_request_disconnect_and_owner_expiry_cancel_decisions(self):
+        self.control(self.a, 'acquire')
+        self.control(self.b, 'request')
+        self.authority.disconnect(self.b)
+        self.assertFalse(self.authority.snapshot(self.a)['requests'])
+        c = self.add()
+        self.control(c, 'request')
+        request_id = self.authority.snapshot(c)['request']['id']
+        self.now = 10
+        self.runner()
+        self.authority.tick()
+        self.assertIsNone(self.authority.owner)
+        self.assertEqual(self.authority.snapshot(c)['request']['state'], 'cancelled')
+        self.assertIn('heartbeat expired', self.authority.snapshot(c)['request']['message'])
+        self.control(self.a, 'acquire')
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.owner, self.a)
+        self.control(c, 'request')
+        self.authority.disconnect(self.a)
+        self.assertEqual(self.authority.snapshot(c)['request']['state'], 'cancelled')
+
+    def test_approved_handover_barrier_survives_old_owner_disconnect(self):
+        self.control(self.a, 'acquire')
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.control(self.b, 'request')
+        request_id = self.authority.snapshot(self.b)['request']['id']
+        self.control(self.a, 'approve', requestId=request_id)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'accepted')
+        self.assertIsNone(self.authority.snapshot(self.b)['token'])
+        self.authority.disconnect(self.a)
+        barrier = self.forwarded[self.a][-1]['id']
+        self.authority.upstream(self.a, dict(op='service_response', id=barrier, result=True))
+        self.assertEqual(self.authority.owner, self.b)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'granted')
 
     def test_disconnect_without_work_recovers_immediately(self):
         self.control(self.a, 'acquire')
@@ -95,6 +207,8 @@ class AuthorityTests(unittest.TestCase):
         for self.now in range(1, 121):
             self.runner()
             self.control(self.a, 'heartbeat')
+            if self.now % 20 == 0:
+                self.control(self.b, 'request')
             self.authority.tick()
         self.assertIsNone(self.authority.owner)
 
@@ -360,6 +474,29 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
             await observer.write_message(json.dumps(dict(op='roboboy_control', action='status')))
             seen = await self.status(observer, lambda value: value['owner'] == owner_id)
             self.assertIsNone(seen['token'])
+
+    @tornado.testing.gen_test
+    async def test_competing_control_requests_notify_owner_and_require_consent(self):
+        owner, _ = await self.connect()
+        b, _ = await self.connect()
+        c, cid = await self.connect()
+        await owner.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
+        lease = await self.status(owner, lambda value: bool(value['token']))
+        await asyncio.gather(*(socket.write_message(json.dumps(dict(op='roboboy_control', action='request'))) for socket in (b, c)))
+        notified = await self.status(owner, lambda value: len(value['requests']) == 2)
+        request_b = await self.status(b, lambda value: value['request'] is not None)
+        request_c = await self.status(c, lambda value: value['request'] is not None)
+        self.assertEqual(request_b['requests'], [])
+        self.assertIsNone(request_b['token'])
+        self.assertEqual(len(notified['requests']), 2)
+        await owner.write_message(json.dumps(dict(op='roboboy_control', action='deny', requestId=request_b['request']['id'], token=lease['token'])))
+        denied = await self.status(b, lambda value: value['request'] and value['request']['state'] == 'denied')
+        self.assertEqual(denied['owner'], lease['owner'])
+        await owner.write_message(json.dumps(dict(op='roboboy_control', action='approve', requestId=request_c['request']['id'], token=lease['token'])))
+        granted = await self.status(c, lambda value: bool(value['token']))
+        self.assertEqual(granted['owner'], cid)
+        self.assertEqual(granted['request']['state'], 'granted')
+        self.assertNotEqual(granted['token'], lease['token'])
 
     @tornado.testing.gen_test
     async def test_disconnected_owner_retains_action_transport_until_terminal_result(self):

@@ -21,6 +21,7 @@ BT_COMMAND = '/robo_boy/behavior_tree/command'
 BT_STATUS = '/robo_boy/behavior_tree/status'
 LEASE_SECONDS = 10
 IDLE_SECONDS = 120
+REQUEST_SECONDS = 60
 READ_SERVICES = frozenset('/rosapi/' + name for name in (
     'topics', 'topics_for_type', 'topic_type', 'services', 'service_type',
     'service_request_details', 'service_response_details', 'message_details',
@@ -64,6 +65,7 @@ class Authority:
         self.managing = False
         self.reason = ''
         self.pending = {}  # (connection id, request id) -> original command
+        self.control_requests = {}  # request id -> requester and decision deadline
         self.runner_incarnation = None
         self.runner_sessions = set()
         self.runner_ready = False
@@ -103,10 +105,24 @@ class Authority:
             self.retire_clients()
 
     def grant(self, client_id):
+        self.clear_requests('Control changed; request control again if needed.')
         self.owner, self.token = client_id, str(uuid.uuid4())
         self.owner_label = self.clients[client_id]['label']
+        self.clients[client_id]['error'] = ''
         self.expires = self.clock() + LEASE_SECONDS
         self.activity = self.clock()
+        request = self.clients[client_id]['request']
+        self.clients[client_id]['request'] = {**request, 'state': 'granted', 'message': 'Control granted.'} if request and request['state'] == 'accepted' else None
+
+    def finish_request(self, request_id, state, message):
+        request = self.control_requests.pop(request_id)
+        client = self.clients.get(request['client'])
+        if client:
+            client['request'] = dict(id=request_id, state=state, message=message)
+
+    def clear_requests(self, message):
+        for request_id in list(self.control_requests):
+            self.finish_request(request_id, 'cancelled', message)
 
     def retire_clients(self):
         for client_id, client in list(self.clients.items()):
@@ -117,7 +133,7 @@ class Authority:
     def add(self, send, forward, close):
         client_id = str(uuid.uuid4())
         self.clients[client_id] = dict(label='Session ' + client_id[:8], send=send,
-                                       forward=forward, close=close, connected=True, error='', used=set(), wrote_topics=False)
+                                       forward=forward, close=close, connected=True, error='', used=set(), wrote_topics=False, request=None)
         self.broadcast()
         return client_id
 
@@ -129,6 +145,8 @@ class Authority:
                     state='blocked' if self.fault else 'draining' if self.draining or (busy and not self.owner) else 'owned' if self.owner else 'available',
                     ready=self.runner_ready, pending=busy, adoptable=self.adoptable(), managing=self.managing, leaseMs=LEASE_SECONDS * 1000,
                     reason=self.fault or self.reason or ('Persistent robot work reserves control.' if busy and not self.owner else ''), error=error,
+                    requests=[dict(id=key, clientId=value['client'], label=self.clients[value['client']]['label']) for key, value in self.control_requests.items()] if client_id == self.owner and self.token and not self.fault else [],
+                    request=self.clients[client_id]['request'],
                     clients=[dict(id=key, label=value['label']) for key, value in self.clients.items() if value['connected']])
 
     def status(self, client_id, error=''):
@@ -142,21 +160,14 @@ class Authority:
             self.status(client_id)
 
     def tick(self):
-        now = self.clock()
-        if self.runner_ready and now - self.runner_seen >= LEASE_SECONDS:
-            self.runner_ready = False
-            self.reason = 'Waiting for behavior-tree runner status.'
-        if self.owner and not self.draining:
-            if now >= self.expires:
-                self.release('Control heartbeat expired.')
-            elif now - self.activity >= IDLE_SECONDS and not self.pending and not self.runner_busy and not self.runner_waiting:
-                self.release('Control released after inactivity.')
+        self.tick_expiry()
         # Retry cancellation: a goal may not have been registered by rosbridge yet.
         if self.draining:
             self.cancel_work()
         self.broadcast()
 
     def release(self, reason, target=None, stop_persistent=False):
+        self.clear_requests(reason)
         self.stop_persistent = stop_persistent
         self.managing = False
         self.transfer_target = target
@@ -192,7 +203,10 @@ class Authority:
         if not client:
             return
         client['connected'] = False
-        if self.owner == client_id:
+        for request_id, request in list(self.control_requests.items()):
+            if request['client'] == client_id:
+                self.finish_request(request_id, 'cancelled', 'Requesting session disconnected.')
+        if self.owner == client_id and not self.draining:
             self.release('Controlling session disconnected; waiting for robot work to finish.')
         self.retire_clients()
         self.broadcast()
@@ -209,6 +223,21 @@ class Authority:
             self.clients[client_id]['label'] = label.strip()
             if self.owner == client_id:
                 self.owner_label = label.strip()
+        elif action == 'request':
+            if self.fault or not self.runner_ready:
+                raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
+            if self.draining or not self.token or not self.owner or self.owner == client_id:
+                raise ValueError('Control is not held by another active session.')
+            previous = self.clients[client_id]['request']
+            if not previous or previous['id'] not in self.control_requests:
+                request_id = str(uuid.uuid4())
+                self.control_requests[request_id] = dict(client=client_id, expires=now + REQUEST_SECONDS)
+                self.clients[client_id]['request'] = dict(id=request_id, state='pending', message='Waiting for the controller to grant or deny your request.')
+        elif action == 'cancel_request':
+            previous = self.clients[client_id]['request']
+            if not previous or previous['id'] not in self.control_requests or message.get('requestId') != previous['id']:
+                raise ValueError('This request is no longer pending.')
+            self.finish_request(previous['id'], 'cancelled', 'Control request cancelled.')
         elif action == 'acquire':
             if self.fault or not self.runner_ready:
                 raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
@@ -228,7 +257,7 @@ class Authority:
             self.managing = True
             self.stop_persistent = False
             self.reason = 'Managing the persistent tree; new commands blocked until it finishes.'
-        elif action in ('heartbeat', 'release', 'transfer'):
+        elif action in ('heartbeat', 'release', 'transfer', 'approve', 'deny'):
             if self.owner != client_id or not self.token or message.get('token') != self.token:
                 raise ValueError('This control lease is no longer valid. Request control again.')
             if action == 'heartbeat':
@@ -236,11 +265,26 @@ class Authority:
             elif action == 'release':
                 self.release('Control released by its owner.', stop_persistent=True)
             else:
-                target = message.get('target')
+                request_id = message.get('requestId')
+                if action in ('approve', 'deny'):
+                    request = self.control_requests.get(request_id) if isinstance(request_id, str) else None
+                    if not request:
+                        raise ValueError('This control request is no longer pending.')
+                    if action == 'deny':
+                        self.finish_request(request_id, 'denied', f"{self.clients[client_id]['label']} denied your control request.")
+                        self.broadcast()
+                        return
+                    target = request['client']
+                else:
+                    target = message.get('target')
+                if self.fault or not self.runner_ready:
+                    raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
                 if not isinstance(target, str) or target == client_id or not self.clients.get(target, {}).get('connected'):
                     raise ValueError('Select another connected session.')
                 if self.pending or self.runner_busy or self.runner_waiting:
                     raise ValueError('Finish or stop running work before transferring control.')
+                if action == 'approve':
+                    self.finish_request(request_id, 'accepted', 'Request accepted; waiting for safe handover.')
                 self.release('Control transferred by its owner.', target)
         elif action != 'status':
             raise ValueError('Unsupported control request.')
@@ -347,8 +391,12 @@ class Authority:
 
     def tick_expiry(self):
         now = self.clock()
+        for request_id, request in list(self.control_requests.items()):
+            if now >= request['expires']:
+                self.finish_request(request_id, 'expired', 'Control request expired after 1 minute. You can request again.')
         if self.runner_ready and now - self.runner_seen >= LEASE_SECONDS:
             self.runner_ready = False
+            self.reason = 'Waiting for behavior-tree runner status.'
         if self.owner and not self.draining:
             if now >= self.expires:
                 self.release('Control heartbeat expired.')

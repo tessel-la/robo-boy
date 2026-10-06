@@ -160,16 +160,16 @@ export const useRos = (): UseRosReturn => {
     [closeCurrentRos, disconnect]
   ); // connect should be stable
 
-  // Mobile browsers commonly suspend a WebSocket while the screen is off. Recreate the
-  // connection when the page becomes visible again (and when the network comes back) using the
-  // same endpoint the user originally selected. This is deliberately owned by useRos so every
-  // ROS consumer gets identical recovery behavior.
+  // Tab switches must preserve healthy connections and their control lease. After standby,
+  // reconnect only if the connection closed or gateway status is stale: the browser may have
+  // suspended its socket without delivering the close event yet.
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
     const reconnect = () => {
       const params = lastConnectionParamsRef.current;
       if (!params || isConnectingRef.current) return;
+      if (isConnectedRef.current && controlSessionRef.current?.hasRecentStatus()) return;
       disconnect();
       connect(params);
     };

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { FiAlertCircle, FiChevronDown, FiLock, FiUnlock, FiX } from 'react-icons/fi';
+import { FiAlertCircle, FiBell, FiChevronDown, FiLock, FiUnlock, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { controlSessionFor } from './ControlSession';
 import './RobotControl.css';
@@ -13,7 +13,16 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   const [label, setLabel] = useState('');
   const [target, setTarget] = useState('');
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const seenRequests = useRef<string[]>([]);
   const menuId = useId();
+  useEffect(() => {
+    const incoming = status?.owner === status?.selfId && status?.token ? (status.requests ?? []) : [];
+    if (incoming.some(request => !seenRequests.current.includes(request.id)) && detailsRef.current) {
+      // Show each new request once, without moving focus away from robot controls.
+      detailsRef.current.open = true;
+    }
+    seenRequests.current = incoming.map(request => request.id);
+  }, [status]);
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
       if (detailsRef.current && !detailsRef.current.contains(event.target as Node)) detailsRef.current.open = false;
@@ -47,8 +56,12 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
               ? `Read-only · ${status.ownerLabel} has control`
               : 'Read-only · Control available';
   const others = status?.clients.filter(client => client.id !== status.selfId) ?? [];
+  const requests = owned ? (status?.requests ?? []) : [];
+  const requestPending = status?.request?.state === 'pending' || status?.request?.state === 'accepted';
+  const canRequest =
+    status?.ready && (status.state === 'available' || (status.state === 'owned' && status.owner !== status.selfId));
   const blocked = Boolean(status?.error || status?.state === 'blocked');
-  const StatusIcon = blocked || !status ? FiAlertCircle : owned ? FiUnlock : FiLock;
+  const StatusIcon = blocked || !status ? FiAlertCircle : requests.length ? FiBell : owned ? FiUnlock : FiLock;
   const summary = blocked
     ? 'Command blocked'
     : status?.state === 'draining'
@@ -61,7 +74,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   return (
     <details ref={detailsRef} className={`robot-control ${owned ? 'has-control' : ''} ${blocked ? 'is-blocked' : ''}`}>
       <summary
-        aria-label={`Robot control: ${status?.error || description}`}
+        aria-label={`Robot control: ${status?.error || description}${requests.length ? `, ${requests.length} control request(s)` : ''}`}
         title={status?.error || description}
         aria-haspopup="dialog"
         aria-controls={menuId}
@@ -71,6 +84,11 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           {summary}
         </span>
         <FiChevronDown className="robot-control-chevron" aria-hidden="true" />
+        {requests.length > 0 && (
+          <span className="robot-control-request-count" aria-hidden="true">
+            {requests.length}
+          </span>
+        )}
       </summary>
       <div className="robot-control-popover" id={menuId} role="dialog" aria-label="Robot control">
         <div className="robot-control-heading">
@@ -99,6 +117,42 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           </p>
         )}
         {status?.reason && status.reason !== description && <p>{status.reason}</p>}
+        {requests.length > 0 && (
+          <div className="robot-control-requests" aria-label="Incoming control requests">
+            {requests.map(request => (
+              <div className="robot-control-request" key={request.id}>
+                <p role="status" aria-live="polite">
+                  <strong>{request.label}</strong> requests control.
+                </p>
+                <div className="robot-control-request-actions">
+                  <button
+                    className="robot-control-action is-primary"
+                    type="button"
+                    disabled={!status?.ready || status.state !== 'owned' || Boolean(status.pending)}
+                    onClick={() => session?.command('approve', { requestId: request.id })}
+                    aria-label={`Grant control to ${request.label}`}
+                  >
+                    Grant
+                  </button>
+                  <button
+                    className="robot-control-action"
+                    type="button"
+                    onClick={() => session?.command('deny', { requestId: request.id })}
+                    aria-label={`Deny control to ${request.label}`}
+                  >
+                    Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+            {Boolean(status?.pending) && <small>Finish or stop running work before granting control.</small>}
+          </div>
+        )}
+        {!owned && status?.request && status.request.state !== 'granted' && (
+          <p className="robot-control-request-message" role="status" aria-live="polite">
+            {status.request.message}
+          </p>
+        )}
         {owned ? (
           <button className="robot-control-action is-release" type="button" onClick={() => session?.command('release')}>
             Release control{status?.pending ? ' and stop work' : ''}
@@ -111,10 +165,19 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           <button
             className="robot-control-action is-primary"
             type="button"
-            disabled={!status?.ready || status.state !== 'available'}
-            onClick={() => session?.command('acquire')}
+            disabled={!canRequest || requestPending}
+            onClick={() => session?.command(status?.owner ? 'request' : 'acquire')}
           >
-            Request control
+            {requestPending ? 'Request sent' : 'Request control'}
+          </button>
+        )}
+        {!owned && status?.request?.state === 'pending' && (
+          <button
+            className="robot-control-action"
+            type="button"
+            onClick={() => session?.command('cancel_request', { requestId: status.request?.id })}
+          >
+            Cancel request
           </button>
         )}
         <form

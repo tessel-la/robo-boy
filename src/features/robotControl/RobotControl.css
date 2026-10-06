@@ -211,6 +211,42 @@
   padding-top: 10px;
   border-top: 1px solid var(--border-color);
 }
+
+.robot-control-request-count {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 14px;
+  padding: 1px 3px;
+  border-radius: 999px;
+  background: var(--primary-color);
+  color: #111;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.robot-control-requests {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-control-request,
+.robot-control-request-message {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  overflow-wrap: anywhere;
+}
+
+.robot-control-request-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
 @media (max-width: 900px) {
   .robot-control summary {
     width: 32px;
