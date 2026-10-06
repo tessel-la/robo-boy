@@ -52,7 +52,7 @@ describe('RobotControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
     expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'acquire' }));
     act(() => status({ owner: 'b', ownerLabel: 'Bob', state: 'owned', error: 'Bob has control.' }));
-    expect(screen.getByText('Command blocked: Bob has control.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Bob has control.');
     expect(screen.getByText(/Read-only · Bob has control/)).toBeInTheDocument();
     act(() => status({ owner: 'a', token: 'lease', state: 'owned', pending: 1 }));
     fireEvent.change(screen.getByLabelText('Transfer to'), { target: { value: 'b' } });

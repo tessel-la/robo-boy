@@ -15,12 +15,12 @@ The lock covers the **whole endpoint**, including every namespace and robot reac
 ## Operator workflow
 
 1. Connect normally. The workspace starts **read-only**; there is no automatic acquisition, takeover, or retry of a blocked command.
-2. Open **Read-only** in the top bar, optionally set a session name, and select **Request control**. Requests are atomic and first processed wins. A losing session sees the owner and remains an observer.
+2. Open **Robot control** in the top bar (the lock icon on smaller screens, **Read-only** on desktop), optionally set a session name, and select **Request control**. Requests are atomic and first processed wins. A losing session sees the owner and remains an observer.
 3. Use pads, services, actions, and trees normally. All built-in panels and permission-approved external panel operations share the connection's lease.
 4. Select **Release control** to revoke the lease and request cancellation of browser actions and persistent trees. Outstanding work must finish before the endpoint becomes available.
 5. **Transfer control** selects a connected session. It is allowed only when no service, action, or persistent tree remains outstanding. Topic queues drain before the new session gets a fresh token. A recipient that disconnects during handover does not receive control.
 
-The owner is shown in every session's top bar. The menu explains readiness, pending work, recovery blocks, and transfer restrictions. Rejected topic commands visibly show **Command blocked** and a reason; service and action requests also receive immediate failure responses through their normal ROSLIB transports. Session names are display labels, not identity or authorization claims.
+The top bar shows the control state, with the owner name in the menu and, when space permits, beside the icon. The menu explains readiness, pending work, recovery blocks, and transfer restrictions. Rejected commands flag the control button and show their reason in the menu; service and action requests also receive immediate failure responses through their normal ROSLIB transports. The menu closes with its close button, Escape, or a click outside, and scrolls within the available viewport on smaller screens. Session names are display labels, not identity or authorization claims.
 
 A single user needs one explicit control request after connecting. Reconnection starts a new observer session and never resumes old control or replays a rejected command.
 
