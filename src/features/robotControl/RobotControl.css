@@ -149,6 +149,16 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
 }
+.robot-control-name-row .robot-control-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.robot-control-name-status {
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+}
 .robot-control-popover input,
 .robot-control-popover select {
   min-width: 0;
@@ -197,6 +207,12 @@
 .robot-control-action:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.robot-control-action.is-saved:disabled {
+  color: var(--success-color);
+  border-color: color-mix(in srgb, var(--success-color) 40%, var(--border-color));
+  opacity: 1;
+  cursor: default;
 }
 .robot-control-popover :is(button, input, select):focus-visible {
   outline: 2px solid var(--primary-color);

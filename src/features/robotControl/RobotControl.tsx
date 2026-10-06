@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { FiAlertCircle, FiBell, FiChevronDown, FiLock, FiUnlock, FiX } from 'react-icons/fi';
+import { FiAlertCircle, FiBell, FiCheck, FiChevronDown, FiLock, FiUnlock, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { controlSessionFor } from './ControlSession';
 import './RobotControl.css';
@@ -56,6 +56,9 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
               ? `Read-only · ${status.ownerLabel} has control`
               : 'Read-only · Control available';
   const others = status?.clients.filter(client => client.id !== status.selfId) ?? [];
+  const savedLabel = status?.clients.find(client => client.id === status.selfId)?.label;
+  const nameSaved = Boolean(label.trim() && label.trim() === savedLabel);
+  const canSetName = Boolean(status && label.trim() && !nameSaved);
   const requests = owned ? (status?.requests ?? []) : [];
   const requestPending = status?.request?.state === 'pending' || status?.request?.state === 'accepted';
   const canRequest =
@@ -184,7 +187,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           className="robot-control-section"
           onSubmit={event => {
             event.preventDefault();
-            if (status && label.trim()) session?.command('identify', { label });
+            if (canSetName) session?.command('identify', { label: label.trim() });
           }}
         >
           <label htmlFor={`${menuId}-name`}>Session name</label>
@@ -192,14 +195,25 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
             <input
               id={`${menuId}-name`}
               value={label}
-              placeholder={status?.clients.find(client => client.id === status.selfId)?.label || 'Your session name'}
+              placeholder={savedLabel || 'Your session name'}
+              aria-describedby={savedLabel ? `${menuId}-name-status` : undefined}
               maxLength={64}
               onChange={event => setLabel(event.target.value)}
             />
-            <button className="robot-control-action" type="submit" disabled={!status || !label.trim()}>
-              Set name
+            <button
+              className={`robot-control-action ${nameSaved ? 'is-saved' : ''}`}
+              type="submit"
+              disabled={!canSetName}
+            >
+              {nameSaved && <FiCheck aria-hidden="true" />}
+              {nameSaved ? 'Saved' : 'Set name'}
             </button>
           </div>
+          {savedLabel && (
+            <p id={`${menuId}-name-status`} className="robot-control-name-status" role="status" aria-live="polite">
+              {nameSaved ? `Name saved as ${savedLabel}.` : `Current name: ${savedLabel}`}
+            </p>
+          )}
         </form>
         {owned && others.length > 0 && (
           <div className="robot-control-section">

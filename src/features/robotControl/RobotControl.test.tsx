@@ -42,6 +42,38 @@ function fakeControlRos() {
 import { RobotControl } from './RobotControl';
 
 describe('RobotControl', () => {
+  it('confirms a name only after the gateway acknowledges it and clears confirmation when edited or disconnected', () => {
+    const { ros, send, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() => status());
+    expect(screen.getByText('Current name: Alice')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Session name'), { target: { value: '  Charlie  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set name' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'identify', label: 'Charlie' }));
+    expect(screen.queryByRole('button', { name: 'Saved' })).not.toBeInTheDocument();
+    act(() => status({ error: 'Name rejected.' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Name rejected.');
+    expect(screen.getByText('Current name: Alice')).toBeInTheDocument();
+    act(() =>
+      status({
+        clients: [
+          { id: 'a', label: 'Charlie' },
+          { id: 'b', label: 'Bob' },
+        ],
+      })
+    );
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled();
+    expect(screen.getByText('Name saved as Charlie.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Session name'), { target: { value: 'Dana' } });
+    expect(screen.getByRole('button', { name: 'Set name' })).toBeEnabled();
+    expect(screen.getByText('Current name: Charlie')).toBeInTheDocument();
+    act(() => session.dispose());
+    expect(screen.queryByText('Current name: Charlie')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set name' })).toBeDisabled();
+    view.unmount();
+  });
+
   it('lets an observer request a held lease and see or cancel the pending decision', () => {
     const { ros, send, status } = fakeControlRos();
     const session = new ControlSession(ros);

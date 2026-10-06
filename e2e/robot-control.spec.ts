@@ -14,6 +14,8 @@ test('a new session starts as an observer and can explicitly acquire and release
   await expect(control.getByText('Read-only · Control available')).toBeVisible();
   await control.getByLabel('Session name').fill('Alice');
   await control.getByLabel('Session name').press('Enter');
+  await expect(control.getByRole('button', { name: 'Saved', exact: true })).toBeDisabled();
+  await expect(control.getByText('Name saved as Alice.', { exact: true })).toBeVisible();
   await control.getByRole('button', { name: 'Request control' }).click();
   await expect(control.locator('summary')).toHaveText('Control: you');
   await expect(control.getByText('You have control')).toBeVisible();
@@ -63,6 +65,10 @@ for (const viewport of [
     await trigger.click();
     const menu = control.locator('.robot-control-popover');
     await expect(menu).toBeVisible();
+    await control.getByLabel('Session name').fill('Alice');
+    await control.getByRole('button', { name: 'Set name', exact: true }).click();
+    await expect(control.getByRole('button', { name: 'Saved', exact: true })).toBeDisabled();
+    await expect(control.getByText('Name saved as Alice.', { exact: true })).toBeVisible();
     const menuBox = (await menu.boundingBox())!;
     expect(menuBox.x).toBeGreaterThanOrEqual(0);
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width);
