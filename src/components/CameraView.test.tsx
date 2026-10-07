@@ -87,10 +87,12 @@ describe('CameraView', () => {
       expect(mockOnTopicChange).toHaveBeenCalledWith('/camera/depth');
     });
 
-    it('should not render selector when no topics available', () => {
+    it('keeps refresh reachable when no topics are available', () => {
       render(<CameraView {...defaultProps} availableTopics={[]} />);
 
-      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Camera topic')).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Refresh camera topics and stream' })).toBeEnabled();
+      expect(screen.getByLabelText('Camera topic')).toHaveValue('/camera/image_raw');
     });
   });
 
@@ -119,9 +121,7 @@ describe('CameraView', () => {
     it('should reject invalid topic query delimiters', () => {
       const hostileTopic = '/camera/image_raw&x=<img src=x onerror=alert(1)>';
       // Offered as available, so the URL builder is what has to reject it.
-      render(
-        <CameraView {...defaultProps} cameraTopic={hostileTopic} availableTopics={[hostileTopic]} />
-      );
+      render(<CameraView {...defaultProps} cameraTopic={hostileTopic} availableTopics={[hostileTopic]} />);
 
       expect(screen.getByText('Failed to construct stream URL.')).toBeInTheDocument();
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
@@ -136,9 +136,7 @@ describe('CameraView', () => {
     });
 
     it('streams again once the topic is published', () => {
-      const { rerender } = render(
-        <CameraView {...defaultProps} cameraTopic="/camera/late" availableTopics={[]} />
-      );
+      const { rerender } = render(<CameraView {...defaultProps} cameraTopic="/camera/late" availableTopics={[]} />);
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
       rerender(<CameraView {...defaultProps} cameraTopic="/camera/late" availableTopics={['/camera/late']} />);
@@ -163,6 +161,35 @@ describe('CameraView', () => {
   });
 
   describe('error handling', () => {
+    it('retries a failed stream only after successful topic discovery', async () => {
+      let complete: (value: boolean) => void = () => {};
+      const onRefreshTopics = vi.fn(
+        () =>
+          new Promise<boolean>(resolve => {
+            complete = resolve;
+          })
+      );
+      render(<CameraView {...defaultProps} onRefreshTopics={onRefreshTopics} />);
+      fireEvent.error(screen.getByRole('img'));
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh camera topics and stream' }));
+      expect(onRefreshTopics).toHaveBeenCalledOnce();
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      complete(false);
+      await waitFor(() =>
+        expect(screen.getByText('Could not load this camera stream. Refresh to retry.')).toBeInTheDocument()
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh camera topics and stream' }));
+      complete(true);
+      await waitFor(() => expect(screen.getByRole('img')).toBeInTheDocument());
+    });
+
+    it('shows discovery failure and disables refresh while discovery is running', () => {
+      render(<CameraView {...defaultProps} refreshingTopics topicsError="Could not refresh camera topics." />);
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not refresh camera topics.');
+      expect(screen.getByRole('button', { name: 'Refresh camera topics and stream' })).toBeDisabled();
+    });
+
     it('should display error message when error state', () => {
       const { container } = render(<CameraView {...defaultProps} cameraTopic="" />);
 

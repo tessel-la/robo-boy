@@ -44,7 +44,7 @@ import {
   importGamepadLayouts,
   loadGamepadLibrary,
 } from '../features/customGamepad/gamepadStorage';
-import { filterCameraTopics } from '../features/customGamepad/rosMessageUtils';
+import { useCameraTopics } from '../hooks/useCameraTopics';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
@@ -1107,7 +1107,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
     assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
   }, []);
-  const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
+  const {
+    topics: availableCameraTopics,
+    refreshing: refreshingCameraTopics,
+    error: cameraTopicsError,
+    refresh: refreshCameraTopics,
+  } = useCameraTopics(ros, isConnected);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
   // --- New State for Modular Control Panels ---
@@ -1521,62 +1526,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     };
   }, [isActive, workspaceReplacementPanelId]);
 
-  // Fetch topics when connected
+  // Keep a chosen topic while it is temporarily unavailable; a refresh must not switch cameras.
   useEffect(() => {
-    let disposed = false;
-    if (isConnected && ros) {
-      console.log('Fetching ROS topics...');
-      ros.getTopics(
-        response => {
-          if (disposed) return;
-          console.log('Available topics:', response.topics);
-          console.log('Corresponding types:', response.types);
-          // Filter topics likely to be camera feeds based on type or name pattern
-          // Note: Comparing types is more reliable but requires type info from getTopics.
-          // ROS2 might require separate calls to get type info if not included in getTopics response.
-          const fetchedTopics = response.topics.map((topic, index) => ({
-            name: topic,
-            type: response.types[index] || '',
-          }));
-          const cameraTopicNames = new Set(filterCameraTopics(fetchedTopics).map(topic => topic.name));
-          const potentialTopics = response.topics.filter(topic => {
-            if (cameraTopicNames.has(topic)) {
-              return true;
-            }
-            // Fallback: Check for common naming patterns if type information is missing/incomplete
-            return topic.includes('image_raw') || topic.includes('image_color') || topic.includes('image_compressed');
-          });
-
-          console.log('Found potential camera topics:', potentialTopics);
-          setAvailableCameraTopics(potentialTopics);
-
-          // Set default selection if available
-          if (potentialTopics.length > 0 && !selectedCameraTopic) {
-            // Try to find a common default or just take the first one
-            const defaultTopic = potentialTopics.find(t => t.includes('/image_raw')) || potentialTopics[0];
-            setSelectedCameraTopic(defaultTopic);
-            console.log(`Default camera topic set to: ${defaultTopic}`);
-          } else if (potentialTopics.length === 0) {
-            console.warn('No potential camera topics found.');
-            setSelectedCameraTopic(''); // Reset if no topics found
-          }
-        },
-        error => {
-          if (disposed) return;
-          console.error('Failed to fetch ROS topics:', error);
-          setAvailableCameraTopics([]);
-          setSelectedCameraTopic('');
-        }
+    if (!isConnected) setSelectedCameraTopic('');
+    else if (availableCameraTopics.length) {
+      setSelectedCameraTopic(
+        current => current || availableCameraTopics.find(topic => topic.includes('/image_raw')) || availableCameraTopics[0]
       );
-    } else {
-      // Reset topics when disconnected
-      setAvailableCameraTopics([]);
-      setSelectedCameraTopic('');
     }
-    return () => {
-      disposed = true;
-    };
-  }, [isConnected, ros]); // Re-run when connection status or ros instance changes
+  }, [isConnected, availableCameraTopics]);
 
   // Connect on mount and disconnect on unmount or when connectionParams change
   useEffect(() => {
@@ -3196,12 +3154,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       {viewMode === 'camera' ? (
         replaySource.ros ? (
           <RecordedCameraView key={`view:${replaySource.generation}`} ros={replaySource.ros} preferredTopic={selectedCameraTopic} />
-        ) : isConnected && ros && selectedCameraTopic ? (
+        ) : isConnected && ros ? (
           <CameraView
             ros={ros}
             cameraTopic={selectedCameraTopic}
             availableTopics={availableCameraTopics}
             onTopicChange={setSelectedCameraTopic}
+            onRefreshTopics={refreshCameraTopics}
+            refreshingTopics={refreshingCameraTopics}
+            topicsError={cameraTopicsError}
           />
         ) : (
           <div className="placeholder">
@@ -3593,22 +3554,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         );
       }
       const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
-      return cameraTopic ? (
+      return (
         <CameraView
           ros={ros!}
           cameraTopic={cameraTopic}
           availableTopics={availableCameraTopics}
           onTopicChange={newTopic => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
+          onRefreshTopics={refreshCameraTopics}
+          refreshingTopics={refreshingCameraTopics}
+          topicsError={cameraTopicsError}
           selectId={`camera-topic-select-${panel.id}`}
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
           onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
         />
-      ) : (
-        <div className="placeholder">
-          {availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found'}
-        </div>
       );
     }
 

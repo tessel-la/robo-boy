@@ -5,12 +5,14 @@ import { installRosMock } from './helpers/rosMock';
 
 // A real, ongoing multipart response is essential: a fulfilled static image cannot reveal
 // streams which survive after their panel has been removed.
-test('releases MJPEG streams when camera panels are removed', async ({ page }) => {
+test('refreshes late camera topics and releases MJPEG streams on refresh and removal', async ({ page }) => {
   const frame = await sharp({ create: { width: 64, height: 48, channels: 3, background: '#123456' } })
     .jpeg()
     .toBuffer();
   const streams = new Set<ServerResponse>();
+  let requests = 0;
   const server = createServer((_request, response) => {
+    ++requests;
     streams.add(response);
     response.writeHead(200, {
       'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
@@ -39,7 +41,20 @@ test('releases MJPEG streams when camera panels are removed', async ({ page }) =
         url: `http://127.0.0.1:${address.port}/stream`,
       })
     );
-    await installRosMock(page, { topics: [{ name: '/camera/image_raw', type: 'sensor_msgs/Image' }] });
+    await installRosMock(page, {
+      topics: [],
+      serviceCalls: {
+        '/rosapi/topics': [
+          { values: { topics: [], types: [] } },
+          {
+            values: {
+              topics: ['/camera/image_raw', '/camera/late'],
+              types: ['sensor_msgs/Image', 'sensor_msgs/msg/Image'],
+            },
+          },
+        ],
+      },
+    });
     await page.goto('/');
     await page.getByTitle('Advanced Options').click();
     await page.locator('#ros2Value').fill('127.0.0.1');
@@ -50,8 +65,24 @@ test('releases MJPEG streams when camera panels are removed', async ({ page }) =
       await page.getByLabel('Add workspace panel').first().click();
       await page.getByRole('button', { name: 'Camera', exact: true }).click();
       const image = page.locator('.camera-view img');
+      if (cycle === 0) {
+        await expect(image).toHaveCount(0);
+        await page.getByRole('button', { name: 'Refresh camera topics and stream' }).click();
+      }
       await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(64);
       await expect.poll(() => streams.size).toBe(1);
+      if (cycle === 0) {
+        await page.getByLabel('Camera topic', { exact: true }).selectOption('/camera/late');
+        await page.getByLabel('Stream quality', { exact: true }).selectOption('low');
+        await expect(image).toHaveAttribute('src', /topic=\/camera\/late.*quality=40/);
+        await expect.poll(() => streams.size).toBe(1);
+        const before = requests;
+        await page.getByRole('button', { name: 'Refresh camera topics and stream' }).click();
+        await expect.poll(() => requests).toBeGreaterThan(before);
+        await expect.poll(() => streams.size).toBe(1);
+        await expect(page.getByLabel('Camera topic', { exact: true })).toHaveValue('/camera/late');
+        await expect(page.getByLabel('Stream quality', { exact: true })).toHaveValue('low');
+      }
       await page.getByRole('button', { name: 'Remove Camera', exact: true }).click();
       await expect(image).toHaveCount(0);
       await expect.poll(() => streams.size).toBe(0);
