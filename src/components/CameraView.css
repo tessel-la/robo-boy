@@ -1,96 +1,179 @@
 .camera-view {
-  background-color: var(--background-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding-top: 15px;
-  padding-bottom: 15px;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
   width: 100%;
-  /* Or set a specific width */
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  container-type: inline-size;
+}
+.camera-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--background-secondary);
+}
+.camera-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.camera-field label {
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+.camera-topic-field {
+  flex: 1 1 auto;
+}
+.camera-quality-field {
+  flex: 0 0 100px;
+}
+.camera-toolbar select,
+.camera-refresh {
+  min-width: 0;
+  height: 36px;
+  margin: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg, var(--background-secondary));
+  color: var(--text-color);
+  font: inherit;
+  font-size: 0.75rem;
+  box-shadow: none;
   box-sizing: border-box;
-  /* Ensure padding is included */
 }
-
-.camera-view h4 {
-  margin: 0 0 10px 0;
-  color: var(--text-primary);
+.camera-toolbar select {
+  width: 100%;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
-
+.camera-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-weight: 750;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.camera-refresh:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+}
+.camera-toolbar :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.camera-toolbar :disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.camera-refresh[aria-busy='true'] svg {
+  animation: camera-refresh-spin 1s linear infinite;
+}
+@keyframes camera-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.camera-discovery-error {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  margin: 0;
+  color: var(--error-color);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
 .camera-stream-container {
   position: relative;
-  /* Establish positioning context for the overlay */
   width: 100%;
-  background-color: #000;
-  /* Black background while loading/error */
-  border-radius: var(--border-radius);
+  min-height: 0;
+  min-width: 0;
+  background: #000;
   overflow: hidden;
-  /* Clip image overflow */
   display: flex;
-  /* Center placeholder text */
   justify-content: center;
   align-items: center;
-  flex-grow: 1;
-  /* Allow container to fill vertical space */
+  flex: 1 1 0;
 }
-
 .camera-stream-container img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  /* Or cover, depending on desired scaling */
 }
-
 .camera-stream-container .placeholder,
 .camera-stream-container .error-message {
   padding: 20px;
   text-align: center;
-  color: var(--text-secondary);
+  color: #b8b8b8;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
-
 .camera-stream-container .error-message {
-  color: #dc3545;
-  /* Red for error */
+  color: var(--error-color, #ff7373);
 }
-
-/* Styles for the overlay dropdown */
+/* Recorded cameras keep their topic control over the canvas. */
 .camera-topic-selector.overlay {
   position: absolute;
   top: 10px;
   right: 10px;
+  max-width: calc(100% - 20px);
   z-index: 5;
-  /* Ensure it's above the image */
-  background-color: rgba(40, 44, 52, 0.7);
-  /* Semi-transparent background */
   padding: 5px;
-  border-radius: 5px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
+  border-radius: 8px;
+  background: var(--background-secondary);
 }
-
 .camera-topic-selector.overlay select {
-  background-color: var(--input-background-color, var(--background-secondary));
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  padding: 3px 5px;
-  font-size: 0.9em;
-  border-radius: 3px;
-  max-width: 200px;
-  /* Limit width */
-  /* The app-wide form style stretches selects and spaces them for a form; these sit side by side. */
   width: auto;
+  max-width: 100%;
   margin: 0;
-}
-
-:root[data-runtime='tauri'] .camera-topic-selector.overlay select option {
-  background-color: var(--input-background-color, var(--background-secondary));
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg, var(--background-secondary));
   color: var(--text-color);
+  font: inherit;
+  font-size: 0.75rem;
 }
-
-/* Optional: Hide label if not needed */
+@container (max-width: 440px) {
+  .camera-toolbar {
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 8px;
+  }
+  .camera-topic-field {
+    flex-basis: 100%;
+  }
+  .camera-quality-field {
+    flex: 1 1 auto;
+  }
+  .camera-refresh {
+    min-width: 96px;
+  }
+}
+@media (pointer: coarse) {
+  .camera-toolbar select,
+  .camera-refresh {
+    height: 44px;
+  }
+  .camera-toolbar select {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camera-refresh[aria-busy='true'] svg {
+    animation: none;
+  }
+}
