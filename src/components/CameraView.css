@@ -1,4 +1,5 @@
 .camera-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -12,64 +13,99 @@
   border-radius: 8px;
   container-type: inline-size;
 }
+/* Floating pills and round actions match the TF / BT canvas controls. */
 .camera-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 5;
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--background-secondary);
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+.camera-toolbar > * {
+  pointer-events: auto;
 }
 .camera-field {
-  display: grid;
-  gap: 4px;
+  position: relative;
   min-width: 0;
-}
-.camera-field label {
-  color: var(--text-color-secondary);
-  font-size: 0.68rem;
-  font-weight: 750;
 }
 .camera-topic-field {
   flex: 1 1 auto;
+  max-width: 360px;
+  margin-right: auto;
 }
 .camera-quality-field {
-  flex: 0 0 100px;
+  flex: 0 0 110px;
 }
 .camera-toolbar select,
 .camera-refresh {
   min-width: 0;
   height: 36px;
   margin: 0;
-  padding: 6px 9px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--card-bg, var(--background-secondary));
-  color: var(--text-color);
+  border: 1px solid var(--border-color, #dee2e6);
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color, #212529);
   font: inherit;
-  font-size: 0.75rem;
-  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .camera-toolbar select {
   width: 100%;
+  padding: 0 27px 0 12px;
+  border-radius: 18px;
+  appearance: none;
   text-overflow: ellipsis;
-  cursor: pointer;
+}
+.camera-topic-field select {
+  padding-left: 36px;
+}
+.camera-topic-icon,
+.camera-select-chevron {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-color, #212529);
+  opacity: 0.55;
+}
+.camera-topic-icon {
+  left: 12px;
+  width: 16px;
+  height: 16px;
+}
+.camera-select-chevron {
+  right: 10px;
+  width: 14px;
+  height: 14px;
 }
 .camera-refresh {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  font-weight: 750;
-  cursor: pointer;
+  flex: 0 0 36px;
+  width: 36px;
+  padding: 0;
+  border-radius: 50%;
   touch-action: manipulation;
 }
+.camera-refresh > svg {
+  width: 18px;
+  height: 18px;
+}
+.camera-toolbar select:hover:not(:disabled),
 .camera-refresh:hover:not(:disabled) {
-  border-color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  color: var(--primary-color, #32cd32);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.camera-refresh:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .camera-toolbar :focus-visible {
   outline: 2px solid var(--primary-color);
@@ -78,6 +114,7 @@
 .camera-toolbar :disabled {
   opacity: 0.5;
   cursor: default;
+  box-shadow: none;
 }
 .camera-refresh[aria-busy='true'] svg {
   animation: camera-refresh-spin 1s linear infinite;
@@ -88,10 +125,18 @@
   }
 }
 .camera-discovery-error {
-  flex-shrink: 0;
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  right: 12px;
+  z-index: 5;
   padding: 8px 10px;
   margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--card-bg, #ffffff);
   color: var(--error-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
@@ -147,29 +192,24 @@
   font: inherit;
   font-size: 0.75rem;
 }
-@container (max-width: 440px) {
-  .camera-toolbar {
-    flex-wrap: wrap;
-    gap: 7px;
-    padding: 8px;
-  }
-  .camera-topic-field {
-    flex-basis: 100%;
-  }
-  .camera-quality-field {
-    flex: 1 1 auto;
-  }
-  .camera-refresh {
-    min-width: 96px;
-  }
-}
 @media (pointer: coarse) {
   .camera-toolbar select,
   .camera-refresh {
     height: 44px;
   }
   .camera-toolbar select {
+    border-radius: 22px;
     font-size: 16px;
+  }
+  .camera-quality-field {
+    flex-basis: 120px;
+  }
+  .camera-refresh {
+    width: 44px;
+    flex-basis: 44px;
+  }
+  .camera-discovery-error {
+    top: 68px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

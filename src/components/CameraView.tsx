@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiRefreshCw } from 'react-icons/fi';
+import { FiCamera, FiChevronDown, FiRefreshCw } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import './CameraView.css';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
@@ -193,7 +193,7 @@ const CameraView: React.FC<CameraViewProps> = ({
     <div className="camera-view">
       <div className="camera-toolbar" aria-label="Camera controls">
         <div className="camera-field camera-topic-field">
-          <label htmlFor={selectId}>Topic</label>
+          <FiCamera className="camera-topic-icon" aria-hidden="true" />
           <select
             id={selectId}
             aria-label="Camera topic"
@@ -213,9 +213,9 @@ const CameraView: React.FC<CameraViewProps> = ({
               </option>
             ))}
           </select>
+          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
         </div>
         <div className="camera-field camera-quality-field">
-          <label htmlFor={`${selectId}-quality`}>Quality</label>
           <select
             id={`${selectId}-quality`}
             aria-label="Stream quality"
@@ -229,18 +229,18 @@ const CameraView: React.FC<CameraViewProps> = ({
               </option>
             ))}
           </select>
+          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
         </div>
         <button
           type="button"
           className="camera-refresh"
           aria-label="Refresh camera topics and stream"
-          title="Refresh camera topics and retry the stream"
+          title={refreshingTopics ? 'Refreshing camera topics…' : 'Refresh camera topics and retry the stream'}
           disabled={!ros?.isConnected || refreshingTopics}
           aria-busy={refreshingTopics}
           onClick={() => void refreshCamera()}
         >
           <FiRefreshCw aria-hidden="true" />
-          <span>{refreshingTopics ? 'Refreshing…' : 'Refresh'}</span>
         </button>
       </div>
       {topicsError && (
