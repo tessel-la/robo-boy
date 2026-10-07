@@ -51,7 +51,7 @@ describe('validatePadAgainstRos', () => {
     const layout = baseLayout([
       {
         eventOperations: {
-          press: { kind: 'service', name: '/missing_service', messageType: 'std_srvs/srv/SetBool' },
+          press: { kind: 'service', name: '/missing_service', messageType: 'std_srvs/srv/SetBool', payload: { data: true } },
         },
       },
     ]);
@@ -66,7 +66,7 @@ describe('validatePadAgainstRos', () => {
         type: 'physical-gamepad',
         config: {
           physicalGamepadBindings: {
-            'face-bottom': { press: { kind: 'action', name: '/wrong_action', messageType: 'nav2_msgs/action/NavigateToPose' } },
+            'face-bottom': { press: { kind: 'action', name: '/wrong_action', messageType: 'nav2_msgs/action/NavigateToPose', payload: { pose: {} } } },
           },
         },
       },
@@ -80,5 +80,20 @@ describe('validatePadAgainstRos', () => {
   it('ignores components with no ROS references at all', () => {
     const layout = baseLayout([{}]);
     expect(validatePadAgainstRos(layout, discovery)).toEqual([]);
+  });
+
+  it('rejects an action with no executable payload even when its name and type match', () => {
+    const layout = baseLayout([{ eventOperations: { press: { kind: 'action', name: '/nav', messageType: 'nav2_msgs/action/NavigateToPose', payload: {} } } }]);
+    expect(validatePadAgainstRos(layout, discovery).some(issue => issue.message.includes('no complete goal'))).toBe(true);
+  });
+
+  it('checks captured joint counts and trajectory timing', () => {
+    const type = 'control_msgs/action/FollowJointTrajectory';
+    const graph = { topics: [], services: [], actions: [{ name: '/home', type, namespace: '/' }] };
+    const payload = { trajectory: { joint_names: ['joint1', 'joint2'], points: [{ positions: [0.5], time_from_start: { sec: 0, nanosec: 0 } }] } };
+    const layout = baseLayout([{ eventOperations: { press: { kind: 'action', name: '/home', messageType: type, payload } } }]);
+    const issues = validatePadAgainstRos(layout, graph);
+    expect(issues.some(issue => issue.message.includes('one finite position'))).toBe(true);
+    expect(issues.some(issue => issue.message.includes('positive and increasing'))).toBe(true);
   });
 });

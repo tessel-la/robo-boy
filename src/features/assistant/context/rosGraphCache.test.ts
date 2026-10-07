@@ -14,6 +14,19 @@ describe('createRosGraphCache', () => {
     discoverAllROSResourcesMock.mockReset();
   });
 
+  it('releases a cancelled turn promptly while another reader still receives shared discovery', async () => {
+    let finish!: (result: typeof emptyResult) => void;
+    discoverAllROSResourcesMock.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const cache = createRosGraphCache(), ros = {} as never, controller = new AbortController();
+    const cancelled = cache.get(ros, 1, { signal: controller.signal });
+    const other = cache.get(ros, 1);
+    controller.abort();
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+    finish(emptyResult);
+    expect((await other)?.result).toBe(emptyResult);
+    expect(discoverAllROSResourcesMock).toHaveBeenCalledOnce();
+  });
+
   it('returns a fresh result on first call and caches it for the same ros+generation', async () => {
     discoverAllROSResourcesMock.mockResolvedValue(emptyResult);
     const cache = createRosGraphCache(30_000);

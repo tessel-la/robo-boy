@@ -62,6 +62,7 @@ export const CLAUDE_CHAT_FLAGS = [
   '--output-format',
   'stream-json',
   '--verbose',
+  '--include-partial-messages',
 ];
 
 /** A single successful result from the official runtime; partial text/tool calls are never applied. */
@@ -155,7 +156,8 @@ export class ClaudeSubscription {
     signal: AbortSignal,
     input?: string,
     cwd = this.directory,
-    executable?: string
+    executable?: string,
+    onThinking?: (text: string) => void
   ): Promise<string> {
     signal.throwIfAborted();
     if (!this.prepared)
@@ -186,6 +188,7 @@ export class ClaudeSubscription {
       });
       let output = '',
         tooLarge = false;
+      let streamBuffer = '';
       let hardKill: ReturnType<typeof setTimeout> | undefined;
       const kill = (force = false) => {
         try {
@@ -217,6 +220,18 @@ export class ClaudeSubscription {
         if (output.length > 8 * 1024 * 1024) {
           tooLarge = true;
           abort();
+        }
+        if (onThinking && !tooLarge && !signal.aborted) {
+          streamBuffer += chunk;
+          const lines = streamBuffer.split(/\r?\n/);
+          streamBuffer = lines.pop() ?? '';
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              const delta = event.type === 'stream_event' ? event.event?.delta : undefined;
+              if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') onThinking(delta.thinking);
+            } catch { /* Completed output is validated by claudeResult. */ }
+          }
         }
       });
       // Drain diagnostics without exposing credentials or the contents of prompts.
@@ -264,7 +279,7 @@ export class ClaudeSubscription {
     await this.run(['auth', 'logout'], signal);
   }
 
-  async send(request: SubscriptionChatRequest, signal: AbortSignal): Promise<string> {
+  async send(request: SubscriptionChatRequest, signal: AbortSignal, onThinking?: (text: string) => void): Promise<string> {
     const state = await this.getState();
     if (!state.accounts.some(account => account.planEnabled))
       throw new Error(state.error ?? 'Sign in through Claude Code in Assistant settings before sending.');
@@ -295,7 +310,9 @@ export class ClaudeSubscription {
         ],
         signal,
         input,
-        cwd
+        cwd,
+        undefined,
+        onThinking
       );
       signal.throwIfAborted();
       return claudeResult(output);

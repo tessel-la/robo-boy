@@ -131,7 +131,7 @@ const FieldListRow: React.FC<{
   connections: string[];
 }> = ({ field, value, basePath, onPush, onInlineChange, connections }) => {
   const fieldPath = [...basePath, field.name];
-  const hasSubfields = (field.subfields?.length ?? 0) > 0;
+  const hasSubfields = field.arrayLen === -1 && (field.subfields?.length ?? 0) > 0;
 
   if (isBoolType(field.rosType)) {
     return (
@@ -280,7 +280,7 @@ const FieldEditView: React.FC<{
 const fieldPaths = (fields: ActionFieldSchema[], prefix = ''): BlackboardPathSuggestion[] =>
   fields.flatMap(field => {
     const path = prefix ? `${prefix}.${field.name}` : field.name;
-    return field.subfields?.length
+    return field.arrayLen === -1 && field.subfields?.length
       ? [{ path, rosType: field.rosType }, ...fieldPaths(field.subfields, path)]
       : [{ path, rosType: field.rosType }];
   });

@@ -199,9 +199,14 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     requests.set(id, { owner: event.sender.id, provider: request.provider, controller });
     const timeout = setTimeout(() => controller.abort(), 300_000);
     try {
+      const onThinking = (text: string) => {
+        if (!controller.signal.aborted && epoch === epochs[request.provider] && !event.sender.isDestroyed()) {
+          event.sender.send('roboboy:assistant-thinking', id, text.slice(0, 64 * 1024));
+        }
+      };
       const result = await (request.provider === 'openai'
-        ? openai.send(request, controller.signal)
-        : claude.send(request, controller.signal));
+        ? openai.send(request, controller.signal, onThinking)
+        : claude.send(request, controller.signal, onThinking));
       controller.signal.throwIfAborted();
       if (epoch !== epochs[request.provider])
         throw new Error('The assistant account changed. Please send the message again.');

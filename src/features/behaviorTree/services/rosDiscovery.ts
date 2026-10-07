@@ -700,9 +700,10 @@ function buildSchemaFields(
     const rosType = types[i] ?? 'float64';
     const arrayLen = lens[i] !== undefined ? lens[i] : -1;
 
-    // Attempt to expand nested message types (not arrays, not primitives)
+    // Arrays need their element schema too: JointTrajectory.points otherwise loses positions
+    // and time_from_start, leaving the assistant unable to construct a complete action goal.
     let subfields: ActionFieldSchema[] | undefined;
-    if (depth < 3 && arrayLen === -1 && !SCHEMA_PRIMITIVES.has(rosType)) {
+    if (depth < 3 && !SCHEMA_PRIMITIVES.has(rosType)) {
       const nested = allTypedefs.find(t => t.type === rosType || t.type.split('/').pop() === rosType.split('/').pop());
       if (nested?.fieldnames?.length) {
         const sub = buildSchemaFields(nested, allTypedefs, true, depth + 1);

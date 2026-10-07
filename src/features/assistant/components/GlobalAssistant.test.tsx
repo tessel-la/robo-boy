@@ -65,7 +65,7 @@ describe('GlobalAssistant', () => {
       .toEqual({ top: 208, height: 360, workspaceInset: 360, takeover: false });
   });
 
-  it('asks rosapi only for Pad-bindable topic types on a Pad turn, never the whole graph', async () => {
+  it('does not introspect unrelated graph types before the model has requested an interface', async () => {
     discoveryMock.discoverAllROSResources.mockResolvedValue({
       topics: [
         { name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' },
@@ -86,7 +86,7 @@ describe('GlobalAssistant', () => {
 
     await waitFor(() => expect(screen.getByText('Pad idea.')).toBeInTheDocument());
     const askedTypes = discoveryMock.fetchMessageSchema.mock.calls.map(call => call[1]).sort();
-    expect(askedTypes).toEqual(['geometry_msgs/msg/Twist', 'sensor_msgs/msg/Joy']);
+    expect(askedTypes).toEqual([]);
   });
 
   it('opens as a desktop complementary panel through its application-toolbar handle', () => {
@@ -221,8 +221,9 @@ describe('GlobalAssistant', () => {
     await waitFor(() => expect(screen.getByText('Here is the tree plan.')).toBeInTheDocument());
     expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
     const secondRequest = sendAssistantChatMock.mock.calls[1][0];
-    expect(secondRequest.messages[secondRequest.messages.length - 1]).toMatchObject({ role: 'user', content: 'Build a tree that moves the robot 0.1 m left and then right.' });
-    expect(screen.getByText('Build a tree that moves the robot 0.1 m left and then right.')).toBeInTheDocument();
+    expect(secondRequest.messages.at(-1)).toMatchObject({ role: 'user', content: 'add a bt panel with a bt that moves the robot left and right' });
+    expect(secondRequest.systemPrompt).toContain('Build a tree that moves the robot 0.1 m left and then right.');
+    expect(screen.queryByText('Build a tree that moves the robot 0.1 m left and then right.')).not.toBeInTheDocument();
   });
 
   it('continues an explicit second task when the model omits followUp', async () => {
@@ -245,7 +246,7 @@ describe('GlobalAssistant', () => {
     expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
     expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1)).toMatchObject({
       role: 'user',
-      content: 'Create a BT to move the robot',
+      content: 'add the BT panel and create a BT to move the robot',
     });
   });
 
@@ -355,7 +356,7 @@ describe('GlobalAssistant', () => {
     expect(screen.getByText('Found 2 matching messages.')).toBeInTheDocument();
     expect(screen.getByText('✗ The inspector is unavailable.')).toBeInTheDocument();
     const followUp = sendAssistantChatMock.mock.calls[1][0];
-    expect(followUp.messages.at(-1)).toMatchObject({ role: 'user', content: 'Summarise the errors in the recording.' });
+    expect(followUp.messages.at(-1)).toMatchObject({ role: 'user', content: 'what errors are in this rosbag' });
     expect(followUp.systemPrompt).toContain('No path found');
   });
 
@@ -381,7 +382,9 @@ describe('GlobalAssistant', () => {
     expect(oldApply).not.toHaveBeenCalled();
     expect(host).toHaveBeenCalledOnce();
     expect(screen.getByText('Ask again to save once the changes above are on screen.')).toBeInTheDocument();
-    expect(sendAssistantChatMock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledTimes(2));
+    // Retrying the model must not repeat the already-successful panel mutation.
+    expect(host).toHaveBeenCalledOnce();
   });
 
   it('cancels settings waiting on a new panel when the assistant closes', async () => {
@@ -411,8 +414,8 @@ describe('GlobalAssistant', () => {
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a timeserie panel with the joints states showing in the ui' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(screen.getByText('Plotting task continued.')).toBeInTheDocument());
-    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('do not add another panel');
-    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('joints states showing in the ui');
+    expect(sendAssistantChatMock.mock.calls[1][0].systemPrompt).toContain('do not add another panel');
+    expect(sendAssistantChatMock.mock.calls[1][0].systemPrompt).toContain('joints states showing in the ui');
   });
 
   it('tells the user when no host is mounted to edit the workspace', async () => {

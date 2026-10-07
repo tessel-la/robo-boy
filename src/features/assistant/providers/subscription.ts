@@ -3,7 +3,7 @@ import { subscriptionErrorMessage } from '../../../runtime/assistantSubscription
 import type { SendChat } from './types';
 import { selectedThinkingEffort } from './thinking';
 
-export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, messages, signal, jsonMode }) => {
+export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, messages, signal, jsonMode, onThinking }) => {
   const bridge = getDesktopBridge()?.assistant;
   if (!bridge)
     throw new Error(
@@ -22,6 +22,7 @@ export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, m
     rejectAbort(new DOMException('Request cancelled.', 'AbortError'));
   };
   signal?.addEventListener('abort', cancel, { once: true });
+  const unsubscribe = bridge.onThinking?.(id, text => { if (!signal?.aborted) onThinking?.(text); });
   try {
     const result = await Promise.race([
       bridge.send(id, { provider: settings.provider, model: settings.model, systemPrompt, messages, jsonMode,
@@ -34,6 +35,7 @@ export const sendSubscriptionChat: SendChat = async ({ settings, systemPrompt, m
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
     throw new Error(subscriptionErrorMessage(cause));
   } finally {
+    unsubscribe?.();
     signal?.removeEventListener('abort', cancel);
   }
 };

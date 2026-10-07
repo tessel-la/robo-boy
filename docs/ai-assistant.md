@@ -67,7 +67,7 @@ Official contracts: [ChatGPT plan usage](https://developers.openai.com/siwc/toke
 
 **Everything the app holds goes in every turn.** The workspace snapshot (panels with their configuration, the current and saved layouts), every saved Pad and every saved Behavior Tree as complete JSON, the whole ROS graph, and the node and parameter lists. They are local reads, so making a user fetch the right one first cost more than carrying them all. Every reply lists what it used, with source and age, and a reconnect marks stale data rather than presenting it as current.
 
-There is no context picker to manage. What is left for the user to choose is the data that is genuinely expensive: a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture.
+There is no context picker to manage. The assistant can request a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture, node/parameter details, camera image or displayed Pad values itself. Tags remain optional references; you do not need to attach resources before it can use them.
 
 Plotting requests automatically retrieve a schema and one bounded live sample for up to three
 explicitly named topics. A joint-state request without a topic name samples graph topics of type
@@ -113,9 +113,9 @@ like any other panel's settings, and the assistant can act on it with `configure
   stops after 20 seconds or half a million messages and says where it stopped.
 
 Data that a request reads (a selected message, a log query, a sample, a read) arrives on the
-assistant's next turn. The model therefore puts the question in `followUp`, and the app sends it
-as soon as the data is there: a panel's `apply` may finish asynchronously, and the assistant waits
-for it before continuing.
+assistant's next model round within the same user turn. A panel's `apply` may finish
+asynchronously; the assistant waits for it before continuing. Its continuation and tool results
+are never inserted as messages from you.
 
 The assistant can also see which Behavior Tree is running, its active node and its last status,
 and it can set a camera panel's stream quality.
@@ -146,6 +146,34 @@ A mention is coloured as it is written: a backdrop behind the textarea paints th
 A message's tags are read from its own text, so the colouring survives a reload, a repeat and an edit. Editing an already-sent message uses the same picker and colouring; its list opens downwards, because an editor in the transcript would otherwise put the list under the header. A tag whose resource is currently on screen is clickable and opens it; one with no view waiting stays a plain mark rather than a dead link.
 
 ## What The Model Is Told About The App
+
+The assistant uses a bounded read/act/observe loop (`agentLoop.ts`), rather than stopping after
+one model response. `contextRequest` asks for up to six reads; their results, timestamps and
+errors go into the next round. Workspace changes similarly return their actual outcomes before
+remaining work continues. Every round refreshes app context. Stop, account changes, and ROS
+reconnect cancel the current work; a turn stops after twelve model rounds or repeated invalid
+proposals. Successful identical workspace batches are not applied twice in the same turn.
+
+All domain tools are offered even for short follow-ups such as "solve it". Keyword matching
+only optimizes eager retrieval and deterministic TF shortcuts; it no longer hides Pad/BT/layout
+instructions. Live captures remain session-only, carry age and connection generation, and can be
+used in a follow-up about the same capture. New conversation clears them.
+
+Provider-exposed thinking appears in a separate expandable assistant section while streaming
+and below the completed reply. It is never treated as answer JSON, a user message or persisted
+conversation content. OpenAI-compatible reasoning, Claude thinking, Gemini thought parts,
+Ollama thinking, and Electron subscription streams use this path. Providers that expose no
+thinking show tool activity instead.
+
+Pad service/action bindings must have an executable `eventOperations` payload. A primary action
+with a supplied request/goal is migrated to the correct button/toggle event; an absent or empty
+goal is rejected and returned to the model for correction. Retrieved schemas check supplied
+field names/types and nested arrays. Joint-trajectory goals additionally need distinct joint
+names, one finite position per joint, and increasing positive times. These checks do not certify
+joint limits, collision clearance or robot safety; motion remains in the reviewed Pad/BT flow.
+
+See [assistant investigation](assistant-investigation.md) for source comparisons and the protocol
+choice.
 
 Left to general ROS knowledge the model answers app questions from outside the app: asked whether Robo-Boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
 

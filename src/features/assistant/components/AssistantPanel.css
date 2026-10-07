@@ -1750,3 +1750,12 @@
   content: '✗';
   color: var(--error-color, #dc3545);
 }
+.assistant-thinking {
+  margin: 8px 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.assistant-thinking summary { cursor: pointer; min-height: 44px; display: list-item; }
+.assistant-thinking > div { white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+.assistant-thinking ul { padding-left: 20px; }

@@ -32,6 +32,8 @@ export interface SendChatRequest {
   messages: AssistantChatTurn[];
   signal?: AbortSignal;
   onToken?: (text: string) => void;
+  /** Only provider-exposed reasoning/thinking, kept separate from answer text. */
+  onThinking?: (text: string) => void;
   onProgress?: (message: string) => void;
   /** Ask the provider to constrain output to a single JSON object, using whatever native
    * mechanism it offers (or a system-prompt instruction, for providers with none). */

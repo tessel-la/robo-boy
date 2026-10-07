@@ -41,6 +41,7 @@ export interface AssistantPanelProps {
   messages: AssistantMessage[];
   isGenerating: boolean;
   progressMessages: string[];
+  thinking?: string;
   error: string;
   clarificationSuggestions?: string[];
   onSelectSuggestion: (suggestion: string) => void;
@@ -202,7 +203,7 @@ type AssistantMotionPhase = 'closed' | 'entering' | 'open' | 'closing';
 
 const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
-    open, compact, onClose, messages, isGenerating, progressMessages, error, clarificationSuggestions, onSelectSuggestion,
+    open, compact, onClose, messages, isGenerating, progressMessages, thinking, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
     onOpenResource, canOpenResource, contextPickerSections,
     attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
@@ -557,6 +558,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
+              {message.role === 'assistant' && message.thinking && <details className="assistant-thinking"><summary>Thinking</summary><div>{message.thinking}</div></details>}
               {editingMessageId === message.id ? (
                 <div className="assistant-message-edit">
                   <span className="assistant-textarea-shell has-highlight">
@@ -606,6 +608,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               {message.role === 'user' && editingMessageId !== message.id && <div className="assistant-message-actions"><button type="button" onClick={() => onRepeat(index)} disabled={isGenerating} aria-label="Repeat" title="Repeat"><FaRedo aria-hidden="true" /></button><button type="button" onClick={() => startEditingMessage(message)} disabled={isGenerating} aria-label="Edit message" title="Edit and resend"><FaPencilAlt aria-hidden="true" /></button></div>}
             </article>
           ))}
+          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}<ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul></details></article>}
           {(lastProgress || error) && <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || lastProgress}</div>}
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
         </div>

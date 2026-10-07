@@ -31,6 +31,8 @@ type MockRosResources = {
   actionServers?: Array<{ name: string; type: string }>;
   nodes?: Array<{ name: string; subscribing?: string[]; publishing?: string[]; services?: string[] }>;
   parameters?: Record<string, unknown>;
+  /** rosapi typedef responses keyed by the requested interface type. */
+  schemas?: Record<string, unknown[]>;
 };
 
 const defaultResources: Required<MockRosResources> = {
@@ -39,6 +41,9 @@ const defaultResources: Required<MockRosResources> = {
   actionServers: [{ name: '/navigate_to_pose', type: 'nav2_msgs/action/NavigateToPose' }],
   nodes: [{ name: '/controller', subscribing: [], publishing: ['/cmd_vel'], services: ['/set_bool'] }],
   parameters: { '/controller/max_velocity': 1.5 },
+  schemas: {},
+  actionGoals: {},
+  serviceCalls: {},
 };
 
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
@@ -50,6 +55,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     parameters: resources.parameters ?? defaultResources.parameters,
     actionGoals: resources.actionGoals ?? {},
     serviceCalls: resources.serviceCalls ?? {},
+    schemas: resources.schemas ?? {},
   };
 
   await page.addInitScript(initResources => {
@@ -259,7 +265,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
             return { topics: initResources.topics.filter(item => item.type === args.type).map(item => item.name) };
           case '/rosapi/message_details':
           case '/rosapi/service_request_details':
-            return { typedefs: [] };
+          case '/rosapi/action_goal_details':
+            return { typedefs: initResources.schemas[args.type] ?? [] };
           case '/rosapi/nodes':
             return { nodes: initResources.nodes.map(item => item.name) };
           case '/rosapi/node_details':

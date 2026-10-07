@@ -17,7 +17,9 @@ export const readSse = async (
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
       if (!data || data === '[DONE]') continue;
-      const token = extract(JSON.parse(data));
+      const payload = JSON.parse(data);
+      if (payload.error || payload.type === 'error') throw new Error(payload.error?.message ?? String(payload.error ?? 'Provider stream failed.'));
+      const token = extract(payload);
       if (token) {
         result += token;
         onToken?.(token);

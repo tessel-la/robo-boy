@@ -60,6 +60,13 @@ const desktopBridge = {
     manageUsage: provider => ipcRenderer.invoke('roboboy:assistant-usage', provider),
     send: (id, request) => ipcRenderer.invoke('roboboy:assistant-send', id, request),
     cancel: id => ipcRenderer.invoke('roboboy:assistant-cancel', id),
+    onThinking: (id, handler) => {
+      const listener = (_event: unknown, requestId: string, text: unknown) => {
+        if (requestId === id && typeof text === 'string') handler(text);
+      };
+      ipcRenderer.on('roboboy:assistant-thinking', listener);
+      return () => ipcRenderer.removeListener('roboboy:assistant-thinking', listener);
+    },
   } satisfies AssistantSubscriptionBridge,
 
   window: {

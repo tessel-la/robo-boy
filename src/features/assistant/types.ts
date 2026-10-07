@@ -59,6 +59,8 @@ export interface AssistantMessage {
    * "Context used" disclosure under the reply. This is how provenance stays visible without
    * cluttering the composer with pre-declared chips (see docs/ai-assistant.md). */
   contextUsed?: AssistantContextUsage[];
+  /** Provider-exposed thinking summaries; never mixed into the answer or user history. */
+  thinking?: string;
 }
 
 export interface AssistantContextUsage {
@@ -285,6 +287,7 @@ export interface AssistantWorkspaceEdit {
 }
 
 export type AssistantResponse =
+  | { kind: 'contextRequest'; summary: string; reads: import('./tools/contextTool').ContextRead[] }
   | AssistantExplanation
   | AssistantClarification
   | AssistantBehaviorTreeProposal

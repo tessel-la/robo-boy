@@ -23,6 +23,16 @@ const stream = (...events: unknown[]) =>
   new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
 
 describe('completed Responses stream', () => {
+  it('streams reasoning summaries without including them in the answer', async () => {
+    const onThinking = vi.fn();
+    const result = await completedResponse(stream(
+      { type: 'response.reasoning_summary_text.delta', delta: 'Checking robot data.' },
+      { type: 'response.output_text.delta', delta: '{"kind":"explanation","message":"Done"}' },
+      { type: 'response.completed', response: { status: 'completed' } }
+    ), new AbortController().signal, onThinking);
+    expect(onThinking).toHaveBeenCalledWith('Checking robot data.');
+    expect(result).not.toContain('Checking robot data.');
+  });
   it('requires completion and preserves UTF-8 text split across bytes', async () => {
     const bytes = new TextEncoder().encode(
       'data: {"type":"response.output_text.delta","delta":"hé"}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n'
@@ -219,12 +229,12 @@ describe('ChatGPT account lifecycle', () => {
       },
       new AbortController().signal
     );
-    expect(lastRequest.reasoning).toEqual({ effort: 'high' });
+    expect(lastRequest.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     await runtime.send(
       { provider: 'openai', model: 'gpt-6.1-sol', systemPrompt: '', messages: [{ role: 'user', content: 'hello' }] },
       new AbortController().signal
     );
-    expect(lastRequest).not.toHaveProperty('reasoning');
+    expect(lastRequest.reasoning).toEqual({ summary: 'auto' });
   });
   it('does not treat identity-only consent as plan access', async () => {
     grantedScope = 'openid email';

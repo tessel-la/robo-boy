@@ -2,6 +2,9 @@ import type { ROSActionInfo, ROSDiscoveryResult, ROSServiceInfo, ROSTopicInfo } 
 import type { CustomGamepadLayout, GamepadComponentConfig } from '../../customGamepad/types';
 import type { RosOperation } from '../../../utils/rosOperations';
 import type { PadValidationIssue } from '../types';
+import type { AssistantAutoContext } from '../types';
+import type { ActionGoalDetails } from '../../behaviorTree/services/rosDiscovery';
+import { validatePayload } from './payloadValidation';
 
 /**
  * Whole-layout Pad-vs-ROS validator — nothing like this exists in `src/features/customGamepad/`
@@ -18,7 +21,8 @@ import type { PadValidationIssue } from '../types';
  */
 export const validatePadAgainstRos = (
   layout: CustomGamepadLayout,
-  discovery: ROSDiscoveryResult
+  discovery: ROSDiscoveryResult,
+  schemas?: AssistantAutoContext['interfaceSchemas']
 ): PadValidationIssue[] => {
   const issues: PadValidationIssue[] = [];
   const topicByName = new Map<string, string>(discovery.topics.map((topic: ROSTopicInfo) => [topic.name, topic.type]));
@@ -32,7 +36,7 @@ export const validatePadAgainstRos = (
   };
 
   const checkTopic = (name: string, messageType: string, componentId: string, componentLabel: string, refLabel: string) => {
-    if (!name) return;
+    if (!name || !messageType) { report(componentId, componentLabel, `${refLabel} needs both a topic name and message type.`); return; }
     const liveType = topicByName.get(name);
     if (liveType === undefined) {
       report(componentId, componentLabel, `${refLabel} references topic "${name}", which the robot is not currently publishing or subscribing to.`);
@@ -75,6 +79,33 @@ export const validatePadAgainstRos = (
 
   const checkOperation = (operation: RosOperation | undefined, componentId: string, componentLabel: string, refLabel: string) => {
     if (!operation) return;
+    if (!operation.payload || typeof operation.payload !== 'object' || Array.isArray(operation.payload) || (operation.kind === 'action' && Object.keys(operation.payload).length === 0)) {
+      report(componentId, componentLabel, `${refLabel} has no complete ${operation.kind === 'action' ? 'goal' : 'payload'} for "${operation.name}".`);
+    }
+    const rawSchema = operation.kind === 'topic' ? schemas?.topics[operation.messageType] : operation.kind === 'service' ? schemas?.services[operation.messageType] : schemas?.actions[operation.messageType];
+    const schema = rawSchema as ActionGoalDetails | undefined;
+    if (schema?.fields && operation.payload) {
+      validatePayload(operation.payload, schema).forEach(message => report(componentId, componentLabel, `${refLabel}: ${message}`));
+    }
+    if (schemas && operation.kind !== 'topic' && !schema) {
+      report(componentId, componentLabel, `${refLabel}: retrieve the ${operation.kind} schema for "${operation.name}" before proposing its payload.`);
+    }
+    if (operation.kind === 'action' && /(?:^|\/)FollowJointTrajectory$/.test(operation.messageType)) {
+      const trajectory = operation.payload?.trajectory as { joint_names?: unknown; points?: Array<{ positions?: unknown; time_from_start?: { sec?: number; nanosec?: number } }> } | undefined;
+      const names = trajectory?.joint_names;
+      if (!Array.isArray(names) || !names.length || names.some(name => typeof name !== 'string' || !name) || new Set(names).size !== names.length) report(componentId, componentLabel, `${refLabel}: trajectory requires distinct captured joint_names.`);
+      if (!Array.isArray(trajectory?.points) || !trajectory.points.length) report(componentId, componentLabel, `${refLabel}: trajectory requires target points.`);
+      else {
+        let previousTime = 0;
+        for (const point of trajectory.points) {
+          if (!Array.isArray(point.positions) || point.positions.length !== (Array.isArray(names) ? names.length : 0) || point.positions.some(value => typeof value !== 'number' || !Number.isFinite(value))) report(componentId, componentLabel, `${refLabel}: every point needs one finite position for each joint.`);
+          const seconds = point.time_from_start?.sec ?? 0, nanos = point.time_from_start?.nanosec ?? 0;
+          const time = seconds + nanos / 1e9;
+          if (!Number.isInteger(seconds) || !Number.isInteger(nanos) || nanos < 0 || nanos >= 1e9 || !Number.isFinite(time) || time <= previousTime) report(componentId, componentLabel, `${refLabel}: time_from_start must be positive and increasing.`);
+          previousTime = time;
+        }
+      }
+    }
     if (operation.kind === 'topic') checkTopic(operation.name, operation.messageType, componentId, componentLabel, refLabel);
     else if (operation.kind === 'service') checkService(operation.name, operation.messageType, componentId, componentLabel, refLabel);
     else checkAction(operation.name, operation.messageType, componentId, componentLabel, refLabel);
@@ -88,6 +119,7 @@ export const validatePadAgainstRos = (
       if ('topic' in action) {
         checkTopic(action.topic, action.messageType, component.id, label, 'Primary action');
       } else if ('type' in action && (action.type === 'action' || action.type === 'service')) {
+        report(component.id, label, 'Service/action bindings must be stored in eventOperations with a complete payload. A primary action alone will not execute.');
         if (action.type === 'service') checkService(action.name, action.messageType, component.id, label, 'Primary action');
         else checkAction(action.name, action.messageType, component.id, label, 'Primary action');
       }

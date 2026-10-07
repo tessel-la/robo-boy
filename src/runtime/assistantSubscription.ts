@@ -59,4 +59,6 @@ export interface AssistantSubscriptionBridge {
   manageUsage(provider: SubscriptionProvider): Promise<void>;
   send(id: string, request: SubscriptionChatRequest): Promise<string>;
   cancel(id: string): Promise<void>;
+  /** Request-scoped stream; unsubscribe before another account/request can deliver events. */
+  onThinking?(id: string, listener: (text: string) => void): () => void;
 }

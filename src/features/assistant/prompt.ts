@@ -10,10 +10,13 @@ import { CAMERA_FRAME_CAPABILITY } from './context/cameraContext';
 import { PAD_VALUES_CAPABILITY } from './context/padContext';
 import type { AssistantAutoContext, AssistantContextChip, AssistantSettings } from './types';
 
-const BASE_PERSONA = `You are the Robo-Boy assistant, a single global copilot embedded in the Robo-Boy robot teleoperation app. Use only the workspace, Pad, Behavior Tree, ROS, TF, diagnostics, and attachment context supplied below. Every item includes its source and freshness. Never claim that you lack access to data that is present in the supplied context. Never invent a ROS name, type, field, frame, Pad, panel, or Behavior Tree. Robo-Boy does not let this chat execute robot-affecting operations; propose them for review through the Pad or Behavior Tree workflows. Answer directly when the user asks a question. Only produce one of the structured JSON outputs described below when the user's request matches that tool.`;
+import { CONTEXT_READ_CAPABILITY, CONTEXT_TOOL_PROMPT } from './tools/contextTool';
+
+const BASE_PERSONA = `You are the Robo-Boy assistant, a single global copilot embedded in the Robo-Boy robot teleoperation app. Complete the user's request autonomously using the supplied context and read tools. Missing live samples or schemas are a reason to call a read tool, never to ask for an @ tag. Every item includes its source and freshness. Never claim that you lack access to data that is present in the supplied context. Never invent a ROS name, type, field, frame, Pad, panel, or Behavior Tree. Robo-Boy does not let this chat execute robot-affecting operations; propose them for review through the Pad or Behavior Tree workflows. Answer directly when the user asks a question. Only produce one of the structured JSON outputs described below when the user's request matches that tool. Say a change is complete only when its bindings and payloads are complete; otherwise retrieve the missing evidence and repair it.`;
 
 const RESPONSE_CONTRACT = `## Response contract
 Always return ONLY one JSON object, no markdown fences, matching exactly one of:
+- {"kind":"contextRequest","summary":"what you are checking","reads":[...]} — retrieve needed evidence and continue in this turn, using the read tools below.
 - {"kind":"explanation","message":"..."} — for questions, diagnosis, comparisons, or anything not covered below.
 - {"kind":"clarification","question":"...","suggestions":["...","..."]} — only when truly blocked by a safety-critical unknown. Ask at most once per conversation; otherwise make the best reasonable assumption and proceed.
 - The Behavior Tree tool's {"kind":"tree",...} shape, described below, when asked to create/change/fix/extend a behavior tree.
@@ -57,7 +60,7 @@ Rules:
 - If no ROS context is available, say so with an explanation instead of guessing topic names.
 - Give every component a distinct id and a human label, and fill "rosConfig" from the pad's primary topic.
 - When repairing a Pad, keep every field that already works and change only the references reported as mismatched.
-- Use the supplied interface schema to build payloads and field mappings. If a schema was unavailable, keep the proposal in the Pad editor for human review and say so in the description.
+- Use the supplied interface schema to build payloads and field mappings. If it is missing, request it yourself. If retrieval fails, explain what failed; do not report an incomplete service/action binding as a finished Pad.
 
 Complete valid example (two sticks driving one Joy topic):
 {"kind":"padProposal","layout":{"id":"drive-pad","name":"Drive Pad","gridSize":{"width":8,"height":4},"cellSize":80,"components":[{"id":"left-stick","type":"joystick","position":{"x":0,"y":1,"width":3,"height":3},"label":"Left Stick","action":{"topic":"/joy","messageType":"sensor_msgs/msg/Joy","field":"axes"},"config":{"min":-1,"max":1,"axes":["0","1"]}},{"id":"right-stick","type":"joystick","position":{"x":5,"y":1,"width":3,"height":3},"label":"Right Stick","action":{"topic":"/joy","messageType":"sensor_msgs/msg/Joy","field":"axes"},"config":{"min":-1,"max":1,"axes":["2","3"]}}],"rosConfig":{"defaultTopic":"/joy","defaultMessageType":"sensor_msgs/msg/Joy"},"metadata":{"created":"2026-01-01T00:00:00.000Z","modified":"2026-01-01T00:00:00.000Z","version":"1.0.0"}}}`;
@@ -66,6 +69,7 @@ Complete valid example (two sticks driving one Joy topic):
  * tool means adding it here; the registry is what the model is told, and `capabilities.test.ts`
  * holds each entry to what its implementation actually does. */
 export const ASSISTANT_CAPABILITIES: readonly AssistantCapability[] = [
+  CONTEXT_READ_CAPABILITY,
   WORKSPACE_CAPABILITY,
   DATA_EXPLORER_CAPABILITY,
   RECORD_REPLAY_CAPABILITY,
@@ -84,13 +88,9 @@ export interface AssistantTurnNeeds {
   workspace: boolean;
 }
 
-const domainFragments = (needs: AssistantTurnNeeds): string[] => {
-  const fragments: string[] = [];
-  if (needs.workspace) fragments.push(WORKSPACE_PROMPT_FRAGMENT);
-  if (needs.behaviorTree) fragments.push(BEHAVIOR_TREE_PROMPT_FRAGMENT);
-  if (needs.pad) fragments.push(PAD_PROMPT_FRAGMENT);
-  return fragments;
-};
+// Follow-ups such as "solve it" need the same capabilities as the original request.
+// Intent keywords may optimise eager reads, but must never hide a tool from the model.
+const domainFragments = (): string[] => [WORKSPACE_PROMPT_FRAGMENT, BEHAVIOR_TREE_PROMPT_FRAGMENT, PAD_PROMPT_FRAGMENT];
 
 export interface ComposeSystemPromptInput {
   settings: Pick<AssistantSettings, 'systemContext' | 'robotContext'>;
@@ -150,13 +150,13 @@ export const composeAssistantSystemPrompt = ({
   settings,
   autoContext,
   pinnedChips,
-  needs,
 }: ComposeSystemPromptInput): string => {
   const parts = [
     BASE_PERSONA,
     describeCapabilities(ASSISTANT_CAPABILITIES),
     RESPONSE_CONTRACT,
-    ...domainFragments(needs),
+    CONTEXT_TOOL_PROMPT,
+    ...domainFragments(),
     settings.systemContext.trim() && `Additional assistant instructions:\n${settings.systemContext.trim()}`,
     settings.robotContext.trim() && `Robot and mission context:\n${settings.robotContext.trim()}`,
     `## Automatically gathered context\n${describeAutoContext(autoContext)}`,

@@ -47,9 +47,11 @@ describe('composeAssistantSystemPrompt', () => {
     expect(compose()).toMatch(/Never tell the user to write a script, launch a node, or run a CLI/);
   });
 
-  it('carries only the domain fragments a turn needs', () => {
+  it('offers every tool even on short follow-ups without domain keywords', () => {
     const plain = compose();
-    expect(plain).not.toContain('## Pad tool');
+    expect(plain).toContain('## Pad tool');
+    expect(plain).toContain('## Workspace tool');
+    expect(plain).toContain('contextRequest');
 
     const pad = compose({ needs: { behaviorTree: false, pad: true, rosAction: false, workspace: false } });
     expect(pad).toContain('## Pad tool');
