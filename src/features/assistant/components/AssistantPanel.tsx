@@ -1,11 +1,13 @@
 import type { ApiKeyStoragePolicy, ApiKeyStorageState } from '../../../runtime/assistantSubscription';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FaArrowLeft, FaArrowUp, FaCheck, FaCog, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowUp, FaCheck, FaCog, FaHistory, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { HiSparkles } from 'react-icons/hi2';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
+import { AssistantActivity } from './AssistantActivity';
 import { resolveCompactAssistantFrame, type CompactAssistantFrame } from './mobileAssistantLayout';
 import '../../treePanel/components/TreePanelChrome.css';
 import './AssistantPanel.css';
@@ -226,7 +228,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     onRefreshOllamaModels, onReviewPadProposal, onSaveBehaviorTreeProposal, hasActiveBehaviorTreeBridge,
   } = props;
 
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeView, setActiveView] = useState<'chat' | 'settings' | 'sessions'>('chat');
+  const showSettings = activeView === 'settings';
+  const showSessions = activeView === 'sessions';
   const [delivery, setDelivery] = useState<import('../runtime/session').InputDelivery>('steer');
   const [sessionSearch, setSessionSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -353,7 +357,13 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       if (event.key === 'Escape' && !showSketchEditor) {
         event.preventDefault();
         if (expandedImage) setExpandedImage(null);
-        else if (showSettings) setShowSettings(false);
+        else if (activeView !== 'chat') {
+          const previousView = activeView;
+          setActiveView('chat');
+          window.requestAnimationFrame(() => panelRef.current?.querySelector<HTMLButtonElement>(
+            previousView === 'settings' ? '[aria-label="Assistant settings"]' : '[aria-label="Chats"]'
+          )?.focus({ preventScroll: true }));
+        }
         else if (composerMentions.isOpen) composerMentions.close();
         else if (editingMentions.isOpen) editingMentions.close();
         else if (editingMessageId) { setEditingMessageId(null); setEditingDraft(''); }
@@ -370,7 +380,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [compactFrame?.takeover, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSettings, showSketchEditor]);
+  }, [activeView, compactFrame?.takeover, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSketchEditor]);
 
   useEffect(() => {
     if (!open) return;
@@ -473,7 +483,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages.length, progressMessages.length, error]);
+  }, [messages.length, progressMessages.length, error, activeView]);
 
   const handlePromptChange = (value: string) => {
     onPromptChange(value);
@@ -507,9 +517,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     : floating.frame
       ? { left: floating.frame.left, top: floating.frame.top, width: floating.frame.width, height: floating.frame.height }
       : undefined;
+  // Limit the growing draft against the actual sheet/frame, including a software-keyboard resize.
+  const frameHeight = (compact ? compactFrame?.height : floating.frame?.height) ?? window.innerHeight;
+  const composerMaxHeight = `${Math.max(34, Math.min(220, frameHeight * 0.2))}px`;
+  const panelOverlayStyle: React.CSSProperties & { '--assistant-composer-max-height': string } = {
+    ...overlayStyle,
+    '--assistant-composer-max-height': composerMaxHeight,
+  };
 
   return (
-    <div className={`assistant-overlay${compact ? ' is-compact' : ' is-floating'}${compactFrame?.takeover ? ' is-mobile-takeover' : ''}${isMobileResizing ? ' is-mobile-resizing' : ''}${floating.isDragging ? ' is-dragging' : ''}`} style={overlayStyle}>
+    <div className={`assistant-overlay${compact ? ' is-compact' : ' is-floating'}${compactFrame?.takeover ? ' is-mobile-takeover' : ''}${isMobileResizing ? ' is-mobile-resizing' : ''}${floating.isDragging ? ' is-dragging' : ''}`} style={panelOverlayStyle}>
       <section
         id="robo-boy-assistant-panel"
         ref={panelRef}
@@ -540,13 +557,14 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           onDoubleClick={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.reset(); }}
           title={compact ? undefined : 'Drag to move · double-click to dock'}
         >
-          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true">✦</span><h2 id="assistant-title">Robo-Boy AI</h2></div>
+          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true"><HiSparkles /></span><h2 id="assistant-title">Robo-Boy AI</h2></div>
           <div className="assistant-header-actions">
-            {messages.length > 0 && <button type="button" className="assistant-new" onClick={onNewConversation}>New chat</button>}
+            {!!props.sessions?.length && <button type="button" className={`assistant-icon-button${showSessions ? ' is-active' : ''}`} onClick={() => setActiveView(current => current === 'sessions' ? 'chat' : 'sessions')} aria-label={showSessions ? 'Back to conversation' : 'Chats'} aria-pressed={showSessions} title={showSessions ? 'Back to conversation' : 'Chats'}>{showSessions ? <FaArrowLeft aria-hidden="true" /> : <FaHistory aria-hidden="true" />}</button>}
+            {messages.length > 0 && <button type="button" className="assistant-new" onClick={() => { setActiveView('chat'); onNewConversation(); }} aria-label="New chat" title="New chat"><FaPlus aria-hidden="true" /><span>New</span></button>}
             <button
               type="button"
               className={`assistant-icon-button${showSettings ? ' is-active' : ''}`}
-              onClick={() => setShowSettings(current => !current)}
+              onClick={() => setActiveView(current => current === 'settings' ? 'chat' : 'settings')}
               aria-label={showSettings ? 'Back to assistant' : 'Assistant settings'}
               aria-pressed={showSettings}
               title={showSettings ? 'Back to assistant' : 'Assistant settings'}
@@ -572,13 +590,28 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
         {showSettings && <AssistantSettingsPopover settings={settings} resolvedBaseUrl={resolvedBaseUrl} onProviderChange={onProviderChange} onUpdate={onUpdateSettings} apiKeyStorage={apiKeyStorage} loadingCredentials={loadingCredentials} onApiKeyStorageChange={onApiKeyStorageChange} ollamaModels={ollamaModels} ollamaModelsError={ollamaModelsError} isLoadingOllamaModels={isLoadingOllamaModels} onRefreshOllamaModels={onRefreshOllamaModels} />}
 
-        <div ref={chatRef} className="assistant-chat" onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
-          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true">✦</span><h3>Robo-Boy AI</h3><p>Ask Robo-Boy AI to build a Pad or a Behavior Tree, look up a transform, or explain anything in your current workspace.</p><p className="assistant-empty-hint">Type <strong>@</strong> to tag a topic, node, Pad, or tree.</p></div>}
+        {showSessions && <section className="assistant-sessions-view" aria-label="Chats">
+          <div className="assistant-settings-popover-header"><h3>Chats</h3></div>
+          <div className="assistant-sessions-body">
+            <label>Search chats<input type="search" aria-label="Search chats" placeholder="Search by title" value={sessionSearch} onChange={event => setSessionSearch(event.target.value)} /></label>
+            <label className="assistant-checkbox-row"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />Show archived chats</label>
+            <label>Current chat<select aria-label="Current chat" value={props.activeSessionId} onChange={event => { props.onSwitchSession?.(event.target.value); setActiveView('chat'); }}>{props.sessions?.filter(session => session.id === props.activeSessionId || (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.toLowerCase())).map(session => <option key={session.id} value={session.id}>{session.title}{session.archived ? ' (archived)' : ''}</option>)}</select></label>
+            <div className="assistant-session-actions">
+              <button type="button" onClick={() => { props.onForkSession?.(); setActiveView('chat'); }}>Fork chat</button>
+              <button type="button" onClick={() => props.activeSessionId && props.onArchiveSession?.(props.activeSessionId)}>{props.sessions?.find(session => session.id === props.activeSessionId)?.archived ? 'Unarchive chat' : 'Archive chat'}</button>
+              <button type="button" onClick={() => { const blob = new Blob([JSON.stringify(messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'robo-boy-chat.json'; link.click(); URL.revokeObjectURL(url); }}>Export chat</button>
+            </div>
+            <p className="assistant-view-note">Chats belong to this robot connection and stay on this device.</p>
+          </div>
+        </section>}
+
+        <div ref={chatRef} className="assistant-chat" hidden={activeView !== 'chat'} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
+          {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true"><HiSparkles /></span><h3>What would you like to do?</h3><p>Inspect robot data, build a Pad or behavior tree, or arrange your workspace. Robot motion stays in your hands.</p><p className="assistant-empty-hint">Type <strong>@</strong> to reference a topic, node, Pad, or tree. Tags are optional.</p></div>}
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
-              {message.role === 'assistant' && (message.thinking || message.activity?.length) && <details className="assistant-thinking"><summary>{message.thinking ? 'Thinking' : 'Tools used'}</summary>{message.thinking && <div>{message.thinking}</div>}{message.activity?.length ? <ul>{message.activity.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}</details>}
-              {message.role === 'assistant' && !!message.events?.length && <details className="assistant-tool-events"><summary>Agent activity ({message.events.length})</summary><ol>{message.events.map(event => <li key={event.id}><span>{event.label}</span><small>{event.status}</small>{event.detail && <pre>{event.detail}</pre>}</li>)}</ol></details>}
+              {message.role === 'assistant' && (message.thinking || (!message.events?.length && message.activity?.length)) && <details className="assistant-thinking"><summary>{message.thinking ? 'Thinking' : 'Tools used'}</summary>{message.thinking && <div>{message.thinking}</div>}{!message.events?.length && message.activity?.length ? <ul>{message.activity.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}</details>}
+              {message.role === 'assistant' && !!message.events?.length && <AssistantActivity events={message.events} />}
               {editingMessageId === message.id ? (
                 <div className="assistant-message-edit">
                   <span className="assistant-textarea-shell has-highlight">
@@ -628,21 +661,24 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               {message.role === 'user' && editingMessageId !== message.id && <div className="assistant-message-actions"><button type="button" onClick={() => onRepeat(index)} disabled={isGenerating} aria-label="Repeat" title="Repeat"><FaRedo aria-hidden="true" /></button><button type="button" onClick={() => startEditingMessage(message)} disabled={isGenerating} aria-label="Edit message" title="Edit and resend"><FaPencilAlt aria-hidden="true" /></button></div>}
             </article>
           ))}
-          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}<ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul></details>{streamedAnswer && <div className="assistant-message-content" aria-live="off">{streamedAnswer}</div>}</article>}
+          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}{!props.events?.length && <ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul>}</details><AssistantActivity events={props.events ?? []} />{streamedAnswer && <div className="assistant-message-content" aria-live="off">{streamedAnswer}</div>}</article>}
           {isGenerating && waitingQuestion && <article className="assistant-message assistant" role="status"><strong>Needs your input</strong><p>{waitingQuestion.label}</p><small>Reply below with “Answer current question”. You can also queue a separate message or stop this task.</small></article>}
           {(lastProgress || error) && <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || lastProgress}</div>}
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
+          <div className="assistant-task-panels">
+          {!!props.monitors?.some(monitor => monitor.status !== 'stopped') && <details className="assistant-pending"><summary>Active watches</summary>{props.monitors.filter(monitor => monitor.status !== 'stopped').map(monitor => <div key={monitor.id}><span>{monitor.topic} · {monitor.remaining} analyses left</span><button type="button" onClick={() => props.onStopMonitor?.(monitor.id)}>Stop watch</button></div>)}</details>}
+          {!!props.documentChanges?.length && <details className="assistant-pending"><summary>Changes ({props.documentChanges.length})</summary>{props.documentChanges.map(change => <div key={change.id}><details><summary>{change.label}</summary><pre>{change.diff || 'Read the document for this older checkpoint.'}</pre></details><button type="button" disabled={isGenerating} onClick={() => props.onUndoDocument?.(change.id)}>Undo</button></div>)}</details>}
+          {!!props.pendingInputs?.length && <details className="assistant-pending"><summary>Pending messages ({props.pendingInputs.length})</summary>{props.pendingInputs.map((item, index) => <div className="assistant-pending-message" key={item.id}><input aria-label={`Queued message ${index + 1}`} value={item.text} onChange={event => props.onPendingInputChange?.(item.id, event.target.value)} /><button type="button" disabled={index === 0} aria-label="Move queued message earlier" onClick={() => props.onMovePendingInput?.(item.id, -1)}>↑</button><button type="button" disabled={index === props.pendingInputs!.length - 1} aria-label="Move queued message later" onClick={() => props.onMovePendingInput?.(item.id, 1)}>↓</button><button type="button" aria-label="Remove queued message" onClick={() => props.onRemovePendingInput?.(item.id)}>Remove</button></div>)}</details>}
+          </div>
         </div>
 
-        <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(delivery); }}>
-          {!!props.monitors?.some(monitor => monitor.status !== 'stopped') && <details className="assistant-pending"><summary>Active watches</summary>{props.monitors.filter(monitor => monitor.status !== 'stopped').map(monitor => <div key={monitor.id}><span>{monitor.topic} · {monitor.remaining} analyses left</span><button type="button" onClick={() => props.onStopMonitor?.(monitor.id)}>Stop watch</button></div>)}</details>}
-          <div className="assistant-run-controls"><label>Mode<select aria-label="Agent mode" value={settings.mode ?? 'agent'} onChange={event => onUpdateSettings({ mode: event.target.value as 'agent' | 'ask' | 'plan' })}><option value="agent">Agent — apply with undo</option><option value="ask">Ask — read only</option><option value="plan">Plan — read only</option></select></label>
-          {!!props.sessions?.length && <details className="assistant-sessions"><summary>Chats</summary><input aria-label="Search chats" placeholder="Search chats" value={sessionSearch} onChange={event => setSessionSearch(event.target.value)} /><label><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />Show archived chats</label><select aria-label="Current chat" value={props.activeSessionId} onChange={event => props.onSwitchSession?.(event.target.value)}>{props.sessions.filter(session => session.id === props.activeSessionId || (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.toLowerCase())).map(session => <option key={session.id} value={session.id}>{session.title}{session.archived ? ' (archived)' : ''}</option>)}</select><button type="button" onClick={props.onForkSession}>Fork chat</button><button type="button" onClick={() => props.activeSessionId && props.onArchiveSession?.(props.activeSessionId)}>{props.sessions.find(session => session.id === props.activeSessionId)?.archived ? 'Unarchive chat' : 'Archive chat'}</button><button type="button" onClick={() => { const blob = new Blob([JSON.stringify(messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'robo-boy-chat.json'; link.click(); URL.revokeObjectURL(url); }}>Export chat</button></details>}
+        <form className="assistant-form" hidden={activeView !== 'chat'} onSubmit={event => { event.preventDefault(); onSubmit(delivery); }}>
+          <div className="assistant-run-controls">
+            <label>Mode<select aria-label="Agent mode" value={settings.mode ?? 'agent'} onChange={event => onUpdateSettings({ mode: event.target.value as 'agent' | 'ask' | 'plan' })}><option value="agent">Agent + Undo</option><option value="ask">Ask — read only</option><option value="plan">Plan — read only</option></select></label>
+            {isGenerating && <label>Next message<select aria-label="Message delivery" title="Steer after the current tool, queue for the next turn, or stop this task and send." value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><option value="steer">{waitingQuestion ? 'Answer question' : 'Steer'}</option><option value="queue">Queue</option><option value="interrupt">Stop + send</option></select></label>}
+            {isGenerating && canGenerateFrom(prompt, false, attachments) && <button type="button" className="assistant-stop-action" onClick={onStop} aria-label="Stop generating" title="Stop generating"><FaStop aria-hidden="true" /></button>}
+            {!isGenerating && <span className="assistant-model-label" title={`${settings.provider}: ${settings.model || 'Choose a model in settings'}`}>{settings.model || 'Choose a model'}</span>}
           </div>
-          {!!props.documentChanges?.length && <details className="assistant-pending"><summary>Changes ({props.documentChanges.length})</summary>{props.documentChanges.map(change => <div key={change.id}><details><summary>{change.label}</summary><pre>{change.diff || 'Read the document for this older checkpoint.'}</pre></details><button type="button" disabled={isGenerating} onClick={() => props.onUndoDocument?.(change.id)}>Undo</button></div>)}</details>}
-          {isGenerating && <div className="assistant-run-controls"><label>Send while working <select aria-label="Message delivery" value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><option value="steer">{waitingQuestion ? 'Answer current question' : 'Steer after current tool'}</option><option value="queue">Queue for next turn</option><option value="interrupt">Stop and send</option></select></label><button type="button" onClick={onStop}>Stop</button></div>}
-          {!!props.pendingInputs?.length && <details className="assistant-pending"><summary>Pending messages ({props.pendingInputs.length})</summary>{props.pendingInputs.map((item, index) => <div key={item.id}><input aria-label={`Queued message ${index + 1}`} value={item.text} onChange={event => props.onPendingInputChange?.(item.id, event.target.value)} /><button type="button" disabled={index === 0} aria-label="Move queued message earlier" onClick={() => props.onMovePendingInput?.(item.id, -1)}>↑</button><button type="button" disabled={index === props.pendingInputs!.length - 1} aria-label="Move queued message later" onClick={() => props.onMovePendingInput?.(item.id, 1)}>↓</button><button type="button" aria-label="Remove queued message" onClick={() => props.onRemovePendingInput?.(item.id)}>Remove</button></div>)}</details>}
-          {!!props.events?.length && <details className="assistant-tool-events"><summary>Agent activity ({props.events.length})</summary><ol>{props.events.map(event => <li key={event.id}><span>{event.type === 'child' ? 'Investigation: ' : ''}{event.label}</span><small>{event.status}</small>{event.detail && <pre>{event.detail}</pre>}</li>)}</ol></details>}
           <div className="assistant-composer-attachments" aria-label="Assistant attachments">
             {attachments.map(item => (
               <span className={`assistant-context-tag attachment ${item.kind}`} key={item.id}>
@@ -671,7 +707,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               autoGrow
               highlight={<MessageText text={prompt} tags={tagsForText(prompt)} />}
               textareaRef={promptRef}
-              placeholder={compact ? 'Ask Robo-Boy about your robot, or to build a Pad…' : 'Ask Robo-Boy about your workspace, or to build a Pad or a Behavior Tree…'}
+              placeholder="Message Robo-Boy…"
               toolbar={{
                 start: (
                   <>
@@ -683,7 +719,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                 // Left out on a phone with nothing to send, so the microphone takes this slot
                 // rather than appearing a second time further down the row.
                 end: !compact || isGenerating || canGenerateFrom(prompt, false, attachments) ? (
-                  <button type={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating && !canGenerateFrom(prompt, false, attachments) ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'Stop generating' : 'Send'}>{isGenerating && !canGenerateFrom(prompt, false, attachments) ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
+                  <button type={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'button' : 'submit'} className={`assistant-send${isGenerating && !canGenerateFrom(prompt, false, attachments) ? ' is-stop' : ''}`} onClick={isGenerating && !canGenerateFrom(prompt, false, attachments) ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'Stop generating' : 'Send'}>{isGenerating && !canGenerateFrom(prompt, false, attachments) ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
                 ) : undefined,
               }}
             />

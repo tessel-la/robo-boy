@@ -107,6 +107,97 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
   await expect(panel).toHaveCount(0);
 });
 
+for (const theme of ['light', 'dark', 'solarized', 'custom-cobalt']) {
+  for (const width of [320, 390, 1280]) {
+    test(`assistant views fit ${theme} at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+      await page.addInitScript(themeId => {
+        localStorage.setItem('appTheme', themeId);
+        localStorage.setItem('customThemes', JSON.stringify([{
+          id: 'custom-cobalt', name: 'Cobalt UI test', fontFamily: 'Verdana, Geneva, sans-serif',
+          colors: { primary: '#ff6132', secondary: '#78a3ff', background: '#10246b', cardBg: '#1c3681', text: '#fff5dc', border: '#788bb9', buttonText: '#10246b' },
+        }]));
+      }, theme);
+      await connectWithMockRos(page);
+      await mockOpenAiCompatibleChat(page, { kind: 'explanation', message: 'Robot data is available. Tags are optional references.' });
+      await page.getByLabel('Open Robo-Boy assistant').click();
+      const panel = page.getByTestId('assistant-panel');
+      await expect(panel).toHaveClass(/is-open/);
+      await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Inspect the workspace');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(panel.getByText('Robot data is available. Tags are optional references.')).toBeVisible();
+      const assertFits = async () => {
+        expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+        expect(await panel.locator('.assistant-header').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      };
+      await assertFits();
+      await page.screenshot({ path: testInfo.outputPath('assistant-chat.png') });
+      await panel.getByRole('button', { name: 'Assistant settings', exact: true }).click();
+      const settings = panel.getByRole('dialog', { name: 'Assistant settings' });
+      await settings.getByText('Trusted MCP integrations', { exact: true }).click();
+      await settings.getByText('Tool policies and hooks', { exact: true }).click();
+      await assertFits();
+      expect(await settings.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      for (const checkbox of await settings.locator('input[type=checkbox]:visible').all()) {
+        const box = (await checkbox.boundingBox())!;
+        expect(box.width).toBe(18);
+        expect(box.height).toBe(18);
+        expect(await checkbox.evaluate(element => element.closest('label')!.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      }
+      await settings.evaluate(element => { element.scrollTop = 0; });
+      await page.screenshot({ path: testInfo.outputPath('assistant-settings.png') });
+      await panel.getByRole('button', { name: 'Chats', exact: true }).click();
+      await expect(settings).toHaveCount(0);
+      await expect(panel.getByRole('region', { name: 'Chats' })).toBeVisible();
+      await expect(panel.locator('#assistant-prompt')).not.toBeVisible();
+      await assertFits();
+      await page.screenshot({ path: testInfo.outputPath('assistant-chats.png') });
+      await panel.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+      await expect(panel.locator('#assistant-prompt')).toBeVisible();
+    });
+  }
+}
+
+test('expanded activity and queued messages do not displace the mobile composer', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await connectWithMockRos(page);
+  let releaseReply!: () => void;
+  const heldReply = new Promise<void>(resolve => { releaseReply = resolve; });
+  await page.route('**/chat/completions', async route => {
+    const isFollowUp = route.request().postDataJSON().messages.some((turn: { role: string }) => turn.role === 'tool');
+    if (isFollowUp) await heldReply;
+    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(isFollowUp
+      ? { kind: 'explanation', message: 'Diagnostics inspected.' }
+      : { kind: 'contextRequest', summary: 'Inspecting diagnostics.', reads: [{ kind: 'topic', name: '/diagnostics' }] }) });
+  });
+  try {
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  const prompt = panel.locator('#assistant-prompt');
+  await prompt.fill('Read current diagnostics');
+  await panel.getByRole('button', { name: 'Send', exact: true }).click();
+  await waitForRosSubscription(page, '/diagnostics');
+  await prompt.fill('Inspect TF next');
+  await panel.getByLabel('Message delivery').selectOption('queue');
+  await expect(panel.getByRole('button', { name: 'Stop generating', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Send', exact: true }).click();
+  await panel.getByText('Pending messages (1)', { exact: true }).click();
+  await panel.locator('.assistant-tool-events > summary').click();
+  await page.setViewportSize({ width: 320, height: 360 });
+  await expect(panel.locator('.assistant-chat')).toBeVisible();
+  await expect(prompt).toBeVisible();
+  expect((await panel.locator('.assistant-chat').boundingBox())!.height).toBeGreaterThan(60);
+  await prompt.fill('A long follow-up\n'.repeat(20));
+  await expect.poll(async () => (await panel.locator('.assistant-chat').boundingBox())!.height).toBeGreaterThan(60);
+  expect(await prompt.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect(panel.getByRole('button', { name: 'Stop generating', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('assistant-running-keyboard.png') });
+  await panel.getByRole('button', { name: 'Stop generating', exact: true }).click();
+  await expect(panel.getByLabel('Message delivery')).toHaveCount(0);
+  } finally { releaseReply(); }
+});
+
 test('keeps the launcher anchored beneath the panel and reverses the animation when toggled', async ({ page }) => {
   await connectWithMockRos(page);
   const launcher = page.locator('.assistant-launcher');

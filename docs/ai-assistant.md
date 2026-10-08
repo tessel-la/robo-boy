@@ -54,6 +54,18 @@ manual edits are not overwritten by Undo.
 
 Settings (provider, model, API key, instructions) live in the gear icon inside the panel. Preferences persist in this browser; current Electron shells own API-key persistence natively.
 
+The header's **Chats** button opens search, archived chats, switching, fork and export controls.
+Chats and Settings replace the conversation body; Back or Escape returns to the conversation.
+Tool activity, watch status, queued messages and **Changes** live in the scrollable transcript,
+not the fixed composer. Tool results expand individually, with explicit Running/Done/Failed
+status words. During a task, message delivery and Stop remain available while drafting a follow-up.
+
+The assistant follows the handbook's [Robo-Boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
+runtime theme surfaces and fonts, restrained message tinting, shared panel resize controls,
+visible keyboard focus, and 44px touch controls. Settings respond to the panel width, including a
+narrow desktop frame. Provider and extension forms use the same spacing and control treatment.
+No fixed brand palette or fonts are imported into the application.
+
 ### API keys and subscription sign-in
 
 For OpenAI and Anthropic Claude, **Authentication** selects **API key** or **Sign in** (subscription).
