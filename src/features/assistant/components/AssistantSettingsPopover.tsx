@@ -258,6 +258,15 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
         </div>
       </section>
       <section className="assistant-settings-section is-single"><AgentWorkflows /></section>
+      <section className="assistant-settings-section is-single">
+        <label>Pad and Behavior Tree changes
+          <select value={settings.authoringMode ?? 'review'} onChange={event => onUpdate({ authoringMode: event.target.value as 'review' | 'automatic' })}>
+            <option value="review">Review before saving</option>
+            <option value="automatic">Automatic authoring with Undo</option>
+          </select>
+        </label>
+        <small>Review is the default. Robot motion and updated control activation always remain manual.</small>
+      </section>
       <section className="assistant-settings-section is-single"><AgentProfiles selected={settings.agentProfileId} onSelect={(agentProfileId, model) => onUpdate({ agentProfileId, ...(model ? { model, thinkingEffort: undefined } : {}) })} /></section>
       <section className="assistant-settings-section is-single">
         <details>

@@ -1,13 +1,14 @@
 import type { ApiKeyStoragePolicy, ApiKeyStorageState } from '../../../runtime/assistantSubscription';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FaArrowLeft, FaArrowUp, FaCheck, FaCog, FaHistory, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowUp, FaCheck, FaChevronDown, FaCog, FaHistory, FaPaintBrush, FaPaperclip, FaPencilAlt, FaPlus, FaRedo, FaSearch, FaStop, FaSyncAlt, FaTimes } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
 import type { AssistantAttachment, AssistantContextSourceKind, AssistantMessage, AssistantProviderId, AssistantSettings } from '../types';
 import AssistantSpeechTextarea from './AssistantSpeechTextarea';
 import AssistantSketchEditor from './AssistantSketchEditor';
 import AssistantSettingsPopover from './AssistantSettingsPopover';
 import { AssistantActivity } from './AssistantActivity';
+import { MessageText, type ResourceTextProps } from './MessageText';
 import { resolveCompactAssistantFrame, type CompactAssistantFrame } from './mobileAssistantLayout';
 import '../../treePanel/components/TreePanelChrome.css';
 import './AssistantPanel.css';
@@ -93,6 +94,7 @@ export interface AssistantPanelProps {
   onRefreshOllamaModels: () => void;
   onReviewPadProposal: (messageId: string) => void;
   onSaveBehaviorTreeProposal: (messageId: string) => void;
+  onRejectProposal?: (messageId: string) => void;
   hasActiveBehaviorTreeBridge: boolean;
 }
 
@@ -103,47 +105,14 @@ const dataUrlFor = (attachment: AssistantAttachment) => `data:${attachment.mimeT
 const canGenerateFrom = (prompt: string, isGenerating: boolean, attachments: AssistantAttachment[] = []) =>
   (Boolean(prompt.trim()) || attachments.length > 0) && !isGenerating;
 
-const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Keep the Markdown parser out of the workspace's initial chunk (including the mobile PWA).
+const MarkdownRenderer = React.lazy(() => import('./AssistantMarkdown').then(module => ({ default: module.AssistantMarkdown })));
+function AssistantMarkdown(props: ResourceTextProps & { content: string }) {
+  return <React.Suspense fallback={<div className="assistant-message-content"><p>{props.content}</p></div>}><MarkdownRenderer {...props} /></React.Suspense>;
+}
 
 /** The `@Label` text a tagged resource reads as, in the prompt and in the transcript. */
 const mentionTextFor = (tag: { label: string; mention?: string }) => `@${tag.mention ?? tag.label}`;
-
-/** Colours the `@Label` mentions a message was sent with. The tagged resource is shown where the
- * author put it rather than in a separate strip, so tagging costs no vertical space. */
-const MessageText = ({ text, tags, onOpen, canOpen }: { text: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void; canOpen?: (id: string) => boolean }) => {
-  if (!tags?.length) return <>{text}</>;
-  // Case-insensitively: a resource is named "TF tree" but nobody types it that way, and a mention
-  // that does not light up reads as a tag that failed rather than a capital letter that differed.
-  const byMention = new Map(tags.map(tag => [mentionTextFor(tag).toLowerCase(), tag]));
-  const mentions = [...byMention.keys()].sort((a, b) => b.length - a.length).map(escapeForRegExp);
-  const parts = text.split(new RegExp(`(${mentions.join('|')})`, 'gi'));
-  return (
-    <>
-      {parts.map((part, index) => {
-        const tag = byMention.get(part.toLowerCase());
-        if (!tag) return part;
-        const className = `assistant-inline-tag source-${tag.source}`;
-        // Clickable only when something is actually open to show; otherwise it is a dead link.
-        return onOpen && canOpen?.(tag.id) ? (
-          <button type="button" key={index} className={`${className} openable`} onClick={() => onOpen(tag.id)} title={`Open ${tag.label}`}>{part}</button>
-        ) : (
-          <mark key={index} className={className}>{part}</mark>
-        );
-      })}
-    </>
-  );
-};
-
-const MessageContent = ({ content, tags, onOpen, canOpen }: { content: string; tags?: AssistantMessage['contextTags']; onOpen?: (id: string) => void; canOpen?: (id: string) => boolean }) => {
-  const segments = content.split(/```([\s\S]*?)```/g);
-  return (
-    <div className="assistant-message-content">
-      {segments.map((segment, index) =>
-        index % 2 === 1 ? <pre key={index}>{segment.trim()}</pre> : segment ? <p key={index}><MessageText text={segment} tags={tags} onOpen={onOpen} canOpen={canOpen} /></p> : null
-      )}
-    </div>
-  );
-};
 
 interface MentionPicker {
   isOpen: boolean;
@@ -234,6 +203,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [delivery, setDelivery] = useState<import('../runtime/session').InputDelivery>('steer');
   const [sessionSearch, setSessionSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [showLatest, setShowLatest] = useState(false);
+  const [showComposerOptions, setShowComposerOptions] = useState(false);
   const waitingQuestion = props.events?.find(event => event.type === 'question' && event.status === 'running');
   const [showSketchEditor, setShowSketchEditor] = useState(false);
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
@@ -251,6 +222,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const editingRef = useRef<HTMLTextAreaElement>(null);
   const editingHighlightRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const composerOptionsRef = useRef<HTMLDivElement>(null);
+  const composerOptionsButtonRef = useRef<HTMLButtonElement>(null);
   const nearBottomRef = useRef(true);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const mobileHeightRef = useRef<number>();
@@ -356,7 +329,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !showSketchEditor) {
         event.preventDefault();
-        if (expandedImage) setExpandedImage(null);
+        if (showComposerOptions) { setShowComposerOptions(false); composerOptionsButtonRef.current?.focus(); }
+        else if (expandedImage) setExpandedImage(null);
         else if (activeView !== 'chat') {
           const previousView = activeView;
           setActiveView('chat');
@@ -380,7 +354,19 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeView, compactFrame?.takeover, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSketchEditor]);
+  }, [activeView, compactFrame?.takeover, composerMentions, editingMentions, editingMessageId, expandedImage, onClose, open, showSketchEditor, showComposerOptions]);
+
+  useEffect(() => {
+    if (!showComposerOptions) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!composerOptionsRef.current?.contains(event.target as Node) && !composerOptionsButtonRef.current?.contains(event.target as Node)) setShowComposerOptions(false);
+    };
+    composerOptionsRef.current?.querySelector<HTMLSelectElement>('select')?.focus();
+    document.addEventListener('pointerdown', closeOnOutside);
+    return () => document.removeEventListener('pointerdown', closeOnOutside);
+  }, [showComposerOptions]);
+
+  useEffect(() => { setShowComposerOptions(false); }, [open, activeView]);
 
   useEffect(() => {
     if (!open) return;
@@ -478,12 +464,17 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   }, [compact, onClose, open]);
 
   useEffect(() => {
+    nearBottomRef.current = true;
+    setShowLatest(false);
+  }, [props.activeSessionId]);
+
+  useEffect(() => {
     if (!nearBottomRef.current || !chatRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages.length, progressMessages.length, error, activeView]);
+  }, [messages, progressMessages.length, streamedAnswer, thinking, props.events, error, activeView]);
 
   const handlePromptChange = (value: string) => {
     onPromptChange(value);
@@ -520,9 +511,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   // Limit the growing draft against the actual sheet/frame, including a software-keyboard resize.
   const frameHeight = (compact ? compactFrame?.height : floating.frame?.height) ?? window.innerHeight;
   const composerMaxHeight = `${Math.max(34, Math.min(220, frameHeight * 0.2))}px`;
-  const panelOverlayStyle: React.CSSProperties & { '--assistant-composer-max-height': string } = {
+  const panelOverlayStyle: React.CSSProperties & { '--assistant-composer-max-height': string; '--assistant-options-max-height': string } = {
     ...overlayStyle,
     '--assistant-composer-max-height': composerMaxHeight,
+    '--assistant-options-max-height': `${Math.max(80, frameHeight - 200)}px`,
   };
 
   return (
@@ -557,10 +549,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           onDoubleClick={compact ? undefined : event => { if (!(event.target as HTMLElement).closest('button')) floating.reset(); }}
           title={compact ? undefined : 'Drag to move · double-click to dock'}
         >
-          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true"><HiSparkles /></span><h2 id="assistant-title">Robo-Boy AI</h2></div>
+          <div className="assistant-title"><span className="assistant-avatar" aria-hidden="true"><HiSparkles /></span><div className="assistant-title-text"><h2 id="assistant-title">Robo-Boy AI</h2>{messages.length > 0 && <small title={props.sessions?.find(session => session.id === props.activeSessionId)?.title}>{isGenerating ? 'Working · ' : ''}{props.sessions?.find(session => session.id === props.activeSessionId)?.title ?? 'Current chat'}</small>}</div></div>
           <div className="assistant-header-actions">
             {!!props.sessions?.length && <button type="button" className={`assistant-icon-button${showSessions ? ' is-active' : ''}`} onClick={() => setActiveView(current => current === 'sessions' ? 'chat' : 'sessions')} aria-label={showSessions ? 'Back to conversation' : 'Chats'} aria-pressed={showSessions} title={showSessions ? 'Back to conversation' : 'Chats'}>{showSessions ? <FaArrowLeft aria-hidden="true" /> : <FaHistory aria-hidden="true" />}</button>}
-            {messages.length > 0 && <button type="button" className="assistant-new" onClick={() => { setActiveView('chat'); onNewConversation(); }} aria-label="New chat" title="New chat"><FaPlus aria-hidden="true" /><span>New</span></button>}
+            <button type="button" className="assistant-icon-button" onClick={() => { setActiveView('chat'); onNewConversation(); }} aria-label="New chat" title="New chat"><FaPlus aria-hidden="true" /></button>
             <button
               type="button"
               className={`assistant-icon-button${showSettings ? ' is-active' : ''}`}
@@ -595,7 +587,14 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           <div className="assistant-sessions-body">
             <label>Search chats<input type="search" aria-label="Search chats" placeholder="Search by title" value={sessionSearch} onChange={event => setSessionSearch(event.target.value)} /></label>
             <label className="assistant-checkbox-row"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />Show archived chats</label>
-            <label>Current chat<select aria-label="Current chat" value={props.activeSessionId} onChange={event => { props.onSwitchSession?.(event.target.value); setActiveView('chat'); }}>{props.sessions?.filter(session => session.id === props.activeSessionId || (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.toLowerCase())).map(session => <option key={session.id} value={session.id}>{session.title}{session.archived ? ' (archived)' : ''}</option>)}</select></label>
+            <ul className="assistant-session-list" aria-label="Saved chats">
+              {props.sessions?.filter(session => (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.trim().toLowerCase())).map(session => <li key={session.id}>
+                <button type="button" aria-current={session.id === props.activeSessionId ? 'page' : undefined} onClick={() => { props.onSwitchSession?.(session.id); setActiveView('chat'); }}>
+                  <span>{session.title}</span><small>{session.archived ? 'Archived' : session.id === props.activeSessionId ? isGenerating ? 'Working' : 'Current' : 'Chat'}</small>
+                </button>
+              </li>)}
+            </ul>
+            {!props.sessions?.some(session => (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.trim().toLowerCase())) && <p role="status">No matching chats.</p>}
             <div className="assistant-session-actions">
               <button type="button" onClick={() => { props.onForkSession?.(); setActiveView('chat'); }}>Fork chat</button>
               <button type="button" onClick={() => props.activeSessionId && props.onArchiveSession?.(props.activeSessionId)}>{props.sessions?.find(session => session.id === props.activeSessionId)?.archived ? 'Unarchive chat' : 'Archive chat'}</button>
@@ -605,12 +604,12 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           </div>
         </section>}
 
-        <div ref={chatRef} className="assistant-chat" hidden={activeView !== 'chat'} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; }}>
+        <div ref={chatRef} className="assistant-chat" hidden={activeView !== 'chat'} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; setShowLatest(!nearBottomRef.current); }}>
           {messages.length === 0 && <div className="assistant-empty"><span aria-hidden="true"><HiSparkles /></span><h3>What would you like to do?</h3><p>Inspect robot data, build a Pad or behavior tree, or arrange your workspace. Robot motion stays in your hands.</p><p className="assistant-empty-hint">Type <strong>@</strong> to reference a topic, node, Pad, or tree. Tags are optional.</p></div>}
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
-              {message.role === 'assistant' && (message.thinking || (!message.events?.length && message.activity?.length)) && <details className="assistant-thinking"><summary>{message.thinking ? 'Thinking' : 'Tools used'}</summary>{message.thinking && <div>{message.thinking}</div>}{!message.events?.length && message.activity?.length ? <ul>{message.activity.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}</details>}
+              {message.role === 'assistant' && (message.thinking || (!message.events?.length && message.activity?.length)) && <details className="assistant-thinking"><summary>{message.thinking ? 'Thinking' : 'Tools used'}</summary>{message.thinking && <AssistantMarkdown content={message.thinking} />}{!message.events?.length && message.activity?.length ? <ul>{message.activity.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}</details>}
               {message.role === 'assistant' && !!message.events?.length && <AssistantActivity events={message.events} />}
               {editingMessageId === message.id ? (
                 <div className="assistant-message-edit">
@@ -634,7 +633,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                   {editingMentions.node}
                   <div className="assistant-inline-actions"><button type="button" className="secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" onClick={() => submitEditedMessage(index)} disabled={!editingDraft.trim()}>Save &amp; resend</button></div>
                 </div>
-              ) : <MessageContent content={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} canOpen={canOpenResource} />}
+              ) : message.role === 'assistant' ? <AssistantMarkdown content={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} canOpen={canOpenResource} /> : <div className="assistant-message-content"><p><MessageText text={message.content} tags={tagsForText(message.content, message.contextTags)} onOpen={openResource} canOpen={canOpenResource} /></p></div>}
               {message.attachments.length > 0 && (
                 <div className="assistant-message-attachments">
                   {message.attachments.map(item =>
@@ -651,19 +650,20 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
 
               {message.response?.kind === 'rosAction' && <div className="assistant-proposal-card"><strong>Review-only {message.response.operation.kind}: {message.response.operation.name}</strong><p>{message.response.rationale}</p><pre>{JSON.stringify(message.response.operation, null, 2)}</pre>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<small>Robo-Boy does not run robot operations from assistant chat. Add the reviewed operation through a Pad or Behavior Tree.</small></div>}
               {message.response?.kind === 'workspaceEdit' && <div className="assistant-proposal-card" data-testid="assistant-workspace-edit-card"><strong>Workspace changes</strong><ul className="assistant-result-list">{(message.response.results ?? []).map((result, resultIndex) => <li key={resultIndex} className={result.ok ? 'is-ok' : 'is-failed'}>{result.message}</li>)}{message.response.rejected.map((reason, reasonIndex) => <li key={`rejected-${reasonIndex}`} className="is-failed">{reason}</li>)}</ul></div>}
-              {message.response?.kind === 'padProposal' && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-pad-proposal-card"><strong>Proposed Pad: {message.response.layout.name}</strong><p>{message.response.layout.components.length} components · review every binding before saving.</p>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<div className="assistant-inline-actions"><button type="button" onClick={() => onReviewPadProposal(message.id)}>Review in Pad editor</button></div></div>}
+              {message.response?.kind === 'padProposal' && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-pad-proposal-card"><strong>Proposed Pad: {message.response.layout.name}</strong><p>{message.response.layout.components.length} components · review every binding before saving.</p>{message.response.issues.map((issue, issueIndex) => <p className="assistant-proposal-warning" key={issueIndex}>{issue.message}</p>)}<div className="assistant-inline-actions"><button type="button" onClick={() => onReviewPadProposal(message.id)}>Review in Pad editor</button>{props.onRejectProposal && <button type="button" className="secondary" onClick={() => props.onRejectProposal?.(message.id)}>Reject Pad proposal</button>}</div></div>}
               {message.response?.kind === 'padProposal' && message.resolution === 'applied' && <p className="assistant-message-note">Opened in the Pad editor for review.</p>}
-              {message.response?.kind === 'behaviorTree' && !hasActiveBehaviorTreeBridge && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-bt-proposal-card"><strong>Built “{message.response.tree.name}”</strong><p>{message.response.tree.nodes.length} nodes · {message.response.tree.edges.length} connections</p><div className="assistant-inline-actions"><button type="button" onClick={() => onSaveBehaviorTreeProposal(message.id)}>Save to Behavior Tree library</button></div></div>}
+              {message.response?.kind === 'behaviorTree' && !hasActiveBehaviorTreeBridge && !message.resolution && <div className="assistant-proposal-card" data-testid="assistant-bt-proposal-card"><strong>Proposed “{message.response.tree.name}”</strong><p>{message.response.tree.nodes.length} nodes · {message.response.tree.edges.length} connections</p><div className="assistant-inline-actions"><button type="button" onClick={() => onSaveBehaviorTreeProposal(message.id)}>Save to Behavior Tree library</button>{props.onRejectProposal && <button type="button" className="secondary" onClick={() => props.onRejectProposal?.(message.id)}>Reject tree proposal</button>}</div></div>}
               {message.response?.kind === 'behaviorTree' && hasActiveBehaviorTreeBridge && !message.resolution && <p className="assistant-message-note">Previewed on the open Behavior Tree canvas. Accept or reject it there.</p>}
               {message.response?.kind === 'behaviorTree' && message.resolution === 'saved' && <p className="assistant-message-note">Saved to the Behavior Tree library.</p>}
+              {message.resolution === 'rejected' && <p className="assistant-message-note">Proposal rejected. No authoring changes were saved.</p>}
 
               {message.contextUsed && message.contextUsed.length > 0 && <details className="assistant-context-used"><summary>Context used ({message.contextUsed.length})</summary><ul>{message.contextUsed.map((item, itemIndex) => <li key={`${item.label}-${itemIndex}`}><span>{item.label}</span><em>{item.source}{item.ageSeconds ? ` · ${item.ageSeconds}s ago` : ''}{item.stale ? ' · stale' : ''}</em></li>)}</ul></details>}
               {message.role === 'user' && editingMessageId !== message.id && <div className="assistant-message-actions"><button type="button" onClick={() => onRepeat(index)} disabled={isGenerating} aria-label="Repeat" title="Repeat"><FaRedo aria-hidden="true" /></button><button type="button" onClick={() => startEditingMessage(message)} disabled={isGenerating} aria-label="Edit message" title="Edit and resend"><FaPencilAlt aria-hidden="true" /></button></div>}
             </article>
           ))}
-          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}{!props.events?.length && <ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul>}</details><AssistantActivity events={props.events ?? []} />{streamedAnswer && <div className="assistant-message-content" aria-live="off">{streamedAnswer}</div>}</article>}
+          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <AssistantMarkdown content={thinking} />}{!props.events?.length && <ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul>}</details><AssistantActivity events={props.events ?? []} />{streamedAnswer && <AssistantMarkdown content={streamedAnswer} tags={tagsForText(streamedAnswer)} onOpen={openResource} canOpen={canOpenResource} />}</article>}
           {isGenerating && waitingQuestion && <article className="assistant-message assistant" role="status"><strong>Needs your input</strong><p>{waitingQuestion.label}</p><small>Reply below with “Answer current question”. You can also queue a separate message or stop this task.</small></article>}
-          {(lastProgress || error) && <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || lastProgress}</div>}
+          {(error || lastProgress && !props.events?.length) && <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || lastProgress}</div>}
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
           <div className="assistant-task-panels">
           {!!props.monitors?.some(monitor => monitor.status !== 'stopped') && <details className="assistant-pending"><summary>Active watches</summary>{props.monitors.filter(monitor => monitor.status !== 'stopped').map(monitor => <div key={monitor.id}><span>{monitor.topic} · {monitor.remaining} analyses left</span><button type="button" onClick={() => props.onStopMonitor?.(monitor.id)}>Stop watch</button></div>)}</details>}
@@ -672,13 +672,20 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           </div>
         </div>
 
+        {activeView === 'chat' && showLatest && <button type="button" className="assistant-jump-latest" onClick={() => {
+          nearBottomRef.current = true;
+          setShowLatest(false);
+          chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'auto' });
+        }}>↓ Latest message</button>}
+
         <form className="assistant-form" hidden={activeView !== 'chat'} onSubmit={event => { event.preventDefault(); onSubmit(delivery); }}>
-          <div className="assistant-run-controls">
-            <label>Mode<select aria-label="Agent mode" value={settings.mode ?? 'agent'} onChange={event => onUpdateSettings({ mode: event.target.value as 'agent' | 'ask' | 'plan' })}><option value="agent">Agent + Undo</option><option value="ask">Ask — read only</option><option value="plan">Plan — read only</option></select></label>
-            {isGenerating && <label>Next message<select aria-label="Message delivery" title="Steer after the current tool, queue for the next turn, or stop this task and send." value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><option value="steer">{waitingQuestion ? 'Answer question' : 'Steer'}</option><option value="queue">Queue</option><option value="interrupt">Stop + send</option></select></label>}
-            {isGenerating && canGenerateFrom(prompt, false, attachments) && <button type="button" className="assistant-stop-action" onClick={onStop} aria-label="Stop generating" title="Stop generating"><FaStop aria-hidden="true" /></button>}
-            {!isGenerating && <span className="assistant-model-label" title={`${settings.provider}: ${settings.model || 'Choose a model in settings'}`}>{settings.model || 'Choose a model'}</span>}
-          </div>
+          {showComposerOptions && <div ref={composerOptionsRef} className="assistant-composer-options" role="dialog" aria-label="Composer options">
+            <div className="assistant-composer-options-heading"><strong>Message options</strong><button type="button" className="assistant-icon-button" onClick={() => { setShowComposerOptions(false); composerOptionsButtonRef.current?.focus(); }} aria-label="Close message options"><FaTimes aria-hidden="true" /></button></div>
+            <label>Mode<select aria-label="Agent mode" value={settings.mode ?? 'agent'} onChange={event => onUpdateSettings({ mode: event.target.value as 'agent' | 'ask' | 'plan' })}><option value="agent">{settings.authoringMode === 'automatic' ? 'Agent + Undo' : 'Agent — review'}</option><option value="ask">Ask — read only</option><option value="plan">Plan — read only</option></select></label>
+            {isGenerating && <label>Next message<select aria-label="Message delivery" value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><option value="steer">{waitingQuestion ? 'Answer question' : 'Steer after current tool'}</option><option value="queue">Queue for next turn</option><option value="interrupt">Stop task and send</option></select></label>}
+            <button type="button" onClick={() => { setShowComposerOptions(false); setActiveView('settings'); }}>Model: {settings.model || 'Choose a model'} · settings</button>
+            <button type="button" onClick={() => { setShowComposerOptions(false); setShowSketchEditor(true); }} aria-label="Create sketch attachment"><FaPaintBrush aria-hidden="true" /> Draw an attachment</button>
+          </div>}
           <div className="assistant-composer-attachments" aria-label="Assistant attachments">
             {attachments.map(item => (
               <span className={`assistant-context-tag attachment ${item.kind}`} key={item.id}>
@@ -711,15 +718,18 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               toolbar={{
                 start: (
                   <>
+                    <button ref={composerOptionsButtonRef} type="button" className="assistant-composer-options-trigger" onClick={() => setShowComposerOptions(value => !value)} aria-expanded={showComposerOptions} aria-label="Message options" title={`${settings.mode ?? 'agent'} · ${settings.model || 'Choose a model'}`}><span>{waitingQuestion ? 'Answer' : isGenerating && delivery !== 'steer' ? delivery === 'queue' ? 'Queue' : 'Interrupt' : settings.mode === 'ask' ? 'Ask' : settings.mode === 'plan' ? 'Plan' : 'Agent'}</span><span className="assistant-composer-model">· {settings.model || 'Choose a model'}</span><FaChevronDown aria-hidden="true" /></button>
                     <button type="button" onClick={() => attachmentInputRef.current?.click()} aria-label="Attach files" title="Attach files"><FaPaperclip aria-hidden="true" /></button>
-                    <button type="button" onClick={() => setShowSketchEditor(true)} aria-label="Create sketch attachment" title="Draw"><FaPaintBrush aria-hidden="true" /></button>
                     <input ref={attachmentInputRef} className="assistant-attachment-input" type="file" multiple accept="text/*,.md,.json,.yaml,.yml,.xml,.csv,.log,.launch,.urdf,.xacro,.py,.js,.jsx,.ts,.tsx,.css,.html,.sh,.toml,.ini,.cfg,image/png,image/jpeg,image/webp,image/gif" onChange={event => { onAttachFiles(event.target.files); event.currentTarget.value = ''; }} aria-label="Assistant attachments" />
                   </>
                 ),
                 // Left out on a phone with nothing to send, so the microphone takes this slot
                 // rather than appearing a second time further down the row.
                 end: !compact || isGenerating || canGenerateFrom(prompt, false, attachments) ? (
-                  <button type={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'button' : 'submit'} className={`assistant-send${isGenerating && !canGenerateFrom(prompt, false, attachments) ? ' is-stop' : ''}`} onClick={isGenerating && !canGenerateFrom(prompt, false, attachments) ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'Stop generating' : 'Send'}>{isGenerating && !canGenerateFrom(prompt, false, attachments) ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
+                  <div className="assistant-composer-primary-actions">
+                    {isGenerating && canGenerateFrom(prompt, false, attachments) && <button type="button" className="assistant-stop-action" onClick={onStop} aria-label="Stop generating" title="Stop generating"><FaStop aria-hidden="true" /></button>}
+                    <button type={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'button' : 'submit'} className={`assistant-send${isGenerating && !canGenerateFrom(prompt, false, attachments) ? ' is-stop' : ''}`} onClick={isGenerating && !canGenerateFrom(prompt, false, attachments) ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'Stop generating' : 'Send'}>{isGenerating && !canGenerateFrom(prompt, false, attachments) ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
+                  </div>
                 ) : undefined,
               }}
             />

@@ -55,4 +55,35 @@ describe('agent run ownership', () => {
     expect(queue.next()).toBeUndefined();
     expect(() => queue.enqueue('', 'queue')).toThrow();
   });
+  it('preserves arrival order within steering, interrupt and queued priorities', () => {
+    const queue = new InputQueue();
+    queue.enqueue('Later', 'queue');
+    queue.enqueue('X first, Y second', 'steer');
+    queue.enqueue('Yes, current pose as Home', 'steer');
+    queue.enqueue('First interrupt', 'interrupt');
+    queue.enqueue('Second interrupt', 'interrupt');
+    expect(queue.items.map(item => item.text)).toEqual(['First interrupt', 'Second interrupt', 'X first, Y second', 'Yes, current pose as Home', 'Later']);
+  });
+  it('does not start a child after immediate parent cancellation', async () => {
+    const run = new AgentRun(vi.fn());
+    const execute = vi.fn(async () => 'late');
+    const id = run.spawn('Read interfaces', execute);
+    run.cancel(new Error('Stopped by you.'));
+    const childId = await id;
+    await expect(run.children.get(childId)!.result).resolves.toMatchObject({ ok: false });
+    expect(execute).not.toHaveBeenCalled();
+    expect(run.events.find(event => event.id === childId)?.status).toBe('cancelled');
+  });
+  it('settles cancellation even if a child transport ignores the signal, discarding late output', async () => {
+    const run = new AgentRun(vi.fn());
+    let finish!: (value: string) => void;
+    const id = await run.spawn('Read logs', () => new Promise(resolve => { finish = resolve; }));
+    await Promise.resolve();
+    run.cancelChild(id);
+    await expect(run.children.get(id)!.result).resolves.toMatchObject({ ok: false });
+    await run.settle();
+    finish('Late evidence');
+    await Promise.resolve();
+    expect(run.events.find(event => event.id === id)?.status).toBe('cancelled');
+  });
 });

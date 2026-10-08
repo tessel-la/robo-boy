@@ -10,6 +10,8 @@ export type { AssistantProviderId };
 
 export interface AssistantSettings {
   mode?: 'agent' | 'ask' | 'plan';
+  /** Preview Pad/BT authoring by default; automatic library saves require an operator preference. */
+  authoringMode?: 'review' | 'automatic';
   monitorEnabled?: boolean;
   monitorBackground?: boolean;
   monitorDurationMinutes?: number;

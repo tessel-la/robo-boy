@@ -90,9 +90,9 @@ describe('operator-owned agent extensions', () => {
   });
   it('imports instruction-only workflows and retains the explicit trust/error boundary', async () => {
     render(<AgentWorkflows />);
-    fireEvent.click(screen.getByText('Skills and workflows'));
-    fireEvent.click(screen.getByLabelText(/Repair a Pad/));
-    expect(loadSkills().find(item => item.id === 'pad-repair')?.enabled).toBe(false);
+    fireEvent.click(screen.getByText('Custom workflows (optional)'));
+    expect(loadSkills()).toEqual([]);
+    expect(screen.queryByLabelText(/Repair a Pad/)).not.toBeInTheDocument();
     const file = new File(['fixture'], 'SKILL.md', { type: 'text/markdown' });
     const text = vi.fn(
       async () =>
@@ -102,6 +102,8 @@ describe('operator-owned agent extensions', () => {
     fireEvent.change(screen.getByLabelText('Import trusted SKILL.md'), { target: { files: [file] } });
     await waitFor(() => expect(screen.getByLabelText(/Inspect battery/)).toBeChecked());
     expect(loadSkills().find(item => item.name === 'Inspect battery')?.instructions).toContain('battery topic');
+    fireEvent.click(screen.getByLabelText(/Inspect battery/));
+    expect(loadSkills().find(item => item.name === 'Inspect battery')?.enabled).toBe(false);
     const oversized = new File(['x'.repeat(24001)], 'SKILL.md');
     fireEvent.change(screen.getByLabelText('Import trusted SKILL.md'), { target: { files: [oversized] } });
     expect(screen.getByRole('alert')).toHaveTextContent('exceeds 24 KiB');

@@ -12,6 +12,8 @@ const statusLabels: Record<AgentEvent['status'], string> = {
  * not the fixed composer, so a long task cannot displace the conversation on a phone. */
 export function AssistantActivity({ events }: { events: AgentEvent[] }) {
   if (!events.length) return null;
+  const activity = events.filter(event => event.type !== 'usage');
+  const usage = events.filter(event => event.type === 'usage');
   const current = [...events].reverse().find(event => event.status === 'running' || event.status === 'paused');
   const eventLabel = (event: AgentEvent) => (event.type === 'tool' ? event.label.replace(/_/g, ' ') : event.label);
   return (
@@ -21,10 +23,10 @@ export function AssistantActivity({ events }: { events: AgentEvent[] }) {
           {statusLabels[current.status]}: {eventLabel(current)}
         </p>
       )}
-      <details className="assistant-tool-events">
-        <summary>Agent activity ({events.length})</summary>
+      {activity.length > 0 && <details className="assistant-tool-events">
+        <summary>Agent activity ({activity.length})</summary>
         <ol className="assistant-event-list">
-          {events.map(event => {
+          {activity.map(event => {
             const label = eventLabel(event);
             const title = `${event.type === 'child' ? 'Investigation: ' : ''}${label}`;
             const heading = (
@@ -47,7 +49,8 @@ export function AssistantActivity({ events }: { events: AgentEvent[] }) {
             );
           })}
         </ol>
-      </details>
+      </details>}
+      {usage.length > 0 && <details className="assistant-tool-events assistant-usage-events"><summary>Model usage ({usage.length} {usage.length === 1 ? 'request' : 'requests'})</summary><ul>{usage.map(event => <li key={event.id}>{event.detail ?? 'Token counts unavailable.'}</li>)}</ul></details>}
     </>
   );
 }

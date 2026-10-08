@@ -10,6 +10,7 @@ describe('subscription capability boundaries', () => {
     const tools = new SubscriptionTools(controller.signal, dispatch);
     await expect(tools.execute('Bash', {})).resolves.toMatchObject({ ok: false });
     const pending = tools.execute('read_topic', { name: '/joint_states' });
+    await Promise.resolve();
     const id = dispatch.mock.calls[0][0];
     expect(() => tools.reply('wrong', { ok: true })).toThrow(/expired/);
     expect(() => tools.reply(id, { ok: 'yes' })).toThrow(/Invalid/);
@@ -21,6 +22,7 @@ describe('subscription capability boundaries', () => {
     const controller = new AbortController(),
       tools = new SubscriptionTools(controller.signal, vi.fn());
     const pending = tools.execute('read_tf', {});
+    await Promise.resolve();
     controller.abort();
     await expect(pending).rejects.toThrow(/cancelled/);
     const another = new SubscriptionTools(new AbortController().signal, vi.fn());
@@ -33,6 +35,7 @@ describe('subscription capability boundaries', () => {
       tools = new SubscriptionTools(new AbortController().signal, dispatch);
     const first = tools.execute('edit_workspace', { operations: [] }, 'native-call');
     const replay = tools.execute('edit_workspace', { operations: [] }, 'native-call');
+    await Promise.resolve();
     expect(dispatch).toHaveBeenCalledOnce();
     tools.reply(dispatch.mock.calls[0][0], { ok: true, value: { applied: true } });
     await expect(replay).resolves.toEqual(await first);
@@ -59,12 +62,57 @@ describe('subscription capability boundaries', () => {
       tools = new SubscriptionTools(new AbortController().signal, dispatch);
     await expect(tools.execute('read_tf', null)).resolves.toMatchObject({ ok: false });
     await expect(tools.execute('read_tf', { huge: 'x'.repeat(270_000) })).resolves.toMatchObject({ ok: false });
-    const pending = tools.execute('read_tf', {}),
-      id = dispatch.mock.calls[0][0];
+    const pending = tools.execute('read_tf', {});
+    await Promise.resolve();
+    const id = dispatch.mock.calls[0][0];
     expect(() => tools.reply(id, { ok: true, value: 'x'.repeat(140_000) })).toThrow(/too large/);
     expect(() => tools.reply(id, { ok: true, image: { mimeType: 'text/html', data: 'evil' } })).toThrow(/image/);
     tools.reply(id, { ok: false, error: 'Unavailable' });
     await pending;
+  });
+  it('starts deadlines at dispatch rather than while a parallel call waits in the queue', async () => {
+    vi.useFakeTimers();
+    try {
+      const dispatch = vi.fn();
+      const controller = new AbortController();
+      const tools = new SubscriptionTools(controller.signal, dispatch, undefined, undefined, reason => controller.abort(reason));
+      const first = tools.execute('read_tf', {});
+      const second = tools.execute('read_topic', { name: '/joint_states' });
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(dispatch).toHaveBeenCalledOnce();
+      tools.reply(dispatch.mock.calls[0][0], { ok: true });
+      await first;
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(controller.signal.aborted).toBe(false);
+      expect(dispatch).toHaveBeenCalledTimes(2);
+      tools.reply(dispatch.mock.calls[1][0], { ok: true });
+      await second;
+    } finally { vi.useRealTimers(); }
+  });
+  it('preserves the timed-out tool name as the cancellation reason', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const tools = new SubscriptionTools(controller.signal, vi.fn(), undefined, undefined, reason => controller.abort(reason));
+      const result = tools.execute('read_tf', {});
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(result).resolves.toMatchObject({ ok: false });
+      expect(controller.signal.reason).toMatchObject({ name: 'TimeoutError', message: expect.stringContaining('read_tf timed out') });
+    } finally { vi.useRealTimers(); }
+  });
+  it('never dispatches queued mutations after disposal', async () => {
+    const dispatch = vi.fn();
+    const tools = new SubscriptionTools(new AbortController().signal, dispatch);
+    const first = tools.execute('read_tf', {});
+    const next = tools.execute('edit_workspace', { operations: [{ op: 'addPanel', type: 'pad' }] });
+    const firstCheck = expect(first).rejects.toThrow(/ended/);
+    const nextCheck = expect(next).rejects.toThrow(/ended/);
+    await Promise.resolve();
+    expect(dispatch).toHaveBeenCalledOnce();
+    tools.dispose();
+    await Promise.all([firstCheck, nextCheck]);
+    expect(dispatch).toHaveBeenCalledOnce();
+    await expect(tools.execute('read_tf', {})).rejects.toThrow(/ended/);
   });
   it('serves authenticated MCP tools, never accepts browser origins or missing tokens', async () => {
     const signal = new AbortController(),

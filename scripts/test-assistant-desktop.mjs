@@ -27,7 +27,7 @@ const server = createServer(async (request, response) => {
     const round = requests.length;
     const delta = round === 1 ? { tool_calls: [{ index: 0, id: 'workspace-call', type: 'function', function: { name: 'edit_workspace', arguments: JSON.stringify({ operations: [{ op: 'addPanel', panelType: 'behaviorTree' }] }) } }] }
       : round === 2 ? { tool_calls: [{ index: 0, id: 'verify-call', type: 'function', function: { name: 'read_workspace', arguments: '{}' } }] }
-        : { content: 'Desktop native tools verified.' };
+        : { content: 'Desktop native tools verified.\n\n**Observed** workspace state:\n\n| Panel | Status |\n| --- | --- |\n| Behavior Tree | Open |\n\n```json\n{"robotExecuted":false}\n```' };
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     response.end(`data: ${JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: 'fixture', created: 0, choices: [{ index: 0, delta, finish_reason: round < 3 ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 12, completion_tokens: 8, total_tokens: 20 } })}\n\ndata: [DONE]\n\n`);
   } catch (cause) { failures.push(String(cause)); response.writeHead(500).end('Desktop fixture failed.'); }
@@ -58,6 +58,9 @@ try {
   await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Add a Behavior Tree panel and verify the workspace.');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText('Desktop native tools verified.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('assistant-panel').getByRole('table')).toBeVisible();
+  assert.equal(await page.getByText('Observed', { exact: true }).evaluate(element => element.tagName), 'STRONG');
+  await expect(page.getByRole('button', { name: 'Copy code', exact: true })).toBeVisible();
   assert.equal(requests.length, 3); assert.deepEqual(failures, []); assert.deepEqual(errors, []);
   assert.equal(requests[2].messages.filter(message => message.role === 'user').length, 1);
   assert.ok(requests[2].messages.some(message => message.role === 'tool' && message.tool_call_id === 'workspace-call'));
@@ -75,7 +78,7 @@ try {
     await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
     console.log('PASS tray hide-on-close');
   } else console.log('SKIP native tray UI: no display (headless native inference still tested)');
-  console.log('PASS packaged ASAR startup, native credentials/tool IPC, read-after-write, isolated profile and zero robot execution');
+  console.log('PASS packaged ASAR startup, native credentials/tool IPC, read-after-write, Markdown/table rendering, isolated profile and zero robot execution');
 } finally {
   await electron?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   // Only the mkdtemp-owned fixture/profile above is removed.

@@ -264,9 +264,18 @@ describe('trusted extension configuration and context', () => {
     expect(skill.instructions).toBe('Read actual joint values.');
     expect(() => importSkill('unbounded '.repeat(3000))).toThrow(/24 KiB/);
     expect(() => importSkill('No frontmatter')).toThrow(/SKILL.md/);
-    storeSkills([...loadSkills().map(item => ({ ...item, enabled: false })), skill]);
-    expect(loadSkills().find(item => item.id === 'home-capture')?.enabled).toBe(false);
+    expect(loadSkills()).toEqual([]);
+    storeSkills([skill]);
     expect(loadSkills().find(item => item.id === skill.id)?.builtin).toBe(false);
+    storeSkills([{ ...skill, enabled: false }]);
+    expect(loadSkills().find(item => item.id === skill.id)?.enabled).toBe(false);
+  });
+  it('retires shipped examples while preserving imported workflows and stored data', () => {
+    const custom = importSkill('---\nname: team-conventions\ndescription: Reusable team instructions\n---\nPreserve the operator settings.');
+    const raw = JSON.stringify([{ ...custom, id: 'home-capture', builtin: true }, custom]);
+    localStorage.setItem('robo-boy-agent-skills-v1', raw);
+    expect(loadSkills()).toEqual([{ ...custom, builtin: false }]);
+    expect(localStorage.getItem('robo-boy-agent-skills-v1')).toBe(raw);
   });
   it('preserves builtin profiles while importing only bounded custom profiles', () => {
     const profiles = loadAgentProfiles();

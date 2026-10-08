@@ -43,7 +43,7 @@ const CustomGamepadWrapper: React.FC<CustomGamepadWrapperProps> = ({ ros, layout
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="custom-gamepad-runtime" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
     {pending && <div role="status" style={{ padding: 8, fontSize: 12 }}><span>Pad authoring updated. Current control bindings are unchanged.</span><button type="button" style={{ minHeight: 44 }} onClick={() => { setGamepadItem(pending); setActivation(value => value + 1); setPending(undefined); }}>Activate updated controls</button></div>}
     <CustomGamepadLayout
       key={`${layoutId}:${activation}`}

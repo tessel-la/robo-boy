@@ -64,12 +64,31 @@ describe('assistant panel hierarchy', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Chats$/ }));
     expect(screen.getByRole('region', { name: 'Chats' })).toBeVisible();
     expect(screen.getByLabelText('Ask the assistant')).not.toBeVisible();
-    expect(screen.queryByRole('option', { name: 'Old task (archived)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Old task Archived' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Show archived chats'));
-    expect(screen.getByRole('option', { name: 'Old task (archived)' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Current chat'), { target: { value: 'other' } });
+    expect(screen.getByRole('button', { name: 'Old task Archived' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Repair Pad Chat' }));
     expect(input.onSwitchSession).toHaveBeenCalledWith('other');
     expect(screen.getByLabelText('Ask the assistant')).toBeVisible();
+  });
+  it('filters chat rows rather than hiding results in a select, with a real empty state', () => {
+    render(<AssistantPanel {...props()} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Chats$/ }));
+    expect(screen.getByRole('button', { name: 'Inspect TF Current' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.change(screen.getByLabelText('Search chats'), { target: { value: 'missing' } });
+    expect(screen.getByText('No matching chats.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Inspect TF Current' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search chats'), { target: { value: '  repair  ' } });
+    expect(screen.getByRole('button', { name: 'Repair Pad Chat' })).toBeVisible();
+  });
+  it('renders live and completed answers and thinking with the same Markdown pipeline', async () => {
+    const { container } = render(<AssistantPanel {...props({ isGenerating: true, thinking: '**Verify** the interface.', streamedAnswer: '**Ready**\n\n| Axis | Speed |\n| --- | --- |\n| X | 0.05 |', messages: [{ id: 'completed', role: 'assistant', content: '**Saved** `pad`.', createdAt: 1, attachments: [], contextChipIds: [], checkpoint: null }] })} />);
+    expect((await screen.findByText('Ready')).tagName).toBe('STRONG');
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('Saved').tagName).toBe('STRONG');
+    fireEvent.click(screen.getByText('Thinking…'));
+    expect(screen.getByText('Verify')).toBeVisible();
+    expect(container.querySelectorAll('.assistant-message.user')).toHaveLength(0);
   });
   it('shows one subview at a time and keeps settings accessible through Escape', async () => {
     render(<AssistantPanel {...props()} />);
@@ -109,11 +128,24 @@ describe('assistant panel hierarchy', () => {
   it('keeps Stop available while composing a steering or queued message', () => {
     const input = props({ isGenerating: true, prompt: 'New evidence' });
     render(<AssistantPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Message options' }));
     fireEvent.change(screen.getByLabelText('Message delivery'), { target: { value: 'queue' } });
     fireEvent.click(screen.getByRole('button', { name: /^Send$/ }));
     expect(input.onSubmit).toHaveBeenCalledWith('queue');
     fireEvent.click(screen.getByRole('button', { name: /^Stop generating$/ }));
     expect(input.onStop).toHaveBeenCalledOnce();
+  });
+  it('keeps optional controls out of the resting composer, with Escape returning focus', async () => {
+    render(<AssistantPanel {...props()} />);
+    expect(screen.queryByLabelText('Agent mode')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create sketch attachment' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Message options' }));
+    expect(screen.getByRole('dialog', { name: 'Composer options' })).toBeVisible();
+    expect(screen.getByLabelText('Agent mode')).toHaveFocus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Composer options' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Message options' })).toHaveFocus());
+    expect(screen.getByLabelText('Ask the assistant')).toBeVisible();
   });
   it('does not duplicate completed activity in the live-task footer', () => {
     render(
@@ -139,6 +171,13 @@ describe('assistant panel hierarchy', () => {
     expect(screen.getAllByText('Agent activity (1)')).toHaveLength(1);
     expect(screen.queryByText('Tools used')).not.toBeInTheDocument();
     expect(screen.queryByText('Old duplicate progress')).not.toBeInTheDocument();
+  });
+  it('keeps token accounting separate from the tool timeline', () => {
+    render(<AssistantPanel {...props({ isGenerating: true, events: [event, { ...event, id: 'usage', type: 'usage', label: 'Model usage', detail: '100 input · 20 output tokens' }] })} />);
+    expect(screen.getByText('Agent activity (1)')).toBeInTheDocument();
+    expect(screen.getByText('Model usage (1 request)')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Model usage (1 request)'));
+    expect(screen.getByText('100 input · 20 output tokens')).toBeVisible();
   });
   it('preserves fork/archive controls in the on-demand chat view', () => {
     const input = props({ onArchiveSession: vi.fn(), onForkSession: vi.fn() });

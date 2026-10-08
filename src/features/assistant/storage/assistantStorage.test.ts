@@ -39,6 +39,15 @@ describe('assistantStorage', () => {
     localStorage.setItem('robo-boy-assistant-settings', '{broken');
     expect(loadAssistantSettings()).toEqual(getDefaultAssistantSettings());
   });
+  it('defaults new, old and invalid settings to review while retaining explicit automatic authoring', () => {
+    expect(getDefaultAssistantSettings().authoringMode).toBe('review');
+    for (const authoringMode of [undefined, null, 'unsafe', 7]) {
+      localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ authoringMode, model: 'kept-model' }));
+      expect(loadAssistantSettings()).toMatchObject({ authoringMode: 'review', model: 'kept-model' });
+    }
+    saveAssistantSettings({ ...getDefaultAssistantSettings(), authoringMode: 'automatic' });
+    expect(loadAssistantSettings().authoringMode).toBe('automatic');
+  });
 
   it('migrates old settings to API mode while retaining their credentials and model', () => {
     localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', apiKey: 'saved-key', model: 'saved-model' }));

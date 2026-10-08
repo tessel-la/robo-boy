@@ -79,6 +79,8 @@ describe('GlobalAssistant', () => {
   };
 
   it('docks on a tall phone and takes over short or keyboard-reduced viewports', () => {
+    expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 210, viewportWidth: 390, toolbarBottom: 48 }))
+      .toEqual({ top: 48, height: 162, workspaceInset: 0, takeover: true });
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40 }))
       .toEqual({ top: 313.36, height: 530.64, workspaceInset: 530.64, takeover: false });
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40, requestedHeight: 650 }))
@@ -446,7 +448,7 @@ describe('GlobalAssistant', () => {
     expect(host).toHaveBeenCalledOnce();
   });
 
-  it('cancels settings waiting on a new panel when the assistant closes', async () => {
+  it('continues settings waiting on a new panel when the assistant is hidden', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'workspaceEdit', operations: [
       { op: 'addPanel', panelType: 'timeSeries' },
       { op: 'configurePanel', panelType: 'timeSeries', settings: { paused: true } },
@@ -460,7 +462,60 @@ describe('GlobalAssistant', () => {
     const apply = vi.fn();
     act(() => ref.current?.registerPanelSettingsBridge('new-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply }));
     await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
-    expect(apply).not.toHaveBeenCalled();
+    await waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it('keeps a model turn running while hidden and shows its completed answer on reopening', async () => {
+    let finish!: (answer: string) => void;
+    sendAssistantChatMock.mockImplementationOnce(request => new Promise<string>(resolve => { finish = resolve; request.onThinking?.('Inspecting the requested data.'); }));
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect my workspace' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    const signal = sendAssistantChatMock.mock.calls[0][0].signal as AbortSignal;
+    fireEvent.click(screen.getByRole('button', { name: 'Close assistant' }));
+    await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
+    expect(signal.aborted).toBe(false);
+    await act(async () => finish('Inspection completed while the panel was hidden.'));
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    expect(await screen.findByText('Inspection completed while the panel was hidden.')).toBeVisible();
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
+  });
+
+  it('preserves partial assistant output and thinking when a provider fails', async () => {
+    sendAssistantChatMock.mockImplementationOnce(async request => { request.onThinking?.('Inspecting interfaces.'); request.onToken?.('Partial analysis.'); throw new Error('Host tool read_node timed out.'); });
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect controller state' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('Partial analysis.'));
+    expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('Host tool read_node timed out.');
+    fireEvent.click(screen.getByText('Thinking'));
+    expect(screen.getByText('Inspecting interfaces.')).toBeVisible();
+    expect(document.querySelector('.assistant-message.user')).not.toHaveTextContent('Inspecting interfaces.');
+  });
+  it('coalesces token bursts without losing final answer or thinking', async () => {
+    let finish!: (value: string) => void;
+    sendAssistantChatMock.mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve; }));
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect state' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    const request = sendAssistantChatMock.mock.calls[0][0];
+    vi.useFakeTimers();
+    try {
+      const baseline = vi.getTimerCount();
+      act(() => {
+        for (let token = 0; token < 500; token++) { request.onToken?.('part '); request.onThinking?.('evidence '); }
+      });
+      expect(vi.getTimerCount()).toBe(baseline + 1);
+      expect(document.querySelector('[aria-label="Assistant activity"] .assistant-message-content')).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(document.querySelector('[aria-label="Assistant activity"]')).toHaveTextContent('part part part');
+      await act(async () => { finish('part '.repeat(500)); });
+      expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('part '.repeat(500).trim());
+      fireEvent.click(screen.getByText('Thinking'));
+      expect(document.querySelector('.assistant-thinking')).toHaveTextContent('evidence '.repeat(500).trim());
+    } finally { vi.useRealTimers(); }
   });
 
   it('recovers the joint-state plotting task when the model only adds the panel', async () => {

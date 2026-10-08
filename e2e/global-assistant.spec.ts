@@ -119,7 +119,7 @@ for (const theme of ['light', 'dark', 'solarized', 'custom-cobalt']) {
         }]));
       }, theme);
       await connectWithMockRos(page);
-      await mockOpenAiCompatibleChat(page, { kind: 'explanation', message: 'Robot data is available. Tags are optional references.' });
+      await mockOpenAiCompatibleChat(page, { kind: 'explanation', message: 'Robot data is available. Tags are optional references.\n\n## Observations\n\n**Verified** `linear.x`\n\n- One\n- Two\n\n| Frame | Status | Measurement |\n| --- | --- | --- |\n| world | Present | 0.05 metres |\n| robot_tool_tip | Connected | 0.20 radians |\n\n```json\n{ "very_long_robot_frame_identifier": "world/arm_1/panda_link_8/tool0/diagnostic_observation" }\n```' });
       await page.getByLabel('Open Robo-Boy assistant').click();
       const panel = page.getByTestId('assistant-panel');
       await expect(panel).toHaveClass(/is-open/);
@@ -131,6 +131,15 @@ for (const theme of ['light', 'dark', 'solarized', 'custom-cobalt']) {
         expect(await panel.locator('.assistant-header').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       };
       await assertFits();
+      await expect(panel.getByRole('table')).toBeVisible();
+      if (width === 1280) expect(await panel.locator('.assistant-markdown-table').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      expect(await panel.locator('.assistant-chat').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      await expect(panel.getByLabel('Agent mode')).toHaveCount(0);
+      await panel.getByRole('button', { name: 'Message options' }).click();
+      await expect(panel.getByRole('dialog', { name: 'Composer options' })).toBeVisible();
+      await assertFits();
+      await page.screenshot({ path: testInfo.outputPath('assistant-message-options.png') });
+      await panel.getByRole('button', { name: 'Close message options' }).click();
       await page.screenshot({ path: testInfo.outputPath('assistant-chat.png') });
       await panel.getByRole('button', { name: 'Assistant settings', exact: true }).click();
       const settings = panel.getByRole('dialog', { name: 'Assistant settings' });
@@ -178,7 +187,9 @@ test('expanded activity and queued messages do not displace the mobile composer'
   await panel.getByRole('button', { name: 'Send', exact: true }).click();
   await waitForRosSubscription(page, '/diagnostics');
   await prompt.fill('Inspect TF next');
+  await panel.getByRole('button', { name: 'Message options' }).click();
   await panel.getByLabel('Message delivery').selectOption('queue');
+  await panel.getByRole('button', { name: 'Close message options' }).click();
   await expect(panel.getByRole('button', { name: 'Stop generating', exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Send', exact: true }).click();
   await panel.getByText('Pending messages (1)', { exact: true }).click();
@@ -387,6 +398,31 @@ test('Behavior Tree entry reuses the one global conversation', async ({ page }) 
   await page.getByTestId('bt-open-agent').click();
   await expect(page.getByTestId('assistant-panel')).toHaveCount(1);
   await expect(page.getByText('This is a test answer.')).toBeVisible();
+});
+
+test('hiding the assistant does not abort inference and reopening shows its completed answer', async ({ page }) => {
+  await connectWithMockRos(page);
+  let release!: () => void;
+  let received = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/chat/completions', async route => {
+    received = true;
+    await held;
+    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream({ kind: 'explanation', message: '**Completed** while hidden.' }) });
+  });
+  try {
+    await page.getByLabel('Open Robo-Boy assistant').click();
+    await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Inspect in the background');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => received).toBe(true);
+    await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
+    await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
+    release();
+    await page.getByLabel('Open Robo-Boy assistant').click();
+    await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.locator('.assistant-message.user')).toHaveCount(1);
+  } finally { release(); }
 });
 
 test('320px portrait keeps header, transcript, context, and composer reachable above the keyboard', async ({ page }) => {

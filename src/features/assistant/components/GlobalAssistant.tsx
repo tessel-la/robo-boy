@@ -254,11 +254,10 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setIsGenerating(false); setStreamedAnswer(''); setThinking(''); setEvents([]);
     }, []);
     const closeAssistant = useCallback(() => {
-      abandonTurn();
-      abortContextWork();
+      // The panel is a view of the connection-owned task, not the task's lifetime.
+      // Hiding it must not be equivalent to Stop, chat switching or reconnecting.
       setIsOpen(false);
-      setProgress([]);
-    }, [abortContextWork, abandonTurn]);
+    }, []);
 
     useLayoutEffect(() => {
       document.documentElement.classList.toggle('assistant-is-open', isOpen);
@@ -717,6 +716,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       if (id.startsWith('proposal:')) {
         const documentId = id.slice('proposal:'.length);
         for (const message of [...historyRef.current].reverse()) {
+          if (message.resolution === 'rejected') continue;
           if (kind === 'pad' && message.response?.kind === 'padProposal' && message.response.layout.id === documentId) return message.response.layout;
           if (kind === 'behaviorTree' && message.response?.kind === 'behaviorTree' && message.response.tree.id === documentId) return message.response.tree;
         }
@@ -782,6 +782,19 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const run = new AgentRun(() => { if (runRef.current === run) setEvents([...run.events]); });
       runRef.current = run;
       const controller = run.controller;
+      let streamUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+      // Coalesce display updates, not evidence. Raw deltas remain in the turn immediately,
+      // including when hidden; final/error messages use those complete snapshots.
+      const scheduleStreamUpdate = () => {
+        if (streamUpdateTimer !== undefined) return;
+        streamUpdateTimer = setTimeout(() => {
+          streamUpdateTimer = undefined;
+          if (abortRef.current === controller && !controller.signal.aborted) {
+            setStreamedAnswer(turnAnswer);
+            setThinking(turnThinking);
+          }
+        }, 50);
+      };
       abortRef.current = controller;
       setEvents([]);
       setIsGenerating(true);
@@ -818,6 +831,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setThinking('');
       setStreamedAnswer('');
       let turnThinking = '';
+      let turnAnswer = '';
       let continueQueue = false;
       const turnActivity: string[] = [];
       const reportActivity = (message: string) => {
@@ -948,7 +962,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           } else if (response.kind === 'behaviorTree') {
             const targetBridge = getActiveBridge();
             if (targetBridge) targetBridge.applyPreview(response.tree);
-            pushMessage({ id: uuidv4(), role: 'assistant', content: targetBridge ? `Built “${response.tree.name}” and opened its preview on the current Behavior Tree canvas. Accept or reject it there.` : `Built “${response.tree.name}”. Open a Behavior Tree panel to preview changes, or save this proposal to the library.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response, ...(targetBridge ? { resolution: 'applied' as const } : {}), contextUsed });
+            pushMessage({ id: uuidv4(), role: 'assistant', content: targetBridge ? `Built “${response.tree.name}” and opened its preview on the current Behavior Tree canvas. Accept or reject it there; it has not been saved or executed.` : `Built “${response.tree.name}”. Review this proposal before accepting it into the library.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response, contextUsed });
           } else if (response.kind === 'padProposal') {
             const issues = discovery ? validatePadAgainstRos(response.layout, discovery) : [];
             pushMessage({ id: uuidv4(), role: 'assistant', content: `Built Pad “${response.layout.name}”. Review its complete layout and bindings in the Pad editor before saving.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: { ...response, issues }, contextUsed, proposedAtGeneration: generationAtSend });
@@ -961,7 +975,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         const profiles = loadAgentProfiles();
         const profile = profiles.find(item => item.id === settings.agentProfileId) ?? profiles[settings.agentProfileId ? 1 : 0];
         const loadedSkills = new Map<string, string>();
-        const skillContext = () => `\n## Enabled workflow catalog\n${JSON.stringify(skills.map(({ id, name, description }) => ({ id, name, description })))}\n## Agent profile catalog\n${JSON.stringify(profiles.map(({ id, name, description }) => ({ id, name, description })))}\n${profile.instructions}\n${[...loadedSkills.entries()].map(([id, instructions]) => `## Trusted loaded workflow ${id}\n${instructions}`).join('\n')}\nMode: ${settings.mode ?? 'agent'}. ${settings.mode === 'plan' ? 'Investigate and produce a plan; do not change app state.' : settings.mode === 'ask' || profile.readOnly ? 'Answer with evidence; do not change app state.' : 'Apply validated authoring changes with checkpoints, not robot operations.'}`;
+        const skillContext = () => `\n## Enabled workflow catalog\n${JSON.stringify(skills.map(({ id, name, description }) => ({ id, name, description })))}\n## Agent profile catalog\n${JSON.stringify(profiles.map(({ id, name, description }) => ({ id, name, description })))}\n${profile.instructions}\n${[...loadedSkills.entries()].map(([id, instructions]) => `## Trusted loaded workflow ${id}\n${instructions}`).join('\n')}\nMode: ${settings.mode ?? 'agent'}. ${settings.mode === 'plan' ? 'Investigate and produce a plan; do not change app state.' : settings.mode === 'ask' || profile.readOnly ? 'Answer with evidence; do not change app state.' : settings.authoringMode === 'automatic' ? 'Apply validated authoring changes with checkpoints, not robot operations.' : 'Stage validated Pad and Behavior Tree changes for operator review. Awaiting review is not saved. Local workspace edits remain available; robot operations are forbidden.'}`;
         const readSkill = (id: string) => { const skill = skills.find(item => item.id === id); if (!skill) throw new Error('No enabled skill with this id.'); loadedSkills.set(id, skill.instructions); return { name: skill.name, instructions: skill.instructions, scriptsExecuted: false }; };
         const integrationTool = async (name: string, input: Record<string, unknown>, signal: AbortSignal, readOnly: boolean) => {
           const integration = await import('../runtime/integrations');
@@ -983,12 +997,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               nativeHistory: nativeHistoryRef.current?.provider === `${resolvedSettings.provider}:${resolvedSettings.model}:${resolvedSettings.authMode}` ? nativeHistoryRef.current.messages : undefined,
               onNativeMessages: messages => { if (!controller.signal.aborted) nativeHistoryRef.current = JSON.stringify(messages).length <= 320_000 ? { provider: `${resolvedSettings.provider}:${resolvedSettings.model}:${resolvedSettings.authMode}`, messages } : undefined; },
               refreshSystemPrompt: () => composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery, interfaceSchemas), pinnedChips: turnChips, needs }) + skillContext(),
-              onToken: text => { if (abortRef.current === controller && !controller.signal.aborted) setStreamedAnswer(previous => (previous + text).slice(-256 * 1024)); },
+              onToken: text => { if (abortRef.current === controller && !controller.signal.aborted) { turnAnswer = (turnAnswer + text).slice(-256 * 1024); scheduleStreamUpdate(); } },
               onThinking: text => {
                 if (abortRef.current !== controller || controller.signal.aborted) return;
                 turnThinking = (turnThinking + (turnThinking && !thinkingInRound ? '\n\n' : '') + text).slice(-64 * 1024);
                 thinkingInRound = true;
-                setThinking(turnThinking);
+                scheduleStreamUpdate();
               },
               onProgress: message => { if (abortRef.current === controller && !controller.signal.aborted) setProgress([...turnActivity, message]); },
             });
@@ -1077,6 +1091,11 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               if (issues.length) throw new Error(issues.join(' '));
             }
             checkCurrent();
+            if (settings.authoringMode !== 'automatic') {
+              if (kind === 'pad') presentResponse({ kind: 'padProposal', layout: document as CustomGamepadLayout, issues: [], ...(baseRevision ? { baseRevision } : {}) });
+              else presentResponse({ kind: 'behaviorTree', tree: document as BehaviorTree });
+              return { status: 'awaiting-review', saved: false, reviewDocumentId: `proposal:${id}`, document, robotExecuted: false, controlsActivated: false };
+            }
             const saved = readSavedDocument(kind, id);
             const draftSnapshot = JSON.stringify(current ?? null);
             const hasDraft = kind === 'pad' ? padDraftReaderRef.current?.()?.id === id : [...bridgesRef.current.values()].some(bridge => bridge.getCurrentTree()?.id === id);
@@ -1176,8 +1195,17 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         if (abortRef.current !== controller) return;
         setProgress([]);
         if (cause instanceof AgentYield || run.isSteering) { continueQueue = true; run.cancel(); pushMessage({ id: uuidv4(), role: 'assistant', content: 'Redirecting to your steering message. Completed changes are preserved.', attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), events: [...run.events] }); }
-        else if (!isAbortError(cause) && !controller.signal.aborted) { run.cancel(); setError(cause instanceof Error ? cause.message : 'The assistant request failed.'); }
+        else {
+          const wasCancelled = controller.signal.aborted;
+          const reason = wasCancelled
+            ? controller.signal.reason instanceof Error && controller.signal.reason.message !== 'This operation was aborted' ? controller.signal.reason.message : 'Task stopped.'
+            : isAbortError(cause) ? 'The model request was interrupted before completion.' : cause instanceof Error ? cause.message : 'The assistant request failed.';
+          run.cancel();
+          pushMessage({ id: uuidv4(), role: 'assistant', content: `${reason}\nCompleted changes and proposals are preserved; no edits were automatically retried.${turnAnswer ? `\n\nPartial response (not completed):\n${turnAnswer}` : ''}`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), thinking: turnThinking, events: run.events.map(event => event.status === 'running' ? { ...event, status: 'cancelled' as const } : { ...event }) });
+          if (!wasCancelled) setError(reason);
+        }
       } finally {
+        clearTimeout(streamUpdateTimer);
         if (abortRef.current === controller) {
           if (runRef.current === run) runRef.current = null;
           abortRef.current = null;
@@ -1352,7 +1380,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         prompt={prompt}
         onPromptChange={setPrompt}
         onSubmit={submitInput}
-        onStop={() => { inputQueueRef.current.items = []; setPendingInputs([]); runRef.current?.cancel(); }}
+        onStop={() => { inputQueueRef.current.items = []; setPendingInputs([]); runRef.current?.cancel(new Error('Stopped by you.')); }}
         onNewConversation={handleNewConversation}
         onRepeat={handleRepeat}
         onEditMessage={handleEditMessage}
@@ -1377,6 +1405,16 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         isLoadingOllamaModels={isLoadingOllamaModels}
         onRefreshOllamaModels={() => setOllamaModelsRefresh(value => value + 1)}
         onReviewPadProposal={handleReviewPad}
+        onRejectProposal={messageId => {
+          const message = historyRef.current.find(item => item.id === messageId);
+          if (message?.response?.kind === 'behaviorTree') {
+            const tree = message.response.tree;
+            for (const bridge of bridgesRef.current.values()) {
+              if (!documentDiff(bridge.getPreviewTree(), tree)) bridge.applyPreview(null);
+            }
+          }
+          updateMessage(messageId, { resolution: 'rejected' });
+        }}
         onSaveBehaviorTreeProposal={handleSaveTree}
         hasActiveBehaviorTreeBridge={Boolean(activeBridge)}
       />

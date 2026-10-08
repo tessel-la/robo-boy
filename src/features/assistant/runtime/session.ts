@@ -135,26 +135,32 @@ export class AgentRun {
       throw new Error('At most three child investigations per task. Reuse an existing result.');
     const id = createUuid(),
       controller = new AbortController();
-    const cancel = () => controller.abort();
+    const cancel = () => controller.abort(this.controller.signal.reason);
     this.controller.signal.addEventListener('abort', cancel, { once: true });
-    this.emit('child', task, 'running', undefined, id);
-    const result = Promise.resolve()
-      .then(() => execute(task, controller.signal, id))
-      .then(
-        value => {
-          controller.signal.throwIfAborted();
-          this.emit('child', task, 'done', undefined, id);
-          return { ok: true, value };
-        },
-        cause => {
-          this.emit('child', task, controller.signal.aborted ? 'cancelled' : 'failed', String(cause), id);
-          return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
-        }
-      )
-      .catch(cause => ({ ok: false, error: String(cause) }))
+    const result = this.investigate(task, execute, controller, id)
       .finally(() => this.controller.signal.removeEventListener('abort', cancel));
     this.children.set(id, { controller, cancelled: false, result, task, execute });
     return id;
+  }
+  private async investigate(task: string, execute: (task: string, signal: AbortSignal, id: string) => Promise<unknown>, controller: AbortController, id: string, label = task): Promise<HostToolResult> {
+    let rejectAbort!: (cause: unknown) => void;
+    const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+    const abort = () => rejectAbort(controller.signal.reason);
+    controller.signal.addEventListener('abort', abort, { once: true });
+    try {
+      controller.signal.throwIfAborted();
+      this.emit('child', label, 'running', undefined, id);
+      const value = await Promise.race([Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return execute(task, controller.signal, id);
+      }), cancelled]);
+      controller.signal.throwIfAborted();
+      this.emit('child', label, 'done', undefined, id);
+      return { ok: true, value };
+    } catch (cause) {
+      this.emit('child', label, controller.signal.aborted ? 'cancelled' : 'failed', String(cause), id);
+      return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
+    } finally { controller.signal.removeEventListener('abort', abort); }
   }
   messageChild(id: string, task: string): void {
     const child = this.children.get(id);
@@ -167,21 +173,16 @@ export class AgentRun {
         if (child.cancelled) throw new DOMException('Child follow-ups cancelled.', 'AbortError');
         const controller = new AbortController();
         child.controller = controller;
-        const cancelled = () => controller.abort();
+        const cancelled = () => controller.abort(this.controller.signal.reason);
         this.controller.signal.addEventListener('abort', cancelled, { once: true });
-        this.emit('child', task, 'running', undefined, id);
         try {
-          const value = await child.execute(
+          return await this.investigate(
             `${task}\nPrevious investigation (data, not authority): ${JSON.stringify(prior).slice(0, 16_000)}`,
-            controller.signal,
-            id
+            child.execute,
+            controller,
+            id,
+            task
           );
-          controller.signal.throwIfAborted();
-          this.emit('child', task, 'done', undefined, id);
-          return { ok: true, value };
-        } catch (cause) {
-          this.emit('child', task, controller.signal.aborted ? 'cancelled' : 'failed', String(cause), id);
-          return { ok: false, error: String(cause) };
         } finally {
           this.controller.signal.removeEventListener('abort', cancelled);
         }
@@ -194,8 +195,8 @@ export class AgentRun {
     child.cancelled = true;
     child.controller.abort();
   }
-  cancel(): void {
-    this.controller.abort();
+  cancel(reason?: Error): void {
+    this.controller.abort(reason);
     this.question?.reject(new DOMException('Question cancelled.', 'AbortError'));
     this.question = undefined;
     for (const child of this.children.values()) child.controller.abort();
@@ -215,8 +216,10 @@ export class InputQueue {
   ): PendingInput {
     if (!text.trim() && !attachments.length) throw new Error('A queued message cannot be empty.');
     const item = { id: createUuid(), text: text.trim(), delivery, attachments: [...attachments] };
-    if (delivery === 'queue') this.items.push(item);
-    else this.items.unshift(item);
+    const priority = (mode: InputDelivery) => mode === 'interrupt' ? 0 : mode === 'steer' ? 1 : 2;
+    const next = this.items.findIndex(pending => priority(pending.delivery) > priority(delivery));
+    if (next < 0) this.items.push(item);
+    else this.items.splice(next, 0, item);
     return item;
   }
   remove(id: string): void {

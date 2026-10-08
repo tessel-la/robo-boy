@@ -217,9 +217,9 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     const tools = request.nativeTools ? new SubscriptionTools(controller.signal, (callId, name, input) => {
       if (controller.signal.aborted || event.sender.isDestroyed() || epoch !== epochs[request.provider]) throw new Error('Subscription scope changed.');
       event.sender.send('roboboy:assistant-tool', id, callId, name, input);
-    }, request.toolScope, request.toolNames, () => controller.abort()) : undefined;
+    }, request.toolScope, request.toolNames, reason => controller.abort(reason)) : undefined;
     requests.set(id, { owner: event.sender.id, provider: request.provider, controller, tools });
-    const timeout = setTimeout(() => controller.abort(), 20 * 60_000);
+    const timeout = setTimeout(() => controller.abort(new Error('The assistant task reached its 20-minute deadline. Completed changes were preserved; check their state before continuing.')), 20 * 60_000);
     try {
       const onThinking = (text: string) => {
         if (!controller.signal.aborted && epoch === epochs[request.provider] && !event.sender.isDestroyed()) {
@@ -237,6 +237,10 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
       if (epoch !== epochs[request.provider])
         throw new Error('The assistant account changed. Please send the message again.');
       return result;
+    } catch (cause) {
+      // A transport may throw a generic AbortError. Preserve the owning deadline/tool reason.
+      if (controller.signal.aborted && controller.signal.reason instanceof Error) throw controller.signal.reason;
+      throw cause;
     } finally {
       clearTimeout(timeout);
       tools?.dispose();
@@ -260,9 +264,9 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     const tools = new SubscriptionTools(controller.signal, (callId, name, args) => {
       if (controller.signal.aborted || event.sender.isDestroyed()) throw new Error('Native API scope ended.');
       event.sender.send('roboboy:assistant-tool', id, callId, name, args);
-    }, request.toolScope, request.toolNames, () => controller.abort());
+    }, request.toolScope, request.toolNames, reason => controller.abort(reason));
     requests.set(id, { owner: event.sender.id, provider, controller, tools });
-    const timeout = setTimeout(() => controller.abort(), 20 * 60_000);
+    const timeout = setTimeout(() => controller.abort(new Error('The assistant task reached its 20-minute deadline. Completed changes were preserved; check their state before continuing.')), 20 * 60_000);
     try {
       const key = await apiKeys.get(provider) ?? '';
       if (!key && !['ollama', 'openai-compatible'].includes(provider)) throw new Error('Enter an API key in Assistant settings.');
@@ -284,6 +288,9 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
         onThinking: text => { if (!controller.signal.aborted && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-thinking', id, text.slice(0, 64 * 1024)); },
         onUsage: usage => { if (!controller.signal.aborted && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-usage-event', id, usage); },
       });
+    } catch (cause) {
+      if (controller.signal.aborted && controller.signal.reason instanceof Error) throw controller.signal.reason;
+      throw cause;
     } finally { clearTimeout(timeout); tools.dispose(); requests.delete(id); }
   });
   ipcMain.handle('roboboy:assistant-tool-result', (event, id: unknown, callId: unknown, value: unknown) => {

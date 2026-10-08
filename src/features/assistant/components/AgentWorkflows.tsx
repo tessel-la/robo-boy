@@ -6,8 +6,9 @@ export function AgentWorkflows() {
     [error, setError] = useState('');
   return (
     <details className="assistant-workflows">
-      <summary>Skills and workflows</summary>
-      <p>Enabled instructions guide the agent. Importing is a trust decision; scripts and hooks are not executed.</p>
+      <summary>Custom workflows (optional)</summary>
+      <p>Pad and Behavior Tree authoring, plotting, and ROS diagnosis already use the agent's normal tools. Import a workflow only for instructions you want to reuse. Imported instructions cannot run scripts or grant tool permissions.</p>
+      {!skills.length && <p>No custom workflows imported. None are required to use the agent.</p>}
       {skills.map(skill => (
         <label key={skill.id} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44 }}>
           <input

@@ -54,21 +54,26 @@ export function createHostTools(host: {
   const definitions = (host.readOnly ? READ_ONLY_TOOL_DEFINITIONS : HOST_TOOL_DEFINITIONS).filter(
     tool => !host.allowedTools || host.allowedTools.includes(tool.name)
   );
+  const validators = new Map(definitions.map(definition => [definition.name, new Validator(definition.inputSchema)]));
   const check = () => {
     host.signal.throwIfAborted();
     host.checkCurrent();
   };
   const execute = async (toolName: string, input: unknown, callId: string): Promise<HostToolResult> => {
     check();
-    host.beforeTool?.();
-    if (++calls > (host.readOnly ? 30 : 150)) throw new Error('This turn reached its tool allowance.');
-    const definition = definitions.find(tool => tool.name === toolName);
-    if (!definition) throw new Error('Unknown host tool or unavailable in this read-only subagent.');
+    const validator = validators.get(toolName);
+    if (!validator) throw new Error('Unknown host tool or unavailable in this read-only subagent.');
     const block = hooks.find(hook => hook.tool === toolName && hook.when === 'before' && hook.action === 'block');
     if (block) throw new Error(`Blocked by operator policy: ${block.message}`);
     if (!isJsonObject(input)) throw new Error('Tool input must be a finite, bounded JSON object.');
     if (JSON.stringify(input).length > 256 * 1024) throw new Error('Tool input is too large.');
-    const validation = new Validator(definition.inputSchema).validate(input);
+    const signature = JSON.stringify({ toolName, input });
+    if (signatures.has(callId) && signatures.get(callId) !== signature)
+      throw new Error('A tool call id was reused with different arguments.');
+    if (completed.has(callId)) return completed.get(callId)!;
+    host.beforeTool?.();
+    if (++calls > (host.readOnly ? 30 : 150)) throw new Error('This turn reached its tool allowance.');
+    const validation = validator.validate(input);
     if (!validation.valid)
       throw new Error(
         `Invalid ${toolName} arguments: ${validation.errors
@@ -77,9 +82,6 @@ export function createHostTools(host: {
           .join(' ')}`
       );
     let data = input as Record<string, unknown>;
-    const signature = JSON.stringify({ toolName, input });
-    if (signatures.has(callId) && signatures.get(callId) !== signature)
-      throw new Error('A tool call id was reused with different arguments.');
     signatures.set(callId, signature);
     host.progress(`Running ${toolName}…`);
     host.event?.('tool', toolName, 'running', undefined, callId);
@@ -279,6 +281,7 @@ export function createHostTools(host: {
           }
           if (JSON.stringify({ ...result, image: undefined }).length > 128 * 1024)
             throw new Error('Tool result exceeds 128 KiB. Read a specific document/resource instead.');
+          if (result.ok) completed.set(callId, result);
           host.progress(`Finished ${toolName}.`);
           host.event?.('tool', toolName, result.ok ? 'done' : 'failed', result.error, callId);
           host.boundary?.();

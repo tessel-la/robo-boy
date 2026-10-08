@@ -133,6 +133,19 @@ describe('native host tools', () => {
     await tools.execute('edit_workspace', input, 'new-call');
     expect(host.execute).toHaveBeenCalledTimes(2);
   });
+  it('replays a completed call without spending another tool allowance or rereading evidence', async () => {
+    const { host } = setup();
+    const beforeTool = vi.fn();
+    const tools = createHostTools({ ...host, beforeTool });
+    const input = { name: '/joint_states' };
+    const receipt = await tools.execute('read_topic', input, 'observation');
+    for (let replay = 0; replay < 151; replay++) expect(await tools.execute('read_topic', input, 'observation')).toEqual(receipt);
+    expect(host.execute).toHaveBeenCalledOnce();
+    expect(beforeTool).toHaveBeenCalledOnce();
+    await expect(tools.execute('read_topic', { name: '/different' }, 'observation')).resolves.toMatchObject({ ok: false, error: expect.stringContaining('different arguments') });
+    await tools.execute('read_topic', input, 'new-observation');
+    expect(host.execute).toHaveBeenCalledTimes(2);
+  });
   it('previews a tree and proposes an operation without robot execution', async () => {
     const { tools, host } = setup();
     await expect(
