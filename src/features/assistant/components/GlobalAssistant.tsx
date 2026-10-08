@@ -222,7 +222,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const abortRef = useRef<AbortController | null>(null);
     const runRef = useRef<AgentRun | null>(null);
     const nativeHistoryRef = useRef<{ provider: string; messages: import('ai').ModelMessage[] }>();
-    const historyBranchRef = useRef(crypto.randomUUID());
+    const historyBranchRef = useRef(uuidv4());
     const inputQueueRef = useRef(new InputQueue());
     const [pendingInputs, setPendingInputs] = useState<PendingInput[]>([]);
     const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -278,7 +278,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       for (const monitor of monitorsRef.current.values()) monitor.stop();
       monitorsRef.current.clear(); setMonitors([]);
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       setRosGraph(null);
       setCatalog({ nodes: [], parameters: [], generation: -1 });
       updatePinnedChips(previous => previous.map(chip => chip.generation === undefined ? chip : { ...chip, stale: true }));
@@ -294,7 +294,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       abandonTurn(); abortContextWork();
       observationsRef.current = [];
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       updatePinnedChips(() => []);
       const next = loadAgentSessions(conversationScope, loadAssistantConversation(conversationScope)); setSessions(next);
       setMessages((next.sessions.find(item => item.id === next.activeId)?.messages ?? []).map(stored => ({ id: uuidv4(), ...stored, attachments: [], contextChipIds: [], checkpoint: null, ...(stored.response ? { proposedAtGeneration: -1 } : {}) })));
@@ -466,7 +466,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
     const updateSettings = (patch: Partial<AssistantSettings>) => {
       abandonTurn();
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       if (patch.provider !== undefined || patch.authMode !== undefined || patch.model !== undefined || patch.apiKey !== undefined) for (const monitor of monitorsRef.current.values()) monitor.stop();
       setError('');
       persistSettings(patch);
@@ -1212,7 +1212,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       updatePinnedChips(() => []);
       observationsRef.current = [];
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       historyRef.current = [];
       setMessages([]);
       setClarificationSuggestions(undefined);
@@ -1231,7 +1231,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const previousMessages = historyRef.current;
       abandonTurn();
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       observationsRef.current = []; updatePinnedChips(() => []); setEvents([]); setProgress([]); setError('');
       setSessions(previous => ({ ...previous, activeId: id, sessions: previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: previousMessages } : session) }));
       const loaded = next.messages.map(message => ({ ...message, id: uuidv4(), attachments: [], contextChipIds: [], checkpoint: null, ...(message.response ? { proposedAtGeneration: -1 } : {}) }));
@@ -1243,7 +1243,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       if (abortRef.current) return;
       // Editing branches conversation only. Reverting documents is an explicit checkpoint action.
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       const history = messages.slice(0, messageIndex);
       setMessages(history);
       setClarificationSuggestions(undefined);
@@ -1258,7 +1258,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       const message = messages[commandIndex];
       if (abortRef.current) return;
       nativeHistoryRef.current = undefined;
-      historyBranchRef.current = crypto.randomUUID();
+      historyBranchRef.current = uuidv4();
       const history = messages.slice(0, commandIndex);
       setMessages(history);
       void generateFromPrompt(message.content, history, message.checkpoint, message.attachments);
@@ -1341,7 +1341,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         activeSessionId={sessions.activeId}
         onSwitchSession={switchSession}
         onArchiveSession={id => setSessions(previous => ({ ...previous, sessions: previous.sessions.map(session => session.id === id ? { ...session, archived: !session.archived } : session) }))}
-        onForkSession={() => { abandonTurn(); nativeHistoryRef.current = undefined; historyBranchRef.current = crypto.randomUUID(); const created = newAgentSession(historyRef.current); setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: historyRef.current } : session), created].slice(-20) })); }}
+        onForkSession={() => { abandonTurn(); nativeHistoryRef.current = undefined; historyBranchRef.current = uuidv4(); const created = newAgentSession(historyRef.current); setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: historyRef.current } : session), created].slice(-20) })); }}
         documentChanges={documentChanges}
         onUndoDocument={id => { void restoreDocument(id).catch(cause => setError(String(cause))); }}
         onPendingInputChange={(id, text) => { inputQueueRef.current.update(id, text); setPendingInputs([...inputQueueRef.current.items]); }}

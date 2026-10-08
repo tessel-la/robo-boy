@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import { documentRevision } from './nativeTools';
 
 export type DocumentKind = 'pad' | 'behaviorTree';
@@ -122,7 +123,7 @@ export class DocumentChanges {
         if (before ? !baseRevision || (await documentRevision(before)) !== baseRevision : baseRevision !== undefined)
           throw new Error('The document changed. Read its latest revision and rebase.');
         const checkpoint: DocumentCheckpoint = {
-          id: crypto.randomUUID(),
+          id: createUuid(),
           kind,
           documentId: id,
           before: before ?? null,

@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import { useState } from 'react';
 import { loadAgentProfiles, saveAgentProfiles } from '../runtime/profiles';
 import { HOST_TOOL_DEFINITIONS } from '../tools/nativeTools';
@@ -46,7 +47,7 @@ export function AgentProfiles({
         type="button"
         onClick={() => {
           const profile = {
-            id: crypto.randomUUID(),
+            id: createUuid(),
             name: 'Custom investigator',
             description: 'Focused read-only agent',
             instructions: '',

@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import type { HostToolResult } from '../tools/nativeTools';
 
 export type InputDelivery = 'steer' | 'queue' | 'interrupt';
@@ -39,7 +40,7 @@ export class AgentLimit extends Error {
 /** Application-level ownership only. The installed SDK/provider owns model/tool rounds;
  * this controller owns genuine inputs, shared budgets, child lifetime and UI events. */
 export class AgentRun {
-  readonly id = crypto.randomUUID();
+  readonly id = createUuid();
   readonly controller = new AbortController();
   readonly events: AgentEvent[] = [];
   tasks: AgentTask[] = [];
@@ -80,7 +81,7 @@ export class AgentRun {
     label: string,
     status: AgentEvent['status'],
     detail?: string,
-    id: string = crypto.randomUUID(),
+    id: string = createUuid(),
     parentId?: string
   ): void {
     const event: AgentEvent = { id, runId: this.id, at: Date.now(), type, label, status, detail, parentId };
@@ -119,7 +120,7 @@ export class AgentRun {
   ask(question: string): Promise<string> {
     this.controller.signal.throwIfAborted();
     if (this.question) throw new Error('A question is already waiting for an answer.');
-    const id = crypto.randomUUID();
+    const id = createUuid();
     this.emit('question', question, 'running', undefined, id);
     return new Promise((resolve, reject) => {
       this.question = { id, label: question, resolve, reject };
@@ -132,7 +133,7 @@ export class AgentRun {
     this.controller.signal.throwIfAborted();
     if (this.children.size >= 3)
       throw new Error('At most three child investigations per task. Reuse an existing result.');
-    const id = crypto.randomUUID(),
+    const id = createUuid(),
       controller = new AbortController();
     const cancel = () => controller.abort();
     this.controller.signal.addEventListener('abort', cancel, { once: true });
@@ -213,7 +214,7 @@ export class InputQueue {
     attachments: import('../types').AssistantAttachment[] = []
   ): PendingInput {
     if (!text.trim() && !attachments.length) throw new Error('A queued message cannot be empty.');
-    const item = { id: crypto.randomUUID(), text: text.trim(), delivery, attachments: [...attachments] };
+    const item = { id: createUuid(), text: text.trim(), delivery, attachments: [...attachments] };
     if (delivery === 'queue') this.items.push(item);
     else this.items.unshift(item);
     return item;

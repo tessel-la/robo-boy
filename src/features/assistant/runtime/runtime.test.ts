@@ -27,6 +27,7 @@ import { compactSessionHistory } from './context';
 import { timedSignal } from './abort';
 import { loadAgentHooks, storeAgentHooks } from './hooks';
 import { createHostTools } from '../tools/hostTools';
+import { newAgentSession } from '../storage/sessionStorage';
 
 beforeEach(() => {
   const data = new Map<string, string>();
@@ -43,6 +44,21 @@ afterEach(() => {
 });
 
 describe('owned agent lifecycle', () => {
+  it('creates sessions, run events and queued inputs without secure-context randomUUID', async () => {
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    vi.stubGlobal('crypto', { getRandomValues });
+    const run = new AgentRun(vi.fn());
+    const session = newAgentSession();
+    const question = run.ask('Which Pad?');
+    expect(run.answer('Drive')).toBe(true);
+    await expect(question).resolves.toBe('Drive');
+    const queue = new InputQueue();
+    queue.enqueue('Inspect TF', 'queue');
+    const ids = [run.id, session.id, run.events[0].id, queue.items[0].id];
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(id).toMatch(/^[0-9a-f-]{14}4[0-9a-f-]{21}$/);
+    run.cancel();
+  });
   it('shares step/call budgets, yields steering, and keeps questions user-authored', async () => {
     const run = new AgentRun(vi.fn(), 2, 1);
     run.beforeStep();

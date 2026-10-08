@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import type { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
 import { getValueAtPath } from '../../customGamepad/rosMessageUtils';
@@ -37,7 +38,14 @@ export class TopicMonitor {
     private changed: (state: MonitorStatus) => void,
     private analyse: (value: unknown, signal: AbortSignal) => Promise<void>
   ) {
-    if (options.comparison !== 'changes' && options.value === undefined || ['above', 'below'].includes(options.comparison) && (typeof options.value !== 'number' || !Number.isFinite(options.value))) throw new Error('Threshold watches need an explicit finite numeric threshold; equality watches need a comparison value.');
+    if (
+      (options.comparison !== 'changes' && options.value === undefined) ||
+      (['above', 'below'].includes(options.comparison) &&
+        (typeof options.value !== 'number' || !Number.isFinite(options.value)))
+    )
+      throw new Error(
+        'Threshold watches need an explicit finite numeric threshold; equality watches need a comparison value.'
+      );
     if (
       !Number.isInteger(options.durationMinutes) ||
       options.durationMinutes < 1 ||
@@ -48,7 +56,7 @@ export class TopicMonitor {
     )
       throw new Error('Monitor expiry and inference allowance must be explicit and bounded.');
     this.state = {
-      id: crypto.randomUUID(),
+      id: createUuid(),
       topic: options.topic,
       fieldPath: options.fieldPath,
       expiresAt: Date.now() + options.durationMinutes * 60_000,

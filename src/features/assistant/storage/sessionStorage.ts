@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import type { StoredAssistantMessage } from '../types';
 import { isJsonObject } from '../../../panels/types';
 import { normalizePadLayout } from '../tools/padGeneration';
@@ -47,7 +48,7 @@ const key = (scope: string) => `robo-boy-agent-sessions-v1:${encodeURIComponent(
 export function newAgentSession(messages: StoredAssistantMessage[] = []): SavedAgentSession {
   const now = Date.now();
   return {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     title: messages.find(item => item.role === 'user')?.content.slice(0, 80) || 'New chat',
     createdAt: now,
     updatedAt: now,

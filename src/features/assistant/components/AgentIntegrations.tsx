@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import { useState } from 'react';
 import {
   integrationUrl,
@@ -56,7 +57,7 @@ export function AgentIntegrations() {
           try {
             const next = [
               ...integrations,
-              { id: crypto.randomUUID(), name: new URL(url).hostname, url: integrationUrl(url), grants: {} },
+              { id: createUuid(), name: new URL(url).hostname, url: integrationUrl(url), grants: {} },
             ];
             storeIntegrations(next);
             setIntegrations(next);

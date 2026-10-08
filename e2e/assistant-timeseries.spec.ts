@@ -97,12 +97,15 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
 
     await page.getByLabel('Open Robo-Boy assistant').click();
     const requestsBeforeFollowUp = prompts.length;
+    const replies = page.getByText('The joint plot is receiving data.', { exact: true });
+    const repliesBeforeFollowUp = await replies.count();
     await page
       .getByRole('textbox', { name: /Ask the assistant|Continue the conversation/ })
       .fill('what does the time series panel show?');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.getByText('The joint plot is receiving data.')).toBeVisible();
     await expect.poll(() => prompts.length).toBeGreaterThan(requestsBeforeFollowUp);
+    await expect(replies).toHaveCount(repliesBeforeFollowUp + 1);
+    await expect(replies.last()).toBeVisible();
     expect(prompts.at(-1)).toContain('"connected":true');
     expect(prompts.at(-1)).toContain('"fieldPath":"position[1]"');
     expect(prompts.at(-1)).toContain('"latestSampleAt":');

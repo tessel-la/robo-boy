@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import { useState } from 'react';
 import { loadAgentHooks, storeAgentHooks, type AgentHook } from '../runtime/hooks';
 import { HOST_TOOL_DEFINITIONS } from '../tools/nativeTools';
@@ -94,7 +95,7 @@ export function AgentHooks() {
           save([
             ...hooks,
             {
-              id: crypto.randomUUID(),
+              id: createUuid(),
               enabled: false,
               tool: 'save_document',
               when: 'success',

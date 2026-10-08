@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
 import type { SendChatRequest } from './types';
 import { subscriptionErrorMessage } from '../../../runtime/assistantSubscription';
@@ -8,7 +9,7 @@ export async function sendDesktopApi(request: SendChatRequest): Promise<string> 
   const bridge = getDesktopBridge()?.assistant;
   if (!bridge?.sendApi || !request.tools || !bridge.onToolCall)
     throw new Error('This desktop runtime does not support native API tools.');
-  const id = crypto.randomUUID();
+  const id = createUuid();
   request.signal?.throwIfAborted();
   let rejectAbort!: (cause: Error) => void;
   const cancelled = new Promise<never>((_, reject) => {

@@ -1,3 +1,4 @@
+import { createUuid } from '../../../utils/uuid';
 export interface AgentSkill {
   id: string;
   name: string;
@@ -98,5 +99,5 @@ export function importSkill(markdown: string): AgentSkill {
     description = field('description');
   if (!name || !/^[a-zA-Z0-9 -]{1,80}$/.test(name) || !description || description.length > 1000)
     throw new Error('Skill name and description must be bounded single-line values.');
-  return { id: `user-${crypto.randomUUID()}`, name, description, instructions: match[2].trim(), enabled: true };
+  return { id: `user-${createUuid()}`, name, description, instructions: match[2].trim(), enabled: true };
 }
