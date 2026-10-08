@@ -82,7 +82,8 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
       expect(prompts[1]).toContain('"signals":[]');
       expect(prompts[1]).toContain('addSignals');
     }
-    await page.getByLabel(mode === 'mobile' ? 'Close assistant' : 'Close Robo-Boy assistant', { exact: true }).click();
+    await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
+    await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
     const plot = page.getByRole('region', { name: 'Time Series', exact: true });
     await expect(plot).toHaveCount(1);
     await expect(plot.getByRole('button', { name: 'shoulder', exact: true })).toContainText('0.2 rad');
