@@ -46,6 +46,14 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
   await expect(panel).toHaveClass(/tree-panel-resize-frame/);
   await expect(page.locator('.assistant-resize-handle.tree-panel-menu-resize-handle')).toHaveCount(4);
   const northwestCorner = panel.locator('.tree-panel-menu-resize-handle.nw');
+  // Focus-within intentionally highlights the handles. Establish both states explicitly
+  // instead of assuming that moving the pointer also removes keyboard focus.
+  const composer = page.locator('#assistant-prompt');
+  await composer.focus();
+  await expect(composer).toBeFocused();
+  await expect.poll(() => northwestCorner.evaluate(element => getComputedStyle(element).opacity)).toBe('0.9');
+  await composer.evaluate(element => element.blur());
+  await expect.poll(() => northwestCorner.evaluate(element => getComputedStyle(element).opacity)).toBe('0.48');
   const cornerStyle = await northwestCorner.evaluate(element => {
     const handle = getComputedStyle(element);
     const marker = getComputedStyle(element, '::after');
