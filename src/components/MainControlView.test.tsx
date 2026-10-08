@@ -36,7 +36,17 @@ const rosConnection: {
 const sendAssistantChatMock = vi.hoisted(() => vi.fn());
 vi.mock('../features/assistant/providers/index', async importOriginal => {
   const actual = await importOriginal<typeof import('../features/assistant/providers/index')>();
-  return { ...actual, sendAssistantChat: sendAssistantChatMock };
+  return { ...actual, sendAssistantChat: async (request: import('../features/assistant/providers/types').SendChatRequest) => {
+    const raw = await sendAssistantChatMock(request);
+    if (!raw) return 'Tool work completed.';
+    let response: Record<string, any>;
+    try { response = JSON.parse(raw); } catch { return raw; }
+    if (response.kind === 'explanation') return response.message;
+    const names: Record<string, string> = { workspaceEdit: 'edit_workspace', padProposal: 'propose_pad', tree: 'propose_tree', rosAction: 'propose_operation' };
+    const { kind, summary, followUp, ...input } = response;
+    await request.tools!.execute(names[kind], kind === 'tree' ? { tree: response } : input, crypto.randomUUID());
+    return summary || 'Tool work completed.';
+  } };
 });
 
 vi.mock('../hooks/useRos', () => ({

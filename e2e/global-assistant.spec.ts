@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { installRosMock, waitForRosSubscription } from './helpers/rosMock';
+import { assistantStream } from './helpers/assistantMock';
 
 async function connectWithMockRos(page: Page) {
   await installRosMock(page, {
@@ -22,7 +23,7 @@ const mockOpenAiCompatibleChat = (page: Page, message: Record<string, unknown>) 
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(message) } }] })}\n\ndata: [DONE]\n\n`,
+      body: assistantStream(route.request().postDataJSON().messages.some((turn: { role: string }) => turn.role === 'tool') ? { kind: 'explanation', message: 'The proposal is ready for review.' } : message),
     })
   );
 
@@ -174,8 +175,20 @@ test('Enter sends, Shift+Enter keeps editing, and parsing status clears after a 
   await expect(page.getByText('Parsing response…')).toHaveCount(0);
 });
 
-test('computes a human-spaced btw TF distance from live /tf data without the provider', async ({ page }) => {
+test('computes a human-spaced TF distance through the native read tool', async ({ page }) => {
   await connectWithMockRos(page);
+  let round = 0;
+  await page.route('**/chat/completions', route => {
+    let reply: Record<string, any> = { kind: 'contextRequest', reads: [{ kind: 'transform', sourceFrame: 'panda link 0', targetFrame: 'panda hand' }] };
+    if (round++ > 0) {
+      const observation = route.request().postDataJSON().messages.filter((message: any) => message.role === 'tool').pop();
+      const captured = JSON.parse(observation.content).value[0].value;
+      expect(captured.resolvedTarget).toBe('panda_hand');
+      const { x, y, z } = captured.transform.translation;
+      reply = { kind: 'explanation', message: `The distance is ${Math.hypot(x, y, z).toFixed(1)} m. Path: ${captured.transform.path.join(' → ')}.` };
+    }
+    return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(reply) });
+  });
   await page.getByLabel('Open Robo-Boy assistant').click();
   const prompt = page.getByRole('textbox', { name: 'Ask the assistant' });
   await prompt.fill('compute distance btw panda link 0 and panda hand');

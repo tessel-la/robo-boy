@@ -1757,5 +1757,19 @@
   overflow-wrap: anywhere;
 }
 .assistant-thinking summary { cursor: pointer; min-height: 44px; display: list-item; }
-.assistant-thinking > div { white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+.assistant-thinking > div { white-space: pre-wrap; }
+.assistant-thinking > div, .assistant-thinking > ul { max-height: 260px; overflow-y: auto; }
 .assistant-thinking ul { padding-left: 20px; }
+.assistant-run-controls { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.assistant-run-controls label { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.assistant-run-controls select { max-width: 100%; min-height: 44px; }
+.assistant-run-controls button, .assistant-pending button { min-height: 44px; min-width: 44px; }
+.assistant-pending > div { display: flex; gap: 6px; padding: 4px 0; }
+.assistant-pending input { min-width: 0; flex: 1; }
+.assistant-pending details { min-width: 0; flex: 1; }
+.assistant-pending pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-pending summary, .assistant-tool-events summary, .assistant-sessions summary { min-height: 44px; cursor: pointer; }
+.assistant-tool-events { font-size: 12px; max-height: 180px; overflow: auto; }
+.assistant-tool-events li { padding: 4px 0; }
+.assistant-tool-events small { margin-left: 8px; opacity: .7; }
+.assistant-tool-events pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow: auto; }

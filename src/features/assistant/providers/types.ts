@@ -26,6 +26,15 @@ export interface AssistantChatTurn {
 }
 
 export interface SendChatRequest {
+  beforeStep?: () => void;
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  onNativeMessages?: (messages: import('ai').ModelMessage[]) => void;
+  nativeHistory?: import('ai').ModelMessage[];
+  contextWindowTokens?: number;
+  sessionId?: string;
+  shouldYield?: () => boolean;
+  tools?: import('../tools/nativeTools').HostTools;
+  refreshSystemPrompt?: () => string;
   settings: AssistantProviderSettings;
   systemPrompt: string;
   /** Full multi-turn history, oldest first, ending with the current user turn. */

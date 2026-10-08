@@ -35,6 +35,20 @@ export interface ContextPickerSection {
 }
 
 export interface AssistantPanelProps {
+  monitors?: import('../runtime/monitors').MonitorStatus[];
+  onStopMonitor?: (id: string) => void;
+  sessions?: Array<{ id: string; title: string; archived?: boolean }>;
+  activeSessionId?: string;
+  onSwitchSession?: (id: string) => void;
+  onArchiveSession?: (id: string) => void;
+  onForkSession?: () => void;
+  documentChanges?: Array<{ id: string; label: string; diff?: string }>;
+  onUndoDocument?: (id: string) => void;
+  events?: import('../runtime/session').AgentEvent[];
+  pendingInputs?: import('../runtime/session').PendingInput[];
+  onPendingInputChange?: (id: string, text: string) => void;
+  onMovePendingInput?: (id: string, direction: -1 | 1) => void;
+  onRemovePendingInput?: (id: string) => void;
   open: boolean;
   compact: boolean;
   onClose: () => void;
@@ -42,12 +56,13 @@ export interface AssistantPanelProps {
   isGenerating: boolean;
   progressMessages: string[];
   thinking?: string;
+  streamedAnswer?: string;
   error: string;
   clarificationSuggestions?: string[];
   onSelectSuggestion: (suggestion: string) => void;
   prompt: string;
   onPromptChange: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (delivery?: import('../runtime/session').InputDelivery) => void;
   onStop: () => void;
   onNewConversation: () => void;
   onRepeat: (messageIndex: number) => void;
@@ -203,7 +218,7 @@ type AssistantMotionPhase = 'closed' | 'entering' | 'open' | 'closing';
 
 const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const {
-    open, compact, onClose, messages, isGenerating, progressMessages, thinking, error, clarificationSuggestions, onSelectSuggestion,
+    open, compact, onClose, messages, isGenerating, progressMessages, thinking, streamedAnswer, error, clarificationSuggestions, onSelectSuggestion,
     prompt, onPromptChange, onSubmit, onStop, onNewConversation, onRepeat, onEditMessage,
     onOpenResource, canOpenResource, contextPickerSections,
     attachments, attachmentError, onAttachFiles, onRemoveAttachment, onTranscribeAudio, onSketchAttach, settings, resolvedBaseUrl,
@@ -212,6 +227,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   } = props;
 
   const [showSettings, setShowSettings] = useState(false);
+  const [delivery, setDelivery] = useState<import('../runtime/session').InputDelivery>('steer');
+  const [sessionSearch, setSessionSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const waitingQuestion = props.events?.find(event => event.type === 'question' && event.status === 'running');
   const [showSketchEditor, setShowSketchEditor] = useState(false);
   const [loadingContextIds, setLoadingContextIds] = useState<string[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -464,9 +483,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const handlePromptKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = event => {
     if (event.nativeEvent.isComposing) return;
     if (composerMentions.handleKeyDown(event)) return;
-    if (event.key === 'Enter' && !event.shiftKey && canGenerateFrom(prompt, isGenerating, attachments)) {
+    if (event.key === 'Enter' && !event.shiftKey && canGenerateFrom(prompt, false, attachments)) {
       event.preventDefault();
-      onSubmit();
+      onSubmit(delivery);
     }
   };
 
@@ -558,7 +577,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {messages.map((message, index) => (
             <article key={message.id} className={`assistant-message ${message.role}`}>
               <span className="assistant-message-role">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
-              {message.role === 'assistant' && message.thinking && <details className="assistant-thinking"><summary>Thinking</summary><div>{message.thinking}</div></details>}
+              {message.role === 'assistant' && (message.thinking || message.activity?.length) && <details className="assistant-thinking"><summary>{message.thinking ? 'Thinking' : 'Tools used'}</summary>{message.thinking && <div>{message.thinking}</div>}{message.activity?.length ? <ul>{message.activity.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}</details>}
+              {message.role === 'assistant' && !!message.events?.length && <details className="assistant-tool-events"><summary>Agent activity ({message.events.length})</summary><ol>{message.events.map(event => <li key={event.id}><span>{event.label}</span><small>{event.status}</small>{event.detail && <pre>{event.detail}</pre>}</li>)}</ol></details>}
               {editingMessageId === message.id ? (
                 <div className="assistant-message-edit">
                   <span className="assistant-textarea-shell has-highlight">
@@ -608,12 +628,21 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               {message.role === 'user' && editingMessageId !== message.id && <div className="assistant-message-actions"><button type="button" onClick={() => onRepeat(index)} disabled={isGenerating} aria-label="Repeat" title="Repeat"><FaRedo aria-hidden="true" /></button><button type="button" onClick={() => startEditingMessage(message)} disabled={isGenerating} aria-label="Edit message" title="Edit and resend"><FaPencilAlt aria-hidden="true" /></button></div>}
             </article>
           ))}
-          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}<ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul></details></article>}
+          {isGenerating && <article className="assistant-message assistant" aria-label="Assistant activity"><span className="assistant-message-role">Assistant</span><details className="assistant-thinking"><summary>{thinking ? 'Thinking' : 'Working'}…</summary>{thinking && <div>{thinking}</div>}<ul>{progressMessages.map((item, index) => <li key={index}>{item}</li>)}</ul></details>{streamedAnswer && <div className="assistant-message-content" aria-live="off">{streamedAnswer}</div>}</article>}
+          {isGenerating && waitingQuestion && <article className="assistant-message assistant" role="status"><strong>Needs your input</strong><p>{waitingQuestion.label}</p><small>Reply below with “Answer current question”. You can also queue a separate message or stop this task.</small></article>}
           {(lastProgress || error) && <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || lastProgress}</div>}
           {clarificationSuggestions && <div className="assistant-suggestions">{clarificationSuggestions.map(item => <button type="button" key={item} onClick={() => onSelectSuggestion(item)}>{item}</button>)}</div>}
         </div>
 
-        <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
+        <form className="assistant-form" onSubmit={event => { event.preventDefault(); onSubmit(delivery); }}>
+          {!!props.monitors?.some(monitor => monitor.status !== 'stopped') && <details className="assistant-pending"><summary>Active watches</summary>{props.monitors.filter(monitor => monitor.status !== 'stopped').map(monitor => <div key={monitor.id}><span>{monitor.topic} · {monitor.remaining} analyses left</span><button type="button" onClick={() => props.onStopMonitor?.(monitor.id)}>Stop watch</button></div>)}</details>}
+          <div className="assistant-run-controls"><label>Mode<select aria-label="Agent mode" value={settings.mode ?? 'agent'} onChange={event => onUpdateSettings({ mode: event.target.value as 'agent' | 'ask' | 'plan' })}><option value="agent">Agent — apply with undo</option><option value="ask">Ask — read only</option><option value="plan">Plan — read only</option></select></label>
+          {!!props.sessions?.length && <details className="assistant-sessions"><summary>Chats</summary><input aria-label="Search chats" placeholder="Search chats" value={sessionSearch} onChange={event => setSessionSearch(event.target.value)} /><label><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />Show archived chats</label><select aria-label="Current chat" value={props.activeSessionId} onChange={event => props.onSwitchSession?.(event.target.value)}>{props.sessions.filter(session => session.id === props.activeSessionId || (showArchived || !session.archived) && session.title.toLowerCase().includes(sessionSearch.toLowerCase())).map(session => <option key={session.id} value={session.id}>{session.title}{session.archived ? ' (archived)' : ''}</option>)}</select><button type="button" onClick={props.onForkSession}>Fork chat</button><button type="button" onClick={() => props.activeSessionId && props.onArchiveSession?.(props.activeSessionId)}>{props.sessions.find(session => session.id === props.activeSessionId)?.archived ? 'Unarchive chat' : 'Archive chat'}</button><button type="button" onClick={() => { const blob = new Blob([JSON.stringify(messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'robo-boy-chat.json'; link.click(); URL.revokeObjectURL(url); }}>Export chat</button></details>}
+          </div>
+          {!!props.documentChanges?.length && <details className="assistant-pending"><summary>Changes ({props.documentChanges.length})</summary>{props.documentChanges.map(change => <div key={change.id}><details><summary>{change.label}</summary><pre>{change.diff || 'Read the document for this older checkpoint.'}</pre></details><button type="button" disabled={isGenerating} onClick={() => props.onUndoDocument?.(change.id)}>Undo</button></div>)}</details>}
+          {isGenerating && <div className="assistant-run-controls"><label>Send while working <select aria-label="Message delivery" value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><option value="steer">{waitingQuestion ? 'Answer current question' : 'Steer after current tool'}</option><option value="queue">Queue for next turn</option><option value="interrupt">Stop and send</option></select></label><button type="button" onClick={onStop}>Stop</button></div>}
+          {!!props.pendingInputs?.length && <details className="assistant-pending"><summary>Pending messages ({props.pendingInputs.length})</summary>{props.pendingInputs.map((item, index) => <div key={item.id}><input aria-label={`Queued message ${index + 1}`} value={item.text} onChange={event => props.onPendingInputChange?.(item.id, event.target.value)} /><button type="button" disabled={index === 0} aria-label="Move queued message earlier" onClick={() => props.onMovePendingInput?.(item.id, -1)}>↑</button><button type="button" disabled={index === props.pendingInputs!.length - 1} aria-label="Move queued message later" onClick={() => props.onMovePendingInput?.(item.id, 1)}>↓</button><button type="button" aria-label="Remove queued message" onClick={() => props.onRemovePendingInput?.(item.id)}>Remove</button></div>)}</details>}
+          {!!props.events?.length && <details className="assistant-tool-events"><summary>Agent activity ({props.events.length})</summary><ol>{props.events.map(event => <li key={event.id}><span>{event.type === 'child' ? 'Investigation: ' : ''}{event.label}</span><small>{event.status}</small>{event.detail && <pre>{event.detail}</pre>}</li>)}</ol></details>}
           <div className="assistant-composer-attachments" aria-label="Assistant attachments">
             {attachments.map(item => (
               <span className={`assistant-context-tag attachment ${item.kind}`} key={item.id}>
@@ -654,7 +683,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                 // Left out on a phone with nothing to send, so the microphone takes this slot
                 // rather than appearing a second time further down the row.
                 end: !compact || isGenerating || canGenerateFrom(prompt, false, attachments) ? (
-                  <button type={isGenerating ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating ? 'Stop generating' : 'Send'}>{isGenerating ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
+                  <button type={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'button' : 'submit'} className="assistant-send" onClick={isGenerating && !canGenerateFrom(prompt, false, attachments) ? onStop : undefined} disabled={!isGenerating && !canGenerateFrom(prompt, false, attachments)} aria-label={isGenerating && !canGenerateFrom(prompt, false, attachments) ? 'Stop generating' : 'Send'}>{isGenerating && !canGenerateFrom(prompt, false, attachments) ? <FaStop aria-hidden="true" /> : <FaArrowUp aria-hidden="true" />}</button>
                 ) : undefined,
               }}
             />

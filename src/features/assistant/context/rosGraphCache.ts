@@ -56,7 +56,7 @@ export const createRosGraphCache = (ttlMs: number = DEFAULT_TTL_MS): RosGraphCac
       return null;
     }
 
-    const promise = discoverAllROSResources(ros);
+    const promise = discoverAllROSResources(ros, undefined, { catalogOnly: true });
     const thisRequest: InFlightRequest = { ros, generation, promise };
     inFlight = thisRequest;
     try {

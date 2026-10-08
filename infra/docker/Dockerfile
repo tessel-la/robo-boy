@@ -1,5 +1,5 @@
 # Stage 1: Build the React application
-FROM node:20-alpine as builder
+FROM node:22-alpine as builder
 WORKDIR /app
 
 # Copy package files and install dependencies
@@ -24,4 +24,4 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 # Start Nginx and keep it in the foreground
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

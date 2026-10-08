@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 import { readEncryptedJson, writeEncryptedJson, requireSecureStorage } from './assistantStorage';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { SubscriptionChatRequest, SubscriptionState } from '../src/runtime/assistantSubscription';
+import type { HostTools } from '../src/features/assistant/tools/nativeTools';
+import { sendNativeChat } from '../src/features/assistant/providers/native';
 
 const AUTH = 'https://auth.openai.com';
 const RESOURCE = 'https://api.openai.com/v1';
@@ -522,9 +524,17 @@ export class OpenAiSubscription {
     });
   }
 
-  async send(request: SubscriptionChatRequest, signal: AbortSignal, onThinking?: (text: string) => void): Promise<string> {
+  async send(request: SubscriptionChatRequest, signal: AbortSignal, onThinking?: (text: string) => void, tools?: HostTools, onToken?: (text: string) => void, onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void): Promise<string> {
     const access = await this.access();
     signal.throwIfAborted();
+    if (tools) {
+      const result = await sendNativeChat({
+        settings: { provider: 'openai', baseUrl: RESOURCE, model: request.model, apiKey: access, thinkingEffort: request.thinkingEffort },
+        systemPrompt: request.systemPrompt, messages: request.messages, signal, tools, onThinking, onToken, onUsage, contextWindowTokens: request.contextWindowTokens,
+        refreshSystemPrompt: () => (tools as HostTools & { systemPrompt?: string }).systemPrompt ?? request.systemPrompt,
+      });
+      return result;
+    }
     const response = await fetch(`${RESOURCE}/responses`, {
       method: 'POST',
       redirect: 'error',

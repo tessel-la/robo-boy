@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { installRosMock, publishRosMessage, getActiveRosSubscriptionCount } from './helpers/rosMock';
+import { assistantStream } from './helpers/assistantMock';
 
 for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
   test(`creates and configures a joint-state plot (${mode})`, async ({ page }) => {
@@ -54,7 +55,7 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
       return route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(response) } }] })}\n\ndata: [DONE]\n\n`,
+        body: assistantStream(response),
       });
     });
     // Simulate a publishing robot for the bounded assistant sample and the panel subscription.
@@ -79,7 +80,7 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     if (mode === 'missing-follow-up') {
       expect(prompts[1]).toContain('"type":"timeSeries"');
       expect(prompts[1]).toContain('"signals":[]');
-      expect(prompts[1]).toContain('"addSignals"');
+      expect(prompts[1]).toContain('addSignals');
     }
     await page.getByLabel(mode === 'mobile' ? 'Close assistant' : 'Close Robo-Boy assistant', { exact: true }).click();
     const plot = page.getByRole('region', { name: 'Time Series', exact: true });
@@ -94,14 +95,16 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     if (mode === 'desktop') await page.screenshot({ path: 'test-results/assistant-joint-timeseries.png' });
 
     await page.getByLabel('Open Robo-Boy assistant').click();
+    const requestsBeforeFollowUp = prompts.length;
     await page
       .getByRole('textbox', { name: /Ask the assistant|Continue the conversation/ })
       .fill('what does the time series panel show?');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByText('The joint plot is receiving data.')).toBeVisible();
+    await expect.poll(() => prompts.length).toBeGreaterThan(requestsBeforeFollowUp);
     expect(prompts.at(-1)).toContain('"connected":true');
     expect(prompts.at(-1)).toContain('"fieldPath":"position[1]"');
     expect(prompts.at(-1)).toContain('"latestSampleAt":');
-    expect(prompts.at(-1)).toContain('plotting,');
+    expect(prompts.at(-1)).toContain('For Time Series');
   });
 }

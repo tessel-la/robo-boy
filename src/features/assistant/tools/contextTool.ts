@@ -1,8 +1,12 @@
 import type { AssistantCapability } from '../capabilities';
 
 export type ContextRead =
-  | { kind: 'graph' | 'catalog' | 'tf' | 'rosout' | 'workspace' }
-  | { kind: 'topic' | 'node' | 'parameter' | 'padValues' | 'camera'; name: string }
+  | { kind: 'catalog' | 'tf' }
+  | { kind: 'workspace'; panelId?: string }
+  | { kind: 'graph'; query?: string; offset?: number; limit?: number }
+  | { kind: 'rosout'; match?: string; maxMessages?: number }
+  | { kind: 'topic'; name: string; maxMessages?: number; timeoutMs?: number }
+  | { kind: 'node' | 'parameter' | 'padValues' | 'camera'; name: string }
   | { kind: 'schema'; resource: 'topic' | 'service' | 'action'; name: string }
   | { kind: 'transform'; sourceFrame: string; targetFrame: string };
 
@@ -43,8 +47,12 @@ export const parseContextReads = (value: unknown): ContextRead[] => {
   return value.map(read => {
     if (!read || typeof read !== 'object' || Array.isArray(read)) throw new Error('Invalid context read.');
     switch (read.kind) {
-      case 'graph': case 'catalog': case 'tf': case 'rosout': case 'workspace': return { kind: read.kind };
-      case 'topic': case 'node': case 'parameter': case 'padValues': case 'camera': return { kind: read.kind, name: name(read.name) };
+      case 'catalog': case 'tf': return { kind: read.kind };
+      case 'workspace': return { kind: 'workspace', ...(typeof read.panelId === 'string' ? { panelId: name(read.panelId) } : {}) };
+      case 'graph': return { kind: 'graph', ...(typeof read.query === 'string' ? { query: read.query.slice(0, 512) } : {}), ...(Number.isInteger(read.offset) && read.offset >= 0 ? { offset: read.offset } : {}), ...(Number.isInteger(read.limit) && read.limit >= 1 && read.limit <= 100 ? { limit: read.limit } : {}) };
+      case 'rosout': return { kind: 'rosout', ...(typeof read.match === 'string' ? { match: read.match.slice(0, 512) } : {}), ...(Number.isInteger(read.maxMessages) && read.maxMessages >= 1 && read.maxMessages <= 40 ? { maxMessages: read.maxMessages } : {}) };
+      case 'topic': return { kind: 'topic', name: name(read.name), ...(Number.isInteger(read.maxMessages) && read.maxMessages >= 1 && read.maxMessages <= 40 ? { maxMessages: read.maxMessages } : {}), ...(Number.isInteger(read.timeoutMs) && read.timeoutMs >= 100 && read.timeoutMs <= 10_000 ? { timeoutMs: read.timeoutMs } : {}) };
+      case 'node': case 'parameter': case 'padValues': case 'camera': return { kind: read.kind, name: name(read.name) };
       case 'schema':
         if (!['topic', 'service', 'action'].includes(read.resource)) throw new Error('Invalid schema resource kind.');
         return { kind: 'schema', resource: read.resource, name: name(read.name) };

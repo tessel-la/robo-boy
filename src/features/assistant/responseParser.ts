@@ -59,7 +59,7 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
       return parseBehaviorTreeToolResponse(trimmed, schemas);
     case 'padProposal': {
       // Repair/normalize before anything downstream sees it — see tools/padGeneration.ts.
-      return { kind: 'padProposal', layout: normalizePadLayout(value.layout), issues: [] };
+      return { kind: 'padProposal', layout: normalizePadLayout(value.layout), issues: [], ...(typeof value.baseRevision === 'string' ? { baseRevision: value.baseRevision } : {}) };
     }
     case 'rosAction': {
       const operation = value.operation;

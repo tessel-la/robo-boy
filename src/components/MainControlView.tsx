@@ -1,4 +1,5 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
+import { flushSync } from 'react-dom';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
 import { recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
@@ -1103,6 +1104,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   }, []);
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
+  }, []);
+  const handleRegisterPadDraftReader = useCallback((reader: (() => CustomGamepadLayout) | null) => {
+    assistantRef.current?.registerPadDraftReader(reader);
   }, []);
   const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
     assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
@@ -4546,6 +4550,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onClose={handleCloseCustomEditor}
           onSave={handleSaveCustomGamepad}
           initialLayout={editorSession.initialLayout}
+          onRegisterDraftReader={handleRegisterPadDraftReader}
           ros={ros}
         />
       )}
@@ -4563,7 +4568,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onReviewPadProposal={handleReviewAssistantPad}
         onOpenResource={handleOpenAssistantResource}
         canOpenResource={canOpenAssistantResource}
-        onApplyWorkspaceEdit={handleAssistantWorkspaceEdit}
+        onApplyWorkspaceEdit={operations => {
+          // Native tool completion is a read-after-write boundary. Flush the owning React
+          // commit so the next model step observes mounted panels, not stale state.
+          let results: WorkspaceEditResult[] = [];
+          flushSync(() => { results = handleAssistantWorkspaceEdit(operations); });
+          return results;
+        }}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [

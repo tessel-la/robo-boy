@@ -40,6 +40,8 @@ export const validatePadAgainstRos = (
     const liveType = topicByName.get(name);
     if (liveType === undefined) {
       report(componentId, componentLabel, `${refLabel} references topic "${name}", which the robot is not currently publishing or subscribing to.`);
+    } else if (liveType === 'unknown' || !liveType) {
+      report(componentId, componentLabel, `${refLabel}: retrieve the topic schema for "${name}" to resolve its type.`);
     } else if (messageType && liveType !== messageType) {
       report(
         componentId,
@@ -54,6 +56,8 @@ export const validatePadAgainstRos = (
     const liveType = serviceByName.get(name);
     if (liveType === undefined) {
       report(componentId, componentLabel, `${refLabel} references service "${name}", which is not currently advertised.`);
+    } else if (liveType === 'unknown' || !liveType) {
+      report(componentId, componentLabel, `${refLabel}: retrieve the service schema for "${name}" to resolve its type.`);
     } else if (messageType && liveType !== messageType) {
       report(
         componentId,

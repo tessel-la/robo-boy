@@ -9,6 +9,7 @@ export interface ApiKeyStorageState {
 }
 import type { AssistantProviderId } from '../features/assistant/providers/types';
 import type { ThinkingEffort } from '../features/assistant/providers/thinking';
+import type { HostToolResult } from '../features/assistant/tools/nativeTools';
 
 export function subscriptionErrorMessage(cause: unknown): string {
   const message = cause instanceof Error ? cause.message : 'The account connection failed.';
@@ -30,6 +31,11 @@ export interface SubscriptionState {
 }
 
 export interface SubscriptionChatRequest {
+  nativeTools?: boolean;
+  toolScope?: 'read-only';
+  toolNames?: string[];
+  contextWindowTokens?: number;
+  sessionId?: string;
   provider: SubscriptionProvider;
   model: string;
   thinkingEffort?: ThinkingEffort;
@@ -41,8 +47,13 @@ export interface SubscriptionChatRequest {
   }[];
   jsonMode?: boolean;
 }
+export interface NativeApiChatRequest extends Omit<SubscriptionChatRequest, 'provider'> { provider: AssistantProviderId; baseUrl: string }
 
 export interface AssistantSubscriptionBridge {
+  sendApi?(id: string, request: NativeApiChatRequest): Promise<string>;
+  setBackgroundActive?(enabled: boolean): Promise<void>;
+  notify?(title: string, body: string): Promise<void>;
+  onStopMonitors?(listener: () => void): () => void;
   /** API transports need the key in renderer memory; disk persistence belongs to the native store. */
   getApiKey?(provider: AssistantProviderId): Promise<string | undefined>;
   setApiKey?(
@@ -61,4 +72,7 @@ export interface AssistantSubscriptionBridge {
   cancel(id: string): Promise<void>;
   /** Request-scoped stream; unsubscribe before another account/request can deliver events. */
   onThinking?(id: string, listener: (text: string) => void): () => void;
+  onToken?(id: string, listener: (text: string) => void): () => void;
+  onUsage?(id: string, listener: (usage: { inputTokens: number; outputTokens: number }) => void): () => void;
+  onToolCall?(id: string, listener: (name: string, input: unknown, callId: string) => Promise<HostToolResult>): () => void;
 }

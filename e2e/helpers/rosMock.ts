@@ -62,6 +62,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     type Listener = (event?: unknown) => void;
 
     class MockWebSocket {
+      static commands: Record<string, any>[] = [];
       static CONNECTING = 0;
       static OPEN = 1;
       static CLOSING = 2;
@@ -112,6 +113,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
 
       send(payload: string) {
         const message = JSON.parse(payload);
+        MockWebSocket.commands.push(message);
         if (message.op === 'subscribe' && typeof message.topic === 'string') {
           this.subscriptions.set(message.id ?? message.topic, message.topic);
           MockWebSocket.subscriptionCounts.set(
@@ -292,12 +294,14 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       __hasRosSubscription: (topic: string) => boolean;
       __publishRosTopic: (topic: string, message: unknown) => void;
       __getPublishedRosMessages: (topic: string) => unknown[];
+      __getRosCommands: () => Record<string, unknown>[];
     };
     mockWindow.__getRosSubscriptionCount = topic => MockWebSocket.subscriptionCounts.get(topic) ?? 0;
     mockWindow.__getActiveRosSubscriptionCount = topic => MockWebSocket.activeSubscriptionCount(topic);
     mockWindow.__hasRosSubscription = topic => MockWebSocket.hasSubscription(topic);
     mockWindow.__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
     mockWindow.__getPublishedRosMessages = topic => MockWebSocket.published.get(topic) ?? [];
+    mockWindow.__getRosCommands = () => MockWebSocket.commands;
   }, mockResources);
 }
 

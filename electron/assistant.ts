@@ -5,6 +5,10 @@ import { ClaudeSubscription } from './claudeSubscription';
 import { AssistantApiKeys } from './assistantStorage';
 import { thinkingEfforts } from '../src/features/assistant/providers/thinking';
 import type { SubscriptionChatRequest, SubscriptionProvider } from '../src/runtime/assistantSubscription';
+import type { AssistantProviderId } from '../src/features/assistant/providers/types';
+import type { ModelMessage } from 'ai';
+import { HOST_TOOL_DEFINITIONS } from '../src/features/assistant/tools/nativeTools';
+import { SubscriptionTools } from './assistantTools';
 
 export function subscriptionProvider(value: unknown): SubscriptionProvider {
   if (value !== 'openai' && value !== 'anthropic') throw new Error('Unsupported subscription provider.');
@@ -27,6 +31,11 @@ export function validateSubscriptionRequest(value: unknown): SubscriptionChatReq
     typeof input.systemPrompt !== 'string' ||
     input.systemPrompt.length > 16 * 1024 * 1024 ||
     (input.jsonMode !== undefined && typeof input.jsonMode !== 'boolean') ||
+    (input.nativeTools !== undefined && typeof input.nativeTools !== 'boolean') ||
+    (input.toolScope !== undefined && input.toolScope !== 'read-only') ||
+    (input.toolNames !== undefined && (!Array.isArray(input.toolNames) || input.toolNames.length > 100 || input.toolNames.some(name => typeof name !== 'string' || !HOST_TOOL_DEFINITIONS.some(tool => tool.name === name)))) ||
+    (input.contextWindowTokens !== undefined && (!Number.isInteger(input.contextWindowTokens) || input.contextWindowTokens < 4096 || input.contextWindowTokens > 2000000)) ||
+    (input.sessionId !== undefined && (typeof input.sessionId !== 'string' || input.sessionId.length > 256)) ||
     !Array.isArray(input.messages) ||
     !input.messages.length ||
     input.messages.length > 1000
@@ -72,6 +81,11 @@ export function validateSubscriptionRequest(value: unknown): SubscriptionChatReq
     systemPrompt: input.systemPrompt,
     messages,
     jsonMode: input.jsonMode,
+    ...(input.nativeTools ? { nativeTools: true } : {}),
+    ...(input.toolScope ? { toolScope: input.toolScope } : {}),
+    ...(input.toolNames ? { toolNames: input.toolNames } : {}),
+    ...(input.contextWindowTokens ? { contextWindowTokens: input.contextWindowTokens } : {}),
+    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     ...(input.thinkingEffort ? { thinkingEffort: input.thinkingEffort } : {}),
   };
   if (JSON.stringify(request).length > 32 * 1024 * 1024)
@@ -92,7 +106,8 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
   const openai = new OpenAiSubscription(join(app.getPath('userData'), 'assistant', 'chatgpt'));
   const claude = new ClaudeSubscription(join(app.getPath('userData'), 'assistant', 'claude-code'));
   const apiKeys = new AssistantApiKeys(join(app.getPath('userData'), 'assistant', 'api-keys'));
-  const requests = new Map<string, { owner: number; provider: SubscriptionProvider; controller: AbortController }>();
+  const requests = new Map<string, { owner: number; provider: AssistantProviderId; controller: AbortController; tools?: SubscriptionTools }>();
+  const apiHistory = new Map<string, { key: string; messages: ModelMessage[] }>();
   const changes = new Map<SubscriptionProvider, { owner: number; controller: AbortController }>();
   const owners = new Set<number>();
   const epochs = { openai: 0, anthropic: 0 };
@@ -108,6 +123,7 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     const cancelOwner = () => {
       for (const request of requests.values()) if (request.owner === owner) request.controller.abort();
       for (const change of changes.values()) if (change.owner === owner) change.controller.abort();
+      for (const key of apiHistory.keys()) if (key.startsWith(`${owner}:`)) apiHistory.delete(key);
     };
     event.sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => {
       if (mainFrame) cancelOwner();
@@ -150,6 +166,8 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
   });
   ipcMain.handle('roboboy:assistant-save-api-key', (event, provider: unknown, key: unknown, policy?: unknown) => {
     protect(event);
+    for (const request of requests.values()) if (request.provider === provider) request.controller.abort();
+    apiHistory.clear();
     return apiKeys.set(provider, key, policy);
   });
   ipcMain.handle('roboboy:assistant-state', (event, value: unknown) => {
@@ -196,25 +214,84 @@ export function registerAssistantSubscriptions(rendererOrigin: string): void {
     if (changes.has(request.provider)) throw new Error('Finish sign-in before sending an assistant message.');
     const controller = new AbortController(),
       epoch = epochs[request.provider];
-    requests.set(id, { owner: event.sender.id, provider: request.provider, controller });
-    const timeout = setTimeout(() => controller.abort(), 300_000);
+    const tools = request.nativeTools ? new SubscriptionTools(controller.signal, (callId, name, input) => {
+      if (controller.signal.aborted || event.sender.isDestroyed() || epoch !== epochs[request.provider]) throw new Error('Subscription scope changed.');
+      event.sender.send('roboboy:assistant-tool', id, callId, name, input);
+    }, request.toolScope, request.toolNames, () => controller.abort()) : undefined;
+    requests.set(id, { owner: event.sender.id, provider: request.provider, controller, tools });
+    const timeout = setTimeout(() => controller.abort(), 20 * 60_000);
     try {
       const onThinking = (text: string) => {
         if (!controller.signal.aborted && epoch === epochs[request.provider] && !event.sender.isDestroyed()) {
           event.sender.send('roboboy:assistant-thinking', id, text.slice(0, 64 * 1024));
         }
       };
+      const onToken = (text: string) => {
+        if (!controller.signal.aborted && epoch === epochs[request.provider] && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-token', id, text.slice(0, 64 * 1024));
+      };
+      const onUsage = (usage: { inputTokens: number; outputTokens: number }) => { if (!controller.signal.aborted && epoch === epochs[request.provider] && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-usage-event', id, usage); };
       const result = await (request.provider === 'openai'
-        ? openai.send(request, controller.signal, onThinking)
-        : claude.send(request, controller.signal, onThinking));
+        ? openai.send(request, controller.signal, onThinking, tools, onToken, onUsage)
+        : claude.send(request, controller.signal, onThinking, tools, onToken, onUsage));
       controller.signal.throwIfAborted();
       if (epoch !== epochs[request.provider])
         throw new Error('The assistant account changed. Please send the message again.');
       return result;
     } finally {
       clearTimeout(timeout);
+      tools?.dispose();
       requests.delete(id);
     }
+  });
+  ipcMain.handle('roboboy:assistant-api-send', async (event, value: unknown, raw: unknown) => {
+    protect(event);
+    const id = identifier(value);
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid native API request.');
+    const input = raw as Record<string, any>;
+    if (!['openai', 'anthropic', 'gemini', 'openai-compatible', 'ollama'].includes(input.provider)) throw new Error('Unknown API provider.');
+    const provider = input.provider as AssistantProviderId;
+    if (typeof input.baseUrl !== 'string' || input.baseUrl.length > 2048) throw new Error('Invalid API base URL.');
+    const url = new URL(input.baseUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error('Use a credential-free HTTP(S) API endpoint without query parameters.');
+    const request = validateSubscriptionRequest({ ...input, provider: 'openai', thinkingEffort: undefined });
+    if (input.thinkingEffort !== undefined && !thinkingEfforts(provider, request.model).includes(input.thinkingEffort)) throw new Error('Unsupported model thinking effort.');
+    if (requests.has(id) || requests.size >= 4) throw new Error('An assistant request is already in progress.');
+    const controller = new AbortController();
+    const tools = new SubscriptionTools(controller.signal, (callId, name, args) => {
+      if (controller.signal.aborted || event.sender.isDestroyed()) throw new Error('Native API scope ended.');
+      event.sender.send('roboboy:assistant-tool', id, callId, name, args);
+    }, request.toolScope, request.toolNames, () => controller.abort());
+    requests.set(id, { owner: event.sender.id, provider, controller, tools });
+    const timeout = setTimeout(() => controller.abort(), 20 * 60_000);
+    try {
+      const key = await apiKeys.get(provider) ?? '';
+      if (!key && !['ollama', 'openai-compatible'].includes(provider)) throw new Error('Enter an API key in Assistant settings.');
+      controller.signal.throwIfAborted();
+      const historyId = `${event.sender.id}:${provider}:${request.model}:${url.href}:${request.sessionId ?? id}`;
+      const history = apiHistory.get(historyId);
+      const { sendNativeChat } = await import('../src/features/assistant/providers/native');
+      return await sendNativeChat({
+        settings: { provider, baseUrl: url.href, model: request.model, apiKey: key, thinkingEffort: input.thinkingEffort },
+        systemPrompt: request.systemPrompt, messages: request.messages, signal: controller.signal, tools, contextWindowTokens: request.contextWindowTokens,
+        refreshSystemPrompt: () => tools.systemPrompt ?? request.systemPrompt,
+        nativeHistory: history?.key === key ? history.messages : undefined,
+        onNativeMessages: messages => {
+          if (controller.signal.aborted || JSON.stringify(messages).length > 320_000) return;
+          apiHistory.set(historyId, { key, messages });
+          if (apiHistory.size > 20) apiHistory.delete(apiHistory.keys().next().value!);
+        },
+        onToken: text => { if (!controller.signal.aborted && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-token', id, text.slice(0, 64 * 1024)); },
+        onThinking: text => { if (!controller.signal.aborted && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-thinking', id, text.slice(0, 64 * 1024)); },
+        onUsage: usage => { if (!controller.signal.aborted && !event.sender.isDestroyed()) event.sender.send('roboboy:assistant-usage-event', id, usage); },
+      });
+    } finally { clearTimeout(timeout); tools.dispose(); requests.delete(id); }
+  });
+  ipcMain.handle('roboboy:assistant-tool-result', (event, id: unknown, callId: unknown, value: unknown) => {
+    protect(event);
+    const request = requests.get(identifier(id));
+    if (!request?.tools || request.owner !== event.sender.id) throw new Error('Untrusted host tool reply.');
+    request.tools.reply(identifier(callId), value);
+    if ((value as { yieldRequested?: unknown })?.yieldRequested === true) setImmediate(() => request.controller.abort());
   });
   ipcMain.handle('roboboy:assistant-cancel', (event, value: unknown) => {
     protect(event);

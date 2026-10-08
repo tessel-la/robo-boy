@@ -7,6 +7,7 @@ const CONVERSATION_STORAGE_KEY = 'robo-boy-assistant-conversation-v1';
 const CONVERSATION_VERSION = 1;
 /** Cap persisted history so localStorage never grows unbounded across a long-lived session. */
 const MAX_PERSISTED_MESSAGES = 100;
+const conversationKey = (scope: string) => scope === 'default' ? CONVERSATION_STORAGE_KEY : `${CONVERSATION_STORAGE_KEY}:${encodeURIComponent(scope)}`;
 
 const PROVIDER_DEFAULTS: Record<AssistantProviderId, Pick<AssistantSettings, 'baseUrl' | 'model'>> = {
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
@@ -70,9 +71,9 @@ interface StoredConversationEnvelope {
 
 /** Persists only role/content/timestamp — never attachments (large/ephemeral) or provider
  * settings (kept separately, see above, and never written into this envelope). */
-export const loadAssistantConversation = (): StoredAssistantMessage[] => {
+export const loadAssistantConversation = (scope = 'default'): StoredAssistantMessage[] => {
   try {
-    const stored = localStorage.getItem(CONVERSATION_STORAGE_KEY);
+    const stored = localStorage.getItem(conversationKey(scope));
     if (!stored) return [];
     const parsed = JSON.parse(stored) as StoredConversationEnvelope;
     if (parsed.version !== CONVERSATION_VERSION || !Array.isArray(parsed.messages)) return [];
@@ -87,21 +88,23 @@ export const loadAssistantConversation = (): StoredAssistantMessage[] => {
   }
 };
 
-export const saveAssistantConversation = (messages: StoredAssistantMessage[]): void => {
+export const saveAssistantConversation = (messages: StoredAssistantMessage[], scope = 'default'): void => {
   try {
     const envelope: StoredConversationEnvelope = {
       version: CONVERSATION_VERSION,
       messages: messages.slice(-MAX_PERSISTED_MESSAGES),
     };
-    localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(envelope));
+    while (JSON.stringify(envelope).length > 256 * 1024 && envelope.messages.length > 1) envelope.messages.shift();
+    if (JSON.stringify(envelope).length > 256 * 1024) envelope.messages = [];
+    localStorage.setItem(conversationKey(scope), JSON.stringify(envelope));
   } catch (error) {
     console.warn('Unable to save assistant conversation to localStorage.', error);
   }
 };
 
-export const clearAssistantConversation = (): void => {
+export const clearAssistantConversation = (scope = 'default'): void => {
   try {
-    localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+    localStorage.removeItem(conversationKey(scope));
   } catch {
     /* best effort */
   }

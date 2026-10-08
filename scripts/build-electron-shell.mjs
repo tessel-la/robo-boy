@@ -28,8 +28,11 @@ await build({
   outfile: path.join(outDir, 'main.js'),
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   format: 'esm',
+  // Native inference dependencies contain CommonJS modules. In an ESM bundle their
+  // built-in imports need Node's actual loader, not esbuild's unsupported-require shim.
+  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   external,
   sourcemap: true,
 });
