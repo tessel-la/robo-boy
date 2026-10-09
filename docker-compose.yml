@@ -127,6 +127,8 @@ services:
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
       - ROBOBOY_CONTROL_ALLOWED_ORIGINS=${ROBOBOY_CONTROL_ALLOWED_ORIGINS:-}
       - ROBOBOY_EXTERNAL_CONTROL_LOCK=${ROBOBOY_EXTERNAL_CONTROL_LOCK:-false}
+      # Optional operator page, loopback-only; its access key is in robot logs.
+      - ROBOBOY_EXTERNAL_CONTROL_UI_PORT=${ROBOBOY_EXTERNAL_CONTROL_UI_PORT:-}
       # rosbridge load tuning; see docs/performance.md ("rosbridge load").
       - ROSBRIDGE_USE_EVENTS_EXECUTOR=${ROSBRIDGE_USE_EVENTS_EXECUTOR:-true}
       - ROSBRIDGE_USE_COMPRESSION=${ROSBRIDGE_USE_COMPRESSION:-true}

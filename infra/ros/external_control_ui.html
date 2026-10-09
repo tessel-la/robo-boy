@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot control operator · Robo-Boy</title>
+  <link rel="stylesheet" href="/operator.css">
+  <script src="/operator.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">Robo-Boy · robot operator</p><h1>Control access</h1>
+      <p>Enable access here, then approve a request from Robo-Boy.</p></header>
+    <p id="error" role="alert" hidden></p>
+    <section aria-labelledby="access-title">
+      <div class="row"><h2 id="access-title">Robot-side lock</h2><span id="access">Connecting…</span></div>
+      <p id="connection" role="status">Waiting for the robot policy.</p>
+      <p>Current owner: <strong id="owner">Unknown</strong></p>
+      <div class="row actions"><button id="enable" disabled>Enable access</button><button id="disable" class="danger" disabled>Disable access</button></div>
+      <p class="hint">Disabling access releases control and requests cancellation of running work. It is not an emergency stop.</p>
+    </section>
+    <section aria-labelledby="requests-title"><div class="row"><h2 id="requests-title">Control requests</h2><span id="count">0</span></div>
+      <p class="hint">Requests expire after 60 s. Approval still waits for owner consent and running work to finish.</p>
+      <div id="requests"><p>No pending requests.</p></div>
+    </section>
+    <section aria-labelledby="log-title"><div class="row"><h2 id="log-title">Event log</h2><button id="download" class="secondary" disabled>Save log</button></div>
+      <pre id="log" aria-label="Robot control event log"></pre>
+      <p class="hint">Updates every second. The latest 200 events stay here until the policy restarts. Container logs keep the full process output.</p>
+    </section>
+  </main>
+</body>
+</html>
