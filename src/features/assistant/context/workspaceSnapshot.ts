@@ -10,6 +10,9 @@ export interface BuildWorkspaceSnapshotInput {
   currentLayout?: WorkspaceSnapshot['currentLayout'];
   savedLayouts?: WorkspaceSnapshot['savedLayouts'];
   panelCatalog?: WorkspaceSnapshot['panelCatalog'];
+  behaviorTreeExecution?: WorkspaceSnapshot['behaviorTreeExecution'];
+  connections?: WorkspaceSnapshot['connections'];
+  app?: WorkspaceSnapshot['app'];
 }
 
 /** Pure, serializable snapshot builder. MainControlView owns the underlying state (open panels,
@@ -26,5 +29,8 @@ export const buildWorkspaceSnapshot = (input: BuildWorkspaceSnapshotInput): Work
   ...(input.currentLayout ? { currentLayout: input.currentLayout } : {}),
   savedLayouts: input.savedLayouts ?? [],
   panelCatalog: input.panelCatalog ?? [],
+  ...(input.behaviorTreeExecution ? { behaviorTreeExecution: input.behaviorTreeExecution } : {}),
+  ...(input.connections ? { connections: input.connections } : {}),
+  ...(input.app ? { app: input.app } : {}),
   fetchedAt: Date.now(),
 });

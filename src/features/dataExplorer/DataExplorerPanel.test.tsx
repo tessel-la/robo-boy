@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoboBoyJsonObject } from '../../panels/types';
 import type { ReplaySession } from '../recordReplay/ReplaySession';
 import type { InspectionSnapshot, Resource } from './types';
+import type { PanelSettingsBridge } from '../assistant/types';
 
 const fake = vi.hoisted(() => ({
   snapshot: undefined as unknown as InspectionSnapshot,
@@ -265,10 +266,12 @@ function Harness({
   config,
   replaySession = noReplay,
   connected = true,
+  onRegisterAssistantBridge,
 }: {
   config?: Record<string, unknown>;
   replaySession?: ReplaySession;
   connected?: boolean;
+  onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }) {
   const [state, setState] = useState<RoboBoyJsonObject | undefined>(
     config ? ({ config } as unknown as RoboBoyJsonObject) : undefined
@@ -287,6 +290,8 @@ function Harness({
         setState(value);
       }}
       onOpen={onOpen}
+      panelId="explorer"
+      onRegisterAssistantBridge={onRegisterAssistantBridge}
     />
   );
 }
@@ -796,5 +801,44 @@ describe('Data Explorer sources', () => {
     render(<Harness connected={false} />);
     expect(screen.getByText('Connect to ROS or open a recording')).toBeInTheDocument();
     expect(button('Refresh resources')).toBeDisabled();
+  });
+});
+
+describe('Data Explorer and the AI assistant', () => {
+  it('registers a bridge that reports what the panel shows and changes it on request', async () => {
+    let bridge: PanelSettingsBridge | null = null;
+    const register = vi.fn((_id: string, value: PanelSettingsBridge | null) => {
+      bridge = value;
+    });
+    const { unmount } = render(<Harness onRegisterAssistantBridge={register} />);
+    expect(register).toHaveBeenCalledWith('explorer', expect.objectContaining({ panelType: 'dataExplorer' }));
+    const view = bridge!.describe() as { topics: { name: string }[]; diagnostics: { components: number } };
+    expect(view.topics.map(topic => topic.name)).toEqual(expect.arrayContaining(['/scan', '/speed']));
+    expect(view.diagnostics.components).toBe(2);
+
+    let outcomes: unknown;
+    await act(async () => {
+      outcomes = await bridge!.apply({
+        watch: ['/scan'],
+        addRules: [{ topic: '/scan', minHz: 9 }],
+        select: '/scan',
+        logs: { level: 'error' },
+        refresh: true,
+      });
+    });
+    expect(outcomes).toEqual(expect.arrayContaining([{ ok: true, message: 'Watching /scan.' }]));
+    expect(lastConfig()).toMatchObject({
+      watched: ['/scan'],
+      rules: [{ topic: '/scan', minHz: 9 }],
+      selected: 'topic:/scan',
+    });
+    expect(fake.refresh).toHaveBeenCalled();
+    expect(screen.getByRole('complementary', { name: '/scan inspector' })).toBeInTheDocument();
+    const after = bridge!.describe() as { selectedResource: { name: string }; logs: { matching: { found: number } } };
+    expect(after.selectedResource.name).toBe('/scan');
+    expect(after.logs.matching.found).toBe(1);
+
+    unmount();
+    expect(register).toHaveBeenLastCalledWith('explorer', null);
   });
 });

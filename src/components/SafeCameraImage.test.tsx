@@ -34,6 +34,14 @@ describe('SafeCameraImage', () => {
     expect(isSafeCameraImageSrc('/video_stream/stream?topic=%2Fcamera%2Fimage_raw&type=mjpeg')).toBe(true);
   });
 
+  it('preserves validated refresh tokens and rejects injected refresh values', () => {
+    const src = '/video_stream/stream?topic=/camera/image_raw&type=mjpeg&_refresh=123abc-456def';
+    render(<SafeCameraImage src={src} alt="Refreshed camera" />);
+    expect(screen.getByAltText('Refreshed camera')).toHaveAttribute('src', src);
+    expect(isSafeCameraImageSrc(src.replace('123abc-456def', ''))).toBe(false);
+    expect(isSafeCameraImageSrc(src.replace('123abc-456def', '%2F%2Fevil.example'))).toBe(false);
+  });
+
   it('allows absolute camera stream URLs only for the configured base', () => {
     expect(
       isSafeCameraImageSrc('http://localhost:8080/stream?topic=/camera/image_raw&type=mjpeg', 'http://localhost:8080')

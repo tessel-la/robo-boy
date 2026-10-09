@@ -45,7 +45,7 @@ import {
   importGamepadLayouts,
   loadGamepadLibrary,
 } from '../features/customGamepad/gamepadStorage';
-import { filterCameraTopics } from '../features/customGamepad/rosMessageUtils';
+import { useCameraTopics } from '../hooks/useCameraTopics';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
 import BehaviorTreePanel, {
   BehaviorTreeExecutionControls,
@@ -68,7 +68,8 @@ import {
   type StoredPanelState,
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
-import { isCameraStreamQuality } from '../utils/cameraStreamQuality';
+import { APP_VERSION } from '../features/appUpdate/releases';
+import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -393,6 +394,15 @@ interface MainControlViewProps {
   storageScope?: string;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
   connectionNavigation?: ConnectionTabsProps;
+  /** App-wide settings the assistant may read and change; owned by the app shell. */
+  appControls?: AssistantAppControls;
+}
+
+/** The theme is chosen at app level, above every connection's workspace. */
+export interface AssistantAppControls {
+  themeId: string;
+  themes: Array<{ id: string; name: string }>;
+  selectTheme: (themeId: string) => void;
 }
 
 type ViewMode = 'camera' | '3d' | 'tfTree' | 'behaviorTree';
@@ -964,6 +974,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   storageScope,
   onConnectionStatusChange,
   connectionNavigation,
+  appControls,
 }) => {
   const runtimeEndpoints = useRuntimeConfig();
   const panelRuntime = useMemo<PanelHostRuntime>(
@@ -1097,7 +1108,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
     assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
   }, []);
-  const [availableCameraTopics, setAvailableCameraTopics] = useState<string[]>([]);
+  const {
+    topics: availableCameraTopics,
+    refreshing: refreshingCameraTopics,
+    error: cameraTopicsError,
+    refresh: refreshCameraTopics,
+  } = useCameraTopics(ros, isConnected);
   const [selectedCameraTopic, setSelectedCameraTopic] = useState<string>('');
 
   // --- New State for Modular Control Panels ---
@@ -1105,6 +1121,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [isAddPanelMenuOpen, setIsAddPanelMenuOpen] = useState(false);
   const [isPanelManagerOpen, setIsPanelManagerOpen] = useState(false);
+  /** A catalog panel the assistant asked to install: the manager prepares it for the user to review. */
+  const [panelManagerInstallId, setPanelManagerInstallId] = useState<string | undefined>();
   const [editorSession, setEditorSession] = useState<GamepadEditorSession | null>(null);
   const [workspacePadEditorTargetId, setWorkspacePadEditorTargetId] = useState<string | null>(null);
   const [workspacePadMenu, setWorkspacePadMenu] = useState<WorkspacePadMenuState | null>(null);
@@ -1509,62 +1527,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     };
   }, [isActive, workspaceReplacementPanelId]);
 
-  // Fetch topics when connected
+  // Keep a chosen topic while it is temporarily unavailable; a refresh must not switch cameras.
   useEffect(() => {
-    let disposed = false;
-    if (isConnected && ros) {
-      console.log('Fetching ROS topics...');
-      ros.getTopics(
-        response => {
-          if (disposed) return;
-          console.log('Available topics:', response.topics);
-          console.log('Corresponding types:', response.types);
-          // Filter topics likely to be camera feeds based on type or name pattern
-          // Note: Comparing types is more reliable but requires type info from getTopics.
-          // ROS2 might require separate calls to get type info if not included in getTopics response.
-          const fetchedTopics = response.topics.map((topic, index) => ({
-            name: topic,
-            type: response.types[index] || '',
-          }));
-          const cameraTopicNames = new Set(filterCameraTopics(fetchedTopics).map(topic => topic.name));
-          const potentialTopics = response.topics.filter(topic => {
-            if (cameraTopicNames.has(topic)) {
-              return true;
-            }
-            // Fallback: Check for common naming patterns if type information is missing/incomplete
-            return topic.includes('image_raw') || topic.includes('image_color') || topic.includes('image_compressed');
-          });
-
-          console.log('Found potential camera topics:', potentialTopics);
-          setAvailableCameraTopics(potentialTopics);
-
-          // Set default selection if available
-          if (potentialTopics.length > 0 && !selectedCameraTopic) {
-            // Try to find a common default or just take the first one
-            const defaultTopic = potentialTopics.find(t => t.includes('/image_raw')) || potentialTopics[0];
-            setSelectedCameraTopic(defaultTopic);
-            console.log(`Default camera topic set to: ${defaultTopic}`);
-          } else if (potentialTopics.length === 0) {
-            console.warn('No potential camera topics found.');
-            setSelectedCameraTopic(''); // Reset if no topics found
-          }
-        },
-        error => {
-          if (disposed) return;
-          console.error('Failed to fetch ROS topics:', error);
-          setAvailableCameraTopics([]);
-          setSelectedCameraTopic('');
-        }
+    if (!isConnected) setSelectedCameraTopic('');
+    else if (availableCameraTopics.length) {
+      setSelectedCameraTopic(
+        current => current || availableCameraTopics.find(topic => topic.includes('/image_raw')) || availableCameraTopics[0]
       );
-    } else {
-      // Reset topics when disconnected
-      setAvailableCameraTopics([]);
-      setSelectedCameraTopic('');
     }
-    return () => {
-      disposed = true;
-    };
-  }, [isConnected, ros]); // Re-run when connection status or ros instance changes
+  }, [isConnected, availableCameraTopics]);
 
   // Connect on mount and disconnect on unmount or when connectionParams change
   useEffect(() => {
@@ -2382,6 +2353,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, cameraTopic } : panel)));
   };
 
+  const handleWorkspaceCameraQualityChange = (panelId: string, streamQuality: CameraStreamQuality) => {
+    const update = (previous: WorkspacePanel[]) =>
+      previous.map(candidate =>
+        candidate.id === panelId
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), streamQuality } } }
+          : candidate
+      );
+    setWorkspacePanels(update);
+    setMobileWorkspacePanels(update);
+  };
+
   const handleWorkspacePadLayoutChange = (panelId: string, layoutId: string) => {
     setWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, layoutId } : panel)));
@@ -2691,6 +2673,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           results.push({ operation, ok: true, message: `${panel.title} now shows ${operation.cameraTopic}.` });
           break;
         }
+        case 'setCameraQuality': {
+          const panel = findPanel(operation.panelId);
+          if (!panel || panel.type !== 'camera') {
+            results.push({ operation, ok: false, message: `No camera panel with id "${operation.panelId}".` });
+            break;
+          }
+          if (!isCameraStreamQuality(operation.quality)) {
+            results.push({ operation, ok: false, message: `"${operation.quality}" is not a stream quality; use ${CAMERA_STREAM_QUALITIES.join(', ')}.` });
+            break;
+          }
+          handleWorkspaceCameraQualityChange(panel.id, operation.quality);
+          results.push({ operation, ok: true, message: `${panel.title} now streams at ${CAMERA_STREAM_PRESETS[operation.quality].label} quality.` });
+          break;
+        }
         case 'setPanelPad': {
           const panel = findPanel(operation.panelId);
           const pad = gamepadLibrary.find(item => item.id === operation.padId);
@@ -2730,6 +2726,67 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           setSavedWorkspaceLayouts(prev => [...prev, savedLayout]);
           setActiveWorkspaceLayoutId(savedLayout.id);
           results.push({ operation, ok: true, message: `Saved the current workspace as "${operation.title}".` });
+          break;
+        }
+        case 'switchConnection':
+        case 'closeConnection': {
+          const tab = connectionNavigation?.tabs.find(item => item.id === operation.connectionId || item.label === operation.connectionId);
+          if (!connectionNavigation || !tab) {
+            results.push({ operation, ok: false, message: `No connection tab "${operation.connectionId}".` });
+            break;
+          }
+          if (operation.op === 'switchConnection') {
+            connectionNavigation.onSelect(tab.id);
+            results.push({ operation, ok: true, message: `Switched to ${tab.label}. Its own assistant answers there.` });
+          } else if (tab.id === connectionNavigation.activeTabId) {
+            results.push({ operation, ok: false, message: `${tab.label} is the connection this conversation runs in; close it from its tab.` });
+          } else {
+            connectionNavigation.onClose(tab.id);
+            results.push({ operation, ok: true, message: `Closed the connection to ${tab.label}.` });
+          }
+          break;
+        }
+        case 'openNewConnection': {
+          if (!connectionNavigation) {
+            results.push({ operation, ok: false, message: 'Connections cannot be opened from here.' });
+            break;
+          }
+          connectionNavigation.onAdd();
+          results.push({ operation, ok: true, message: 'Opened the form to connect to another robot.' });
+          break;
+        }
+        case 'setTheme': {
+          const theme = appControls?.themes.find(item => item.id === operation.themeId || item.name.toLowerCase() === operation.themeId.toLowerCase());
+          if (!appControls || !theme) {
+            results.push({ operation, ok: false, message: `No theme "${operation.themeId}"${appControls ? `; available: ${appControls.themes.map(item => item.id).join(', ')}` : ''}.` });
+            break;
+          }
+          appControls.selectTheme(theme.id);
+          results.push({ operation, ok: true, message: `Switched to the ${theme.name} theme.` });
+          break;
+        }
+        case 'setPanelEnabled': {
+          const wanted = operation.panelType.toLowerCase();
+          const panel = (installedPanelRegistry.allPanels ?? []).find(item => item.manifest.id.toLowerCase() === wanted || item.manifest.name.toLowerCase() === wanted);
+          if (!panel) {
+            results.push({ operation, ok: false, message: `No installed panel "${operation.panelType}". Built-in panels are always offered.` });
+            break;
+          }
+          installedPanelRegistry.setPanelEnabled(panel.manifest.id, operation.enabled);
+          results.push({ operation, ok: true, message: `${panel.manifest.name} is ${operation.enabled ? 'offered in' : 'hidden from'} the add-panel menu.` });
+          break;
+        }
+        case 'openPanelManager': {
+          setPanelManagerInstallId(operation.installPanelId);
+          setIsPanelManagerOpen(true);
+          setIsWorkspaceAddMenuOpen(false);
+          results.push({
+            operation,
+            ok: true,
+            message: operation.installPanelId
+              ? `Opened the panel manager to install ${operation.installPanelId}. Review the verified changes there and apply them to install it.`
+              : 'Opened the panel manager.',
+          });
           break;
         }
       }
@@ -3098,12 +3155,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       {viewMode === 'camera' ? (
         replaySource.ros ? (
           <RecordedCameraView key={`view:${replaySource.generation}`} ros={replaySource.ros} preferredTopic={selectedCameraTopic} />
-        ) : isConnected && ros && selectedCameraTopic ? (
+        ) : isConnected && ros ? (
           <CameraView
             ros={ros}
             cameraTopic={selectedCameraTopic}
             availableTopics={availableCameraTopics}
             onTopicChange={setSelectedCameraTopic}
+            onRefreshTopics={refreshCameraTopics}
+            refreshingTopics={refreshingCameraTopics}
+            topicsError={cameraTopicsError}
           />
         ) : (
           <div className="placeholder">
@@ -3373,6 +3433,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const catalogEntry = panelCatalogById.get(panel.type);
 
     if (panel.type === 'dataExplorer') return <DataExplorerPanel ros={ros} connected={isConnected}
+      panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
       generation={connectionGeneration} isActive={isPanelActive && isActive}
       replaySession={replaySession} replayGeneration={replaySource.generation} state={panel.panelState?.values}
       onStateChange={values => {
@@ -3383,7 +3444,8 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })} />;
 
     if (panel.type === 'recordReplay') {
-      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession} ros={ros} connected={isConnected}
+      return <RecordReplayPanel key={`${panel.id}:${panel.openedAt ?? 0}`} session={replaySession}
+        panelId={panel.id} onRegisterAssistantBridge={handleRegisterPanelSettingsBridge} ros={ros} connected={isConnected}
         isActive={isPanelActive && isActive} state={panel.panelState?.values}
         onStateChange={values => {
           const update = (previous: WorkspacePanel[]) => previous.map(candidate =>
@@ -3493,38 +3555,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         );
       }
       const cameraTopic = panel.cameraTopic || selectedCameraTopic || availableCameraTopics[0] || '';
-      return cameraTopic ? (
+      return (
         <CameraView
           ros={ros!}
           cameraTopic={cameraTopic}
           availableTopics={availableCameraTopics}
           onTopicChange={newTopic => handleWorkspaceCameraTopicChange(panel.id, newTopic)}
+          onRefreshTopics={refreshCameraTopics}
+          refreshingTopics={refreshingCameraTopics}
+          topicsError={cameraTopicsError}
           selectId={`camera-topic-select-${panel.id}`}
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
-          onStreamQualityChange={streamQuality => {
-            const update = (previous: WorkspacePanel[]) =>
-              previous.map(candidate =>
-                candidate.id === panel.id && candidate.type === panel.type
-                  ? {
-                      ...candidate,
-                      panelState: {
-                        schemaVersion: 1 as const,
-                        panelId: panel.type,
-                        values: { ...(candidate.panelState?.values ?? {}), streamQuality },
-                      },
-                    }
-                  : candidate
-              );
-            setWorkspacePanels(update);
-            setMobileWorkspacePanels(update);
-          }}
+          onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
         />
-      ) : (
-        <div className="placeholder">
-          {availableCameraTopics.length > 0 ? 'Select a camera topic' : 'No camera topics found'}
-        </div>
       );
     }
 
@@ -4490,8 +4535,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           installedPanels={installedPanelRegistry.managedPanels}
           availablePanels={installedPanelRegistry.allPanels}
           onPanelEnabledChange={installedPanelRegistry.setPanelEnabled}
-          onClose={() => setIsPanelManagerOpen(false)}
+          onClose={() => { setIsPanelManagerOpen(false); setPanelManagerInstallId(undefined); }}
           onApplied={installedPanelRegistry.refresh}
+          requestedInstallPanelId={panelManagerInstallId}
         />
       )}
 
@@ -4513,6 +4559,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       <GlobalAssistant
         ref={assistantRef}
         ros={ros}
+        visualizationRos={visualizationRos}
         isConnected={isConnected}
         connectionGeneration={connectionGeneration}
         onReviewPadProposal={handleReviewAssistantPad}
@@ -4585,6 +4632,30 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             layout: layout.layout,
           })),
           panelCatalog: panelCatalog.map(panel => ({ id: panel.id, name: panel.name })),
+          ...(connectionNavigation ? { connections: {
+            current: connectionNavigation.activeTabId,
+            tabs: connectionNavigation.tabs.filter(tab => !tab.isClosing).map(tab => ({
+              id: tab.id, label: tab.label, description: tab.description, status: tab.status, current: tab.id === connectionNavigation.activeTabId,
+            })),
+          } } : {}),
+          app: {
+            version: APP_VERSION,
+            theme: appControls?.themeId ?? 'unknown',
+            themes: appControls?.themes ?? [],
+            panels: (installedPanelRegistry.allPanels ?? []).map(panel => ({
+              id: panel.manifest.id, name: panel.manifest.name, version: panel.manifest.version, origin: panel.origin, enabled: panel.isEnabled,
+            })),
+            panelIssues: (installedPanelRegistry.issues ?? []).map(issue => issue.message),
+          },
+          ...(btExecution.treeName ? { behaviorTreeExecution: {
+            running: btExecution.isExecuting,
+            ...(btExecution.isPaused ? { paused: true } : {}),
+            treeName: btExecution.treeName,
+            ...(btExecution.activeNodeLabel ? { activeNode: btExecution.activeNodeLabel } : {}),
+            ...(btExecution.status ? { status: btExecution.status } : {}),
+            ...(btExecution.isExecuting && btExecution.startedAt ? { runningForSec: Math.round((Date.now() - btExecution.startedAt) / 1000) } : {}),
+            ...(btExecution.isPersistent ? { persistent: true } : {}),
+          } } : {}),
         })}
       />
     </div>

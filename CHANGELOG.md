@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.18.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.17.0-alpha...robo-boy-v0.18.0-alpha) (2026-10-05)
+
+
+### Features
+
+* let the AI assistant use the Data Explorer, Record & Replay and more of the app ([#219](https://github.com/tessel-la/robo-boy/issues/219)) ([b608bb0](https://github.com/tessel-la/robo-boy/commit/b608bb002fb2d95cae7f6fab204e0de8aeb98717))
+* subscription agent auth ([#218](https://github.com/tessel-la/robo-boy/issues/218)) ([14ed8f0](https://github.com/tessel-la/robo-boy/commit/14ed8f0186ead33d02f3cfb175050e1acf57464f))
+
+
+### Bug Fixes
+
+* align README platforms and patch vulnerable dependencies ([#215](https://github.com/tessel-la/robo-boy/issues/215)) ([e66a1f5](https://github.com/tessel-la/robo-boy/commit/e66a1f5107b4077b1b8d4d0425aa845ca072247b))
+* **electron:** verify public TLS certificates and panel downloads ([#214](https://github.com/tessel-la/robo-boy/issues/214)) ([f9c1dbf](https://github.com/tessel-la/robo-boy/commit/f9c1dbfd1f8b86c62decf78bad543e6af5820c77))
+* keep the diagnostics view from crashing over plain http ([#213](https://github.com/tessel-la/robo-boy/issues/213)) ([61bb1e8](https://github.com/tessel-la/robo-boy/commit/61bb1e861f472e646fda3a327cd7318b9319b28e))
+* preserve empty workspaces on reconnect ([#216](https://github.com/tessel-la/robo-boy/issues/216)) ([8b78fa0](https://github.com/tessel-la/robo-boy/commit/8b78fa03b21ff6a3da4cb77e071be37ceaf547b4))
+* wait for a current inspector graph before listing behavior-tree actions ([#217](https://github.com/tessel-la/robo-boy/issues/217)) ([9378813](https://github.com/tessel-la/robo-boy/commit/93788138337a61dd80cfed2a1f23b2323d6d3532))
+
 ## [0.17.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.16.0-alpha...robo-boy-v0.17.0-alpha) (2026-10-01)
 
 

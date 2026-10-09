@@ -5,6 +5,7 @@ import { rangeServer } from '../../test/rangeServer';
 import RecordReplayPanel from './RecordReplayPanel';
 import { ReplaySession } from './ReplaySession';
 import type { BagInfo, ReaderRequest, ReaderResponse, RecorderStatus } from './types';
+import type { PanelSettingsBridge } from '../assistant/types';
 
 const recorder = vi.hoisted(() => ({
   value: {
@@ -393,5 +394,77 @@ describe('RecordReplayPanel record', () => {
     await settle();
     expect(screen.getByRole('button', { name: 'Replay' })).toHaveAttribute('aria-pressed', 'true');
     expect(fetchMock).toHaveBeenLastCalledWith('/recordings/list?path=field%2Frun_9', expect.anything());
+  });
+});
+
+describe('RecordReplayPanel and the AI assistant', () => {
+  it('lets the assistant open, play and read a recording, and drive the recorder', async () => {
+    const workers: FakeWorker[] = [];
+    session.dispose();
+    session = new ReplaySession(() => {
+      const created = new FakeWorker();
+      workers.push(created);
+      return created as unknown as Worker;
+    });
+    listings[''] = LISTING;
+    recorder.value = { ...recorder.value, online: true, status: recorderStatus({}) };
+    let bridge: PanelSettingsBridge | null = null;
+    const register = vi.fn((_id: string, value: PanelSettingsBridge | null) => { bridge = value; });
+    renderPanel({ panelId: 'rr', onRegisterAssistantBridge: register });
+    await settle();
+    expect(register).toHaveBeenCalledWith('rr', expect.objectContaining({ panelType: 'recordReplay' }));
+    expect(bridge!.describe()).toMatchObject({
+      recordingsOnRosHost: { recordings: expect.arrayContaining([expect.objectContaining({ name: 'run_1', durationSec: 75 })]) },
+    });
+
+    // Open a recording stored on the ROS host, then drive playback.
+    let outcomes = await bridge!.apply({ openRecording: 'run_1' });
+    expect(outcomes).toEqual([{ ok: true, message: 'Opening run_1_0.mcap from the ROS host.' }]);
+    const player = workers[0];
+    expect(player.last('open')).toMatchObject({ source: { url: remoteUrl('run_1/run_1_0.mcap') } });
+    player.reply({ id: player.last('open').id, op: 'opened', info: INFO });
+    player.reply({ id: player.last('seek').id, op: 'messages', messages: [], done: true });
+    expect(bridge!.describe()).toMatchObject({ replay: { name: 'field_test.mcap', durationSec: 60 } });
+    await act(async () => { outcomes = await bridge!.apply({ seek: 30, speed: 2, loop: true, play: true }); });
+    expect(session.snapshot).toMatchObject({ position: 30, speed: 2, loop: true, playing: true });
+    await act(async () => { await bridge!.apply({ play: false }); });
+    expect(session.snapshot.playing).toBe(false);
+    player.reply({ id: player.last('seek').id, op: 'messages', messages: [], done: true });
+
+    // Read the latest message at the cursor.
+    const sampling = bridge!.apply({ sample: ['/odom'] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(60); });
+    player.reply({ id: player.last('seek').id, op: 'messages', done: true, messages: [{ topic: '/odom', time: START + 29n * 1_000_000_000n, message: { pose: { x: 1 } } }] });
+    await act(async () => { outcomes = await sampling; });
+    expect(bridge!.describe()).toMatchObject({ samples: [{ topic: '/odom', atSeconds: 30, value: { pose: { x: 1 } } }] });
+
+    // Read a stretch with a reader of its own.
+    const reading = bridge!.apply({ read: { topics: ['/odom'], fromSec: 0, toSec: 60, limit: 5 } });
+    await settle();
+    const reader = workers[1];
+    reader.reply({ id: 1, op: 'opened', info: INFO });
+    reader.reply({ id: 2, op: 'messages', done: true, messages: [{ topic: '/odom', time: START + 1_000_000_000n, message: { pose: { x: 0 } } }] });
+    await act(async () => { outcomes = await reading; });
+    expect(outcomes).toEqual(expect.arrayContaining([{ ok: true, message: 'Found 1 matching of 1 messages.' }]));
+    expect(bridge!.describe()).toMatchObject({ lastRead: { matched: 1, messages: [{ topic: '/odom', atSec: 1, value: { pose: { x: 0 } } }] } });
+
+    // Record on the ROS host with the options the assistant chose.
+    await act(async () => { outcomes = await bridge!.apply({ recordOptions: { topics: ['/scan'] }, recorder: 'start' }); });
+    expect(recorder.value.command).toHaveBeenCalledWith('start', expect.objectContaining({ topics: ['/scan'], allTopics: false }));
+    expect(screen.getByRole('button', { name: /Record/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await act(async () => { await bridge!.apply({ closeRecording: true }); });
+    expect(session.snapshot.phase).toBe('empty');
+    expect(bridge!.describe()).toMatchObject({ replay: { state: 'no recording open' } });
+  });
+
+  it('reports a recording that closed before a read', async () => {
+    let bridge: PanelSettingsBridge | null = null;
+    renderPanel({ panelId: 'rr', onRegisterAssistantBridge: (_id, value) => { bridge = value; } });
+    openBag();
+    const pending = bridge!.apply({ sample: ['/odom'] });
+    act(() => session.close());
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(await pending).toEqual(expect.arrayContaining([expect.objectContaining({ ok: false })]));
   });
 });

@@ -10,6 +10,8 @@ import type { ReplaySession } from './ReplaySession';
 import { defaultRecordOptions, type BagSource, type RecordOptions } from './types';
 import { formatBytes as bytes, formatDuration } from './format';
 import { useRecorder } from './useRecorder';
+import { describeRecordReplay, planRecordReplaySettings, readRecording, RECORD_REPLAY_SETTINGS_HELP, sampleRecording, type RecordingReadResult, type RecordingSample } from './assistantBridge';
+import type { PanelSettingsBridge } from '../assistant/types';
 import './RecordReplayPanel.css';
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
@@ -36,8 +38,11 @@ interface Props {
   isActive: boolean;
   state?: RoboBoyJsonObject;
   onStateChange: (state: RoboBoyJsonObject) => void;
+  /** Lets the AI assistant read the recording and recorder, and drive them. */
+  panelId?: string;
+  onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
 }
-export default function RecordReplayPanel({ session, ros, connected, isActive, state, onStateChange }: Props) {
+export default function RecordReplayPanel({ session, ros, connected, isActive, state, onStateChange, panelId, onRegisterAssistantBridge }: Props) {
   const replay = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const recorder = useRecorder(ros, connected && isActive);
   const [tab, setTab] = useState<'replay' | 'record'>(state?.initialTab === 'record' ? 'record' : 'replay');
@@ -109,6 +114,63 @@ export default function RecordReplayPanel({ session, ros, connected, isActive, s
     if (wasBusy.current && !busy && recorder.status?.path.split('/').pop() === options.name) change({ name: defaultRecordOptions().name });
     wasBusy.current = busy;
   });
+  // The AI assistant's bridge is registered once and reads the latest state through this ref.
+  // Messages it sampled are kept here too, so the next turn sees them before React re-renders.
+  const samples = useRef<RecordingSample[]>([]);
+  const lastRead = useRef<RecordingReadResult>();
+  useEffect(() => { samples.current = []; lastRead.current = undefined; }, [replay.info]);
+  const assistantState = useRef({ replay, tab, connected, recorder, options, remote: remote.state, change, load, setTab, setRemotePath, recordingsBaseUrl });
+  assistantState.current = { replay, tab, connected, recorder, options, remote: remote.state, change, load, setTab, setRemotePath, recordingsBaseUrl };
+  useEffect(() => {
+    if (!panelId || !onRegisterAssistantBridge) return;
+    const input = () => {
+      const current = assistantState.current;
+      return {
+        replay: current.replay, duration: session.duration, tab: current.tab, connected: current.connected,
+        recorder: { online: current.recorder.online, pending: current.recorder.pending, status: current.recorder.status, error: current.recorder.error },
+        options: current.options, remote: current.remote, samples: samples.current, lastRead: lastRead.current,
+      };
+    };
+    const bridge: PanelSettingsBridge = {
+      panelType: 'recordReplay',
+      settingsHelp: RECORD_REPLAY_SETTINGS_HELP,
+      describe: () => describeRecordReplay(input()),
+      apply: async settings => {
+        const current = assistantState.current;
+        const { steps, outcomes } = planRecordReplaySettings(settings, input());
+        for (const step of steps) {
+          if (step.kind === 'tab') current.setTab(step.tab);
+          else if (step.kind === 'close') session.close();
+          else if (step.kind === 'browse') current.setRemotePath(step.path);
+          else if (step.kind === 'open') current.load(remoteBag(current.recordingsBaseUrl, step.file));
+          else if (step.kind === 'seek') session.seek(step.seconds);
+          else if (step.kind === 'speed') session.setSpeed(step.speed);
+          else if (step.kind === 'loop') session.setLoop(step.loop);
+          else if (step.kind === 'play') { if (step.playing) session.play(); else session.pause(); }
+          else if (step.kind === 'options') current.change(step.patch);
+          else if (step.kind === 'recorder') current.recorder.command(step.command, step.options);
+          else if (step.kind === 'sample') {
+            // Read from the source after any seek above: seeking backwards replaces it.
+            const source = session.source.ros;
+            if (!source) { outcomes.push({ ok: false, message: 'The recording closed before it could be read.' }); continue; }
+            samples.current = await sampleRecording(source, step.topics, session.snapshot.position);
+            const empty = samples.current.filter(sample => sample.unavailable).map(sample => sample.topic);
+            if (empty.length) outcomes.push({ ok: false, message: `Nothing of ${empty.join(', ')} was recorded before this position.` });
+          } else if (step.kind === 'read') {
+            const start = session.snapshot.info?.start;
+            if (start === undefined) { outcomes.push({ ok: false, message: 'The recording closed before it could be read.' }); continue; }
+            const result = await readRecording((from, to, topics, keep) => session.readRange(from, to, topics, keep), step.request, start);
+            lastRead.current = result;
+            if (result.error) outcomes.push({ ok: false, message: `Reading failed: ${result.error}` });
+            else outcomes.push({ ok: true, message: `Found ${result.matched.toLocaleString('en')} matching of ${result.scanned.toLocaleString('en')} messages${result.stoppedBecause ? `; stopped at ${result.stoppedAtSec} s because it ${result.stoppedBecause}` : ''}.` });
+          }
+        }
+        return outcomes;
+      },
+    };
+    onRegisterAssistantBridge(panelId, bridge);
+    return () => onRegisterAssistantBridge(panelId, null);
+  }, [panelId, onRegisterAssistantBridge, session]);
   const ready = Boolean(replay.info) && replay.phase !== 'error';
   const loading = replay.phase === 'loading' || replay.phase === 'seeking';
   const position = scrub ?? replay.position;
