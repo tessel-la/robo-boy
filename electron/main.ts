@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, net, protocol, shell, session } from 'electron';
 import { readFile } from 'node:fs/promises';
+import { userInfo } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerUpdater } from './updater';
@@ -202,6 +203,14 @@ const configurePermissions = (): void => {
 const registerWindowControls = (): void => {
   const windowFor = (event: Electron.IpcMainInvokeEvent): BrowserWindow | null =>
     BrowserWindow.fromWebContents(event.sender);
+
+  ipcMain.handle('roboboy:session-username', event => {
+    if (!windowFor(event) || event.senderFrame !== event.sender.mainFrame) return undefined;
+    const caller = new URL(event.senderFrame.url);
+    const expected = new URL(devServerUrl ?? RENDERER_ORIGIN);
+    if (caller.protocol !== expected.protocol || caller.host !== expected.host) return undefined;
+    try { return userInfo().username; } catch { return undefined; }
+  });
 
   ipcMain.handle('roboboy:window-minimize', event => windowFor(event)?.minimize());
   ipcMain.handle('roboboy:window-close', event => windowFor(event)?.close());

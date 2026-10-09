@@ -13,6 +13,7 @@ import math
 import operator
 import threading
 import time
+import uuid
 from typing import Any, Callable, Optional
 
 import rclpy
@@ -27,6 +28,7 @@ from rosidl_runtime_py.utilities import get_action, get_message, get_service
 from std_msgs.msg import String
 
 import bt_execution_details as details
+from robot_work import RobotWork
 
 
 PROTOCOL_VERSION = 1
@@ -151,6 +153,8 @@ class BehaviorTreeRunner(Node):
         self._stop = threading.Event()
         self._attempts = 0
         self._active_goals: list[Any] = []
+        self._work = RobotWork()
+        self._runner_id = str(uuid.uuid4())
         self._last_error: Optional[str] = None
         self.get_logger().info('Persistent behavior-tree runner ready')
 
@@ -188,7 +192,7 @@ class BehaviorTreeRunner(Node):
             self._publish_error('A valid tree is required to start execution')
             return
         with self._lock:
-            if self._state != 'idle':
+            if self._state != 'idle' or self._work.count:
                 self._publish_error('Another persistent behavior tree is already running')
                 return
             self._session_id = str(command.get('sessionId') or f'bt-{now_ms()}')
@@ -221,10 +225,11 @@ class BehaviorTreeRunner(Node):
 
     def _stop_execution(self, session_id: Optional[str]) -> None:
         with self._pause_condition:
-            if self._state == 'idle' or not self._matches(session_id):
+            if (self._state == 'idle' and not self._work.count) or not self._matches(session_id):
                 return
             self._stop.set()
-            self._state = 'running'
+            if self._state != 'idle':
+                self._state = 'running'
             self._pause_condition.notify_all()
             goals = list(self._active_goals)
         for goal in goals:
@@ -254,7 +259,6 @@ class BehaviorTreeRunner(Node):
             self._publish_event('completed', data={'result': result})
         with self._lock:
             self._state = 'idle'
-            self._active_goals = []
             self._last_error = error
         self._publish_snapshot(include_tree=True)
 
@@ -350,7 +354,13 @@ class BehaviorTreeRunner(Node):
         children = self._children(node, tree)
         if not children: return 'failure'
         result = ['failure']
-        thread = threading.Thread(target=lambda: result.__setitem__(0, self._execute(children[0], tree, path)), daemon=True)
+        token = self._work.begin()
+        def execute_child():
+            try:
+                result[0] = self._execute(children[0], tree, path)
+            finally:
+                self._work.finish(token)
+        thread = threading.Thread(target=execute_child, daemon=True)
         thread.start()
         thread.join(timeout_seconds(node.get('data') or {}, 10000))
         return result[0] if not thread.is_alive() else 'failure'
@@ -407,6 +417,9 @@ class BehaviorTreeRunner(Node):
         client: Any = None
         handle: Any = None
         last_feedback = [0.0]
+        tracked = False
+        tracking = {}
+        timed_out = threading.Event()
 
         def on_feedback(message: Any) -> None:
             # Feedback can come many times a second; the panel needs a few updates a second at most.
@@ -426,8 +439,20 @@ class BehaviorTreeRunner(Node):
             goal = action_type.Goal()
             payload = apply_inputs(data.get('parameters') or {}, data.get('inputBindings') or [], self._blackboard)
             set_message_fields(goal, normalize_message_fields(goal, payload))
-            handle = self._wait_future(client.send_goal_async(goal, feedback_callback=on_feedback), timeout)
+            future = client.send_goal_async(goal, feedback_callback=on_feedback)
+            def on_accept(accepted):
+                with self._lock:
+                    self._active_goals.append(accepted)
+            def on_terminal(completed):
+                with self._lock:
+                    if completed in self._active_goals:
+                        self._active_goals.remove(completed)
+            tracked = True
+            tracking = self._work.action(future, client.destroy, on_accept, on_terminal,
+                              lambda: self._stop.is_set() or timed_out.is_set())
+            handle = tracking.get('handle') if tracking['ready'].wait(timeout) and not self._stop.is_set() else None
             if handle is None:
+                timed_out.set()
                 self.get_logger().error(f'Action {name} did not accept a goal within {timeout:.3f}s')
                 if self._stop.is_set():
                     report(phase='cancelled', error=details.error('Cancelled because the tree stopped.', 'stopped'))
@@ -438,8 +463,10 @@ class BehaviorTreeRunner(Node):
                 self.get_logger().error(f'Action {name} rejected the goal')
                 report(phase='failed', error=details.error(f'{name} rejected the goal.', 'ros'))
                 return 'failure'
-            with self._lock: self._active_goals.append(handle)
-            response = self._wait_future(handle.get_result_async(), timeout)
+            result_future = tracking.get('result')
+            if result_future is None:
+                raise RuntimeError(f'Cannot confirm the result of {name}')
+            response = self._wait_future(result_future, timeout)
             if response is None:
                 handle.cancel_goal_async()
                 if self._stop.is_set():
@@ -463,10 +490,14 @@ class BehaviorTreeRunner(Node):
             report(phase='failed', error=details.error(str(exc), 'client'))
             return 'failure'
         finally:
-            with self._lock:
-                if handle in self._active_goals:
-                    self._active_goals.remove(handle)
-            if client is not None:
+            timed_out.set()
+            late_handle = tracking.get('handle')
+            result_future = tracking.get('result')
+            if late_handle is not None and result_future is not None and not result_future.done():
+                late_handle.cancel_goal_async()
+            # The tracker retains the client and accepted goal until terminal ROS
+            # status, even if this tree node has timed out or stopped.
+            if client is not None and not tracked:
                 client.destroy()
 
     def _service(self, node: dict[str, Any], path: list[str]) -> str:
@@ -475,6 +506,7 @@ class BehaviorTreeRunner(Node):
         report = self._execution_reporter(node, path, 'service', name, data.get('serviceType', ''))
         report(phase='running', begin=True)
         client: Any = None
+        tracked = False
         try:
             service_type = get_service(data.get('serviceType', ''))
             client = self.create_client(service_type, name, callback_group=self._group)
@@ -485,7 +517,10 @@ class BehaviorTreeRunner(Node):
             request = service_type.Request()
             payload = apply_inputs(data.get('request') or {}, data.get('inputBindings') or [], self._blackboard)
             set_message_fields(request, normalize_message_fields(request, payload))
-            response = self._wait_future(client.call_async(request), timeout)
+            future = client.call_async(request)
+            tracked = True
+            self._work.service(future, lambda: self.destroy_client(client))
+            response = self._wait_future(future, timeout)
             if response is None:
                 if self._stop.is_set():
                     report(phase='cancelled', error=details.error('Cancelled because the tree stopped.', 'stopped'))
@@ -500,7 +535,7 @@ class BehaviorTreeRunner(Node):
             report(phase='failed', error=details.error(str(exc), 'client'))
             return 'failure'
         finally:
-            if client is not None:
+            if client is not None and not tracked:
                 self.destroy_client(client)
 
     def _topic(self, data: dict[str, Any]) -> str:
@@ -581,6 +616,7 @@ class BehaviorTreeRunner(Node):
         with self._lock:
             payload: dict[str, Any] = {
                 'protocolVersion': PROTOCOL_VERSION, 'state': self._state,
+                'activeWork': self._work.count, 'runnerId': self._runner_id,
                 'sessionId': self._session_id, 'treeName': (self._tree or {}).get('name', ''),
                 'startedAt': self._started_at, 'activeNodeId': self._active_node_id,
                 'activeNodeLabel': self._active_node_label, 'blackboard': self._blackboard,

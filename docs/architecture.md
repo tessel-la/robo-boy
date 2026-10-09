@@ -15,7 +15,8 @@ Browser or Tauri webview
         |
         v
 ROS stack
-  rosapi + rosbridge + web_video_server
+  robot control gateway -> private rosbridge + rosapi
+  web_video_server
   TF relay, inspector, recorder, behavior-tree runner
         |
         | ROS 2 DDS on the host network
@@ -23,7 +24,7 @@ ROS stack
 Robot or simulation nodes
 ```
 
-Robo-Boy has no application server or database. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
+Robo-Boy has no database. A robot-host WebSocket gateway arbitrates shared control before forwarding to private rosbridge. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
 
 ## Frontend Composition
 
@@ -54,6 +55,12 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 ## ROS Boundary
 
 `useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect and Domain ID, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
+
+The public WebSocket endpoint is `infra/ros/control_gateway.py`; raw rosbridge binds only to loopback.
+`useRos` installs a connection-scoped `ControlSession`, and the shared top-bar `RobotControl` exposes
+acquisition, release, transfer, and persistent-run management. The gateway owns the robot-wide lease
+and outstanding-work reservation. See [Shared robot control](robot-control.md) for the protocol,
+timeouts, fail-closed recovery, and panel contract.
 
 The connection object is passed to feature components. Code that creates a `ROSLIB.Topic`, `Service`, or action request must:
 
@@ -174,6 +181,7 @@ State is intentionally local to the browser:
 
 | State                        | Owner                     | Persistence                                                      |
 | ---------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| Robot control lease          | Robot-host control gateway | Memory; durable journal fences unconfirmed work after restart |
 | Active ROS connection        | `useRos`                  | Memory only                                                      |
 | Persistent BT runtime        | ROS behavior-tree runner  | Memory until completion/restart                                  |
 | Current view and open panels | `MainControlView`         | Memory only                                                      |

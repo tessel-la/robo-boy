@@ -1,0 +1,308 @@
+.robot-control {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: 0.75rem;
+}
+.robot-control summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: var(--navbar-text, #fff);
+  cursor: pointer;
+  list-style: none;
+  box-sizing: border-box;
+}
+.robot-control summary::-webkit-details-marker {
+  display: none;
+}
+.robot-control summary:hover,
+.robot-control[open] summary {
+  background: rgba(255, 255, 255, 0.18);
+}
+.robot-control summary:focus-visible {
+  outline: 2px solid var(--navbar-text, #fff);
+  outline-offset: -2px;
+}
+.robot-control summary > svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+}
+.robot-control-label {
+  max-width: 125px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+}
+.robot-control.has-control summary > svg:first-child {
+  color: var(--success-color);
+}
+.robot-control.is-blocked summary > svg:first-child {
+  color: var(--warning-color, #ffc107);
+}
+.robot-control summary > .robot-control-chevron {
+  width: 12px;
+  height: 12px;
+  flex-basis: 12px;
+  opacity: 0.62;
+}
+.robot-control[open] .robot-control-chevron {
+  transform: rotate(180deg);
+}
+.robot-control-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 1200;
+  width: min(330px, calc(100vw - 16px));
+  max-height: calc(var(--safe-height, 100dvh) - 58px - var(--safe-area-top, 0px));
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--background-secondary) 94%, transparent);
+  color: var(--text-color);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+  display: grid;
+  gap: 10px;
+  box-sizing: border-box;
+  white-space: normal;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.robot-control-popover p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.robot-control-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.robot-control-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-color-secondary);
+  box-shadow: none;
+  cursor: pointer;
+}
+.robot-control-close:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+}
+.robot-control-close svg {
+  width: 17px;
+  height: 17px;
+}
+.robot-control-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 750;
+}
+.robot-control-status > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 2px;
+  color: var(--text-color-secondary);
+}
+.has-control .robot-control-status > svg {
+  color: var(--success-color);
+}
+.robot-control-error {
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 10%, transparent);
+}
+.robot-control-section {
+  display: grid;
+  gap: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  margin: 0;
+}
+.robot-control-section label {
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.robot-control-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+.robot-control-name-row .robot-control-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.robot-control-name-status {
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+}
+.robot-control-popover input,
+.robot-control-popover select {
+  min-width: 0;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  color: var(--text-color);
+  background: var(--card-bg);
+  font: inherit;
+  box-sizing: border-box;
+}
+.robot-control-action {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font: inherit;
+  font-weight: 750;
+  box-shadow: none;
+  cursor: pointer;
+}
+.robot-control-action:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+}
+.robot-control-action.is-primary {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
+  color: var(--text-color);
+}
+.robot-control-action.is-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-color) 25%, var(--card-bg));
+}
+.robot-control-action.is-release {
+  border-color: color-mix(in srgb, var(--error-color) 40%, var(--border-color));
+  color: var(--error-color);
+}
+.robot-control-action.is-release:hover:not(:disabled) {
+  border-color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 10%, var(--card-bg));
+}
+.robot-control-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.robot-control-action.is-saved:disabled {
+  color: var(--success-color);
+  border-color: color-mix(in srgb, var(--success-color) 40%, var(--border-color));
+  opacity: 1;
+  cursor: default;
+}
+.robot-control-popover :is(button, input, select):focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.robot-control-popover small {
+  color: var(--text-color-secondary);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+.robot-control-footer {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.robot-control-request-count {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 14px;
+  padding: 1px 3px;
+  border-radius: 999px;
+  background: var(--primary-color);
+  color: #111;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.robot-control-requests {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-control-request,
+.robot-control-request-message {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  overflow-wrap: anywhere;
+}
+
+.robot-control-request-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .robot-control summary {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  .robot-control-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+  }
+  .robot-control summary > .robot-control-chevron {
+    display: none;
+  }
+}
+@media (max-width: 768px) {
+  .robot-control-popover {
+    position: fixed;
+    top: calc(46px + var(--safe-area-top, 0px));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    width: auto;
+    max-height: calc(var(--safe-height, 100dvh) - 56px);
+  }
+  .robot-control-popover input,
+  .robot-control-popover select,
+  .robot-control-action {
+    min-height: 44px;
+  }
+
+  .robot-control-popover input,
+  .robot-control-popover select {
+    /* Keep iOS from zooming the viewport when a field receives focus. */
+    font-size: 16px;
+  }
+  .robot-control-close {
+    width: 36px;
+    height: 36px;
+  }
+}

@@ -35,3 +35,13 @@ the one selected topic and message type, and the broker grants that exact subscr
 Robo-Boy installs its public theme tokens as CSS custom properties in the sandbox and updates them when the user
 changes theme. Use variables such as `--background-color`, `--card-bg`, `--text-color`, `--border-color`,
 `--primary-color`, and `--font-family-ui`; `context.theme` is available when code also needs the current snapshot.
+
+## Shared robot control
+
+ROS operations use the host connection’s robot-wide control lease. Observers can subscribe and
+inspect, but topic publishes and robot service calls require the session to request
+control in Robo-Boy’s top bar. Do not acquire automatically or retry/queue rejected commands.
+Use absolute canonical names. The SDK currently exposes topic and service operations; tracked
+long-running robot work needs a core ROS action integration.
+See [the concurrency contract](../docs/robot-control.md#panel-and-integration-contract) for
+handover, disconnects, and robot-side watchdog requirements.

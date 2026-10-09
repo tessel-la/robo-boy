@@ -58,6 +58,8 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `HTTPS_PORT`                    | `443`                    | Caddy HTTPS and HTTP/3 listener                            |
 | `BACKEND_HOST`                  | `host.docker.internal`   | Caddy upstream host for ROS services                       |
 | `ROSBRIDGE_PORT`                | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
+| `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Gateway session ownership; `false` permits shared control |
+| `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Idle ownership timeout in seconds; `0` disables idle expiry |
 | `ROSBRIDGE_USE_EVENTS_EXECUTOR` | `true`                   | rosbridge on rclpy's events executor (less CPU)            |
 | `ROSBRIDGE_USE_COMPRESSION`     | `true`                   | permessage-deflate for clients that offer it               |
 | `ROBOBOY_TF_RELAY_HZ`           | `60`                     | `/tf` coalesced into `/roboboy/tf`; `0` disables it        |
@@ -78,6 +80,10 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VITE_RECORDINGS_PORT`          | `9091`                   | Direct-connect recordings URL (needs the TCP port)         |
 | `VITE_OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama URL                          |
 | `VITE_WEB_BACKEND_MODE`         | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
+
+Configure ownership on the ROS host, rather than in individual clients. See
+[Shared robot control](robot-control.md#configure-control-at-setup) for setup examples and the
+independent robot-side switch. Recreate `ros-stack` after changing these settings.
 
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
