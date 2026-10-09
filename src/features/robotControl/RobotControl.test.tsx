@@ -75,7 +75,7 @@ describe('RobotControl', () => {
     view.unmount();
   });
 
-  it('shows robot-side policy and waits for approval without allowing local bypass', () => {
+  it('blocks requests while the robot switch is closed and enables normal acquisition when opened', () => {
     const { ros, send, status } = fakeControlRos();
     const session = new ControlSession(ros);
     const view = render(<RobotControl ros={ros} />);
@@ -83,17 +83,18 @@ describe('RobotControl', () => {
       status({ external: { enabled: true, ready: true, allowControl: false, reason: 'Disabled on the robot.' } })
     );
     expect(screen.getByText('Disabled on the robot.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
-    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'acquire' }));
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Enable control' })).not.toBeInTheDocument();
+    const sentBeforeOpening = send.mock.calls.length;
     act(() =>
       status({
-        external: { enabled: true, ready: true, allowControl: false, reason: 'Disabled on the robot.' },
-        request: { id: 'robot-request', state: 'pending', message: 'Waiting for robot-side approval.' },
+        external: { enabled: true, ready: true, allowControl: true, reason: '' },
       })
     );
-    expect(screen.getByRole('button', { name: 'Request sent' })).toBeDisabled();
-    expect(screen.getByText('Waiting for robot-side approval.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Enable control' })).not.toBeInTheDocument();
+    expect(send.mock.calls).toHaveLength(sentBeforeOpening);
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'acquire' }));
     act(() =>
       status({ external: { enabled: true, ready: false, allowControl: false, reason: 'Policy disconnected.' } })
     );

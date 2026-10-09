@@ -37,10 +37,10 @@ prevent naming a connected session. A delayed native lookup never overwrites a m
 Names identify a display label only. They do not authenticate the person, distinguish two
 sessions with the same name, or grant control automatically.
 
-## Optional robot-side approval
+## Optional robot-side control switch
 
-Set `ROBOBOY_EXTERNAL_CONTROL_LOCK=true` in the ROS stack environment and rebuild it to
-require approval outside Robo-Boy:
+Set `ROBOBOY_EXTERNAL_CONTROL_LOCK=true` in the ROS stack environment and rebuild it
+when a native robot operator needs a global switch for Robo-Boy control:
 
 ```dotenv
 ROBOBOY_EXTERNAL_CONTROL_LOCK=true
@@ -50,83 +50,63 @@ ROBOBOY_EXTERNAL_CONTROL_LOCK=true
 docker compose up -d --build ros-stack
 ```
 
-The default is `false`, preserving the existing session ownership workflow. When enabled,
-the ROS stack also starts `infra/ros/external_control_lock.py`. This node runs on the robot
-without a web or desktop app, under `/roboboy/control/external/controller`. Its boolean ROS
-parameter **`allow_control` defaults to `false`** on every process start. The environment
-flag enables the extra approval requirement; the ROS parameter opens or closes access while
-it runs. Neither changes the gateway's normal single-owner rule.
+The environment flag defaults to `false`, preserving the normal session ownership workflow.
+When enabled, the stack starts `infra/ros/external_control_lock.py` independently of the
+frontend, under `/roboboy/control/external/controller`. Its boolean ROS parameter
+**`allow_control` defaults to `false`** on every process start. The environment flag opts
+into this policy; the ROS parameter enables or disables control while it runs.
 
-Use a native ROS shell in the same domain to operate the policy. For the container:
+Use a native ROS shell in the robot's domain. For the container:
 
 ```bash
 docker compose exec ros-stack bash
 source /opt/ros/${ROS_DISTRO}/setup.bash
-```
-
-Enable access, inspect requests, then approve or deny an exact request ID:
-
-```bash
 ros2 param set /roboboy/control/external/controller allow_control true
-ros2 topic echo --once /roboboy/control/external/requests
-ros2 topic pub --once /roboboy/control/external/command std_msgs/msg/String \
-  '{data: "{\"version\":1,\"requestId\":\"REQUEST_ID\",\"approve\":true}"}'
 ```
 
-Replace `REQUEST_ID` with an ID from the snapshot. Set `approve` to `false` to deny it.
-Opening access does not grant any pending request. Requests can arrive while access is closed,
-so an operator can inspect them before enabling it. Each request expires after 60 s; repeated
-clicks reuse it. Acquiring control, directly transferring it, and adopting a persistent tree
-each require a new robot-side approval. A transfer requested by an observer also needs the
-current owner's consent. Either approval can arrive first. Approval waits for the same
-tracked-work completion and topic barrier as a normal handover; it never interrupts work.
+With `allow_control=true`, Robo-Boy uses its normal **Request control**, **Release control**,
+owner **Grant** / **Deny**, **Transfer control**, and **Manage running tree** workflow.
+There is no additional robot-side approval of individual requests. Enabling access neither
+assigns an owner nor retries blocked requests. One session still owns the entire endpoint,
+and transfers still wait for running work and topic queues. Other sessions remain read-only.
 
-Close access at any time:
+Disable access with:
 
 ```bash
 ros2 param set /roboboy/control/external/controller allow_control false
 ```
 
-This immediately fences the lease, cancels pending requests and transfers, requests action
-cancellation, and stops persistent trees. The gateway retains its reservation until actual
-completion is confirmed. This policy overrides a persistent tree's usual promise to survive a
-browser disconnect. Reopening access requires a fresh request; it never revives the old token.
-The policy publishes a heartbeat every 1 s. Missing heartbeats for 10 s, a lost private ROS
-connection, or a policy process restart has the same revocation behavior. A restart also
-returns the supplied policy node's `allow_control` parameter to `false`. Recovery fences for
-uncertain robot work remain in force; the switch does not force-unlock them.
+The node publishes the parameter value every 1 s. When the gateway observes `false`, it
+fences the lease, cancels pending owner-consent requests and transfers, requests action
+cancellation, and stops persistent trees. It retains its reservation until actual completion
+is confirmed; services cannot be cancelled generically. Reopening access requires a fresh
+control request and never restores an old token. This policy overrides a persistent tree's
+usual promise to survive a browser disconnect.
+
+Missing policy heartbeats for 10 s, a lost private ROS connection, or a policy process restart
+has the same revocation behavior. A restart returns `allow_control` to `false`. Recovery
+fences for uncertain robot work remain in force; the switch does not force-unlock them.
 
 ### ROS integration contract
 
-All messages use `std_msgs/msg/String` containing JSON. The reference node exposes
-`/roboboy/control/external/command` for native operator decisions. A custom robot integration
-can implement the policy protocol directly instead of running that node. Run only one policy
-publisher, and keep it in the robot's trusted ROS domain.
+The robot policy publishes **`/roboboy/control/external/state`** as `std_msgs/msg/String`
+containing JSON with `version: 1`, a process-specific `controllerId`, a strictly increasing
+integer `sequence`, boolean `allowControl`, and an optional `reason` of at most 256 characters.
+Use a new controller ID at startup. Duplicate/out-of-order states do not renew freshness,
+and retired controller IDs cannot restore access. Native node logs report access changes.
 
-| Topic suffix under `/roboboy/control/external/` | Producer | Version-1 payload |
-| --- | --- | --- |
-| `state` | Robot policy | `version`, process-specific `controllerId`, strictly increasing integer `sequence`, boolean `allowControl`, optional `reason` of at most 256 characters |
-| `requests` | Gateway | `version`, `owner`, `ownerLabel`, `requests` with `requestId`, `clientId`, `label`, `intent` (`acquire`, `transfer`, `adopt`) and `ownerApproved` |
-| `decision` | Robot policy | `version`, current `controllerId`, exact `requestId`, boolean `approve` |
-| `command` | Native operator, consumed by reference node | `version`, exact `requestId`, boolean `approve` |
+A custom robot integration can publish this state instead of running the reference node.
+Run one policy publisher in the robot's trusted ROS domain. The former per-request
+`requests`, `decision`, and `command` topics are no longer used; operators only set the
+parameter. The public gateway reads policy state through its private rosbridge connection.
 
-Use a new `controllerId` at process startup and increase `sequence` on every heartbeat.
-Duplicate/out-of-order state messages do not renew freshness. Decisions from retired policy
-processes, expired/cancelled requests, or disconnected clients cannot grant control. After the
-first contender wins, the gateway cancels competing requests. ROS snapshots never contain
-lease tokens. The reference node retries decisions until the request disappears, tolerating
-initial ROS discovery and delivery ordering across the state and decision topics.
-It drops cached requests and decisions after 10 s without gateway snapshots, so stale
-approvals cannot be retried after recovery. Native node logs report access changes,
-requests, decisions, and confirmed ownership changes.
-
-The public WebSocket gateway permits reads of this namespace but rejects writes,
+The public WebSocket gateway permits reads of the policy namespace but rejects writes,
 advertisements, services, actions, and rosapi parameter writes in it, including from the owner.
-The UI shows the policy reason and request state and provides no policy toggle or bypass.
-This is an additional robot-side admission policy, not ROS authentication or an emergency
-stop. Native DDS peers remain trusted, and robot-native watchdogs and stopping tools are still
-required. For a standalone gateway, use `--external-lock true` and start the policy node from
-the robot's own ROS launch/supervision system; absent policy heartbeats keep control closed.
+Robo-Boy shows whether the switch is enabled, disabled, or unavailable. It provides no toggle
+or bypass. Native DDS peers remain trusted; this policy is not authentication or an emergency
+stop, and robot-native watchdogs and stopping tools remain required. For a standalone gateway,
+use `--external-lock true` and start the policy node through the robot's ROS launch/supervision
+system. Missing policy heartbeats keep control closed.
 
 ### Requesting control from another session
 
@@ -236,5 +216,5 @@ It checks two competing clients, observer rejection, topic forwarding and drain,
 cancellation, service completion, and a persistent run surviving disconnect, being adopted, and stopped.
 
 Add `-e CONTROL_SMOKE_EXTERNAL_LOCK=true` to the same isolated smoke command to exercise the
-reference ROS policy node, its default-closed parameter, explicit requests/decisions, adoption,
+reference ROS policy node, its default-closed parameter, ordinary session acquisition, adoption,
 action cancellation on disable, and policy heartbeat loss. No test targets real hardware.

@@ -72,7 +72,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   const requestPending = status?.request?.state === 'pending' || status?.request?.state === 'accepted';
   const canRequest =
     status?.ready &&
-    (!status.external?.enabled || status.external.ready) &&
+    (!status.external?.enabled || status.external.allowControl) &&
     (status.state === 'available' || (status.state === 'owned' && status.owner !== status.selfId));
   const blocked = Boolean(status?.error || status?.state === 'blocked');
   const StatusIcon = blocked || !status ? FiAlertCircle : requests.length ? FiBell : owned ? FiUnlock : FiLock;
@@ -135,9 +135,11 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
         {status?.reason && status.reason !== description && <p>{status.reason}</p>}
         {status?.external?.enabled && (
           <p className="robot-control-request-message" role="status" aria-live="polite">
-            {status.external.reason && status.external.reason !== description
-              ? status.external.reason
-              : 'The robot-side controller must approve each control request.'}
+            {!status.external.ready
+              ? 'Waiting for the robot-side control switch.'
+              : status.external.allowControl
+                ? 'Control is enabled on the robot.'
+                : 'The robot-side switch must be enabled before requesting control.'}
           </p>
         )}
         {requests.length > 0 && (
@@ -152,12 +154,12 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
                     className="robot-control-action is-primary"
                     type="button"
                     disabled={
-                      !status?.ready || status.state !== 'owned' || Boolean(status.pending) || request.ownerApproved
+                      !status?.ready || status.state !== 'owned' || Boolean(status.pending)
                     }
                     onClick={() => session?.command('approve', { requestId: request.id })}
                     aria-label={`Grant control to ${request.label}`}
                   >
-                    {request.ownerApproved ? 'Consent sent' : 'Grant'}
+                    Grant
                   </button>
                   <button
                     className="robot-control-action"
@@ -168,9 +170,6 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
                     Deny
                   </button>
                 </div>
-                {request.ownerApproved && status?.external?.enabled && !request.externalApproved && (
-                  <small>Waiting for robot-side approval.</small>
-                )}
               </div>
             ))}
             {Boolean(status?.pending) && <small>Finish or stop running work before granting control.</small>}
@@ -189,7 +188,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           <button
             className="robot-control-action is-primary"
             type="button"
-            disabled={requestPending || (status.external?.enabled && !status.external.ready)}
+            disabled={requestPending || (status.external?.enabled && !status.external.allowControl)}
             onClick={() => session?.command('adopt')}
           >
             {requestPending ? 'Request sent' : 'Manage running tree'}

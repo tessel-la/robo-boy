@@ -35,7 +35,7 @@ Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS contain
 Desktop control sessions use the local account name when available. You can replace it in
 **Session name**, and the app remembers that confirmed label. Web/mobile sessions keep a
 generated label until you choose one. See [Shared robot control](robot-control.md#session-names)
-for identity limits and optional robot-side ROS approval.
+for identity limits and the optional robot-side ROS control switch.
 
 The existing `ros-stack` Compose service satisfies the local contract on its own. Neither Caddy nor the web
 frontend is needed, so no certificate has to be created:

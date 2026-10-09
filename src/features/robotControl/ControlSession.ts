@@ -17,7 +17,7 @@ export interface ControlStatus {
   reason: string;
   error: string;
   clients: { id: string; label: string }[];
-  requests?: { id: string; clientId: string; label: string; ownerApproved?: boolean; externalApproved?: boolean }[];
+  requests?: { id: string; clientId: string; label: string }[];
   external?: { enabled: boolean; ready: boolean; allowControl: boolean; reason: string };
   request?: {
     id: string;
@@ -114,9 +114,7 @@ export class ControlSession {
               request =>
                 typeof request?.id === 'string' &&
                 typeof request?.clientId === 'string' &&
-                typeof request?.label === 'string' &&
-                (request.ownerApproved === undefined || typeof request.ownerApproved === 'boolean') &&
-                (request.externalApproved === undefined || typeof request.externalApproved === 'boolean')
+                typeof request?.label === 'string'
             ))) ||
         (status.request != null &&
           (typeof status.request.id !== 'string' ||

@@ -112,19 +112,9 @@ async def smoke():
                 finally:
                     node.destroy_client(client)
 
-            async def approve(client_id):
-                await until(lambda: bool(authority.snapshot(client_id)['request']) and authority.snapshot(client_id)['request']['state'] == 'pending')
-                request_id = authority.snapshot(client_id)['request']['id']
-                deadline = time.monotonic() + 10
-                while authority.owner != client_id:
-                    assert time.monotonic() < deadline, 'Robot-side approval was not applied'
-                    policy_commands.publish(String(data=json.dumps(dict(version=1, requestId=request_id, approve=True))))
-                    await asyncio.sleep(.1)
-
             if external:
                 policy_process = subprocess.Popen(['python3', str(directory / 'external_control_lock.py')], stdout=log, stderr=log)
                 processes.append(policy_process)
-                policy_commands = node.create_publisher(String, EXTERNAL_PREFIX + 'command', 10)
                 await until(lambda: authority.external_status()['ready'])
                 assert not authority.external_status()['allowControl'], 'External policy must default to disabled'
 
@@ -157,11 +147,12 @@ async def smoke():
             b, bid = await connect()
             await asyncio.gather(*(send(socket, op='roboboy_control', action='acquire') for socket in (a, b)))
             if external:
-                await until(lambda: len(authority.control_requests) == 2)
+                await asyncio.sleep(.2)
+                assert not authority.control_requests, 'Closed switch must not queue acquisitions'
                 assert authority.owner is None, 'Control bypassed the robot-side gate'
                 await switch(True)
-                assert authority.owner is None, 'Enabling access must not approve a pending request'
-                await approve(aid)
+                assert authority.owner is None, 'Enabling access must not automatically acquire control'
+                await asyncio.gather(*(send(socket, op='roboboy_control', action='acquire') for socket in (a, b)))
             await until(lambda: authority.owner is not None)
             owner, observer = (a, b) if authority.owner == aid else (b, a)
             lease = await status(owner, lambda value: bool(value['token']))
@@ -182,8 +173,6 @@ async def smoke():
             assert cancelled, 'Browser-owned action was not cancelled'
 
             await send(observer, op='roboboy_control', action='acquire')
-            if external:
-                await approve(bid if observer == b else aid)
             lease = await status(observer, lambda value: bool(value['token']))
             await send(observer, op='call_service', id='smoke-service', service='/control_smoke/reset',
                        type='std_srvs/srv/Trigger', args={}, controlToken=lease['token'])
@@ -201,8 +190,6 @@ async def smoke():
             assert len(cancelled) == 1, 'Persistent action was unexpectedly cancelled'
             c, cid = await connect()
             await send(c, op='roboboy_control', action='adopt')
-            if external:
-                await approve(cid)
             lease = await status(c, lambda value: bool(value['token']))
             assert lease['managing'] and lease['owner'] == cid
             await send(c, op='publish', topic='/control_smoke/command', msg={'data': 2}, controlToken=lease['token'])
@@ -222,12 +209,12 @@ async def smoke():
                 assert len(cancelled) > before, 'Global switch did not cancel the action'
                 await switch(True)
                 await send(c, op='roboboy_control', action='acquire')
-                await approve(cid)
+                await until(lambda: authority.owner == cid)
                 policy_process.terminate()
                 await until(lambda: authority.token is None)
                 assert not authority.external_status()['ready'], 'Dead policy retained control'
                 assert not authority.fault, authority.fault
-                print('External ROS policy smoke passed: default-off switch, requests, approvals, persistent adoption, action cancellation and heartbeat loss.')
+                print('External ROS policy smoke passed: default-off switch, normal acquisition, persistent adoption, action cancellation and heartbeat loss.')
             print('Real ROS smoke passed: competing clients, observer rejection, topic barrier, action cancellation, service completion, persistent adoption and stop.')
         except Exception:
             log.flush()
