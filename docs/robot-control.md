@@ -96,54 +96,6 @@ connection, or a policy process restart has the same revocation behavior. A rest
 returns the supplied policy node's `allow_control` parameter to `false`. Recovery fences for
 uncertain robot work remain in force; the switch does not force-unlock them.
 
-### Local operator page
-
-For a small robot-side control page, also set `ROBOBOY_EXTERNAL_CONTROL_UI_PORT=8095`
-in the ROS stack environment and rebuild/recreate it. This setting is empty by default;
-the page runs only when the external lock is enabled. It binds **127.0.0.1** and uses
-the same native ROS node, parameter, and decisions as the shell commands above. Run
-only one reference policy node.
-
-```dotenv
-ROBOBOY_EXTERNAL_CONTROL_LOCK=true
-ROBOBOY_EXTERNAL_CONTROL_UI_PORT=8095
-```
-
-```bash
-docker compose up -d --build ros-stack
-docker compose logs ros-stack | rg 'Robot operator UI:' | tail -1
-```
-
-Use your deployment's existing Compose overrides when rebuilding. Open the printed
-operator link on the robot host. It includes a random access key generated at policy
-startup. API reads and writes require that key; it is retained in the browser tab's
-session storage and removed from the displayed URL. A restart rotates the key and
-closes access. Reopen the new link after a restart. Robot/container logs are trusted
-operator information because they include this link.
-
-The page shows **Enable access**, **Disable access**, the gateway's reported owner,
-and pending **Approve** / **Deny** controls. Enabling access leaves all requests pending.
-An approval confirms the robot's decision, not completion of a handover: the gateway
-still waits for owner consent and tracked work. Request disappearance may mean acceptance,
-cancellation, denial, or expiry; the reported owner confirms who acquired control.
-After 10 s without gateway updates, the page hides stale requests and the policy discards
-cached decisions. The latest 200 events appear in the page and can be downloaded with
-**Save log**. The node also writes events to container logs; configure Docker log retention
-for longer records.
-
-For a remote operator, use an authenticated SSH tunnel, keeping the same local port:
-
-```bash
-ssh -N -L 8095:127.0.0.1:8095 USER@ROBOT_HOST
-```
-
-Then open the operator link at `http://127.0.0.1:8095` on that machine. Keep this port
-out of the public proxy and firewall. Ordinary remote Robo-Boy clients need only the
-normal HTTP/HTTPS proxy (or the public control gateway for direct desktop connections);
-the policy messages travel within the robot's ROS domain, so remote clients need no
-DDS or private rosbridge port. The page rejects cross-origin API calls and framing and
-does not share its key with Robo-Boy sessions.
-
 ### ROS integration contract
 
 All messages use `std_msgs/msg/String` containing JSON. The reference node exposes
@@ -164,6 +116,9 @@ processes, expired/cancelled requests, or disconnected clients cannot grant cont
 first contender wins, the gateway cancels competing requests. ROS snapshots never contain
 lease tokens. The reference node retries decisions until the request disappears, tolerating
 initial ROS discovery and delivery ordering across the state and decision topics.
+It drops cached requests and decisions after 10 s without gateway snapshots, so stale
+approvals cannot be retried after recovery. Native node logs report access changes,
+requests, decisions, and confirmed ownership changes.
 
 The public WebSocket gateway permits reads of this namespace but rejects writes,
 advertisements, services, actions, and rosapi parameter writes in it, including from the owner.

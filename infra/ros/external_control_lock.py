@@ -5,16 +5,11 @@ Set the allow_control ROS parameter, then publish approval commands containing a
 requestId and approve boolean. See docs/robot-control.md for the wire contract.
 """
 import json
-import argparse
-from collections import deque
-from datetime import datetime, timezone
 import time
 import uuid
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
-from rclpy.utilities import remove_ros_args
 from std_msgs.msg import String
 
 from external_control_protocol import EXTERNAL_PREFIX, EXTERNAL_STATE, EXTERNAL_DECISION, EXTERNAL_REQUESTS
@@ -29,9 +24,7 @@ class ExternalControlLock(Node):
         self.requests = {}
         self.decisions = {}
         self.owner = None
-        self.owner_label = None
         self.requests_seen = None
-        self.events = deque(maxlen=200)
         self.last_allowed = None
         self.state_publisher = self.create_publisher(String, EXTERNAL_STATE, 1)
         self.decision_publisher = self.create_publisher(String, EXTERNAL_DECISION, 10)
@@ -40,35 +33,16 @@ class ExternalControlLock(Node):
         self.create_timer(1.0, self.heartbeat)
         self.heartbeat()
 
-    def record(self, message):
-        self.events.append(dict(time=datetime.now(timezone.utc).isoformat(timespec='seconds'), message=message))
-        self.get_logger().info(message)
-
-    def snapshot(self):
-        fresh = self.requests_seen is not None and time.monotonic() - self.requests_seen < 10
-        return dict(allowControl=self.get_parameter('allow_control').value, gatewayReady=fresh,
-                    owner=self.owner_label if fresh else None,
-                    requests=[dict(item, decision=self.decisions.get(key)) for key, item in self.requests.items()] if fresh else [],
-                    events=list(self.events))
-
-    def set_access(self, allowed):
-        if type(allowed) is not bool:
-            raise ValueError('Access must be enabled or disabled.')
-        result = self.set_parameters([Parameter('allow_control', value=allowed)])[0]
-        if not result.successful:
-            raise ValueError(result.reason)
-        self.heartbeat()
-
     def decide(self, request_id, approved):
         if (not isinstance(request_id, str) or request_id not in self.requests
-                or not self.snapshot()['gatewayReady']):
-            raise ValueError('This request is no longer pending. Refresh and select a current request.')
+                or self.requests_seen is None or time.monotonic() - self.requests_seen >= 10):
+            raise ValueError('This request is no longer pending. Read the requests topic and use a current request ID.')
         if type(approved) is not bool:
-            raise ValueError('Choose approve or deny.')
+            raise ValueError('Set approve to true or false.')
         if approved and not self.get_parameter('allow_control').value:
-            raise ValueError('Control is disabled. Enable access before approving.')
+            raise ValueError('Control is disabled. Set allow_control to true before approving.')
         self.decisions[request_id] = approved
-        self.record(f"{'Approved' if approved else 'Denied'} request from {self.requests[request_id]['label']} ({request_id}).")
+        self.get_logger().info(f"{'Approved' if approved else 'Denied'} request from {self.requests[request_id]['label']} ({request_id}).")
         self.heartbeat()
 
     def receive_requests(self, message):
@@ -83,14 +57,14 @@ class ExternalControlLock(Node):
             return
         for request_id, request in requests.items():
             if request_id not in self.requests:
-                self.record(f"Control request {request_id}: {request['label']} ({request.get('intent', 'control')})")
+                self.get_logger().info(f"Control request {request_id}: {request['label']} ({request.get('intent', 'control')})")
         for request_id in self.requests.keys() - requests.keys():
-            self.record(f'Request {request_id} is no longer pending.')
+            self.get_logger().info(f'Request {request_id} is no longer pending.')
         owner = snapshot.get('owner')
         owner_label = snapshot.get('ownerLabel')
         if owner != self.owner:
-            self.record(f"Control owner: {owner_label or 'none'}.")
-        self.owner, self.owner_label = owner, owner_label
+            self.get_logger().info(f"Control owner: {owner_label or 'none'}.")
+        self.owner = owner
         self.requests_seen = time.monotonic()
         self.requests = requests
         self.decisions = {key: value for key, value in self.decisions.items() if key in requests}
@@ -112,13 +86,13 @@ class ExternalControlLock(Node):
         if allowed != self.last_allowed:
             if not allowed:
                 self.decisions.clear()
-            self.record('Access enabled. Each request still needs approval.' if allowed else 'Access disabled.')
+            self.get_logger().info('Access enabled. Each request still needs approval.' if allowed else 'Access disabled.')
             self.last_allowed = allowed
         if self.requests_seen is not None and time.monotonic() - self.requests_seen >= 10:
             self.requests_seen = None
             self.requests.clear()
             self.decisions.clear()
-            self.record('Gateway updates lost. Wait for reconnection before approving.')
+            self.get_logger().info('Gateway updates lost. Wait for reconnection before approving.')
         self.sequence += 1
         self.state_publisher.publish(String(data=json.dumps(dict(
             version=1, controllerId=self.controller_id, sequence=self.sequence, allowControl=allowed,
@@ -132,19 +106,10 @@ class ExternalControlLock(Node):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--ui-port', type=int, help='Serve a local operator page on 127.0.0.1 at this port.')
-    args = parser.parse_args(remove_ros_args()[1:])
-    if args.ui_port is not None and not 1 <= args.ui_port <= 65535:
-        parser.error('--ui-port must be between 1 and 65535')
     rclpy.init()
     node = ExternalControlLock()
     try:
-        if args.ui_port is None:
-            rclpy.spin(node)
-        else:
-            from external_control_ui import run
-            run(node, args.ui_port)
+        rclpy.spin(node)
     finally:
         node.destroy_node()
         rclpy.shutdown()

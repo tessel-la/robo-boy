@@ -7,7 +7,6 @@ mock /control_smoke interfaces, never a real robot. See docs/robot-control.md.
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -25,7 +24,6 @@ from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 from rcl_interfaces.srv import SetParameters
 from std_srvs.srv import Trigger
 import tornado.ioloop
-import tornado.httpclient
 import tornado.websocket
 
 from control_gateway import Authority, application, monitor_runner, STATUS_TOPIC, BT_COMMAND
@@ -117,29 +115,17 @@ async def smoke():
             async def approve(client_id):
                 await until(lambda: bool(authority.snapshot(client_id)['request']) and authority.snapshot(client_id)['request']['state'] == 'pending')
                 request_id = authority.snapshot(client_id)['request']['id']
-                # Wait for the native policy to consume this gateway snapshot.
                 deadline = time.monotonic() + 10
-                while True:
-                    state = await operator('/api/status')
-                    if any(item['requestId'] == request_id for item in state['requests']):
-                        break
-                    assert time.monotonic() < deadline, 'Operator UI did not receive the request'
+                while authority.owner != client_id:
+                    assert time.monotonic() < deadline, 'Robot-side approval was not applied'
+                    policy_commands.publish(String(data=json.dumps(dict(version=1, requestId=request_id, approve=True))))
                     await asyncio.sleep(.1)
-                await operator('/api/decision', dict(requestId=request_id, approve=True))
-                await until(lambda: authority.owner == client_id)
-
-            async def operator(path, command=None):
-                response = await tornado.httpclient.AsyncHTTPClient().fetch(
-                    'http://127.0.0.1:19095' + path, method='POST' if command else 'GET',
-                    headers={'Authorization': 'Bearer ' + operator_key, 'Content-Type': 'application/json'},
-                    body=json.dumps(command) if command else None)
-                return json.loads(response.body)
 
             if external:
-                policy_process = subprocess.Popen(['python3', str(directory / 'external_control_lock.py'), '--ui-port', '19095'], stdout=log, stderr=log)
+                policy_process = subprocess.Popen(['python3', str(directory / 'external_control_lock.py')], stdout=log, stderr=log)
                 processes.append(policy_process)
+                policy_commands = node.create_publisher(String, EXTERNAL_PREFIX + 'command', 10)
                 await until(lambda: authority.external_status()['ready'])
-                operator_key = re.search(r'Robot operator UI: http://127\.0\.0\.1:19095/#key=([\w-]+)', Path(log.name).read_text())[1]
                 assert not authority.external_status()['allowControl'], 'External policy must default to disabled'
 
             async def connect():
@@ -173,9 +159,7 @@ async def smoke():
             if external:
                 await until(lambda: len(authority.control_requests) == 2)
                 assert authority.owner is None, 'Control bypassed the robot-side gate'
-                ui_state = await operator('/api/access', dict(allowControl=True))
-                assert ui_state['allowControl'], 'Operator UI did not enable the native policy'
-                await until(lambda: authority.external_status()['allowControl'])
+                await switch(True)
                 assert authority.owner is None, 'Enabling access must not approve a pending request'
                 await approve(aid)
             await until(lambda: authority.owner is not None)
@@ -243,7 +227,7 @@ async def smoke():
                 await until(lambda: authority.token is None)
                 assert not authority.external_status()['ready'], 'Dead policy retained control'
                 assert not authority.fault, authority.fault
-                print('External ROS policy and operator UI smoke passed: default-off switch, requests, approvals, persistent adoption, native parameter action cancellation and heartbeat loss.')
+                print('External ROS policy smoke passed: default-off switch, requests, approvals, persistent adoption, action cancellation and heartbeat loss.')
             print('Real ROS smoke passed: competing clients, observer rejection, topic barrier, action cancellation, service completion, persistent adoption and stop.')
         except Exception:
             log.flush()

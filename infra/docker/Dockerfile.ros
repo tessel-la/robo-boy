@@ -55,7 +55,6 @@ COPY infra/ros/tf_relay.py /ros_ws/tf_relay.py
 COPY infra/ros/control_gateway.py /ros_ws/control_gateway.py
 COPY infra/ros/external_control_lock.py /ros_ws/external_control_lock.py
 COPY infra/ros/external_control_protocol.py /ros_ws/external_control_protocol.py
-COPY infra/ros/external_control_ui.* /ros_ws/
 COPY infra/ros/robot_work.py /ros_ws/robot_work.py
 COPY infra/ros/rosbridge_launch.xml /ros_ws/rosbridge_launch.xml
 RUN chmod +x /ros_ws/entrypoint.sh
