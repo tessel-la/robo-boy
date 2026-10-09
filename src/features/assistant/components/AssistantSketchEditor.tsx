@@ -122,6 +122,10 @@ const drawSketch = (context: CanvasRenderingContext2D, elements: SketchElement[]
 };
 
 const AssistantSketchEditor: React.FC<AssistantSketchEditorProps> = ({ onAttach, onClose }) => {
+  const editorRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    editorRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const activePointerRef = useRef<number | null>(null);
   const activeElementRef = useRef<number | null>(null);
@@ -321,7 +325,37 @@ const AssistantSketchEditor: React.FC<AssistantSketchEditorProps> = ({ onAttach,
       className="assistant-sketch-overlay"
       onPointerDown={event => event.target === event.currentTarget && onClose()}
     >
-      <section className="assistant-sketch-editor" role="dialog" aria-modal="true" aria-labelledby="assistant-sketch-title">
+      <section
+        ref={editorRef}
+        className="assistant-sketch-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="assistant-sketch-title"
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+          }
+          if (event.key !== 'Tab') return;
+          const focusable = [
+            ...event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), input:not(:disabled), [tabindex="0"]'
+            ),
+          ].filter(element => element.getClientRects().length);
+          const first = focusable[0],
+            last = focusable[focusable.length - 1];
+          if (
+            first &&
+            last &&
+            ((event.shiftKey && document.activeElement === first) ||
+              (!event.shiftKey && document.activeElement === last))
+          ) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          }
+        }}
+      >
         <header className="assistant-sketch-header">
           <h3 id="assistant-sketch-title">Sketch attachment</h3>
           <button type="button" onClick={onClose} aria-label="Close sketch editor" title="Close">

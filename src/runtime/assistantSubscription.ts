@@ -26,7 +26,7 @@ export interface SubscriptionAccount {
 export interface SubscriptionState {
   accounts: SubscriptionAccount[];
   activeAccountId?: string;
-  models: { id: string; label: string }[];
+  models: { id: string; label: string; contextWindowTokens?: number }[];
   error?: string;
 }
 
@@ -47,7 +47,10 @@ export interface SubscriptionChatRequest {
   }[];
   jsonMode?: boolean;
 }
-export interface NativeApiChatRequest extends Omit<SubscriptionChatRequest, 'provider'> { provider: AssistantProviderId; baseUrl: string }
+export interface NativeApiChatRequest extends Omit<SubscriptionChatRequest, 'provider'> {
+  provider: AssistantProviderId;
+  baseUrl: string;
+}
 
 export interface AssistantSubscriptionBridge {
   sendApi?(id: string, request: NativeApiChatRequest): Promise<string>;
@@ -74,5 +77,8 @@ export interface AssistantSubscriptionBridge {
   onThinking?(id: string, listener: (text: string) => void): () => void;
   onToken?(id: string, listener: (text: string) => void): () => void;
   onUsage?(id: string, listener: (usage: { inputTokens: number; outputTokens: number }) => void): () => void;
-  onToolCall?(id: string, listener: (name: string, input: unknown, callId: string) => Promise<HostToolResult>): () => void;
+  onToolCall?(
+    id: string,
+    listener: (name: string, input: unknown, callId: string) => Promise<HostToolResult>
+  ): () => void;
 }

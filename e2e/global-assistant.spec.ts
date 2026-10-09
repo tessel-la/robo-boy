@@ -348,6 +348,80 @@ test('Enter sends, Shift+Enter keeps editing, and parsing status clears after a 
   await expect(page.getByText('Parsing response…')).toHaveCount(0);
 });
 
+test('desktop has four visible resize corners and no whole-chat green focus frame', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await connectWithMockRos(page);
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  await expect(panel).toHaveClass(/is-open/);
+  const corners = panel.locator('.tree-panel-menu-resize-handle');
+  await expect(corners).toHaveCount(4);
+  for (const corner of await corners.all()) await expect(corner).toBeVisible();
+  await panel.locator('#assistant-prompt').click();
+  expect(await panel.evaluate(element => getComputedStyle(element, '::before').boxShadow)).toBe('none');
+  expect(await panel.evaluate(element => getComputedStyle(element, '::before').borderTopWidth)).toBe('0px');
+  expect(await panel.locator('#assistant-prompt').evaluate(element => getComputedStyle(element).outlineStyle)).toBe('none');
+  const before = (await panel.boundingBox())!;
+  const handle = (await panel.getByRole('separator', { name: 'Resize assistant from nw', exact: true }).boundingBox())!;
+  await page.mouse.move(handle.x + 4, handle.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 60, handle.y + 65, { steps: 6 });
+  await page.mouse.up();
+  const after = (await panel.boundingBox())!;
+  expect(after.width).toBeGreaterThan(before.width + 40);
+  expect(after.height).toBeLessThan(before.height - 40);
+});
+
+for (const width of [390, 1280]) test(`sketch attaches a PNG without hiding chat controls at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  await connectWithMockRos(page);
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  await expect(panel).toHaveClass(/is-open/);
+  await panel.getByRole('button', { name: 'Create sketch attachment' }).click();
+  const editor = panel.getByRole('dialog', { name: 'Sketch attachment' });
+  await expect(editor).toBeVisible();
+  const canvas = editor.getByLabel('Assistant sketch canvas');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 3, box.y + box.height / 3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 2 / 3, box.y + box.height * 2 / 3, { steps: 5 });
+  await page.mouse.up();
+  await editor.getByRole('button', { name: 'Attach sketch' }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(panel.locator('.assistant-composer-attachments .attachment.image')).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await panel.getByRole('button', { name: 'Create sketch attachment' }).click();
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Create sketch attachment' })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('restored-sketch.png') });
+});
+
+test('selecting an inactive chat stays in Chats and archives only that selection', async ({ page }) => {
+  await connectWithMockRos(page);
+  await mockOpenAiCompatibleChat(page, { kind: 'explanation', message: 'Chat reply.' });
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  await panel.locator('#assistant-prompt').fill('First chat');
+  await panel.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(panel.getByText('Chat reply.', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'New chat', exact: true }).click();
+  await panel.getByRole('button', { name: 'Chats', exact: true }).click();
+  await panel.getByRole('button', { name: 'First chat Chat', exact: true }).click();
+  await expect(panel.getByRole('region', { name: 'Chats' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'New chat Current', exact: true })).toHaveAttribute('aria-current', 'page');
+  await panel.getByRole('button', { name: 'Archive chat', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'First chat Chat', exact: true })).toHaveCount(0);
+  await panel.getByLabel('Show archived chats').check();
+  await expect(panel.getByRole('button', { name: 'First chat Archived', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Delete chat First chat' }).click();
+  await panel.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(panel.getByRole('button', { name: 'First chat Archived', exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('region', { name: 'Chats' })).toBeVisible();
+});
+
 for (const width of [320, 390, 1280]) test(`inline mode/model/reasoning controls fit at ${width}px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 844 });
   await page.addInitScript(() => localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ provider: 'openai', model: 'gpt-6.1-sol', thinkingEffort: 'high', mode: 'edit' })));

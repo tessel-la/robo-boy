@@ -28,6 +28,59 @@ const compose = (input: Partial<Parameters<typeof composeAssistantSystemPrompt>[
   });
 
 describe('composeAssistantSystemPrompt', () => {
+  it('references open documents without repeatedly dumping large trees into every checkpoint', () => {
+    const prompt = composeNativeSystemPrompt({
+      settings: { systemContext: '', robotContext: '' },
+      autoContext: autoContext({
+        padLibrary: [
+          {
+            id: 'saved-pad',
+            name: 'Saved Pad',
+            isDefault: false,
+            layout: { id: 'saved-pad', description: 'never-dump-me'.repeat(30_000) } as never,
+          },
+        ],
+        behaviorTreeLibrary: [
+          {
+            id: 'saved-tree',
+            name: 'Saved Tree',
+            tree: {
+              id: 'saved-tree',
+              name: 'Saved Tree',
+              nodes: [],
+              edges: [],
+              createdAt: 0,
+              updatedAt: 0,
+              description: 'never-dump-me'.repeat(30_000),
+            },
+          },
+        ],
+        selectedPad: {
+          name: 'Saved Pad',
+          layout: { id: 'saved-pad', description: 'never-dump-me'.repeat(30_000) } as never,
+        },
+        interfaceSchemas: {
+          topics: { '/huge': { fields: [], description: 'never-dump-me'.repeat(30_000) } as never },
+          services: {},
+          actions: {},
+        },
+        openBehaviorTree: {
+          name: 'Large draft',
+          tree: { id: 'large-tree', description: 'never-dump-me'.repeat(30_000) },
+        },
+        selectedBehaviorTreeNodes: [{ id: 'n1', payload: 'never-dump-me'.repeat(30_000) }],
+      }),
+      pinnedChips: [],
+      needs: { behaviorTree: true, pad: false, rosAction: false, workspace: true },
+    });
+    expect(prompt).toContain('large-tree');
+    expect(prompt).toContain('n1');
+    expect(prompt).toContain('saved-pad');
+    expect(prompt).toContain('saved-tree');
+    expect(prompt).not.toContain('never-dump-me');
+    expect(prompt.length).toBeLessThan(25_000);
+    expect(prompt).toContain('configurePanel settings.watch');
+  });
   it('budgets escaped native context without dropping instructions or slicing observation JSON', () => {
     const prompt = composeNativeSystemPrompt({
       settings: { systemContext: '', robotContext: '', mode: 'goal' },

@@ -185,7 +185,29 @@ export async function sendNativeChat(request: SendChatRequest): Promise<string> 
       while (lastGroup > 0 && responseMessages[lastGroup].role !== 'assistant') lastGroup--;
       const latestSize = contextSize(responseMessages.slice(Math.max(0, lastGroup)));
       const historical = compactSessionHistory(initialMessages, Math.max(1, budget - latestSize - 512));
-      return { system, messages: compactNativeMessages(historical, responseMessages, budget) };
+      const latest = responseMessages[responseMessages.length - 1];
+      const hasPlan = responseMessages.some(
+        message =>
+          message.role === 'tool' &&
+          message.content.some(part => part.type === 'tool-result' && part.toolName === 'update_plan')
+      );
+      const latestResults = latest?.role === 'tool' ? latest.content.filter(part => part.type === 'tool-result') : [];
+      const lastPlanIndex = latestResults.map(part => part.toolName).lastIndexOf('update_plan');
+      const updatePlan =
+        tools.update_plan &&
+        hasPlan &&
+        latestResults
+          .slice(lastPlanIndex + 1)
+          .some(part =>
+            ['edit_workspace', 'propose_pad', 'propose_tree', 'save_document', 'patch_pad', 'patch_tree'].includes(
+              part.toolName
+            )
+          );
+      return {
+        system,
+        messages: compactNativeMessages(historical, responseMessages, budget),
+        ...(updatePlan ? { toolChoice: { type: 'tool' as const, toolName: 'update_plan' } } : {}),
+      };
     },
     onStepFinish: ({ response, usage }) => {
       nativeRounds.push(...response.messages);
@@ -194,11 +216,16 @@ export async function sendNativeChat(request: SendChatRequest): Promise<string> 
     },
   });
   let text = '';
+  let reasoningBlockSeen = false;
   for await (const part of result.fullStream) {
     request.signal?.throwIfAborted();
     if (part.type === 'text-delta') {
       text += part.text;
       request.onToken?.(part.text);
+    }
+    if (part.type === 'reasoning-start') {
+      if (reasoningBlockSeen) request.onThinking?.('\n\n');
+      reasoningBlockSeen = true;
     }
     if (part.type === 'reasoning-delta') request.onThinking?.(part.text);
     if (part.type === 'tool-error')

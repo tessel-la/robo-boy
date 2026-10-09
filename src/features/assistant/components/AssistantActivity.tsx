@@ -12,10 +12,19 @@ const statusLabels: Record<AgentEvent['status'], string> = {
 
 /** One treatment for live and completed tool activity. Details stay in the transcript,
  * not the fixed composer, so a long task cannot displace the conversation on a phone. */
-export function AssistantActivity({ events, live = false }: { events: AgentEvent[]; live?: boolean }) {
+export function AssistantActivity({
+  events,
+  live = false,
+  modelResponding = false,
+}: {
+  events: AgentEvent[];
+  live?: boolean;
+  modelResponding?: boolean;
+}) {
   if (!events.length) return null;
   const activity = events.filter(event => event.type !== 'usage' && !event.tasks);
   const usage = events.filter(event => event.type === 'usage');
+  const waitingForAnswer = activity.some(event => event.type === 'question' && event.status === 'running');
   const current = live
     ? [...activity]
         .reverse()
@@ -29,6 +38,11 @@ export function AssistantActivity({ events, live = false }: { events: AgentEvent
       {current && (
         <p className="assistant-current-activity">
           {statusLabels[current.status]}: {eventLabel(current)}
+        </p>
+      )}
+      {live && !current && !modelResponding && !waitingForAnswer && (
+        <p className="assistant-current-activity" role="status">
+          Waiting for the model…
         </p>
       )}
       {activity.length > 0 && (

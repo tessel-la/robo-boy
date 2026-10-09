@@ -6,6 +6,49 @@ const action = '/arm_1/panda_arm_controller/follow_joint_trajectory';
 const type = 'control_msgs/action/FollowJointTrajectory';
 const typedef = (name: string, fields: string[], types: string[], lengths: number[]) => ({ type: name, fieldnames: fields, fieldtypes: types, fieldarraylen: lengths, examples: fields.map(() => ''), constnames: [], constvalues: [] });
 
+test('joint plot + XY tree + logs watch completes with a reconciled plan and no scheduled monitor or robot execution', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const move = '/move_xy', moveType = 'example_msgs/action/MoveXY';
+  await installRosMock(page, { topics: [{ name: '/joint_states', type: 'sensor_msgs/msg/JointState' }], services: [], actionServers: [{ name: move, type: moveType }], schemas: { [moveType]: [typedef(`${moveType}_Goal`, ['x', 'y', 'relative'], ['float64', 'float64', 'bool'], [-1, -1, -1])] } });
+  await page.goto('/');
+  await page.getByTitle('Advanced Options').click();
+  await page.locator('#ros2Value').fill('127.0.0.1');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  const timer = await page.evaluate(() => window.setInterval(() => (window as any).__publishRosTopic('/joint_states', { name: ['panda_joint1'], position: [0.25], velocity: [0], effort: [] }), 100));
+  const tasks = (plot: string, tree: string, logs: string) => [{ id: 'plot', label: 'Plot joint states', status: plot }, { id: 'tree', label: 'Stage XY 0.05 m tree', status: tree }, { id: 'logs', label: 'Watch joint states in logs', status: logs }, { id: 'review', label: 'Operator review', status: 'waiting' }];
+  const steps = [
+    { kind: 'tool', name: 'update_plan', input: { tasks: tasks('running', 'pending', 'pending') } },
+    { kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'timeSeries' }, { op: 'addPanel', panelType: 'behaviorTree' }, { op: 'addPanel', panelType: 'dataExplorer' }] },
+    { kind: 'tool', name: 'update_plan', input: { tasks: tasks('running', 'pending', 'pending') } },
+    { kind: 'contextRequest', reads: [{ kind: 'schema', resource: 'action', name: move }] },
+    { kind: 'workspaceEdit', operations: [{ op: 'configurePanel', panelType: 'timeSeries', settings: { addSignals: [{ topic: '/joint_states', messageType: 'sensor_msgs/msg/JointState', fieldPath: 'position[0]', label: 'panda_joint1', unit: 'rad' }], timeWindowSec: 15, autoScale: true } }, { op: 'configurePanel', panelType: 'dataExplorer', settings: { watch: ['/joint_states'], select: '/joint_states' } }] },
+    { kind: 'tool', name: 'update_plan', input: { tasks: tasks('done', 'running', 'done') } },
+    { kind: 'tree', id: 'xy-motion', name: 'XY Motion 0.05 m', nodes: [{ id: 'move', type: 'action', position: { x: 0, y: 0 }, data: { label: 'Move relative XY', actionName: move, actionType: moveType, parameters: { x: 0.05, y: 0.05, relative: true } } }], edges: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { kind: 'tool', name: 'update_plan', input: { tasks: tasks('done', 'done', 'done') } },
+    { kind: 'explanation', message: 'Joint plot and live watch verified. XY tree awaits operator review; nothing executed.' },
+  ];
+  const requests: any[] = [];
+  await page.route('**/chat/completions', route => { requests.push(route.request().postDataJSON()); return route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(steps[requests.length - 1] ?? steps[steps.length - 1]) }); });
+  await page.getByLabel('Open Robo-Boy assistant').click();
+  const panel = page.getByTestId('assistant-panel');
+  await panel.getByRole('textbox', { name: 'Ask the assistant', exact: true }).fill('Add timeseries with plotted joint states, a BT to move XY by 0.05 m, and logs watching joint states.');
+  await panel.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(panel.getByText('Joint plot and live watch verified. XY tree awaits operator review; nothing executed.')).toBeVisible();
+  await expect(panel.locator('.assistant-task-plan .is-done')).toHaveCount(3);
+  await expect(panel.locator('.assistant-task-plan .is-waiting')).toHaveCount(1);
+  await expect(panel.getByTestId('assistant-workspace-edit-card')).toHaveCount(1);
+  await expect(panel.getByTestId('assistant-workspace-edit-card')).toContainText('Watching /joint_states');
+  expect(requests.every(request => !request.tools.some((tool: any) => tool.function.name === 'start_monitor'))).toBe(true);
+  expect(requests[2].tool_choice).toMatchObject({ type: 'function', function: { name: 'update_plan' } });
+  await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
+  await expect(page.getByTestId('bt-agent-canvas-preview-banner').getByRole('button', { name: 'Accept', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop watching /joint_states' }).first()).toBeVisible();
+  const commands = await page.evaluate(() => (window as any).__getRosCommands());
+  expect(commands.filter((command: any) => command.op === 'send_action_goal' || command.op === 'publish' && command.topic === '/cmd_vel')).toEqual([]);
+  await page.evaluate(id => window.clearInterval(id), timer);
+});
+
 for (const kind of ['pad', 'behaviorTree'] as const) for (const mobile of [false, true]) test(`native save_document stages ${kind} for review, not silent saving (${mobile ? 'mobile' : 'desktop'})`, async ({ page }) => {
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   await installRosMock(page, { topics: [], services: [], actionServers: [] });
@@ -195,7 +238,10 @@ for (const saveTool of [false, true]) for (const mobile of [false, true]) test(`
   expect(JSON.stringify(requests[1].messages)).toContain('position');
   expect(JSON.stringify(requests[1].messages)).toContain('time_from_start');
   await page.getByTestId('assistant-panel').getByText('Thinking', { exact: true }).click();
-  await expect(page.getByText(/I will read the robot data/)).toBeVisible();
+  // Each fixture round exposes its own reasoning block; paragraph boundaries must survive.
+  const reasoningParagraphs = page.locator('.assistant-thinking p').filter({ hasText: 'I will read the robot data' });
+  await expect(reasoningParagraphs).toHaveCount(3);
+  for (const paragraph of await reasoningParagraphs.all()) await expect(paragraph).toBeVisible();
   await expect(page.locator('.assistant-message.user')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('home-proposal.png') });
   // Robot motion stays in the reviewed Pad workflow, never in assistant retrieval.

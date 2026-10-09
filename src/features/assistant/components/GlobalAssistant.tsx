@@ -27,7 +27,7 @@ import { computeNeeds } from '../turnNeeds';
 import { sendAssistantChat, fetchOllamaModels, type AssistantChatTurn, type AssistantProviderId, type AssistantProviderSettings } from '../providers/index';
 import { parseAssistantResponse } from '../responseParser';
 import { createHostTools } from '../tools/hostTools';
-import { documentRevision } from '../tools/nativeTools';
+import { documentRevision, HOST_TOOL_DEFINITIONS } from '../tools/nativeTools';
 import { composeNativeSystemPrompt } from '../prompt';
 import { readAssistantContext } from '../tools/contextReader';
 import { AgentRun, AgentYield, InputQueue, type AgentEvent, type InputDelivery, type PendingInput } from '../runtime/session';
@@ -552,9 +552,8 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           source: 'ros', ageSeconds: Math.round((Date.now() - auto.ros.fetchedAt) / 1000), stale: auto.ros.stale,
         });
       }
-      if (auto.selectedPad) used.push({ label: `Selected Pad: ${auto.selectedPad.name} (full JSON)`, source: 'pad', ageSeconds: 0 });
-      if (auto.openBehaviorTree) used.push({ label: `Open Behavior Tree: ${auto.openBehaviorTree.name} (full JSON)`, source: 'behaviorTree', ageSeconds: 0 });
-      if (auto.interfaceSchemas) used.push({ label: 'ROS interface schemas', source: 'ros', ageSeconds: 0 });
+      if (auto.selectedPad) used.push({ label: `Selected Pad reference: ${auto.selectedPad.name}`, source: 'pad', ageSeconds: 0 });
+      if (auto.openBehaviorTree) used.push({ label: `Open Behavior Tree reference: ${auto.openBehaviorTree.name}`, source: 'behaviorTree', ageSeconds: 0 });
       return used;
     };
 
@@ -834,8 +833,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       let turnAnswer = '';
       let continueQueue = false;
       const turnActivity: string[] = [];
+      let workspaceReceipt: AssistantMessage | undefined;
       const reportActivity = (message: string) => {
-        turnActivity.push(message);
+        if (turnActivity[turnActivity.length - 1] !== message) turnActivity.push(message);
         if (turnActivity.length > 40) turnActivity.shift();
         setProgress([...turnActivity]);
       };
@@ -985,11 +985,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           return result.value;
         };
         const initialChipIds = new Set(turnChips.map(chip => chip.id));
+        const taskContext = () => skillContext() + `\n## Current task checklist (update after observed outcomes)\n${JSON.stringify(run.tasks)}\nBefore finishing, reconcile every pending/running task with actual tool receipts. Keep operator approval waiting until accepted. Do not claim completion while a requested non-approval task is pending or blocked.`;
         const request = () => {
             let thinkingInRound = false;
             const systemPrompt = composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery, interfaceSchemas), pinnedChips: turnChips, needs });
             return sendAssistantChat({
-              settings: resolvedSettings, systemPrompt: systemPrompt + skillContext(), messages: chatMessages, signal: controller.signal, tools: hostTools,
+              settings: resolvedSettings, systemPrompt: systemPrompt + taskContext(), messages: chatMessages, signal: controller.signal, tools: hostTools,
               sessionId: `${sessions.activeId}:${generationAtSend}:${historyBranchRef.current}`,
               shouldYield: () => run.isSteering,
               beforeStep: run.beforeStep,
@@ -998,7 +999,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               onNativeMessages: messages => { if (!controller.signal.aborted) nativeHistoryRef.current = JSON.stringify(messages).length <= 320_000 ? { provider: `${resolvedSettings.provider}:${resolvedSettings.model}:${resolvedSettings.authMode}`, messages } : undefined; },
               // Native history already carries paired tool observations. Repeating every sample
               // and schema in the checkpoint grows both inference context and the IPC envelope.
-              refreshSystemPrompt: () => composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery), pinnedChips: turnChips.filter(chip => !chip.id.startsWith('tool:') || initialChipIds.has(chip.id)), needs }) + skillContext(),
+              refreshSystemPrompt: () => composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery), pinnedChips: turnChips.filter(chip => !chip.id.startsWith('tool:') || initialChipIds.has(chip.id)), needs }) + taskContext(),
               onToken: text => { if (abortRef.current === controller && !controller.signal.aborted) { turnAnswer = (turnAnswer + text).slice(-256 * 1024); scheduleStreamUpdate(); } },
               onThinking: text => {
                 if (abortRef.current !== controller || controller.signal.aborted) return;
@@ -1050,7 +1051,12 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               candidate.results = await applyWorkspaceOperations(candidate.operations, controller.signal);
               checkCurrent();
               const applied = candidate.results.filter(result => result.ok).length;
-              pushMessage({ id: uuidv4(), role: 'assistant', content: applied === candidate.results.length ? candidate.summary || `Applied ${applied} workspace changes.` : `Applied ${applied} of ${candidate.results.length} workspace changes.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), response: candidate, resolution: applied ? 'applied' : 'failed', contextUsed: [...contextUsed] });
+              const previous = workspaceReceipt?.response?.kind === 'workspaceEdit' ? workspaceReceipt.response : undefined;
+              const response = { ...candidate, operations: [...previous?.operations ?? [], ...candidate.operations], results: [...previous?.results ?? [], ...candidate.results], rejected: [...previous?.rejected ?? [], ...candidate.rejected] };
+              const total = response.results.filter(result => result.ok).length;
+              const receipt: AssistantMessage = { id: workspaceReceipt?.id ?? uuidv4(), role: 'assistant', content: total === response.results.length ? `Applied ${total} workspace changes.` : `Applied ${total} of ${response.results.length} workspace changes.`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: workspaceReceipt?.createdAt ?? Date.now(), response, resolution: total ? 'applied' : 'failed', contextUsed: [...contextUsed] };
+              if (workspaceReceipt) updateMessage(receipt.id, receipt); else pushMessage(receipt);
+              workspaceReceipt = receipt;
               return { results: candidate.results, ok: applied === candidate.results.length };
             }
             return undefined;
@@ -1058,7 +1064,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         const hostTools = createHostTools({
           signal: controller.signal, checkCurrent, schemas: () => parserSchemas,
           readOnly: settings.mode === 'ask' || settings.mode === 'plan' || profile.readOnly,
-          allowedTools: profile.tools,
+          allowedTools: HOST_TOOL_DEFINITIONS.filter(tool => (!profile.tools || profile.tools.includes(tool.name)) && (settings.monitorEnabled || tool.name !== 'start_monitor')).map(tool => tool.name),
           beforeTool: run.beforeTool,
           event: run.emit.bind(run),
           validate: candidate => {
@@ -1297,14 +1303,16 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setMessages(history);
       void generateFromPrompt(message.content, history, message.checkpoint, message.attachments);
     };
-    const handleAttachFiles = async (fileList: FileList | null) => {
+    const handleAttachFiles = async (fileList: FileList | readonly File[] | null) => {
       const files = Array.from(fileList ?? []);
       if (!files.length) return;
       setAttachmentError('');
       if (attachments.length + files.length > MAX_ATTACHMENTS) { setAttachmentError(`Attach up to ${MAX_ATTACHMENTS} files per message.`); return; }
       if (attachments.reduce((total, item) => total + item.size, 0) + files.reduce((total, file) => total + file.size, 0) > MAX_ATTACHMENT_TOTAL_SIZE) { setAttachmentError('Attachments can use up to 12 MB per message.'); return; }
       try {
+        const attachmentBranch = historyBranchRef.current;
         const next = await Promise.all(files.map(createAttachment));
+        if (attachmentBranch !== historyBranchRef.current) return;
         setAttachments(previous => [...previous, ...next.filter(item => !previous.some(existing => existing.id === item.id))]);
       } catch (cause) {
         setAttachmentError(cause instanceof Error ? cause.message : 'Could not attach that file.');

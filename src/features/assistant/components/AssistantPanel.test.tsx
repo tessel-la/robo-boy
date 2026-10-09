@@ -3,6 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AssistantPanel, { type AssistantPanelProps } from './AssistantPanel';
 import { getDefaultAssistantSettings } from '../storage/assistantStorage';
 import type { AgentEvent } from '../runtime/session';
+vi.mock('./AssistantSketchEditor', () => ({
+  default: ({ onAttach, onClose }: { onAttach: (value: string) => void; onClose: () => void }) => (
+    <div role="dialog" aria-label="Sketch attachment">
+      <button onClick={() => onAttach('data:image/png;base64,AA==')}>Attach sketch</button>
+      <button onClick={onClose}>Close sketch editor</button>
+    </div>
+  ),
+}));
 
 const event: AgentEvent = {
   id: 'read',
@@ -67,6 +75,10 @@ describe('assistant panel hierarchy', () => {
     fireEvent.click(screen.getByLabelText('Show archived chats'));
     expect(screen.getByRole('button', { name: 'Old task Archived' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Repair Pad Chat' }));
+    expect(input.onSwitchSession).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Repair Pad Chat' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: 'Chats' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat Repair Pad' }));
     expect(input.onSwitchSession).toHaveBeenCalledWith('other');
     expect(screen.getByLabelText('Ask the assistant')).toBeVisible();
   });
@@ -153,7 +165,7 @@ describe('assistant panel hierarchy', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Stop generating$/ }));
     expect(input.onStop).toHaveBeenCalledOnce();
   });
-  it('offers the four modes, model and reasoning directly without drawing or policy controls', () => {
+  it('offers direct modes, model, reasoning and sketch without policy controls', () => {
     const input = props({ settings: { ...getDefaultAssistantSettings(), provider: 'openai', model: 'gpt-6.1-sol' } });
     render(<AssistantPanel {...input} />);
     expect(
@@ -163,8 +175,43 @@ describe('assistant panel hierarchy', () => {
     expect(screen.getByLabelText('Thinking effort')).toBeVisible();
     fireEvent.change(screen.getByLabelText('Agent mode'), { target: { value: 'goal' } });
     expect(input.onUpdateSettings).toHaveBeenCalledWith({ mode: 'goal' });
-    expect(screen.queryByRole('button', { name: 'Create sketch attachment' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create sketch attachment' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Message options' })).not.toBeInTheDocument();
+  });
+  it('archives a selected inactive chat without opening it or forking the wrong conversation', () => {
+    const input = props({ onArchiveSession: vi.fn(), onSwitchSession: vi.fn() });
+    render(<AssistantPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Repair Pad Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archive chat' }));
+    expect(input.onArchiveSession).toHaveBeenCalledWith('other');
+    expect(input.onSwitchSession).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Fork chat' })).toBeDisabled();
+  });
+  it('attaches sketches through the same bounded file path and preserves the open chat on Escape', async () => {
+    const input = props();
+    render(<AssistantPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create sketch attachment' }));
+    await screen.findByRole('dialog', { name: 'Sketch attachment' });
+    fireEvent.click(screen.getByText('Attach sketch'));
+    expect(input.onAttachFiles).toHaveBeenCalledOnce();
+    expect((input.onAttachFiles as ReturnType<typeof vi.fn>).mock.calls[0][0][0]).toMatchObject({
+      type: 'image/png',
+      size: 1,
+    });
+    expect(screen.queryByRole('dialog', { name: 'Sketch attachment' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create sketch attachment' }));
+    await screen.findByRole('dialog', { name: 'Sketch attachment' });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(input.onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Create sketch attachment' })).toHaveFocus();
+  });
+  it('shows one transient waiting status, not a repeated chat transcript', () => {
+    render(
+      <AssistantPanel {...props({ isGenerating: true, progressMessages: Array(5).fill('Waiting for the model…') })} />
+    );
+    expect(screen.getAllByText('Waiting for the model…')).toHaveLength(1);
+    expect(screen.queryByText('Working…')).not.toBeInTheDocument();
   });
   it('returns focus after closing running-task delivery options', async () => {
     render(<AssistantPanel {...props({ isGenerating: true })} />);
@@ -229,6 +276,7 @@ describe('assistant panel hierarchy', () => {
     expect(screen.getByLabelText('Task checklist')).toBeVisible();
     expect(screen.getByText('Waiting for approval/input')).toBeVisible();
     expect(screen.getByText('Waiting for your answer. Reply below to continue this task.')).toBeVisible();
+    expect(screen.queryByText('Waiting for the model…')).not.toBeInTheDocument();
     rerender(
       <AssistantPanel
         {...props({

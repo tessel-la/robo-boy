@@ -3,12 +3,14 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import {
   FaArrowLeft,
+  FaArrowRight,
   FaArrowUp,
   FaCheck,
   FaChevronDown,
   FaCog,
   FaHistory,
   FaPaperclip,
+  FaPen,
   FaPencilAlt,
   FaPlus,
   FaRedo,
@@ -102,7 +104,7 @@ export interface AssistantPanelProps {
   contextPickerSections: ContextPickerSection[];
   attachments: AssistantAttachment[];
   attachmentError: string;
-  onAttachFiles: (files: FileList | null) => void;
+  onAttachFiles: (files: FileList | readonly File[] | null) => void;
   onRemoveAttachment: (id: string) => void;
   /** Turns a finished recording into text for the prompt. */
   onTranscribeAudio: (audio: Blob) => Promise<string>;
@@ -134,6 +136,7 @@ const canGenerateFrom = (prompt: string, isGenerating: boolean, attachments: Ass
 const MarkdownRenderer = React.lazy(() =>
   import('./AssistantMarkdown').then(module => ({ default: module.AssistantMarkdown }))
 );
+const SketchEditor = React.lazy(() => import('./AssistantSketchEditor'));
 function AssistantMarkdown(props: ResourceTextProps & { content: string }) {
   return (
     <React.Suspense
@@ -296,6 +299,10 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [delivery, setDelivery] = useState<import('../runtime/session').InputDelivery>('steer');
   const [sessionSearch, setSessionSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const selectedSession =
+    props.sessions?.find(session => session.id === selectedSessionId) ??
+    props.sessions?.find(session => session.id === props.activeSessionId);
   const [showLatest, setShowLatest] = useState(false);
   const [showComposerOptions, setShowComposerOptions] = useState(false);
   const waitingQuestion = props.events?.find(event => event.type === 'question' && event.status === 'running');
@@ -304,6 +311,12 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
   const [expandedImage, setExpandedImage] = useState<AssistantAttachment | null>(null);
+  const [showSketch, setShowSketch] = useState(false);
+  const sketchButtonRef = useRef<HTMLButtonElement>(null);
+  const closeSketch = useCallback(() => {
+    setShowSketch(false);
+    sketchButtonRef.current?.focus();
+  }, []);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [compactFrame, setCompactFrame] = useState<CompactAssistantFrame>();
   const [isMobileResizing, setIsMobileResizing] = useState(false);
@@ -331,6 +344,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
       return;
     }
     mobileResizeRef.current = null;
+    setShowSketch(false);
     setIsMobileResizing(false);
     document.documentElement.classList.remove('assistant-mobile-resizing');
     if (!isRendered) return;
@@ -427,7 +441,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (showComposerOptions) {
+        if (showSketch) closeSketch();
+        else if (showComposerOptions) {
           setShowComposerOptions(false);
           composerOptionsButtonRef.current?.focus();
         } else if (sessionAction) setSessionAction(undefined);
@@ -449,7 +464,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           setEditingDraft('');
         } else onClose();
       }
-      if (event.key === 'Tab' && compactFrame?.takeover && panelRef.current) {
+      if (event.key === 'Tab' && !showSketch && compactFrame?.takeover && panelRef.current) {
         const focusable = [
           ...panelRef.current.querySelectorAll<HTMLElement>(
             'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'
@@ -480,6 +495,8 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
     open,
     sessionAction,
     showComposerOptions,
+    showSketch,
+    closeSketch,
   ]);
 
   useEffect(() => {
@@ -866,9 +883,9 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                       <button
                         type="button"
                         aria-current={session.id === props.activeSessionId ? 'page' : undefined}
+                        aria-pressed={session.id === selectedSession?.id}
                         onClick={() => {
-                          props.onSwitchSession?.(session.id);
-                          setActiveView('chat');
+                          setSelectedSessionId(session.id);
                         }}
                       >
                         <span>{session.title}</span>
@@ -883,6 +900,17 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                         </small>
                       </button>
                       <div className="assistant-session-row-actions">
+                        <button
+                          type="button"
+                          aria-label={`Open chat ${session.title}`}
+                          title="Open conversation"
+                          onClick={() => {
+                            props.onSwitchSession?.(session.id);
+                            setActiveView('chat');
+                          }}
+                        >
+                          <FaArrowRight aria-hidden="true" />
+                        </button>
                         {props.onRenameSession && (
                           <button
                             type="button"
@@ -961,6 +989,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               <div className="assistant-session-actions">
                 <button
                   type="button"
+                  disabled={selectedSession?.id !== props.activeSessionId}
                   onClick={() => {
                     props.onForkSession?.();
                     setActiveView('chat');
@@ -968,16 +997,12 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                 >
                   Fork chat
                 </button>
-                <button
-                  type="button"
-                  onClick={() => props.activeSessionId && props.onArchiveSession?.(props.activeSessionId)}
-                >
-                  {props.sessions?.find(session => session.id === props.activeSessionId)?.archived
-                    ? 'Unarchive chat'
-                    : 'Archive chat'}
+                <button type="button" onClick={() => selectedSession && props.onArchiveSession?.(selectedSession.id)}>
+                  {selectedSession?.archived ? 'Unarchive chat' : 'Archive chat'}
                 </button>
                 <button
                   type="button"
+                  disabled={selectedSession?.id !== props.activeSessionId}
                   onClick={() => {
                     const blob = new Blob(
                       [
@@ -1274,17 +1299,16 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
           {isGenerating && (
             <article className="assistant-message assistant" aria-label="Assistant activity">
               <span className="assistant-message-role">Assistant</span>
-              <AssistantDisclosure className="assistant-thinking" summary={`${thinking ? 'Thinking' : 'Working'}…`}>
-                {thinking && <AssistantMarkdown content={thinking} />}
-                {!props.events?.length && (
-                  <ul>
-                    {progressMessages.map((item, index) => (
-                      <li key={index}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </AssistantDisclosure>
-              <AssistantActivity events={props.events ?? []} live />
+              {thinking && (
+                <AssistantDisclosure className="assistant-thinking" summary="Thinking…">
+                  <AssistantMarkdown content={thinking} />
+                </AssistantDisclosure>
+              )}
+              <AssistantActivity
+                events={props.events ?? []}
+                live
+                modelResponding={Boolean(thinking || streamedAnswer)}
+              />
               {streamedAnswer && (
                 <AssistantMarkdown
                   content={streamedAnswer}
@@ -1295,7 +1319,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
               )}
             </article>
           )}
-          {(error || (lastProgress && !props.events?.length)) && (
+          {(error || (lastProgress && !thinking && !props.events?.length)) && (
             <div className={`assistant-status${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>
               {error || lastProgress}
             </div>
@@ -1544,6 +1568,15 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
                     >
                       <FaPaperclip aria-hidden="true" />
                     </button>
+                    <button
+                      ref={sketchButtonRef}
+                      type="button"
+                      aria-label="Create sketch attachment"
+                      title="Sketch"
+                      onClick={() => setShowSketch(true)}
+                    >
+                      <FaPen aria-hidden="true" />
+                    </button>
                     <input
                       ref={attachmentInputRef}
                       className="assistant-attachment-input"
@@ -1624,6 +1657,19 @@ const AssistantPanel: React.FC<AssistantPanelProps> = props => {
             </div>,
             document.body
           )}
+        {showSketch && (
+          <React.Suspense fallback={<div role="status">Opening sketch editor…</div>}>
+            <SketchEditor
+              onClose={closeSketch}
+              onAttach={dataUrl => {
+                const content = dataUrl.slice(dataUrl.indexOf(',') + 1);
+                const bytes = Uint8Array.from(atob(content), char => char.charCodeAt(0));
+                onAttachFiles([new File([bytes], `sketch-${Date.now()}.png`, { type: 'image/png' })]);
+                closeSketch();
+              }}
+            />
+          </React.Suspense>
+        )}
       </section>
     </div>
   );

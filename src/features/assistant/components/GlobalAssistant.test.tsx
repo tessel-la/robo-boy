@@ -267,6 +267,28 @@ describe('GlobalAssistant', () => {
     expect(request.messages[request.messages.length - 1]).toMatchObject({ role: 'user', content: 'Why can I not see a camera feed?' });
   });
 
+  it('keeps disabled scheduled monitoring out of the native tool catalog while live panel watching remains available', async () => {
+    sendAssistantChatMock.mockResolvedValue('Live topic watching uses Data Explorer.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Watch joint states in logs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Live topic watching uses Data Explorer.');
+    const tools = sendAssistantChatMock.mock.calls[0][0].tools;
+    expect(tools.definitions.some((tool: { name: string }) => tool.name === 'start_monitor')).toBe(false);
+    expect(tools.definitions.some((tool: { name: string }) => tool.name === 'edit_workspace')).toBe(true);
+  });
+  it('consolidates workspace receipts within one task without replaying successful edits', async () => {
+    const apply = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, message: `Added ${'panelType' in operation ? operation.panelType : operation.op}.` })));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'behaviorTree' }] })).mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'camera' }] })).mockResolvedValueOnce('Both panels verified.');
+    renderOpenAssistant({ onApplyWorkspaceEdit: apply });
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Add a BT and camera' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Both panels verified.');
+    expect(screen.getAllByTestId('assistant-workspace-edit-card')).toHaveLength(1);
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Added behaviorTree.');
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Added camera.');
+    expect(apply).toHaveBeenCalledTimes(2);
+  });
   it('applies a workspace edit through the host at once and shows each outcome', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({
       kind: 'workspaceEdit',

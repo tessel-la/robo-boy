@@ -84,6 +84,49 @@ const request = (): SendChatRequest => ({
 
 describe('native multi-provider agent runtime', () => {
   beforeEach(() => vi.clearAllMocks());
+  it('reconciles an active checklist after an app mutation before proceeding', async () => {
+    const call = (name: string, id: string) =>
+      stream([{ type: 'tool-call', toolName: name, toolCallId: id, input: '{}' }, finish('tool-calls')]);
+    const model = new MockLanguageModelV4({
+      doStream: [
+        call('update_plan', 'plan-start'),
+        call('edit_workspace', 'edit'),
+        call('update_plan', 'plan-updated'),
+        stream([
+          { type: 'text-start', id: 'answer' },
+          { type: 'text-delta', id: 'answer', delta: 'Workspace verified; review remains waiting.' },
+          { type: 'text-end', id: 'answer' },
+          finish(),
+        ]),
+      ],
+    });
+    adapters.model = model;
+    const input = request();
+    input.tools!.definitions = ['update_plan', 'edit_workspace'].map(name => ({
+      name,
+      description: name,
+      inputSchema: { type: 'object', additionalProperties: false },
+    }));
+    await expect(sendNativeChat(input)).resolves.toContain('review remains waiting');
+    expect(model.doStreamCalls[2].toolChoice).toEqual({ type: 'tool', toolName: 'update_plan' });
+    expect(model.doStreamCalls[3].toolChoice).not.toEqual({ type: 'tool', toolName: 'update_plan' });
+  });
+  it('separates streamed reasoning blocks instead of joining their headings', async () => {
+    adapters.model = new MockLanguageModelV4({
+      doStream: stream([
+        { type: 'reasoning-start', id: 'first' },
+        { type: 'reasoning-delta', id: 'first', delta: 'Inspecting joints' },
+        { type: 'reasoning-end', id: 'first' },
+        { type: 'reasoning-start', id: 'second' },
+        { type: 'reasoning-delta', id: 'second', delta: 'Configuring plots' },
+        { type: 'reasoning-end', id: 'second' },
+        finish(),
+      ]),
+    });
+    const onThinking = vi.fn();
+    await sendNativeChat({ ...request(), onThinking });
+    expect(onThinking.mock.calls.map(call => call[0]).join('')).toBe('Inspecting joints\n\nConfiguring plots');
+  });
   it('replays paired native tool results and reasoning metadata, without additional user turns', async () => {
     const model = new MockLanguageModelV4({
       doStream: [

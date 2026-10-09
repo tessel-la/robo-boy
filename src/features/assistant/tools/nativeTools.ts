@@ -241,7 +241,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
   {
     name: 'start_monitor',
     description:
-      'Start an explicitly requested topic watch under operator-enabled monitor settings, expiry and inference allowance. Deterministic triggers cause read-only analysis; this never commands the robot.',
+      'Start an explicitly requested scheduled AI analysis under operator-enabled monitor settings, expiry and inference allowance. For ordinary live topic watching, use configurePanel with Data Explorer settings.watch instead. Deterministic triggers here consume model inference; this never commands the robot.',
     inputSchema: object(
       {
         topic: name,

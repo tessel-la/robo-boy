@@ -114,6 +114,14 @@
   position: absolute;
   z-index: 40;
 }
+/* Keep shared corner markers without the shared whole-panel focus decoration. */
+.assistant-overlay .assistant-panel.tree-panel-resize-frame::before {
+  border: 0;
+  box-shadow: none;
+}
+.assistant-panel .assistant-resize-handle.tree-panel-menu-resize-handle {
+  display: block;
+}
 
 .assistant-resize-handle.n,
 .assistant-resize-handle.s {
@@ -1809,6 +1817,9 @@
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
+.assistant-composer textarea:focus-visible {
+  outline: none;
+}
 
 .assistant-settings textarea {
   padding-right: 46px;
@@ -2461,6 +2472,10 @@
 .assistant-session-row > button {
   min-width: 0;
   flex: 1;
+}
+.assistant-session-row > button[aria-pressed='true'] {
+  border-color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-color) 8%, var(--background-secondary));
 }
 .assistant-session-row-actions {
   display: flex;
